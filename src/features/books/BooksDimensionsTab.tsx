@@ -5,6 +5,8 @@ import {
   Layers, Building2, FolderKanban, Tags, Plus, RefreshCw, BarChart3,
   Pencil, Check, X, Scale,
 } from "lucide-react";
+import BulkUpload from "@/components/BulkUpload";
+import ExportMenu from "@/components/ExportMenu";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES — shapes mirror backend/src/modules/books/{costcentres,reports,ops}.js
@@ -346,9 +348,42 @@ function CostCentresSection({ canWrite }: { canWrite: boolean }) {
         title="Cost centres"
         icon={<Layers size={15} />}
         action={
-          <button type="button" onClick={() => void loadList()} className={btnGhost} title="Refresh">
-            <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <BulkUpload
+              title="Bulk upload cost centres"
+              templateName="cost-centres-template"
+              columns={[
+                { key: "name", label: "Name", example: "Mumbai branch", required: true },
+                { key: "category", label: "Category", example: "Region" },
+                { key: "parentId", label: "Parent id", example: "" },
+              ]}
+              endpoint="/api/books/cost-centres/bulk"
+              transform={(row) => ({
+                name: (row.name || "").trim(),
+                category: (row.category || "").trim() || undefined,
+                parentId: (row.parentId || "").trim() || undefined,
+              })}
+              canWrite={canWrite}
+              onDone={() => { void loadList(); void loadReport(); }}
+            />
+            <ExportMenu
+              filename="cost-centres"
+              title="Cost centres"
+              columns={[
+                { key: "name", label: "Name" },
+                { key: "category", label: "Category" },
+                { key: "status", label: "Status" },
+              ]}
+              rows={list.map((c) => ({
+                name: c.name,
+                category: c.category || "",
+                status: c.is_active !== false ? "Active" : "Inactive",
+              }))}
+            />
+            <button type="button" onClick={() => void loadList()} className={btnGhost} title="Refresh">
+              <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
+            </button>
+          </div>
         }
       >
         <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">
@@ -414,9 +449,29 @@ function CostCentresSection({ canWrite }: { canWrite: boolean }) {
         title="Cost-centre P&L (this FY)"
         icon={<BarChart3 size={15} />}
         action={
-          <button type="button" onClick={() => void loadReport()} className={btnGhost} title="Refresh">
-            <RefreshCw size={14} className={reportBusy ? "animate-spin" : ""} /> Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <ExportMenu
+              filename="cost-centre-pl"
+              title="Cost-centre P&L (this FY)"
+              columns={[
+                { key: "name", label: "Cost centre" },
+                { key: "category", label: "Category" },
+                { key: "income", label: "Income" },
+                { key: "expense", label: "Expense" },
+                { key: "net", label: "Net" },
+              ]}
+              rows={report.map((r) => ({
+                name: r.name,
+                category: r.category || "",
+                income: num(r.income),
+                expense: num(r.expense),
+                net: num(r.net),
+              }))}
+            />
+            <button type="button" onClick={() => void loadReport()} className={btnGhost} title="Refresh">
+              <RefreshCw size={14} className={reportBusy ? "animate-spin" : ""} /> Refresh
+            </button>
+          </div>
         }
       >
         <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">
@@ -575,9 +630,38 @@ function ProjectsSection({ canWrite }: { canWrite: boolean }) {
           title="Projects"
           icon={<FolderKanban size={15} />}
           action={
-            <button type="button" onClick={() => void loadProjects()} className={btnGhost} title="Refresh">
-              <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
-            </button>
+            <div className="flex items-center gap-2">
+              <BulkUpload
+                title="Bulk upload projects"
+                templateName="projects-template"
+                columns={[
+                  { key: "name", label: "Project name", example: "ACME website build", required: true },
+                  { key: "customerLedgerId", label: "Customer ledger id", example: "" },
+                ]}
+                endpoint="/api/books/projects/bulk"
+                transform={(row) => ({
+                  name: (row.name || "").trim(),
+                  customerLedgerId: (row.customerLedgerId || "").trim() || undefined,
+                })}
+                canWrite={canWrite}
+                onDone={() => { void loadProjects(); void loadPl(); }}
+              />
+              <ExportMenu
+                filename="projects"
+                title="Projects"
+                columns={[
+                  { key: "name", label: "Name" },
+                  { key: "status", label: "Status" },
+                ]}
+                rows={projects.map((p) => ({
+                  name: p.name,
+                  status: (p.status || "active").toString().toLowerCase(),
+                }))}
+              />
+              <button type="button" onClick={() => void loadProjects()} className={btnGhost} title="Refresh">
+                <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
+              </button>
+            </div>
           }
         >
           <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">
@@ -634,9 +718,31 @@ function ProjectsSection({ canWrite }: { canWrite: boolean }) {
         title="Project profitability (this FY)"
         icon={<BarChart3 size={15} />}
         action={
-          <button type="button" onClick={() => void loadPl()} className={btnGhost} title="Refresh">
-            <RefreshCw size={14} className={plBusy ? "animate-spin" : ""} /> Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <ExportMenu
+              filename="project-profitability"
+              title="Project profitability (this FY)"
+              columns={[
+                { key: "name", label: "Project" },
+                { key: "status", label: "Status" },
+                { key: "revenue", label: "Revenue" },
+                { key: "cost", label: "Cost" },
+                { key: "grossMargin", label: "Gross margin" },
+                { key: "marginPct", label: "Margin %" },
+              ]}
+              rows={(pl?.rows ?? []).map((r) => ({
+                name: r.name,
+                status: (r.status || "active").toString().toLowerCase(),
+                revenue: num(r.revenue),
+                cost: num(r.cost),
+                grossMargin: num(r.grossMargin),
+                marginPct: r.marginPct,
+              }))}
+            />
+            <button type="button" onClick={() => void loadPl()} className={btnGhost} title="Refresh">
+              <RefreshCw size={14} className={plBusy ? "animate-spin" : ""} /> Refresh
+            </button>
+          </div>
         }
       >
         <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">

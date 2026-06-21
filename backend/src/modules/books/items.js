@@ -163,8 +163,43 @@ async function setBarcode(tenantId, itemId, barcode) {
   }
 }
 
+// ── Bulk item creation ──────────────────────────────────────────────────────────
+// Reuses inventory.createItem (the single-item master create + validation) for
+// each row, then applies an optional barcode via this module's setBarcode (which
+// surfaces a clean BARCODE_TAKEN on clash). Each row runs in its own try/catch so
+// one bad row never aborts the rest. createItem is a single INSERT (no
+// transaction), so per-row processing is correct here — no batch transaction.
+// Rows use the snake_case external shape; we map to createItem's camelCase keys.
+async function bulkCreateItems(tenantId, actorId, rows) {
+  if (!Array.isArray(rows)) throw new PostError("BAD_INPUT", "rows must be an array", 400);
+  const { createItem } = require("./inventory"); // lazy: avoid load-order coupling
+  let created = 0, failed = 0;
+  const errors = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i] || {};
+    try {
+      const item = await createItem(tenantId, {
+        name: r.name,
+        unit: r.unit,
+        hsn: r.hsn_sac,
+        gstRate: r.gst_rate,
+        valuationMethod: r.valuation_method,
+        openingQty: r.opening_qty,
+        openingValue: r.opening_value,
+      });
+      if (r.barcode) await setBarcode(tenantId, item.id, r.barcode);
+      created++;
+    } catch (e) {
+      failed++;
+      errors.push({ row: i + 1, error: e && e.message ? e.message : String(e) });
+    }
+  }
+  return { created, failed, errors };
+}
+
 module.exports = {
   createVariant, listVariants,
   setKitComponents, getKitComponents,
   findByBarcode, setBarcode,
+  bulkCreateItems,
 };

@@ -27,6 +27,8 @@ import BooksAutomationTab from "./BooksAutomationTab";
 import BooksComplianceTab from "./BooksComplianceTab";
 import BooksSettlementTab from "./BooksSettlementTab";
 import BooksDocumentsTab from "./BooksDocumentsTab";
+import BulkUpload from "@/components/BulkUpload";
+import ExportMenu from "@/components/ExportMenu";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES (response shapes inlined — backend confirmed)
@@ -624,6 +626,18 @@ function ChartOfAccountsTab({
   const groupName = (id: string) => groups.find((g) => g.id === id)?.name ?? "Ungrouped";
   const groupNature = (id: string) => groups.find((g) => g.id === id)?.nature ?? "ASSET";
 
+  // Flat, export-friendly view of every ledger (group name + Dr/Cr resolved).
+  const ledgerExportRows = ledgers.map((l) => ({
+    name: l.name,
+    group: groupName(l.group_id),
+    nature: groupNature(l.group_id),
+    is_party: l.is_party ? "Yes" : "No",
+    is_bank: l.is_bank ? "Yes" : "No",
+    opening_balance: l.opening_balance,
+    opening: `${l.opening_is_debit ? "Dr" : "Cr"}`,
+    is_active: l.is_active ? "Active" : "Inactive",
+  }));
+
   // group ledgers by their account group, preserving the order groups arrive in
   const byGroup = groups
     .map((g) => ({ group: g, items: ledgers.filter((l) => l.group_id === g.id) }))
@@ -636,11 +650,61 @@ function ChartOfAccountsTab({
         <p className="text-sm text-[var(--color-muted)] tabular-nums">
           {ledgers.length} ledgers · {groups.length} groups
         </p>
-        {canWrite && (
-          <button type="button" onClick={() => setOpen((o) => !o)} className={btnPrimary}>
-            <Plus size={14} /> New ledger
-          </button>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <BulkUpload
+            title="Bulk upload ledgers"
+            templateName="ledgers-template"
+            hint="Download the template, fill it in, then upload. Group must match an existing account-group name. Required columns are marked with *."
+            columns={[
+              { key: "name", label: "name", example: "Acme Pvt Ltd", required: true },
+              { key: "group", label: "group", example: "Sundry Debtors", required: true },
+              { key: "is_party", label: "is_party", example: "true" },
+              { key: "is_bank", label: "is_bank", example: "false" },
+              { key: "gstin", label: "gstin", example: "27AAAAA0000A1Z5" },
+              { key: "pan", label: "pan", example: "AAAAA0000A" },
+              { key: "opening_balance", label: "opening_balance", example: "0" },
+            ]}
+            endpoint="/api/books/ledgers/bulk"
+            canWrite={canWrite}
+            transform={(row) => {
+              const truthy = (v: string) => /^(1|y|yes|true|t)$/i.test((v || "").trim());
+              const g = groups.find(
+                (gr) => gr.name.trim().toLowerCase() === (row.group || "").trim().toLowerCase(),
+              );
+              return {
+                name: (row.name || "").trim(),
+                group: (row.group || "").trim(),
+                group_id: g?.id,
+                is_party: truthy(row.is_party),
+                is_bank: truthy(row.is_bank),
+                gstin: (row.gstin || "").trim() || undefined,
+                pan: (row.pan || "").trim() || undefined,
+                opening_balance: (row.opening_balance || "").trim() || "0",
+              };
+            }}
+            onDone={() => { void onReload(); }}
+          />
+          <ExportMenu
+            filename="chart-of-accounts"
+            title="Chart of Accounts"
+            columns={[
+              { key: "name", label: "Ledger" },
+              { key: "group", label: "Group" },
+              { key: "nature", label: "Nature" },
+              { key: "is_party", label: "Party" },
+              { key: "is_bank", label: "Bank" },
+              { key: "opening_balance", label: "Opening balance" },
+              { key: "opening", label: "Dr/Cr" },
+              { key: "is_active", label: "Status" },
+            ]}
+            rows={ledgerExportRows}
+          />
+          {canWrite && (
+            <button type="button" onClick={() => setOpen((o) => !o)} className={btnPrimary}>
+              <Plus size={14} /> New ledger
+            </button>
+          )}
+        </div>
       </div>
 
       {open && canWrite && (
@@ -1176,9 +1240,26 @@ function DocumentList({ docs, busy, onReload }: { docs: DocumentRow[]; busy: boo
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
       <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
         <h3 className="text-sm font-semibold">Documents</h3>
-        <button type="button" onClick={() => void onReload()} className="text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Refresh">
-          <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
-        </button>
+        <div className="flex items-center gap-2">
+          <ExportMenu
+            filename="documents"
+            title="Documents"
+            size="sm"
+            columns={[
+              { key: "doc_date", label: "Date" },
+              { key: "doc_kind", label: "Kind" },
+              { key: "doc_number", label: "Number" },
+              { key: "status", label: "Status" },
+              { key: "subtotal", label: "Subtotal" },
+              { key: "gst_rate", label: "GST %" },
+              { key: "reference", label: "Reference" },
+            ]}
+            rows={docs}
+          />
+          <button type="button" onClick={() => void onReload()} className="text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Refresh">
+            <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
@@ -1638,7 +1719,26 @@ function TrialBalanceTable({ tb }: { tb: TrialBalance | null }) {
   const rows = tb?.ledgers ?? [];
   return (
     <>
-      <ReportHeader title="Trial Balance" badge={tb ? <BalancedBadge ok={tb.balanced} /> : null} />
+      <ReportHeader
+        title="Trial Balance"
+        badge={
+          <div className="flex items-center gap-2">
+            {tb ? <BalancedBadge ok={tb.balanced} /> : null}
+            <ExportMenu
+              filename="trial-balance"
+              title="Trial Balance"
+              size="sm"
+              columns={[
+                { key: "name", label: "Ledger" },
+                { key: "nature", label: "Nature" },
+                { key: "debit", label: "Debit" },
+                { key: "credit", label: "Credit" },
+              ]}
+              rows={rows}
+            />
+          </div>
+        }
+      />
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
@@ -1713,9 +1813,28 @@ function SectionTable({ title, rows, totalLabel, total }: { title: string; rows:
 
 function ProfitLossTable({ pl }: { pl: ProfitLoss | null }) {
   const net = Number(pl?.netProfit ?? 0);
+  const plExportRows = [
+    ...(pl?.income ?? []).map((r) => ({ section: "Income", name: r.name, amount: r.amount })),
+    ...(pl?.expense ?? []).map((r) => ({ section: "Expense", name: r.name, amount: r.amount })),
+  ];
   return (
     <>
-      <ReportHeader title="Profit & Loss" />
+      <ReportHeader
+        title="Profit & Loss"
+        badge={
+          <ExportMenu
+            filename="profit-loss"
+            title="Profit & Loss"
+            size="sm"
+            columns={[
+              { key: "section", label: "Section" },
+              { key: "name", label: "Ledger" },
+              { key: "amount", label: "Amount" },
+            ]}
+            rows={plExportRows}
+          />
+        }
+      />
       <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-[var(--color-border)]">
         <SectionTable title="Income" rows={pl?.income ?? []} totalLabel="Total income" total={pl?.totalIncome ?? "0.00"} />
         <SectionTable title="Expense" rows={pl?.expense ?? []} totalLabel="Total expense" total={pl?.totalExpense ?? "0.00"} />
@@ -1729,9 +1848,32 @@ function ProfitLossTable({ pl }: { pl: ProfitLoss | null }) {
 }
 
 function BalanceSheetTable({ bs }: { bs: BalanceSheet | null }) {
+  const bsExportRows = [
+    ...(bs?.assets ?? []).map((r) => ({ section: "Assets", name: r.name, amount: r.amount })),
+    ...(bs?.liabilities ?? []).map((r) => ({ section: "Liabilities", name: r.name, amount: r.amount })),
+    ...(bs?.equity ?? []).map((r) => ({ section: "Equity", name: r.name, amount: r.amount })),
+  ];
   return (
     <>
-      <ReportHeader title="Balance Sheet" badge={bs ? <BalancedBadge ok={bs.balanced} /> : null} />
+      <ReportHeader
+        title="Balance Sheet"
+        badge={
+          <div className="flex items-center gap-2">
+            {bs ? <BalancedBadge ok={bs.balanced} /> : null}
+            <ExportMenu
+              filename="balance-sheet"
+              title="Balance Sheet"
+              size="sm"
+              columns={[
+                { key: "section", label: "Section" },
+                { key: "name", label: "Ledger" },
+                { key: "amount", label: "Amount" },
+              ]}
+              rows={bsExportRows}
+            />
+          </div>
+        }
+      />
       <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[var(--color-border)]">
         <SectionTable title="Assets" rows={bs?.assets ?? []} totalLabel="Total assets" total={bs?.totalAssets ?? "0.00"} />
         <SectionTable title="Liabilities" rows={bs?.liabilities ?? []} totalLabel="Total liabilities" total={bs?.totalLiabilities ?? "0.00"} />
@@ -1747,9 +1889,27 @@ function CashFlowTable({ cf }: { cf: CashFlow | null }) {
     { label: "Investing activities", value: cf?.investing },
     { label: "Financing activities", value: cf?.financing },
   ];
+  const cfExportRows = [
+    ...rows.map((r) => ({ activity: r.label, value: r.value ?? "0.00" })),
+    { activity: "Net cash flow", value: cf?.netCashFlow ?? "0.00" },
+  ];
   return (
     <>
-      <ReportHeader title="Cash Flow" />
+      <ReportHeader
+        title="Cash Flow"
+        badge={
+          <ExportMenu
+            filename="cash-flow"
+            title="Cash Flow"
+            size="sm"
+            columns={[
+              { key: "activity", label: "Activity" },
+              { key: "value", label: "Net cash" },
+            ]}
+            rows={cfExportRows}
+          />
+        }
+      />
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
@@ -2053,9 +2213,28 @@ function ReconcileTab({ ledgers, canWrite }: { ledgers: Ledger[]; canWrite: bool
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
         <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
           <h3 className="text-sm font-semibold">Unmatched lines <span className="text-[var(--color-muted)] tabular-nums">({inbox.length})</span></h3>
-          <button type="button" onClick={() => void loadInbox()} className="text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Refresh">
-            <RefreshCw size={14} className={inboxBusy ? "animate-spin" : ""} />
-          </button>
+          <div className="flex items-center gap-2">
+            <ExportMenu
+              filename="unmatched-lines"
+              title="Unmatched bank lines"
+              size="sm"
+              columns={[
+                { key: "txn_date", label: "Date" },
+                { key: "amount", label: "Amount" },
+                { key: "description", label: "Description" },
+                { key: "suggestion", label: "Suggestion" },
+              ]}
+              rows={inbox.map((line) => ({
+                txn_date: line.txn_date,
+                amount: line.amount,
+                description: line.description ?? "",
+                suggestion: line.suggestion?.kind ?? (Number(line.amount) >= 0 ? "RECEIPT" : "PAYMENT"),
+              }))}
+            />
+            <button type="button" onClick={() => void loadInbox()} className="text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Refresh">
+              <RefreshCw size={14} className={inboxBusy ? "animate-spin" : ""} />
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">

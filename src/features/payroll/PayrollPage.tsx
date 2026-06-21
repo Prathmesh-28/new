@@ -8,6 +8,11 @@ import { Users, Plus, Play, X, CheckCircle2, Clock, ChevronDown, ChevronUp, Bank
 import { format } from "date-fns";
 import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
+import BulkUpload from "@/components/BulkUpload";
+import ExportMenu from "@/components/ExportMenu";
+
+// Roles allowed to write payroll/HRMS data — mirrors the backend hrms WRITE_ROLES gate.
+const PAYROLL_WRITE_ROLES = new Set(["super_admin", "owner", "finance_manager"]);
 
 interface Employee {
   id: string; name: string; email?: string; pan?: string;
@@ -155,7 +160,8 @@ function AddEmployeeModal({ onClose, onAdded }: { onClose: () => void; onAdded: 
 
 export default function PayrollPage() {
   const now = new Date();
-  const { store } = useApp();
+  const { store, currentRole } = useApp();
+  const canWrite = PAYROLL_WRITE_ROLES.has(currentRole);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [runs, setRuns]           = useState<PayrollRun[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -251,6 +257,32 @@ export default function PayrollPage() {
             className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] font-medium px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">
             <Plus size={12} /> Add Employee
           </button>
+          <BulkUpload
+            title="Bulk upload employees"
+            templateName="employees-template"
+            label="Bulk upload"
+            canWrite={canWrite}
+            onDone={load}
+            endpoint="/api/hrms/employees/bulk"
+            columns={[
+              { key: "name", label: "Name", example: "Ananya Sharma", required: true },
+              { key: "email", label: "Email", example: "ananya@acme.in" },
+              { key: "designation", label: "Designation", example: "Software Engineer" },
+              { key: "ctc", label: "CTC (annual)", example: "1200000" },
+              { key: "pan", label: "PAN", example: "ABCDE1234F" },
+              { key: "pf_no", label: "PF No", example: "MH/12345/0001" },
+              { key: "doj", label: "Date of joining", example: "2024-04-01" },
+            ]}
+            transform={r => ({
+              name: r.name,
+              email: r.email || null,
+              designation: r.designation || null,
+              ctc: r.ctc ? Number(r.ctc) : null,
+              pan: r.pan || null,
+              pf_no: r.pf_no || null,
+              dateOfJoining: r.doj || null,
+            })}
+          />
           <button onClick={runPayroll} disabled={running || employees.length === 0}
             className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
             <Play size={12} /> Run {MONTH_NAMES[runMonth - 1]} Payroll
@@ -292,7 +324,28 @@ export default function PayrollPage() {
             <button onClick={() => setShowAdd(true)} className="mt-4 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg">Add Employee</button>
           </div>
         ) : (
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg">
+            <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-[var(--color-border)]">
+              <span className="text-xs font-semibold text-[var(--color-muted)]">{employees.length} employee(s)</span>
+              <ExportMenu
+                size="sm"
+                filename="employees"
+                title="Employees"
+                columns={[
+                  { key: "name", label: "Name" },
+                  { key: "email", label: "Email" },
+                  { key: "gross", label: "Gross Salary" },
+                  { key: "tds", label: "TDS / month" },
+                  { key: "net", label: "Net Pay" },
+                  { key: "status", label: "Status" },
+                ]}
+                rows={employees.map(e => {
+                  const c = computeStatutoryNet(parseFloat(String(e.gross_salary)) || 0, statCfg);
+                  return { name: e.name, email: e.email ?? "", gross: c.gross, tds: c.tds, net: c.net, status: e.status };
+                })}
+              />
+            </div>
+            <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[640px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>
@@ -325,6 +378,7 @@ export default function PayrollPage() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )
       ) : (
@@ -334,6 +388,41 @@ export default function PayrollPage() {
           </div>
         ) : (
           <div className="space-y-3">
+            {/* Payroll runs toolbar — export the consolidated run summary on screen */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-[var(--color-muted)]">{runs.length} payroll run(s)</span>
+              <ExportMenu
+                size="sm"
+                filename="payroll-runs"
+                title="Payroll runs"
+                columns={[
+                  { key: "period", label: "Period" },
+                  { key: "status", label: "Status" },
+                  { key: "gross", label: "Gross" },
+                  { key: "pf", label: "PF" },
+                  { key: "esi", label: "ESI" },
+                  { key: "pt", label: "PT" },
+                  { key: "tds", label: "TDS" },
+                  { key: "net", label: "Net" },
+                ]}
+                rows={runs.map(run => {
+                  const lines = (run.breakdown ?? []).map(b => computeStatutoryNet(Number(b.gross), statCfg));
+                  const s = lines.reduce((a, c) => ({
+                    gross: a.gross + c.gross, pf: a.pf + c.pf, esi: a.esi + c.esi,
+                    pt: a.pt + c.pt, tds: a.tds + c.tds, net: a.net + c.net,
+                  }), { gross: 0, pf: 0, esi: 0, pt: 0, tds: 0, net: 0 });
+                  const has = lines.length > 0;
+                  return {
+                    period: `${MONTH_NAMES[run.run_month - 1]} ${run.run_year}`,
+                    status: run.status,
+                    gross: has ? s.gross : run.total_gross,
+                    pf: s.pf, esi: s.esi, pt: s.pt,
+                    tds: has ? s.tds : run.total_tds,
+                    net: has ? s.net : run.total_net,
+                  };
+                })}
+              />
+            </div>
             {/* CTC structure controls — drive the statutory deductions inside every run */}
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
               <span className="font-semibold flex items-center gap-1.5"><Calculator size={12} /> CTC structure</span>

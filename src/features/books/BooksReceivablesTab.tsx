@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import ExportMenu from "@/components/ExportMenu";
 import {
   Wallet, RefreshCw, ArrowLeftRight, FileText, Receipt, Undo2, Plus, Link2,
 } from "lucide-react";
@@ -266,10 +267,33 @@ function AgingSection() {
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-[var(--color-border)]">
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between flex-wrap gap-2">
           <h3 className="text-sm font-semibold">
             {kind === "ar" ? "Accounts Receivable aging" : "Accounts Payable aging"} · as of {asOf}
           </h3>
+          <ExportMenu
+            size="sm"
+            filename={`${kind === "ar" ? "ar" : "ap"}-aging-${asOf}`}
+            title={`${kind === "ar" ? "Accounts Receivable aging" : "Accounts Payable aging"} · as of ${asOf}`}
+            columns={[
+              { key: "party", label: "Party" },
+              { key: "notDue", label: "Not Due" },
+              { key: "d0_30", label: "0-30" },
+              { key: "d31_60", label: "31-60" },
+              { key: "d61_90", label: "61-90" },
+              { key: "d90_plus", label: "90+" },
+              { key: "total", label: "Total" },
+            ]}
+            rows={rows.map((r) => ({
+              party: r.party,
+              notDue: rupee(r.notDue),
+              d0_30: rupee(r.d0_30),
+              d31_60: rupee(r.d31_60),
+              d61_90: rupee(r.d61_90),
+              d90_plus: rupee(r.d90_plus),
+              total: rupee(r.total),
+            }))}
+          />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
@@ -388,9 +412,29 @@ function StatementSection({ parties }: { parties: LedgerLite[] }) {
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between flex-wrap gap-2">
             <h3 className="text-sm font-semibold">Statement · {from} → {to}</h3>
-            <div className="flex gap-4 text-xs">
+            <div className="flex items-center gap-4 text-xs">
               <span className="text-[var(--color-muted)]">Opening: <span className="tabular-nums text-[var(--color-text)]">{rupee(data.opening)}</span></span>
               <span className="text-[var(--color-muted)]">Closing: <span className="tabular-nums text-[var(--color-primary)] font-semibold">{rupee(data.closing)}</span></span>
+              <ExportMenu
+                size="sm"
+                filename={`party-statement-${from}_${to}`}
+                title={`Party statement · ${from} → ${to}`}
+                subtitle={`Opening ${rupee(data.opening)} · Closing ${rupee(data.closing)}`}
+                columns={[
+                  { key: "date", label: "Date" },
+                  { key: "voucher", label: "Voucher" },
+                  { key: "debit", label: "Debit" },
+                  { key: "credit", label: "Credit" },
+                  { key: "balance", label: "Balance" },
+                ]}
+                rows={lines.map((l) => ({
+                  date: l.date,
+                  voucher: l.voucher,
+                  debit: num(l.debit) ? rupee(l.debit) : "",
+                  credit: num(l.credit) ? rupee(l.credit) : "",
+                  balance: rupee(l.balance),
+                }))}
+              />
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -508,11 +552,32 @@ function OpenBillsSection({ parties }: { parties: LedgerLite[] }) {
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">Open bills</h3>
-          <button type="button" onClick={() => void load(partyId)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Refresh">
-            <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
-          </button>
+          <div className="flex items-center gap-2">
+            <ExportMenu
+              size="sm"
+              filename="open-bills"
+              title="Open bills"
+              columns={[
+                { key: "date", label: "Date" },
+                { key: "voucherNumber", label: "Voucher" },
+                { key: "kind", label: "Kind" },
+                { key: "amount", label: "Amount" },
+                { key: "outstanding", label: "Outstanding" },
+              ]}
+              rows={bills.map((b) => ({
+                date: b.date,
+                voucherNumber: b.voucherNumber,
+                kind: b.kind ?? "",
+                amount: rupee(b.amount),
+                outstanding: rupee(b.outstanding),
+              }))}
+            />
+            <button type="button" onClick={() => void load(partyId)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Refresh">
+              <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">

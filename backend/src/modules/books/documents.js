@@ -169,6 +169,67 @@ async function recordDeposit(tenantId, actorId, bankLedgerId, amount, date) {
     [{ ledgerId: bankLedgerId, debit: toDb(amount), credit: "0" }, { ledgerId: undep, debit: "0", credit: toDb(amount) }]);
 }
 
+// Resolve (or create) a party ledger by NAME. SALES → Sundry Debtors,
+// PURCHASE → Sundry Creditors (the standard Tally groups seeded by seed.js).
+// Bulk import rows carry the party as a free-text name, so we look it up
+// case-insensitively and create it under the right group when missing.
+async function resolvePartyLedgerByName(tenantId, name, type) {
+  const nm = String(name || "").trim();
+  if (!nm) throw new PostError("BAD_INPUT", "party (name) required", 400);
+  const { rows } = await pool.query("SELECT id FROM book_ledgers WHERE tenant_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1", [tenantId, nm]);
+  if (rows[0]) return rows[0].id;
+  const groupName = type === "PURCHASE" ? "Sundry Creditors" : "Sundry Debtors";
+  const { rows: g } = await pool.query("SELECT id FROM book_account_groups WHERE tenant_id=$1 AND name=$2 LIMIT 1", [tenantId, groupName]);
+  if (!g[0]) throw new PostError("NOT_SEEDED", `${groupName} group missing — seed first`, 422);
+  const { rows: ins } = await pool.query(
+    "INSERT INTO book_ledgers(tenant_id,name,group_id,is_party) VALUES($1,$2,$3,true) ON CONFLICT(tenant_id,name) DO UPDATE SET name=EXCLUDED.name RETURNING id",
+    [tenantId, nm, g[0].id]
+  );
+  return ins[0].id;
+}
+
+// Bulk-create SALES / PURCHASE invoices from flat rows. Each row carries its own
+// `type` ('SALES'|'PURCHASE') and reuses the exact single-create posting path:
+// resolve the party ledger by name → build the balanced GST voucher via the same
+// mapper + ctx used by POST /documents/sales|purchase → postVoucher. Each row is
+// posted in its OWN try/catch (postVoucher is itself a transaction), so one bad
+// row never rolls back the rows that already posted cleanly.
+// row: { type, party (name), date, lineTotal, gstRate, interState?, narration?, invoiceNumber? }
+async function bulkCreateInvoices(tenantId, actorId, rows) {
+  if (!Array.isArray(rows)) throw new PostError("BAD_INPUT", "rows[] required", 400);
+  let created = 0, failed = 0;
+  const errors = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i] || {};
+    try {
+      const type = String(row.type || "").toUpperCase();
+      if (type !== "SALES" && type !== "PURCHASE") throw new PostError("BAD_INPUT", "type must be SALES or PURCHASE", 400);
+      if (row.lineTotal == null || row.gstRate == null || !row.date) throw new PostError("BAD_INPUT", "party, date, lineTotal, gstRate required", 400);
+      const partyLedgerId = await resolvePartyLedgerByName(tenantId, row.party, type);
+      const input = {
+        lineTotal: row.lineTotal,
+        gstRate: row.gstRate,
+        interState: !!row.interState,
+        date: row.date,
+        narration: row.narration || null,
+        reference: row.invoiceNumber || null,
+      };
+      let m;
+      if (type === "SALES") {
+        m = buildSalesVoucher(input, await salesCtx(tenantId, partyLedgerId));
+      } else {
+        m = buildPurchaseVoucher(input, await purchaseCtx(tenantId, partyLedgerId));
+      }
+      await postVoucher(tenantId, actorId, m.voucher, m.entries, { taxes: m.taxes });
+      created++;
+    } catch (e) {
+      failed++;
+      errors.push({ row: i + 1, error: e.message });
+    }
+  }
+  return { created, failed, errors };
+}
+
 // Recurring templates.
 function advanceDate(dateStr, freq) {
   const d = new Date(dateStr);
@@ -274,4 +335,4 @@ async function postDocumentStock(tenantId, actorId, docId) {
   return { docKind, moved };
 }
 
-module.exports = { createDocument, convertDocument, cancelDocument, listDocuments, allocate, recordDeposit, createRecurring, runRecurringDue, runAllRecurring, postDocumentStock, salesCtx, purchaseCtx, NEXT };
+module.exports = { createDocument, convertDocument, cancelDocument, listDocuments, allocate, recordDeposit, createRecurring, runRecurringDue, runAllRecurring, postDocumentStock, bulkCreateInvoices, salesCtx, purchaseCtx, NEXT };

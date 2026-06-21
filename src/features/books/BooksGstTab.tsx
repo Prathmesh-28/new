@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import ExportMenu from "@/components/ExportMenu";
 import {
   Landmark, Download, RefreshCw, Calculator, FileJson, Receipt, Plus,
   Percent, Banknote, ShieldAlert, Ban, GitCompareArrows,
@@ -211,6 +212,23 @@ function SectionTable({
         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)] tabular-nums">
           {count}
         </span>
+        <div className="ml-auto">
+          <ExportMenu
+            size="sm"
+            filename={`gstr1-${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`}
+            title={`GSTR-1 ${title}`}
+            columns={[
+              { key: "gstin", label: "GSTIN" },
+              { key: "pos", label: "PoS" },
+              { key: "rate", label: "Rate %" },
+              { key: "taxable", label: "Taxable" },
+              { key: "cgst", label: "CGST" },
+              { key: "sgst", label: "SGST" },
+              { key: "igst", label: "IGST" },
+            ]}
+            rows={rows as unknown as Record<string, unknown>[]}
+          />
+        </div>
       </div>
       <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">
         <table className="w-full text-sm border-collapse">
@@ -355,6 +373,16 @@ export default function BooksGstTab() {
     void loadSummaries(period);
   };
 
+  // GSTR-3B + TDS summary as exportable rows (mirrors the StatCards on screen)
+  const summaryRows: Record<string, unknown>[] = [
+    { metric: "GSTR-3B output tax", value: rupee(gstr3b?.outputTax) },
+    { metric: "Input tax credit", value: rupee(gstr3b?.inputTaxCredit) },
+    { metric: "Net GST liability", value: rupee(gstr3b?.netLiability) },
+    { metric: "TDS deducted", value: rupee(tdsReport?.amount) },
+    { metric: "TDS base", value: rupee(tdsReport?.base) },
+    { metric: "TDS count", value: String(tdsReport?.count ?? 0) },
+  ];
+
   return (
     <div className="space-y-6">
       {/* PERIOD PICKER + ACTIONS */}
@@ -375,10 +403,21 @@ export default function BooksGstTab() {
         >
           <RefreshCw size={14} className={gstr1Busy || summaryBusy ? "animate-spin" : ""} /> Refresh
         </button>
-        <button type="button" onClick={downloadJson} disabled={downloading} className={`${btnPrimary} ml-auto`}>
-          {downloading ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
-          Download GSTR-1 JSON
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <ExportMenu
+            filename={`gst-summary-${period}`}
+            title={`GST summary · ${period}`}
+            columns={[
+              { key: "metric", label: "Metric" },
+              { key: "value", label: "Value" },
+            ]}
+            rows={summaryRows}
+          />
+          <button type="button" onClick={downloadJson} disabled={downloading} className={btnPrimary}>
+            {downloading ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+            Download GSTR-1 JSON
+          </button>
+        </div>
       </div>
 
       {/* GSTR-3B + TDS SUMMARY */}
@@ -418,6 +457,23 @@ export default function BooksGstTab() {
 
       {/* HSN SUMMARY */}
       <Card title="HSN / SAC summary (Table 12)" icon={<FileJson size={15} />}>
+        <div className="flex justify-end mb-3 -mt-2">
+          <ExportMenu
+            size="sm"
+            filename={`hsn-summary-${period}`}
+            title={`HSN / SAC summary · ${period}`}
+            columns={[
+              { key: "hsn", label: "HSN / SAC" },
+              { key: "rate", label: "Rate %" },
+              { key: "taxable", label: "Taxable" },
+              { key: "cgst", label: "CGST" },
+              { key: "sgst", label: "SGST" },
+              { key: "igst", label: "IGST" },
+              { key: "totalTax", label: "Total tax" },
+            ]}
+            rows={(hsn?.rows ?? []) as unknown as Record<string, unknown>[]}
+          />
+        </div>
         <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">
           <table className="w-full text-sm border-collapse">
             <thead>
@@ -1095,6 +1151,22 @@ function Gstr2bBucketTable({ title, rows, tint }: { title: string; rows: Gstr2bM
         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)] tabular-nums">
           {rows.length}
         </span>
+        <div className="ml-auto">
+          <ExportMenu
+            size="sm"
+            filename={`gstr2b-${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`}
+            title={`GSTR-2B · ${title}`}
+            columns={[
+              { key: "gstin", label: "GSTIN" },
+              { key: "invoiceNo", label: "Invoice" },
+              { key: "invoiceDate", label: "Date" },
+              { key: "taxable", label: "Taxable" },
+              { key: "tax", label: "Tax" },
+              { key: "reason", label: "Reason" },
+            ]}
+            rows={rows as unknown as Record<string, unknown>[]}
+          />
+        </div>
       </div>
       <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">
         <table className="w-full text-sm border-collapse">

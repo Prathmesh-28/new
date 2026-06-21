@@ -311,8 +311,67 @@ async function shippingCharge(tenantId, { ruleId, basisValue }) {
   return { charge, accountLedgerId: rule.account_ledger_id, basis: rule.basis };
 }
 
+// ───────────────────────── Bulk price-list upsert ─────────────────────────────
+// Bulk-set selling prices on a price list, reusing the inventory price-list +
+// price-list-item upsert SQL (book_price_lists / book_price_list_items). Each row
+// is { itemId|itemName, priceList?, price, currency? }: resolves (or creates) the
+// named price list, resolves the item by id or name, then upserts the price as a
+// decimal-backed string. Every row runs in its own try/catch so one bad row never
+// aborts the batch. Single-create logic uses plain pool.query (no per-create
+// transaction), so per-row is correct here. Returns { created, failed, errors }.
+async function bulkUpsertPrices(tenantId, actorId, rows) {
+  if (!Array.isArray(rows)) throw new PostError("BAD_INPUT", "rows[] required", 400);
+  let created = 0, failed = 0;
+  const errors = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i] || {};
+    try {
+      if (r.price == null || String(r.price).trim() === "")
+        throw new PostError("BAD_INPUT", "price required", 400);
+
+      // Resolve (or create) the named price list — mirrors inventory.createPriceList.
+      const plName = r.priceList || "Standard";
+      const currency = r.currency || "INR";
+      let pl = (await pool.query(
+        "INSERT INTO book_price_lists(tenant_id,name,currency) VALUES($1,$2,$3) ON CONFLICT(tenant_id,name) DO NOTHING RETURNING *",
+        [tenantId, plName, currency]
+      )).rows[0];
+      if (!pl)
+        pl = (await pool.query(
+          "SELECT * FROM book_price_lists WHERE tenant_id=$1 AND name=$2",
+          [tenantId, plName]
+        )).rows[0];
+      if (!pl) throw new PostError("NOT_FOUND", "Price list not found", 404);
+
+      // Resolve the item by id or name (book_stock_items).
+      let itemId = r.itemId || null;
+      if (!itemId) {
+        if (!r.itemName) throw new PostError("BAD_INPUT", "itemId or itemName required", 400);
+        const ir = await pool.query(
+          "SELECT id FROM book_stock_items WHERE tenant_id=$1 AND name=$2",
+          [tenantId, r.itemName]
+        );
+        if (!ir.rows[0]) throw new PostError("NOT_FOUND", `Item not found: ${r.itemName}`, 404);
+        itemId = ir.rows[0].id;
+      }
+
+      // Upsert the price — mirrors inventory.setPrice.
+      await pool.query(
+        "INSERT INTO book_price_list_items(tenant_id,price_list_id,item_id,price) VALUES($1,$2,$3,$4) ON CONFLICT(price_list_id,item_id) DO UPDATE SET price=EXCLUDED.price RETURNING *",
+        [tenantId, pl.id, itemId, toDb(r.price)]
+      );
+      created++;
+    } catch (e) {
+      failed++;
+      errors.push({ row: i + 1, error: e && e.message ? e.message : String(e) });
+    }
+  }
+  return { created, failed, errors };
+}
+
 module.exports = {
   createPricingRule, listPricingRules, deletePricingRule,
+  bulkUpsertPrices,
   applyPricing,
   createCoupon, redeemCoupon,
   createShippingRule, shippingCharge,

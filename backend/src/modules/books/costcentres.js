@@ -53,4 +53,31 @@ async function costCentreReport(tenantId, fy) {
   }));
 }
 
-module.exports = { listCostCentres, createCostCentre, updateCostCentre, costCentreReport };
+// Bulk-create cost centres. Each row reuses createCostCentre and runs in its own
+// try/catch so one bad row never aborts the rest. createCostCentre is non-transactional
+// (single INSERT … ON CONFLICT), so per-row error isolation is sufficient.
+async function bulkCreateCostCentres(tenantId, actorId, rows) {
+  if (!Array.isArray(rows)) throw new PostError("BAD_INPUT", "rows array required", 400);
+  let created = 0, failed = 0; const errors = [];
+  for (let i = 0; i < rows.length; i++) {
+    try { await createCostCentre(tenantId, rows[i] || {}); created++; }
+    catch (e) { failed++; errors.push({ row: i + 1, error: e.message }); }
+  }
+  return { created, failed, errors };
+}
+
+// Bulk-create projects. Reuses ops.createProject (same single INSERT … ON CONFLICT,
+// non-transactional) with per-row error isolation. Required lazily to avoid any
+// load-order coupling between the books modules.
+async function bulkCreateProjects(tenantId, actorId, rows) {
+  if (!Array.isArray(rows)) throw new PostError("BAD_INPUT", "rows array required", 400);
+  const { createProject } = require("./ops");
+  let created = 0, failed = 0; const errors = [];
+  for (let i = 0; i < rows.length; i++) {
+    try { await createProject(tenantId, rows[i] || {}); created++; }
+    catch (e) { failed++; errors.push({ row: i + 1, error: e.message }); }
+  }
+  return { created, failed, errors };
+}
+
+module.exports = { listCostCentres, createCostCentre, updateCostCentre, costCentreReport, bulkCreateCostCentres, bulkCreateProjects };

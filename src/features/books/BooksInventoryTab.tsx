@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import BulkUpload from "@/components/BulkUpload";
+import ExportMenu from "@/components/ExportMenu";
 import {
   Boxes, Plus, RefreshCw, ArrowDownToLine, ArrowUpFromLine, Factory,
   ClipboardCheck, AlertTriangle, BarChart3, PackageX, Trash2,
@@ -344,6 +346,23 @@ function ItemsSection({
   const [openingValue, setOpeningValue] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Rows shaped to match the on-screen items table, for ExportMenu.
+  const exportRows = useMemo(
+    () =>
+      items.map((i) => ({
+        name: itemName(i),
+        unit: i.unit || "",
+        hsn_sac: i.hsn_sac ?? i.hsn ?? "",
+        gst_rate: (i.gst_rate ?? i.gstRate) != null ? num(i.gst_rate ?? i.gstRate) : "",
+        valuation_method: (i.valuation_method ?? i.valuationMethod ?? "").toString().replace(/_/g, " "),
+        closing_qty:
+          (i.closing_qty ?? i.current_qty ?? i.opening_qty) != null
+            ? qtyFmt(i.closing_qty ?? i.current_qty ?? i.opening_qty)
+            : "",
+      })),
+    [items],
+  );
+
   const submit = async () => {
     if (!name.trim()) {
       toast.error("Enter an item name");
@@ -382,6 +401,47 @@ function ItemsSection({
           <button type="button" onClick={() => void onReload()} className={btnGhost} title="Refresh">
             <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
           </button>
+          <ExportMenu
+            filename="inventory-items"
+            title="Inventory items"
+            columns={[
+              { key: "name", label: "Item" },
+              { key: "unit", label: "Unit" },
+              { key: "hsn_sac", label: "HSN / SAC" },
+              { key: "gst_rate", label: "GST%" },
+              { key: "valuation_method", label: "Valuation" },
+              { key: "closing_qty", label: "Closing qty" },
+            ]}
+            rows={exportRows}
+          />
+          <BulkUpload
+            title="Bulk upload items"
+            templateName="inventory-items-template"
+            label="Bulk upload"
+            canWrite={canWrite}
+            endpoint="/api/books/inventory/items/bulk"
+            onDone={() => void onReload()}
+            columns={[
+              { key: "name", label: "Name", example: "Steel rod 12mm", required: true },
+              { key: "unit", label: "Unit", example: "Nos", required: true },
+              { key: "hsn_sac", label: "HSN / SAC", example: "7214" },
+              { key: "gst_rate", label: "GST rate", example: "18" },
+              { key: "valuation_method", label: "Valuation method", example: "FIFO" },
+              { key: "opening_qty", label: "Opening qty", example: "0" },
+              { key: "opening_value", label: "Opening value", example: "0" },
+              { key: "barcode", label: "Barcode", example: "8901234567890" },
+            ]}
+            transform={(r) => ({
+              name: r.name?.trim(),
+              unit: r.unit?.trim() || undefined,
+              hsn_sac: r.hsn_sac?.trim() || undefined,
+              gst_rate: r.gst_rate?.trim() ? Number(r.gst_rate) : undefined,
+              valuation_method: r.valuation_method?.trim().toUpperCase() || undefined,
+              opening_qty: r.opening_qty?.trim() ? Number(r.opening_qty) : undefined,
+              opening_value: r.opening_value?.trim() ? Number(r.opening_value) : undefined,
+              barcode: r.barcode?.trim() || undefined,
+            })}
+          />
           {canWrite && (
             <button type="button" onClick={() => setOpen((o) => !o)} className={btnPrimary}>
               <Plus size={14} /> New item

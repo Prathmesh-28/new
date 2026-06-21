@@ -222,9 +222,44 @@ async function listItc04Challans(tenantId, filter = {}) {
   return { challans: rows, summary };
 }
 
+// ── Bulk create helpers ───────────────────────────────────────────────────────
+// Process each row in its own try/catch so one bad row never aborts the rest.
+// Each single-create is already self-contained (createBoe posts via postVoucher,
+// which is internally transactional; createItc04Challan is a single INSERT) — so a
+// per-row loop is the correct granularity (no outer batch transaction needed).
+async function bulkCreateBoe(tenantId, actorId, rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const errors = [];
+  let created = 0;
+  for (let i = 0; i < list.length; i++) {
+    try {
+      await createBoe(tenantId, actorId, list[i] || {});
+      created++;
+    } catch (e) {
+      errors.push({ row: i + 1, error: e && e.message ? e.message : String(e) });
+    }
+  }
+  return { created, failed: errors.length, errors };
+}
+
+async function bulkCreateItc04(tenantId, actorId, rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const errors = [];
+  let created = 0;
+  for (let i = 0; i < list.length; i++) {
+    try {
+      await createItc04Challan(tenantId, actorId, list[i] || {});
+      created++;
+    } catch (e) {
+      errors.push({ row: i + 1, error: e && e.message ? e.message : String(e) });
+    }
+  }
+  return { created, failed: errors.length, errors };
+}
+
 module.exports = {
   // BoE
-  buildBillOfEntryVoucher, boeCtx, createBoe, listBoe, importItc,
+  buildBillOfEntryVoucher, boeCtx, createBoe, bulkCreateBoe, listBoe, importItc,
   // ITC-04
-  createItc04Challan, listItc04Challans, ITC04_DIRECTIONS,
+  createItc04Challan, bulkCreateItc04, listItc04Challans, ITC04_DIRECTIONS,
 };

@@ -787,6 +787,15 @@ router.patch("/recurrences/:id", canPost, async (req, res) => { try { res.json(a
 router.delete("/recurrences/:id", canPost, async (req, res) => { try { res.json(await recurrence.deleteRecurrence(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.get("/recurrences/:id/preview", async (req, res) => { try { res.json(await recurrence.preview(tenantOf(req), req.params.id, req.query.count)); } catch (e) { fail(res, e); } });
 router.post("/recurrences/run", canPost, async (req, res) => { try { res.json(await recurrence.runDue(tenantOf(req), (req.body || {}).asOf, req.user.id)); } catch (e) { fail(res, e); } });
+// ── Bulk upload (CSV template → rows): { rows:[...] } → { created, failed, errors:[{row,error}] } ──
+router.post("/ledgers/bulk", canPost, async (req, res) => { try { res.json(await ledgersadmin.bulkCreateLedgers(tenantOf(req), req.user.id, (req.body || {}).rows || [])); } catch (e) { fail(res, e); } });
+router.post("/inventory/items/bulk", canPost, async (req, res) => { try { res.status(201).json(await items.bulkCreateItems(tenantOf(req), req.user.id, (req.body || {}).rows || [])); } catch (e) { fail(res, e); } });
+router.post("/cost-centres/bulk", canPost, async (req, res) => { try { res.status(201).json(await cc.bulkCreateCostCentres(tenantOf(req), req.user.id, (req.body || {}).rows || [])); } catch (e) { fail(res, e); } });
+router.post("/projects/bulk", canPost, async (req, res) => { try { res.status(201).json(await cc.bulkCreateProjects(tenantOf(req), req.user.id, (req.body || {}).rows || [])); } catch (e) { fail(res, e); } });
+router.post("/pricing/bulk", canPost, async (req, res) => { try { res.json(await pricing.bulkUpsertPrices(tenantOf(req), req.user.id, (req.body || {}).rows || [])); } catch (e) { fail(res, e); } });
+router.post("/boe/bulk", canPost, async (req, res) => { try { res.json(await billofentry.bulkCreateBoe(tenantOf(req), req.user.id, (req.body || {}).rows || [])); } catch (e) { fail(res, e); } });
+router.post("/itc04/bulk", canPost, async (req, res) => { try { res.json(await billofentry.bulkCreateItc04(tenantOf(req), req.user.id, (req.body || {}).rows || [])); } catch (e) { fail(res, e); } });
+router.post("/documents/bulk", canPost, async (req, res) => { try { res.json(await docs.bulkCreateInvoices(tenantOf(req), req.user.id, (req.body || {}).rows || [])); } catch (e) { fail(res, e); } });
 
 // ── M5: reconciliation bridge ────────────────────────────────────────────────
 router.post("/recon/import", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await recon.importLines(tenantOf(req), b.bankLedgerId, b.lines)); } catch (e) { fail(res, e); } });

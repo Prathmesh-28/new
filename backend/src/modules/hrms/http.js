@@ -20,6 +20,7 @@ const fail = (res, e) => {
 // ── Employees ────────────────────────────────────────────────────────────────
 router.get("/employees", async (req, res) => { try { res.json(await hr.listEmployees(tenantOf(req))); } catch (e) { fail(res, e); } });
 router.post("/employees", canWrite, async (req, res) => { try { res.status(201).json(await hr.createEmployee(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/employees/bulk", canWrite, async (req, res) => { try { res.status(201).json(await hr.bulkCreateEmployees(tenantOf(req), req.user.id, (req.body || {}).rows || [])); } catch (e) { fail(res, e); } });
 router.post("/employees/:id/status", canWrite, async (req, res) => { try { res.json(await hr.setEmployeeStatus(tenantOf(req), req.params.id, (req.body || {}).status)); } catch (e) { fail(res, e); } });
 
 // ── Attendance ───────────────────────────────────────────────────────────────

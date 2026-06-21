@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import BulkUpload from "@/components/BulkUpload";
+import ExportMenu from "@/components/ExportMenu";
 import {
   Tag, Ticket, Truck, Plus, Trash2, RefreshCw, FlaskConical, Gift, Percent,
 } from "lucide-react";
@@ -103,7 +105,7 @@ const SCHEMES = [
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
-function BooksPricingTab() {
+function BooksPricingTab({ canWrite = true }: { canWrite?: boolean } = {}) {
   const [sub, setSub] = useState<SubTab>("rules");
 
   const subTabs: { id: SubTab; label: string; icon: React.ReactNode }[] = [
@@ -135,7 +137,7 @@ function BooksPricingTab() {
         })}
       </div>
 
-      {sub === "rules" && <PricingRulesPanel />}
+      {sub === "rules" && <PricingRulesPanel canWrite={canWrite} />}
       {sub === "coupons" && <CouponsPanel />}
       {sub === "shipping" && <ShippingPanel />}
     </div>
@@ -145,7 +147,7 @@ function BooksPricingTab() {
 // ─────────────────────────────────────────────────────────────────────────────
 // PRICING RULES
 // ─────────────────────────────────────────────────────────────────────────────
-function PricingRulesPanel() {
+function PricingRulesPanel({ canWrite }: { canWrite: boolean }) {
   const [rules, setRules] = useState<PricingRule[]>([]);
   const [busy, setBusy] = useState(true);
 
@@ -326,11 +328,86 @@ function PricingRulesPanel() {
 
       {/* LIST */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">Pricing rules <span className="text-[var(--color-muted)] tabular-nums">· {rules.length}</span></h3>
-          <button type="button" onClick={() => void load()} className="text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Refresh">
-            <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
-          </button>
+          <div className="flex items-center gap-2">
+            <BulkUpload
+              title="Bulk upload pricing rules"
+              templateName="pricing-rules-template"
+              size="sm"
+              columns={[
+                { key: "title", label: "Title", example: "Diwali 10% off", required: true },
+                { key: "appliesOn", label: "Applies on", example: "all" },
+                { key: "scopeValue", label: "Scope value", example: "" },
+                { key: "partyScope", label: "Party scope", example: "all" },
+                { key: "partyValue", label: "Party value", example: "" },
+                { key: "minQty", label: "Min qty", example: "0" },
+                { key: "maxQty", label: "Max qty", example: "" },
+                { key: "minAmount", label: "Min amount", example: "0" },
+                { key: "action", label: "Action", example: "discount_pct" },
+                { key: "value", label: "Value", example: "10" },
+                { key: "scheme", label: "Scheme", example: "none" },
+                { key: "freeItemId", label: "Free item id", example: "" },
+                { key: "freeQty", label: "Free qty", example: "0" },
+                { key: "priority", label: "Priority", example: "0" },
+                { key: "validFrom", label: "Valid from", example: "" },
+                { key: "validTo", label: "Valid to", example: "" },
+              ]}
+              endpoint="/api/books/pricing/bulk"
+              transform={(row) => ({
+                title: (row.title || "").trim(),
+                appliesOn: (row.appliesOn || "").trim() || "all",
+                scopeValue: (row.scopeValue || "").trim() || undefined,
+                partyScope: (row.partyScope || "").trim() || "all",
+                partyValue: (row.partyValue || "").trim() || undefined,
+                minQty: (row.minQty || "").trim() || 0,
+                maxQty: (row.maxQty || "").trim() || undefined,
+                minAmount: (row.minAmount || "").trim() || 0,
+                action: (row.action || "").trim() || "discount_pct",
+                value: (row.value || "").trim() || 0,
+                scheme: (row.scheme || "").trim() || "none",
+                freeItemId: (row.freeItemId || "").trim() || undefined,
+                freeQty: (row.freeQty || "").trim() || 0,
+                priority: (row.priority || "").trim() || 0,
+                validFrom: (row.validFrom || "").trim() || undefined,
+                validTo: (row.validTo || "").trim() || undefined,
+              })}
+              canWrite={canWrite}
+              onDone={() => void load()}
+            />
+            <ExportMenu
+              filename="pricing-rules"
+              title="Pricing rules"
+              size="sm"
+              columns={[
+                { key: "title", label: "Title" },
+                { key: "applies_on", label: "Applies on" },
+                { key: "scope_value", label: "Scope value" },
+                { key: "party_scope", label: "Party scope" },
+                { key: "party_value", label: "Party value" },
+                { key: "action", label: "Action" },
+                { key: "value", label: "Value" },
+                { key: "scheme", label: "Scheme" },
+                { key: "priority", label: "Priority" },
+                { key: "is_active", label: "Active" },
+              ]}
+              rows={rules.map((r) => ({
+                title: r.title,
+                applies_on: r.applies_on,
+                scope_value: r.scope_value || "",
+                party_scope: r.party_scope,
+                party_value: r.party_value || "",
+                action: r.action,
+                value: r.value,
+                scheme: r.scheme,
+                priority: String(r.priority),
+                is_active: r.is_active ? "Yes" : "No",
+              }))}
+            />
+            <button type="button" onClick={() => void load()} className="text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Refresh">
+              <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">

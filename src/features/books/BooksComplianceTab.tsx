@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import BulkUpload from "@/components/BulkUpload";
+import ExportMenu from "@/components/ExportMenu";
 import {
   ScrollText, FileJson, Ship, Truck, RefreshCw, Download, Plus,
   Calculator, ClipboardList, FileCheck2, Pencil, UserCog, CalendarClock, Ban,
@@ -302,6 +304,18 @@ function Gstr9Section() {
     { label: "7J — Total reversed", b: t7?.["7J_total_reversed"] },
   ];
 
+  // Flatten the GSTR-9 tables on screen (Table 4 outward + Tables 6/7 ITC) into a
+  // single export-friendly row set so the toolbar Export menu mirrors the renders.
+  const gstr9ExportRows = [
+    ...t4Labels.map(([k, label]) => {
+      const b = t4?.[k] ?? {};
+      return { section: "Pt II Table 4", row: label, taxable: num(b.taxable), cgst: num(b.cgst), sgst: num(b.sgst), igst: num(b.igst), cess: num(b.cess) };
+    }),
+    ...itcLabels.map((r) => ({
+      section: "Pt III Tables 6-7", row: r.label, taxable: 0, cgst: num(r.b?.cgst), sgst: num(r.b?.sgst), igst: num(r.b?.igst), cess: num(r.b?.cess),
+    })),
+  ];
+
   return (
     <div className="space-y-5">
       <Card
@@ -312,6 +326,21 @@ function Gstr9Section() {
             <select value={fy} onChange={(e) => setFy(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-sm outline-none">
               {fyOptions().map((f) => <option key={f} value={f}>FY {f}</option>)}
             </select>
+            <ExportMenu
+              filename={`gstr9-${fy}`}
+              title={`GSTR-9 — FY ${fy}`}
+              columns={[
+                { key: "section", label: "Section" },
+                { key: "row", label: "Row" },
+                { key: "taxable", label: "Taxable" },
+                { key: "cgst", label: "CGST" },
+                { key: "sgst", label: "SGST" },
+                { key: "igst", label: "IGST" },
+                { key: "cess", label: "Cess" },
+              ]}
+              rows={gstr9ExportRows}
+              size="sm"
+            />
             <button type="button" onClick={() => void loadNine(fy)} className={btnGhost} title="Refresh">
               <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
             </button>
@@ -753,6 +782,53 @@ function BoeCard({ canWrite }: { canWrite: boolean }) {
       icon={<Ship size={15} />}
       action={
         <div className="flex items-center gap-2">
+          <ExportMenu
+            filename="bills-of-entry"
+            title="Bills of Entry"
+            columns={[
+              { key: "boe_no", label: "BoE no" },
+              { key: "port_code", label: "Port" },
+              { key: "boe_date", label: "Date" },
+              { key: "assessable_value", label: "Assessable" },
+              { key: "bcd", label: "BCD" },
+              { key: "sws", label: "SWS" },
+              { key: "import_igst", label: "Import IGST" },
+              { key: "landed_cost", label: "Landed cost" },
+              { key: "hsn_sac", label: "HSN/SAC" },
+            ]}
+            rows={rows}
+            size="sm"
+          />
+          <BulkUpload
+            title="Bulk upload Bills of Entry"
+            templateName="bills-of-entry-template"
+            endpoint="/api/books/boe/bulk"
+            canWrite={canWrite}
+            size="sm"
+            onDone={() => void load()}
+            columns={[
+              { key: "vendorLedgerId", label: "Vendor ledger id", required: true, example: "ledger-uuid" },
+              { key: "boeNo", label: "BoE no", required: true, example: "1234567" },
+              { key: "boeDate", label: "BoE date", required: true, example: "2026-04-01" },
+              { key: "portCode", label: "Port code", example: "INNSA1" },
+              { key: "assessableValue", label: "Assessable value", required: true, example: "100000" },
+              { key: "bcd", label: "BCD", example: "10000" },
+              { key: "sws", label: "SWS", example: "1000" },
+              { key: "importIgst", label: "Import IGST", example: "19980" },
+              { key: "hsn", label: "HSN", example: "84713010" },
+            ]}
+            transform={(r) => ({
+              vendorLedgerId: r.vendorLedgerId,
+              boeNo: r.boeNo,
+              boeDate: r.boeDate,
+              portCode: r.portCode || undefined,
+              assessableValue: Number(r.assessableValue) || 0,
+              bcd: Number(r.bcd) || 0,
+              sws: Number(r.sws) || 0,
+              importIgst: Number(r.importIgst) || 0,
+              hsn: r.hsn || undefined,
+            })}
+          />
           <button type="button" onClick={() => void load()} className={btnGhost}><RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh</button>
           {canWrite && <button type="button" onClick={() => setOpen((o) => !o)} className={btnPrimary}><Plus size={14} /> New BoE</button>}
         </div>
@@ -913,6 +989,59 @@ function Itc04Card({ canWrite }: { canWrite: boolean }) {
             <option value="SENT">Sent (Table 4)</option>
             <option value="RECEIVED">Received (Table 5A)</option>
           </select>
+          <ExportMenu
+            filename="itc04-challans"
+            title="ITC-04 — job-work challans"
+            columns={[
+              { key: "challan_no", label: "Challan no" },
+              { key: "challan_date", label: "Date" },
+              { key: "direction", label: "Direction" },
+              { key: "job_worker_name", label: "Job-worker" },
+              { key: "job_worker_gstin", label: "Job-worker GSTIN" },
+              { key: "item_description", label: "Item" },
+              { key: "hsn_sac", label: "HSN/SAC" },
+              { key: "qty", label: "Qty" },
+              { key: "uom", label: "UoM" },
+              { key: "taxable_value", label: "Taxable" },
+              { key: "goods_type", label: "Goods type" },
+            ]}
+            rows={rows}
+            size="sm"
+          />
+          <BulkUpload
+            title="Bulk upload ITC-04 challans"
+            templateName="itc04-challans-template"
+            endpoint="/api/books/itc04/bulk"
+            canWrite={canWrite}
+            size="sm"
+            onDone={() => void load(filter)}
+            columns={[
+              { key: "direction", label: "Direction (SENT/RECEIVED)", required: true, example: "SENT" },
+              { key: "challanNo", label: "Challan no", required: true, example: "JW/001" },
+              { key: "challanDate", label: "Challan date", required: true, example: "2026-04-01" },
+              { key: "jobWorkerGstin", label: "Job-worker GSTIN", example: "29ABCDE1234F1Z5" },
+              { key: "jobWorkerName", label: "Job-worker name", example: "Acme Job Works" },
+              { key: "itemDescription", label: "Item description", example: "MS sheets" },
+              { key: "hsn", label: "HSN", example: "7208" },
+              { key: "qty", label: "Qty", example: "100" },
+              { key: "uom", label: "UoM", example: "KGS" },
+              { key: "taxableValue", label: "Taxable value", example: "50000" },
+              { key: "goodsType", label: "Goods type (INPUT/CAPITAL)", example: "INPUT" },
+            ]}
+            transform={(r) => ({
+              direction: (r.direction || "SENT").toUpperCase(),
+              challanNo: r.challanNo,
+              challanDate: r.challanDate,
+              jobWorkerGstin: r.jobWorkerGstin || undefined,
+              jobWorkerName: r.jobWorkerName || undefined,
+              itemDescription: r.itemDescription || undefined,
+              hsn: r.hsn || undefined,
+              qty: Number(r.qty) || 0,
+              uom: r.uom || undefined,
+              taxableValue: Number(r.taxableValue) || 0,
+              goodsType: (r.goodsType || "INPUT").toUpperCase(),
+            })}
+          />
           {canWrite && <button type="button" onClick={() => setOpen((o) => !o)} className={btnPrimary}><Plus size={14} /> New challan</button>}
         </div>
       }

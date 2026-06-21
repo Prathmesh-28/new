@@ -494,6 +494,18 @@ async function createEmployee(tenantId, e) {
   );
   return rows[0];
 }
+// Bulk create — each row in its own try/catch so one bad row can't abort the rest.
+// createEmployee is a single INSERT (no transaction), so per-row is correct here.
+async function bulkCreateEmployees(tenantId, actorId, rows) {
+  if (!Array.isArray(rows)) throw new HrError("rows[] required");
+  let created = 0, failed = 0;
+  const errors = [];
+  for (let i = 0; i < rows.length; i += 1) {
+    try { await createEmployee(tenantId, rows[i] || {}); created += 1; }
+    catch (e) { failed += 1; errors.push({ row: i + 1, error: e.message }); }
+  }
+  return { created, failed, errors };
+}
 const listEmployees = async (t) => (await pool.query("SELECT * FROM hrms_employees WHERE tenant_id=$1 ORDER BY name", [t])).rows;
 async function setEmployeeStatus(tenantId, id, status) {
   await pool.query("UPDATE hrms_employees SET status=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, id, status === "INACTIVE" ? "INACTIVE" : "ACTIVE"]);
@@ -1392,7 +1404,7 @@ module.exports = {
   referencedVars, orderComponentsByDependency, evaluateFormulaComponents,
   createSalaryComponent, listSalaryComponents, validateComponentSet,
   // employees
-  createEmployee, listEmployees, setEmployeeStatus,
+  createEmployee, bulkCreateEmployees, listEmployees, setEmployeeStatus,
   // attendance
   markAttendance, bulkMarkAttendance, attendanceFor, attendanceSummary,
   // leave

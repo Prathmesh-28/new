@@ -5,6 +5,56 @@
 const { pool } = require("../../db");
 const { money, toDb } = require("./money");
 const { PostError } = require("./posting-engine");
+const validators = require("../../lib/validators");
+
+// Resolve a group reference that may be a UUID (id) or a group name, to its id.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+async function resolveGroupId(tenantId, group) {
+  const g = String(group == null ? "" : group).trim();
+  if (!g) throw new PostError("BAD_INPUT", "group required", 400);
+  if (UUID_RE.test(g)) {
+    const { rows } = await pool.query("SELECT id FROM book_account_groups WHERE tenant_id=$1 AND id=$2", [tenantId, g]);
+    if (!rows[0]) throw new PostError("NOT_FOUND", `Group not found: ${g}`, 404);
+    return rows[0].id;
+  }
+  const { rows } = await pool.query("SELECT id FROM book_account_groups WHERE tenant_id=$1 AND lower(name)=lower($2)", [tenantId, g]);
+  if (!rows[0]) throw new PostError("NOT_FOUND", `Group not found: ${g}`, 404);
+  return rows[0].id;
+}
+
+// Create one ledger — same validation + INSERT as POST /api/books/ledgers, plus
+// group-by-name resolution. opening_dir ('debit'/'credit'/'dr'/'cr') maps to
+// opening_is_debit (defaults to debit). Single INSERT, non-transactional.
+async function createOneLedger(tenantId, row) {
+  const r = row || {};
+  if (!r.name) throw new PostError("BAD_INPUT", "name required", 400);
+  if (r.gstin && !validators.isValidGstin(String(r.gstin).toUpperCase())) throw new PostError("BAD_INPUT", "Invalid GSTIN (checksum failed)", 400);
+  if (r.pan && !validators.isValidPan(String(r.pan).toUpperCase())) throw new PostError("BAD_INPUT", "Invalid PAN", 400);
+  const groupId = await resolveGroupId(tenantId, r.group != null ? r.group : r.group_id);
+  const openingIsDebit = r.opening_dir == null
+    ? (r.opening_is_debit !== false)
+    : !/^(c|cr|credit)$/i.test(String(r.opening_dir).trim());
+  const { rows } = await pool.query(
+    `INSERT INTO book_ledgers(tenant_id,name,group_id,opening_balance,opening_is_debit,is_party,gstin,pan,is_bank)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [tenantId, r.name, groupId, r.opening_balance || 0, openingIsDebit, !!r.is_party, r.gstin || null, r.pan || null, !!r.is_bank]
+  );
+  return rows[0];
+}
+
+// Bulk-create ledgers (Chart-of-Accounts + party bulk add). Each row reuses the
+// single-create logic above and runs in its own try/catch so one bad row never
+// aborts the rest. createOneLedger is a single INSERT (non-transactional), so
+// per-row error isolation is sufficient — no batch transaction needed.
+async function bulkCreateLedgers(tenantId, actorId, rows) {
+  if (!Array.isArray(rows)) throw new PostError("BAD_INPUT", "rows array required", 400);
+  let created = 0, failed = 0; const errors = [];
+  for (let i = 0; i < rows.length; i++) {
+    try { await createOneLedger(tenantId, rows[i] || {}); created++; }
+    catch (e) { failed++; errors.push({ row: i + 1, error: e.message }); }
+  }
+  return { created, failed, errors };
+}
 
 // Signed opening (debit-positive) of a ledger row.
 const signedOpening = (l) => money(l.opening_balance || 0).mul(l.opening_is_debit ? 1 : -1);
@@ -61,4 +111,4 @@ async function deleteLedger(tenantId, id) {
   return { ok: true, deleted: id };
 }
 
-module.exports = { mergeLedger, deleteLedger };
+module.exports = { mergeLedger, deleteLedger, bulkCreateLedgers };

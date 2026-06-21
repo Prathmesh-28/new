@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import ExportMenu from "@/components/ExportMenu";
 import {
   FileBarChart, Download, RefreshCw, Scale, FileSpreadsheet,
   BookOpen, GitCompareArrows, Target, Users, Package, FolderKanban,
@@ -380,6 +381,43 @@ function ScheduleIIICard({ fy, asOf }: { fy: string; asOf: string }) {
   const bs = data?.balanceSheet;
   const pl = data?.statementOfPL;
 
+  // Flatten Schedule III blocks into export rows ({section, particulars, group, amount}).
+  const bsRows = (() => {
+    if (!bs) return [];
+    const out: Record<string, unknown>[] = [];
+    const push = (section: string, lines: Sch3Line[]) =>
+      lines.forEach((l) => out.push({ section, particulars: l.name, group: l.group, amount: l.amount }));
+    push("Shareholders' funds", bs.equityAndLiabilities.shareholdersFunds);
+    push("Non-current liabilities", bs.equityAndLiabilities.nonCurrentLiabilities);
+    push("Current liabilities", bs.equityAndLiabilities.currentLiabilities);
+    out.push({ section: "", particulars: "Total equity & liabilities", group: "", amount: bs.equityAndLiabilities.total });
+    push("Non-current assets", bs.assets.nonCurrentAssets);
+    push("Current assets", bs.assets.currentAssets);
+    out.push({ section: "", particulars: "Total assets", group: "", amount: bs.assets.total });
+    return out;
+  })();
+  const plRows = (() => {
+    if (!pl) return [];
+    const out: Record<string, unknown>[] = [];
+    const block = (section: string, b: Sch3Block) => {
+      b.lines.forEach((l) => out.push({ section, particulars: l.name, group: l.group, amount: l.amount }));
+      out.push({ section, particulars: "Subtotal", group: "", amount: b.subtotal });
+    };
+    block("Revenue from operations", pl.revenueFromOperations);
+    block("Other income", pl.otherIncome);
+    out.push({ section: "", particulars: "Total revenue", group: "", amount: pl.totalRevenue });
+    block("Expenses", pl.expenses);
+    out.push({ section: "", particulars: "Total expenses", group: "", amount: pl.totalExpenses });
+    out.push({ section: "", particulars: "Profit before tax", group: "", amount: pl.profitBeforeTax });
+    return out;
+  })();
+  const sch3Cols = [
+    { key: "section", label: "Section" },
+    { key: "particulars", label: "Particulars" },
+    { key: "group", label: "Group" },
+    { key: "amount", label: "Amount" },
+  ];
+
   return (
     <Card
       title="Schedule III — P&L and Balance Sheet"
@@ -398,13 +436,16 @@ function ScheduleIIICard({ fy, asOf }: { fy: string; asOf: string }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* BALANCE SHEET */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <h4 className="text-sm font-semibold">Balance Sheet</h4>
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                bs?.balanced
-                  ? "bg-green-900/30 text-green-300 border-green-700/40"
-                  : "bg-red-900/30 text-red-300 border-red-700/40"
-              }`}>{bs?.balanced ? "Balanced" : "Out of balance"}</span>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                  bs?.balanced
+                    ? "bg-green-900/30 text-green-300 border-green-700/40"
+                    : "bg-red-900/30 text-red-300 border-red-700/40"
+                }`}>{bs?.balanced ? "Balanced" : "Out of balance"}</span>
+                <ExportMenu size="sm" filename={`balance-sheet-${fy}`} title={`Balance Sheet ${fy}`} columns={sch3Cols} rows={bsRows} />
+              </div>
             </div>
             <TableShell cols={2} head={<><th className={thCls}>Particulars</th><th className={thR}>Amount</th></>}>
               <Sch3Section title="Shareholders' funds" lines={bs?.equityAndLiabilities.shareholdersFunds ?? []} />
@@ -425,7 +466,10 @@ function ScheduleIIICard({ fy, asOf }: { fy: string; asOf: string }) {
 
           {/* STATEMENT OF P&L */}
           <div className="space-y-2">
-            <h4 className="text-sm font-semibold">Statement of Profit &amp; Loss</h4>
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-sm font-semibold">Statement of Profit &amp; Loss</h4>
+              <ExportMenu size="sm" filename={`statement-pl-${fy}`} title={`Statement of P&L ${fy}`} columns={sch3Cols} rows={plRows} />
+            </div>
             <TableShell cols={2} head={<><th className={thCls}>Particulars</th><th className={thR}>Amount</th></>}>
               <Sch3Section title="Revenue from operations" lines={pl?.revenueFromOperations.lines ?? []} subtotal={pl?.revenueFromOperations.subtotal} />
               <Sch3Section title="Other income" lines={pl?.otherIncome.lines ?? []} subtotal={pl?.otherIncome.subtotal} />
@@ -497,14 +541,36 @@ function ComparativePLCard({ fy }: { fy: string }) {
     );
   };
 
+  const cmpRows: Record<string, unknown>[] = data
+    ? [
+        { metric: "Total income", current: data.current.totalIncome, previous: data.previous.totalIncome, change: String(delta(data.current.totalIncome, data.previous.totalIncome)) },
+        { metric: "Total expense", current: data.current.totalExpense, previous: data.previous.totalExpense, change: String(delta(data.current.totalExpense, data.previous.totalExpense)) },
+        { metric: "Net profit", current: data.current.netProfit, previous: data.previous.netProfit, change: String(delta(data.current.netProfit, data.previous.netProfit)) },
+      ]
+    : [];
+
   return (
     <Card
       title="Comparative P&L (year-over-year)"
       icon={<GitCompareArrows size={15} />}
       action={
-        <button type="button" onClick={load} disabled={busy} className={btnGhost}>
-          <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <ExportMenu
+            size="sm"
+            filename={`comparative-pl-${fy}`}
+            title="Comparative P&L"
+            columns={[
+              { key: "metric", label: "Metric" },
+              { key: "current", label: data?.current.fy ?? "Current" },
+              { key: "previous", label: data?.previous.fy ?? "Previous" },
+              { key: "change", label: "Change" },
+            ]}
+            rows={cmpRows}
+          />
+          <button type="button" onClick={load} disabled={busy} className={btnGhost}>
+            <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
+          </button>
+        </div>
       }
     >
       <TableShell
@@ -560,14 +626,36 @@ function AgingCard({ kind, asOf }: { kind: "ar" | "ap"; asOf: string }) {
 
   const t = data?.totals;
 
+  const agingRows: Record<string, unknown>[] = (data?.parties ?? []).map((p) => ({
+    party: p.name, notDue: p.notDue, d0_30: p.d0_30, d31_60: p.d31_60, d61_90: p.d61_90, d90plus: p.d90plus, total: p.total,
+  }));
+  if (t) agingRows.push({ party: "Total", notDue: t.notDue, d0_30: t.d0_30, d31_60: t.d31_60, d61_90: t.d61_90, d90plus: t.d90plus, total: t.total });
+
   return (
     <Card
       title={title}
       icon={<TrendingUp size={15} />}
       action={
-        <button type="button" onClick={load} disabled={busy} className={btnGhost}>
-          <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <ExportMenu
+            size="sm"
+            filename={`${path}-${asOf}`}
+            title={title}
+            columns={[
+              { key: "party", label: partyCol },
+              { key: "notDue", label: "Not due" },
+              { key: "d0_30", label: "0-30" },
+              { key: "d31_60", label: "31-60" },
+              { key: "d61_90", label: "61-90" },
+              { key: "d90plus", label: "90+" },
+              { key: "total", label: "Total" },
+            ]}
+            rows={agingRows}
+          />
+          <button type="button" onClick={load} disabled={busy} className={btnGhost}>
+            <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
+          </button>
+        </div>
       }
     >
       <TableShell
@@ -646,6 +734,22 @@ function DayBookCard() {
 
   useEffect(() => { void load(); }, [load]);
 
+  const dayBookRows: Record<string, unknown>[] = (rows ?? []).map((v) => {
+    const dr = v.entries.reduce((s, e) => s + Number(e.debit || 0), 0);
+    const cr = v.entries.reduce((s, e) => s + Number(e.credit || 0), 0);
+    return {
+      date: v.voucher_date,
+      voucher: `${v.voucher_type} ${v.voucher_number}`,
+      narration: v.narration ?? "",
+      entries: v.entries
+        .map((e) => `${e.ledger}: ${Number(e.debit || 0) > 0 ? `Dr ${e.debit}` : `Cr ${e.credit}`}`)
+        .join("; "),
+      debit: dr.toFixed(2),
+      credit: cr.toFixed(2),
+      cancelled: v.is_cancelled ? "Yes" : "",
+    };
+  });
+
   return (
     <Card
       title="Day book"
@@ -663,6 +767,22 @@ function DayBookCard() {
           <button type="button" onClick={load} disabled={busy} className={btnGhost}>
             <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Load
           </button>
+          <ExportMenu
+            size="sm"
+            filename={`day-book-${from}_${to}`}
+            title="Day book"
+            subtitle={`${from} to ${to}`}
+            columns={[
+              { key: "date", label: "Date" },
+              { key: "voucher", label: "Voucher" },
+              { key: "narration", label: "Narration" },
+              { key: "entries", label: "Entries" },
+              { key: "debit", label: "Debit" },
+              { key: "credit", label: "Credit" },
+              { key: "cancelled", label: "Cancelled" },
+            ]}
+            rows={dayBookRows}
+          />
         </div>
       }
     >
@@ -746,9 +866,23 @@ function BudgetVsActualCard({ fy }: { fy: string }) {
       title="Budget vs actual"
       icon={<Target size={15} />}
       action={
-        <button type="button" onClick={load} disabled={busy} className={btnGhost}>
-          <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <ExportMenu
+            size="sm"
+            filename={`budget-vs-actual-${fy}`}
+            title={`Budget vs actual ${fy}`}
+            columns={[
+              { key: "ledger", label: "Ledger" },
+              { key: "budget", label: "Budget" },
+              { key: "actual", label: "Actual" },
+              { key: "variance", label: "Variance" },
+            ]}
+            rows={(data?.rows ?? []) as unknown as Record<string, unknown>[]}
+          />
+          <button type="button" onClick={load} disabled={busy} className={btnGhost}>
+            <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
+          </button>
+        </div>
       }
     >
       <TableShell
@@ -825,14 +959,49 @@ function ProfitabilityCard({ fy }: { fy: string }) {
   const tRev = dim === "item" ? t?.salesValue : t?.revenue;
   const tGm = dim === "item" ? t?.grossProfit : t?.grossMargin;
 
+  const profCols = [
+    { key: "name", label: nameHead },
+    ...(dim === "item" ? [{ key: "qtySold", label: "Qty sold" }] : []),
+    { key: "revenue", label: revHead },
+    { key: "cost", label: "Cost" },
+    { key: "grossMargin", label: gmHead },
+    { key: "marginPct", label: "Margin %" },
+  ];
+  const profRows: Record<string, unknown>[] = (data?.rows ?? []).map((r) => ({
+    name: r.party || r.name || "—",
+    qtySold: r.qtySold ?? "",
+    revenue: revOf(r) ?? "",
+    cost: r.cost,
+    grossMargin: gmOf(r) ?? "",
+    marginPct: r.marginPct,
+  }));
+  if (t)
+    profRows.push({
+      name: "Total",
+      qtySold: "",
+      revenue: tRev ?? "",
+      cost: t.cost,
+      grossMargin: tGm ?? "",
+      marginPct: t.marginPct,
+    });
+
   return (
     <Card
       title="Profitability analysis"
       icon={<FileSpreadsheet size={15} />}
       action={
-        <button type="button" onClick={load} disabled={busy} className={btnGhost}>
-          <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <ExportMenu
+            size="sm"
+            filename={`profitability-${dim}-${fy}`}
+            title={`Profitability by ${dim} ${fy}`}
+            columns={profCols}
+            rows={profRows}
+          />
+          <button type="button" onClick={load} disabled={busy} className={btnGhost}>
+            <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
+          </button>
+        </div>
       }
     >
       <div className="flex flex-wrap gap-2 mb-4">
