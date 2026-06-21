@@ -27,6 +27,7 @@ import BooksAutomationTab from "./BooksAutomationTab";
 import BooksComplianceTab from "./BooksComplianceTab";
 import BooksSettlementTab from "./BooksSettlementTab";
 import BooksDocumentsTab from "./BooksDocumentsTab";
+import BooksHealthCard from "./BooksHealthCard";
 import BulkUpload from "@/components/BulkUpload";
 import ExportMenu from "@/components/ExportMenu";
 
@@ -519,6 +520,7 @@ function OverviewTab({ loading }: { loading: boolean }) {
 
   return (
     <div className="space-y-5">
+      <BooksHealthCard />
       <div
         className={`rounded-lg px-4 py-3 text-sm font-medium border ${
           balanced
