@@ -8,6 +8,7 @@ import {
   Plus, RefreshCw, CheckCircle2, XCircle, Undo2, Sparkles, ArrowDownToLine,
   FileText, Trash2, Printer, Send, Receipt, Percent, SlidersHorizontal, Boxes,
   Landmark, Tag, CalendarClock, Layers,
+  Lock, Split, FileBarChart, Coins, Building2, Workflow, ShieldCheck, Scale, Files,
 } from "lucide-react";
 import BooksReceivablesTab from "./BooksReceivablesTab";
 import BooksGstTab from "./BooksGstTab";
@@ -17,6 +18,15 @@ import BooksTaxFilingTab from "./BooksTaxFilingTab";
 import BooksPricingTab from "./BooksPricingTab";
 import BooksPaymentTermsTab from "./BooksPaymentTermsTab";
 import BooksSubscriptionsTab from "./BooksSubscriptionsTab";
+import BooksClosingTab from "./BooksClosingTab";
+import BooksDimensionsTab from "./BooksDimensionsTab";
+import BooksReportsProTab from "./BooksReportsProTab";
+import BooksFxTab from "./BooksFxTab";
+import BooksAssetsTab from "./BooksAssetsTab";
+import BooksAutomationTab from "./BooksAutomationTab";
+import BooksComplianceTab from "./BooksComplianceTab";
+import BooksSettlementTab from "./BooksSettlementTab";
+import BooksDocumentsTab from "./BooksDocumentsTab";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES (response shapes inlined — backend confirmed)
@@ -116,7 +126,7 @@ interface DocumentRow {
   party_ledger_id: string | null;
 }
 
-type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls" | "taxfiling" | "pricing" | "payterms" | "subscriptions";
+type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls" | "taxfiling" | "pricing" | "payterms" | "subscriptions" | "closing" | "dimensions" | "finreports" | "fx" | "assets" | "automation" | "compliance" | "settlement" | "documents";
 type ReportId = "tb" | "pl" | "bs" | "cf";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -344,6 +354,15 @@ export default function BooksPage() {
     { id: "pricing",   label: "Pricing",           icon: <Tag size={14} /> },
     { id: "payterms",  label: "Payment Terms",     icon: <CalendarClock size={14} /> },
     { id: "subscriptions", label: "Subscriptions", icon: <Layers size={14} /> },
+    { id: "documents", label: "Documents",         icon: <Files size={14} /> },
+    { id: "closing",   label: "Closing",           icon: <Lock size={14} /> },
+    { id: "dimensions", label: "Cost Centres",     icon: <Split size={14} /> },
+    { id: "finreports", label: "Financial Reports", icon: <FileBarChart size={14} /> },
+    { id: "fx",        label: "Multi-Currency",    icon: <Coins size={14} /> },
+    { id: "assets",    label: "Fixed Assets",      icon: <Building2 size={14} /> },
+    { id: "compliance", label: "Compliance",       icon: <ShieldCheck size={14} /> },
+    { id: "settlement", label: "Settlements",      icon: <Scale size={14} /> },
+    { id: "automation", label: "Automation",       icon: <Workflow size={14} /> },
   ];
 
   return (
@@ -416,6 +435,15 @@ export default function BooksPage() {
             {tab === "pricing" && <BooksPricingTab />}
             {tab === "payterms" && <BooksPaymentTermsTab />}
             {tab === "subscriptions" && <BooksSubscriptionsTab />}
+            {tab === "documents" && <BooksDocumentsTab canWrite={canWrite} />}
+            {tab === "closing" && <BooksClosingTab />}
+            {tab === "dimensions" && <BooksDimensionsTab canWrite={canWrite} />}
+            {tab === "finreports" && <BooksReportsProTab />}
+            {tab === "fx" && <BooksFxTab />}
+            {tab === "assets" && <BooksAssetsTab />}
+            {tab === "compliance" && <BooksComplianceTab canWrite={canWrite} />}
+            {tab === "settlement" && <BooksSettlementTab />}
+            {tab === "automation" && <BooksAutomationTab />}
           </>
         )}
       </div>

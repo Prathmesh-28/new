@@ -5,6 +5,7 @@ import {
   Boxes, Plus, RefreshCw, ArrowDownToLine, ArrowUpFromLine, Factory,
   ClipboardCheck, AlertTriangle, BarChart3, PackageX, Trash2,
   Hash, Layers, Package, ScanLine, Search, Wrench,
+  History, Ship, RotateCcw, LifeBuoy,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -77,7 +78,36 @@ interface StockSummaryRow {
 
 type SubTab =
   | "items" | "moves" | "manufacture" | "adjust" | "alerts" | "summary"
-  | "serials" | "variants" | "kits" | "barcode";
+  | "serials" | "variants" | "kits" | "barcode" | "repost" | "landed";
+
+interface RepostRun {
+  id?: string;
+  item_id?: string;
+  itemId?: string;
+  warehouse_id?: string | null;
+  from_date?: string | null;
+  fromDate?: string | null;
+  status?: string | null;
+  detail?: Record<string, unknown> | string | null;
+  voucher_id?: string | null;
+  updated_at?: string | null;
+  updatedAt?: string | null;
+}
+
+interface LandedCostRow {
+  voucher_id?: string;
+  voucherId?: string;
+  voucher_number?: string | null;
+  voucherNumber?: string | null;
+  lcv_date?: string | null;
+  lcvDate?: string | null;
+  reference?: string | null;
+  narration?: string | null;
+  total_charge?: string | number | null;
+  totalCharge?: string | number | null;
+  charges?: unknown;
+  created_at?: string | null;
+}
 
 interface SerialRow {
   id?: string;
@@ -241,6 +271,8 @@ export default function BooksInventoryTab({ canWrite = true }: { canWrite?: bool
     { id: "variants", label: "Variants", icon: <Layers size={14} /> },
     { id: "kits", label: "Kits / BOM", icon: <Package size={14} /> },
     { id: "barcode", label: "Barcode", icon: <ScanLine size={14} /> },
+    { id: "repost", label: "Reposting", icon: <History size={14} /> },
+    { id: "landed", label: "Landed cost", icon: <Ship size={14} /> },
   ];
 
   return (
@@ -285,6 +317,8 @@ export default function BooksInventoryTab({ canWrite = true }: { canWrite?: bool
       {sub === "variants" && <VariantsSection items={items} canWrite={canWrite} />}
       {sub === "kits" && <KitsSection items={items} canWrite={canWrite} onPosted={loadItems} />}
       {sub === "barcode" && <BarcodeSection items={items} canWrite={canWrite} />}
+      {sub === "repost" && <RepostSection items={items} canWrite={canWrite} onPosted={loadItems} />}
+      {sub === "landed" && <LandedCostSection items={items} canWrite={canWrite} onPosted={loadItems} />}
     </div>
   );
 }
@@ -1696,6 +1730,508 @@ function BarcodeSection({ items, canWrite }: { items: Item[]; canWrite: boolean 
             Lookup
           </button>
         </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REPOSTING SECTION — re-run stock valuation from a date + recover failed runs
+// ─────────────────────────────────────────────────────────────────────────────
+function repostDetail(d: RepostRun["detail"]): Record<string, unknown> {
+  if (!d) return {};
+  if (typeof d === "string") { try { return JSON.parse(d); } catch { return {}; } }
+  return d as Record<string, unknown>;
+}
+
+function RepostStatusPill({ status }: { status: string }) {
+  const s = status.toUpperCase();
+  const cls =
+    s === "POSTED"
+      ? "bg-green-900/30 text-green-300 border-green-700/40"
+      : s === "REWRITTEN"
+      ? "bg-sky-900/30 text-sky-300 border-sky-700/40"
+      : s === "FAILED"
+      ? "bg-red-900/30 text-red-300 border-red-700/40"
+      : "bg-amber-900/30 text-amber-300 border-amber-700/40";
+  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${cls}`}>{s}</span>;
+}
+
+function RepostSection({
+  items, canWrite, onPosted,
+}: {
+  items: Item[];
+  canWrite: boolean;
+  onPosted: () => Promise<void>;
+}) {
+  // run form
+  const [mode, setMode] = useState<"item" | "allOpen">("allOpen");
+  const [itemId, setItemId] = useState("");
+  const [warehouseId, setWarehouseId] = useState("");
+  const [fromDate, setFromDate] = useState(todayIso());
+  const [reason, setReason] = useState("");
+  const [running, setRunning] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+
+  // history
+  const [runs, setRuns] = useState<RepostRun[]>([]);
+  const [filterItemId, setFilterItemId] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [busy, setBusy] = useState(true);
+
+  const load = useCallback(async (fItem: string, fStatus: string) => {
+    setBusy(true);
+    try {
+      const qs = new URLSearchParams();
+      if (fItem) qs.set("itemId", fItem);
+      if (fStatus) qs.set("status", fStatus);
+      const suffix = qs.toString() ? `?${qs.toString()}` : "";
+      const res = await api.get<unknown>(`/api/books/inventory/repost${suffix}`);
+      setRuns(asArray<RepostRun>(res));
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(filterItemId, filterStatus);
+  }, [load, filterItemId, filterStatus]);
+
+  const itemNameById = useCallback(
+    (id: string | null | undefined): string => {
+      if (!id) return "—";
+      return items.find((i) => i.id === id)?.name ?? `#${id}`;
+    },
+    [items],
+  );
+
+  const run = async () => {
+    if (mode === "item" && !itemId) { toast.error("Pick an item, or switch to all open"); return; }
+    if (!fromDate) { toast.error("Pick a from-date"); return; }
+    setRunning(true);
+    try {
+      const body: Record<string, unknown> = { fromDate, reason: reason.trim() || undefined };
+      if (mode === "allOpen") {
+        body.allOpen = true;
+      } else {
+        body.itemId = itemId;
+        body.warehouseId = warehouseId.trim() || undefined;
+      }
+      const res = await api.post<any>("/api/books/inventory/repost", body);
+      if (mode === "allOpen") {
+        const n = res?.items ?? (Array.isArray(res?.reposted) ? res.reposted.length : 0);
+        const errs = Array.isArray(res?.errors) ? res.errors.length : 0;
+        toast.success(`Reposted ${n} item${n === 1 ? "" : "s"}${errs ? ` · ${errs} failed` : ""}`);
+      } else {
+        toast.success(`Reposted — ${res?.rowsRewritten ?? 0} rows, Δ ${rupee(res?.delta)}`);
+      }
+      await Promise.all([load(filterItemId, filterStatus), onPosted()]);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const recover = async () => {
+    setRecovering(true);
+    try {
+      const res = await api.post<any>("/api/books/inventory/repost/recover", {});
+      const rec = res?.recovered ?? 0;
+      const still = Array.isArray(res?.stillFailing) ? res.stillFailing.length : 0;
+      toast.success(`Recovered ${rec} run${rec === 1 ? "" : "s"}${still ? ` · ${still} still failing` : ""}`);
+      await Promise.all([load(filterItemId, filterStatus), onPosted()]);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setRecovering(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)]">
+        Reposting replays an item's stock ledger from a date so a back-dated receipt, a rate correction or a
+        landed-cost charge re-prices every downstream issue and posts the net valuation correction to the GL.
+        Use it after fixing historic movements, then check the history below for any failed runs to recover.
+      </p>
+
+      {canWrite ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card title="Run a repost" icon={<History size={15} />}>
+            <div className="space-y-3 flex-1">
+              <div>
+                <label className={labelCls}>Scope</label>
+                <select value={mode} onChange={(e) => setMode(e.target.value as "item" | "allOpen")} className={inputCls}>
+                  <option value="allOpen">All items with movements on/after the date</option>
+                  <option value="item">A single item</option>
+                </select>
+              </div>
+              {mode === "item" && (
+                <>
+                  <ItemSelect items={items} value={itemId} onChange={setItemId} />
+                  <div>
+                    <label className={labelCls}>Warehouse (optional)</label>
+                    <input value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} placeholder="Warehouse id" className={inputCls} />
+                  </div>
+                </>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>From date</label>
+                  <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Reason (optional)</label>
+                  <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. back-dated receipt" className={inputCls} />
+                </div>
+              </div>
+              <p className="text-[11px] text-[var(--color-muted)]">
+                Replays from the opening balance, so it is safe to re-run; a net valuation delta posts a
+                Stock-in-hand / Stock Adjustment correction.
+              </p>
+            </div>
+            <button type="button" onClick={run} disabled={running} className={`${btnPrimary} mt-4 w-full`}>
+              {running ? <RefreshCw size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+              Repost {mode === "allOpen" ? "all open" : "item"}
+            </button>
+          </Card>
+
+          <Card title="Recover failed reposts" icon={<LifeBuoy size={15} />}>
+            <div className="space-y-3 flex-1">
+              <p className="text-sm text-[var(--color-muted)]">
+                Re-runs every repost that previously failed (status FAILED in the history). Each retry replays
+                from the opening balance, so transient failures self-heal — safe to run repeatedly.
+              </p>
+            </div>
+            <button type="button" onClick={recover} disabled={recovering} className={`${btnPrimary} mt-4 w-full`}>
+              {recovering ? <RefreshCw size={14} className="animate-spin" /> : <LifeBuoy size={14} />}
+              Recover failed runs
+            </button>
+          </Card>
+        </div>
+      ) : (
+        <NoWrite what="run or recover stock reposts" />
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between gap-3 flex-wrap">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <History size={15} className="text-[var(--color-primary)]" /> Repost history
+            <span className="text-[var(--color-muted)] tabular-nums font-normal">· {runs.length}</span>
+          </h3>
+          <div className="flex items-center gap-2">
+            <select value={filterItemId} onChange={(e) => setFilterItemId(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1 text-sm outline-none">
+              <option value="">All items</option>
+              {items.map((i) => <option key={i.id} value={i.id}>{itemName(i)}</option>)}
+            </select>
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1 text-sm outline-none">
+              <option value="">Any status</option>
+              <option value="POSTED">Posted</option>
+              <option value="REWRITTEN">Rewritten</option>
+              <option value="FAILED">Failed</option>
+            </select>
+            <button type="button" onClick={() => void load(filterItemId, filterStatus)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Refresh">
+              <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+            </button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse min-w-[760px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                <Th>Item</Th>
+                <Th>From date</Th>
+                <Th>Status</Th>
+                <Th right>Rows rewritten</Th>
+                <Th right>Δ value</Th>
+                <Th>Reason</Th>
+                <Th right>Updated</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {busy ? (
+                <SkeletonRows cols={7} rows={6} />
+              ) : runs.length === 0 ? (
+                <tr><td colSpan={7} className="px-3 py-8 text-center text-[var(--color-muted)]">No repost runs yet.</td></tr>
+              ) : (
+                runs.map((r, i) => {
+                  const d = repostDetail(r.detail);
+                  const err = typeof d.error === "string" ? d.error : null;
+                  return (
+                    <tr key={r.id ?? i} className="border-b border-[var(--color-border)] last:border-b-0">
+                      <td className="px-3 py-2.5 font-medium">{itemNameById(r.item_id ?? r.itemId)}</td>
+                      <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{r.from_date ?? r.fromDate ?? "—"}</td>
+                      <td className="px-3 py-2.5"><RepostStatusPill status={String(r.status ?? "—")} /></td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{d.rowsRewritten != null ? qtyFmt(d.rowsRewritten as number) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{d.delta != null ? rupee(d.delta as string | number) : "—"}</td>
+                      <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{err ? <span className="text-red-400">{err}</span> : (d.reason ? String(d.reason) : "—")}</td>
+                      <td className="px-3 py-2.5 text-right text-xs text-[var(--color-muted)] whitespace-nowrap">{(r.updated_at ?? r.updatedAt ?? "").toString().slice(0, 19).replace("T", " ") || "—"}</td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LANDED COST SECTION — capitalise freight/customs/insurance into stock value
+// ─────────────────────────────────────────────────────────────────────────────
+interface LcItemLine { key: string; itemId: string; qty: string; amount: string; weight: string }
+interface LcChargeLine { key: string; ledgerName: string; amount: string; basis: string }
+function newLcItem(): LcItemLine {
+  return { key: Math.random().toString(36).slice(2), itemId: "", qty: "", amount: "", weight: "" };
+}
+function newLcCharge(): LcChargeLine {
+  return { key: Math.random().toString(36).slice(2), ledgerName: "", amount: "", basis: "qty" };
+}
+const LC_BASES = [
+  { id: "qty", label: "By quantity" },
+  { id: "amount", label: "By amount / value" },
+  { id: "weight", label: "By weight" },
+] as const;
+
+function LandedCostSection({
+  items, canWrite, onPosted,
+}: {
+  items: Item[];
+  canWrite: boolean;
+  onPosted: () => Promise<void>;
+}) {
+  // form
+  const [date, setDate] = useState(todayIso());
+  const [reference, setReference] = useState("");
+  const [narration, setNarration] = useState("");
+  const [lcItems, setLcItems] = useState<LcItemLine[]>([newLcItem()]);
+  const [charges, setCharges] = useState<LcChargeLine[]>([newLcCharge()]);
+  const [saving, setSaving] = useState(false);
+
+  // history
+  const fyStart = (() => {
+    const now = new Date();
+    const y = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    return `${y}-04-01`;
+  })();
+  const [from, setFrom] = useState(fyStart);
+  const [to, setTo] = useState(todayIso());
+  const [rows, setRows] = useState<LandedCostRow[]>([]);
+  const [busy, setBusy] = useState(true);
+
+  const load = useCallback(async (f: string, t: string) => {
+    setBusy(true);
+    try {
+      const res = await api.get<unknown>(`/api/books/inventory/landed-cost?from=${f}&to=${t}`);
+      setRows(asArray<LandedCostRow>(res));
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(from, to);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const totalCharges = useMemo(
+    () => charges.reduce((a, c) => a + (Number(c.amount) || 0), 0),
+    [charges],
+  );
+
+  const setItemLine = (key: string, patch: Partial<LcItemLine>) =>
+    setLcItems((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  const setChargeLine = (key: string, patch: Partial<LcChargeLine>) =>
+    setCharges((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+
+  const submit = async () => {
+    const its = lcItems
+      .filter((l) => l.itemId && (Number(l.qty) || 0) > 0)
+      .map((l) => ({
+        itemId: l.itemId,
+        qty: Number(l.qty) || 0,
+        amount: Number(l.amount) || 0,
+        ...(l.weight.trim() ? { weight: Number(l.weight) || 0 } : {}),
+      }));
+    const chs = charges
+      .filter((c) => c.ledgerName.trim() && (Number(c.amount) || 0) > 0)
+      .map((c) => ({ ledgerName: c.ledgerName.trim(), amount: Number(c.amount) || 0, basis: c.basis }));
+    if (its.length === 0) { toast.error("Add at least one received item"); return; }
+    if (chs.length === 0) { toast.error("Add at least one charge above zero"); return; }
+    setSaving(true);
+    try {
+      const res = await api.post<any>("/api/books/inventory/landed-cost", {
+        date,
+        reference: reference.trim() || undefined,
+        narration: narration.trim() || undefined,
+        items: its,
+        charges: chs,
+      });
+      toast.success(`Landed cost posted — ${rupee(res?.totalCharge)} capitalised across ${its.length} item${its.length === 1 ? "" : "s"}`);
+      setReference(""); setNarration("");
+      setLcItems([newLcItem()]);
+      setCharges([newLcCharge()]);
+      await Promise.all([load(from, to), onPosted()]);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)]">
+        A landed-cost voucher capitalises freight, customs duty and insurance into the value of received stock,
+        so item cost (and downstream COGS) reflects the true landed price. Charge ledgers must already exist
+        (e.g. Freight Payable, Customs Duty Payable) — the entry posts Dr Stock-in-hand / Cr each charge ledger
+        and reposts the affected items.
+      </p>
+
+      {canWrite ? (
+        <Card title="New landed-cost voucher" icon={<Ship size={15} />}>
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className={labelCls}>Date</label>
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Reference (optional)</label>
+                <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. BOE / freight bill no" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Narration (optional)</label>
+                <input value={narration} onChange={(e) => setNarration(e.target.value)} placeholder="Notes" className={inputCls} />
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)] mb-2">Received items (cost basis)</h4>
+              <div className="space-y-2">
+                {lcItems.map((l) => (
+                  <div key={l.key} className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <select value={l.itemId} onChange={(e) => setItemLine(l.key, { itemId: e.target.value })} className={inputCls}>
+                        <option value="">Select item…</option>
+                        {items.map((i) => <option key={i.id} value={i.id}>{itemName(i)}</option>)}
+                      </select>
+                    </div>
+                    <div className="w-24">
+                      <input value={l.qty} onChange={(e) => setItemLine(l.key, { qty: e.target.value })} inputMode="decimal" placeholder="Qty" className={`${inputCls} text-right tabular-nums`} />
+                    </div>
+                    <div className="w-28">
+                      <input value={l.amount} onChange={(e) => setItemLine(l.key, { amount: e.target.value })} inputMode="decimal" placeholder="Item value" className={`${inputCls} text-right tabular-nums`} />
+                    </div>
+                    <div className="w-24">
+                      <input value={l.weight} onChange={(e) => setItemLine(l.key, { weight: e.target.value })} inputMode="decimal" placeholder="Weight" className={`${inputCls} text-right tabular-nums`} />
+                    </div>
+                    <button type="button" onClick={() => setLcItems((ls) => (ls.length > 1 ? ls.filter((x) => x.key !== l.key) : ls))} disabled={lcItems.length <= 1} className="px-2 py-2.5 text-[var(--color-muted)] hover:text-red-400 disabled:opacity-30" title="Remove">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => setLcItems((ls) => [...ls, newLcItem()])} className={btnGhost}>
+                  <Plus size={14} /> Add item
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)] mb-2">Charges (freight / customs / insurance)</h4>
+              <div className="space-y-2">
+                {charges.map((c) => (
+                  <div key={c.key} className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <input value={c.ledgerName} onChange={(e) => setChargeLine(c.key, { ledgerName: e.target.value })} placeholder="Charge ledger (e.g. Freight Payable)" className={inputCls} />
+                    </div>
+                    <div className="w-28">
+                      <input value={c.amount} onChange={(e) => setChargeLine(c.key, { amount: e.target.value })} inputMode="decimal" placeholder="Amount" className={`${inputCls} text-right tabular-nums`} />
+                    </div>
+                    <div className="w-40">
+                      <select value={c.basis} onChange={(e) => setChargeLine(c.key, { basis: e.target.value })} className={inputCls}>
+                        {LC_BASES.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+                      </select>
+                    </div>
+                    <button type="button" onClick={() => setCharges((ls) => (ls.length > 1 ? ls.filter((x) => x.key !== c.key) : ls))} disabled={charges.length <= 1} className="px-2 py-2.5 text-[var(--color-muted)] hover:text-red-400 disabled:opacity-30" title="Remove">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => setCharges((ls) => [...ls, newLcCharge()])} className={btnGhost}>
+                  <Plus size={14} /> Add charge
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-sm flex justify-between">
+              <span className="text-[var(--color-muted)]">Total charges to capitalise</span>
+              <span className="tabular-nums font-semibold text-[var(--color-primary)]">{rupee(totalCharges)}</span>
+            </div>
+
+            <div className="flex justify-end">
+              <button type="button" onClick={submit} disabled={saving} className={btnPrimary}>
+                {saving ? <RefreshCw size={14} className="animate-spin" /> : <Ship size={14} />}
+                Post landed cost
+              </button>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <NoWrite what="post landed-cost vouchers" />
+      )}
+
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between gap-3 flex-wrap">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Ship size={15} className="text-[var(--color-primary)]" /> Landed-cost vouchers
+            <span className="text-[var(--color-muted)] tabular-nums font-normal">· {rows.length}</span>
+          </h3>
+          <div className="flex items-center gap-2">
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1 text-sm outline-none" />
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1 text-sm outline-none" />
+            <button type="button" onClick={() => void load(from, to)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Refresh">
+              <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+            </button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse min-w-[680px]">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                <Th>Date</Th>
+                <Th>Voucher</Th>
+                <Th>Reference</Th>
+                <Th>Narration</Th>
+                <Th right>Total charge</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {busy ? (
+                <SkeletonRows cols={5} rows={5} />
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={5} className="px-3 py-8 text-center text-[var(--color-muted)]">No landed-cost vouchers in this range.</td></tr>
+              ) : (
+                rows.map((r, i) => (
+                  <tr key={r.voucher_id ?? r.voucherId ?? i} className="border-b border-[var(--color-border)] last:border-b-0">
+                    <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{r.lcv_date ?? r.lcvDate ?? "—"}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs">{r.voucher_number ?? r.voucherNumber ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.reference || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.narration || "—"}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-medium text-[var(--color-primary)]">{rupee(r.total_charge ?? r.totalCharge)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

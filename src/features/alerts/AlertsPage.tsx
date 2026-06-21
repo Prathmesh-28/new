@@ -1,10 +1,21 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, monthlyBurn } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { AlertTriangle, Bell, Info, CheckCircle2, X, Settings2, SlidersHorizontal, CalendarClock, Droplets, ShieldAlert, BellOff, Mail, Users, FileText, Wallet, Boxes, ArrowUpRight, PieChart, Inbox, Layers, BadgeCheck, HandCoins, Repeat, Landmark } from "lucide-react";
+import { api } from "@/lib/api";
+import { AlertTriangle, Bell, Info, CheckCircle2, X, Settings2, SlidersHorizontal, CalendarClock, Droplets, ShieldAlert, BellOff, Mail, Users, FileText, Wallet, Boxes, ArrowUpRight, PieChart, Inbox, Layers, BadgeCheck, HandCoins, Repeat, Landmark, CheckCheck, Cloud, CloudOff } from "lucide-react";
 import { toast } from "sonner";
 import { addMonths, addQuarters, addYears } from "date-fns";
+
+// ── Backend alert read-state sync ─────────────────────────────────────────────
+// The Active/History UI renders from the synced client store (context), but alert
+// read / resolved state is also persisted server-side via backend/src/routes/alerts.js
+// so it survives across devices and matches the unread badge the rest of the app uses.
+// Endpoints: GET /api/alerts, GET /api/alerts/unread-count, PATCH /api/alerts/:id,
+// POST /api/alerts/mark-all-read. Everything is best-effort: if the backend is
+// unreachable the page still works fully on the local KV store.
+type ServerAlert = { id: string; is_read?: boolean; is_resolved?: boolean };
+type AlertsListResponse = { data?: ServerAlert[]; total?: number };
 
 const INP = "w-full text-sm bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 outline-none focus:border-[var(--color-primary)]";
 
@@ -19,6 +30,76 @@ export default function AlertsPage() {
   const { store, markAlertRead, deleteAlert, updateFirm, resolveAlert } = useApp();
   const { alerts, transactions } = store;
   const safetyDays = store.firm.safetyThresholdDays ?? 14;
+
+  // Backend read-state sync. `synced` is null until the first probe completes,
+  // then true (server reachable) or false (offline → KV-only fallback).
+  const [synced, setSynced] = useState<boolean | null>(null);
+  const [serverUnread, setServerUnread] = useState<number | null>(null);
+  const [markingAll, setMarkingAll] = useState(false);
+
+  const refreshServerCount = useCallback(async () => {
+    try {
+      const r = await api.get<{ count: number }>("/api/alerts/unread-count");
+      setServerUnread(typeof r?.count === "number" ? r.count : null);
+      setSynced(true);
+      return true;
+    } catch {
+      setSynced(false);
+      return false;
+    }
+  }, []);
+
+  // On mount, pull the server's read/resolved state and reconcile the local
+  // store so a dismissal made on another device shows here too. Best-effort.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ok = await refreshServerCount();
+      if (!ok || cancelled) return;
+      try {
+        const r = await api.get<AlertsListResponse>("/api/alerts?limit=100");
+        if (cancelled) return;
+        const localById = new Map(store.alerts.map(a => [a.id, a]));
+        for (const sa of r?.data ?? []) {
+          const local = localById.get(sa.id);
+          if (!local) continue;
+          if ((sa.is_read || sa.is_resolved) && !local.isRead) markAlertRead(sa.id);
+        }
+      } catch {
+        /* list pull optional — count probe already set synced */
+      }
+    })();
+    return () => { cancelled = true; };
+    // run once on mount; store/actions are stable refs from context
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Mirror a single read-state change to the backend (no-op on failure).
+  const pushRead = useCallback(async (id: string, body: { is_read?: boolean; is_resolved?: boolean }) => {
+    try {
+      await api.patch(`/api/alerts/${encodeURIComponent(id)}`, body);
+      void refreshServerCount();
+    } catch {
+      setSynced(false);
+    }
+  }, [refreshServerCount]);
+
+  const markAllRead = async () => {
+    if (active.length === 0) return;
+    setMarkingAll(true);
+    // Optimistically clear locally; the context update is the source of truth for render.
+    active.forEach(a => markAlertRead(a.id));
+    try {
+      const r = await api.post<{ updated: number }>("/api/alerts/mark-all-read", {});
+      toast.success(`Marked ${r?.updated ?? active.length} alert${(r?.updated ?? active.length) === 1 ? "" : "s"} as read`);
+      void refreshServerCount();
+    } catch {
+      setSynced(false);
+      toast.success("Marked all read on this device (offline — will not sync)");
+    } finally {
+      setMarkingAll(false);
+    }
+  };
 
   const [tab,         setTab]         = useState<"active" | "history" | "thresholds" | "compliance" | "liquidity" | "fraud" | "mute" | "digest" | "escalation" | "receivables" | "payables" | "kpi" | "inventory" | "largetxn" | "budget" | "concentration" | "inbox" | "licenses" | "emicover" | "recurring" | "taxsetaside">("active");
   const [showConfig,  setShowConfig]  = useState(false);
@@ -43,13 +124,22 @@ export default function AlertsPage() {
     // Persist the note the user typed (was previously computed then dropped, so
     // the history's "✓ {actionTaken}" line never showed what was done).
     resolveAlert(id, actionText[id]);
+    void pushRead(id, { is_read: true, is_resolved: true });
     toast.success("Alert marked as resolved");
     setActionText(prev => { const n = { ...prev }; delete n[id]; return n; });
   };
 
   const handleDismiss = (id: string) => {
     markAlertRead(id);
+    void pushRead(id, { is_read: true });
     toast.success("Alert dismissed");
+  };
+
+  // History delete has no backend equivalent (no DELETE route); mark it read on
+  // the server so it stays out of the cross-device unread count, then drop locally.
+  const handleDelete = (id: string) => {
+    void pushRead(id, { is_read: true });
+    deleteAlert(id);
   };
 
   const handleSaveThreshold = () => {
@@ -114,13 +204,35 @@ export default function AlertsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Alerts Centre</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold">Alerts Centre</h1>
+            {synced === true && (
+              <span title={`Synced to your account${serverUnread != null ? ` · ${serverUnread} unread server-side` : ""}`}
+                className="inline-flex items-center gap-1 text-[10px] text-green-400 border border-green-800/40 bg-green-950/20 px-1.5 py-0.5 rounded-full">
+                <Cloud size={10} /> Synced
+              </span>
+            )}
+            {synced === false && (
+              <span title="Backend unreachable — read-state is kept on this device only"
+                className="inline-flex items-center gap-1 text-[10px] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full">
+                <CloudOff size={10} /> Offline
+              </span>
+            )}
+          </div>
           <p className="text-sm text-[var(--color-muted)] mt-0.5">{active.length} active · {history.length} resolved</p>
         </div>
-        <button onClick={() => setShowConfig(v => !v)}
-          className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
-          <Settings2 size={12} /> Configure
-        </button>
+        <div className="flex items-center gap-2">
+          {active.length > 0 && (
+            <button onClick={markAllRead} disabled={markingAll}
+              className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 disabled:opacity-50">
+              <CheckCheck size={12} /> Mark all read
+            </button>
+          )}
+          <button onClick={() => setShowConfig(v => !v)}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+            <Settings2 size={12} /> Configure
+          </button>
+        </div>
       </div>
 
       {/* Safety buffer config */}
@@ -223,7 +335,7 @@ export default function AlertsPage() {
                         <p className="text-xs text-[var(--color-muted)]">{a.message}</p>
                         {a.actionTaken && <p className="text-xs text-[var(--color-muted)] italic mt-1">✓ {a.actionTaken}</p>}
                       </div>
-                      <button onClick={() => deleteAlert(a.id)} className="p-1 text-[var(--color-muted)] hover:text-red-400 rounded">
+                      <button onClick={() => handleDelete(a.id)} className="p-1 text-[var(--color-muted)] hover:text-red-400 rounded">
                         <X size={12} />
                       </button>
                     </div>

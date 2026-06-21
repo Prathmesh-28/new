@@ -1,8 +1,8 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
-import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText, Repeat, Wand2, GitCompareArrows, Split, Layers, ArrowLeftRight, FolderTree, Scale, NotebookPen, Calculator, BookOpen, BookText, Wallet, Eraser, Lock, ListTree, Percent, Receipt, Banknote, Target, Users } from "lucide-react";
+import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText, Repeat, Wand2, GitCompareArrows, Split, Layers, ArrowLeftRight, FolderTree, Scale, NotebookPen, Calculator, BookOpen, BookText, Wallet, Eraser, Lock, ListTree, Percent, Receipt, Banknote, Target, Users, Trash2, RefreshCw, CloudOff } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import type { Transaction } from "@/data/types";
@@ -29,6 +29,64 @@ const CAT_DOT: Record<string, string> = {
 
 type SortField = "date" | "description" | "amount";
 type SortDir   = "asc" | "desc";
+
+// ── BACKEND WIRING (routes/transactions.js) ─────────────────────────────────
+// The server stores transactions in Postgres with snake_case columns and a
+// wider category set than the UI's 6 buckets. These helpers translate between
+// the API row shape and the frontend `Transaction` type so the existing UI +
+// every sub-view (which read `store.transactions`) keep working unchanged.
+const TXN_PAGE_LIMIT = 200; // backend caps page size at 200
+
+// backend category → one of the UI's six buckets
+function catFromApi(c: string | null | undefined): Transaction["category"] {
+  switch (c) {
+    case "revenue":        return "revenue";
+    case "payroll":        return "payroll";
+    case "tax":            return "tax";
+    case "transfer":       return "transfer";
+    case "loan_repayment": return "loan";
+    default:               return "expense"; // rent/software/inventory/utilities/marketing/uncategorized
+  }
+}
+// UI bucket → backend category (used on create/update)
+function catToApi(c: Transaction["category"]): string {
+  switch (c) {
+    case "revenue":  return "revenue";
+    case "payroll":  return "payroll";
+    case "tax":      return "tax";
+    case "transfer": return "transfer";
+    case "loan":     return "loan_repayment";
+    case "expense":  return "uncategorized";
+    default:         return "uncategorized";
+  }
+}
+// API row → frontend Transaction
+function txnFromApi(r: any): Transaction {
+  return {
+    id:            String(r.id),
+    date:          (r.transaction_date ?? "").toString().slice(0, 10),
+    amount:        Number(r.amount) || 0,
+    description:   r.description_raw ?? r.account_name ?? "Transaction",
+    category:      catFromApi(r.category),
+    counterparty:  r.merchant_name ?? "",
+    isRecurring:   !!r.is_recurring,
+    bankAccountId: r.bank_account_id ? String(r.bank_account_id) : "",
+    notes:         r.notes ?? undefined,
+  };
+}
+// frontend Transaction → POST body
+function txnToApiBody(t: Transaction) {
+  return {
+    bank_account_id:  t.bankAccountId || undefined,
+    amount:           t.amount,
+    description_raw:  t.description,
+    merchant_name:    t.counterparty || undefined,
+    category:         catToApi(t.category),
+    is_recurring:     t.isRecurring,
+    transaction_date: t.date,
+    source:           "manual",
+  };
+}
 
 function getRules(): Record<string, string> {
   try { return JSON.parse(localStorage.getItem("hr_cat_rules") ?? "{}"); } catch { return {}; }
@@ -72,8 +130,46 @@ function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: 
 }
 
 export default function TransactionsPage() {
-  const { store, updateTransaction, addTransaction, canExport, canEdit } = useApp();
+  const { store, setStore, updateTransaction, addTransaction, deleteTransaction, canExport, canEdit } = useApp();
   const { transactions, bankAccounts } = store;
+
+  // ── Backend hydration ──────────────────────────────────────────────────────
+  // On mount (and on refresh) pull the real ledger from routes/transactions.js
+  // and mirror it into the AppContext store, so the main table *and* every
+  // downstream tool view (which read `store.transactions`) reflect server data.
+  // If the API is unreachable we keep whatever is already in the KV-backed store
+  // — the page stays fully usable offline.
+  const [apiState, setApiState] = useState<"idle" | "loading" | "online" | "offline">("idle");
+  const [serverTotal, setServerTotal] = useState<number | null>(null);
+
+  const loadFromServer = useCallback(async () => {
+    setApiState("loading");
+    try {
+      // Pull pages until we've fetched everything (or hit a safety cap).
+      const all: Transaction[] = [];
+      let page = 1;
+      let pages = 1;
+      let total = 0;
+      do {
+        const res = await api.get<{ data: any[]; total: number; pages: number }>(
+          `/api/transactions?page=${page}&limit=${TXN_PAGE_LIMIT}`,
+        );
+        (res.data ?? []).forEach(r => all.push(txnFromApi(r)));
+        pages = res.pages || 1;
+        total = res.total ?? all.length;
+        page += 1;
+      } while (page <= pages && page <= 25); // cap at 5,000 rows
+      setServerTotal(total);
+      setApiState("online");
+      // Mirror into the shared store so sub-views stay consistent.
+      setStore(s => ({ ...s, transactions: all }));
+    } catch {
+      setApiState("offline");
+      // Graceful fallback: leave the existing store.transactions in place.
+    }
+  }, [setStore]);
+
+  useEffect(() => { void loadFromServer(); }, [loadFromServer]);
 
   const [view, setView] = useState<"transactions" | "pdc" | "bounce" | "upi" | "recon" | "recurring" | "cat-rules" | "recon-workbench" | "split-txn" | "bulk-tag" | "transfer-detect" | "cost-center" | "cash-accrual" | "journal-entry" | "trial-balance" | "day-book" | "ledger-account" | "opening-balance" | "write-off" | "period-lock" | "chart-of-accounts" | "gst-ledger" | "tds-ledger" | "cash-bank-split" | "counterparty-360" | "budget-actual">("transactions");
   const [scanning, setScanning] = useState(false);
@@ -88,12 +184,20 @@ export default function TransactionsPage() {
       const r = await api.post<{ vendor: string; amount: number; date: string | null; category: Transaction["category"]; description: string }>("/api/ai/scan-receipt", { image });
       if (!r.amount) { toast.error("Couldn't read an amount — try a clearer photo."); setScanning(false); return; }
       const sign = r.category === "revenue" ? 1 : -1;
-      addTransaction({
+      const draft: Transaction = {
         id: generateId(), date: r.date || new Date().toISOString().slice(0, 10),
         amount: sign * Math.abs(r.amount), description: r.description || r.vendor || "Scanned receipt",
         category: r.category, counterparty: r.vendor || "Scanned", isRecurring: false,
         bankAccountId: bankAccounts[0]?.id ?? "",
-      });
+      };
+      // Persist server-side so the row computes into summaries and survives reload.
+      try {
+        const created = await api.post<any>("/api/transactions", txnToApiBody(draft));
+        const saved = Array.isArray(created) ? created[0] : created;
+        addTransaction(saved ? txnFromApi(saved) : draft);
+      } catch {
+        addTransaction(draft); // offline fallback: keep it locally
+      }
       toast.success(`Scanned: ${formatCurrency(Math.abs(r.amount))} · ${r.vendor || "receipt"} — review below`);
     } catch {
       toast.error("Receipt scan failed. Check your connection and try again.");
@@ -160,16 +264,50 @@ export default function TransactionsPage() {
     else setSelected(prev => { const next = new Set(prev); paginated.forEach(t => next.add(t.id)); return next; });
   };
 
-  const applyBulkCat = () => {
-    let count = 0;
-    transactions.forEach(t => {
-      if (selected.has(t.id) && t.category !== bulkCat) {
-        updateTransaction({ ...t, category: bulkCat });
-        count++;
-      }
-    });
-    toast.success(`Updated ${count} transaction${count !== 1 ? "s" : ""} to "${bulkCat}"`);
+  // Update a single transaction's category: optimistic store write, then PATCH
+  // the backend (only when we know the server is reachable).
+  const persistCategory = useCallback(async (t: Transaction, category: Transaction["category"]) => {
+    updateTransaction({ ...t, category });
+    if (apiState === "offline") return;
+    try {
+      await api.patch(`/api/transactions/${t.id}`, { category: catToApi(category) });
+    } catch {
+      toast.error("Saved locally — couldn't sync category to the server.");
+    }
+  }, [updateTransaction, apiState]);
+
+  const applyBulkCat = async () => {
+    const targets = transactions.filter(t => selected.has(t.id) && t.category !== bulkCat);
+    targets.forEach(t => updateTransaction({ ...t, category: bulkCat }));
     setSelected(new Set());
+    if (apiState !== "offline") {
+      const results = await Promise.allSettled(
+        targets.map(t => api.patch(`/api/transactions/${t.id}`, { category: catToApi(bulkCat) })),
+      );
+      const failed = results.filter(r => r.status === "rejected").length;
+      if (failed) toast.error(`${failed} change${failed !== 1 ? "s" : ""} saved locally but not synced.`);
+    }
+    toast.success(`Updated ${targets.length} transaction${targets.length !== 1 ? "s" : ""} to "${bulkCat}"`);
+  };
+
+  // Delete selected transactions on the server (DELETE /api/transactions/:id),
+  // then drop them from the store. Falls back to a local-only delete offline.
+  const deleteSelected = async () => {
+    const ids = transactions.filter(t => selected.has(t.id)).map(t => t.id);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Delete ${ids.length} transaction${ids.length !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    setSelected(new Set());
+    if (apiState === "offline") {
+      ids.forEach(id => deleteTransaction(id));
+      toast.success(`Removed ${ids.length} locally (offline)`);
+      return;
+    }
+    const results = await Promise.allSettled(ids.map(id => api.delete(`/api/transactions/${id}`)));
+    let ok = 0;
+    results.forEach((r, i) => { if (r.status === "fulfilled") { deleteTransaction(ids[i]); ok++; } });
+    setServerTotal(prev => (prev == null ? prev : Math.max(0, prev - ok)));
+    if (ok === ids.length) toast.success(`Deleted ${ok} transaction${ok !== 1 ? "s" : ""}`);
+    else toast.error(`Deleted ${ok} of ${ids.length} — the rest failed.`);
   };
 
   const applyRule = (counterparty: string) => {
@@ -179,8 +317,11 @@ export default function TransactionsPage() {
     saveRules(rules);
     const matching = transactions.filter(t => t.counterparty.toLowerCase() === counterparty.toLowerCase() && t.category !== bulkCat);
     matching.forEach(t => updateTransaction({ ...t, category: bulkCat }));
-    toast.success(`Rule saved: all "${counterparty}" → ${bulkCat} (${matching.length} updated)`);
     setSelected(new Set());
+    if (apiState !== "offline") {
+      void Promise.allSettled(matching.map(t => api.patch(`/api/transactions/${t.id}`, { category: catToApi(bulkCat) })));
+    }
+    toast.success(`Rule saved: all "${counterparty}" → ${bulkCat} (${matching.length} updated)`);
   };
 
   const selectedCounterparties = useMemo(() => {
@@ -239,12 +380,24 @@ export default function TransactionsPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold">Transactions</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold">Transactions</h1>
+            {apiState === "offline" && (
+              <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-orange-800/40 bg-orange-900/20 text-orange-400" title="The server is unreachable — showing locally cached data. Changes are kept on this device and will not sync until you reconnect.">
+                <CloudOff size={10} /> Offline
+              </span>
+            )}
+          </div>
           <p className="text-xs text-[var(--color-muted)] mt-0.5 tabular-nums">
-            {filtered.length} transactions · <span className="text-green-400">{formatCurrency(totalIn)} in</span> · <span className="text-red-400">{formatCurrency(totalOut)} out</span>
+            {filtered.length} transactions{serverTotal != null && serverTotal !== filtered.length ? ` of ${serverTotal.toLocaleString("en-IN")}` : ""} · <span className="text-green-400">{formatCurrency(totalIn)} in</span> · <span className="text-red-400">{formatCurrency(totalOut)} out</span>
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <button onClick={() => void loadFromServer()} disabled={apiState === "loading"}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors disabled:opacity-50"
+            title="Reload transactions from the server">
+            <RefreshCw size={12} className={apiState === "loading" ? "animate-spin" : ""} /> Refresh
+          </button>
           {canEdit() && (
             <button onClick={handleScanReceipt} disabled={scanning}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90 disabled:opacity-50 transition-colors">
@@ -445,7 +598,11 @@ export default function TransactionsPage() {
       {/* Dense table */}
       {filtered.length === 0 ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-lg p-10 text-center text-sm text-[var(--color-muted)]">
-          {transactions.length === 0 ? "No transactions yet. Add an account and import transactions from the Dashboard." : "No transactions match your filters."}
+          {apiState === "loading" && transactions.length === 0
+            ? "Loading transactions from the server…"
+            : transactions.length === 0
+              ? "No transactions yet. Scan a receipt above, or add an account and import transactions from the Dashboard."
+              : "No transactions match your filters."}
         </div>
       ) : (
         <div className="rounded-lg border border-[var(--color-border)] overflow-hidden">
@@ -501,7 +658,7 @@ export default function TransactionsPage() {
                             value={t.category}
                             autoFocus
                             onChange={e => {
-                              updateTransaction({ ...t, category: e.target.value as Transaction["category"] });
+                              void persistCategory(t, e.target.value as Transaction["category"]);
                               toast.success("Category updated");
                               setEditCatId(null);
                             }}
@@ -593,6 +750,16 @@ export default function TransactionsPage() {
               className="text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-md hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/40 transition-colors"
             >
               + Create rule
+            </button>
+          )}
+
+          {canEdit() && (
+            <button
+              onClick={deleteSelected}
+              title={`Delete ${selected.size} transaction${selected.size !== 1 ? "s" : ""}`}
+              className="flex items-center gap-1 text-xs border border-red-800/40 text-red-400 px-3 py-1.5 rounded-md hover:bg-red-900/20 transition-colors"
+            >
+              <Trash2 size={12} /> Delete
             </button>
           )}
 

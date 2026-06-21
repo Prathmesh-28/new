@@ -6,7 +6,8 @@ import {
   Building2, Lock, ScrollText, Upload, CalendarX2, FileSpreadsheet,
   RefreshCw, Plus, ShieldCheck, CheckCircle2, XCircle, Loader2,
   PieChart, FileCode2, Hash, GitMerge, Trash2, Landmark, Undo2,
-  LayoutTemplate, CalendarClock, Download,
+  LayoutTemplate, CalendarClock, Download, GitPullRequestArrow, Gavel,
+  ListChecks, FileDigit,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -298,6 +299,18 @@ export default function BooksAdminTab() {
       <ScheduleIIIPanel fy={fy} />
 
       {/* ─────────────────────────────────────────────────────────────────────
+          CONTROLS SUITE — approvals workflow + document numbering governance
+          ───────────────────────────────────────────────────────────────────── */}
+      <ApprovalsHowTo />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <ApprovalRulesPanel />
+        <ApprovalsQueuePanel />
+      </div>
+
+      <NumberFormatsPanel />
+
+      {/* ─────────────────────────────────────────────────────────────────────
           ADDED SECTIONS (surgical — below the original Admin controls)
           ───────────────────────────────────────────────────────────────────── */}
       <ProfitabilityPanel fy={fy} />
@@ -319,6 +332,448 @@ export default function BooksAdminTab() {
         <PdcRegisterPanel />
       </div>
     </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CONTROLS SUITE: how-to hint
+// ═════════════════════════════════════════════════════════════════════════════
+function ApprovalsHowTo() {
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 sm:p-5">
+      <h3 className="text-sm font-bold flex items-center gap-2 text-[var(--color-text)] mb-2">
+        <span className="text-[var(--color-primary)]"><GitPullRequestArrow size={15} /></span>
+        Approvals &amp; numbering controls
+      </h3>
+      <ul className="text-xs text-[var(--color-muted)] space-y-1 list-disc pl-4">
+        <li><b className="text-[var(--color-text)]">Approval rules</b> set the threshold above which a document type (e.g. PURCHASE) needs sign-off — anything at or above <i>min amount</i> routes to the chosen approver role.</li>
+        <li><b className="text-[var(--color-text)]">Approvals queue</b> lists every pending / decided request; an owner approves or rejects with an optional note. Raise a request manually below to test the flow.</li>
+        <li><b className="text-[var(--color-text)]">Number formats</b> govern the prefix / zero-padding / suffix and whether the FY is embedded in each document type's running number (e.g. <span className="font-mono">INV-2026-27-0001</span>).</li>
+      </ul>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CONTROLS SUITE: approval rules (create) — POST /api/books/approval-rules
+// ═════════════════════════════════════════════════════════════════════════════
+interface ApprovalRule {
+  id: string;
+  entity_type: string;
+  min_amount: string;
+  approver_role: string;
+  created_at?: string;
+}
+const ENTITY_TYPES = ["SALES", "PURCHASE", "PAYMENT", "RECEIPT", "JOURNAL", "CONTRA", "DEBIT_NOTE", "CREDIT_NOTE"];
+const APPROVER_ROLES = ["owner", "admin", "finance", "accountant"];
+
+function ApprovalRulesPanel() {
+  // The backend exposes create only (no list endpoint); we keep a session-local
+  // view of rules created here so the admin gets immediate feedback.
+  const [created, setCreated] = useState<ApprovalRule[]>([]);
+  const [entityType, setEntityType] = useState(ENTITY_TYPES[1]); // PURCHASE
+  const [minAmount, setMinAmount] = useState("");
+  const [approverRole, setApproverRole] = useState(APPROVER_ROLES[0]);
+  const [saving, setSaving] = useState(false);
+
+  const save = useCallback(async () => {
+    if (!(Number(minAmount) >= 0) || minAmount.trim() === "") { toast.error("Enter a minimum amount (0 or more)"); return; }
+    setSaving(true);
+    try {
+      const r = await api.post<ApprovalRule>(`${B}/approval-rules`, {
+        entityType,
+        minAmount: minAmount.trim(),
+        approverRole,
+      });
+      toast.success(`Rule saved · ${entityType} ≥ ${rupee(String(minAmount).trim())} → ${approverRole}`);
+      if (r?.id) setCreated((prev) => [r, ...prev]);
+      setMinAmount("");
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSaving(false);
+    }
+  }, [entityType, minAmount, approverRole]);
+
+  return (
+    <Section
+      icon={<ListChecks size={15} />}
+      title="Approval rules"
+      subtitle="Require sign-off above an amount, by document type"
+    >
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex-1 min-w-[130px]">
+            <label className={labelCls}>Document type</label>
+            <select value={entityType} onChange={(e) => setEntityType(e.target.value)} className={inputCls}>
+              {ENTITY_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
+            </select>
+          </div>
+          <div className="flex-1 min-w-[120px]">
+            <label className={labelCls}>Min amount (₹)</label>
+            <input value={minAmount} onChange={(e) => setMinAmount(e.target.value)} inputMode="decimal" className={`${inputCls} font-mono tabular-nums`} placeholder="50000" />
+          </div>
+          <div className="flex-1 min-w-[120px]">
+            <label className={labelCls}>Approver role</label>
+            <select value={approverRole} onChange={(e) => setApproverRole(e.target.value)} className={inputCls}>
+              {APPROVER_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+        </div>
+        <button type="button" onClick={() => void save()} className={btnPrimary} disabled={saving}>
+          {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add rule
+        </button>
+      </div>
+
+      {created.length > 0 && (
+        <div className="mt-4 overflow-x-auto">
+          <p className="text-[11px] text-[var(--color-muted)] mb-2">Rules added this session:</p>
+          <table className="w-full text-sm min-w-[360px]">
+            <thead>
+              <tr className="text-left text-[11px] text-[var(--color-muted)] border-b border-[var(--color-border)]">
+                <th className="px-3 py-2">Document type</th>
+                <th className="px-3 py-2 text-right">Min amount</th>
+                <th className="px-3 py-2">Approver</th>
+              </tr>
+            </thead>
+            <tbody>
+              {created.map((r) => (
+                <tr key={r.id} className="border-b border-[var(--color-border)]">
+                  <td className="px-3 py-2">{(r.entity_type || "").replace(/_/g, " ")}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{rupee(r.min_amount)}</td>
+                  <td className="px-3 py-2 text-[var(--color-muted)]">{r.approver_role}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CONTROLS SUITE: approvals queue + decide + raise — /api/books/approvals
+// ═════════════════════════════════════════════════════════════════════════════
+type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
+interface Approval {
+  id: string;
+  entity_type: string;
+  entity_id: string | null;
+  amount: string;
+  status: ApprovalStatus;
+  requested_by: string | null;
+  decided_by: string | null;
+  note: string | null;
+  created_at: string;
+  decided_at?: string | null;
+}
+
+function ApprovalStatusPill({ status }: { status: ApprovalStatus }) {
+  const map: Record<ApprovalStatus, string> = {
+    PENDING: "bg-amber-900/30 text-amber-300 border border-amber-700/40",
+    APPROVED: "bg-green-900/30 text-green-300 border border-green-700/40",
+    REJECTED: "bg-red-900/30 text-red-300 border border-red-700/40",
+  };
+  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${map[status]}`}>{status}</span>;
+}
+
+function ApprovalsQueuePanel() {
+  const [rows, setRows] = useState<Approval[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"" | ApprovalStatus>("PENDING");
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  // Raise-a-request form (POST /approvals) so the queue can be exercised end-to-end.
+  const [reqType, setReqType] = useState(ENTITY_TYPES[1]);
+  const [reqAmount, setReqAmount] = useState("");
+  const [reqEntityId, setReqEntityId] = useState("");
+  const [reqNote, setReqNote] = useState("");
+  const [raising, setRaising] = useState(false);
+  const [showRaise, setShowRaise] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const qs = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : "";
+      const r = await api.get<Approval[]>(`${B}/approvals${qs}`);
+      setRows(Array.isArray(r) ? r : []);
+    } catch (e) {
+      toast.error(errMsg(e));
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const decide = useCallback(async (id: string, approve: boolean) => {
+    const note = window.prompt(approve ? "Approve — optional note:" : "Reject — optional note:", "");
+    if (note === null) return; // cancelled
+    setBusyId(id);
+    try {
+      await api.post(`${B}/approvals/${encodeURIComponent(id)}/decide`, { approve, note: note.trim() || undefined });
+      toast.success(approve ? "Request approved" : "Request rejected");
+      await load();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusyId(null);
+    }
+  }, [load]);
+
+  const raise = useCallback(async () => {
+    if (!(Number(reqAmount) > 0)) { toast.error("Enter an amount above zero"); return; }
+    setRaising(true);
+    try {
+      await api.post(`${B}/approvals`, {
+        entityType: reqType,
+        amount: reqAmount.trim(),
+        entityId: reqEntityId.trim() || undefined,
+        note: reqNote.trim() || undefined,
+      });
+      toast.success("Approval request raised");
+      setReqAmount(""); setReqEntityId(""); setReqNote(""); setShowRaise(false);
+      if (statusFilter && statusFilter !== "PENDING") setStatusFilter("PENDING");
+      else await load();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setRaising(false);
+    }
+  }, [reqType, reqAmount, reqEntityId, reqNote, statusFilter, load]);
+
+  const STATUSES: ("" | ApprovalStatus)[] = ["PENDING", "APPROVED", "REJECTED", ""];
+
+  return (
+    <Section
+      icon={<Gavel size={15} />}
+      title="Approvals queue"
+      subtitle="Review, approve or reject pending requests"
+      action={
+        <div className="flex items-center gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as "" | ApprovalStatus)}
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]"
+          >
+            {STATUSES.map((s) => <option key={s || "all"} value={s}>{s || "All"}</option>)}
+          </select>
+          <button type="button" onClick={() => void load()} className={btnGhost} disabled={loading}>
+            <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+          </button>
+        </div>
+      }
+    >
+      <div className="mb-3">
+        <button type="button" onClick={() => setShowRaise((o) => !o)} className={btnGhost}>
+          <Plus size={13} /> Raise request
+        </button>
+        {showRaise && (
+          <div className="mt-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 space-y-2">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex-1 min-w-[120px]">
+                <label className={labelCls}>Document type</label>
+                <select value={reqType} onChange={(e) => setReqType(e.target.value)} className={inputCls}>
+                  {ENTITY_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
+                </select>
+              </div>
+              <div className="flex-1 min-w-[100px]">
+                <label className={labelCls}>Amount (₹)</label>
+                <input value={reqAmount} onChange={(e) => setReqAmount(e.target.value)} inputMode="decimal" className={`${inputCls} font-mono tabular-nums`} placeholder="0.00" />
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Entity id (optional)</label>
+              <input value={reqEntityId} onChange={(e) => setReqEntityId(e.target.value)} className={`${inputCls} font-mono`} placeholder="voucher / document uuid" />
+            </div>
+            <div>
+              <label className={labelCls}>Note (optional)</label>
+              <input value={reqNote} onChange={(e) => setReqNote(e.target.value)} className={inputCls} placeholder="Why this needs approval" />
+            </div>
+            <button type="button" onClick={() => void raise()} className={btnPrimary} disabled={raising}>
+              {raising ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Submit request
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="overflow-x-auto max-h-80 overflow-y-auto">
+        <table className="w-full text-sm min-w-[520px]">
+          <thead className="sticky top-0 bg-[var(--color-surface)]">
+            <tr className="text-left text-[11px] text-[var(--color-muted)] border-b border-[var(--color-border)]">
+              <th className="px-3 py-2">Requested</th>
+              <th className="px-3 py-2">Type</th>
+              <th className="px-3 py-2 text-right">Amount</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2 text-right">Decide</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={5} className="px-3 py-4 text-center text-xs text-[var(--color-muted)]">{loading ? "Loading…" : "No approval requests"}</td></tr>
+            ) : (
+              rows.map((a) => (
+                <tr key={a.id} className="border-b border-[var(--color-border)]">
+                  <td className="px-3 py-2 text-xs text-[var(--color-muted)] whitespace-nowrap">{fmtTime(a.created_at)}</td>
+                  <td className="px-3 py-2 text-xs">
+                    {(a.entity_type || "").replace(/_/g, " ")}
+                    {a.note ? <span className="block text-[10px] text-[var(--color-muted)] truncate max-w-[160px]" title={a.note}>{a.note}</span> : null}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{rupee(a.amount)}</td>
+                  <td className="px-3 py-2"><ApprovalStatusPill status={a.status} /></td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    {a.status === "PENDING" ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => void decide(a.id, true)}
+                          disabled={busyId === a.id}
+                          className="inline-flex items-center gap-1 text-xs text-[var(--color-muted)] hover:text-green-400 disabled:opacity-30 mr-3"
+                        >
+                          {busyId === a.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />} Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void decide(a.id, false)}
+                          disabled={busyId === a.id}
+                          className="inline-flex items-center gap-1 text-xs text-[var(--color-muted)] hover:text-red-400 disabled:opacity-30"
+                        >
+                          <XCircle size={12} /> Reject
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-[10px] text-[var(--color-muted)]">{a.decided_at ? fmtTime(a.decided_at) : "decided"}</span>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Section>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CONTROLS SUITE: document number formats — POST /api/books/number-formats
+// ═════════════════════════════════════════════════════════════════════════════
+interface NumberFormat {
+  tenant_id?: string;
+  doc_type: string;
+  prefix: string;
+  pad: number;
+  suffix: string;
+  include_fy: boolean;
+}
+const DOC_TYPES = ["SALES", "PURCHASE", "PAYMENT", "RECEIPT", "JOURNAL", "CONTRA", "DEBIT_NOTE", "CREDIT_NOTE", "INVOICE", "QUOTE"];
+
+// Mirror backend automation.formatDocNumber so the admin sees a live preview.
+function previewDocNumber(prefix: string, pad: number, suffix: string, includeFy: boolean, fy: string): string {
+  const padded = "1".padStart(Math.max(0, pad || 0), "0");
+  const mid = includeFy && fy ? `${fy}-${padded}` : padded;
+  return `${prefix}${mid}${suffix}`;
+}
+
+function NumberFormatsPanel() {
+  // Backend exposes upsert only (no list); track formats saved this session.
+  const [saved, setSaved] = useState<NumberFormat[]>([]);
+  const [docType, setDocType] = useState(DOC_TYPES[0]);
+  const [prefix, setPrefix] = useState("INV-");
+  const [pad, setPad] = useState(4);
+  const [suffix, setSuffix] = useState("");
+  const [includeFy, setIncludeFy] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const fyForPreview = currentFy();
+
+  const save = useCallback(async () => {
+    setSaving(true);
+    try {
+      const r = await api.post<NumberFormat>(`${B}/number-formats`, {
+        docType,
+        prefix,
+        pad: Number(pad) || 0,
+        suffix,
+        includeFy,
+      });
+      toast.success(`Number format saved for ${docType}`);
+      if (r?.doc_type) {
+        setSaved((prev) => [r, ...prev.filter((x) => x.doc_type !== r.doc_type)]);
+      }
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSaving(false);
+    }
+  }, [docType, prefix, pad, suffix, includeFy]);
+
+  return (
+    <Section
+      icon={<FileDigit size={15} />}
+      title="Document numbering"
+      subtitle="Prefix / padding / suffix and FY embedding per document type"
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+        <div>
+          <label className={labelCls}>Document type</label>
+          <select value={docType} onChange={(e) => setDocType(e.target.value)} className={inputCls}>
+            {DOC_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Prefix</label>
+          <input value={prefix} onChange={(e) => setPrefix(e.target.value)} className={`${inputCls} font-mono`} placeholder="INV-" />
+        </div>
+        <div>
+          <label className={labelCls}>Pad (digits)</label>
+          <input value={pad} onChange={(e) => setPad(Number(e.target.value) || 0)} type="number" min={0} max={12} className={`${inputCls} font-mono tabular-nums`} />
+        </div>
+        <div>
+          <label className={labelCls}>Suffix</label>
+          <input value={suffix} onChange={(e) => setSuffix(e.target.value)} className={`${inputCls} font-mono`} placeholder="optional" />
+        </div>
+        <label className="flex items-center gap-2 text-sm cursor-pointer pb-2">
+          <input type="checkbox" checked={includeFy} onChange={(e) => setIncludeFy(e.target.checked)} className="accent-[var(--color-primary)] w-4 h-4" />
+          Include FY
+        </label>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button type="button" onClick={() => void save()} className={btnPrimary} disabled={saving}>
+          {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Save format
+        </button>
+        <span className="text-xs text-[var(--color-muted)]">
+          Preview: <span className="font-mono text-[var(--color-text)]">{previewDocNumber(prefix, pad, suffix, includeFy, fyForPreview)}</span>
+        </span>
+      </div>
+
+      {saved.length > 0 && (
+        <div className="mt-4 overflow-x-auto">
+          <p className="text-[11px] text-[var(--color-muted)] mb-2">Formats saved this session:</p>
+          <table className="w-full text-sm min-w-[420px]">
+            <thead>
+              <tr className="text-left text-[11px] text-[var(--color-muted)] border-b border-[var(--color-border)]">
+                <th className="px-3 py-2">Document type</th>
+                <th className="px-3 py-2">Example</th>
+                <th className="px-3 py-2 text-center">FY</th>
+              </tr>
+            </thead>
+            <tbody>
+              {saved.map((f) => (
+                <tr key={f.doc_type} className="border-b border-[var(--color-border)]">
+                  <td className="px-3 py-2">{(f.doc_type || "").replace(/_/g, " ")}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{previewDocNumber(f.prefix, f.pad, f.suffix, f.include_fy, fyForPreview)}</td>
+                  <td className="px-3 py-2 text-center">{f.include_fy ? <CheckCircle2 size={13} className="inline text-green-400" /> : <XCircle size={13} className="inline text-[var(--color-muted)]" />}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -465,23 +920,25 @@ function TallyExportPanel({ fy }: { fy: string }) {
 // ═════════════════════════════════════════════════════════════════════════════
 // ADDED: Numbering audit — voucher number gaps
 // ═════════════════════════════════════════════════════════════════════════════
+// Backend (auto.numberGaps) returns one entry per voucher_type:
+//   { voucherType, max, missing: number[], duplicates: number[] }
 interface NumberGap {
+  voucherType?: string;
   voucher_type?: string;
-  series?: string;
-  prefix?: string;
-  from?: number | string;
-  to?: number | string;
-  missing?: (number | string)[];
-  count?: number;
+  max?: number;
+  missing?: number[];
+  duplicates?: number[];
 }
 function NumberGapsPanel({ fy }: { fy: string }) {
   const [gaps, setGaps] = useState<NumberGap[]>([]);
   const [loading, setLoading] = useState(false);
+  const [voucherType, setVoucherType] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await api.get<NumberGap[] | { gaps?: NumberGap[] }>(`${B}/audit/number-gaps?fy=${encodeURIComponent(fy)}`);
+      const qs = `fy=${encodeURIComponent(fy)}${voucherType.trim() ? `&voucherType=${encodeURIComponent(voucherType.trim())}` : ""}`;
+      const r = await api.get<NumberGap[] | { gaps?: NumberGap[] }>(`${B}/audit/number-gaps?${qs}`);
       const arr = Array.isArray(r) ? r : Array.isArray(r?.gaps) ? r.gaps : [];
       setGaps(arr);
     } catch (e) {
@@ -490,46 +947,76 @@ function NumberGapsPanel({ fy }: { fy: string }) {
     } finally {
       setLoading(false);
     }
-  }, [fy]);
+  }, [fy, voucherType]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const VTYPES = ["", "SALES", "PURCHASE", "PAYMENT", "RECEIPT", "JOURNAL", "CONTRA", "DEBIT_NOTE", "CREDIT_NOTE"];
+
+  // A "clean" tab still returns rows (with empty missing/duplicates); flag whether anything is wrong.
+  const flagged = gaps.filter((g) => (g.missing?.length ?? 0) > 0 || (g.duplicates?.length ?? 0) > 0);
 
   return (
     <Section
       icon={<Hash size={15} />}
       title="Numbering audit"
-      subtitle={`Detect gaps in voucher / invoice numbering · FY ${fy}`}
+      subtitle={`Gaps & duplicate voucher numbers · FY ${fy}`}
       action={
-        <button type="button" onClick={() => void load()} className={btnGhost} disabled={loading}>
-          <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <select
+            value={voucherType}
+            onChange={(e) => setVoucherType(e.target.value)}
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]"
+          >
+            {VTYPES.map((t) => <option key={t || "all"} value={t}>{t || "All types"}</option>)}
+          </select>
+          <button type="button" onClick={() => void load()} className={btnGhost} disabled={loading}>
+            <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+          </button>
+        </div>
       }
     >
-      {gaps.length === 0 ? (
+      <p className="text-[11px] text-[var(--color-muted)] mb-3">
+        The counter is gap-free by design — gaps usually mean cancelled vouchers, while duplicates point to a data-integrity issue worth investigating.
+      </p>
+      {flagged.length === 0 ? (
         <p className="text-xs py-4 text-center">
           {loading ? <span className="text-[var(--color-muted)]">Loading…</span> : (
-            <span className="inline-flex items-center gap-1 text-green-400"><CheckCircle2 size={13} /> No numbering gaps found for {fy}</span>
+            <span className="inline-flex items-center gap-1 text-green-400"><CheckCircle2 size={13} /> No gaps or duplicates for {fy}{voucherType ? ` · ${voucherType}` : ""}</span>
           )}
         </p>
       ) : (
         <div className="space-y-2">
-          {gaps.map((g, i) => {
-            const label = g.voucher_type ?? g.series ?? g.prefix ?? `Series ${i + 1}`;
+          {flagged.map((g, i) => {
+            const label = g.voucherType ?? g.voucher_type ?? `Series ${i + 1}`;
             const missing = Array.isArray(g.missing) ? g.missing : [];
+            const dupes = Array.isArray(g.duplicates) ? g.duplicates : [];
             return (
               <div key={i} className="bg-[var(--color-bg)] border border-amber-700/40 rounded-lg p-3">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <span className="text-xs font-semibold">{label}</span>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-900/30 text-amber-300 border border-amber-700/40">
-                    {g.count ?? missing.length} missing
+                  <span className="flex items-center gap-1.5">
+                    {missing.length > 0 && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-900/30 text-amber-300 border border-amber-700/40">
+                        {missing.length} missing
+                      </span>
+                    )}
+                    {dupes.length > 0 && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-900/30 text-red-300 border border-red-700/40">
+                        {dupes.length} duplicate
+                      </span>
+                    )}
                   </span>
                 </div>
-                {(g.from != null || g.to != null) && (
-                  <p className="text-[11px] text-[var(--color-muted)] mt-1">Range {String(g.from ?? "?")} → {String(g.to ?? "?")}</p>
-                )}
+                {g.max != null && <p className="text-[11px] text-[var(--color-muted)] mt-1">Highest number: {g.max}</p>}
                 {missing.length > 0 && (
                   <p className="text-[11px] text-amber-300/80 mt-1 break-words">
                     Missing: {missing.slice(0, 50).map(String).join(", ")}{missing.length > 50 ? ` … +${missing.length - 50}` : ""}
+                  </p>
+                )}
+                {dupes.length > 0 && (
+                  <p className="text-[11px] text-red-300/80 mt-1 break-words">
+                    Duplicates: {dupes.slice(0, 50).map(String).join(", ")}{dupes.length > 50 ? ` … +${dupes.length - 50}` : ""}
                   </p>
                 )}
               </div>

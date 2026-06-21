@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
+import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import EmptyState from "@/components/EmptyState";
 import { differenceInDays, format, parseISO, addDays } from "date-fns";
@@ -13,6 +14,7 @@ import {
   Activity, PieChart, Trophy, History, FlaskConical, Save,
   Printer, Banknote, IndianRupee, UserCheck,
   Split, Inbox, CreditCard, Target, Calculator,
+  QrCode, Link2, X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -128,16 +130,129 @@ function ReminderModal({
   );
 }
 
+// ── UPI / payment-link modal ────────────────────────────────────────────────
+// Calls the backend to mint a Razorpay payment link (if a key is configured) or
+// a static UPI deep-link + QR, and stores it on the invoice. Honest: when no
+// payment gateway is configured the backend returns demo:true (a plain UPI
+// intent), and we surface that so the user isn't misled.
+type UpiLinkResult = { url: string; qr: string | null; provider: string; demo: boolean };
+
+function UpiLinkModal({
+  invoiceId, name, amount, onClose,
+}: { invoiceId: string; name: string; amount: number; onClose: () => void }) {
+  const [busy, setBusy]     = useState(false);
+  const [result, setResult] = useState<UpiLinkResult | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const generate = useCallback(async () => {
+    if (!invoiceId) { toast.error("This receivable has no backend invoice id — open it from Invoices first"); return; }
+    setBusy(true);
+    try {
+      const res = await api.post<UpiLinkResult>("/api/collections/upi-link", {
+        invoice_id: invoiceId,
+        amount,
+      });
+      setResult(res);
+      toast.success(res?.provider === "razorpay" ? "Razorpay payment link created" : "UPI payment link created");
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : "Could not generate payment link");
+    } finally {
+      setBusy(false);
+    }
+  }, [invoiceId, amount]);
+
+  // Auto-generate on open so the user sees the link immediately.
+  useEffect(() => { void generate(); }, [generate]);
+
+  const copy = () => {
+    if (!result?.url) return;
+    navigator.clipboard.writeText(result.url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success("Payment link copied");
+    }).catch(() => toast.error("Could not copy"));
+  };
+
+  const shareWhatsApp = () => {
+    if (!result?.url) return;
+    const text = `Hi ${name}, here is a secure link to pay ${formatCurrency(amount)}: ${result.url}`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-md">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-base font-bold flex items-center gap-2">
+            <QrCode size={16} className="text-[var(--color-primary)]" /> Payment link
+          </h2>
+          <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">
+          {name} · {formatCurrency(amount)}
+        </p>
+
+        {busy && (
+          <div className="py-10 text-center text-sm text-[var(--color-muted)]">
+            <RefreshCw size={22} className="mx-auto mb-2 animate-spin text-[var(--color-primary)]" />
+            Generating link…
+          </div>
+        )}
+
+        {!busy && result && (
+          <div className="space-y-4">
+            {result.qr && (
+              <div className="flex justify-center">
+                <img src={result.qr} alt="Payment QR code" className="w-44 h-44 rounded-lg bg-white p-2" />
+              </div>
+            )}
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-muted)] mb-1 uppercase tracking-wide">
+                {result.provider === "razorpay" ? "Razorpay link" : "UPI intent"}
+              </p>
+              <p className="text-xs font-mono break-all text-[var(--color-text)]">{result.url}</p>
+            </div>
+            {result.demo && (
+              <div className="bg-yellow-950/20 border border-yellow-800/30 rounded-lg px-3 py-2 text-[11px] text-yellow-400">
+                No payment gateway configured — this is a plain UPI deep-link. Configure Razorpay to issue trackable, auto-reconciling links.
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button onClick={copy} className="flex-1 flex items-center justify-center gap-1.5 text-sm bg-[var(--color-bg)] border border-[var(--color-border)] py-2.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+                <Copy size={13} /> {copied ? "Copied!" : "Copy link"}
+              </button>
+              <button onClick={shareWhatsApp} className="flex-1 flex items-center justify-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] py-2.5 rounded-lg font-bold hover:opacity-90">
+                <Send size={13} /> Send on WhatsApp
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!busy && !result && (
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--color-muted)]">Could not generate a link.</p>
+            <button onClick={() => void generate()} className="w-full flex items-center justify-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] py-2.5 rounded-lg font-bold hover:opacity-90">
+              <RefreshCw size={13} /> Retry
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function CollectionsPage() {
   const { store } = useApp();
 
   const [view, setView]           = useState<"collections" | "profitability" | "clv" | "score" | "statement" | "dunning" | "dso" | "promise" | "agents" | "settlement" | "cei" | "provision" | "plan" | "interest" | "forecast" | "worklist" | "discount" | "legal" | "kpi" | "dispute" | "concentration" | "defaulters" | "behavior" | "abtest" | "letters" | "interestinv" | "nach" | "byrep" | "partpay" | "unapplied" | "creditlimit" | "goal" | "recoveryroi">("collections");
   const [filter, setFilter]       = useState<Aging | "all">("all");
   const [reminder, setReminder]   = useState<{ id: string; name: string; amount: number; days: number } | null>(null);
+  const [upiTarget, setUpiTarget] = useState<{ id: string; name: string; amount: number } | null>(null);
   // Persisted per-invoice "contacted / reminder-sent" flags (survives reload + syncs across devices).
   const [contacted, setContacted] = useFeatureState<Record<string, boolean>>("collections-contacted", {});
 
-  const receivables = useMemo(() => {
+  // KV-derived receivables — the always-available local fallback.
+  const localReceivables = useMemo(() => {
     return store.invoices
       .filter(inv => inv.status !== "paid")
       .map(inv => ({
@@ -155,8 +270,43 @@ export default function CollectionsPage() {
       }));
   }, [store]);
 
-  // Honest: only real outstanding receivables derived from the tenant's invoices.
-  const displayData = receivables;
+  // Backend pending receivables (GET /api/collections/pending). When this loads
+  // we prefer it because each row carries the canonical invoice id the UPI-link
+  // endpoint needs; on any failure we silently keep the local KV view.
+  const [backendRows, setBackendRows] = useState<typeof localReceivables | null>(null);
+  const [loadingPending, setLoadingPending] = useState(false);
+
+  const loadPending = useCallback(async () => {
+    setLoadingPending(true);
+    try {
+      const rows = await api.get<any[]>("/api/collections/pending");
+      const mapped = (Array.isArray(rows) ? rows : []).map((r) => {
+        const dueDate = (r.due_date ?? r.dueDate ?? "") as string;
+        const dueIso = dueDate ? String(dueDate).slice(0, 10) : "";
+        const overdue = Number(r.days_overdue ?? 0);
+        return {
+          id: r.id as string,
+          clientName: (r.customer_name ?? r.customer ?? "Unknown") as string,
+          amount: Number(r.total_amount ?? r.amount ?? 0),
+          dueDate: dueIso,
+          status: (r.status ?? "sent") as "pending" | "overdue" | "paid",
+          aging: getAging(dueIso),
+          daysOverdue: Number.isFinite(overdue) ? Math.max(0, overdue) : 0,
+        };
+      });
+      setBackendRows(mapped);
+    } catch {
+      // Graceful fallback: keep using the local KV-derived view.
+      setBackendRows(null);
+    } finally {
+      setLoadingPending(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadPending(); }, [loadPending]);
+
+  // Honest: real outstanding receivables — backend when available, else local KV.
+  const displayData = backendRows ?? localReceivables;
 
   const filtered = filter === "all" ? displayData : displayData.filter(r => r.aging === filter);
   const sorted   = [...filtered].sort((a, b) => b.daysOverdue - a.daysOverdue);
@@ -414,6 +564,13 @@ export default function CollectionsPage() {
             <span className="ml-2 text-xs text-[var(--color-muted)]">{sorted.length} accounts</span>
           </h2>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => void loadPending()}
+              title={backendRows ? "Refresh from server" : "Reload server receivables"}
+              className="flex items-center gap-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] px-2 py-1 rounded border border-[var(--color-border)]"
+            >
+              <RefreshCw size={11} className={loadingPending ? "animate-spin" : ""} /> {backendRows ? "Live" : "Local"}
+            </button>
             <Filter size={12} className="text-[var(--color-muted)]" />
             <select
               value={filter}
@@ -475,6 +632,12 @@ export default function CollectionsPage() {
                     >
                       <MessageSquare size={11} /> Remind
                     </button>
+                    <button
+                      onClick={() => setUpiTarget({ id: row.id, name: row.clientName, amount: row.amount })}
+                      className="flex items-center gap-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] px-2.5 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40 transition-colors font-medium"
+                    >
+                      <Link2 size={11} /> UPI link
+                    </button>
                     {!isContacted && (
                       <button
                         onClick={() => markContacted(row.id)}
@@ -513,6 +676,15 @@ export default function CollectionsPage() {
           days={reminder.days}
           onClose={() => setReminder(null)}
           onSent={() => markContacted(reminder.id)}
+        />
+      )}
+
+      {upiTarget && (
+        <UpiLinkModal
+          invoiceId={upiTarget.id}
+          name={upiTarget.name}
+          amount={upiTarget.amount}
+          onClose={() => setUpiTarget(null)}
         />
       )}
       </>}
