@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
@@ -32,14 +33,14 @@ const AGING_COLOR: Record<string, string> = {
   current: "text-green-400", "30d": "text-yellow-400", "60d": "text-orange-400", "90d+": "text-red-400",
 };
 
-function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [customerName, setCustomerName] = useState("");
+function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void; onCreated: () => void; initial?: { customer?: string; amount?: string; desc?: string } }) {
+  const [customerName, setCustomerName] = useState(initial?.customer ?? "");
   const [customerGstin, setCustomerGstin] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [gstRate, setGstRate] = useState("18");
   const [dueDate, setDueDate] = useState("");
-  const [items, setItems] = useState([{ description: "", hsn_sac: "", quantity: "1", unit_price: "", gst_rate: "18" }]);
+  const [items, setItems] = useState([{ description: initial?.desc ?? "", hsn_sac: "", quantity: "1", unit_price: initial?.amount ?? "", gst_rate: "18" }]);
   const [saving, setSaving] = useState(false);
 
   const addItem = () => setItems(v => [...v, { description: "", hsn_sac: "", quantity: "1", unit_price: "", gst_rate: gstRate }]);
@@ -289,7 +290,25 @@ export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading]   = useState(true);
   const [showNew, setShowNew]   = useState(false);
+  const [composeInitial, setComposeInitial] = useState<{ customer?: string; amount?: string; desc?: string } | undefined>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [qrInvoice, setQrInvoice] = useState<Invoice | null>(null);
+
+  // Open a pre-filled new-invoice form when the assistant deep-links here
+  // (/invoices?compose=1&customer=&amount=&desc=), then strip the params.
+  useEffect(() => {
+    if (searchParams.get("compose") === "1") {
+      setComposeInitial({
+        customer: searchParams.get("customer") ?? undefined,
+        amount: searchParams.get("amount") ?? undefined,
+        desc: searchParams.get("desc") ?? undefined,
+      });
+      setShowNew(true);
+      ["compose", "customer", "amount", "desc"].forEach(k => searchParams.delete(k));
+      setSearchParams(searchParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [tab, setTab]           = useState<
     "all" | "pending" | "paid" | "collection"
     | "quote" | "proforma" | "recurring" | "paylink" | "creditnote" | "creditlimit"
@@ -577,7 +596,7 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      {showNew   && <NewInvoiceModal onClose={() => setShowNew(false)} onCreated={load} />}
+      {showNew   && <NewInvoiceModal initial={composeInitial} onClose={() => { setShowNew(false); setComposeInitial(undefined); }} onCreated={load} />}
       {qrInvoice && <UpiQrModal invoice={qrInvoice} onClose={() => setQrInvoice(null)} />}
     </div>
   );

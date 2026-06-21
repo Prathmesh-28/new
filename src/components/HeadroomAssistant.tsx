@@ -2,10 +2,16 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
-import { Sparkles, X, Send, Loader2, ArrowRight, List, MessageSquare, ArrowLeft, RotateCcw } from "lucide-react";
+import { Sparkles, X, Send, Loader2, ArrowRight, List, MessageSquare, ArrowLeft, RotateCcw, Mic } from "lucide-react";
 import { FEATURE_GUIDES } from "@/data/featureGuides";
 import { CURATED_FAQ, type FaqEntry } from "@/data/assistantFaq";
 import { TAB_CATALOG } from "@/data/roles";
+import { detectAction, parseAiDirective } from "@/lib/assistantActions";
+
+// Web Speech API (voice input) — available in Chrome/Edge/Android WebView; absent in
+// iOS WKWebView, so we feature-detect and only show the mic when supported.
+const getRecognition = (): any => { const w = window as any; const C = w.SpeechRecognition || w.webkitSpeechRecognition; return C ? new C() : null; };
+const SPEECH_OK = typeof window !== "undefined" && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 
 interface KbItem { id: string; category: string; title: string; what: string; steps?: string[]; tips?: string[]; route?: string; haystack: string }
 
@@ -63,6 +69,8 @@ export default function HeadroomAssistant() {
   const [msgs, setMsgs] = useState<Msg[]>([GREETING]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [listening, setListening] = useState(false);
+  const recogRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -83,24 +91,34 @@ export default function HeadroomAssistant() {
     const matches = rank(kb, q);
     const top = matches[0];
     const chips = matches.slice(1, 4).map(m => m.title);
-    const route = top?.route;
-    const routeLabel = top ? (tabLabel[top.route?.slice(1) ?? ""]?.label ?? "Open") : undefined;
+    // Agentic: turn the request into a one-tap action (navigate + prefill where parseable).
+    const localAction = detectAction(q);
+    const kbRoute = top?.route;
+    const kbLabel = top ? (tabLabel[top.route?.slice(1) ?? ""]?.label ?? null) : null;
+    const resolve = (aiAction: { label: string; route: string } | null) => {
+      const act = aiAction ?? localAction;
+      return { route: act?.route ?? kbRoute, routeLabel: act?.label ?? (kbLabel ? `Go to ${kbLabel}` : undefined) };
+    };
 
     // Multi-turn: send the real conversation (exclude the seeded greeting) to the AI,
     // grounded with the top KB matches so answers stay accurate to Headroom.
     const ctx = matches.slice(0, 6).map(m => `• ${m.title}: ${m.what}${m.steps ? " Steps: " + m.steps.join("; ") : ""}`).join("\n");
-    const system = `You are the Headroom Assistant, a friendly in-app helper for an India-first SMB finance & accounting super-app (books/GL, GST & India tax filing, invoicing, collections, payroll, inventory, banking, capital, CRM). Answer conversationally and concisely (2-4 short sentences or tight bullets), reference the real screen/route, and be accurate. Use ONLY this product context where relevant:\n${ctx || "(no direct match — answer from general Headroom knowledge and suggest where to look.)"}`;
+    const system = `You are the Headroom Assistant, a friendly in-app helper for an India-first SMB finance & accounting super-app (books/GL, GST & India tax filing, invoicing, collections, payroll, inventory, banking, capital, CRM). Answer conversationally and concisely (2-4 short sentences or tight bullets), reference the real screen/route, and be accurate. Use ONLY this product context where relevant:\n${ctx || "(no direct match — answer from general Headroom knowledge and suggest where to look.)"}\n\nIf the user wants to DO or OPEN something in the app, end your reply with a directive on its own line in the form [[go:/route|Button label]] using a real route (e.g. /invoices, /gst, /payroll, /collections, /books, /payments, /banking, /forecast, /vendors, /advisor, /settings). Never describe or mention the directive itself.`;
     const apiMsgs = history.filter(m => !m.seed).map(m => ({ role: m.role, content: m.content }));
 
     try {
       const res = await api.post<{ content?: string; error?: string }>("/api/ai/ask", { system, messages: apiMsgs });
-      const content = res?.content?.trim() || (top ? top.what : "I couldn't find that — try rephrasing, or tap the list icon to browse topics.");
+      let content = res?.content?.trim() || (top ? top.what : "I couldn't find that — try rephrasing, or tap the list icon to browse topics.");
+      const parsed = parseAiDirective(content);          // AI may emit [[go:/route|Label]]
+      content = parsed.text || content;
+      const { route, routeLabel } = resolve(parsed.action);
       setMsgs(m => [...m, { role: "assistant", content, route, routeLabel, chips }]);
     } catch {
-      // AI off → answer straight from the knowledge base, still conversational.
+      // AI off → answer straight from the knowledge base, still conversational + actionable.
       const content = top
         ? `${top.what}${top.steps && top.steps.length ? "\n\nQuick steps:\n" + top.steps.slice(0, 4).map((s, i) => `${i + 1}. ${s}`).join("\n") : ""}`
         : "I couldn't find a direct answer — try rephrasing, or tap the list icon (top-right) to browse all help topics.";
+      const { route, routeLabel } = resolve(null);
       setMsgs(m => [...m, { role: "assistant", content, route, routeLabel, chips }]);
     } finally {
       setBusy(false);
@@ -108,6 +126,18 @@ export default function HeadroomAssistant() {
   };
 
   const reset = () => setMsgs([GREETING]);
+
+  const toggleMic = () => {
+    if (listening) { recogRef.current?.stop?.(); setListening(false); return; }
+    const r = getRecognition();
+    if (!r) return;
+    recogRef.current = r;
+    r.lang = "en-IN"; r.interimResults = false; r.maxAlternatives = 1;
+    r.onresult = (e: any) => { const t = e?.results?.[0]?.[0]?.transcript; if (t) setInput(prev => (prev ? prev + " " : "") + t); inputRef.current?.focus(); };
+    r.onerror = () => setListening(false);
+    r.onend = () => setListening(false);
+    try { r.start(); setListening(true); } catch { setListening(false); }
+  };
 
   // ── Browse view (secondary) ──────────────────────────────────────────────────
   const byCategory = useMemo(() => {
@@ -158,7 +188,7 @@ export default function HeadroomAssistant() {
                     {m.role === "assistant" && m.route && (
                       <button onClick={() => { setOpen(false); navigate(m.route!); }}
                         className="mt-1.5 inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-primary)] hover:bg-[var(--color-surface-2)]">
-                        {m.routeLabel ? `Go to ${m.routeLabel}` : "Take me there"} <ArrowRight size={11} />
+                        {m.routeLabel || "Take me there"} <ArrowRight size={11} />
                       </button>
                     )}
                     {m.role === "assistant" && m.chips && m.chips.length > 0 && (
@@ -188,8 +218,14 @@ export default function HeadroomAssistant() {
                   <textarea ref={inputRef} value={input} rows={1}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
-                    placeholder="Ask anything…"
+                    placeholder={listening ? "Listening…" : "Ask anything…"}
                     className="max-h-24 flex-1 resize-none bg-transparent py-1 text-xs outline-none" />
+                  {SPEECH_OK && (
+                    <button onClick={toggleMic} title={listening ? "Stop" : "Speak"}
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${listening ? "animate-pulse border-[var(--color-primary)] bg-[var(--color-primary)]/15 text-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                      <Mic size={14} />
+                    </button>
+                  )}
                   <button onClick={() => send(input)} disabled={busy || !input.trim()}
                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary)] text-white disabled:opacity-40">
                     {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
