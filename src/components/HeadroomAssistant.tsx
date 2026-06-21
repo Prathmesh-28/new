@@ -72,7 +72,7 @@ export default function HeadroomAssistant() {
     for (const it of kb) { if (!m.has(it.category)) m.set(it.category, []); m.get(it.category)!.push(it); }
     return [...m.entries()];
   }, [kb]);
-  const [openCat, setOpenCat] = useState<string | null>("Getting started");
+  const [openCat, setOpenCat] = useState<string | null>("Getting started & plans");
 
   useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [chat, aiBusy]);
 
@@ -85,7 +85,7 @@ export default function HeadroomAssistant() {
     setQuery("");
     setAiBusy(true);
     // Ground the model with the top KB matches so answers stay accurate to Headroom.
-    const ctx = results.slice(0, 4).map(r => `• ${r.title}: ${r.what}`).join("\n");
+    const ctx = results.slice(0, 6).map(r => `• ${r.title}: ${r.what}${r.steps ? " Steps: " + r.steps.join("; ") : ""}`).join("\n");
     const system = `You are the Headroom Assistant for an India-first SMB finance & accounting super-app. Answer concisely and actionably, referencing real screens/buttons. If relevant, use this product context:\n${ctx || "(no direct match — answer from general Headroom knowledge: it does books/GL, GST & India tax filing, invoicing, collections, payroll, inventory, banking, capital.)"}`;
     try {
       const res = await api.post<{ content?: string; error?: string }>("/api/ai/ask", {
