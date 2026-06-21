@@ -228,6 +228,158 @@ function evaluateComponents(components, ctx) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// (3) DEPENDENCY-ORDERED COMPONENT EVALUATION  (Frappe SSA component ordering)
+//
+// Frappe's evaluateComponents above runs a fixed earning→deduction order and seeds
+// every abbr to 0. That works when a formula references an abbr defined EARLIER in
+// the list. The richer "formula-driven component" model lets a component's formula
+// reference ANY other component's abbr regardless of list order — so we must compute
+// a topological order from the formula/condition dependencies and evaluate in that
+// order (Frappe does this implicitly by repeated passes; we make it explicit).
+//
+// We extract the variable names a formula/condition references (its abbr deps),
+// build a DAG over the components, topo-sort it, and evaluate each in order against
+// a shared scope. STATISTICAL components (is_statistical) are evaluated and exposed
+// to the scope but NOT emitted into earnings/deductions (they are pure inputs).
+// A dependency cycle throws.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Collect the identifier tokens (variable references) in an expression.
+function referencedVars(expr) {
+  if (expr == null || String(expr).trim() === "") return [];
+  const out = [];
+  for (const t of tokenize(expr)) if (t.t === "var") out.push(t.v);
+  return out;
+}
+
+// Topologically order components so every component is evaluated AFTER the ones its
+// formula/condition references. base/payment_days/etc are not components → ignored.
+function orderComponentsByDependency(components) {
+  const byAbbr = new Map();
+  for (const c of components) byAbbr.set(c.abbr || abbrOf(c.component_name || c.name), c);
+  const visited = new Map(); // abbr → 0 visiting / 1 done
+  const ordered = [];
+  const visit = (c, stack) => {
+    const abbr = c.abbr || abbrOf(c.component_name || c.name);
+    if (visited.get(abbr) === 1) return;
+    if (visited.get(abbr) === 0) throw new HrError(`Circular dependency in salary components at "${abbr}"`);
+    visited.set(abbr, 0);
+    const deps = [...referencedVars(c.formula), ...referencedVars(c.condition)];
+    for (const d of deps) {
+      const dep = byAbbr.get(d);
+      if (dep && dep !== c) visit(dep, [...stack, abbr]);
+    }
+    visited.set(abbr, 1);
+    ordered.push(c);
+  };
+  for (const c of components) visit(c, []);
+  return ordered;
+}
+
+// Evaluate a set of FORMULA-DRIVEN components in dependency order. Returns
+// { earnings, deductions, statistical, scope }. ctx carries base + day counts +
+// any seed variables (e.g. taxable salary for a TDS row). Statistical components
+// resolve into scope but are not paid. Mirrors Frappe SSA.get_evaluated_components
+// but with explicit topo ordering and statistical-component support.
+function evaluateFormulaComponents(components, ctx) {
+  const scope = {
+    base: Number(ctx.base) || 0,
+    working_days: Number(ctx.working_days) || 0,
+    total_working_days: Number(ctx.working_days) || 0,
+    payment_days: Number(ctx.payment_days) || 0,
+    lop_days: Number(ctx.lop_days) || 0,
+  };
+  // caller-supplied seeds (e.g. annual_taxable_salary, monthly_tds)
+  for (const [k, v] of Object.entries(ctx.seed || {})) scope[k] = Number(v) || 0;
+  for (const c of components) scope[c.abbr || abbrOf(c.component_name || c.name)] = 0;
+
+  const proration = ctx.working_days > 0 ? Number(ctx.payment_days) / Number(ctx.working_days) : 0;
+  const ordered = orderComponentsByDependency(components);
+  const out = { earnings: [], deductions: [], statistical: [] };
+
+  for (const c of ordered) {
+    const name = c.component_name || c.name;
+    const abbr = c.abbr || abbrOf(name);
+    const type = c.type === "deduction" ? "deduction" : "earning";
+    const stat = !!(c.is_statistical ?? c.statistical_only);
+    // expose gross_pay (sum of earnings so far) to any later component (Frappe behaviour)
+    scope.gross_pay = out.earnings.reduce((a, e) => a + e.amount, 0);
+
+    if (!evalCondition(c.condition, scope)) { scope[abbr] = 0; continue; }
+    let amount;
+    if (c.formula && String(c.formula).trim() !== "") amount = flt(evalExpr(c.formula, scope), 2);
+    else amount = flt(c.amount, 2);
+    scope[abbr] = amount; // full (unprorated) value visible to dependents
+
+    let final = amount;
+    if (c.depends_on_payment_days) final = flt(amount * proration, 2);
+    if (c.round_to_integer || c.round) final = roundRupee(final);
+
+    const row = {
+      name, abbr, type, amount: final, default_amount: amount,
+      depends_on_payment_days: !!c.depends_on_payment_days,
+      statutory: !!c.statutory, statistical: stat,
+      is_tax_applicable: c.is_tax_applicable !== false,
+    };
+    if (stat) { out.statistical.push(row); continue; }   // input-only, not paid
+    if (final === 0 && !c.formula) continue;
+    out[type + "s"].push(row);
+  }
+  return { ...out, scope };
+}
+
+// ── Salary-component MASTER CRUD (first-class entities) ──────────────────────
+function normalizeComponentMaster(c) {
+  const name = c.componentName || c.component_name || c.name;
+  if (!name) throw new HrError("componentName required");
+  const type = c.type === "deduction" ? "deduction" : "earning";
+  if (c.formula) tokenize(c.formula);     // compile-check (safe-eval grammar)
+  if (c.condition) tokenize(c.condition);
+  return {
+    component_name: String(name),
+    abbr: c.abbr ? String(c.abbr) : abbrOf(name),
+    type,
+    formula: c.formula ? String(c.formula) : null,
+    condition: c.condition ? String(c.condition) : null,
+    amount: flt(c.amount || 0, 2),
+    depends_on_payment_days: c.dependsOnPaymentDays ?? c.depends_on_payment_days ?? true,
+    is_statistical: !!(c.isStatistical ?? c.is_statistical),
+    is_tax_applicable: c.isTaxApplicable ?? c.is_tax_applicable ?? true,
+    statutory: !!(c.statutory),
+    variable_based_on_taxable_salary: !!(c.variableBasedOnTaxableSalary ?? c.variable_based_on_taxable_salary),
+    round_to_integer: !!(c.roundToInteger ?? c.round_to_integer ?? c.round),
+  };
+}
+async function createSalaryComponent(tenantId, c) {
+  const n = normalizeComponentMaster(c);
+  const { rows } = await pool.query(
+    `INSERT INTO hrms_salary_components
+      (tenant_id,component_name,abbr,type,formula,condition,amount,depends_on_payment_days,
+       is_statistical,is_tax_applicable,statutory,variable_based_on_taxable_salary,round_to_integer)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+     ON CONFLICT(tenant_id,component_name) DO UPDATE SET
+       abbr=EXCLUDED.abbr, type=EXCLUDED.type, formula=EXCLUDED.formula, condition=EXCLUDED.condition,
+       amount=EXCLUDED.amount, depends_on_payment_days=EXCLUDED.depends_on_payment_days,
+       is_statistical=EXCLUDED.is_statistical, is_tax_applicable=EXCLUDED.is_tax_applicable,
+       statutory=EXCLUDED.statutory, variable_based_on_taxable_salary=EXCLUDED.variable_based_on_taxable_salary,
+       round_to_integer=EXCLUDED.round_to_integer
+     RETURNING *`,
+    [tenantId, n.component_name, n.abbr, n.type, n.formula, n.condition, n.amount, n.depends_on_payment_days,
+     n.is_statistical, n.is_tax_applicable, n.statutory, n.variable_based_on_taxable_salary, n.round_to_integer]
+  );
+  return rows[0];
+}
+const listSalaryComponents = async (t) => (await pool.query("SELECT * FROM hrms_salary_components WHERE tenant_id=$1 ORDER BY type,component_name", [t])).rows;
+
+// Validate (and topo-order) a set of component rows without persisting — surfaces
+// circular dependencies / formula errors to the UI before a structure is saved.
+function validateComponentSet(components) {
+  const norm = (Array.isArray(components) ? components : []).map(normalizeComponentMaster);
+  const ordered = orderComponentsByDependency(norm);
+  return { ok: true, order: ordered.map((c) => c.abbr) };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STATUTORY  (India). Configurable ceilings with sane defaults.
 // PF: 12% of basic, capped at a PF wage ceiling (15000 → 1800/mo by default).
 // ESI: 0.75% of gross IF gross ≤ ₹21,000 (the ESI wage threshold).
@@ -586,13 +738,14 @@ async function previewSlip(tenantId, employeeId, month) {
 // ─────────────────────────────────────────────────────────────────────────────
 // PAYROLL ENTRY / RUN  (batch → slips → ONE consolidated salary journal)
 // ─────────────────────────────────────────────────────────────────────────────
-async function runPayroll(tenantId, actorId, month) {
+async function runPayroll(tenantId, actorId, month, opts = {}) {
   if (!/^\d{4}-\d{2}$/.test(month || "")) throw new HrError("month=YYYY-MM required");
   const { rows: ex } = await pool.query("SELECT id FROM hrms_payroll_runs WHERE tenant_id=$1 AND run_month=$2", [tenantId, month]);
   if (ex[0]) throw new HrError("Payroll already run for this month", 409);
 
   const onDate = `${month}-28`;
   const paid = await paidLeaveTypeNames(tenantId);
+  const costCentreId = opts.costCentreId || null;
 
   // Batch: active employees who have a structure assignment effective on/before the period.
   const { rows: emps } = await pool.query("SELECT id, name FROM hrms_employees WHERE tenant_id=$1 AND status='ACTIVE' ORDER BY name", [tenantId]);
@@ -607,7 +760,21 @@ async function runPayroll(tenantId, actorId, month) {
       structure: { apply_pf: ssa.apply_pf, apply_esi: ssa.apply_esi, apply_pt: ssa.apply_pt },
       paidLeaveTypes: paid,
     });
-    slips.push({ employeeId: e.id, employeeName: e.name, ...slip });
+    // (1) ANNUALIZED TDS: deduct the stored per-month projected TDS (mid-year true-up).
+    // If a TDS row already exists on the structure, the projection takes precedence.
+    const monthlyTds = money(await monthlyTdsFor(tenantId, e.id, month));
+    let slipTds = money(0);
+    if (monthlyTds.greaterThan(0)) {
+      slip.deductions = slip.deductions.filter((d) => !(d.abbr === "TDS" || /tds|income tax/i.test(d.name)));
+      slip.deductions.push({ name: "TDS", abbr: "TDS", type: "deduction", amount: Number(toRupees(monthlyTds)), statutory: true });
+      slipTds = monthlyTds;
+      slip.total_deduction = Number(toRupees(money(sum(slip.deductions.map((d) => d.amount)))));
+      slip.net = roundRupee(slip.gross - slip.total_deduction);
+    } else {
+      const existing = slip.deductions.find((d) => d.abbr === "TDS" || /tds|income tax/i.test(d.name));
+      if (existing) slipTds = money(existing.amount);
+    }
+    slips.push({ employeeId: e.id, employeeName: e.name, tds: toRupees(slipTds), ...slip });
   }
   if (!slips.length) throw new HrError("No active employees with a salary structure assignment for this month", 422);
 
@@ -637,35 +804,43 @@ async function runPayroll(tenantId, actorId, month) {
   // ESI + Professional Tax (no dedicated seeded ledger) fold into Staff Deductions.
   const staffDeductions = esi.plus(pt).plus(otherDed);
 
-  const entries = [{ ledgerId: salaries, debit: toRupees(gross), credit: "0" }];
+  // (4a) ACCRUAL journal — Dr expense heads, Cr payables. Cost-centre tags the
+  // expense (Salaries) line so cost-centre-wise P&L attributes the payroll cost.
+  const entries = [{ ledgerId: salaries, debit: toRupees(gross), credit: "0", costCentreId }];
   if (pf.greaterThan(0)) entries.push({ ledgerId: pfPayable, debit: "0", credit: toRupees(pf) });
   if (tds.greaterThan(0)) entries.push({ ledgerId: tdsPayable, debit: "0", credit: toRupees(tds) });
   if (staffDeductions.greaterThan(0)) entries.push({ ledgerId: deductionsLed, debit: "0", credit: toRupees(staffDeductions) });
   entries.push({ ledgerId: salPayable, debit: "0", credit: toRupees(net) });
 
   const voucher = await books.postVoucher(tenantId, actorId,
-    { voucherType: "JOURNAL", voucherDate: onDate, narration: `Payroll ${month}`, source: "payroll" }, entries);
+    { voucherType: "JOURNAL", voucherDate: onDate, narration: `Payroll accrual ${month}`, source: "payroll" },
+    entries, { idempotencyKey: `payroll-accrual:${tenantId}:${month}` });
 
   // Persist run + payslips with the full breakdown JSON.
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const { rows: rr } = await client.query(
-      "INSERT INTO hrms_payroll_runs(tenant_id,run_month,gross,total_deduction,net,voucher_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",
-      [tenantId, month, toRupees(gross), toRupees(totalDeduction), toRupees(net), voucher.voucherId]
+      `INSERT INTO hrms_payroll_runs(tenant_id,run_month,gross,total_deduction,net,voucher_id,accrual_voucher_id,cost_centre_id,pay_status)
+       VALUES($1,$2,$3,$4,$5,$6,$6,$7,'ACCRUED') RETURNING *`,
+      [tenantId, month, toRupees(gross), toRupees(totalDeduction), toRupees(net), voucher.voucherId, costCentreId]
     );
     const run = rr[0];
     for (const s of slips) {
       await client.query(
-        `INSERT INTO hrms_payslips(tenant_id,run_id,employee_id,employee_name,total_working_days,payment_days,lop_days,earnings,deductions,gross,total_deduction,net)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        `INSERT INTO hrms_payslips(tenant_id,run_id,employee_id,employee_name,total_working_days,payment_days,lop_days,earnings,deductions,gross,total_deduction,net,tds)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
         [tenantId, run.id, s.employeeId, s.employeeName, s.total_working_days, s.payment_days, s.lop_days,
-         JSON.stringify(s.earnings), JSON.stringify(s.deductions), s.gross, s.total_deduction, s.net]
+         JSON.stringify(s.earnings), JSON.stringify(s.deductions), s.gross, s.total_deduction, s.net, s.tds || "0.00"]
       );
     }
     await client.query("COMMIT");
+    // Refresh each employee's projection so tds_paid_to_date / remaining_months /
+    // the next per-month figure reflect this month's deduction (mid-year true-up).
+    const fy = fyForMonth(month);
+    for (const s of slips) await computeTdsProjection(tenantId, s.employeeId, fy).catch(() => {});
     return {
-      run, voucher, employees: slips.length,
+      run, voucher, accrual_voucher: voucher, employees: slips.length, pay_status: "ACCRUED",
       gross: toRupees(gross), total_deduction: toRupees(totalDeduction), net: toRupees(net),
       breakdown: { pf: toRupees(pf), tds: toRupees(tds), esi: toRupees(esi), pt: toRupees(pt), other: toRupees(otherDed) },
       slips,
@@ -680,11 +855,542 @@ async function payslipsForRun(tenantId, runId) {
   return rows;
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// (1) ANNUALIZED TDS PROJECTION  (port of frappe/hrms income_tax_computation +
+//     salary_slip.compute_year_to_date / get_income_tax_deducted_till_date)
+//
+// India payroll deducts TDS on salary MONTHLY, but the amount is derived from the
+// projected ANNUAL liability: project each employee's full-year taxable salary,
+// subtract exemptions (standard deduction + HRA) and Chapter VI-A declarations,
+// run the slab+surcharge+cess engine (../books/incometax) for the regime, then
+// SPREAD the remaining tax across the months left in the payroll year — a mid-year
+// TRUE-UP: (annual_tax − tds_already_deducted) / remaining_months. The result is
+// stored so monthly payroll deducts the stored per-month figure.
+// ═════════════════════════════════════════════════════════════════════════════
+const incometax = require("../books/incometax");
+
+// Payroll year runs 1-Apr (year Y) → 31-Mar (Y+1). 'fy' is "YYYY-YY" (start year).
+function payrollYearBounds(fy) {
+  const startYear = Number(String(fy).slice(0, 4));
+  if (!Number.isFinite(startYear)) throw new HrError(`bad payroll year "${fy}"`);
+  return { startYear, start: `${startYear}-04-01`, end: `${startYear + 1}-03-31` };
+}
+// AY = FY start year + 1 expressed "YYYY-YY". FY 2024-25 → AY 2025-26.
+function ayForFy(fy) {
+  const s = Number(String(fy).slice(0, 4));
+  return `${s + 1}-${String((s + 2) % 100).padStart(2, "0")}`;
+}
+// Which payroll-year month index (1..12, Apr=1) a 'YYYY-MM' falls in; 0 if outside.
+function payrollMonthIndex(fy, month) {
+  const { startYear } = payrollYearBounds(fy);
+  const [y, m] = month.split("-").map(Number);
+  const idx = (y - startYear) * 12 + (m - 4) + 1;
+  return idx >= 1 && idx <= 12 ? idx : 0;
+}
+// The FY that a 'YYYY-MM' payroll month belongs to (Apr-Mar). Returns "YYYY-YY".
+function fyForMonth(month) {
+  const [y, m] = month.split("-").map(Number);
+  const startYear = m >= 4 ? y : y - 1;
+  return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+}
+
+async function getOrCreatePayrollPeriod(tenantId, fy) {
+  const { rows } = await pool.query("SELECT * FROM hrms_payroll_periods WHERE tenant_id=$1 AND fy=$2", [tenantId, fy]);
+  if (rows[0]) return rows[0];
+  const b = payrollYearBounds(fy);
+  const { rows: ins } = await pool.query(
+    `INSERT INTO hrms_payroll_periods(tenant_id,fy,assessment_year,start_date,end_date,regime)
+     VALUES($1,$2,$3,$4,$5,'new')
+     ON CONFLICT(tenant_id,fy) DO UPDATE SET assessment_year=EXCLUDED.assessment_year RETURNING *`,
+    [tenantId, fy, ayForFy(fy), b.start, b.end]
+  );
+  return ins[0];
+}
+async function setPayrollPeriod(tenantId, fy, opts = {}) {
+  const period = await getOrCreatePayrollPeriod(tenantId, fy);
+  const { rows } = await pool.query(
+    `UPDATE hrms_payroll_periods SET regime=COALESCE($3,regime), standard_deduction=COALESCE($4,standard_deduction)
+       WHERE tenant_id=$1 AND fy=$2 RETURNING *`,
+    [tenantId, fy, opts.regime === "old" || opts.regime === "new" ? opts.regime : null,
+     opts.standardDeduction != null ? flt(opts.standardDeduction, 2) : null]
+  );
+  return rows[0] || period;
+}
+
+// Least-of-three HRA exemption (s.10(13A) + Rule 2A):
+//   min( actual HRA received, rent − 10% of basic, 50%/40% of basic ).
+// Metro cities → 50% of basic, else 40%. Annualized figures.
+function hraExemption({ annualBasic, annualHraReceived, annualRent, isMetro }) {
+  const basic = money(annualBasic || 0);
+  const hra = money(annualHraReceived || 0);
+  const rent = money(annualRent || 0);
+  if (rent.lessThanOrEqualTo(0)) return money(0);
+  const cityPct = isMetro ? 50 : 40;
+  const cap1 = hra;
+  const cap2 = rent.minus(basic.times(10).div(100));
+  const cap3 = basic.times(cityPct).div(100);
+  let least = cap1;
+  if (cap2.lessThan(least)) least = cap2;
+  if (cap3.lessThan(least)) least = cap3;
+  if (least.lessThan(0)) least = money(0);
+  return least;
+}
+
+// Sum the Chapter VI-A deductions from a declaration's section map, applying the
+// statutory caps that matter most in India: 80C ≤ 150000, 80CCD(1B) ≤ 50000,
+// 80D ≤ 100000 (generous parent-incl. cap). Other sections passed through.
+function chapterVIA(sections = {}) {
+  const cap = (key, limit) => {
+    const v = money(sections[key] || 0);
+    return v.greaterThan(limit) ? money(limit) : v;
+  };
+  let total = money(0);
+  const capped = {};
+  const CAPS = { "80C": 150000, "80CCC": 150000, "80CCD1B": 50000, "80D": 100000, "80E": Infinity, "80G": Infinity, "80TTA": 10000, "80TTB": 50000 };
+  // 80C + 80CCC + 80CCD(1) share a 1.5L ceiling; treat declared 80C as the combined.
+  for (const [k, raw] of Object.entries(sections)) {
+    const lim = CAPS[k] != null ? CAPS[k] : Infinity;
+    const c = lim === Infinity ? money(raw || 0) : cap(k, lim);
+    capped[k] = toRupees(c);
+    total = total.plus(c);
+  }
+  return { total, capped };
+}
+
+// Build the per-employee annual projection. Pulls the active structure assignment
+// effective at the payroll year start, evaluates a FULL-month (no LOP) slip to get
+// the monthly gross / basic / HRA, annualizes them, applies the regime's exemptions
+// and the employee's declaration, runs the income-tax engine, and spreads the
+// remaining tax over the remaining months (mid-year true-up).
+async function computeTdsProjection(tenantId, employeeId, fy, opts = {}) {
+  const period = await getOrCreatePayrollPeriod(tenantId, fy);
+  const regime = opts.regime || period.regime || "new";
+  const ay = period.assessment_year || ayForFy(fy);
+  const b = payrollYearBounds(fy);
+
+  const ssa = await activeAssignment(tenantId, employeeId, b.start);
+  if (!ssa) {
+    // try the earliest assignment within the year if none effective at 1-Apr
+    const { rows } = await pool.query(
+      `SELECT a.*, s.components, s.apply_pf, s.apply_esi, s.apply_pt
+         FROM hrms_structure_assignments a JOIN hrms_salary_structures s ON s.id=a.structure_id
+        WHERE a.tenant_id=$1 AND a.employee_id=$2 AND a.from_date<=$3 ORDER BY a.from_date DESC LIMIT 1`,
+      [tenantId, employeeId, b.end]
+    );
+    if (!rows[0]) throw new HrError("No salary structure assignment for this employee in the payroll year", 422);
+  }
+  const a = ssa || (await activeAssignment(tenantId, employeeId, b.end));
+  if (!a) throw new HrError("No salary structure assignment for this employee in the payroll year", 422);
+
+  // A full (no-LOP) monthly slip to read recurring gross / basic / HRA.
+  const fullSlip = computeSlip({
+    base: Number(a.base), components: a.components, month: `${b.startYear}-04`, attendance: [],
+    structure: { apply_pf: a.apply_pf, apply_esi: a.apply_esi, apply_pt: a.apply_pt },
+    paidLeaveTypes: [],
+  });
+  const monthlyGross = money(fullSlip.gross);
+  const basicComp = fullSlip.earnings.find((e) => /basic/i.test(e.name) || e.abbr === "BS");
+  const hraComp = fullSlip.earnings.find((e) => /hra|house rent/i.test(e.name) || e.abbr === "HRA");
+  // taxable-applicable earnings only (exclude flagged non-taxable rows)
+  const monthlyTaxableEarn = sum(fullSlip.earnings.filter((e) => e.is_tax_applicable !== false).map((e) => e.amount));
+
+  const months = 12;
+  const annualGross = money(monthlyTaxableEarn).times(months);
+  const annualBasic = money(basicComp ? basicComp.amount : 0).times(months);
+  const annualHra = money(hraComp ? hraComp.amount : 0).times(months);
+
+  // Declaration → HRA inputs + Chapter VI-A (proofs override declared once verified).
+  const { rows: dr } = await pool.query("SELECT * FROM hrms_investment_declarations WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, employeeId, fy]);
+  const decl = dr[0] || null;
+  const useProofs = decl && (decl.status === "PROOF_SUBMITTED" || decl.status === "VERIFIED");
+  const sections = decl ? (useProofs ? decl.proofs : decl.declared) || {} : {};
+  const monthlyRent = decl ? money(decl.monthly_rent) : money(0);
+  const isMetro = decl ? !!decl.is_metro : false;
+
+  // Standard deduction applies to the NEW regime too (post-FY2023-24). HRA exemption
+  // only under the OLD regime (new regime forgoes most exemptions).
+  const stdDed = money(period.standard_deduction || 50000);
+  let exemptions = stdDed;
+  let hraEx = money(0);
+  let via = { total: money(0), capped: {} };
+  if (regime === "old") {
+    hraEx = hraExemption({
+      annualBasic: toRupees(annualBasic),
+      annualHraReceived: toRupees(annualHra),
+      annualRent: toRupees(monthlyRent.times(12)),
+      isMetro,
+    });
+    exemptions = exemptions.plus(hraEx);
+    via = chapterVIA(sections);
+  }
+
+  let taxable = annualGross.minus(exemptions).minus(via.total);
+  if (taxable.lessThan(0)) taxable = money(0);
+
+  const tax = incometax.computeIncomeTax({ taxableIncome: toRupees(taxable), regime, entityType: "individual", ay });
+  const annualTax = money(tax.total);
+
+  // How much TDS has ALREADY been deducted in this payroll year (mid-year true-up).
+  const { rows: paidRows } = await pool.query(
+    `SELECT COALESCE(SUM(p.tds),0) AS paid
+       FROM hrms_payslips p JOIN hrms_payroll_runs r ON r.id=p.run_id
+      WHERE p.tenant_id=$1 AND p.employee_id=$2 AND r.run_month BETWEEN $3 AND $4`,
+    [tenantId, employeeId, `${b.startYear}-04`, `${b.startYear + 1}-03`]
+  );
+  const paid = money(paidRows[0].paid);
+
+  // Remaining months: from the next un-run month to Mar. Count payslips already run.
+  const ranMonths = Number((await pool.query(
+    `SELECT COUNT(*) AS n FROM hrms_payslips p JOIN hrms_payroll_runs r ON r.id=p.run_id
+      WHERE p.tenant_id=$1 AND p.employee_id=$2 AND r.run_month BETWEEN $3 AND $4`,
+    [tenantId, employeeId, `${b.startYear}-04`, `${b.startYear + 1}-03`]
+  )).rows[0].n);
+  const remaining = Math.max(1, months - ranMonths);
+
+  let perMonth = annualTax.minus(paid).div(remaining);
+  if (perMonth.lessThan(0)) perMonth = money(0);
+  perMonth = money(roundRupee(toRupees(perMonth)));
+
+  const computation = {
+    monthlyGross: toRupees(monthlyGross), annualGross: toRupees(annualGross),
+    annualBasic: toRupees(annualBasic), annualHra: toRupees(annualHra),
+    standardDeduction: toRupees(stdDed), hraExemption: toRupees(hraEx),
+    chapterVIA: via.capped, chapterVIATotal: toRupees(via.total),
+    taxable: toRupees(taxable), tax, ay, regime,
+    paidToDate: toRupees(paid), remainingMonths: remaining,
+    usedProofs: !!useProofs,
+  };
+
+  const { rows: up } = await pool.query(
+    `INSERT INTO hrms_tds_projections
+      (tenant_id,employee_id,fy,regime,projected_gross,total_exemptions,chapter_via,
+       projected_taxable,annual_tax,tds_paid_to_date,remaining_months,tds_per_month,computation,computed_at)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,now())
+     ON CONFLICT(tenant_id,employee_id,fy) DO UPDATE SET
+       regime=EXCLUDED.regime, projected_gross=EXCLUDED.projected_gross, total_exemptions=EXCLUDED.total_exemptions,
+       chapter_via=EXCLUDED.chapter_via, projected_taxable=EXCLUDED.projected_taxable, annual_tax=EXCLUDED.annual_tax,
+       tds_paid_to_date=EXCLUDED.tds_paid_to_date, remaining_months=EXCLUDED.remaining_months,
+       tds_per_month=EXCLUDED.tds_per_month, computation=EXCLUDED.computation, computed_at=now()
+     RETURNING *`,
+    [tenantId, employeeId, fy, regime, toRupees(annualGross), toRupees(exemptions), toRupees(via.total),
+     toRupees(taxable), toRupees(annualTax), toRupees(paid), remaining, toRupees(perMonth), JSON.stringify(computation)]
+  );
+  return up[0];
+}
+
+// Recompute projections for all assigned active employees for a payroll year.
+async function projectTdsForYear(tenantId, fy) {
+  const { rows: emps } = await pool.query("SELECT id FROM hrms_employees WHERE tenant_id=$1 AND status='ACTIVE'", [tenantId]);
+  const out = [];
+  for (const e of emps) {
+    try { out.push(await computeTdsProjection(tenantId, e.id, fy)); }
+    catch (err) { if (!(err instanceof HrError)) throw err; }  // skip employees with no SSA
+  }
+  return { fy, projected: out.length, projections: out };
+}
+async function getTdsProjection(tenantId, employeeId, fy) {
+  const { rows } = await pool.query("SELECT * FROM hrms_tds_projections WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, employeeId, fy]);
+  return rows[0] || null;
+}
+const listTdsProjections = async (t, fy) => (await pool.query(
+  `SELECT pr.*, e.name AS employee_name FROM hrms_tds_projections pr JOIN hrms_employees e ON e.id=pr.employee_id
+    WHERE pr.tenant_id=$1 AND pr.fy=$2 ORDER BY e.name`, [t, fy])).rows;
+
+// The per-month TDS to deduct for an employee in a given payroll month. Reads the
+// stored projection (computing one if absent). Returns a money string.
+async function monthlyTdsFor(tenantId, employeeId, month) {
+  const fy = fyForMonth(month);
+  let proj = await getTdsProjection(tenantId, employeeId, fy);
+  if (!proj) { try { proj = await computeTdsProjection(tenantId, employeeId, fy); } catch { return "0.00"; } }
+  return toRupees(money(proj.tds_per_month));
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// (2) INVESTMENT DECLARATION + PROOF lifecycle
+//   DRAFT → SUBMITTED (planned) → PROOF_SUBMITTED → VERIFIED.
+// Declared amounts feed the TDS projection; once proofs are submitted/verified the
+// projection uses the proof figures instead. Saving/advancing re-projects TDS.
+// ═════════════════════════════════════════════════════════════════════════════
+async function saveDeclaration(tenantId, d) {
+  if (!d.employeeId || !d.fy) throw new HrError("employeeId and fy required");
+  const declared = d.declared && typeof d.declared === "object" ? d.declared : {};
+  const { rows } = await pool.query(
+    `INSERT INTO hrms_investment_declarations(tenant_id,employee_id,fy,monthly_rent,is_metro,declared,status)
+     VALUES($1,$2,$3,$4,$5,$6,'DRAFT')
+     ON CONFLICT(tenant_id,employee_id,fy) DO UPDATE SET
+       monthly_rent=EXCLUDED.monthly_rent, is_metro=EXCLUDED.is_metro, declared=EXCLUDED.declared
+     RETURNING *`,
+    [tenantId, d.employeeId, d.fy, flt(d.monthlyRent || 0, 2), !!d.isMetro, JSON.stringify(declared)]
+  );
+  return rows[0];
+}
+// Advance the lifecycle. SUBMIT stamps the planned declaration; SUBMIT_PROOF stores
+// actual proofs; VERIFY marks proofs accepted. Each transition re-projects TDS.
+async function advanceDeclaration(tenantId, d) {
+  if (!d.employeeId || !d.fy || !d.action) throw new HrError("employeeId, fy, action required");
+  const { rows: cur } = await pool.query("SELECT * FROM hrms_investment_declarations WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, d.employeeId, d.fy]);
+  if (!cur[0]) throw new HrError("Declaration not found — save it first", 404);
+  const action = d.action;
+  let sql, params;
+  if (action === "SUBMIT") {
+    sql = "UPDATE hrms_investment_declarations SET status='SUBMITTED', submitted_at=now() WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3 AND status='DRAFT' RETURNING *";
+    params = [tenantId, d.employeeId, d.fy];
+  } else if (action === "SUBMIT_PROOF") {
+    const proofs = d.proofs && typeof d.proofs === "object" ? d.proofs : {};
+    sql = "UPDATE hrms_investment_declarations SET status='PROOF_SUBMITTED', proofs=$4, proof_submitted_at=now() WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3 AND status IN ('SUBMITTED','PROOF_SUBMITTED') RETURNING *";
+    params = [tenantId, d.employeeId, d.fy, JSON.stringify(proofs)];
+  } else if (action === "VERIFY") {
+    sql = "UPDATE hrms_investment_declarations SET status='VERIFIED', verified_at=now() WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3 AND status='PROOF_SUBMITTED' RETURNING *";
+    params = [tenantId, d.employeeId, d.fy];
+  } else throw new HrError(`Unknown action "${action}" (SUBMIT|SUBMIT_PROOF|VERIFY)`);
+  const { rows } = await pool.query(sql, params);
+  if (!rows[0]) throw new HrError(`Cannot ${action} from current status "${cur[0].status}"`, 409);
+  // Re-project so the new figures flow into monthly TDS.
+  await computeTdsProjection(tenantId, d.employeeId, d.fy).catch(() => {});
+  return rows[0];
+}
+async function getDeclaration(tenantId, employeeId, fy) {
+  const { rows } = await pool.query("SELECT * FROM hrms_investment_declarations WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, employeeId, fy]);
+  return rows[0] || null;
+}
+const listDeclarations = async (t, fy) => (await pool.query(
+  `SELECT d.*, e.name AS employee_name FROM hrms_investment_declarations d JOIN hrms_employees e ON e.id=d.employee_id
+    WHERE d.tenant_id=$1 AND d.fy=$2 ORDER BY e.name`, [t, fy])).rows;
+
+// ═════════════════════════════════════════════════════════════════════════════
+// (4a) Two-stage payroll → GL  (Frappe payroll_entry.make_accrual_jv_entry +
+//      make_payment_entry). runPayroll posts the ACCRUAL journal; this posts the
+//      consolidated bank PAYMENT for a run (Dr payable, Cr bank), once.
+// ═════════════════════════════════════════════════════════════════════════════
+// Resolve a GL ledger by name, falling back through a list (so unseeded payroll
+// ledgers degrade to a seeded one rather than throwing).
+async function resolveLedger(tenantId, names) {
+  for (const n of names) { const id = await books.ledgerIdByName(tenantId, n); if (id) return id; }
+  return null;
+}
+async function payPayrollRun(tenantId, actorId, runId, opts = {}) {
+  const { rows: rr } = await pool.query("SELECT * FROM hrms_payroll_runs WHERE tenant_id=$1 AND id=$2", [tenantId, runId]);
+  const run = rr[0];
+  if (!run) throw new HrError("Payroll run not found", 404);
+  if (run.pay_status === "PAID") throw new HrError("Payroll run already paid", 409);
+
+  const net = money(run.net);
+  const bank = await resolveLedger(tenantId, [opts.bankLedger, "Bank Accounts", "Bank", "Cash"].filter(Boolean));
+  const salPayable = await resolveLedger(tenantId, ["Salaries Payable"]);
+  if (!bank || !salPayable) throw new HrError("Bank / Salaries Payable ledger missing — seed books first", 422);
+
+  const payDate = opts.date && /^\d{4}-\d{2}-\d{2}$/.test(opts.date) ? opts.date : `${run.run_month}-28`;
+  const entries = [
+    { ledgerId: salPayable, debit: toRupees(net), credit: "0", costCentreId: run.cost_centre_id || null },
+    { ledgerId: bank, debit: "0", credit: toRupees(net) },
+  ];
+  const voucher = await books.postVoucher(tenantId, actorId,
+    { voucherType: "PAYMENT", voucherDate: payDate, narration: `Payroll payment ${run.run_month}`, source: "payroll" },
+    entries, { idempotencyKey: `payroll-pay:${tenantId}:${runId}` });
+
+  await pool.query("UPDATE hrms_payroll_runs SET pay_status='PAID', payment_voucher_id=$3 WHERE tenant_id=$1 AND id=$2",
+    [tenantId, runId, voucher.voucherId]);
+  return { runId, pay_status: "PAID", payment_voucher: voucher, net: toRupees(net) };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// (4b) Region-based GRATUITY  (Frappe Gratuity Rule + gratuity computation)
+//   gratuity = fraction_per_year × last_drawn_basic × completed_years, eligible
+//   only after min_years of service, capped at the statutory max. Seeds India's
+//   default 15/26-per-year (Payment of Gratuity Act) slab on first read.
+// ═════════════════════════════════════════════════════════════════════════════
+async function ensureGratuitySlabs(tenantId) {
+  const { rows } = await pool.query("SELECT 1 FROM hrms_gratuity_slabs WHERE tenant_id=$1 LIMIT 1", [tenantId]);
+  if (rows[0]) return;
+  // India: 15 days' wages per completed year on a 26-day month = 15/26 per year,
+  // eligible after 5 years, capped ₹20,00,000.
+  await pool.query(
+    `INSERT INTO hrms_gratuity_slabs(tenant_id,region,from_year,to_year,fraction_per_year,min_years,max_amount)
+     VALUES($1,'India',0,NULL,$2,5,2000000)`,
+    [tenantId, 15 / 26]
+  );
+}
+async function listGratuitySlabs(tenantId, region) {
+  await ensureGratuitySlabs(tenantId);
+  const { rows } = await pool.query(
+    "SELECT * FROM hrms_gratuity_slabs WHERE tenant_id=$1 AND ($2::text IS NULL OR region=$2) ORDER BY region, from_year",
+    [tenantId, region || null]);
+  return rows;
+}
+async function upsertGratuitySlab(tenantId, s) {
+  const { rows } = await pool.query(
+    `INSERT INTO hrms_gratuity_slabs(tenant_id,region,from_year,to_year,fraction_per_year,min_years,max_amount)
+     VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [tenantId, s.region || "India", flt(s.fromYear || 0, 2), s.toYear != null ? flt(s.toYear, 2) : null,
+     Number(s.fractionPerYear || 0), flt(s.minYears != null ? s.minYears : 5, 2), s.maxAmount != null ? flt(s.maxAmount, 2) : null]);
+  return rows[0];
+}
+function yearsBetween(fromDate, toDate) {
+  const ms = new Date(toDate) - new Date(fromDate);
+  return Math.max(0, ms / (365.25 * 86400000));
+}
+// Pure gratuity computation against a region's slab set.
+function gratuityAmount({ lastBasic, completedYears, slabs, region = "India" }) {
+  const applicable = (slabs || []).filter((s) => String(s.region) === String(region))
+    .sort((a, b) => Number(a.from_year) - Number(b.from_year));
+  // pick the band covering completedYears (last from_year ≤ years)
+  let band = null;
+  for (const s of applicable) {
+    if (Number(s.from_year) <= completedYears && (s.to_year == null || completedYears <= Number(s.to_year))) band = s;
+  }
+  if (!band) band = applicable[applicable.length - 1] || null;
+  if (!band) return { eligible: false, amount: "0.00", reason: "no gratuity slab configured" };
+  const minY = Number(band.min_years || 0);
+  if (completedYears < minY) return { eligible: false, amount: "0.00", reason: `service < ${minY} years` };
+  const years = Math.floor(completedYears); // completed years only
+  let amt = money(lastBasic).times(band.fraction_per_year).times(years);
+  if (band.max_amount != null && amt.greaterThan(band.max_amount)) amt = money(band.max_amount);
+  return { eligible: true, amount: toRupees(amt), completedYears: years, fractionPerYear: Number(band.fraction_per_year), cappedAt: band.max_amount };
+}
+// DB-backed gratuity for an employee as of a relieving date.
+async function computeGratuity(tenantId, employeeId, relievingDate, opts = {}) {
+  const { rows: er } = await pool.query("SELECT * FROM hrms_employees WHERE tenant_id=$1 AND id=$2", [tenantId, employeeId]);
+  const emp = er[0];
+  if (!emp) throw new HrError("Employee not found", 404);
+  if (!emp.date_of_joining) throw new HrError("Employee has no date_of_joining", 422);
+  const slabs = await listGratuitySlabs(tenantId, opts.region || "India");
+  // last drawn basic: from the latest assignment's structure (a full-month slip).
+  let lastBasic = money(opts.lastBasic || 0);
+  if (lastBasic.lessThanOrEqualTo(0)) {
+    const a = await activeAssignment(tenantId, employeeId, relievingDate);
+    if (a) {
+      const fs = computeSlip({ base: Number(a.base), components: a.components, month: String(relievingDate).slice(0, 7),
+        structure: { apply_pf: a.apply_pf, apply_esi: a.apply_esi, apply_pt: a.apply_pt }, attendance: [], paidLeaveTypes: [] });
+      const bc = fs.earnings.find((e) => /basic/i.test(e.name) || e.abbr === "BS");
+      lastBasic = money(bc ? bc.amount : a.base);
+    }
+  }
+  const completed = yearsBetween(emp.date_of_joining, relievingDate);
+  return { employeeId, region: opts.region || "India", lastBasic: toRupees(lastBasic),
+    serviceYears: flt(completed, 2), ...gratuityAmount({ lastBasic: toRupees(lastBasic), completedYears: completed, slabs, region: opts.region || "India" }) };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// (4c) EMPLOYEE LOANS (for F&F recovery)
+// ═════════════════════════════════════════════════════════════════════════════
+async function createLoan(tenantId, l) {
+  if (!l.employeeId || !(Number(l.principal) > 0)) throw new HrError("employeeId and principal>0 required");
+  const { rows } = await pool.query(
+    "INSERT INTO hrms_employee_loans(tenant_id,employee_id,principal,outstanding) VALUES($1,$2,$3,$3) RETURNING *",
+    [tenantId, l.employeeId, flt(l.principal, 2)]);
+  return rows[0];
+}
+const loansFor = async (t, e) => (await pool.query("SELECT * FROM hrms_employee_loans WHERE tenant_id=$1 AND employee_id=$2 AND status='OPEN' ORDER BY created_at", [t, e])).rows;
+
+// ═════════════════════════════════════════════════════════════════════════════
+// (4d) FULL & FINAL SETTLEMENT  (Frappe "Full and Final Statement")
+//   net = pending salary + other dues + gratuity + leave encashment
+//         − loan recovery − other deductions.
+//   Posts a GL voucher (Dr Salaries/expense for earnings, Cr Salaries Payable net,
+//   Dr loan recovery against the payable etc.) and marks the employee relieved.
+// ═════════════════════════════════════════════════════════════════════════════
+// Leave encashment = encashable leave balance × per-day basic (last basic / 30).
+function leaveEncashmentAmount({ encashableDays, lastBasic, perDayDivisor = 30 }) {
+  if (!(Number(encashableDays) > 0)) return money(0);
+  const perDay = money(lastBasic).div(perDayDivisor);
+  return perDay.times(encashableDays);
+}
+async function fullAndFinal(tenantId, actorId, d) {
+  if (!d.employeeId || !d.relievingDate) throw new HrError("employeeId and relievingDate required");
+  const { rows: er } = await pool.query("SELECT * FROM hrms_employees WHERE tenant_id=$1 AND id=$2", [tenantId, d.employeeId]);
+  const emp = er[0];
+  if (!emp) throw new HrError("Employee not found", 404);
+
+  // 1. Gratuity (region-based).
+  const grat = await computeGratuity(tenantId, d.employeeId, d.relievingDate, { region: d.region });
+  const gratuity = money(grat.eligible ? grat.amount : 0);
+
+  // 2. Leave encashment: sum of positive leave balances × per-day basic.
+  let encashDays = Number(d.encashableDays || 0);
+  if (d.encashableDays == null) {
+    const bals = await leaveBalances(tenantId, d.employeeId);
+    encashDays = bals.reduce((a, b) => a + Math.max(0, Number(b.balance)), 0);
+  }
+  const leaveEnc = leaveEncashmentAmount({ encashableDays: encashDays, lastBasic: grat.lastBasic, perDayDivisor: d.perDayDivisor || 30 });
+
+  // 3. Dues + recoveries.
+  const pendingSalary = money(d.pendingSalary || 0);
+  const otherDues = money(d.otherDues || 0);
+  const otherDeductions = money(d.otherDeductions || 0);
+
+  // 4. Loan recovery: outstanding open loans (or caller override).
+  let loanRecovery = money(d.loanRecovery || 0);
+  if (d.loanRecovery == null) {
+    const loans = await loansFor(tenantId, d.employeeId);
+    loanRecovery = loans.reduce((a, l) => a.plus(l.outstanding), money(0));
+  }
+
+  const earningsTotal = pendingSalary.plus(otherDues).plus(gratuity).plus(leaveEnc);
+  const deductionsTotal = loanRecovery.plus(otherDeductions);
+  let net = earningsTotal.minus(deductionsTotal);
+  if (net.lessThan(0)) net = money(0);
+
+  const breakdown = {
+    gratuity: toRupees(gratuity), gratuityDetail: grat,
+    leaveEncashment: toRupees(leaveEnc), encashableDays: encashDays,
+    pendingSalary: toRupees(pendingSalary), otherDues: toRupees(otherDues),
+    loanRecovery: toRupees(loanRecovery), otherDeductions: toRupees(otherDeductions),
+    earningsTotal: toRupees(earningsTotal), deductionsTotal: toRupees(deductionsTotal),
+    netPayable: toRupees(net),
+  };
+
+  // GL: Dr Salaries (earnings) + Dr Staff Deductions reversal for recoveries, Cr
+  // Salaries Payable (net) + Cr Staff Deductions (recoveries/other deductions).
+  const salaries = await resolveLedger(tenantId, ["Salaries"]);
+  const salPayable = await resolveLedger(tenantId, ["Salaries Payable"]);
+  const staffDed = await resolveLedger(tenantId, ["Staff Deductions"]);
+  if (!salaries || !salPayable) throw new HrError("Payroll GL ledgers missing — seed books first", 422);
+
+  const entries = [{ ledgerId: salaries, debit: toRupees(earningsTotal), credit: "0", costCentreId: d.costCentreId || null }];
+  if (deductionsTotal.greaterThan(0)) entries.push({ ledgerId: staffDed || salPayable, debit: "0", credit: toRupees(deductionsTotal) });
+  if (net.greaterThan(0)) entries.push({ ledgerId: salPayable, debit: "0", credit: toRupees(net) });
+  // balance guard: if earnings == deductions (net 0) the two lines balance already.
+
+  let voucher = null;
+  if (earningsTotal.greaterThan(0)) {
+    voucher = await books.postVoucher(tenantId, actorId,
+      { voucherType: "JOURNAL", voucherDate: d.relievingDate, narration: `Full & Final — ${emp.name}`, source: "payroll" },
+      entries, { idempotencyKey: `fnf:${tenantId}:${d.employeeId}:${d.relievingDate}` });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(
+      `INSERT INTO hrms_full_and_final
+        (tenant_id,employee_id,relieving_date,gratuity,leave_encashment,pending_salary,other_dues,
+         loan_recovery,other_deductions,net_payable,breakdown,voucher_id)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [tenantId, d.employeeId, d.relievingDate, toRupees(gratuity), toRupees(leaveEnc), toRupees(pendingSalary),
+       toRupees(otherDues), toRupees(loanRecovery), toRupees(otherDeductions), toRupees(net),
+       JSON.stringify(breakdown), voucher ? voucher.voucherId : null]);
+    // close recovered loans + relieve the employee
+    if (loanRecovery.greaterThan(0) && d.loanRecovery == null) {
+      await client.query("UPDATE hrms_employee_loans SET outstanding=0, status='CLOSED' WHERE tenant_id=$1 AND employee_id=$2 AND status='OPEN'", [tenantId, d.employeeId]);
+    }
+    await client.query("UPDATE hrms_employees SET status='INACTIVE', relieving_date=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, d.employeeId, d.relievingDate]);
+    await client.query("COMMIT");
+    return { ...rows[0], breakdown, voucher };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; }
+  finally { client.release(); }
+}
+const listFullAndFinal = async (t) => (await pool.query(
+  `SELECT f.*, e.name AS employee_name FROM hrms_full_and_final f JOIN hrms_employees e ON e.id=f.employee_id
+    WHERE f.tenant_id=$1 ORDER BY f.created_at DESC`, [t])).rows;
+
 module.exports = {
   HrError,
   // pure logic (exported for asserts/tests)
   evalExpr, evalCondition, evaluateComponents, computeSlip, workingDayDetails,
   pfAmount, esiAmount, ptAmount, leaveDayCount, abbrOf, roundRupee, flt,
+  // (3) formula-driven components
+  referencedVars, orderComponentsByDependency, evaluateFormulaComponents,
+  createSalaryComponent, listSalaryComponents, validateComponentSet,
   // employees
   createEmployee, listEmployees, setEmployeeStatus,
   // attendance
@@ -694,6 +1400,16 @@ module.exports = {
   requestLeave, decideLeave, listLeave,
   // structures / assignments / slips
   createStructure, listStructures, assignStructure, listAssignments, previewSlip,
-  // payroll
-  runPayroll, listPayrollRuns, payslipsForRun,
+  // payroll (two-stage GL)
+  runPayroll, listPayrollRuns, payslipsForRun, payPayrollRun,
+  // (1) annualized TDS projection
+  payrollYearBounds, ayForFy, fyForMonth, payrollMonthIndex, hraExemption, chapterVIA,
+  getOrCreatePayrollPeriod, setPayrollPeriod,
+  computeTdsProjection, projectTdsForYear, getTdsProjection, listTdsProjections, monthlyTdsFor,
+  // (2) investment declaration + proof lifecycle
+  saveDeclaration, advanceDeclaration, getDeclaration, listDeclarations,
+  // (4b) gratuity
+  gratuityAmount, computeGratuity, listGratuitySlabs, upsertGratuitySlab, yearsBetween,
+  // (4c) loans + (4d) full & final
+  createLoan, loansFor, leaveEncashmentAmount, fullAndFinal, listFullAndFinal,
 };

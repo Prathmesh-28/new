@@ -164,6 +164,140 @@ const ERP_SCHEMA = `
     reorder_level       NUMERIC(19,4)
   );
   CREATE INDEX IF NOT EXISTS idx_erp_mr_items ON erp_material_request_items(tenant_id, material_request_id);
+
+  -- A production plan can raise material requests; link them back for traceability.
+  ALTER TABLE erp_material_requests ADD COLUMN IF NOT EXISTS production_plan_id UUID;
+  ALTER TABLE erp_work_orders        ADD COLUMN IF NOT EXISTS production_plan_id UUID;
+
+  -- ── Production Plan / MRP ─────────────────────────────────────────────────────
+  -- Port of ERPNext "Production Plan": aggregates demand (sales orders + ad-hoc
+  -- forecast rows), runs material-requirement-planning against on-hand stock with
+  -- a MULTI-LEVEL BOM explosion, then auto-raises Work Orders for the finished
+  -- goods and Material Requests for the raw-material shortfalls.
+  CREATE TABLE IF NOT EXISTS erp_production_plans (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     TEXT NOT NULL,
+    name          TEXT,
+    -- DRAFT → PLANNED (MRP run) → IN_PROCESS (WOs raised) → COMPLETED / CANCELLED
+    status        TEXT NOT NULL DEFAULT 'DRAFT'
+                  CHECK (status IN ('DRAFT','PLANNED','IN_PROCESS','COMPLETED','CANCELLED')),
+    warehouse_id  UUID,                                  -- default mfg / source warehouse
+    posting_date  DATE NOT NULL DEFAULT CURRENT_DATE,
+    note          TEXT,
+    created_by    UUID,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_erp_pp ON erp_production_plans(tenant_id, status);
+
+  -- One row per finished good to be produced (the aggregated demand).
+  CREATE TABLE IF NOT EXISTS erp_production_plan_items (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id          TEXT NOT NULL,
+    production_plan_id UUID NOT NULL REFERENCES erp_production_plans(id) ON DELETE CASCADE,
+    item_id            UUID NOT NULL,                     -- finished good (book_stock_items.id)
+    bom_id             UUID,                              -- BOM to manufacture with (defaults to item's default BOM)
+    demand_qty         NUMERIC(19,4) NOT NULL DEFAULT 0,  -- aggregated gross demand
+    available_qty      NUMERIC(19,4) NOT NULL DEFAULT 0,  -- on-hand at MRP time
+    planned_qty        NUMERIC(19,4) NOT NULL DEFAULT 0,  -- net = max(0, demand - available)
+    source             TEXT NOT NULL DEFAULT 'manual'     -- 'sales_order' | 'forecast' | 'manual'
+                       CHECK (source IN ('manual','sales_order','forecast')),
+    work_order_id      UUID,                              -- the WO raised for this row
+    seq                INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_erp_pp_items ON erp_production_plan_items(tenant_id, production_plan_id);
+
+  -- The MRP result: net raw-material requirement after BOM explosion + stock net-off.
+  CREATE TABLE IF NOT EXISTS erp_production_plan_materials (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id          TEXT NOT NULL,
+    production_plan_id UUID NOT NULL REFERENCES erp_production_plans(id) ON DELETE CASCADE,
+    item_id            UUID NOT NULL,                     -- raw material (book_stock_items.id)
+    required_qty       NUMERIC(19,4) NOT NULL DEFAULT 0,  -- gross from exploded BOMs
+    available_qty      NUMERIC(19,4) NOT NULL DEFAULT 0,  -- on-hand at MRP time
+    shortfall_qty      NUMERIC(19,4) NOT NULL DEFAULT 0,  -- max(0, required - available)
+    rate               NUMERIC(19,4) NOT NULL DEFAULT 0,  -- valuation rate snapshot
+    is_sub_assembly    BOOLEAN NOT NULL DEFAULT false,    -- has its own BOM (could be made instead of bought)
+    material_request_id UUID,                             -- the MR raised for the shortfall
+    UNIQUE (tenant_id, production_plan_id, item_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_erp_pp_mat ON erp_production_plan_materials(tenant_id, production_plan_id);
+
+  -- ── Warehouse hierarchy + putaway ─────────────────────────────────────────────
+  -- A structural overlay on books' flat book_warehouses. Every erp_warehouses row
+  -- 1:1-maps a book_warehouses row (book_warehouse_id) so stock truth stays in
+  -- books, but adds ERPNext/InvenTree warehouse semantics: a parent tree, a
+  -- "group" (structural, no-stock) flag, an "external"/transit flag, a location
+  -- type, and a physical capacity used by putaway. Bins are leaf rows (is_group=false).
+  CREATE TABLE IF NOT EXISTS erp_warehouses (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id         TEXT NOT NULL,
+    name              TEXT NOT NULL,
+    parent_id         UUID REFERENCES erp_warehouses(id) ON DELETE SET NULL,
+    book_warehouse_id UUID,                               -- maps to book_warehouses.id (stock lives there)
+    is_group          BOOLEAN NOT NULL DEFAULT false,     -- structural node — holds NO stock
+    is_external       BOOLEAN NOT NULL DEFAULT false,     -- supplier/customer/transit (off-balance-sheet)
+    location_type     TEXT NOT NULL DEFAULT 'STORAGE'
+                      CHECK (location_type IN ('STORAGE','RECEIVING','SHIPPING','PRODUCTION','QUARANTINE','SCRAP','TRANSIT')),
+    capacity_qty      NUMERIC(19,4),                      -- max units this bin can hold (NULL = unlimited)
+    sort_order        INTEGER NOT NULL DEFAULT 0,
+    is_active         BOOLEAN NOT NULL DEFAULT true,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, name)
+  );
+  CREATE INDEX IF NOT EXISTS idx_erp_wh_parent ON erp_warehouses(tenant_id, parent_id);
+  CREATE INDEX IF NOT EXISTS idx_erp_wh_book ON erp_warehouses(tenant_id, book_warehouse_id);
+
+  -- Capacity-based putaway rules (port of ERPNext "Putaway Rule"): on receipt of an
+  -- item, candidate bins are chosen by priority, optionally item-scoped, and filled
+  -- up to capacity. A NULL item_id rule applies to any item.
+  CREATE TABLE IF NOT EXISTS erp_putaway_rules (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id         TEXT NOT NULL,
+    item_id           UUID,                               -- NULL = applies to any item
+    warehouse_id      UUID NOT NULL REFERENCES erp_warehouses(id) ON DELETE CASCADE, -- the target bin (leaf)
+    capacity_qty      NUMERIC(19,4) NOT NULL,             -- max qty of this item this rule will place here
+    priority          INTEGER NOT NULL DEFAULT 1,         -- lower = filled first
+    is_active         BOOLEAN NOT NULL DEFAULT true,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_erp_putaway ON erp_putaway_rules(tenant_id, item_id, priority);
+
+  -- ── Multi-source cached part valuation ────────────────────────────────────────
+  -- A cached min/max price RANGE per item (normalised to base currency) computed
+  -- from up to four sources: internal valuation (book_stock_items.current value),
+  -- supplier price-breaks (below), purchase history (book_stock_movements inward
+  -- rate), and BOM cost rollup. Recomputed on PO/SO/BOM change. Port of InvenTree's
+  -- Part pricing (overall_min/overall_max) + ERPNext item price logic.
+  CREATE TABLE IF NOT EXISTS erp_supplier_price_breaks (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     TEXT NOT NULL,
+    item_id       UUID NOT NULL,                          -- book_stock_items.id
+    supplier      TEXT,                                   -- free-text supplier / party name
+    min_qty       NUMERIC(19,4) NOT NULL DEFAULT 1,       -- price applies at/above this qty
+    price         NUMERIC(19,4) NOT NULL,                 -- per-unit price in the row currency
+    currency      TEXT NOT NULL DEFAULT 'INR',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_erp_spb ON erp_supplier_price_breaks(tenant_id, item_id, min_qty);
+
+  CREATE TABLE IF NOT EXISTS erp_item_valuation (
+    tenant_id        TEXT NOT NULL,
+    item_id          UUID NOT NULL,                       -- book_stock_items.id
+    -- per-source (base currency); NULL when that source had no data
+    internal_rate    NUMERIC(19,4),                       -- books weighted-avg valuation
+    supplier_min     NUMERIC(19,4),
+    supplier_max     NUMERIC(19,4),
+    purchase_min     NUMERIC(19,4),                       -- from inward movement history
+    purchase_max     NUMERIC(19,4),
+    bom_rate         NUMERIC(19,4),                       -- rolled-up BOM cost / output_qty
+    -- overall range across all available sources
+    overall_min      NUMERIC(19,4) NOT NULL DEFAULT 0,
+    overall_max      NUMERIC(19,4) NOT NULL DEFAULT 0,
+    currency         TEXT NOT NULL DEFAULT 'INR',
+    computed_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id, item_id)
+  );
 `;
 
 module.exports = { ERP_SCHEMA };

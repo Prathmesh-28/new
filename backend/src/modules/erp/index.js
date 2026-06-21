@@ -10,6 +10,7 @@
 // Decimal math reuses books' decimal.js wrapper — never raw JS number for money.
 const { pool } = require("../../db");
 const books = require("../books");
+const fx = require("../books/fx");
 const { money, toDb } = require("../books/money");
 
 class ErpError extends Error { constructor(msg, http) { super(msg); this.http = http || 400; } }
@@ -642,10 +643,439 @@ async function raiseReorderRequest(tenantId, actorId) {
   return { raised: true, count: below.length, materialRequest: mr };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PRODUCTION PLANNING / MRP  (port of ERPNext production_plan.py)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Pure: net a gross demand against available stock (ERPNext get_so_pending_qty /
+// "ignore_existing_ordered_qty"):  planned = max(0, demand − available).
+function netRequirement(demandQty, availableQty) {
+  const net = money(demandQty).minus(money(availableQty));
+  return net.gt(0) ? net : money(0);
+}
+
+// Pure: aggregate sales-order lines (+ explicit forecast rows) into one gross
+// demand qty per finished-item. Mirrors production_plan.get_items_for_material_requests
+// demand bucketing. Each line: { itemId, qty }. Returns Map<itemId, Decimal>.
+function aggregateDemand(salesLines, forecastRows) {
+  const acc = new Map();
+  const add = (itemId, qty) => {
+    if (!itemId) return;
+    acc.set(itemId, (acc.get(itemId) || money(0)).plus(money(qty || 0)));
+  };
+  for (const l of salesLines || []) add(l.itemId || l.item_id, l.qty);
+  for (const f of forecastRows || []) add(f.itemId || f.item_id, f.qty);
+  return acc;
+}
+
+// Resolve the BOM for a finished item: explicit override → its default active BOM.
+async function defaultBomForItem(client, tenantId, itemId, override) {
+  if (override) return override;
+  const { rows } = await client.query(
+    "SELECT id FROM erp_boms WHERE tenant_id=$1 AND item_id=$2 AND is_active=true ORDER BY is_default DESC, created_at LIMIT 1",
+    [tenantId, itemId]
+  );
+  return rows[0] ? rows[0].id : null;
+}
+
+async function onHandQty(client, tenantId, itemId) {
+  const { rows } = await client.query("SELECT current_qty FROM book_stock_items WHERE tenant_id=$1 AND id=$2", [tenantId, itemId]);
+  return rows[0] ? money(rows[0].current_qty) : money(0);
+}
+
+// Create a production plan. demand is assembled from (a) referenced sales orders
+// (book_documents doc_kind=SALES_ORDER, JSONB lines) and (b) ad-hoc forecast rows
+// [{ itemId, qty, bomId? }]. Each finished item becomes a plan item; net planned
+// qty = max(0, aggregated demand − on-hand).
+async function createProductionPlan(tenantId, actorId, p = {}) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Pull lines from any referenced sales orders.
+    let soLines = [];
+    if (Array.isArray(p.salesOrderIds) && p.salesOrderIds.length) {
+      const { rows: docs } = await client.query(
+        "SELECT lines FROM book_documents WHERE tenant_id=$1 AND doc_kind='SALES_ORDER' AND id = ANY($2::uuid[]) AND status <> 'CANCELLED'",
+        [tenantId, p.salesOrderIds]
+      );
+      for (const d of docs) for (const ln of (Array.isArray(d.lines) ? d.lines : [])) soLines.push(ln);
+    }
+    const demand = aggregateDemand(soLines, p.forecast);
+    if (!demand.size) throw new ErpError("Production plan has no demand (provide salesOrderIds or forecast[])", 422);
+
+    const { rows: pr } = await client.query(
+      "INSERT INTO erp_production_plans(tenant_id,name,warehouse_id,posting_date,note,created_by,status) VALUES($1,$2,$3,COALESCE($4,CURRENT_DATE),$5,$6,'DRAFT') RETURNING *",
+      [tenantId, p.name || null, p.warehouseId || null, p.postingDate || null, p.note || null, actorId || null]
+    );
+    const plan = pr[0];
+    let seq = 0;
+    for (const [itemId, gross] of demand) {
+      const bomId = await defaultBomForItem(client, tenantId, itemId, null);
+      const avail = await onHandQty(client, tenantId, itemId);
+      const planned = netRequirement(gross, avail);
+      const src = soLines.some((l) => (l.itemId || l.item_id) === itemId) ? "sales_order" : "forecast";
+      await client.query(
+        "INSERT INTO erp_production_plan_items(tenant_id,production_plan_id,item_id,bom_id,demand_qty,available_qty,planned_qty,source,seq) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        [tenantId, plan.id, itemId, bomId, toDb(gross), toDb(avail), toDb(planned), src, seq++]
+      );
+    }
+    await client.query("COMMIT");
+    return getProductionPlan(tenantId, plan.id);
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+// Run MRP: for every plan item with planned_qty>0, explode its BOM (multi-level,
+// so SUB-ASSEMBLIES expand into raw materials), aggregate the gross raw-material
+// requirement across all plan items, net each against on-hand stock, and persist
+// the shortfall rows. A component that itself has a default BOM is flagged
+// is_sub_assembly (it could be manufactured rather than purchased). Status → PLANNED.
+async function runMrp(tenantId, planId) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows: pr } = await client.query("SELECT * FROM erp_production_plans WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [tenantId, planId]);
+    const plan = pr[0];
+    if (!plan) throw new ErpError("Production plan not found", 404);
+    if (plan.status === "CANCELLED") throw new ErpError("Plan is cancelled", 409);
+    const { rows: items } = await client.query("SELECT * FROM erp_production_plan_items WHERE tenant_id=$1 AND production_plan_id=$2 ORDER BY seq", [tenantId, planId]);
+
+    // Which items have their own default BOM (→ sub-assembly).
+    const { rows: defs } = await client.query("SELECT DISTINCT item_id FROM erp_boms WHERE tenant_id=$1 AND is_active=true AND is_default=true", [tenantId]);
+    const makeable = new Set(defs.map((d) => d.item_id));
+
+    const gross = new Map(); // rawItemId → Decimal required
+    for (const pi of items) {
+      const planned = money(pi.planned_qty);
+      if (!planned.gt(0)) continue;
+      const bomId = pi.bom_id || await defaultBomForItem(client, tenantId, pi.item_id, null);
+      if (!bomId) throw new ErpError(`Plan item ${pi.item_id} has no BOM to explode`, 422);
+      const graph = await loadBomGraph(client, tenantId, bomId);
+      const flat = explodeBom(graph, bomId, Number(planned.toFixed(6)));
+      for (const r of flat) gross.set(r.itemId, (gross.get(r.itemId) || money(0)).plus(r.requiredQty));
+    }
+
+    await client.query("DELETE FROM erp_production_plan_materials WHERE tenant_id=$1 AND production_plan_id=$2", [tenantId, planId]);
+    const materials = [];
+    for (const [itemId, reqQty] of gross) {
+      const avail = await onHandQty(client, tenantId, itemId);
+      const shortfall = netRequirement(reqQty, avail);
+      const rate = await itemRate(client, tenantId, itemId);
+      const isSub = makeable.has(itemId);
+      const { rows } = await client.query(
+        "INSERT INTO erp_production_plan_materials(tenant_id,production_plan_id,item_id,required_qty,available_qty,shortfall_qty,rate,is_sub_assembly) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
+        [tenantId, planId, itemId, toDb(reqQty), toDb(avail), toDb(shortfall), toDb(rate), isSub]
+      );
+      materials.push(rows[0]);
+    }
+    await client.query("UPDATE erp_production_plans SET status='PLANNED', updated_at=now() WHERE tenant_id=$1 AND id=$2", [tenantId, planId]);
+    await client.query("COMMIT");
+    return { planId, materials };
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+// Execute the plan: auto-raise a Work Order per plan item (planned_qty>0) and a
+// single PURCHASE Material Request covering all raw-material shortfalls. Idempotent
+// per row (skips items that already produced a WO / materials with an MR). → IN_PROCESS.
+async function executePlan(tenantId, actorId, planId) {
+  const { rows: pr } = await pool.query("SELECT * FROM erp_production_plans WHERE tenant_id=$1 AND id=$2", [tenantId, planId]);
+  const plan = pr[0];
+  if (!plan) throw new ErpError("Production plan not found", 404);
+  if (plan.status === "DRAFT") throw new ErpError("Run MRP before executing the plan", 409);
+  if (plan.status === "CANCELLED") throw new ErpError("Plan is cancelled", 409);
+
+  const { rows: items } = await pool.query("SELECT * FROM erp_production_plan_items WHERE tenant_id=$1 AND production_plan_id=$2 ORDER BY seq", [tenantId, planId]);
+  const workOrders = [];
+  for (const pi of items) {
+    if (!money(pi.planned_qty).gt(0) || pi.work_order_id) continue;
+    let useBom = pi.bom_id;
+    if (!useBom) {
+      const client = await pool.connect();
+      try { useBom = await defaultBomForItem(client, tenantId, pi.item_id, null); } finally { client.release(); }
+    }
+    if (!useBom) continue;
+    const wo = await createWorkOrder(tenantId, actorId, { bomId: useBom, qty: Number(pi.planned_qty), finishedItemId: pi.item_id, warehouseId: plan.warehouse_id });
+    await pool.query("UPDATE erp_work_orders SET production_plan_id=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, wo.id, planId]);
+    await pool.query("UPDATE erp_production_plan_items SET work_order_id=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, pi.id, wo.id]);
+    workOrders.push(wo.id);
+  }
+
+  // Shortfalls without an MR yet → one PURCHASE material request.
+  const { rows: shorts } = await pool.query(
+    "SELECT * FROM erp_production_plan_materials WHERE tenant_id=$1 AND production_plan_id=$2 AND shortfall_qty > 0 AND material_request_id IS NULL",
+    [tenantId, planId]
+  );
+  let materialRequest = null;
+  if (shorts.length) {
+    materialRequest = await createMaterialRequest(tenantId, actorId, {
+      requestType: "PURCHASE",
+      note: `Production plan MRP shortfall (${plan.name || planId})`,
+      items: shorts.map((s) => ({ itemId: s.item_id, qty: Number(s.shortfall_qty), projectedQty: Number(s.available_qty) })),
+    });
+    await pool.query("UPDATE erp_material_requests SET production_plan_id=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, materialRequest.id, planId]);
+    await pool.query(
+      "UPDATE erp_production_plan_materials SET material_request_id=$3 WHERE tenant_id=$1 AND production_plan_id=$2 AND material_request_id IS NULL AND shortfall_qty > 0",
+      [tenantId, planId, materialRequest.id]
+    );
+  }
+  await pool.query("UPDATE erp_production_plans SET status='IN_PROCESS', updated_at=now() WHERE tenant_id=$1 AND id=$2", [tenantId, planId]);
+  return { planId, workOrders, materialRequest };
+}
+
+async function listProductionPlans(tenantId) {
+  return (await pool.query("SELECT * FROM erp_production_plans WHERE tenant_id=$1 ORDER BY created_at DESC", [tenantId])).rows;
+}
+
+async function getProductionPlan(tenantId, id) {
+  const { rows: pr } = await pool.query("SELECT * FROM erp_production_plans WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
+  if (!pr[0]) throw new ErpError("Production plan not found", 404);
+  const { rows: items } = await pool.query(
+    `SELECT pi.*, si.name AS item_name, si.unit FROM erp_production_plan_items pi
+       LEFT JOIN book_stock_items si ON si.id = pi.item_id
+      WHERE pi.tenant_id=$1 AND pi.production_plan_id=$2 ORDER BY pi.seq`, [tenantId, id]
+  );
+  const { rows: mats } = await pool.query(
+    `SELECT pm.*, si.name AS item_name, si.unit FROM erp_production_plan_materials pm
+       LEFT JOIN book_stock_items si ON si.id = pm.item_id
+      WHERE pm.tenant_id=$1 AND pm.production_plan_id=$2 ORDER BY si.name`, [tenantId, id]
+  );
+  return { ...pr[0], items, materials: mats };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WAREHOUSE HIERARCHY + PUTAWAY  (port of ERPNext warehouse tree + Putaway Rule)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Create a warehouse node. A leaf (is_group=false) optionally maps to a books
+// warehouse where stock physically lives; group nodes are structural (no stock).
+async function createWarehouseNode(tenantId, w = {}) {
+  if (!w.name) throw new ErpError("name required");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    if (w.parentId) {
+      const { rows: p } = await client.query("SELECT is_group FROM erp_warehouses WHERE tenant_id=$1 AND id=$2", [tenantId, w.parentId]);
+      if (!p[0]) throw new ErpError("Parent warehouse not found", 404);
+      if (!p[0].is_group) throw new ErpError("Parent must be a group (structural) warehouse", 422);
+    }
+    // A non-group leaf maps to a books warehouse (auto-create one if not supplied).
+    let bookWhId = w.bookWarehouseId || null;
+    if (!w.isGroup && !bookWhId) {
+      const bw = await books.createWarehouse(tenantId, w.name, w.address || null);
+      bookWhId = bw.id;
+    }
+    const lt = (w.locationType || "STORAGE").toUpperCase();
+    const { rows } = await client.query(
+      "INSERT INTO erp_warehouses(tenant_id,name,parent_id,book_warehouse_id,is_group,is_external,location_type,capacity_qty,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *",
+      [tenantId, w.name, w.parentId || null, w.isGroup ? null : bookWhId, !!w.isGroup, !!w.isExternal, lt, w.capacityQty != null ? toDb(w.capacityQty) : null, w.sortOrder || 0]
+    );
+    await client.query("COMMIT");
+    return rows[0];
+  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+}
+
+// Flat list (caller can build the tree from parent_id).
+async function listWarehouseNodes(tenantId) {
+  return (await pool.query("SELECT * FROM erp_warehouses WHERE tenant_id=$1 ORDER BY sort_order, name", [tenantId])).rows;
+}
+
+// Build a nested tree from the flat rows.
+async function warehouseTree(tenantId) {
+  const rows = await listWarehouseNodes(tenantId);
+  const byId = new Map(rows.map((r) => [r.id, { ...r, children: [] }]));
+  const roots = [];
+  for (const r of byId.values()) {
+    if (r.parent_id && byId.has(r.parent_id)) byId.get(r.parent_id).children.push(r);
+    else roots.push(r);
+  }
+  return roots;
+}
+
+async function createPutawayRule(tenantId, r = {}) {
+  if (!r.warehouseId) throw new ErpError("warehouseId (target bin) required");
+  if (!(Number(r.capacityQty) > 0)) throw new ErpError("capacityQty must be > 0");
+  const { rows: wh } = await pool.query("SELECT is_group FROM erp_warehouses WHERE tenant_id=$1 AND id=$2", [tenantId, r.warehouseId]);
+  if (!wh[0]) throw new ErpError("Target warehouse not found", 404);
+  if (wh[0].is_group) throw new ErpError("Putaway target must be a leaf bin, not a group", 422);
+  const { rows } = await pool.query(
+    "INSERT INTO erp_putaway_rules(tenant_id,item_id,warehouse_id,capacity_qty,priority) VALUES($1,$2,$3,$4,$5) RETURNING *",
+    [tenantId, r.itemId || null, r.warehouseId, toDb(r.capacityQty), r.priority || 1]
+  );
+  return rows[0];
+}
+
+async function listPutawayRules(tenantId) {
+  return (await pool.query("SELECT * FROM erp_putaway_rules WHERE tenant_id=$1 ORDER BY priority, created_at", [tenantId])).rows;
+}
+
+// Pure: split an incoming qty across candidate bins by remaining free capacity,
+// in priority order (port of ERPNext apply_putaway_rule). bins: ordered
+// [{ warehouseId, capacityQty(Decimal), occupiedQty(Decimal) }]. Returns
+// assignments [{ warehouseId, qty }] + unassigned (capacity exhausted).
+function planPutaway(bins, qty) {
+  let remaining = money(qty);
+  const assignments = [];
+  for (const b of bins) {
+    if (!remaining.gt(0)) break;
+    const free = money(b.capacityQty).minus(b.occupiedQty);
+    if (!free.gt(0)) continue;
+    const place = free.lt(remaining) ? free : remaining;
+    assignments.push({ warehouseId: b.warehouseId, qty: Number(place.toFixed(6)) });
+    remaining = remaining.minus(place);
+  }
+  return { assignments, unassigned: Number(remaining.toFixed(6)) };
+}
+
+// Resolve a putaway plan for receiving `qty` of an item: gather active rules
+// (item-specific first, then generic), compute current occupancy per target bin
+// from books' per-warehouse balance, and split the qty by free capacity. This is
+// a PLAN only — the caller still posts the receipt(s) through books.receive.
+async function resolvePutaway(tenantId, itemId, qty) {
+  const { rows: rules } = await pool.query(
+    `SELECT pr.*, w.book_warehouse_id FROM erp_putaway_rules pr
+       JOIN erp_warehouses w ON w.id = pr.warehouse_id
+      WHERE pr.tenant_id=$1 AND pr.is_active=true AND (pr.item_id=$2 OR pr.item_id IS NULL)
+      ORDER BY (pr.item_id IS NULL), pr.priority, pr.created_at`,
+    [tenantId, itemId]
+  );
+  const bins = [];
+  for (const r of rules) {
+    let occupied = money(0);
+    if (r.book_warehouse_id) {
+      const { rows: bal } = await pool.query("SELECT qty FROM book_stock_balances WHERE tenant_id=$1 AND item_id=$2 AND warehouse_id=$3", [tenantId, itemId, r.book_warehouse_id]);
+      occupied = money(bal[0] ? bal[0].qty : 0);
+    }
+    bins.push({ warehouseId: r.warehouse_id, bookWarehouseId: r.book_warehouse_id, capacityQty: r.capacity_qty, occupiedQty: occupied });
+  }
+  const plan = planPutaway(bins, qty);
+  // attach bookWarehouseId for the caller to actually post against
+  const byNode = new Map(bins.map((b) => [b.warehouseId, b.bookWarehouseId]));
+  return {
+    itemId, qty: Number(money(qty).toFixed(6)),
+    assignments: plan.assignments.map((a) => ({ ...a, bookWarehouseId: byNode.get(a.warehouseId) || null })),
+    unassigned: plan.unassigned,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MULTI-SOURCE CACHED PART VALUATION  (port of InvenTree Part pricing)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Pure: fold a list of {min,max} candidate ranges into one overall {min,max},
+// ignoring null/empty sources (InvenTree update_pricing overall_min/overall_max).
+function combineRanges(ranges) {
+  let lo = null, hi = null;
+  for (const r of ranges || []) {
+    if (r == null) continue;
+    const mn = r.min != null ? money(r.min) : null;
+    const mx = r.max != null ? money(r.max) : (mn != null ? mn : null);
+    const lmn = mn != null ? mn : mx;
+    if (lmn != null) lo = lo == null || lmn.lt(lo) ? lmn : lo;
+    if (mx != null) hi = hi == null || mx.gt(hi) ? mx : hi;
+  }
+  return { min: lo, max: hi };
+}
+
+// Normalise a price in `currency` to base (INR) using the books fx rate on date.
+// getRate returns base-per-foreign-unit; a null rate (= base currency) means ×1.
+async function toBaseRate(tenantId, price, currency, onDate) {
+  if (!currency || String(currency).toUpperCase() === "INR") return money(price);
+  const rate = await fx.getRate(tenantId, currency, onDate || new Date().toISOString().slice(0, 10));
+  return money(price).mul(rate != null ? rate : 1);
+}
+
+// Compute (and cache) the min/max valuation range for an item from four sources:
+//   1. internal weighted-avg valuation (books current value)
+//   2. supplier price-breaks (erp_supplier_price_breaks, fx-normalised)
+//   3. purchase history (inward book_stock_movements rate)
+//   4. BOM cost rollup (its default BOM total_cost / output_qty)
+// Persists into erp_item_valuation and returns the row. Pure folding via combineRanges.
+async function recomputeItemValuation(tenantId, itemId) {
+  const today = new Date().toISOString().slice(0, 10);
+  // 1) internal
+  const { rows: ir } = await pool.query("SELECT current_qty, current_value FROM book_stock_items WHERE tenant_id=$1 AND id=$2", [tenantId, itemId]);
+  if (!ir[0]) throw new ErpError("Item not found", 404);
+  const internal = money(ir[0].current_qty).gt(0) ? money(ir[0].current_value).div(ir[0].current_qty) : null;
+
+  // 2) supplier price-breaks (fx-normalised to base)
+  const { rows: spb } = await pool.query("SELECT price, currency FROM erp_supplier_price_breaks WHERE tenant_id=$1 AND item_id=$2", [tenantId, itemId]);
+  let supMin = null, supMax = null;
+  for (const b of spb) {
+    const base = await toBaseRate(tenantId, b.price, b.currency, today);
+    supMin = supMin == null || base.lt(supMin) ? base : supMin;
+    supMax = supMax == null || base.gt(supMax) ? base : supMax;
+  }
+
+  // 3) purchase history — inward movements with a positive rate
+  const { rows: pmm } = await pool.query(
+    "SELECT MIN(rate) AS mn, MAX(rate) AS mx FROM book_stock_movements WHERE tenant_id=$1 AND item_id=$2 AND qty_in > 0 AND rate > 0",
+    [tenantId, itemId]
+  );
+  const purMin = pmm[0] && pmm[0].mn != null ? money(pmm[0].mn) : null;
+  const purMax = pmm[0] && pmm[0].mx != null ? money(pmm[0].mx) : null;
+
+  // 4) BOM rollup — default active BOM for this item
+  const { rows: bom } = await pool.query(
+    "SELECT total_cost, output_qty FROM erp_boms WHERE tenant_id=$1 AND item_id=$2 AND is_active=true ORDER BY is_default DESC, created_at LIMIT 1",
+    [tenantId, itemId]
+  );
+  const bomRate = bom[0] && money(bom[0].output_qty).gt(0) ? money(bom[0].total_cost).div(bom[0].output_qty) : null;
+
+  const overall = combineRanges([
+    internal != null ? { min: internal, max: internal } : null,
+    supMin != null ? { min: supMin, max: supMax } : null,
+    purMin != null ? { min: purMin, max: purMax } : null,
+    bomRate != null ? { min: bomRate, max: bomRate } : null,
+  ]);
+  const oMin = overall.min != null ? overall.min : money(0);
+  const oMax = overall.max != null ? overall.max : oMin;
+
+  const { rows } = await pool.query(
+    `INSERT INTO erp_item_valuation(tenant_id,item_id,internal_rate,supplier_min,supplier_max,purchase_min,purchase_max,bom_rate,overall_min,overall_max,currency,computed_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'INR',now())
+     ON CONFLICT (tenant_id,item_id) DO UPDATE SET
+       internal_rate=EXCLUDED.internal_rate, supplier_min=EXCLUDED.supplier_min, supplier_max=EXCLUDED.supplier_max,
+       purchase_min=EXCLUDED.purchase_min, purchase_max=EXCLUDED.purchase_max, bom_rate=EXCLUDED.bom_rate,
+       overall_min=EXCLUDED.overall_min, overall_max=EXCLUDED.overall_max, computed_at=now()
+     RETURNING *`,
+    [tenantId, itemId,
+     internal != null ? toDb(internal) : null,
+     supMin != null ? toDb(supMin) : null, supMax != null ? toDb(supMax) : null,
+     purMin != null ? toDb(purMin) : null, purMax != null ? toDb(purMax) : null,
+     bomRate != null ? toDb(bomRate) : null, toDb(oMin), toDb(oMax)]
+  );
+  return rows[0];
+}
+
+async function getItemValuation(tenantId, itemId) {
+  const { rows } = await pool.query("SELECT * FROM erp_item_valuation WHERE tenant_id=$1 AND item_id=$2", [tenantId, itemId]);
+  if (rows[0]) return rows[0];
+  return recomputeItemValuation(tenantId, itemId); // compute on first access
+}
+
+async function addSupplierPriceBreak(tenantId, b = {}) {
+  if (!b.itemId || b.price == null) throw new ErpError("itemId and price required");
+  const { rows } = await pool.query(
+    "INSERT INTO erp_supplier_price_breaks(tenant_id,item_id,supplier,min_qty,price,currency) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",
+    [tenantId, b.itemId, b.supplier || null, toDb(b.minQty || 1), toDb(b.price), (b.currency || "INR").toUpperCase()]
+  );
+  await recomputeItemValuation(tenantId, b.itemId).catch(() => {}); // auto-recalc
+  return rows[0];
+}
+
+// Recompute valuation for a set of items (called after PO/SO/BOM change). Best-effort.
+async function recomputeValuations(tenantId, itemIds) {
+  const out = [];
+  for (const id of itemIds || []) {
+    try { out.push(await recomputeItemValuation(tenantId, id)); } catch (e) { /* skip */ }
+  }
+  return out;
+}
+
 module.exports = {
   ErpError,
   // pure (testable)
   explodeBom, operationCost, rollupCost, scaleOperation, jobCardCost, reorderSuggestion, materialRequestStatus, deriveWoStatus,
+  netRequirement, aggregateDemand, planPutaway, combineRanges,
   // BOM
   createBom, listBoms, getBom, explodedBom,
   // work orders
@@ -654,4 +1084,10 @@ module.exports = {
   startJobCard, completeJobCard,
   // material requests + reorder
   createMaterialRequest, listMaterialRequests, markOrdered, reorderReport, raiseReorderRequest,
+  // production planning / MRP
+  createProductionPlan, runMrp, executePlan, listProductionPlans, getProductionPlan,
+  // warehouse hierarchy + putaway
+  createWarehouseNode, listWarehouseNodes, warehouseTree, createPutawayRule, listPutawayRules, resolvePutaway,
+  // multi-source valuation
+  recomputeItemValuation, getItemValuation, addSupplierPriceBreak, recomputeValuations,
 };

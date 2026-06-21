@@ -45,4 +45,27 @@ router.post("/material-requests/:id/order", canWrite, async (req, res) => { try 
 router.get("/reorder", async (req, res) => { try { res.json(await erp.reorderReport(tenantOf(req))); } catch (e) { fail(res, e); } });
 router.post("/reorder/raise", canWrite, async (req, res) => { try { res.status(201).json(await erp.raiseReorderRequest(tenantOf(req), req.user.id)); } catch (e) { fail(res, e); } });
 
+// ── Production plans / MRP ──────────────────────────────────────────────────
+router.get("/production-plans", async (req, res) => { try { res.json(await erp.listProductionPlans(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.get("/production-plans/:id", async (req, res) => { try { res.json(await erp.getProductionPlan(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/production-plans", canWrite, async (req, res) => { try { res.status(201).json(await erp.createProductionPlan(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+// run material-requirement-planning (BOM explosion + stock net-off → shortfalls)
+router.post("/production-plans/:id/mrp", canWrite, async (req, res) => { try { res.json(await erp.runMrp(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+// auto-raise work orders + a purchase material request for the shortfalls
+router.post("/production-plans/:id/execute", canWrite, async (req, res) => { try { res.json(await erp.executePlan(tenantOf(req), req.user.id, req.params.id)); } catch (e) { fail(res, e); } });
+
+// ── Warehouse hierarchy + putaway ───────────────────────────────────────────
+router.get("/warehouses", async (req, res) => { try { res.json(await erp.listWarehouseNodes(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.get("/warehouses/tree", async (req, res) => { try { res.json(await erp.warehouseTree(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/warehouses", canWrite, async (req, res) => { try { res.status(201).json(await erp.createWarehouseNode(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/putaway-rules", async (req, res) => { try { res.json(await erp.listPutawayRules(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/putaway-rules", canWrite, async (req, res) => { try { res.status(201).json(await erp.createPutawayRule(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+// resolve a capacity-based putaway plan for receiving qty of an item (PLAN only)
+router.get("/putaway/resolve", async (req, res) => { try { res.json(await erp.resolvePutaway(tenantOf(req), req.query.itemId, Number(req.query.qty))); } catch (e) { fail(res, e); } });
+
+// ── Multi-source part valuation ─────────────────────────────────────────────
+router.get("/valuation/:itemId", async (req, res) => { try { res.json(await erp.getItemValuation(tenantOf(req), req.params.itemId)); } catch (e) { fail(res, e); } });
+router.post("/valuation/:itemId/recompute", canWrite, async (req, res) => { try { res.json(await erp.recomputeItemValuation(tenantOf(req), req.params.itemId)); } catch (e) { fail(res, e); } });
+router.post("/price-breaks", canWrite, async (req, res) => { try { res.status(201).json(await erp.addSupplierPriceBreak(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+
 module.exports = router;

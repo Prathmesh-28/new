@@ -45,9 +45,41 @@ router.get("/assignments", async (req, res) => { try { res.json(await hr.listAss
 router.post("/assignments", canWrite, async (req, res) => { try { res.status(201).json(await hr.assignStructure(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/slip-preview", async (req, res) => { try { res.json(await hr.previewSlip(tenantOf(req), req.query.employeeId, req.query.month)); } catch (e) { fail(res, e); } });
 
-// ── Payroll runs ───────────────────────────────────────────────────────────────
+// ── Payroll runs (two-stage GL: accrual on run, payment on pay) ─────────────────
 router.get("/payroll", async (req, res) => { try { res.json(await hr.listPayrollRuns(tenantOf(req))); } catch (e) { fail(res, e); } });
-router.post("/payroll/run", canWrite, async (req, res) => { try { res.status(201).json(await hr.runPayroll(tenantOf(req), req.user.id, (req.body || {}).month)); } catch (e) { fail(res, e); } });
+router.post("/payroll/run", canWrite, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await hr.runPayroll(tenantOf(req), req.user.id, b.month, { costCentreId: b.costCentreId })); } catch (e) { fail(res, e); } });
+router.post("/payroll/:id/pay", canWrite, async (req, res) => { try { const b = req.body || {}; res.json(await hr.payPayrollRun(tenantOf(req), req.user.id, req.params.id, { bankLedger: b.bankLedger, date: b.date })); } catch (e) { fail(res, e); } });
 router.get("/payroll/:id/payslips", async (req, res) => { try { res.json(await hr.payslipsForRun(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+
+// ── (3) Formula-driven salary components ────────────────────────────────────────
+router.get("/components", async (req, res) => { try { res.json(await hr.listSalaryComponents(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/components", canWrite, async (req, res) => { try { res.status(201).json(await hr.createSalaryComponent(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/components/validate", async (req, res) => { try { res.json(hr.validateComponentSet((req.body || {}).components || [])); } catch (e) { fail(res, e); } });
+
+// ── (1) Payroll period config + annualized TDS projection ───────────────────────
+router.get("/payroll-period", async (req, res) => { try { res.json(await hr.getOrCreatePayrollPeriod(tenantOf(req), req.query.fy)); } catch (e) { fail(res, e); } });
+router.post("/payroll-period", canWrite, async (req, res) => { try { const b = req.body || {}; res.json(await hr.setPayrollPeriod(tenantOf(req), b.fy, { regime: b.regime, standardDeduction: b.standardDeduction })); } catch (e) { fail(res, e); } });
+router.get("/tds/projections", async (req, res) => { try { res.json(await hr.listTdsProjections(tenantOf(req), req.query.fy)); } catch (e) { fail(res, e); } });
+router.get("/tds/projection", async (req, res) => { try { res.json(await hr.getTdsProjection(tenantOf(req), req.query.employeeId, req.query.fy)); } catch (e) { fail(res, e); } });
+router.post("/tds/project", canWrite, async (req, res) => { try { const b = req.body || {}; res.json(b.employeeId ? await hr.computeTdsProjection(tenantOf(req), b.employeeId, b.fy, { regime: b.regime }) : await hr.projectTdsForYear(tenantOf(req), b.fy)); } catch (e) { fail(res, e); } });
+
+// ── (2) Investment declaration + proof lifecycle ────────────────────────────────
+router.get("/declarations", async (req, res) => { try { res.json(await hr.listDeclarations(tenantOf(req), req.query.fy)); } catch (e) { fail(res, e); } });
+router.get("/declaration", async (req, res) => { try { res.json(await hr.getDeclaration(tenantOf(req), req.query.employeeId, req.query.fy)); } catch (e) { fail(res, e); } });
+router.post("/declaration", canWrite, async (req, res) => { try { res.status(201).json(await hr.saveDeclaration(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/declaration/advance", canWrite, async (req, res) => { try { res.json(await hr.advanceDeclaration(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+
+// ── (4b) Gratuity slabs + computation ───────────────────────────────────────────
+router.get("/gratuity/slabs", async (req, res) => { try { res.json(await hr.listGratuitySlabs(tenantOf(req), req.query.region)); } catch (e) { fail(res, e); } });
+router.post("/gratuity/slabs", canWrite, async (req, res) => { try { res.status(201).json(await hr.upsertGratuitySlab(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/gratuity/compute", async (req, res) => { try { res.json(await hr.computeGratuity(tenantOf(req), req.query.employeeId, req.query.relievingDate, { region: req.query.region })); } catch (e) { fail(res, e); } });
+
+// ── (4c) Employee loans ─────────────────────────────────────────────────────────
+router.get("/loans", async (req, res) => { try { res.json(await hr.loansFor(tenantOf(req), req.query.employeeId)); } catch (e) { fail(res, e); } });
+router.post("/loans", canWrite, async (req, res) => { try { res.status(201).json(await hr.createLoan(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+
+// ── (4d) Full & final settlement ────────────────────────────────────────────────
+router.get("/full-and-final", async (req, res) => { try { res.json(await hr.listFullAndFinal(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/full-and-final", canWrite, async (req, res) => { try { res.status(201).json(await hr.fullAndFinal(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 
 module.exports = router;
