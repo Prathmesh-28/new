@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+# Auth-only utility routes (no SEO value)
+Disallow: /set-password
+Disallow: /forgot-password
+
+Sitemap: https://headroom.app/sitemap.xml

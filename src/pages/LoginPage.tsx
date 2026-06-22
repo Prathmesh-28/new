@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useSeo } from "@/lib/seo";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { ArrowLeft } from "lucide-react";
 import Logo from "@/components/Logo";
 
 export default function LoginPage() {
+  useSeo({ title: "Log in — Headroom", description: "Log in to Headroom — your all-in-one GST billing, accounting and cash-flow workspace for Indian SMBs." });
   const { login } = useAuth();
   const navigate    = useNavigate();
   const [params]    = useSearchParams();

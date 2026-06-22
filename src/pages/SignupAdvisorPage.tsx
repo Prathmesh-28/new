@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSeo } from "@/lib/seo";
 import { Link } from "react-router-dom";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { ArrowLeft, Wifi, WifiOff } from "lucide-react";
@@ -6,6 +7,7 @@ import type { AuthUser } from "@/data/types";
 import Logo from "@/components/Logo";
 
 export default function SignupAdvisorPage() {
+  useSeo({ title: "Headroom for CAs & Accountants — run your client book in one console", description: "Link every client, track GST/TDS/ITR filings, chase documents and send white-label reports — the CA practice console inside Headroom. Free to start." });
   const { serverReady } = useAuth();
   const [email,    setEmail]    = useState("");
   const [firm,     setFirm]     = useState("");

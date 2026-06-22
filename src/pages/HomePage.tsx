@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSeo } from "@/lib/seo";
 import { useNavigate } from "react-router-dom";
 import {
   CheckCircle2, ChevronDown, Radar, LineChart, Bell, Zap, Activity, ScanSearch,
@@ -152,6 +153,7 @@ function IconTile({ icon: Icon, size = 44, dark = false }: { icon: LucideIcon; s
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 export default function HomePage() {
+  useSeo({ title: "Headroom — GST Billing, Accounting & Cash-Flow Software for Indian SMBs", description: "All-in-one finance platform for Indian SMBs — GST billing & e-invoicing, double-entry accounting, GST/TDS filing, invoicing, collections, payroll and 90-day cash-flow forecasts. Your CA works in it too. Free to start." });
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [inr] = useState(() => !detectUS()); // India-first: ₹ by default, $ only for US visitors

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSeo } from "@/lib/seo";
 import { Link } from "react-router-dom";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { ArrowLeft, Wifi, WifiOff } from "lucide-react";
@@ -24,6 +25,7 @@ const ROLE_OPTIONS = [
 ];
 
 export default function SignupPage() {
+  useSeo({ title: "Start free — Headroom | GST Billing & Accounting for SMBs", description: "Create your free Headroom account — GST billing, accounting, invoicing, collections, payroll and cash-flow forecasts for Indian SMBs. No credit card." });
   const { serverReady } = useAuth();
   const [email,       setEmail]       = useState("");
   const [password,    setPassword]    = useState("");
