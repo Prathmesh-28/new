@@ -8,7 +8,7 @@ import {
   Plus, RefreshCw, CheckCircle2, XCircle, Undo2, Sparkles, ArrowDownToLine,
   FileText, Trash2, Printer, Send, Receipt, Percent, SlidersHorizontal, Boxes,
   Landmark, Tag, CalendarClock, Layers,
-  Lock, Split, FileBarChart, Coins, Building2, Workflow, ShieldCheck, Scale, Files,
+  Lock, Split, FileBarChart, Coins, Building2, Workflow, ShieldCheck, Scale, Files, Bot,
 } from "lucide-react";
 import BooksReceivablesTab from "./BooksReceivablesTab";
 import BooksGstTab from "./BooksGstTab";
@@ -28,6 +28,7 @@ import BooksComplianceTab from "./BooksComplianceTab";
 import BooksSettlementTab from "./BooksSettlementTab";
 import BooksDocumentsTab from "./BooksDocumentsTab";
 import BooksHealthCard from "./BooksHealthCard";
+import BooksAgentsTab from "./BooksAgentsTab";
 import BulkUpload from "@/components/BulkUpload";
 import ExportMenu from "@/components/ExportMenu";
 
@@ -129,7 +130,7 @@ interface DocumentRow {
   party_ledger_id: string | null;
 }
 
-type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls" | "taxfiling" | "pricing" | "payterms" | "subscriptions" | "closing" | "dimensions" | "finreports" | "fx" | "assets" | "automation" | "compliance" | "settlement" | "documents";
+type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls" | "taxfiling" | "pricing" | "payterms" | "subscriptions" | "closing" | "dimensions" | "finreports" | "fx" | "assets" | "automation" | "compliance" | "settlement" | "documents" | "agents";
 type ReportId = "tb" | "pl" | "bs" | "cf";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -366,6 +367,7 @@ export default function BooksPage() {
     { id: "compliance", label: "Compliance",       icon: <ShieldCheck size={14} /> },
     { id: "settlement", label: "Settlements",      icon: <Scale size={14} /> },
     { id: "automation", label: "Automation",       icon: <Workflow size={14} /> },
+    { id: "agents",    label: "AI Agents",         icon: <Bot size={14} /> },
   ];
 
   return (
@@ -447,6 +449,7 @@ export default function BooksPage() {
             {tab === "compliance" && <BooksComplianceTab canWrite={canWrite} />}
             {tab === "settlement" && <BooksSettlementTab />}
             {tab === "automation" && <BooksAutomationTab />}
+            {tab === "agents" && <BooksAgentsTab />}
           </>
         )}
       </div>

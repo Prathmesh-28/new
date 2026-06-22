@@ -32,6 +32,8 @@ const usage = require("./usage");
 const demoseed = require("./demoseed");
 const itr = require("./itr");
 const billofentry = require("./billofentry");
+const agents = require("./agents");
+const llm = require("./llm");
 const reposting = require("./reposting");
 const landedcost = require("./landedcost");
 const rules = require("./rules");
@@ -81,6 +83,8 @@ module.exports = {
   ...importcfg,
   ...dunning,
   itr,
+  agents,
+  llm,
   rules,
   integrity,
   settlement,

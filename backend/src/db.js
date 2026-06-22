@@ -619,6 +619,42 @@ async function initDb() {
     );
   `);
 
+  // SMB AI-agent platform — per-tenant LLM engine + agents + run audit.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tenant_llm_config (
+      tenant_id   TEXT PRIMARY KEY,
+      base_url    TEXT NOT NULL DEFAULT 'https://openrouter.ai/api/v1',
+      model       TEXT NOT NULL DEFAULT 'anthropic/claude-sonnet-4.6',
+      api_key_enc TEXT,
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE TABLE IF NOT EXISTS book_agents (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id    TEXT NOT NULL,
+      name         TEXT NOT NULL,
+      instructions TEXT,
+      model        TEXT,
+      tools        JSONB NOT NULL DEFAULT '[]',
+      enabled      BOOLEAN NOT NULL DEFAULT true,
+      created_by   UUID,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_agents ON book_agents(tenant_id, created_at DESC);
+    CREATE TABLE IF NOT EXISTS book_agent_runs (
+      id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id  TEXT NOT NULL,
+      agent_id   UUID,
+      actor_id   UUID,
+      input      TEXT,
+      reply      TEXT,
+      steps      JSONB,
+      status     TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_agent_runs ON book_agent_runs(tenant_id, agent_id, created_at DESC);
+  `);
+
   // ── Wave-1c depth tables: real master/persistence behind features that were stubs ──
   await pool.query(`
     -- Company UPI/VPA — used by sales "Accept → create order" + invoice payment links.
