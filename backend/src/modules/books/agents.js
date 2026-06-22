@@ -95,17 +95,27 @@ async function runAgent(tenantId, actorId, agentId, userMessage) {
 
   const llm = require("./llm");
   const tools = require("./agenttools");
+  const rag = require("./agentrag");
   const allowed = Array.isArray(agent.tools) ? agent.tools : [];
+
+  // Retrieve relevant knowledge for this query and prepend it to the system
+  // prompt. retrieve() degrades to "" and never throws, so this never breaks a run.
+  let system = agent.instructions || "";
+  const ctx = await rag.retrieve(tenantId, agentId, userMessage, 5);
+  if (ctx) {
+    system = `${system}\n\n--- Relevant knowledge (retrieved from this agent's documents; cite it when useful) ---\n${ctx}`;
+  }
 
   const messages = [{ role: "user", content: userMessage }];
   const steps = [];
+  const pendingActions = [];
   let reply = null;
   let status = "ok";
 
   try {
     for (let i = 0; i < MAX_STEPS; i++) {
       const message = await llm.chat(tenantId, {
-        system: agent.instructions,
+        system,
         messages,
         tools: tools.toolSchemas(allowed),
         model: agent.model || undefined,
@@ -129,20 +139,31 @@ async function runAgent(tenantId, actorId, agentId, userMessage) {
         const name = fn.name;
         let args = {};
         let result;
+        let parseError = false;
         try {
           args = fn.arguments ? JSON.parse(fn.arguments) : {};
         } catch (e) {
           args = {};
           result = { error: `Bad tool arguments: ${e.message}` };
+          parseError = true;
         }
-        if (result === undefined) {
+
+        // WRITE tools are NEVER executed inline — collect them for human approval
+        // and feed the model an "awaiting_approval" result so it stops retrying.
+        if (!parseError && tools.isWrite(name)) {
+          const id = `pa_${Date.now().toString(36)}_${pendingActions.length}`;
+          const label = describeAction(name, args);
+          pendingActions.push({ id, tool: name, args, label });
+          result = { status: "awaiting_approval", message: "This action needs human approval before it runs.", tool: name };
+        } else if (result === undefined) {
+          // READ tool — execute inline. A bad tool must never abort the run.
           try {
-            result = await tools.runTool(tenantId, name, args);
+            result = await tools.runTool(tenantId, name, args, actorId);
           } catch (e) {
-            // A bad tool must never abort the run — surface it as the result.
             result = { error: e.message || String(e) };
           }
         }
+
         steps.push({ tool: name, args, result });
         messages.push({
           role: "tool",
@@ -162,7 +183,65 @@ async function runAgent(tenantId, actorId, agentId, userMessage) {
   }
 
   await persistRun(tenantId, agentId, actorId, userMessage, reply, steps, status);
-  return { reply, steps };
+  return { reply, steps, pendingActions };
+}
+
+// Human-readable one-liner for a pending write action, shown on the approval card.
+function describeAction(tool, args) {
+  const a = args || {};
+  switch (tool) {
+    case "create_sales_invoice":
+      return `Create a sales invoice${a.subtotal ? ` for ₹${a.subtotal}` : ""}${a.partyLedgerId ? ` (party ${a.partyLedgerId})` : ""}`;
+    case "create_ledger":
+      return `Create ledger "${a.name || "?"}"${a.group ? ` under ${a.group}` : ""}`;
+    case "create_item":
+      return `Create item "${a.name || "?"}"${a.unit ? ` (${a.unit})` : ""}`;
+    default:
+      return `Run ${tool}`;
+  }
+}
+
+// Resolve the role of an actor (user) within a tenant. Returns null if unknown.
+async function _actorRole(tenantId, actorId) {
+  if (!actorId) return null;
+  try {
+    const { rows } = await pool.query(
+      "SELECT role FROM users WHERE id=$1 AND tenant_id=$2",
+      [actorId, tenantId]
+    );
+    return rows[0] ? rows[0].role : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Confirm (approve) a pending WRITE action. Asserts the tool is a write tool and
+// that the actor's role is in the tool's allow-list, executes the real write via
+// runTool, and audits it to book_agent_runs with status 'write'. The actor's role
+// is taken from the payload when the route passes it, else resolved from actorId.
+async function confirmAction(tenantId, actorId, payload = {}) {
+  const { tool, args } = payload;
+  const tools = require("./agenttools");
+  if (!tools.isWrite(tool)) throw new PostError("FORBIDDEN", `'${tool}' is not an approvable write action`, 403);
+
+  // Prefer an explicitly-passed role (common key spellings); else look it up.
+  const actorRole = payload.actorRole || payload.role || payload.userRole
+    || await _actorRole(tenantId, actorId);
+  const def = tools.TOOLS[tool];
+  const roles = (def && def.role) || [];
+  if (!roles.includes(actorRole)) {
+    throw new PostError("FORBIDDEN", `Your role is not permitted to run '${tool}'`, 403);
+  }
+
+  const result = await tools.runTool(tenantId, tool, args || {}, actorId);
+  await persistRun(
+    tenantId, null, actorId,
+    JSON.stringify({ tool, args: args || {} }),
+    JSON.stringify(result),
+    [{ tool, args: args || {}, result }],
+    "write"
+  );
+  return result;
 }
 
 async function persistRun(tenantId, agentId, actorId, input, reply, steps, status) {
@@ -178,5 +257,5 @@ async function persistRun(tenantId, agentId, actorId, input, reply, steps, statu
 }
 
 module.exports = {
-  createAgent, listAgents, getAgent, updateAgent, deleteAgent, runAgent,
+  createAgent, listAgents, getAgent, updateAgent, deleteAgent, runAgent, confirmAction,
 };

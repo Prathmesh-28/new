@@ -625,9 +625,11 @@ async function initDb() {
       tenant_id   TEXT PRIMARY KEY,
       base_url    TEXT NOT NULL DEFAULT 'https://openrouter.ai/api/v1',
       model       TEXT NOT NULL DEFAULT 'anthropic/claude-sonnet-4.6',
+      embed_model TEXT DEFAULT 'openai/text-embedding-3-small',
       api_key_enc TEXT,
       updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    ALTER TABLE tenant_llm_config ADD COLUMN IF NOT EXISTS embed_model TEXT DEFAULT 'openai/text-embedding-3-small';
     CREATE TABLE IF NOT EXISTS book_agents (
       id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       tenant_id    TEXT NOT NULL,
@@ -653,6 +655,18 @@ async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_book_agent_runs ON book_agent_runs(tenant_id, agent_id, created_at DESC);
+    -- Agent knowledge (RAG): one row per chunk; embedding stored as JSONB (no pgvector dependency).
+    CREATE TABLE IF NOT EXISTS book_agent_docs (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id   TEXT NOT NULL,
+      agent_id    UUID NOT NULL,
+      title       TEXT NOT NULL,
+      chunk_index INTEGER NOT NULL DEFAULT 0,
+      content     TEXT NOT NULL,
+      embedding   JSONB,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_book_agent_docs ON book_agent_docs(tenant_id, agent_id);
   `);
 
   // ── Wave-1c depth tables: real master/persistence behind features that were stubs ──

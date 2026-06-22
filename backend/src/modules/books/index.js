@@ -34,6 +34,7 @@ const itr = require("./itr");
 const billofentry = require("./billofentry");
 const agents = require("./agents");
 const llm = require("./llm");
+const agentrag = require("./agentrag");
 const reposting = require("./reposting");
 const landedcost = require("./landedcost");
 const rules = require("./rules");
@@ -85,6 +86,7 @@ module.exports = {
   itr,
   agents,
   llm,
+  agentrag,
   rules,
   integrity,
   settlement,

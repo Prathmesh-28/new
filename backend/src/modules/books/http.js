@@ -28,6 +28,7 @@ const billofentry = require("./billofentry");
 const llm = require("./llm");
 const agents = require("./agents");
 const agenttools = require("./agenttools");
+const agentrag = require("./agentrag");
 const reposting = require("./reposting");
 const landedcost = require("./landedcost");
 const rules = require("./rules");
@@ -802,13 +803,19 @@ router.post("/documents/bulk", canPost, async (req, res) => { try { res.json(awa
 // ── SMB AI agents (per-tenant LLM engine + read-only agents). Specific paths before /:id. ──
 router.get("/agents/tools", async (_req, res) => { try { res.json(agenttools.toolCatalog()); } catch (e) { fail(res, e); } });
 router.get("/agents/llm-config", async (req, res) => { try { res.json(await llm.getTenantLlm(tenantOf(req))); } catch (e) { fail(res, e); } });
-router.put("/agents/llm-config", canPost, async (req, res) => { try { const b = req.body || {}; await llm.setTenantLlm(tenantOf(req), { baseUrl: b.baseUrl, model: b.model, apiKey: b.apiKey }); res.json(await llm.getTenantLlm(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.put("/agents/llm-config", canPost, async (req, res) => { try { const b = req.body || {}; await llm.setTenantLlm(tenantOf(req), { baseUrl: b.baseUrl, model: b.model, apiKey: b.apiKey, embedModel: b.embedModel }); res.json(await llm.getTenantLlm(tenantOf(req))); } catch (e) { fail(res, e); } });
 router.get("/agents", async (req, res) => { try { res.json(await agents.listAgents(tenantOf(req))); } catch (e) { fail(res, e); } });
 router.post("/agents", canPost, async (req, res) => { try { res.status(201).json(await agents.createAgent(tenantOf(req), { ...(req.body || {}), created_by: req.user.id })); } catch (e) { fail(res, e); } });
 router.get("/agents/:id", async (req, res) => { try { res.json(await agents.getAgent(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.patch("/agents/:id", canPost, async (req, res) => { try { res.json(await agents.updateAgent(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.delete("/agents/:id", canPost, async (req, res) => { try { res.json(await agents.deleteAgent(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.post("/agents/:id/run", async (req, res) => { try { res.json(await agents.runAgent(tenantOf(req), req.user.id, req.params.id, (req.body || {}).message || "")); } catch (e) { fail(res, e); } });
+// Approve a proposed write action (human-in-the-loop) — re-checks the actor's role.
+router.post("/agents/:id/confirm", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await agents.confirmAction(tenantOf(req), req.user.id, { tool: b.tool, args: b.args, role: req.user.role })); } catch (e) { fail(res, e); } });
+// Agent knowledge (RAG) docs.
+router.post("/agents/:id/docs", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await agentrag.addDoc(tenantOf(req), req.params.id, { title: b.title, content: b.content })); } catch (e) { fail(res, e); } });
+router.get("/agents/:id/docs", async (req, res) => { try { res.json(await agentrag.listDocs(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.delete("/agents/:id/docs/:title", canPost, async (req, res) => { try { res.json(await agentrag.deleteDoc(tenantOf(req), req.params.id, decodeURIComponent(req.params.title))); } catch (e) { fail(res, e); } });
 
 // ── M5: reconciliation bridge ────────────────────────────────────────────────
 router.post("/recon/import", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await recon.importLines(tenantOf(req), b.bankLedgerId, b.lines)); } catch (e) { fail(res, e); } });

@@ -111,4 +111,4 @@ async function deleteLedger(tenantId, id) {
   return { ok: true, deleted: id };
 }
 
-module.exports = { mergeLedger, deleteLedger, bulkCreateLedgers };
+module.exports = { mergeLedger, deleteLedger, bulkCreateLedgers, createOneLedger };

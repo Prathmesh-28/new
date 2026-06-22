@@ -8,6 +8,7 @@ const { PostError } = require("./posting-engine");
 
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = () => process.env.AGENT_MODEL || "anthropic/claude-sonnet-4.6";
+const DEFAULT_EMBED_MODEL = () => process.env.AGENT_EMBED_MODEL || "openai/text-embedding-3-small";
 
 // --- encryption at rest (AES-256-GCM, scrypt-derived key) ---------------------
 // The stored blob is iv(12) | tag(16) | ciphertext, base64-encoded. The key is
@@ -47,7 +48,7 @@ function decryptKey(blob) {
 // fallback (OPENROUTER_API_KEY) is present.
 async function getTenantLlm(tenantId) {
   const { rows } = await pool.query(
-    "SELECT base_url, model, api_key_enc FROM tenant_llm_config WHERE tenant_id=$1",
+    "SELECT base_url, model, embed_model, api_key_enc FROM tenant_llm_config WHERE tenant_id=$1",
     [tenantId]
   );
   const row = rows[0] || {};
@@ -55,23 +56,25 @@ async function getTenantLlm(tenantId) {
   return {
     baseUrl: row.base_url || DEFAULT_BASE_URL,
     model: row.model || DEFAULT_MODEL(),
+    embedModel: row.embed_model || DEFAULT_EMBED_MODEL(),
     hasKey: hasTenantKey || !!process.env.OPENROUTER_API_KEY,
   };
 }
 
 // Upsert a tenant's LLM config. A blank/omitted apiKey leaves any existing
 // encrypted key untouched; a non-empty apiKey replaces it.
-async function setTenantLlm(tenantId, { baseUrl, model, apiKey } = {}) {
+async function setTenantLlm(tenantId, { baseUrl, model, apiKey, embedModel } = {}) {
   const enc = apiKey ? encryptKey(apiKey) : null;
   await pool.query(
-    `INSERT INTO tenant_llm_config(tenant_id, base_url, model, api_key_enc, updated_at)
-       VALUES($1,$2,$3,$4,now())
+    `INSERT INTO tenant_llm_config(tenant_id, base_url, model, embed_model, api_key_enc, updated_at)
+       VALUES($1,$2,$3,$4,$5,now())
      ON CONFLICT(tenant_id) DO UPDATE SET
        base_url=COALESCE($2, tenant_llm_config.base_url),
        model=COALESCE($3, tenant_llm_config.model),
-       api_key_enc=COALESCE($4, tenant_llm_config.api_key_enc),
+       embed_model=COALESCE($4, tenant_llm_config.embed_model),
+       api_key_enc=COALESCE($5, tenant_llm_config.api_key_enc),
        updated_at=now()`,
-    [tenantId, baseUrl || null, model || null, enc]
+    [tenantId, baseUrl || null, model || null, embedModel || null, enc]
   );
   return getTenantLlm(tenantId);
 }
@@ -79,7 +82,7 @@ async function setTenantLlm(tenantId, { baseUrl, model, apiKey } = {}) {
 // Resolve the secret key for an outbound call: tenant key first, env fallback next.
 async function _resolveSecret(tenantId) {
   const { rows } = await pool.query(
-    "SELECT base_url, model, api_key_enc FROM tenant_llm_config WHERE tenant_id=$1",
+    "SELECT base_url, model, embed_model, api_key_enc FROM tenant_llm_config WHERE tenant_id=$1",
     [tenantId]
   );
   const row = rows[0] || {};
@@ -87,6 +90,7 @@ async function _resolveSecret(tenantId) {
   return {
     baseUrl: row.base_url || DEFAULT_BASE_URL,
     model: row.model || DEFAULT_MODEL(),
+    embedModel: row.embed_model || DEFAULT_EMBED_MODEL(),
     key: tenantKey || process.env.OPENROUTER_API_KEY || null,
   };
 }
@@ -140,4 +144,45 @@ async function chat(tenantId, { system, messages = [], tools, model: modelOverri
   return { content: msg.content || "", tool_calls: msg.tool_calls };
 }
 
-module.exports = { getTenantLlm, setTenantLlm, chat, encryptKey, decryptKey };
+// --- embeddings ---------------------------------------------------------------
+// Maps texts[] onto an OpenAI-shape /embeddings request and returns a parallel
+// array of vectors (number[][]). Uses the tenant's embed model. Throws a typed
+// PostError on ANY failure (no key, network, non-2xx, bad shape) so the RAG layer
+// (agentrag.js) can catch it and degrade gracefully instead of breaking a run.
+async function embed(tenantId, texts) {
+  const list = (Array.isArray(texts) ? texts : [texts]).map((t) => String(t == null ? "" : t));
+  if (!list.length) return [];
+  const { baseUrl, embedModel, key } = await _resolveSecret(tenantId);
+  if (!key) throw new PostError("LLM_NOT_CONFIGURED", "No LLM key configured for embeddings", 422);
+
+  const url = baseUrl.replace(/\/+$/, "") + "/embeddings";
+  let resp;
+  try {
+    resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ model: embedModel, input: list }),
+    });
+  } catch (e) {
+    throw new PostError("EMBED_NETWORK", `Embedding request failed: ${e.message}`, 502);
+  }
+  if (!resp.ok) {
+    let text;
+    try { text = await resp.text(); } catch { text = ""; }
+    throw new PostError("EMBED_ERROR", `Embedding provider error (${resp.status}): ${text}`, 502);
+  }
+  const data = await resp.json();
+  const rows = data && Array.isArray(data.data) ? data.data : null;
+  if (!rows || rows.length !== list.length) throw new PostError("EMBED_ERROR", "Embedding provider returned an unexpected shape", 502);
+  // Preserve request order (OpenAI returns an index per row).
+  const out = new Array(list.length);
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i] || {};
+    const idx = Number.isInteger(r.index) ? r.index : i;
+    if (!Array.isArray(r.embedding)) throw new PostError("EMBED_ERROR", "Embedding provider returned no vector", 502);
+    out[idx] = r.embedding.map(Number);
+  }
+  return out;
+}
+
+module.exports = { getTenantLlm, setTenantLlm, chat, embed, encryptKey, decryptKey };

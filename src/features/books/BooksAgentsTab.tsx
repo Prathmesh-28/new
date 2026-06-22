@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import {
   Bot, RefreshCw, Plus, Save, Trash2, Pencil, X, Send, Cpu, KeyRound,
   CheckCircle2, AlertCircle, Wrench, ChevronRight, ChevronDown, MessageSquare, Sparkles,
+  BookOpen, Upload, FileText, Check, ShieldAlert,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -13,12 +14,29 @@ interface LlmConfig {
   baseUrl?: string;
   base_url?: string;
   model?: string;
+  embedModel?: string;
+  embed_model?: string;
   hasKey?: boolean;
 }
 
 interface ToolDef {
   name: string;
   description?: string;
+  scope?: "read" | "write";
+}
+
+interface AgentDoc {
+  title: string;
+  chunks?: number;
+  chars?: number;
+  created_at?: string;
+}
+
+interface PendingAction {
+  id: string;
+  tool: string;
+  args?: unknown;
+  label?: string;
 }
 
 interface Agent {
@@ -39,10 +57,12 @@ interface RunStep {
 interface RunResponse {
   reply?: string;
   steps?: RunStep[];
+  pendingActions?: PendingAction[];
 }
 
 const DEFAULT_MODEL = "anthropic/claude-sonnet-4.6";
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
+const DEFAULT_EMBED_MODEL = "openai/text-embedding-3-small";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -160,6 +180,7 @@ function EngineCard({ cfg, onChange }: { cfg: LlmConfig | null; onChange: (c: Ll
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [baseUrl, setBaseUrl] = useState(DEFAULT_BASE_URL);
+  const [embedModel, setEmbedModel] = useState(DEFAULT_EMBED_MODEL);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -168,6 +189,7 @@ function EngineCard({ cfg, onChange }: { cfg: LlmConfig | null; onChange: (c: Ll
       onChange(c ?? {});
       setModel(c?.model || DEFAULT_MODEL);
       setBaseUrl(c?.baseUrl || c?.base_url || DEFAULT_BASE_URL);
+      setEmbedModel(c?.embedModel || c?.embed_model || DEFAULT_EMBED_MODEL);
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -186,6 +208,7 @@ function EngineCard({ cfg, onChange }: { cfg: LlmConfig | null; onChange: (c: Ll
       const body: Record<string, unknown> = {
         model: model.trim() || DEFAULT_MODEL,
         baseUrl: baseUrl.trim() || DEFAULT_BASE_URL,
+        embedModel: embedModel.trim() || DEFAULT_EMBED_MODEL,
       };
       if (apiKey.trim()) body.apiKey = apiKey.trim();
       const c = await api.put<LlmConfig>("/api/books/agents/llm-config", body);
@@ -193,6 +216,7 @@ function EngineCard({ cfg, onChange }: { cfg: LlmConfig | null; onChange: (c: Ll
       setApiKey("");
       setModel(c?.model || DEFAULT_MODEL);
       setBaseUrl(c?.baseUrl || c?.base_url || DEFAULT_BASE_URL);
+      setEmbedModel(c?.embedModel || c?.embed_model || DEFAULT_EMBED_MODEL);
       toast.success("Engine saved");
     } catch (e) {
       toast.error(errMsg(e));
@@ -257,11 +281,23 @@ function EngineCard({ cfg, onChange }: { cfg: LlmConfig | null; onChange: (c: Ll
             className={`${inputCls} font-mono`}
           />
         </div>
+        <div>
+          <label className={labelCls}>
+            <span className="inline-flex items-center gap-1"><BookOpen size={11} /> Embedding model</span>
+          </label>
+          <input
+            value={embedModel}
+            onChange={(e) => setEmbedModel(e.target.value)}
+            placeholder={DEFAULT_EMBED_MODEL}
+            className={`${inputCls} font-mono`}
+          />
+        </div>
       </div>
 
       <p className="text-xs text-[var(--color-muted)] mt-3">
         Any OpenAI-compatible endpoint works. You can later point the base URL at your own server — e.g. a Raspberry Pi
         running Ollama at <code className="font-mono text-[var(--color-text)]">http://&lt;pi&gt;:11434/v1</code> — and keep the key blank.
+        The embedding model powers each agent's Knowledge search.
       </p>
 
       <div className="flex justify-end mt-4">
@@ -334,10 +370,21 @@ function AgentsManager({
         ) : agents.length === 0 ? (
           <div className="px-4 py-8 text-center text-[var(--color-muted)]">No agents yet — create one above.</div>
         ) : (
-          agents.map((a) => {
-            const tools = toolsOf(a);
-            return (
-              <div key={a.id} className="px-4 py-3 flex items-start justify-between gap-3">
+          agents.map((a) => (
+            <AgentRow key={a.id} agent={a} onEdit={() => setEditing(a)} reload={reload} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AgentRow({ agent: a, onEdit, reload }: { agent: Agent; onEdit: () => void; reload: () => Promise<void> }) {
+  const [showKnowledge, setShowKnowledge] = useState(false);
+  const tools = toolsOf(a);
+  return (
+    <div>
+      <div className="px-4 py-3 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{a.name || "Untitled agent"}</span>
@@ -369,14 +416,169 @@ function AgentsManager({
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <button type="button" onClick={() => setEditing(a)} className={btnGhost} title="Edit">
+                  <button
+                    type="button"
+                    onClick={() => setShowKnowledge((s) => !s)}
+                    className={btnGhost}
+                    title="Knowledge"
+                  >
+                    <BookOpen size={12} /> Knowledge
+                  </button>
+                  <button type="button" onClick={onEdit} className={btnGhost} title="Edit">
                     <Pencil size={12} /> Edit
                   </button>
                   <DeleteButton agent={a} onDone={reload} />
                 </div>
+      </div>
+      {showKnowledge && (
+        <div className="px-4 pb-4 bg-[var(--color-bg)] border-t border-[var(--color-border)]">
+          <KnowledgePanel agentId={a.id} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KNOWLEDGE PANEL (per agent) — upload/paste docs for retrieval (RAG)
+// ─────────────────────────────────────────────────────────────────────────────
+function KnowledgePanel({ agentId }: { agentId: string }) {
+  const [docs, setDocs] = useState<AgentDoc[]>([]);
+  const [busy, setBusy] = useState(true);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try {
+      const rows = await api.get<AgentDoc[]>(`/api/books/agents/${agentId}/docs`);
+      setDocs(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      toast.error(errMsg(e));
+      setDocs([]);
+    } finally {
+      setBusy(false);
+    }
+  }, [agentId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const onFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      setContent(text);
+      if (!title.trim()) setTitle(file.name);
+    } catch {
+      toast.error("Couldn't read that file");
+    }
+  };
+
+  const add = async () => {
+    const t = title.trim();
+    const c = content.trim();
+    if (!t) { toast.error("Give the document a title"); return; }
+    if (!c) { toast.error("Paste or upload some content"); return; }
+    setSaving(true);
+    try {
+      await api.post(`/api/books/agents/${agentId}/docs`, { title: t, content: c });
+      toast.success("Knowledge added");
+      setTitle("");
+      setContent("");
+      await load();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (docTitle: string) => {
+    if (!window.confirm(`Remove "${docTitle}" from this agent's knowledge?`)) return;
+    try {
+      await api.delete(`/api/books/agents/${agentId}/docs/${encodeURIComponent(docTitle)}`);
+      toast.success("Removed");
+      await load();
+    } catch (e) {
+      toast.error(errMsg(e));
+    }
+  };
+
+  return (
+    <div className="pt-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <h5 className="text-xs font-semibold flex items-center gap-1.5 text-[var(--color-muted)]">
+          <BookOpen size={12} className="text-[var(--color-primary)]" /> Knowledge
+        </h5>
+        <button type="button" onClick={() => void load()} className="text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Refresh">
+          <RefreshCw size={12} className={busy ? "animate-spin" : ""} />
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Document title (e.g. Credit policy)"
+            className={inputCls}
+          />
+          <label className={`${btnGhost} cursor-pointer whitespace-nowrap`} title="Upload a text file">
+            <Upload size={12} /> Upload
+            <input
+              type="file"
+              accept=".txt,.md,.csv,.json,text/*"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); e.target.value = ""; }}
+            />
+          </label>
+        </div>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={4}
+          placeholder="Paste content the agent should know — policies, FAQs, product notes… It gets chunked, embedded and searched at chat time."
+          className={`${inputCls} resize-y leading-relaxed`}
+        />
+        <div className="flex justify-end">
+          <button type="button" onClick={add} disabled={saving} className={btnPrimary}>
+            {saving ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
+            Add to knowledge
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        {busy ? (
+          <div className="text-xs text-[var(--color-muted)] py-2">Loading…</div>
+        ) : docs.length === 0 ? (
+          <div className="text-xs text-[var(--color-muted)] py-2">No documents yet. Add one above to ground this agent's answers.</div>
+        ) : (
+          docs.map((d) => (
+            <div
+              key={d.title}
+              className="flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]"
+            >
+              <div className="min-w-0 flex items-center gap-2">
+                <FileText size={13} className="text-[var(--color-primary)] shrink-0" />
+                <span className="text-sm truncate">{d.title}</span>
+                <span className="text-[11px] text-[var(--color-muted)] shrink-0">
+                  {d.chunks ? `${d.chunks} chunk${d.chunks === 1 ? "" : "s"}` : ""}
+                  {d.chars ? ` · ${d.chars.toLocaleString()} chars` : ""}
+                </span>
               </div>
-            );
-          })
+              <button
+                type="button"
+                onClick={() => remove(d.title)}
+                className="text-[var(--color-muted)] hover:text-red-400 shrink-0"
+                title="Remove"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))
         )}
       </div>
     </div>
@@ -519,7 +721,14 @@ function AgentEditor({
                     className="mt-0.5 accent-[var(--color-primary)]"
                   />
                   <span className="min-w-0">
-                    <span className="block text-sm font-mono">{t.name}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-sm font-mono">{t.name}</span>
+                      {t.scope === "write" && (
+                        <span className="inline-flex items-center gap-0.5 text-[9px] uppercase tracking-wide font-semibold text-amber-400 border border-amber-500/40 rounded-full px-1.5 py-0.5">
+                          <ShieldAlert size={9} /> write
+                        </span>
+                      )}
+                    </span>
                     {t.description && (
                       <span className="block text-xs text-[var(--color-muted)] mt-0.5">{t.description}</span>
                     )}
@@ -551,6 +760,7 @@ interface ChatTurn {
   role: "user" | "assistant";
   text: string;
   steps?: RunStep[];
+  pendingActions?: PendingAction[];
 }
 
 function Playground({ agents, engineReady }: { agents: Agent[]; engineReady: boolean }) {
@@ -578,7 +788,15 @@ function Playground({ agents, engineReady }: { agents: Agent[]; engineReady: boo
     setRunning(true);
     try {
       const res = await api.post<RunResponse>(`/api/books/agents/${agentId}/run`, { message: text });
-      setTurns((t) => [...t, { role: "assistant", text: res?.reply || "(no reply)", steps: res?.steps || [] }]);
+      setTurns((t) => [
+        ...t,
+        {
+          role: "assistant",
+          text: res?.reply || "(no reply)",
+          steps: res?.steps || [],
+          pendingActions: Array.isArray(res?.pendingActions) ? res!.pendingActions : [],
+        },
+      ]);
     } catch (e) {
       const m = errMsg(e);
       setTurns((t) => [...t, { role: "assistant", text: `Error: ${m}` }]);
@@ -636,6 +854,13 @@ function Playground({ agents, engineReady }: { agents: Agent[]; engineReady: boo
                   <div className="w-full space-y-1.5 pl-1">
                     {t.steps.map((s, j) => (
                       <StepRow key={j} step={s} />
+                    ))}
+                  </div>
+                )}
+                {t.pendingActions && t.pendingActions.length > 0 && agentId && (
+                  <div className="w-full space-y-1.5 pl-1">
+                    {t.pendingActions.map((pa) => (
+                      <PendingActionCard key={pa.id} action={pa} agentId={agentId} />
                     ))}
                   </div>
                 )}
@@ -700,6 +925,82 @@ function StepRow({ step }: { step: RunStep }) {
             <div className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] mb-1">Result</div>
             <pre className="text-[11px] font-mono bg-[var(--color-bg)] border border-[var(--color-border)] rounded p-2 overflow-x-auto max-h-60 overflow-y-auto">{pretty(step.result)}</pre>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PENDING ACTION CARD — a write the agent wants to perform, gated on approval
+// ─────────────────────────────────────────────────────────────────────────────
+type ActionState = "pending" | "approving" | "done" | "rejected";
+
+function PendingActionCard({ action, agentId }: { action: PendingAction; agentId: string }) {
+  const [state, setState] = useState<ActionState>("pending");
+  const [result, setResult] = useState<unknown>(null);
+
+  const approve = async () => {
+    setState("approving");
+    try {
+      const res = await api.post(`/api/books/agents/${agentId}/confirm`, {
+        tool: action.tool,
+        args: action.args ?? {},
+      });
+      setResult(res);
+      setState("done");
+      toast.success("Action approved & executed");
+    } catch (e) {
+      setState("pending");
+      toast.error(errMsg(e));
+    }
+  };
+
+  if (state === "rejected") {
+    return (
+      <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-muted)] flex items-center gap-2">
+        <X size={13} /> Rejected: <span className="font-mono">{action.tool}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border border-amber-500/40 rounded-lg bg-amber-900/10 overflow-hidden">
+      <div className="px-3 py-2 flex items-start gap-2">
+        <ShieldAlert size={15} className="text-amber-400 shrink-0 mt-0.5" />
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium flex items-center gap-2 flex-wrap">
+            {action.label || `Run ${action.tool}`}
+            <span className="text-[10px] uppercase tracking-wide font-mono text-amber-400 border border-amber-500/40 rounded-full px-1.5 py-0.5">
+              needs approval
+            </span>
+          </div>
+          <div className="text-[11px] font-mono text-[var(--color-muted)] mt-0.5">{action.tool}</div>
+          <pre className="text-[11px] font-mono bg-[var(--color-bg)] border border-[var(--color-border)] rounded p-2 mt-1.5 overflow-x-auto max-h-40 overflow-y-auto">{pretty(action.args)}</pre>
+        </div>
+      </div>
+
+      {state === "done" ? (
+        <div className="px-3 pb-3">
+          <div className="text-[11px] uppercase tracking-wide text-green-400 mb-1 flex items-center gap-1">
+            <Check size={12} /> Executed
+          </div>
+          <pre className="text-[11px] font-mono bg-[var(--color-bg)] border border-[var(--color-border)] rounded p-2 overflow-x-auto max-h-60 overflow-y-auto">{pretty(result)}</pre>
+        </div>
+      ) : (
+        <div className="px-3 pb-2.5 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setState("rejected")}
+            disabled={state === "approving"}
+            className={btnGhost}
+          >
+            <X size={12} /> Reject
+          </button>
+          <button type="button" onClick={approve} disabled={state === "approving"} className={btnPrimary}>
+            {state === "approving" ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+            Approve
+          </button>
         </div>
       )}
     </div>
