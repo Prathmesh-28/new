@@ -93,6 +93,8 @@ app.get("/health", (_req, res) => res.json({ ok: true, ts: new Date().toISOStrin
 
 // Capability map — which integrations are live vs. preview (public, no secrets)
 app.use("/api/capabilities", require("./routes/capabilities"));
+// Platform settings — public social links (footer) + super-admin editor
+app.use("/api/platform",     require("./routes/platform"));
 // Client error sink (structured logging / observability)
 app.use("/api/telemetry", require("./routes/telemetry"));
 

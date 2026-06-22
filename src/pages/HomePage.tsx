@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { initHero3D } from "@/animations/hero3d";
 import Logo from "@/components/Logo";
+import SocialLinks from "@/components/SocialLinks";
 
 /* ─── Colour tokens ─── */
 const C = {
@@ -775,6 +776,9 @@ export default function HomePage() {
               <Logo variant="horizontal" size={20} />
             </div>
             <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.35)", lineHeight: 1.6, maxWidth: 200 }}>A 10-layer cash flow intelligence platform for modern SMB operators.</p>
+            <div style={{ marginTop: 18 }}>
+              <SocialLinks size={18} color="rgba(169,217,188,0.5)" hoverColor={C.pale} />
+            </div>
           </div>
           {[
             { h:"Platform",    links:["Features","Forecasting","Credit rescue","Community capital","Scenario planner"] },

@@ -610,6 +610,15 @@ async function initDb() {
   await pool.query(require("./modules/hrms/schema").HRMS_SCHEMA);
   await pool.query(require("./modules/insights/schema").INSIGHTS_SCHEMA);
 
+  // Platform-level settings (super-admin editable, e.g. social links) — key/value JSON.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS platform_settings (
+      key        TEXT PRIMARY KEY,
+      value      JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
   // ── Wave-1c depth tables: real master/persistence behind features that were stubs ──
   await pool.query(`
     -- Company UPI/VPA — used by sales "Accept → create order" + invoice payment links.

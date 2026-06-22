@@ -319,6 +319,45 @@ function EmptyState({ icon, message }: { icon: ReactNode; message: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
+// Super-admin editor for the public website social links (footer icons).
+function SocialLinksAdmin() {
+  const FIELDS = [["linkedin", "LinkedIn"], ["instagram", "Instagram"], ["twitter", "X / Twitter"], ["youtube", "YouTube"], ["facebook", "Facebook"]] as const;
+  const [v, setV] = useState<Record<string, string>>({ linkedin: "", instagram: "", twitter: "", youtube: "", facebook: "" });
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    api.get<Record<string, string>>("/api/platform/social")
+      .then(d => setV({ linkedin: d.linkedin || "", instagram: d.instagram || "", twitter: d.twitter || "", youtube: d.youtube || "", facebook: d.facebook || "" }))
+      .catch(() => { /* keep blanks */ })
+      .finally(() => setLoaded(true));
+  }, []);
+  const save = async () => {
+    setSaving(true);
+    try { await api.put("/api/platform/social", v); toast.success("Social links updated — live on the website footer"); }
+    catch (err) { toast.error(errMsg(err)); }
+    finally { setSaving(false); }
+  };
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <h3 className="text-sm font-semibold mb-1">Social links (website footer)</h3>
+      <p className="text-xs text-[var(--color-muted)] mb-4">Full https:// URLs — shown as icons in the public footer. Leave a field blank to hide that icon.</p>
+      <div className="space-y-2.5">
+        {FIELDS.map(([k, label]) => (
+          <div key={k} className="flex items-center gap-3">
+            <label className="w-24 shrink-0 text-xs text-[var(--color-muted)]">{label}</label>
+            <input value={v[k]} onChange={e => setV(s => ({ ...s, [k]: e.target.value }))} placeholder="https://…"
+              className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+          </div>
+        ))}
+      </div>
+      <button onClick={save} disabled={saving || !loaded}
+        className="mt-4 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-[var(--color-bg)] disabled:opacity-50">
+        {saving ? "Saving…" : "Save social links"}
+      </button>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { user } = useAuth();
   const { setSelectedClient } = useApp();
@@ -545,15 +584,18 @@ export default function AdminPage() {
         )}
         {section === "audit" && <AuditSection rows={audit} loading={loadingAudit} />}
         {section === "platform" && (
-          <PlatformSection
-            stats={stats}
-            metrics={metrics}
-            companies={companies}
-            users={users}
-            onFindUser={gotoUsersWithSearch}
-            onBulkPlan={gotoCompaniesWithPlan}
-            onRefresh={() => { fetchOverview(); fetchCompanies(); fetchUsers(); }}
-          />
+          <div className="space-y-5">
+            <PlatformSection
+              stats={stats}
+              metrics={metrics}
+              companies={companies}
+              users={users}
+              onFindUser={gotoUsersWithSearch}
+              onBulkPlan={gotoCompaniesWithPlan}
+              onRefresh={() => { fetchOverview(); fetchCompanies(); fetchUsers(); }}
+            />
+            <SocialLinksAdmin />
+          </div>
         )}
       </div>
     </div>
