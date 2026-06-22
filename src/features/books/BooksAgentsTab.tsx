@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import {
   Bot, RefreshCw, Plus, Save, Trash2, Pencil, X, Send, Cpu, KeyRound,
   CheckCircle2, AlertCircle, Wrench, ChevronRight, ChevronDown, MessageSquare, Sparkles,
-  BookOpen, Upload, FileText, Check, ShieldAlert,
+  BookOpen, Upload, FileText, Check, ShieldAlert, Clock, Server, Cloud, Zap, LayoutGrid,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,6 +39,8 @@ interface PendingAction {
   label?: string;
 }
 
+type Schedule = "off" | "daily" | "weekly";
+
 interface Agent {
   id: string;
   name?: string;
@@ -46,6 +48,20 @@ interface Agent {
   model?: string | null;
   tools?: string[] | string | null;
   enabled?: boolean;
+  schedule?: Schedule | null;
+  schedule_hour?: number | null;
+  schedule_dow?: number | null;
+  trigger_prompt?: string | null;
+  last_run_at?: string | null;
+}
+
+interface AgentTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  instructions?: string;
+  tools?: string[];
+  suggestedModel?: string;
 }
 
 interface RunStep {
@@ -63,6 +79,9 @@ interface RunResponse {
 const DEFAULT_MODEL = "anthropic/claude-sonnet-4.6";
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_EMBED_MODEL = "openai/text-embedding-3-small";
+const SELFHOSTED_BASE_URL = "http://localhost:11434/v1";
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -83,6 +102,22 @@ function toolsOf(a: Agent): string[] {
     }
   }
   return [];
+}
+
+function hourLabel(h: number): string {
+  const hr = ((h % 24) + 24) % 24;
+  const ampm = hr < 12 ? "AM" : "PM";
+  const h12 = hr % 12 === 0 ? 12 : hr % 12;
+  return `${h12}:00 ${ampm}`;
+}
+
+function scheduleSummary(a: Agent): string | null {
+  const s = (a.schedule ?? "off") as Schedule;
+  if (s === "off") return null;
+  const h = hourLabel(a.schedule_hour ?? 9);
+  if (s === "daily") return `Daily at ${h}`;
+  const dow = a.schedule_dow ?? 1;
+  return `Weekly · ${WEEKDAYS[((dow % 7) + 7) % 7]} at ${h}`;
 }
 
 function pretty(v: unknown): string {
@@ -176,11 +211,15 @@ export default function BooksAgentsTab() {
 function EngineCard({ cfg, onChange }: { cfg: LlmConfig | null; onChange: (c: LlmConfig) => void }) {
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [baseUrl, setBaseUrl] = useState(DEFAULT_BASE_URL);
   const [embedModel, setEmbedModel] = useState(DEFAULT_EMBED_MODEL);
+
+  // Derive the active provider preset from the base URL.
+  const isSelfHosted = /localhost|127\.0\.0\.1|:11434|ollama/i.test(baseUrl);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -225,6 +264,24 @@ function EngineCard({ cfg, onChange }: { cfg: LlmConfig | null; onChange: (c: Ll
     }
   };
 
+  const test = async () => {
+    setTesting(true);
+    try {
+      const body: Record<string, unknown> = {
+        baseUrl: baseUrl.trim() || DEFAULT_BASE_URL,
+        model: model.trim() || DEFAULT_MODEL,
+      };
+      if (apiKey.trim()) body.apiKey = apiKey.trim();
+      const res = await api.post<{ ok?: boolean; error?: string }>("/api/books/agents/llm-config/test", body);
+      if (res?.ok) toast.success("Connection OK");
+      else toast.error(res?.error || "Connection failed");
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const connected = !!cfg?.hasKey;
 
   return (
@@ -249,10 +306,41 @@ function EngineCard({ cfg, onChange }: { cfg: LlmConfig | null; onChange: (c: Ll
         </div>
       </div>
 
+      {/* Provider preset toggle — prefills the base URL */}
+      <div className="mb-4">
+        <label className={labelCls}>Provider</label>
+        <div className="inline-flex rounded-lg border border-[var(--color-border)] overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setBaseUrl(DEFAULT_BASE_URL)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors ${
+              !isSelfHosted
+                ? "bg-[var(--color-primary)] text-[var(--color-bg)]"
+                : "text-[var(--color-muted)] hover:text-[var(--color-text)]"
+            }`}
+          >
+            <Cloud size={13} /> OpenRouter
+          </button>
+          <button
+            type="button"
+            onClick={() => setBaseUrl(SELFHOSTED_BASE_URL)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border-l border-[var(--color-border)] transition-colors ${
+              isSelfHosted
+                ? "bg-[var(--color-primary)] text-[var(--color-bg)]"
+                : "text-[var(--color-muted)] hover:text-[var(--color-text)]"
+            }`}
+          >
+            <Server size={13} /> Self-hosted (Pi/Ollama)
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-1">
           <label className={labelCls}>
-            <span className="inline-flex items-center gap-1"><KeyRound size={11} /> OpenRouter API key</span>
+            <span className="inline-flex items-center gap-1">
+              <KeyRound size={11} /> {isSelfHosted ? "API key (optional)" : "OpenRouter API key"}
+            </span>
           </label>
           <input
             type="password"
@@ -300,7 +388,11 @@ function EngineCard({ cfg, onChange }: { cfg: LlmConfig | null; onChange: (c: Ll
         The embedding model powers each agent's Knowledge search.
       </p>
 
-      <div className="flex justify-end mt-4">
+      <div className="flex justify-end gap-2 mt-4">
+        <button type="button" onClick={test} disabled={testing || saving} className={btnGhost}>
+          {testing ? <RefreshCw size={12} className="animate-spin" /> : <Zap size={12} />}
+          Test connection
+        </button>
         <button type="button" onClick={save} disabled={saving} className={btnPrimary}>
           {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
           Save engine
@@ -328,6 +420,26 @@ function AgentsManager({
 }) {
   const [editing, setEditing] = useState<Agent | "new" | null>(null);
 
+  // After cloning a template the list reloads; we want to open the new agent in
+  // the editor. We stash its id and pick it up once it appears in `agents`.
+  const [openId, setOpenId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!openId) return;
+    const found = agents.find((a) => a.id === openId);
+    if (found) {
+      setEditing(found);
+      setOpenId(null);
+    }
+  }, [openId, agents]);
+
+  const onCloned = useCallback(
+    async (created: Agent) => {
+      setOpenId(created.id);
+      await reload();
+    },
+    [reload]
+  );
+
   return (
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
       <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
@@ -343,6 +455,8 @@ function AgentsManager({
           </button>
         </div>
       </div>
+
+      <TemplatesGallery onCloned={onCloned} />
 
       {editing && (
         <div className="px-4 py-4 border-b border-[var(--color-border)] bg-[var(--color-bg)]">
@@ -379,6 +493,116 @@ function AgentsManager({
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TEMPLATES GALLERY — curated starting points; clone -> open in editor
+// ─────────────────────────────────────────────────────────────────────────────
+function TemplatesGallery({ onCloned }: { onCloned: (created: Agent) => Promise<void> }) {
+  const [templates, setTemplates] = useState<AgentTemplate[]>([]);
+  const [busy, setBusy] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [cloningId, setCloningId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try {
+      const rows = await api.get<AgentTemplate[]>("/api/books/agents/templates");
+      setTemplates(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      toast.error(errMsg(e));
+      setTemplates([]);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const use = async (t: AgentTemplate) => {
+    setCloningId(t.id);
+    try {
+      const created = await api.post<Agent>(`/api/books/agents/templates/${t.id}/clone`, {});
+      toast.success(`Created "${created?.name || t.name}" from template`);
+      await onCloned(created);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setCloningId(null);
+    }
+  };
+
+  // Hide entirely if the endpoint yields nothing.
+  if (!busy && templates.length === 0) return null;
+
+  return (
+    <div className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-[var(--color-surface)] transition-colors"
+      >
+        <span className="text-xs font-semibold flex items-center gap-1.5 text-[var(--color-muted)]">
+          <LayoutGrid size={13} className="text-[var(--color-primary)]" /> Start from a template
+          {templates.length > 0 && (
+            <span className="text-[10px] font-normal">({templates.length})</span>
+          )}
+        </span>
+        {open ? <ChevronDown size={14} className="text-[var(--color-muted)]" /> : <ChevronRight size={14} className="text-[var(--color-muted)]" />}
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4">
+          {busy ? (
+            <div className="text-xs text-[var(--color-muted)] py-3">Loading templates…</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {templates.map((t) => (
+                <div
+                  key={t.id}
+                  className="flex flex-col border border-[var(--color-border)] rounded-lg bg-[var(--color-surface)] p-3"
+                >
+                  <div className="text-sm font-semibold flex items-center gap-1.5">
+                    <Sparkles size={13} className="text-[var(--color-primary)] shrink-0" />
+                    {t.name}
+                  </div>
+                  {t.description && (
+                    <p className="text-xs text-[var(--color-muted)] mt-1 flex-1 leading-relaxed">{t.description}</p>
+                  )}
+                  {Array.isArray(t.tools) && t.tools.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {t.tools.slice(0, 4).map((tool) => (
+                        <span
+                          key={tool}
+                          className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-muted)]"
+                        >
+                          <Wrench size={9} /> {tool}
+                        </span>
+                      ))}
+                      {t.tools.length > 4 && (
+                        <span className="text-[10px] text-[var(--color-muted)]">+{t.tools.length - 4}</span>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => use(t)}
+                    disabled={cloningId === t.id}
+                    className={`${btnGhost} mt-3 justify-center`}
+                  >
+                    {cloningId === t.id ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}
+                    Use template
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AgentRow({ agent: a, onEdit, reload }: { agent: Agent; onEdit: () => void; reload: () => Promise<void> }) {
   const [showKnowledge, setShowKnowledge] = useState(false);
   const tools = toolsOf(a);
@@ -395,6 +619,11 @@ function AgentRow({ agent: a, onEdit, reload }: { agent: Agent; onEdit: () => vo
                     )}
                     {a.model && (
                       <span className="text-[11px] font-mono text-[var(--color-muted)]">{a.model}</span>
+                    )}
+                    {scheduleSummary(a) && (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-[var(--color-primary)] border border-[var(--color-primary)]/40 rounded-full px-1.5 py-0.5">
+                        <Clock size={9} /> {scheduleSummary(a)}
+                      </span>
                     )}
                   </div>
                   {a.instructions && (
@@ -624,6 +853,12 @@ function AgentEditor({
   const [tools, setTools] = useState<string[]>(agent ? toolsOf(agent) : []);
   const [saving, setSaving] = useState(false);
 
+  // Schedule controls
+  const [schedule, setSchedule] = useState<Schedule>((agent?.schedule as Schedule) || "off");
+  const [scheduleHour, setScheduleHour] = useState<number>(agent?.schedule_hour ?? 9);
+  const [scheduleDow, setScheduleDow] = useState<number>(agent?.schedule_dow ?? 1);
+  const [triggerPrompt, setTriggerPrompt] = useState(agent?.trigger_prompt ?? "");
+
   const toggleTool = (t: string) => {
     setTools((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
   };
@@ -639,6 +874,10 @@ function AgentEditor({
       instructions: instructions.trim(),
       model: model.trim() || null,
       tools,
+      schedule,
+      schedule_hour: scheduleHour,
+      schedule_dow: schedule === "weekly" ? scheduleDow : null,
+      trigger_prompt: triggerPrompt.trim() || null,
     };
     try {
       if (agent) {
@@ -737,6 +976,73 @@ function AgentEditor({
               );
             })}
           </div>
+        )}
+      </div>
+
+      {/* Schedule — autonomous, read-only runs */}
+      <div className="border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-surface)] space-y-3">
+        <div className="text-xs font-semibold flex items-center gap-1.5 text-[var(--color-muted)]">
+          <Clock size={12} className="text-[var(--color-primary)]" /> Schedule
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className={labelCls}>Run</label>
+            <select
+              value={schedule}
+              onChange={(e) => setSchedule(e.target.value as Schedule)}
+              className={inputCls}
+            >
+              <option value="off">Off</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          {schedule !== "off" && (
+            <div>
+              <label className={labelCls}>At hour</label>
+              <select
+                value={scheduleHour}
+                onChange={(e) => setScheduleHour(Number(e.target.value))}
+                className={inputCls}
+              >
+                {Array.from({ length: 24 }, (_, h) => (
+                  <option key={h} value={h}>{hourLabel(h)}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {schedule === "weekly" && (
+            <div>
+              <label className={labelCls}>Day of week</label>
+              <select
+                value={scheduleDow}
+                onChange={(e) => setScheduleDow(Number(e.target.value))}
+                className={inputCls}
+              >
+                {WEEKDAYS.map((d, i) => (
+                  <option key={d} value={i}>{d}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+        {schedule !== "off" && (
+          <>
+            <div>
+              <label className={labelCls}>Trigger prompt (optional)</label>
+              <textarea
+                value={triggerPrompt}
+                onChange={(e) => setTriggerPrompt(e.target.value)}
+                rows={2}
+                placeholder="What should the agent do on each scheduled run? e.g. Summarise overdue invoices and draft reminders. Leave blank for a sensible default."
+                className={`${inputCls} resize-y leading-relaxed`}
+              />
+            </div>
+            <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5">
+              <ShieldAlert size={12} className="text-amber-400 shrink-0 mt-0.5" />
+              Scheduled runs are read-only — any actions that change data are saved as pending approvals for you to review later, not executed automatically.
+            </p>
+          </>
         )}
       </div>
 

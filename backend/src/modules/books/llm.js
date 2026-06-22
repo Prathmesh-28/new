@@ -95,10 +95,24 @@ async function _resolveSecret(tenantId) {
   };
 }
 
+// --- usage --------------------------------------------------------------------
+// Normalize a provider response's data.usage into a stable shape. OpenAI-compatible
+// endpoints (OpenRouter included) return { prompt_tokens, completion_tokens,
+// total_tokens }; any field may be absent, so default each to 0.
+function parseUsage(data) {
+  const u = (data && data.usage) || {};
+  const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  return {
+    prompt_tokens: n(u.prompt_tokens),
+    completion_tokens: n(u.completion_tokens),
+    total_tokens: n(u.total_tokens),
+  };
+}
+
 // --- chat ---------------------------------------------------------------------
 // Maps our { system, messages, tools } onto an OpenAI chat-completions request and
-// returns the assistant message { content, tool_calls }. Throws PostError on any
-// non-2xx so callers get a consistent, surfaceable error.
+// returns the assistant message { content, tool_calls, usage }. Throws PostError on
+// any non-2xx so callers get a consistent, surfaceable error.
 async function chat(tenantId, { system, messages = [], tools, model: modelOverride } = {}) {
   const { baseUrl, model: tenantModel, key } = await _resolveSecret(tenantId);
   const model = modelOverride || tenantModel;   // per-agent model override wins
@@ -141,7 +155,7 @@ async function chat(tenantId, { system, messages = [], tools, model: modelOverri
   const data = await resp.json();
   const msg = data && data.choices && data.choices[0] && data.choices[0].message;
   if (!msg) throw new PostError("LLM_ERROR", "LLM returned no message", 502);
-  return { content: msg.content || "", tool_calls: msg.tool_calls };
+  return { content: msg.content || "", tool_calls: msg.tool_calls, usage: parseUsage(data) };
 }
 
 // --- embeddings ---------------------------------------------------------------
@@ -182,6 +196,9 @@ async function embed(tenantId, texts) {
     if (!Array.isArray(r.embedding)) throw new PostError("EMBED_ERROR", "Embedding provider returned no vector", 502);
     out[idx] = r.embedding.map(Number);
   }
+  // Vectors stay the primary return value (number[][]); expose usage non-enumerably
+  // so existing callers that index/iterate the array are unaffected.
+  Object.defineProperty(out, "usage", { value: parseUsage(data), enumerable: false });
   return out;
 }
 

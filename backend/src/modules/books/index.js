@@ -35,6 +35,7 @@ const billofentry = require("./billofentry");
 const agents = require("./agents");
 const llm = require("./llm");
 const agentrag = require("./agentrag");
+const agenttemplates = require("./agenttemplates");
 const reposting = require("./reposting");
 const landedcost = require("./landedcost");
 const rules = require("./rules");
@@ -87,6 +88,7 @@ module.exports = {
   agents,
   llm,
   agentrag,
+  agenttemplates,
   rules,
   integrity,
   settlement,

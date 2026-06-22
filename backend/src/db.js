@@ -643,6 +643,12 @@ async function initDb() {
       updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_book_agents ON book_agents(tenant_id, created_at DESC);
+    -- Phase 3: scheduled/triggered autonomous runs.
+    ALTER TABLE book_agents ADD COLUMN IF NOT EXISTS schedule      TEXT DEFAULT 'off';
+    ALTER TABLE book_agents ADD COLUMN IF NOT EXISTS schedule_hour INT DEFAULT 9;
+    ALTER TABLE book_agents ADD COLUMN IF NOT EXISTS schedule_dow  INT;
+    ALTER TABLE book_agents ADD COLUMN IF NOT EXISTS trigger_prompt TEXT;
+    ALTER TABLE book_agents ADD COLUMN IF NOT EXISTS last_run_at   TIMESTAMPTZ;
     CREATE TABLE IF NOT EXISTS book_agent_runs (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       tenant_id  TEXT NOT NULL,

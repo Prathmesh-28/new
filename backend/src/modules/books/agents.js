@@ -28,12 +28,20 @@ async function getAgent(tenantId, id) {
   return rows[0];
 }
 
+// Normalise a schedule value to one of the accepted modes; anything else → 'off'.
+function _normSchedule(v) {
+  const s = String(v == null ? "off" : v).trim().toLowerCase();
+  return s === "daily" || s === "weekly" ? s : "off";
+}
+
 async function createAgent(tenantId, d) {
   d = d || {};
   if (!d.name) throw new PostError("BAD_INPUT", "name required", 400);
   const { rows } = await pool.query(
-    `INSERT INTO book_agents(tenant_id,name,instructions,model,tools,enabled,created_by)
-     VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    `INSERT INTO book_agents
+       (tenant_id,name,instructions,model,tools,enabled,created_by,
+        schedule,schedule_hour,schedule_dow,trigger_prompt)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
     [
       tenantId,
       d.name,
@@ -42,6 +50,10 @@ async function createAgent(tenantId, d) {
       JSON.stringify(Array.isArray(d.tools) ? d.tools : []),
       d.enabled === false ? false : true,
       d.createdBy || d.created_by || null,
+      _normSchedule(d.schedule),
+      d.scheduleHour ?? d.schedule_hour ?? 9,
+      d.scheduleDow ?? d.schedule_dow ?? null,
+      d.triggerPrompt ?? d.trigger_prompt ?? null,
     ]
   );
   return rows[0];
@@ -51,6 +63,12 @@ async function updateAgent(tenantId, id, patch) {
   patch = patch || {};
   const tools = patch.tools === undefined ? null
     : JSON.stringify(Array.isArray(patch.tools) ? patch.tools : []);
+  // schedule is normalised only when present in the patch (so COALESCE keeps the
+  // stored value when the caller doesn't touch it).
+  const schedule = (patch.schedule === undefined) ? null : _normSchedule(patch.schedule);
+  const scheduleHour = patch.scheduleHour ?? patch.schedule_hour ?? null;
+  const scheduleDow = patch.scheduleDow ?? patch.schedule_dow ?? null;
+  const triggerPrompt = patch.triggerPrompt ?? patch.trigger_prompt ?? null;
   const { rows } = await pool.query(
     `UPDATE book_agents SET
         name=COALESCE($3,name),
@@ -58,6 +76,10 @@ async function updateAgent(tenantId, id, patch) {
         model=COALESCE($5,model),
         tools=COALESCE($6,tools),
         enabled=COALESCE($7,enabled),
+        schedule=COALESCE($8,schedule),
+        schedule_hour=COALESCE($9,schedule_hour),
+        schedule_dow=COALESCE($10,schedule_dow),
+        trigger_prompt=COALESCE($11,trigger_prompt),
         updated_at=now()
       WHERE tenant_id=$1 AND id=$2 RETURNING *`,
     [
@@ -67,6 +89,10 @@ async function updateAgent(tenantId, id, patch) {
       patch.model ?? null,
       tools,
       patch.enabled ?? null,
+      schedule,
+      scheduleHour,
+      scheduleDow,
+      triggerPrompt,
     ]
   );
   if (!rows[0]) throw new PostError("NOT_FOUND", "Agent not found", 404);
@@ -93,6 +119,58 @@ async function runAgent(tenantId, actorId, agentId, userMessage) {
   const agent = await getAgent(tenantId, agentId);
   if (agent.enabled === false) throw new PostError("AGENT_DISABLED", "This agent is disabled", 422);
 
+  const runId = _newRunId();
+  const steps = [];
+  const pendingActions = [];
+  let reply = null;
+  let status = "ok";
+  let totalTokens = 0;
+
+  try {
+    const out = await _driveLoop(tenantId, actorId, agent, userMessage, steps, pendingActions, false);
+    reply = out.reply;
+    totalTokens = out.totalTokens;
+  } catch (e) {
+    status = "error";
+    reply = e.message || String(e);
+    await persistRun(tenantId, agentId, actorId, userMessage, reply, steps, status);
+    await _recordUsage(tenantId, runId, totalTokens);
+    throw e;
+  }
+
+  await persistRun(tenantId, agentId, actorId, userMessage, reply, steps, status);
+  // Best-effort token metering — must never throw or affect the run's result.
+  await _recordUsage(tenantId, runId, totalTokens);
+  return { reply, steps, pendingActions };
+}
+
+// Generate a stable per-run id used as the usage dedupKey (the runs table assigns
+// its own UUID, so we keep an independent token-meter key here).
+function _newRunId() {
+  return `agentrun_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// Record agent token usage for the tenant. Best-effort: ingestUsage may reject (it
+// requires a subscriptionId) or the table may be unavailable — either way we swallow
+// it so metering never breaks or aborts an agent run.
+async function _recordUsage(tenantId, runId, totalTokens) {
+  try {
+    await require("./usage").ingestUsage(tenantId, {
+      metric: "agent_tokens",
+      value: totalTokens || 0,
+      dedupKey: runId,
+    });
+  } catch (_) {
+    // metering is best-effort; ignore.
+  }
+}
+
+// Shared tool-use loop. Drives the OpenAI-style turn loop, executing READ tools
+// inline and collecting WRITE tools as pendingActions. `readOnly` (used by scheduled
+// autonomous runs) forces ALL write tools to be recorded for human approval and never
+// executed — the inline path already does this, so readOnly is reserved for clarity
+// and to forbid any future inline-write behaviour. Returns { reply, totalTokens }.
+async function _driveLoop(tenantId, actorId, agent, userMessage, steps, pendingActions, readOnly) {
   const llm = require("./llm");
   const tools = require("./agenttools");
   const rag = require("./agentrag");
@@ -101,89 +179,82 @@ async function runAgent(tenantId, actorId, agentId, userMessage) {
   // Retrieve relevant knowledge for this query and prepend it to the system
   // prompt. retrieve() degrades to "" and never throws, so this never breaks a run.
   let system = agent.instructions || "";
-  const ctx = await rag.retrieve(tenantId, agentId, userMessage, 5);
+  const ctx = await rag.retrieve(tenantId, agent.id, userMessage, 5);
   if (ctx) {
     system = `${system}\n\n--- Relevant knowledge (retrieved from this agent's documents; cite it when useful) ---\n${ctx}`;
   }
 
   const messages = [{ role: "user", content: userMessage }];
-  const steps = [];
-  const pendingActions = [];
   let reply = null;
-  let status = "ok";
+  let totalTokens = 0;
 
-  try {
-    for (let i = 0; i < MAX_STEPS; i++) {
-      const message = await llm.chat(tenantId, {
-        system,
-        messages,
-        tools: tools.toolSchemas(allowed),
-        model: agent.model || undefined,
-      });
+  for (let i = 0; i < MAX_STEPS; i++) {
+    const message = await llm.chat(tenantId, {
+      system,
+      messages,
+      tools: tools.toolSchemas(allowed),
+      model: agent.model || undefined,
+    });
+    totalTokens += (message && message.usage && Number(message.usage.total_tokens)) || 0;
 
-      const toolCalls = message && message.tool_calls;
-      if (!toolCalls || !toolCalls.length) {
-        reply = (message && message.content) || "";
-        break;
-      }
-
-      // Keep the assistant turn (with its tool_calls) before the tool replies.
-      messages.push({
-        role: "assistant",
-        content: message.content || null,
-        tool_calls: toolCalls,
-      });
-
-      for (const call of toolCalls) {
-        const fn = (call && call.function) || {};
-        const name = fn.name;
-        let args = {};
-        let result;
-        let parseError = false;
-        try {
-          args = fn.arguments ? JSON.parse(fn.arguments) : {};
-        } catch (e) {
-          args = {};
-          result = { error: `Bad tool arguments: ${e.message}` };
-          parseError = true;
-        }
-
-        // WRITE tools are NEVER executed inline — collect them for human approval
-        // and feed the model an "awaiting_approval" result so it stops retrying.
-        if (!parseError && tools.isWrite(name)) {
-          const id = `pa_${Date.now().toString(36)}_${pendingActions.length}`;
-          const label = describeAction(name, args);
-          pendingActions.push({ id, tool: name, args, label });
-          result = { status: "awaiting_approval", message: "This action needs human approval before it runs.", tool: name };
-        } else if (result === undefined) {
-          // READ tool — execute inline. A bad tool must never abort the run.
-          try {
-            result = await tools.runTool(tenantId, name, args, actorId);
-          } catch (e) {
-            result = { error: e.message || String(e) };
-          }
-        }
-
-        steps.push({ tool: name, args, result });
-        messages.push({
-          role: "tool",
-          tool_call_id: call.id,
-          content: JSON.stringify(result),
-        });
-      }
+    const toolCalls = message && message.tool_calls;
+    if (!toolCalls || !toolCalls.length) {
+      reply = (message && message.content) || "";
+      break;
     }
 
-    // Loop exhausted without a prose answer.
-    if (reply === null) reply = "";
-  } catch (e) {
-    status = "error";
-    reply = e.message || String(e);
-    await persistRun(tenantId, agentId, actorId, userMessage, reply, steps, status);
-    throw e;
+    // Keep the assistant turn (with its tool_calls) before the tool replies.
+    messages.push({
+      role: "assistant",
+      content: message.content || null,
+      tool_calls: toolCalls,
+    });
+
+    for (const call of toolCalls) {
+      const fn = (call && call.function) || {};
+      const name = fn.name;
+      let args = {};
+      let result;
+      let parseError = false;
+      try {
+        args = fn.arguments ? JSON.parse(fn.arguments) : {};
+      } catch (e) {
+        args = {};
+        result = { error: `Bad tool arguments: ${e.message}` };
+        parseError = true;
+      }
+
+      // WRITE tools are NEVER executed inline — collect them for human approval
+      // and feed the model an "awaiting_approval" result so it stops retrying.
+      // (readOnly is true for autonomous scheduled runs; the inline path is already
+      // read-only for writes, so behaviour is identical either way — writes are
+      // never executed without an explicit confirmAction call.)
+      if (!parseError && tools.isWrite(name)) {
+        const id = `pa_${Date.now().toString(36)}_${pendingActions.length}`;
+        const label = describeAction(name, args);
+        pendingActions.push({ id, tool: name, args, label });
+        result = { status: "awaiting_approval", message: "This action needs human approval before it runs.", tool: name };
+      } else if (result === undefined) {
+        // READ tool — execute inline. A bad tool must never abort the run.
+        try {
+          result = await tools.runTool(tenantId, name, args, actorId);
+        } catch (e) {
+          result = { error: e.message || String(e) };
+        }
+      }
+
+      steps.push({ tool: name, args, result });
+      messages.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify(result),
+      });
+    }
   }
 
-  await persistRun(tenantId, agentId, actorId, userMessage, reply, steps, status);
-  return { reply, steps, pendingActions };
+  // Loop exhausted without a prose answer.
+  if (reply === null) reply = "";
+  return { reply, totalTokens };
 }
 
 // Human-readable one-liner for a pending write action, shown on the approval card.
@@ -244,12 +315,117 @@ async function confirmAction(tenantId, actorId, payload = {}) {
   return result;
 }
 
-async function persistRun(tenantId, agentId, actorId, input, reply, steps, status) {
+// ── Scheduled autonomous runs (GLOBAL scan) ───────────────────────────────────
+// Default prompt used when a scheduled agent has no trigger_prompt set.
+const DEFAULT_TRIGGER_PROMPT =
+  "Run your scheduled review now. Use your read tools to assess the current state " +
+  "of the books and report anything that needs attention. Do not make changes.";
+
+// Is a scheduled agent DUE at `now`? daily: the configured hour matches now's hour
+// and it hasn't already run today. weekly: the configured day-of-week and hour both
+// match and it hasn't run since the start of this week. Times are evaluated in the
+// process/server local timezone (consistent with new Date()).
+function _isDue(agent, now) {
+  const sched = String(agent.schedule || "off").toLowerCase();
+  if (sched !== "daily" && sched !== "weekly") return false;
+  const hour = agent.schedule_hour == null ? 9 : Number(agent.schedule_hour);
+  if (Number(now.getHours()) !== hour) return false;
+
+  const last = agent.last_run_at ? new Date(agent.last_run_at) : null;
+
+  if (sched === "daily") {
+    // Not already run today.
+    return !(last && _sameDay(last, now));
+  }
+  // weekly: right day-of-week, and not run since the start of this week.
+  if (Number(now.getDay()) !== Number(agent.schedule_dow)) return false;
+  if (!last) return true;
+  return last < _startOfWeek(now);
+}
+
+function _sameDay(a, b) {
+  return a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
+}
+
+// Midnight at the start of `now`'s week (week starts Sunday, matching getDay()).
+function _startOfWeek(now) {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  d.setDate(d.getDate() - d.getDay());
+  return d;
+}
+
+// GLOBAL scan across all tenants: find enabled agents whose schedule is due at
+// `now` and run each autonomously. Autonomous runs are READ-ONLY — any write tool
+// the model requests is recorded as a pendingAction in the run row for a human to
+// approve later (via confirmAction), never executed here. last_run_at is advanced
+// to `now` for each agent that runs (so it won't re-fire this window). A failure in
+// one agent never stops the scan. Returns { ran, skipped }.
+async function runScheduledAgents(now = new Date()) {
+  let ran = 0;
+  let skipped = 0;
+  let candidates = [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM book_agents WHERE enabled=true AND schedule IS NOT NULL AND schedule<>'off'`
+    );
+    candidates = rows;
+  } catch (_) {
+    return { ran, skipped };
+  }
+
+  for (const agent of candidates) {
+    if (!_isDue(agent, now)) { skipped++; continue; }
+    const tenantId = agent.tenant_id;
+    const prompt = (agent.trigger_prompt && String(agent.trigger_prompt).trim())
+      ? agent.trigger_prompt : DEFAULT_TRIGGER_PROMPT;
+    const runId = _newRunId();
+    const steps = [];
+    const pendingActions = [];
+    let reply = null;
+    let status = "scheduled";
+    let totalTokens = 0;
+
+    try {
+      const out = await _driveLoop(tenantId, agent.created_by || null, agent, prompt, steps, pendingActions, true);
+      reply = out.reply;
+      totalTokens = out.totalTokens;
+    } catch (e) {
+      status = "error";
+      reply = e.message || String(e);
+    }
+
+    // Persist the run (with any pendingActions for later human approval), meter
+    // tokens, and advance last_run_at — each step best-effort so one failure can't
+    // stall the rest of the global scan.
+    await persistRun(tenantId, agent.id, agent.created_by || null, prompt, reply, steps, status, pendingActions);
+    await _recordUsage(tenantId, runId, totalTokens);
+    try {
+      await pool.query(
+        "UPDATE book_agents SET last_run_at=$3 WHERE tenant_id=$1 AND id=$2",
+        [tenantId, agent.id, now.toISOString()]
+      );
+    } catch (_) { /* best-effort */ }
+    ran++;
+  }
+
+  return { ran, skipped };
+}
+
+async function persistRun(tenantId, agentId, actorId, input, reply, steps, status, pendingActions) {
+  // pendingActions (autonomous scheduled runs) have no dedicated column, so they
+  // ride along inside the steps JSONB as a single trailing marker entry. This keeps
+  // them durably in the run row where a human approval UI can read them back.
+  let stepsPayload = Array.isArray(steps) ? steps.slice() : [];
+  if (Array.isArray(pendingActions) && pendingActions.length) {
+    stepsPayload.push({ pendingActions });
+  }
   try {
     await pool.query(
       `INSERT INTO book_agent_runs(tenant_id,agent_id,actor_id,input,reply,steps,status)
        VALUES($1,$2,$3,$4,$5,$6,$7)`,
-      [tenantId, agentId, actorId || null, input, reply, JSON.stringify(steps || []), status]
+      [tenantId, agentId, actorId || null, input, reply, JSON.stringify(stepsPayload), status]
     );
   } catch (_) {
     // Persistence is best-effort audit; never let it mask the run's outcome.
@@ -258,4 +434,5 @@ async function persistRun(tenantId, agentId, actorId, input, reply, steps, statu
 
 module.exports = {
   createAgent, listAgents, getAgent, updateAgent, deleteAgent, runAgent, confirmAction,
+  runScheduledAgents,
 };

@@ -51,7 +51,8 @@ function parseTs(v, label) {
 // at-least-once event pipelines never double-count usage.
 async function ingestUsage(tenantId, { subscriptionId, metric, value, eventTime, dedupKey } = {}) {
   if (!tenantId) throw new PostError("BAD_INPUT", "tenantId required", 400);
-  if (!subscriptionId) throw new PostError("BAD_INPUT", "subscriptionId required", 422);
+  // subscriptionId is optional: subscription metering passes it; platform metering
+  // (e.g. agent token usage) records subscription-less events (column is nullable).
   if (!metric || !String(metric).trim()) throw new PostError("BAD_INPUT", "metric required", 422);
   const val = money(value == null ? 0 : value);
   if (val.lessThan(0)) throw new PostError("BAD_AMOUNT", "value cannot be negative", 422);
@@ -61,9 +62,9 @@ async function ingestUsage(tenantId, { subscriptionId, metric, value, eventTime,
   const { rows } = await pool.query(
     `INSERT INTO book_usage_events(tenant_id, subscription_id, metric, value, event_time, dedup_key)
        VALUES($1,$2,$3,$4,COALESCE($5::timestamptz, now()),$6)
-     ON CONFLICT (tenant_id, dedup_key) DO NOTHING
+     ON CONFLICT (tenant_id, dedup_key) WHERE dedup_key IS NOT NULL DO NOTHING
      RETURNING id, subscription_id, metric, value, event_time, dedup_key, created_at`,
-    [tenantId, subscriptionId, String(metric).trim(), toDb(val), ts, dk]
+    [tenantId, subscriptionId || null, String(metric).trim(), toDb(val), ts, dk]
   );
 
   if (rows[0]) return { ...rows[0], deduplicated: false };

@@ -428,6 +428,12 @@ initDb()
     }, { timezone: "UTC" });
     // Books: durable e-invoice worker (registers QUEUED vouchers with the GSP).
     require("./modules/books/einvoice").startWorker();
+    // SMB agents: run scheduled (daily/weekly) agents each hour — read-only autonomous runs.
+    cron.schedule("0 * * * *", () => {
+      require("./modules/books").agents.runScheduledAgents(new Date())
+        .then(r => { if (r && r.ran) console.log(`[agents] ran ${r.ran} scheduled agent(s)`); })
+        .catch(err => console.error("[agents-scheduled]", err.message));
+    }, { timezone: "UTC" });
     // Overdue-invoice reminders daily at 08:30 IST (03:00 UTC) — raises in-app alerts.
     cron.schedule("0 3 * * *", () => {
       require("./lib/reminders").runOverdueReminders()
