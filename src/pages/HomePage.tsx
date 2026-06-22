@@ -9,6 +9,7 @@ import {
 import { initHero3D } from "@/animations/hero3d";
 import Logo from "@/components/Logo";
 import SocialLinks from "@/components/SocialLinks";
+import { usePlatformSettings } from "@/lib/usePlatformSettings";
 
 /* ─── Colour tokens ─── */
 const C = {
@@ -156,6 +157,7 @@ function IconTile({ icon: Icon, size = 44, dark = false }: { icon: LucideIcon; s
 export default function HomePage() {
   useSeo({ title: "Headroom — GST Billing, Accounting & Cash-Flow Software for Indian SMBs", description: "All-in-one finance platform for Indian SMBs — GST billing & e-invoicing, double-entry accounting, GST/TDS filing, invoicing, collections, payroll and 90-day cash-flow forecasts. Your CA works in it too. Free to start." });
   const navigate = useNavigate();
+  const platform = usePlatformSettings(); // super-admin-controlled footer links, banner, contact
   const [scrolled, setScrolled] = useState(false);
   const [inr] = useState(() => !detectUS()); // India-first: ₹ by default, $ only for US visitors
 
@@ -797,8 +799,8 @@ export default function HomePage() {
         <div style={{ borderTop: "1px solid rgba(169,217,188,0.06)", padding: "18px 48px", display: "flex", justifyContent: "space-between", alignItems: "center", maxWidth: 1100, margin: "0 auto" }}>
           <span style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.25)" }}>© {new Date().getFullYear()} Headroom Technologies Pvt. Ltd.</span>
           <div style={{ display: "flex", gap: 24 }}>
-            {["Privacy","Terms","Security"].map(l => (
-              <a key={l} href="#" style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.25)", textDecoration: "none" }}>{l}</a>
+            {([["Privacy", platform.links?.privacyUrl], ["Terms", platform.links?.termsUrl], ["Security", platform.links?.securityUrl]] as [string, string | undefined][]).map(([l, url]) => (
+              <a key={l} href={url || "#"} {...(url ? { target: "_blank", rel: "noopener noreferrer" } : {})} style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.25)", textDecoration: "none" }}>{l}</a>
             ))}
           </div>
         </div>

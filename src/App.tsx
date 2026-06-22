@@ -13,6 +13,7 @@ import AppTopMeta from "@/components/AppTopMeta";
 import OfflineBanner from "@/components/OfflineBanner";
 import TenantSwitcher from "@/components/TenantSwitcher";
 import ReadOnlyBanner from "@/components/ReadOnlyBanner";
+import AnnouncementBanner from "@/components/AnnouncementBanner";
 import HeadroomAssistant from "@/components/HeadroomAssistant";
 import AppLockGate from "@/components/AppLockGate";
 import InstallPrompt from "@/components/InstallPrompt";
@@ -214,6 +215,7 @@ function AppShell() {
           no offset on md+ where the desktop sidebar is used. */}
       <div className="flex-1 flex flex-col min-w-0 pt-12 md:pt-0">
         <OfflineBanner />
+        <AnnouncementBanner />
         <TenantSwitcher />
         <ReadOnlyBanner />
         <PreviewBanner />

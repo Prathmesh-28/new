@@ -319,41 +319,60 @@ function EmptyState({ icon, message }: { icon: ReactNode; message: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
-// Super-admin editor for the public website social links (footer icons).
-function SocialLinksAdmin() {
-  const FIELDS = [["linkedin", "LinkedIn"], ["instagram", "Instagram"], ["twitter", "X / Twitter"], ["youtube", "YouTube"], ["facebook", "Facebook"]] as const;
-  const [v, setV] = useState<Record<string, string>>({ linkedin: "", instagram: "", twitter: "", youtube: "", facebook: "" });
-  const [saving, setSaving] = useState(false);
+// Super-admin editor for all super-admin-editable platform settings — social links,
+// brand/contact, footer legal links, and the site-wide announcement banner. Each card
+// PUTs its own group to /api/platform/settings/:group and goes live immediately.
+interface PlatformGroup { title: string; hint: string; fields: [string, string][]; toggle?: string }
+const PLATFORM_GROUPS: Record<string, PlatformGroup> = {
+  brand: { title: "Brand & contact", hint: "Company identity used in the footer and documents.", fields: [["companyName", "Company name"], ["supportEmail", "Support email"], ["salesEmail", "Sales email"], ["phone", "Phone"], ["address", "Address"], ["tagline", "Tagline"]] },
+  social: { title: "Social links (footer icons)", hint: "Full https:// URLs. Blank hides that icon.", fields: [["linkedin", "LinkedIn"], ["instagram", "Instagram"], ["twitter", "X / Twitter"], ["youtube", "YouTube"], ["facebook", "Facebook"]] },
+  links: { title: "Footer legal links", hint: "Privacy / Terms / Security URLs shown in the footer.", fields: [["privacyUrl", "Privacy URL"], ["termsUrl", "Terms URL"], ["securityUrl", "Security URL"]] },
+  banner: { title: "Announcement banner", hint: "A site-wide banner (shown in-app). Off by default.", toggle: "enabled", fields: [["text", "Banner text"], ["linkUrl", "Link URL"], ["linkLabel", "Link label"]] },
+};
+
+function PlatformSettingsAdmin() {
+  const [data, setData] = useState<Record<string, Record<string, any>>>({});
+  const [saving, setSaving] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    api.get<Record<string, string>>("/api/platform/social")
-      .then(d => setV({ linkedin: d.linkedin || "", instagram: d.instagram || "", twitter: d.twitter || "", youtube: d.youtube || "", facebook: d.facebook || "" }))
-      .catch(() => { /* keep blanks */ })
-      .finally(() => setLoaded(true));
+    api.get<Record<string, Record<string, any>>>("/api/platform/settings")
+      .then(d => setData(d || {})).catch(() => { /* keep blanks */ }).finally(() => setLoaded(true));
   }, []);
-  const save = async () => {
-    setSaving(true);
-    try { await api.put("/api/platform/social", v); toast.success("Social links updated — live on the website footer"); }
+  const set = (g: string, k: string, v: any) => setData(s => ({ ...s, [g]: { ...(s[g] || {}), [k]: v } }));
+  const save = async (g: string) => {
+    setSaving(g);
+    try { const res = await api.put<Record<string, any>>(`/api/platform/settings/${g}`, data[g] || {}); setData(s => ({ ...s, [g]: res })); toast.success("Saved — live now"); }
     catch (err) { toast.error(errMsg(err)); }
-    finally { setSaving(false); }
+    finally { setSaving(null); }
   };
+  if (!loaded) return <div className="text-xs text-[var(--color-muted)]">Loading platform settings…</div>;
   return (
-    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-      <h3 className="text-sm font-semibold mb-1">Social links (website footer)</h3>
-      <p className="text-xs text-[var(--color-muted)] mb-4">Full https:// URLs — shown as icons in the public footer. Leave a field blank to hide that icon.</p>
-      <div className="space-y-2.5">
-        {FIELDS.map(([k, label]) => (
-          <div key={k} className="flex items-center gap-3">
-            <label className="w-24 shrink-0 text-xs text-[var(--color-muted)]">{label}</label>
-            <input value={v[k]} onChange={e => setV(s => ({ ...s, [k]: e.target.value }))} placeholder="https://…"
-              className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+    <div className="space-y-4">
+      <p className="text-xs text-[var(--color-muted)]">Everything below is editable here and goes live immediately — no redeploy.</p>
+      {Object.entries(PLATFORM_GROUPS).map(([g, cfg]) => (
+        <div key={g} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+          <h3 className="text-sm font-semibold mb-1">{cfg.title}</h3>
+          <p className="text-xs text-[var(--color-muted)] mb-4">{cfg.hint}</p>
+          {cfg.toggle && (
+            <label className="flex items-center gap-2 mb-3 text-xs cursor-pointer">
+              <input type="checkbox" checked={!!data[g]?.[cfg.toggle]} onChange={e => set(g, cfg.toggle!, e.target.checked)} /> Show the banner
+            </label>
+          )}
+          <div className="space-y-2.5">
+            {cfg.fields.map(([k, label]) => (
+              <div key={k} className="flex items-center gap-3">
+                <label className="w-28 shrink-0 text-xs text-[var(--color-muted)]">{label}</label>
+                <input value={data[g]?.[k] ?? ""} onChange={e => set(g, k, e.target.value)} placeholder="…"
+                  className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <button onClick={save} disabled={saving || !loaded}
-        className="mt-4 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-[var(--color-bg)] disabled:opacity-50">
-        {saving ? "Saving…" : "Save social links"}
-      </button>
+          <button onClick={() => save(g)} disabled={saving === g}
+            className="mt-4 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-[var(--color-bg)] disabled:opacity-50">
+            {saving === g ? "Saving…" : "Save"}
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -594,7 +613,7 @@ export default function AdminPage() {
               onBulkPlan={gotoCompaniesWithPlan}
               onRefresh={() => { fetchOverview(); fetchCompanies(); fetchUsers(); }}
             />
-            <SocialLinksAdmin />
+            <PlatformSettingsAdmin />
           </div>
         )}
       </div>
