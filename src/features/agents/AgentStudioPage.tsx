@@ -18,6 +18,8 @@ interface ToolDef { name: string; description?: string; scope?: "read" | "write"
 export default function AgentStudioPage() {
   // Bumping this remounts the manager so a freshly-built agent shows up immediately.
   const [reloadKey, setReloadKey] = useState(0);
+  // The just-built agent — its row auto-opens its Run panel so it's ready to test.
+  const [autoRunId, setAutoRunId] = useState<string | undefined>(undefined);
 
   return (
     <div className="space-y-6">
@@ -38,9 +40,9 @@ export default function AgentStudioPage() {
         </div>
       </header>
 
-      <NaturalLanguageBuilder onCreated={() => setReloadKey((k) => k + 1)} />
+      <NaturalLanguageBuilder onCreated={(id) => { setAutoRunId(id); setReloadKey((k) => k + 1); }} />
 
-      <BooksAgentsTab key={reloadKey} />
+      <BooksAgentsTab key={reloadKey} autoRunAgentId={autoRunId} />
     </div>
   );
 }
@@ -52,7 +54,7 @@ const EXAMPLES = [
   "Prepare my GSTR-3B figures and tell me exactly what to file.",
 ];
 
-function NaturalLanguageBuilder({ onCreated }: { onCreated: () => void }) {
+function NaturalLanguageBuilder({ onCreated }: { onCreated: (createdId?: string) => void }) {
   const [desc, setDesc] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -80,10 +82,10 @@ function NaturalLanguageBuilder({ onCreated }: { onCreated: () => void }) {
       const valid = new Set(catalog.map((t) => t.name));
       const tools = Array.isArray(spec.tools) ? spec.tools.filter((t) => valid.has(t)) : [];
       const name = (spec.name || "New agent").slice(0, 60);
-      await api.post("/api/books/agents", { name, instructions: spec.instructions || desc.trim(), tools });
-      toast.success(`Built "${name}" with ${tools.length} tool${tools.length === 1 ? "" : "s"} — scroll down to test or edit it.`);
+      const created = await api.post<{ id?: string }>("/api/books/agents", { name, instructions: spec.instructions || desc.trim(), tools });
+      toast.success(`Built "${name}" with ${tools.length} tool${tools.length === 1 ? "" : "s"} — opening it below to test live.`);
       setDesc("");
-      onCreated();
+      onCreated(created?.id);
     } catch (e) {
       toast.error(humanizeAiError(e));
     } finally {

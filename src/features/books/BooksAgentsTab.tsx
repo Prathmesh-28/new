@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import {
@@ -144,7 +144,7 @@ const btnGhost =
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN
 // ─────────────────────────────────────────────────────────────────────────────
-export default function BooksAgentsTab() {
+export default function BooksAgentsTab({ autoRunAgentId }: { autoRunAgentId?: string } = {}) {
   // engine config
   const [cfg, setCfg] = useState<LlmConfig | null>(null);
   // catalogue + agents (shared down to the children)
@@ -203,13 +203,13 @@ export default function BooksAgentsTab() {
           <div className="space-y-2.5 border-t border-[var(--color-border)] px-4 py-3 text-xs leading-relaxed text-[var(--color-muted)]">
             <p><strong className="text-[var(--color-text)]">What this is:</strong> build your own AI assistants that read your live books (and, with approval, take actions) — no code.</p>
             <ol className="space-y-2">
-              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">1</span><span><strong className="text-[var(--color-text)]">Connect a model</strong> (Engine card below): paste your <strong>OpenRouter API key</strong> — model defaults to <strong>Claude Sonnet 4.6</strong> — then <strong>Save → Test connection</strong>. (Self-hosted later: switch the preset to point at your own Pi/Ollama URL.)</span></li>
+              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">1</span><span><strong className="text-[var(--color-text)]">Connect a model</strong> (Engine card below): if your workspace key is already set you're ready to go — the default is a <strong>free model</strong> (no credits needed). To use your own, paste an <strong>OpenRouter API key</strong>, pick a model, then <strong>Save → Test connection</strong>. (Self-hosted later: switch the preset to point at your own Pi/Ollama URL.)</span></li>
               <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">2</span><span><strong className="text-[var(--color-text)]">Add an agent</strong>: pick a <strong>Template</strong> (Collections Chaser, Cash-flow Watchdog, GST Filing Helper…) and click <em>Use template</em> — or <strong>New agent</strong>: name it, write instructions in plain English, and tick the <strong>tools</strong> it may use.</span></li>
               <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">3</span><span><strong className="text-[var(--color-text)]">(Optional) Add knowledge</strong>: upload your price list / policies in the agent's Knowledge panel so it answers from your own data.</span></li>
               <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">4</span><span><strong className="text-[var(--color-text)]">Test in the Playground</strong>: chat with it. If it proposes a <strong>write</strong> (create invoice/ledger), you get <strong>Approve / Reject</strong> cards — nothing posts to your books without your click.</span></li>
               <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">5</span><span><strong className="text-[var(--color-text)]">(Optional) Schedule it</strong>: set Daily/Weekly + an hour so it runs itself (e.g. a 9am cash brief). Scheduled runs are <strong>read-only</strong> — proposed writes wait for your approval.</span></li>
             </ol>
-            <p className="flex items-center gap-1.5 text-[11px]"><ShieldAlert size={12} className="text-[var(--color-warning,#d97706)]" /> You need an OpenRouter key with credit to run agents. Writes always need approval and are role-checked + audited.</p>
+            <p className="flex items-center gap-1.5 text-[11px]"><ShieldAlert size={12} className="text-[var(--color-warning,#d97706)]" /> Runs on your own engine (free model by default — no credits needed). Writes always need approval and are role-checked + audited.</p>
           </div>
         )}
       </div>
@@ -221,6 +221,7 @@ export default function BooksAgentsTab() {
         catalog={catalog}
         reload={loadAgents}
         engineReady={!!cfg?.hasKey}
+        autoRunAgentId={autoRunAgentId}
       />
       <Playground agents={agents} engineReady={!!cfg?.hasKey} />
     </div>
@@ -433,12 +434,14 @@ function AgentsManager({
   catalog,
   reload,
   engineReady,
+  autoRunAgentId,
 }: {
   agents: Agent[];
   busy: boolean;
   catalog: ToolDef[];
   reload: () => Promise<void>;
   engineReady: boolean;
+  autoRunAgentId?: string;
 }) {
   const [editing, setEditing] = useState<Agent | "new" | null>(null);
 
@@ -507,7 +510,7 @@ function AgentsManager({
           <div className="px-4 py-8 text-center text-[var(--color-muted)]">No agents yet — create one above.</div>
         ) : (
           agents.map((a) => (
-            <AgentRow key={a.id} agent={a} onEdit={() => setEditing(a)} reload={reload} engineReady={engineReady} />
+            <AgentRow key={a.id} agent={a} onEdit={() => setEditing(a)} reload={reload} engineReady={engineReady} autoRun={a.id === autoRunAgentId} />
           ))
         )}
       </div>
@@ -625,12 +628,21 @@ function TemplatesGallery({ onCloned }: { onCloned: (created: Agent) => Promise<
   );
 }
 
-function AgentRow({ agent: a, onEdit, reload, engineReady }: { agent: Agent; onEdit: () => void; reload: () => Promise<void>; engineReady: boolean }) {
+function AgentRow({ agent: a, onEdit, reload, engineReady, autoRun }: { agent: Agent; onEdit: () => void; reload: () => Promise<void>; engineReady: boolean; autoRun?: boolean }) {
   const [showKnowledge, setShowKnowledge] = useState(false);
-  const [showRun, setShowRun] = useState(false);
+  const [showRun, setShowRun] = useState(!!autoRun);
+  const rowRef = useRef<HTMLDivElement>(null);
   const tools = toolsOf(a);
+  // A freshly-built agent opens its Run panel automatically and scrolls into view,
+  // so the test box is waiting for the user the moment it's created.
+  useEffect(() => {
+    if (autoRun) {
+      setShowRun(true);
+      rowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [autoRun]);
   return (
-    <div>
+    <div ref={rowRef}>
       <div className="px-4 py-3 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
