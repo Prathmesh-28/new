@@ -151,6 +151,7 @@ export default function BooksAgentsTab() {
   const [catalog, setCatalog] = useState<ToolDef[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentsBusy, setAgentsBusy] = useState(true);
+  const [showHelp, setShowHelp] = useState(true);
 
   const loadAgents = useCallback(async () => {
     setAgentsBusy(true);
@@ -190,6 +191,27 @@ export default function BooksAgentsTab() {
         <p className="text-sm text-[var(--color-muted)] mt-0.5">
           No-code AI assistants over your books. Connect a model, give an agent instructions and tools, then chat with it.
         </p>
+      </div>
+
+      {/* How to use — collapsible guide */}
+      <div className="rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/5">
+        <button onClick={() => setShowHelp(v => !v)} className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left">
+          <span className="flex items-center gap-2 text-sm font-semibold"><BookOpen size={15} className="text-[var(--color-primary)]" /> How to use AI Agents</span>
+          {showHelp ? <ChevronDown size={16} className="text-[var(--color-muted)]" /> : <ChevronRight size={16} className="text-[var(--color-muted)]" />}
+        </button>
+        {showHelp && (
+          <div className="space-y-2.5 border-t border-[var(--color-border)] px-4 py-3 text-xs leading-relaxed text-[var(--color-muted)]">
+            <p><strong className="text-[var(--color-text)]">What this is:</strong> build your own AI assistants that read your live books (and, with approval, take actions) — no code.</p>
+            <ol className="space-y-2">
+              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">1</span><span><strong className="text-[var(--color-text)]">Connect a model</strong> (Engine card below): paste your <strong>OpenRouter API key</strong> — model defaults to <strong>Claude Sonnet 4.6</strong> — then <strong>Save → Test connection</strong>. (Self-hosted later: switch the preset to point at your own Pi/Ollama URL.)</span></li>
+              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">2</span><span><strong className="text-[var(--color-text)]">Add an agent</strong>: pick a <strong>Template</strong> (Collections Chaser, Cash-flow Watchdog, GST Filing Helper…) and click <em>Use template</em> — or <strong>New agent</strong>: name it, write instructions in plain English, and tick the <strong>tools</strong> it may use.</span></li>
+              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">3</span><span><strong className="text-[var(--color-text)]">(Optional) Add knowledge</strong>: upload your price list / policies in the agent's Knowledge panel so it answers from your own data.</span></li>
+              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">4</span><span><strong className="text-[var(--color-text)]">Test in the Playground</strong>: chat with it. If it proposes a <strong>write</strong> (create invoice/ledger), you get <strong>Approve / Reject</strong> cards — nothing posts to your books without your click.</span></li>
+              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">5</span><span><strong className="text-[var(--color-text)]">(Optional) Schedule it</strong>: set Daily/Weekly + an hour so it runs itself (e.g. a 9am cash brief). Scheduled runs are <strong>read-only</strong> — proposed writes wait for your approval.</span></li>
+            </ol>
+            <p className="flex items-center gap-1.5 text-[11px]"><ShieldAlert size={12} className="text-[var(--color-warning,#d97706)]" /> You need an OpenRouter key with credit to run agents. Writes always need approval and are role-checked + audited.</p>
+          </div>
+        )}
       </div>
 
       <EngineCard cfg={cfg} onChange={setCfg} />
