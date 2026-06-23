@@ -38,6 +38,9 @@ router.post("/upi-link", authenticate, canWrite, async (req, res) => {
           currency:    "INR",
           description: `Payment for ${inv.invoice_number}`,
           reference_id: inv.invoice_number,
+          // Carry the tenant so the webhook matches the RIGHT tenant's invoice —
+          // invoice_number is not globally unique across tenants.
+          notes: { invoice_number: inv.invoice_number, tenant_id: req.user.tenant_id },
           callback_url:  `${process.env.BACKEND_URL ?? ""}/webhook/razorpay`,
           callback_method: "get",
           notify: { sms: false, email: !!inv.customer_email },
@@ -49,13 +52,20 @@ router.post("/upi-link", authenticate, canWrite, async (req, res) => {
     } catch { /* fallback to UPI */ }
   }
 
-  // Fallback: static UPI deep-link
-  const upiId   = firm.upiId || "headroom@upi";
-  const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(firm.name || "Headroom")}&am=${payAmt}&tn=${encodeURIComponent(inv.invoice_number)}&cu=INR`;
-  const qr      = await QRCode.toDataURL(razorpay_url || upiLink, { width: 200 }).catch(() => null);
+  // Fallback: static UPI deep-link — ONLY with the firm's real UPI ID. Never send a
+  // placeholder ("headroom@upi") to a customer: their money would go nowhere / wrong.
+  const upiId   = firm.upiId || null;
+  const upiLink = upiId
+    ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(firm.name || "")}&am=${payAmt}&tn=${encodeURIComponent(inv.invoice_number)}&cu=INR`
+    : null;
+  const payUrl  = razorpay_url || upiLink;
+  if (!payUrl) {
+    return res.status(400).json({ error: "Add your UPI ID (Settings → Company) or connect Razorpay to collect payments — we won't send a placeholder account to your customer." });
+  }
+  const qr = await QRCode.toDataURL(payUrl, { width: 200 }).catch(() => null);
 
-  await pool.query("UPDATE invoices SET upi_link=$1 WHERE id=$2", [razorpay_url || upiLink, inv.id]);
-  res.json({ url: razorpay_url || upiLink, qr, provider: razorpay_url ? "razorpay" : "upi", demo: !razorpay_url });
+  await pool.query("UPDATE invoices SET upi_link=$1 WHERE id=$2 AND tenant_id=$3", [payUrl, inv.id, req.user.tenant_id]);
+  res.json({ url: payUrl, qr, provider: razorpay_url ? "razorpay" : "upi", demo: !razorpay_url });
 });
 
 // POST /webhook/razorpay — Razorpay payment captured webhook.
@@ -81,19 +91,34 @@ router.post("/", async (req, res) => {
 
   if (event === "payment.captured" && payment) {
     const invoiceNumber = payment.description?.match(/INV-\d{4}-\d+/)?.[0] ?? payment.notes?.invoice_number;
+    const noteTenant    = payment.notes?.tenant_id ?? null;
     if (invoiceNumber) {
-      const { rows: [inv] } = await pool.query(
-        "SELECT * FROM invoices WHERE invoice_number=$1 AND status != 'paid' LIMIT 1",
-        [invoiceNumber]
-      );
+      // invoice_number is NOT globally unique, so matching it alone could mark a
+      // DIFFERENT tenant's invoice paid. Prefer the tenant from the link's notes;
+      // for legacy links with no tenant, only proceed if exactly ONE invoice matches.
+      let inv = null;
+      if (noteTenant) {
+        const { rows } = await pool.query(
+          "SELECT * FROM invoices WHERE invoice_number=$1 AND tenant_id=$2 AND status != 'paid' LIMIT 1",
+          [invoiceNumber, noteTenant]
+        );
+        inv = rows[0] ?? null;
+      } else {
+        const { rows } = await pool.query(
+          "SELECT * FROM invoices WHERE invoice_number=$1 AND status != 'paid'",
+          [invoiceNumber]
+        );
+        if (rows.length === 1) inv = rows[0];
+        else if (rows.length > 1) console.warn(`[razorpay] invoice_number ${invoiceNumber} is ambiguous across ${rows.length} tenants and the payment has no tenant note — skipping to avoid a cross-tenant write`);
+      }
       if (inv) {
         await pool.query(
-          "UPDATE invoices SET status='paid', paid_at=now() WHERE id=$1",
-          [inv.id]
+          "UPDATE invoices SET status='paid', paid_at=now() WHERE id=$1 AND tenant_id=$2",
+          [inv.id, inv.tenant_id]
         );
         // Create revenue transaction in KV store is done client-side via polling
         // Could also push via Server-Sent Events or WebSocket in production
-        console.log(`[razorpay] Invoice ${invoiceNumber} marked paid — ₹${payment.amount / 100}`);
+        console.log(`[razorpay] Invoice ${invoiceNumber} (tenant ${inv.tenant_id}) marked paid — ₹${payment.amount / 100}`);
       }
     }
   }

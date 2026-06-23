@@ -228,7 +228,7 @@ router.post("/:id/remind", authenticate, canWrite, async (req, res) => {
 
     // Move a still-draft invoice to "sent" once a reminder goes out.
     if (invoice.status === "draft") {
-      await pool.query(`UPDATE invoices SET status='sent' WHERE id=$1`, [id]);
+      await pool.query(`UPDATE invoices SET status='sent' WHERE id=$1 AND tenant_id=$2`, [id, tenantId]);
     }
 
     res.json({
