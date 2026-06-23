@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import {
   Bot, RefreshCw, Plus, Save, Trash2, Pencil, X, Send, Cpu, KeyRound,
   CheckCircle2, AlertCircle, Wrench, ChevronRight, ChevronDown, MessageSquare, Sparkles,
-  BookOpen, Upload, FileText, Check, ShieldAlert, Clock, Server, Cloud, Zap, LayoutGrid,
+  BookOpen, Upload, FileText, Check, ShieldAlert, Clock, Server, Cloud, Zap, LayoutGrid, Play,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -507,7 +507,7 @@ function AgentsManager({
           <div className="px-4 py-8 text-center text-[var(--color-muted)]">No agents yet — create one above.</div>
         ) : (
           agents.map((a) => (
-            <AgentRow key={a.id} agent={a} onEdit={() => setEditing(a)} reload={reload} />
+            <AgentRow key={a.id} agent={a} onEdit={() => setEditing(a)} reload={reload} engineReady={engineReady} />
           ))
         )}
       </div>
@@ -625,8 +625,9 @@ function TemplatesGallery({ onCloned }: { onCloned: (created: Agent) => Promise<
   );
 }
 
-function AgentRow({ agent: a, onEdit, reload }: { agent: Agent; onEdit: () => void; reload: () => Promise<void> }) {
+function AgentRow({ agent: a, onEdit, reload, engineReady }: { agent: Agent; onEdit: () => void; reload: () => Promise<void>; engineReady: boolean }) {
   const [showKnowledge, setShowKnowledge] = useState(false);
+  const [showRun, setShowRun] = useState(false);
   const tools = toolsOf(a);
   return (
     <div>
@@ -669,6 +670,16 @@ function AgentRow({ agent: a, onEdit, reload }: { agent: Agent; onEdit: () => vo
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
+                    onClick={() => setShowRun((s) => !s)}
+                    className={showRun
+                      ? `${btnPrimary} !px-3 !py-1.5`
+                      : "inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-semibold bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90 transition-opacity"}
+                    title="Run / test this agent"
+                  >
+                    {showRun ? <X size={12} /> : <Play size={12} />} {showRun ? "Close" : "Run"}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setShowKnowledge((s) => !s)}
                     className={btnGhost}
                     title="Knowledge"
@@ -681,11 +692,119 @@ function AgentRow({ agent: a, onEdit, reload }: { agent: Agent; onEdit: () => vo
                   <DeleteButton agent={a} onDone={reload} />
                 </div>
       </div>
+      {showRun && (
+        <div className="px-4 pb-4 bg-[var(--color-bg)] border-t border-[var(--color-border)]">
+          <AgentChat agentId={a.id} agentName={a.name || "this agent"} engineReady={engineReady} />
+        </div>
+      )}
       {showKnowledge && (
         <div className="px-4 pb-4 bg-[var(--color-bg)] border-t border-[var(--color-border)]">
           <KnowledgePanel agentId={a.id} />
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AGENT CHAT — an inline live runner scoped to ONE agent. Used both in the
+// per-agent "Run" panel (in the list) and as the body of the standalone
+// Playground. Sends to /run, shows the tool steps it took, and renders any
+// write the agent proposes as an approval-gated PendingActionCard.
+// ─────────────────────────────────────────────────────────────────────────────
+function AgentChat({ agentId, agentName, engineReady, autoFocus }: { agentId: string; agentName: string; engineReady: boolean; autoFocus?: boolean }) {
+  const [message, setMessage] = useState("");
+  const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [running, setRunning] = useState(false);
+
+  const send = async () => {
+    const text = message.trim();
+    if (!text) return;
+    setMessage("");
+    setTurns((t) => [...t, { role: "user", text }]);
+    setRunning(true);
+    try {
+      const res = await api.post<RunResponse>(`/api/books/agents/${agentId}/run`, { message: text });
+      setTurns((t) => [
+        ...t,
+        {
+          role: "assistant",
+          text: res?.reply || "(no reply)",
+          steps: res?.steps || [],
+          pendingActions: Array.isArray(res?.pendingActions) ? res!.pendingActions : [],
+        },
+      ]);
+    } catch (e) {
+      const m = errMsg(e);
+      setTurns((t) => [...t, { role: "assistant", text: `Error: ${m}` }]);
+      toast.error(m);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+      <div className="px-3 py-2 border-b border-[var(--color-border)] flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold flex items-center gap-1.5 text-[var(--color-muted)]">
+          <MessageSquare size={13} className="text-[var(--color-primary)]" /> Test run · {agentName}
+        </span>
+        {turns.length > 0 && (
+          <button type="button" onClick={() => setTurns([])} className={btnGhost} title="Clear">
+            <X size={12} /> Clear
+          </button>
+        )}
+      </div>
+
+      <div className="px-3 py-3 space-y-3 max-h-[24rem] overflow-y-auto">
+        {turns.length === 0 ? (
+          <div className="text-center text-[var(--color-muted)] py-5 text-xs">
+            Ask <span className="font-medium text-[var(--color-text)]">{agentName}</span> something to test it live — e.g. "Run your task now and show me the result."
+          </div>
+        ) : (
+          turns.map((t, i) =>
+            t.role === "user" ? (
+              <div key={i} className="flex justify-end">
+                <div className="max-w-[85%] bg-[var(--color-primary)] text-[var(--color-bg)] rounded-2xl rounded-br-sm px-3 py-1.5 text-sm whitespace-pre-wrap">{t.text}</div>
+              </div>
+            ) : (
+              <div key={i} className="flex flex-col items-start gap-2">
+                <div className="max-w-[85%] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl rounded-bl-sm px-3 py-1.5 text-sm whitespace-pre-wrap">{t.text}</div>
+                {t.steps && t.steps.length > 0 && (
+                  <div className="w-full space-y-1.5 pl-1">
+                    {t.steps.map((s, j) => (<StepRow key={j} step={s} />))}
+                  </div>
+                )}
+                {t.pendingActions && t.pendingActions.length > 0 && (
+                  <div className="w-full space-y-1.5 pl-1">
+                    {t.pendingActions.map((pa) => (<PendingActionCard key={pa.id} action={pa} agentId={agentId} />))}
+                  </div>
+                )}
+              </div>
+            )
+          )
+        )}
+        {running && (
+          <div className="flex items-center gap-2 text-sm text-[var(--color-muted)]">
+            <RefreshCw size={13} className="animate-spin" /> Thinking…
+          </div>
+        )}
+      </div>
+
+      <div className="px-3 py-2.5 border-t border-[var(--color-border)] flex items-end gap-2">
+        <textarea
+          value={message}
+          autoFocus={autoFocus}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
+          rows={1}
+          placeholder={engineReady ? "Type a message…  (Enter to send)" : "Connect an LLM in the Engine card first…"}
+          className={`${inputCls} resize-none`}
+        />
+        <button type="button" onClick={() => void send()} disabled={running} className={btnPrimary}>
+          {running ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />} Send
+        </button>
+      </div>
     </div>
   );
 }
