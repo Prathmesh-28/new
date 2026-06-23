@@ -199,7 +199,7 @@ async function sendMondayBrief() {
       const kv   = kvRows[0]?.value?.value ?? {};
       if (!(kv.bankAccounts ?? []).length) continue;
 
-      const items = await generateCFOBrief(kv);
+      const items = await generateCFOBrief(kv, owner.tenant_id);
       const weekOf = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
       const itemsHtml = items.map((item, i) => `

@@ -1,4 +1,6 @@
-// Weekly Monday CFO brief — AI-generated 3 actionable items from live tenant data
+// Weekly Monday CFO brief — AI-generated 3 actionable items from live tenant data.
+// Runs on the tenant's own engine (OpenRouter / self-host gateway) — no direct Anthropic.
+const llm = require("../modules/books/llm");
 
 function fmt(n) {
   if (!n || isNaN(n)) return "₹0";
@@ -19,7 +21,7 @@ function runwayDays(bankAccounts, burn) {
   return burn > 0 ? Math.floor((total / burn) * 30) : 999;
 }
 
-async function generateCFOBrief(data) {
+async function generateCFOBrief(data, tenantId) {
   const bankAccounts = data.bankAccounts ?? [];
   const transactions = data.transactions ?? [];
   const invoices     = data.invoices     ?? [];
@@ -97,7 +99,7 @@ async function generateCFOBrief(data) {
     ruleItems.push("Review your week-on-week transaction patterns to identify any unusual spend categories.");
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) return ruleItems.slice(0, 3);
+  if (!tenantId) return ruleItems.slice(0, 3);
 
   const context = `
 Today: ${today} | Cash: ${fmt(totalCash)} | Burn: ${fmt(burn)}/mo${burnChangePct !== 0 ? ` (${burnChangePct > 0 ? "+" : ""}${burnChangePct}% vs last month)` : ""} | Runway: ${runway} days
@@ -110,15 +112,11 @@ Critical/high alerts: ${critAlerts.length ? critAlerts.join("; ") : "none"}
   `.trim();
 
   try {
-    const Anthropic = require("@anthropic-ai/sdk");
-    const client    = new Anthropic.default();
-    const resp = await client.messages.create({
-      model:      "claude-haiku-4-5-20251001",
-      max_tokens: 512,
-      system:     `You are a CFO assistant for an Indian SMB. Generate exactly 3 specific, actionable items for this week. Rules: (1) Each item is exactly 1 sentence. (2) Mention specific customer names, amounts in Indian format (₹ with L/Cr), and exact dates from the data. (3) Start each with a clear action verb (Chase, Defer, Review, Confirm, Transfer, File, Negotiate). (4) Only recommend actions supported by the data — do not invent. Return a raw JSON array of 3 strings with no markdown or explanation.`,
-      messages:   [{ role: "user", content: context }],
+    const out = await llm.chat(tenantId, {
+      system:   `You are a CFO assistant for an Indian SMB. Generate exactly 3 specific, actionable items for this week. Rules: (1) Each item is exactly 1 sentence. (2) Mention specific customer names, amounts in Indian format (₹ with L/Cr), and exact dates from the data. (3) Start each with a clear action verb (Chase, Defer, Review, Confirm, Transfer, File, Negotiate). (4) Only recommend actions supported by the data — do not invent. Return a raw JSON array of 3 strings with no markdown or explanation.`,
+      messages: [{ role: "user", content: context }],
     });
-    const raw   = resp.content[0]?.text ?? "[]";
+    const raw   = out?.content ?? "[]";
     const match = raw.match(/\[[\s\S]*?\]/);
     if (match) {
       const items = JSON.parse(match[0]);

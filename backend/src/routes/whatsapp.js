@@ -4,6 +4,8 @@ const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
 const { sendWhatsApp, validateSignature, normalizePhone } = require("../lib/whatsapp");
 const { sendPush } = require("../lib/push");
+// Plain-language replies run on the tenant's own engine (OpenRouter / self-host) — no direct Anthropic.
+const llm = require("../modules/books/llm");
 
 const sha256 = (s) => crypto.createHash("sha256").update(String(s)).digest("hex");
 
@@ -58,7 +60,7 @@ function buildContext(data) {
 }
 
 // Dispatch a command from WhatsApp text → response string
-async function dispatch(text, data) {
+async function dispatch(text, data, tenantId) {
   const cmd = text.trim().toLowerCase().replace(/[^a-z0-9 ]/g, "");
 
   // Cash / balance
@@ -135,21 +137,18 @@ async function dispatch(text, data) {
     return `👋 *Headroom CFO Assistant*\n\nReply with:\n  *cash* — current balance\n  *runway* — how many days of cash\n  *burn* — monthly expenses\n  *alerts* — unread alerts\n  *invoices* — outstanding receivables\n  *forecast* — 30-day projection\n  *credit* — loan status\n\nOr ask anything in plain language:\n  "Should I take the credit offer?"\n  "Why is my burn so high?"`;
   }
 
-  // AI fallback — anything else
-  if (!process.env.ANTHROPIC_API_KEY) {
+  // AI fallback — anything else. Runs on the tenant's own engine; if no engine is
+  // configured (gateway throws LLM_NOT_CONFIGURED) we degrade to the command hint.
+  if (!tenantId) {
     return `I didn't understand "${text}". Reply *help* for available commands.`;
   }
   try {
-    const Anthropic = require("@anthropic-ai/sdk");
-    const client    = new Anthropic.default();
-    const context   = buildContext(data);
-    const resp = await client.messages.create({
-      model:      "claude-haiku-4-5-20251001",
-      max_tokens: 300,
-      system:     `You are a CFO assistant for an Indian SMB. Answer questions about their business finances concisely in 2-4 sentences. Use Indian number formatting (L for lakhs, Cr for crores). Do NOT use markdown. ${context}`,
-      messages:   [{ role: "user", content: text }],
+    const context = buildContext(data);
+    const out = await llm.chat(tenantId, {
+      system:   `You are a CFO assistant for an Indian SMB. Answer questions about their business finances concisely in 2-4 sentences. Use Indian number formatting (L for lakhs, Cr for crores). Do NOT use markdown. ${context}`,
+      messages: [{ role: "user", content: text }],
     });
-    return resp.content[0]?.text ?? "Sorry, I could not process that.";
+    return out?.content || `I didn't understand "${text}". Reply *help* for available commands.`;
   } catch {
     return `Couldn't process that right now. Reply *help* for available commands.`;
   }
@@ -402,7 +401,7 @@ router.post("/", async (req, res) => {
 
   try {
     const data  = await getTenantData(tenant_id);
-    const reply = await dispatch(body, data);
+    const reply = await dispatch(body, data, tenant_id);
     const safe  = reply.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${safe}</Message></Response>`;
     res.type("text/xml").send(twiml);

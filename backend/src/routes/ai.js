@@ -1,6 +1,9 @@
 const router   = require("express").Router();
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
+// All app AI runs on the tenant's own engine (OpenRouter by default, self-host later) —
+// the same per-tenant gateway the agents use. No direct Anthropic dependency.
+const llm = require("../modules/books/llm");
 
 const VALID_CATEGORIES = ["revenue", "expense", "payroll", "loan", "tax", "transfer"];
 
@@ -32,18 +35,14 @@ async function categorizeOne(merchant, description, tenantId) {
   ).catch(() => ({ rows: [] }));
   if (globalRows[0]) return { category: globalRows[0].category, source: "cache_global" };
 
-  // 3. Claude Haiku
-  if (!process.env.ANTHROPIC_API_KEY) return { category: "expense", source: "default" };
-
-  const Anthropic = require("@anthropic-ai/sdk");
-  const client    = new Anthropic.default();
-  const text      = `Merchant: ${merchant}\nDescription: ${description}`;
-  const resp = await client.messages.create({
-    model: "claude-haiku-4-5-20251001", max_tokens: 10,
-    system: FEW_SHOT,
-    messages: [{ role: "user", content: text }],
-  });
-  const raw = (resp.content[0]?.text ?? "expense").toLowerCase().trim();
+  // 3. The tenant's LLM engine (OpenRouter / self-host) — graceful default if unset.
+  let raw;
+  try {
+    const out = await llm.chat(tenantId, { system: FEW_SHOT, messages: [{ role: "user", content: `Merchant: ${merchant}\nDescription: ${description}` }] });
+    raw = (out?.content ?? "expense").toLowerCase().trim();
+  } catch {
+    return { category: "expense", source: "default" };
+  }
   const category = VALID_CATEGORIES.includes(raw) ? raw : "expense";
 
   // Store in cache
@@ -57,51 +56,36 @@ async function categorizeOne(merchant, description, tenantId) {
   return { category, source: "haiku" };
 }
 
-// POST /api/ai/ask — proxies to Claude
+// POST /api/ai/ask — runs on the tenant's own engine (OpenRouter / self-host gateway).
 router.post("/ask", authenticate, async (req, res) => {
-  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: "AI not configured" });
   const { messages, system } = req.body;
   if (!messages?.length) return res.status(400).json({ error: "messages required" });
   try {
-    const Anthropic = require("@anthropic-ai/sdk");
-    const client = new Anthropic.default();
-    const resp = await client.messages.create({
-      model: "claude-haiku-4-5-20251001", max_tokens: 1024,
-      system: system || "You are a financial operations assistant for a small business. Be concise and actionable.",
+    const out = await llm.chat(req.user.tenant_id, {
+      system: system || "You are a financial operations assistant for an Indian SMB. Be concise and actionable.",
       messages,
     });
-    res.json({ content: resp.content[0]?.text ?? "" });
+    res.json({ content: out?.content ?? "" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.http || 500).json({ error: err.message });
   }
 });
 
 // POST /api/ai/scan-receipt — extract fields from a receipt/invoice photo (Claude vision)
 // body: { image: "data:image/...;base64,...." }  → { amount, date, vendor, category, description }
 router.post("/scan-receipt", authenticate, async (req, res) => {
-  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: "AI not configured" });
   const { image } = req.body || {};
-  const m = typeof image === "string" && image.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/s);
-  if (!m) return res.status(400).json({ error: "image (base64 data URL) required" });
-  const [, mediaType, b64] = m;
+  if (typeof image !== "string" || !/^data:image\/[a-zA-Z+]+;base64,/.test(image)) return res.status(400).json({ error: "image (base64 data URL) required" });
   try {
-    const Anthropic = require("@anthropic-ai/sdk");
-    const client = new Anthropic.default();
-    const resp = await client.messages.create({
-      model: "claude-haiku-4-5-20251001", max_tokens: 400,
+    const raw = await llm.vision(req.user.tenant_id, {
       system: `Extract the key fields from this receipt/invoice/bill image for an Indian SMB's books. Return ONLY a JSON object, no prose:
 {"vendor": string, "amount": number (total, in rupees, no symbols/commas), "date": "YYYY-MM-DD" or null, "category": one of revenue|expense|payroll|loan|tax|transfer, "description": short string}
 If a field is unreadable use null. amount is the grand total.`,
-      messages: [{
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: mediaType, data: b64 } },
-          { type: "text", text: "Extract the fields as JSON." },
-        ],
-      }],
+      prompt: "Extract the fields as JSON.",
+      imageDataUrl: image,
+      maxTokens: 400,
     });
-    const raw = resp.content[0]?.text ?? "{}";
-    const json = raw.match(/\{[\s\S]*\}/)?.[0] ?? "{}";
+    const json = (raw || "{}").match(/\{[\s\S]*\}/)?.[0] ?? "{}";
     const parsed = JSON.parse(json);
     const category = VALID_CATEGORIES.includes(parsed.category) ? parsed.category : "expense";
     res.json({

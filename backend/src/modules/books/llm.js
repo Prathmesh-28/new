@@ -202,4 +202,32 @@ async function embed(tenantId, texts) {
   return out;
 }
 
-module.exports = { getTenantLlm, setTenantLlm, chat, embed, encryptKey, decryptKey };
+// --- vision (image → text/JSON) ----------------------------------------------
+// OpenAI-compatible multimodal call: an image (data URL) + prompt to the tenant's
+// model (must be vision-capable, e.g. Claude Sonnet via OpenRouter). Same engine as
+// chat() — used for receipt/document capture. Returns the assistant text.
+async function vision(tenantId, { system, prompt, imageDataUrl, model: modelOverride, maxTokens = 600 } = {}) {
+  const { baseUrl, model: tenantModel, key } = await _resolveSecret(tenantId);
+  const model = modelOverride || tenantModel;
+  if (!key) throw new PostError("LLM_NOT_CONFIGURED", "Connect an LLM provider (OpenRouter key) in Agents settings", 422);
+  const userContent = [];
+  if (prompt) userContent.push({ type: "text", text: prompt });
+  userContent.push({ type: "image_url", image_url: { url: imageDataUrl } });
+  const messages = [];
+  if (system) messages.push({ role: "system", content: system });
+  messages.push({ role: "user", content: userContent });
+  const url = baseUrl.replace(/\/+$/, "") + "/chat/completions";
+  let resp;
+  try {
+    resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
+    });
+  } catch (e) { throw new PostError("LLM_NETWORK", `LLM request failed: ${e.message}`, 502); }
+  if (!resp.ok) { let t; try { t = await resp.text(); } catch { t = ""; } throw new PostError("LLM_ERROR", `LLM provider error (${resp.status}): ${t}`, 502); }
+  const data = await resp.json();
+  return data?.choices?.[0]?.message?.content || "";
+}
+
+module.exports = { getTenantLlm, setTenantLlm, chat, embed, vision, encryptKey, decryptKey };
