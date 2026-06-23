@@ -7,11 +7,11 @@ const { pool } = require("../../db");
 const { PostError } = require("./posting-engine");
 
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
-// Free by default so the app works on a zero-credit OpenRouter account. gpt-oss-120b
-// is a strong, clean free text model — used for ALL chat (insights, assistant, CFO
-// brief, WhatsApp, categorizer). Override per-tenant in Books → AI Agents, or globally
-// via the AGENT_MODEL env var (e.g. a paid Claude model once credits are added).
-const DEFAULT_MODEL = () => process.env.AGENT_MODEL || "openai/gpt-oss-120b:free";
+// Free by default so the app works on a zero-credit OpenRouter account. owl-alpha is
+// a free, ~1M-context text model — used for ALL chat (insights, assistant, CFO brief,
+// WhatsApp, categorizer). Override per-tenant in Books → AI Agents, or globally via
+// the AGENT_MODEL env var (e.g. a paid Claude model once credits are added).
+const DEFAULT_MODEL = () => process.env.AGENT_MODEL || "openrouter/owl-alpha";
 // Receipt/document capture needs image input; the chat model may be text-only, so
 // vision uses its own free image-capable default. Override via AGENT_VISION_MODEL.
 const DEFAULT_VISION_MODEL = () => process.env.AGENT_VISION_MODEL || "openrouter/free";
