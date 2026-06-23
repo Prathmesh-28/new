@@ -2,7 +2,8 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
-import { Sparkles, X, Send, Loader2, ArrowRight, List, MessageSquare, ArrowLeft, RotateCcw, Mic } from "lucide-react";
+import { toast } from "sonner";
+import { Sparkles, X, Send, Loader2, ArrowRight, List, MessageSquare, ArrowLeft, RotateCcw, Mic, Bot, CheckCircle2, XCircle } from "lucide-react";
 import { FEATURE_GUIDES } from "@/data/featureGuides";
 import { CURATED_FAQ, type FaqEntry } from "@/data/assistantFaq";
 import { TAB_CATALOG } from "@/data/roles";
@@ -45,7 +46,8 @@ function rank(kb: KbItem[], q: string): KbItem[] {
     .map(r => r.it);
 }
 
-interface Msg { role: "user" | "assistant"; content: string; route?: string; routeLabel?: string; chips?: string[]; seed?: boolean }
+interface Pending { id?: string; tool: string; args?: unknown; label?: string }
+interface Msg { role: "user" | "assistant"; content: string; route?: string; routeLabel?: string; chips?: string[]; seed?: boolean; pending?: Pending[] }
 
 const STARTERS = [
   "How do I set up my business?",
@@ -73,6 +75,10 @@ export default function HeadroomAssistant() {
   const recogRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // The tenant's own agents — selectable so they're usable from anywhere via this chatbox.
+  const [agents, setAgents] = useState<any[]>([]);
+  const [activeAgent, setActiveAgent] = useState<string | null>(null);
+  useEffect(() => { if (open) api.get<any[]>("/api/books/agents").then(a => setAgents(Array.isArray(a) ? a : [])).catch(() => { /* no agents / no access */ }); }, [open]);
 
   const kb = useMemo(buildKb, []);
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [msgs, busy]);
@@ -87,6 +93,18 @@ export default function HeadroomAssistant() {
     setMsgs(history);
     setInput("");
     setBusy(true);
+
+    // Agent mode: route to the tenant's own agent (its engine + tools + knowledge).
+    if (activeAgent) {
+      try {
+        const res = await api.post<any>(`/api/books/agents/${activeAgent}/run`, { message: q });
+        setMsgs(m => [...m, { role: "assistant", content: res?.reply || "(no response)", pending: Array.isArray(res?.pendingActions) ? res.pendingActions : [] }]);
+      } catch (e: any) {
+        const msg = String(e?.message || "");
+        setMsgs(m => [...m, { role: "assistant", content: /LLM|key|configur/i.test(msg) ? "This agent needs an LLM key — set it in Books → AI Agents → Engine." : (msg || "Agent error.") }]);
+      } finally { setBusy(false); }
+      return;
+    }
 
     const matches = rank(kb, q);
     const top = matches[0];
@@ -126,6 +144,19 @@ export default function HeadroomAssistant() {
   };
 
   const reset = () => setMsgs([GREETING]);
+
+  // Approve/reject a write action an agent proposed (re-checked + audited server-side).
+  const dismissPending = (msgIdx: number, actIdx: number) =>
+    setMsgs(m => m.map((mm, k) => k === msgIdx ? { ...mm, pending: (mm.pending || []).filter((_, x) => x !== actIdx) } : mm));
+  const approvePending = async (msgIdx: number, actIdx: number, p: Pending) => {
+    if (!activeAgent) return;
+    try {
+      await api.post(`/api/books/agents/${activeAgent}/confirm`, { tool: p.tool, args: p.args });
+      toast.success(`Done: ${p.label || p.tool}`);
+      dismissPending(msgIdx, actIdx);
+      setMsgs(m => [...m, { role: "assistant", content: `✓ Done: ${p.label || p.tool}` }]);
+    } catch (e: any) { toast.error(e?.message || "Action failed"); }
+  };
 
   const toggleMic = () => {
     if (listening) { recogRef.current?.stop?.(); setListening(false); return; }
@@ -176,6 +207,18 @@ export default function HeadroomAssistant() {
 
           {view === "chat" ? (
             <>
+              {/* "Chat with" selector — Headroom Help or one of the tenant's own agents */}
+              {agents.length > 0 && (
+                <div className="flex items-center gap-1.5 border-b border-[var(--color-border)] px-3 py-1.5 text-[11px]">
+                  <Bot size={12} className="shrink-0 text-[var(--color-primary)]" />
+                  <span className="shrink-0 text-[var(--color-muted)]">Chat with</span>
+                  <select value={activeAgent ?? ""} onChange={e => { setActiveAgent(e.target.value || null); setMsgs([GREETING]); }}
+                    className="min-w-0 flex-1 bg-transparent font-medium outline-none">
+                    <option value="">Headroom Help</option>
+                    {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+              )}
               {/* Conversation */}
               <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-3">
                 {msgs.map((m, i) => (
@@ -198,6 +241,20 @@ export default function HeadroomAssistant() {
                             className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1 text-left text-[11px] text-[var(--color-muted)] hover:border-[var(--color-primary)] hover:text-[var(--color-text)] disabled:opacity-50">
                             {c}
                           </button>
+                        ))}
+                      </div>
+                    )}
+                    {m.role === "assistant" && m.pending && m.pending.length > 0 && (
+                      <div className="mt-2 space-y-1.5">
+                        {m.pending.map((p, j) => (
+                          <div key={j} className="rounded-lg border border-[var(--color-warning,#d97706)]/40 bg-[var(--color-warning,#d97706)]/5 p-2">
+                            <p className="text-[11px] font-medium">Approve: {p.label || p.tool}</p>
+                            <pre className="mt-0.5 max-h-16 overflow-auto whitespace-pre-wrap break-words text-[10px] text-[var(--color-muted)]">{(() => { try { return JSON.stringify(p.args); } catch { return ""; } })()}</pre>
+                            <div className="mt-1.5 flex gap-1.5">
+                              <button onClick={() => approvePending(i, j, p)} className="inline-flex items-center gap-1 rounded-md bg-[var(--color-primary)] px-2 py-1 text-[10px] font-medium text-white hover:opacity-90"><CheckCircle2 size={10} /> Approve</button>
+                              <button onClick={() => dismissPending(i, j)} className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[10px] hover:bg-[var(--color-surface-2)]"><XCircle size={10} /> Reject</button>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     )}
