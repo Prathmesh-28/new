@@ -7,7 +7,14 @@ const { pool } = require("../../db");
 const { PostError } = require("./posting-engine");
 
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
-const DEFAULT_MODEL = () => process.env.AGENT_MODEL || "anthropic/claude-sonnet-4.6";
+// Free by default so the app works on a zero-credit OpenRouter account. gpt-oss-120b
+// is a strong, clean free text model — used for ALL chat (insights, assistant, CFO
+// brief, WhatsApp, categorizer). Override per-tenant in Books → AI Agents, or globally
+// via the AGENT_MODEL env var (e.g. a paid Claude model once credits are added).
+const DEFAULT_MODEL = () => process.env.AGENT_MODEL || "openai/gpt-oss-120b:free";
+// Receipt/document capture needs image input; the chat model may be text-only, so
+// vision uses its own free image-capable default. Override via AGENT_VISION_MODEL.
+const DEFAULT_VISION_MODEL = () => process.env.AGENT_VISION_MODEL || "openrouter/free";
 const DEFAULT_EMBED_MODEL = () => process.env.AGENT_EMBED_MODEL || "openai/text-embedding-3-small";
 
 // --- encryption at rest (AES-256-GCM, scrypt-derived key) ---------------------
@@ -207,8 +214,10 @@ async function embed(tenantId, texts) {
 // model (must be vision-capable, e.g. Claude Sonnet via OpenRouter). Same engine as
 // chat() — used for receipt/document capture. Returns the assistant text.
 async function vision(tenantId, { system, prompt, imageDataUrl, model: modelOverride, maxTokens = 600 } = {}) {
-  const { baseUrl, model: tenantModel, key } = await _resolveSecret(tenantId);
-  const model = modelOverride || tenantModel;
+  const { baseUrl, key } = await _resolveSecret(tenantId);
+  // The tenant's chat model may be text-only, so default to the free image-capable
+  // model for vision unless the caller explicitly passes a model override.
+  const model = modelOverride || DEFAULT_VISION_MODEL();
   if (!key) throw new PostError("LLM_NOT_CONFIGURED", "Connect an LLM provider (OpenRouter key) in Agents settings", 422);
   const userContent = [];
   if (prompt) userContent.push({ type: "text", text: prompt });

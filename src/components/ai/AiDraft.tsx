@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { humanizeAiError } from "./aiError";
 import { toast } from "sonner";
 import { Sparkles, Loader2 } from "lucide-react";
 
@@ -33,8 +34,8 @@ export default function AiDraft({ prompt, context, onInsert, label = "Draft with
       });
       if (res?.content?.trim()) { onInsert(res.content.trim()); toast.success("Draft inserted — edit before sending"); }
       else toast.error("Couldn't generate a draft");
-    } catch {
-      toast.error("AI isn't enabled in this workspace yet");
+    } catch (e) {
+      toast.error(humanizeAiError(e));
     } finally { setBusy(false); }
   };
   const pad = size === "sm" ? "px-2 py-1 text-[11px]" : "px-2.5 py-1.5 text-xs";

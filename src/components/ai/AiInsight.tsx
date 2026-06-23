@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { humanizeAiError } from "./aiError";
 import { Sparkles, RefreshCw, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 
 /**
@@ -36,8 +37,8 @@ export default function AiInsight({ question, context, title = "AI insight", sys
         messages: [{ role: "user", content: `${question}\n\nData:\n${ctx.slice(0, 6000)}` }],
       });
       setText(res?.content?.trim() || "No insight available for this data.");
-    } catch {
-      setText("AI isn't enabled in this workspace yet — ask an admin to add the AI key.");
+    } catch (e) {
+      setText(humanizeAiError(e));
     } finally {
       setBusy(false);
       setLoaded(true);
