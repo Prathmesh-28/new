@@ -300,6 +300,15 @@ const TOOLS = {
   },
 };
 
+// ── cross-domain platform tools ───────────────────────────────────────────────
+// Merge in the whole-business READ tools (cash, transactions, receivables, alerts,
+// forecast) so an agent built in the Agent Studio isn't limited to the books ledger.
+// Same tool contract; all scope:"read". Books tools above win on any name clash.
+const platformtools = require("./platformtools");
+for (const [name, def] of Object.entries(platformtools.TOOLS)) {
+  if (!TOOLS[name]) TOOLS[name] = def;
+}
+
 // ── registry surface (CONTRACT) ───────────────────────────────────────────────
 function toolCatalog() {
   return Object.entries(TOOLS).map(([name, t]) => ({

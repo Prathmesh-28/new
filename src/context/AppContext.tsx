@@ -313,6 +313,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const canAccess = (tab: string) => {
     if (effectiveRole === "super_admin") return true;
+    // Agent Studio is open to every member — anyone can build/run agents for their
+    // business (write-actions are still role-gated server-side at confirm time).
+    if (tab === "agents") return true;
     return getRoleConfig(effectiveRole)?.accessibleTabs.includes(tab) ?? false;
   };
 

@@ -11,7 +11,9 @@
 
 const { PostError } = require("./posting-engine") || {};
 
-const SUGGESTED_MODEL = "anthropic/claude-sonnet-4.6";
+// null → cloned agents inherit the tenant's configured engine model (free by
+// default), so a template never pins users to a paid model they have no credits for.
+const SUGGESTED_MODEL = null;
 
 // ── curated templates ─────────────────────────────────────────────────────────
 const TEMPLATES = [
@@ -89,6 +91,60 @@ const TEMPLATES = [
       "list. Be clear about what is genuinely low versus merely below a comfortable buffer. Do not create purchase " +
       "orders yourself — just recommend.",
     tools: ["get_stock_summary"],
+    suggestedModel: SUGGESTED_MODEL,
+  },
+
+  // ── cross-domain (whole-business) templates ──────────────────────────────────
+  {
+    id: "daily-business-briefing",
+    name: "Daily Business Briefing",
+    description:
+      "Every morning, a one-screen briefing on cash, runway, overdue money and anything that needs attention today.",
+    instructions:
+      "You are the owner's Daily Business Briefing. Use get_business_snapshot for cash, burn, runway, receivables " +
+      "and revenue, get_alerts for anything urgent, and get_cash_forecast if a projection exists. Produce a short, " +
+      "scannable briefing: headline cash & runway up top, then 'needs attention today', then a one-line outlook. " +
+      "Be specific with ₹ amounts (Indian L/Cr formatting) and names. Only report what the tools return.",
+    tools: ["get_business_snapshot", "get_alerts", "get_cash_forecast"],
+    suggestedModel: SUGGESTED_MODEL,
+  },
+  {
+    id: "cash-runway-sentinel",
+    name: "Cash Runway Sentinel",
+    description:
+      "Watches your cash runway and warns you — with the reason — when it gets tight, so you're never surprised.",
+    instructions:
+      "You are the Cash Runway Sentinel. Use get_business_snapshot and get_bank_balances for current cash and burn, " +
+      "and get_cash_forecast for the projected path. State the current runway in days and whether it is healthy " +
+      "(>90d), tightening (30-90d) or critical (<30d). Explain the main drivers of the burn and name 2-3 concrete " +
+      "levers to extend runway. Never fabricate numbers.",
+    tools: ["get_business_snapshot", "get_bank_balances", "get_cash_forecast"],
+    suggestedModel: SUGGESTED_MODEL,
+  },
+  {
+    id: "receivables-collector",
+    name: "Receivables Collector",
+    description:
+      "Finds who owes you, prioritises the worst offenders, and drafts polite reminders you can send.",
+    instructions:
+      "You are a Receivables Collector. Use get_receivables to see outstanding and overdue customer invoices. " +
+      "Rank by amount and days overdue, summarise the total at risk, and draft a courteous, escalating reminder for " +
+      "the top accounts (cite customer, amount, due date). Be firm but professional; never threaten or promise " +
+      "discounts. Only use the figures the tool returns.",
+    tools: ["get_receivables"],
+    suggestedModel: SUGGESTED_MODEL,
+  },
+  {
+    id: "spend-investigator",
+    name: "Spend Investigator",
+    description:
+      "Reviews recent spending and flags anything unusual, large or off-pattern that's worth a second look.",
+    instructions:
+      "You are a Spend Investigator. Use list_transactions (type 'expense') to review recent outflows. Group by " +
+      "category and counterparty, surface the largest and any that look unusual or off-pattern, and call out " +
+      "possible duplicates or one-offs. Present a tight 'worth a look' list with ₹ amounts and dates. Do not accuse " +
+      "— flag for review. Only report what the data shows.",
+    tools: ["list_transactions"],
     suggestedModel: SUGGESTED_MODEL,
   },
 ];

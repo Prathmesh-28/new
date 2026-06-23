@@ -97,6 +97,7 @@ const VoicePage          = lazy(() => import("@/features/voice/VoicePage"));
 const FieldPage          = lazy(() => import("@/features/field/FieldPage"));
 const TokensPage         = lazy(() => import("@/features/tokens/TokensPage"));
 const FrontierPage       = lazy(() => import("@/features/frontier/FrontierPage"));
+const AgentStudioPage    = lazy(() => import("@/features/agents/AgentStudioPage"));
 
 function PageLoader() {
   return (
@@ -280,6 +281,7 @@ function AppShell() {
                 <Route path="/marketplace"   element={<MarketplacePage />} />
                 <Route path="/network"       element={<NetworkPage />} />
                 <Route path="/automation"    element={<AutomationPage />} />
+                <Route path="/agents"        element={<AgentStudioPage />} />
                 <Route path="/copilot"       element={<CopilotPage />} />
                 <Route path="/security"      element={<SecurityPage />} />
                 <Route path="/privacy"       element={<PrivacyPage />} />

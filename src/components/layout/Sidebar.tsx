@@ -13,7 +13,7 @@ import {
   MessageCircle, Sliders, PhoneCall, Award, FolderOpen, FileSpreadsheet, ScrollText, Database,
   Handshake, IndianRupee, Umbrella, Coins, Leaf, Globe,
   ShoppingCart, Network, Workflow, Bot, ShieldAlert, KeyRound, Banknote, Radar,
-  Mic, Smartphone, Blocks, FlaskConical, BookOpen, Factory, LineChart, UsersRound,
+  Mic, Smartphone, Blocks, FlaskConical, BookOpen, Factory, LineChart, UsersRound, Wand2,
 } from "lucide-react";
 
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
@@ -87,6 +87,7 @@ const NAV_CATALOG: NavGroup[] = [
     { to: "/insurance",       label: "Insurance",     icon: Umbrella,        tab: "insurance"  },
   ]},
   { label: "AI & Automation", items: [
+    { to: "/agents",          label: "Agent Studio",  icon: Wand2,           tab: "agents"     },
     { to: "/copilot",         label: "AI CFO",        icon: Bot,             tab: "copilot"    },
     { to: "/automation",      label: "Automation",    icon: Workflow,        tab: "automation" },
     { to: "/whatsapp",        label: "WhatsApp",      icon: MessageCircle,   tab: "whatsapp"   },
@@ -120,13 +121,13 @@ const NAV_CATALOG: NavGroup[] = [
 // Audit #1 — the 6-8 daily-driver pages per role shown up top as "Main"; the rest
 // stay collapsed under their user-flow group. The 20% of features used 80% of the time.
 const PRIMARY_NAV: Record<string, string[]> = {
-  super_admin:        ["dashboard", "transactions", "invoices", "gst", "forecast", "health", "admin", "settings"],
-  owner:              ["dashboard", "transactions", "invoices", "gst", "forecast", "health", "settings"],
-  finance_manager:    ["dashboard", "transactions", "invoices", "receivables", "gst", "forecast", "health"],
-  accountant:         ["dashboard", "transactions", "books", "gst", "tax", "compliance", "advisor", "statements"],
-  sales:              ["dashboard", "crm", "invoices", "receivables", "collections", "analytics"],
-  operations_manager: ["dashboard", "operations", "erp", "vendors", "suppliers", "spend", "documents"],
-  viewer:             ["dashboard", "analytics", "health", "cfo-brief", "forecast", "benchmarks"],
+  super_admin:        ["dashboard", "transactions", "invoices", "gst", "forecast", "agents", "admin", "settings"],
+  owner:              ["dashboard", "transactions", "invoices", "gst", "forecast", "agents", "settings"],
+  finance_manager:    ["dashboard", "transactions", "invoices", "receivables", "gst", "agents", "forecast"],
+  accountant:         ["dashboard", "transactions", "books", "gst", "tax", "agents", "compliance", "advisor"],
+  sales:              ["dashboard", "crm", "invoices", "receivables", "collections", "agents"],
+  operations_manager: ["dashboard", "operations", "erp", "vendors", "suppliers", "agents", "spend"],
+  viewer:             ["dashboard", "analytics", "health", "cfo-brief", "forecast", "agents"],
   investor:           ["investor", "capital", "valuation", "term-sheet", "lenders"],
 };
 
@@ -324,6 +325,19 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
           }
         </button>
 
+        {/* Always-visible CTA — build your own AI agent, reachable from every tab */}
+        <NavLink
+          to="/agents"
+          title="Build your own AI agent"
+          className={cn(
+            "shrink-0 mx-2 mt-2 flex items-center gap-2 rounded-lg font-semibold text-[var(--color-bg)] bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] hover:opacity-90 transition-opacity",
+            collapsed ? "justify-center p-2" : "px-3 py-2 text-sm"
+          )}
+        >
+          <Wand2 size={collapsed ? 16 : 15} className="shrink-0" />
+          {!collapsed && <span>Build an Agent</span>}
+        </NavLink>
+
         {/* Client-view banner */}
         {selectedClientTenantId && !collapsed && (
           <div className="mx-2 mt-2 bg-blue-950/60 border border-blue-800/40 rounded-md p-2">
@@ -443,6 +457,10 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
           <Logo variant="horizontal" size={20} className="text-[var(--color-text)] select-none" />
         </button>
         <div className="flex items-center gap-1">
+          <NavLink to="/agents" aria-label="Build an Agent" onClick={() => setMobileOpen(false)}
+            className="inline-flex items-center gap-1 rounded-md bg-[var(--color-primary)] text-[var(--color-bg)] text-[11px] font-semibold px-2 py-1">
+            <Wand2 size={13} /> Agent
+          </NavLink>
           {onOpenSearch && (
             <button onClick={onOpenSearch} aria-label="Search" className="p-1.5 rounded-md text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors">
               <Search size={18} />
