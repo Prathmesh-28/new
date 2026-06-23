@@ -116,13 +116,23 @@ function parseUsage(data) {
   };
 }
 
+// Is this error a billing/out-of-credits failure we should recover from by
+// retrying on the free default model? (402 Payment Required / "insufficient credits")
+function _isPaymentError(e) {
+  if (!e) return false;
+  if (e.providerStatus === 402) return true;
+  return /insufficient credit|payment required|\(402\)|\b402\b/i.test(e.providerText || e.message || "");
+}
+
 // --- chat ---------------------------------------------------------------------
 // Maps our { system, messages, tools } onto an OpenAI chat-completions request and
 // returns the assistant message { content, tool_calls, usage }. Throws PostError on
-// any non-2xx so callers get a consistent, surfaceable error.
+// any non-2xx so callers get a consistent, surfaceable error. If the configured model
+// is out of credits (402), retries ONCE on the free default model so the app keeps
+// working without a paid balance — unless the configured model already IS the default.
 async function chat(tenantId, { system, messages = [], tools, model: modelOverride } = {}) {
   const { baseUrl, model: tenantModel, key } = await _resolveSecret(tenantId);
-  const model = modelOverride || tenantModel;   // per-agent model override wins
+  const requestedModel = modelOverride || tenantModel;   // per-agent / tenant model wins
   if (!key) {
     throw new PostError(
       "LLM_NOT_CONFIGURED",
@@ -135,34 +145,45 @@ async function chat(tenantId, { system, messages = [], tools, model: modelOverri
   if (system) oaMessages.push({ role: "system", content: String(system) });
   for (const m of messages) oaMessages.push({ role: m.role, content: m.content });
 
-  const body = { model, messages: oaMessages };
-  if (tools && tools.length) body.tools = tools;
-
   const url = baseUrl.replace(/\/+$/, "") + "/chat/completions";
-  let resp;
+
+  const attempt = async (useModel) => {
+    const body = { model: useModel, messages: oaMessages };
+    if (tools && tools.length) body.tools = tools;
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      throw new PostError("LLM_NETWORK", `LLM request failed: ${e.message}`, 502);
+    }
+    if (!resp.ok) {
+      let text;
+      try { text = await resp.text(); } catch { text = ""; }
+      const err = new PostError("LLM_ERROR", `LLM provider error (${resp.status}): ${text}`, 502);
+      err.providerStatus = resp.status;
+      err.providerText = text;
+      throw err;
+    }
+    const data = await resp.json();
+    const msg = data && data.choices && data.choices[0] && data.choices[0].message;
+    if (!msg) throw new PostError("LLM_ERROR", "LLM returned no message", 502);
+    return { content: msg.content || "", tool_calls: msg.tool_calls, usage: parseUsage(data) };
+  };
+
   try {
-    resp = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify(body),
-    });
+    return await attempt(requestedModel);
   } catch (e) {
-    throw new PostError("LLM_NETWORK", `LLM request failed: ${e.message}`, 502);
+    const freeModel = DEFAULT_MODEL();
+    if (_isPaymentError(e) && requestedModel !== freeModel) {
+      try { console.warn(`[llm] model "${requestedModel}" out of credits — falling back to free "${freeModel}"`); } catch {}
+      return await attempt(freeModel);
+    }
+    throw e;
   }
-
-  if (!resp.ok) {
-    let text;
-    try { text = await resp.text(); } catch { text = ""; }
-    throw new PostError("LLM_ERROR", `LLM provider error (${resp.status}): ${text}`, 502);
-  }
-
-  const data = await resp.json();
-  const msg = data && data.choices && data.choices[0] && data.choices[0].message;
-  if (!msg) throw new PostError("LLM_ERROR", "LLM returned no message", 502);
-  return { content: msg.content || "", tool_calls: msg.tool_calls, usage: parseUsage(data) };
 }
 
 // --- embeddings ---------------------------------------------------------------
@@ -226,17 +247,36 @@ async function vision(tenantId, { system, prompt, imageDataUrl, model: modelOver
   if (system) messages.push({ role: "system", content: system });
   messages.push({ role: "user", content: userContent });
   const url = baseUrl.replace(/\/+$/, "") + "/chat/completions";
-  let resp;
+
+  const attempt = async (useModel) => {
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ model: useModel, messages, max_tokens: maxTokens }),
+      });
+    } catch (e) { throw new PostError("LLM_NETWORK", `LLM request failed: ${e.message}`, 502); }
+    if (!resp.ok) {
+      let t; try { t = await resp.text(); } catch { t = ""; }
+      const err = new PostError("LLM_ERROR", `LLM provider error (${resp.status}): ${t}`, 502);
+      err.providerStatus = resp.status; err.providerText = t;
+      throw err;
+    }
+    const data = await resp.json();
+    return data?.choices?.[0]?.message?.content || "";
+  };
+
   try {
-    resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
-    });
-  } catch (e) { throw new PostError("LLM_NETWORK", `LLM request failed: ${e.message}`, 502); }
-  if (!resp.ok) { let t; try { t = await resp.text(); } catch { t = ""; } throw new PostError("LLM_ERROR", `LLM provider error (${resp.status}): ${t}`, 502); }
-  const data = await resp.json();
-  return data?.choices?.[0]?.message?.content || "";
+    return await attempt(model);
+  } catch (e) {
+    const freeVision = DEFAULT_VISION_MODEL();
+    if (_isPaymentError(e) && model !== freeVision) {
+      try { console.warn(`[llm] vision model "${model}" out of credits — falling back to free "${freeVision}"`); } catch {}
+      return await attempt(freeVision);
+    }
+    throw e;
+  }
 }
 
 module.exports = { getTenantLlm, setTenantLlm, chat, embed, vision, encryptKey, decryptKey };
