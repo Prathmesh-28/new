@@ -39,6 +39,12 @@ const GROUPS = {
     bool: ["enabled"],
     defaults: { enabled: false, text: "", linkUrl: "", linkLabel: "" },
   },
+  // Default collection details — used on invoice payment links when a business
+  // hasn't set its own. Non-sensitive (they appear on the customer's payment link).
+  payments: {
+    keys: ["upiId", "payeeName", "paymentNote"],
+    defaults: { upiId: "", payeeName: "", paymentNote: "" },
+  },
 };
 
 async function readGroup(group) {

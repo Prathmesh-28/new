@@ -7,6 +7,15 @@ const crypto   = require("crypto");
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant","sales"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
+// Platform-default collection details the super-admin sets in the console
+// (Admin → Payments & collections). Used when a business hasn't set its own UPI.
+async function platformPayments() {
+  try {
+    const { rows } = await pool.query("SELECT value FROM platform_settings WHERE key='payments'");
+    return rows[0]?.value || {};
+  } catch { return {}; }
+}
+
 // POST /api/collections/upi-link
 router.post("/upi-link", authenticate, canWrite, async (req, res) => {
   const { invoice_id, amount } = req.body;
@@ -52,15 +61,18 @@ router.post("/upi-link", authenticate, canWrite, async (req, res) => {
     } catch { /* fallback to UPI */ }
   }
 
-  // Fallback: static UPI deep-link — ONLY with the firm's real UPI ID. Never send a
-  // placeholder ("headroom@upi") to a customer: their money would go nowhere / wrong.
-  const upiId   = firm.upiId || null;
+  // Fallback: static UPI deep-link. Use the firm's own UPI ID first, else the
+  // platform default the super-admin set in the console. Never a placeholder — a
+  // wrong VPA would send the customer's money to the wrong place.
+  const platformPay = await platformPayments();
+  const upiId   = firm.upiId || platformPay.upiId || null;
+  const payee   = firm.name || platformPay.payeeName || "";
   const upiLink = upiId
-    ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(firm.name || "")}&am=${payAmt}&tn=${encodeURIComponent(inv.invoice_number)}&cu=INR`
+    ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payee)}&am=${payAmt}&tn=${encodeURIComponent(inv.invoice_number)}&cu=INR`
     : null;
   const payUrl  = razorpay_url || upiLink;
   if (!payUrl) {
-    return res.status(400).json({ error: "Add your UPI ID (Settings → Company) or connect Razorpay to collect payments — we won't send a placeholder account to your customer." });
+    return res.status(400).json({ error: "No payment method set up yet — add your UPI ID in Settings, or ask your admin to set a default UPI ID in the console (Admin → Payments), or connect Razorpay." });
   }
   const qr = await QRCode.toDataURL(payUrl, { width: 200 }).catch(() => null);
 

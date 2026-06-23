@@ -328,6 +328,7 @@ const PLATFORM_GROUPS: Record<string, PlatformGroup> = {
   social: { title: "Social links (footer icons)", hint: "Full https:// URLs. Blank hides that icon.", fields: [["linkedin", "LinkedIn"], ["instagram", "Instagram"], ["twitter", "X / Twitter"], ["youtube", "YouTube"], ["facebook", "Facebook"]] },
   links: { title: "Footer legal links", hint: "Privacy / Terms / Security URLs shown in the footer.", fields: [["privacyUrl", "Privacy URL"], ["termsUrl", "Terms URL"], ["securityUrl", "Security URL"]] },
   banner: { title: "Announcement banner", hint: "A site-wide banner (shown in-app). Off by default.", toggle: "enabled", fields: [["text", "Banner text"], ["linkUrl", "Link URL"], ["linkLabel", "Link label"]] },
+  payments: { title: "Payments & collections", hint: "Default UPI ID used on invoice payment links when a business hasn't set its own. Shown to customers — use a real VPA you control.", fields: [["upiId", "UPI ID (VPA)"], ["payeeName", "Payee name"], ["paymentNote", "Payment note"]] },
 };
 
 function PlatformSettingsAdmin() {
