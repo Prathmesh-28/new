@@ -78,13 +78,11 @@ export default function HeadroomAssistant() {
   // The tenant's own agents — selectable so they're usable from anywhere via this chatbox.
   const [agents, setAgents] = useState<any[]>([]);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
-  useEffect(() => { if (open) api.get<any[]>("/api/books/agents").then(a => setAgents(Array.isArray(a) ? a : [])).catch(() => { /* no agents / no access */ }); }, [open]);
+  useEffect(() => { if (open && user) api.get<any[]>("/api/books/agents").then(a => setAgents(Array.isArray(a) ? a : [])).catch(() => { /* no agents / no access */ }); }, [open, user]);
 
   const kb = useMemo(buildKb, []);
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [msgs, busy]);
   useEffect(() => { if (open && view === "chat") inputRef.current?.focus(); }, [open, view]);
-
-  if (!user) return null;
 
   const send = async (text: string) => {
     const q = text.trim();
@@ -124,6 +122,18 @@ export default function HeadroomAssistant() {
     const system = `You are the Headroom Assistant, a friendly in-app helper for an India-first SMB finance & accounting super-app (books/GL, GST & India tax filing, invoicing, collections, payroll, inventory, banking, capital, CRM). Answer conversationally and concisely (2-4 short sentences or tight bullets), reference the real screen/route, and be accurate. Use ONLY this product context where relevant:\n${ctx || "(no direct match — answer from general Headroom knowledge and suggest where to look.)"}\n\nIf the user wants to DO or OPEN something in the app, end your reply with a directive on its own line in the form [[go:/route|Button label]] using a real route (e.g. /invoices, /gst, /payroll, /collections, /books, /payments, /banking, /forecast, /vendors, /advisor, /settings). Never describe or mention the directive itself.`;
     const apiMsgs = history.filter(m => !m.seed).map(m => ({ role: m.role, content: m.content }));
 
+    // Knowledge-base answer (used as the AI-off fallback AND the logged-out path,
+    // since /api/ai/ask needs auth — so the assistant still helps public visitors).
+    const kbAnswer = () => {
+      const content = top
+        ? `${top.what}${top.steps && top.steps.length ? "\n\nQuick steps:\n" + top.steps.slice(0, 4).map((s, i) => `${i + 1}. ${s}`).join("\n") : ""}`
+        : (user ? "I couldn't find a direct answer — tap the list icon (top-right) to browse all help topics."
+                : "Sign in to chat with the AI or your agents. Meanwhile, browse help topics via the list icon (top-right).");
+      const { route, routeLabel } = resolve(null);
+      setMsgs(m => [...m, { role: "assistant", content, route, routeLabel, chips }]);
+    };
+    if (!user) { kbAnswer(); setBusy(false); return; }   // logged-out → KB only
+
     try {
       const res = await api.post<{ content?: string; error?: string }>("/api/ai/ask", { system, messages: apiMsgs });
       let content = res?.content?.trim() || (top ? top.what : "I couldn't find that — try rephrasing, or tap the list icon to browse topics.");
@@ -132,12 +142,7 @@ export default function HeadroomAssistant() {
       const { route, routeLabel } = resolve(parsed.action);
       setMsgs(m => [...m, { role: "assistant", content, route, routeLabel, chips }]);
     } catch {
-      // AI off → answer straight from the knowledge base, still conversational + actionable.
-      const content = top
-        ? `${top.what}${top.steps && top.steps.length ? "\n\nQuick steps:\n" + top.steps.slice(0, 4).map((s, i) => `${i + 1}. ${s}`).join("\n") : ""}`
-        : "I couldn't find a direct answer — try rephrasing, or tap the list icon (top-right) to browse all help topics.";
-      const { route, routeLabel } = resolve(null);
-      setMsgs(m => [...m, { role: "assistant", content, route, routeLabel, chips }]);
+      kbAnswer();
     } finally {
       setBusy(false);
     }

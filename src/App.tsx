@@ -299,7 +299,6 @@ function AppShell() {
         </main>
       </div>
       <CommandPalette open={paletteOpen} onClose={closePalette} />
-      <HeadroomAssistant />
     </div>
   );
 }
@@ -323,6 +322,8 @@ export default function App() {
                 <Route path="/*"               element={<RequireAuth><AppLockGate><AppShell /></AppLockGate></RequireAuth>} />
               </Routes>
             </Suspense>
+            {/* Ask-Headroom assistant on EVERY page (public + authed). Logged-out = help-only. */}
+            <HeadroomAssistant />
           </ErrorBoundary>
         </BrowserRouter>
         </CapabilitiesProvider>
