@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { ActiveLoan } from "@/data/types";
 import PreviewBadge from "@/components/PreviewBadge";
+import AiInsight from "@/components/ai/AiInsight";
 
 function emi(principal: number, annualRate: number, months: number): number {
   const r = annualRate / 100 / 12;
@@ -233,6 +234,20 @@ export default function CreditPage() {
               </div>
             ))}
           </div>
+
+          <AiInsight
+            collapsed
+            title="Should I take on this credit?"
+            question="Given my credit offers and current borrowing, should I take on any of this credit and what's the smart move?"
+            context={{
+              underwritingScore: bestScore,
+              maxApprovedAmount: bestApp?.approvedAmount ?? null,
+              monthlyBurn: burn,
+              runwayDays: runway,
+              activeLoans: activeLoans.slice(0, 20).map(l => ({ lender: l.lender, outstanding: l.outstanding, rate: l.rate, monthlyEmi: l.monthlyEmi, termMonths: l.termMonths })),
+              offers: realOffers.slice(0, 20).map(o => ({ lender: o.lender, amount: o.amount, rate: o.rate, termMonths: o.termMonths, monthlyEmi: o.monthlyEmi, interest: o.interest, total: o.total })),
+            }}
+          />
 
           {/* Real lender offers from the underwriting backend */}
           {realOffers.length > 0 ? (

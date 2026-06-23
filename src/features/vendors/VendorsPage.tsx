@@ -4,6 +4,7 @@ import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import { api } from "@/lib/api";
 import EmptyState from "@/components/EmptyState";
+import AiInsight from "@/components/ai/AiInsight";
 import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2, LineChart, Layers, Network, FileCheck2, Gavel, PiggyBank, FileBadge, BadgePercent, Ban, CreditCard, Repeat, Truck, CopyCheck, Hourglass, Scale, Pencil, Building2, BadgeCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
@@ -536,6 +537,38 @@ export default function VendorsPage() {
           ))}
         </div>
       </div>
+
+      <AiInsight
+        collapsed
+        className="w-full"
+        title="AI insight — vendors"
+        question="Which vendors should I prioritise paying or renegotiating, and where is my spend concentrated? Flag any single-vendor concentration risk and overdue AP."
+        context={{
+          totalVendors: vendors.length,
+          savedProfiles: master.length,
+          totalSpend: Math.round(totalSpend),
+          thisMonthSpend: Math.round(thisMSpend),
+          recurringVendors: recurringN,
+          topVendorsBySpend: [...vendors]
+            .sort((a, b) => b.totalSpend - a.totalSpend)
+            .slice(0, 20)
+            .map(v => ({
+              name: v.name,
+              category: v.category,
+              totalSpend: Math.round(v.totalSpend),
+              thisMonth: Math.round(v.thisMonth),
+              lastMonth: Math.round(v.lastMonth),
+              txnCount: v.txnCount,
+              trend: v.trend,
+              lastPayment: v.lastPayment,
+            })),
+          apAgingBuckets: agingBucketTotals.map(b => ({
+            bucket: b.bucket,
+            amount: Math.round(b.amount),
+            count: b.count,
+          })),
+        }}
+      />
 
       {view === "directory" && (
         <>

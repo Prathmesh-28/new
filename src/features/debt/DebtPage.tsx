@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { addMonths, format, parseISO } from "date-fns";
 import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import AiInsight from "@/components/ai/AiInsight";
 
 type ActiveLoanLike = { id: string; lender: string; outstanding: number; rate: number; monthlyEmi: number };
 
@@ -157,6 +158,25 @@ export default function DebtPage() {
           </div>
         ))}
       </div>
+
+      <AiInsight
+        collapsed
+        title="What should I pay down first?"
+        question="Looking at my debt and repayment schedule, what should I prioritise paying down and where can I save on interest?"
+        context={{
+          totalOutstanding: snap.debtOutstanding,
+          monthlyDebtService: snap.monthlyDebtService,
+          monthlyInterest: snap.monthlyInterest,
+          weightedAvgRatePct: snap.weightedAvgRatePct,
+          dscr: snap.dscr,
+          loans: loans.slice(0, 20).map(l => ({
+            lender: l.lender, outstanding: l.outstanding, rate: l.rate, monthlyEmi: l.monthlyEmi,
+            remainingMonths: remainingMonths(l), estInterestLeft: Math.round(totalInterest(l.outstanding, l.rate, remainingMonths(l))),
+          })),
+          selectedLoan: selected ? { lender: selected.lender, outstanding: selected.outstanding, rate: selected.rate, monthlyEmi: selected.monthlyEmi, remainingMonths: selRemaining } : null,
+          nextMonthsSchedule: schedule.slice(0, 12).map(r => ({ month: r.month, opening: Math.round(r.opening), interest: Math.round(r.interest), principal: Math.round(r.principal), closing: Math.round(r.closing) })),
+        }}
+      />
 
       {loans.length === 0 ? (
         <div className="bg-[var(--color-surface)] border border-dashed border-[var(--color-border)] rounded-lg p-10 text-center">

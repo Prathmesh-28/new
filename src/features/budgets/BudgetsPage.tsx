@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
+import AiInsight from "@/components/ai/AiInsight";
 import { Plus, X, AlertTriangle, TrendingUp, TrendingDown, RotateCcw, Building2, HardHat, CheckCircle2, Clock, CalendarRange, GitCompareArrows, SlidersHorizontal, Wallet, Users, FolderKanban, Gauge, Repeat, Megaphone, Scissors, ArrowLeftRight, CalendarClock, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { startOfMonth, endOfMonth, format, subMonths } from "date-fns";
@@ -149,6 +150,29 @@ export default function BudgetsPage() {
           </div>
         ))}
       </div>
+
+      <AiInsight
+        collapsed
+        title="AI budget insight"
+        question="Where am I over or under budget this month, and what should I rein in or reallocate? Call out the worst overspends and any categories trending up vs last month."
+        context={{
+          month: monthLabel,
+          totalBudget,
+          totalSpent,
+          overCount,
+          warnCount,
+          lines: rows.slice(0, 20).map(r => ({
+            label: r.label,
+            category: r.category,
+            limit: r.monthlyLimit,
+            spent: r.spent,
+            lastMonth: r.lastM,
+            pctUsed: Math.round(r.pct),
+            remaining: r.remaining,
+            overspend: r.overspend,
+          })),
+        }}
+      />
 
       {/* Overall progress bar */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">

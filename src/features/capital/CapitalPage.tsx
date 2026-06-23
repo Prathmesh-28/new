@@ -5,6 +5,7 @@ import { formatCurrency, generateId } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { Plus, Rocket, Gauge, FileSignature, Landmark, Wallet, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import AiInsight from "@/components/ai/AiInsight";
 
 // ── Backend-shaped types (rows from /api/capital/raises) ──────────────────────
 // Defined locally to avoid touching the shared data/types.ts. The Raises tab now
@@ -197,6 +198,24 @@ export default function CapitalPage() {
           </button>
         ))}
       </div>
+
+      <AiInsight
+        collapsed
+        title="✨ AI insight — capital"
+        question="Based on my capital structure and funding progress, what should I prioritise and what are the key risks or opportunities?"
+        context={{
+          totalRaised,
+          activeRaises: raises.filter(r => r.status === "active").length,
+          totalInvestors,
+          raises: raises.slice(0, 20).map(r => ({
+            name: decodeName(r.name),
+            type: raiseTypeLabel(r.raise_type),
+            status: r.status,
+            target: num(r.target_amount),
+            raised: num(r.raised_amount),
+          })),
+        }}
+      />
 
       {capTab === "runway"       && <RunwayExtensionPlanner />}
       {capTab === "safe"         && <SafeNoteModeller />}

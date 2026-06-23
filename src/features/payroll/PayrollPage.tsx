@@ -11,6 +11,7 @@ import PreviewBadge from "@/components/PreviewBadge";
 import BulkUpload from "@/components/BulkUpload";
 import ExportMenu from "@/components/ExportMenu";
 import SharedEmptyState from "@/components/EmptyState";
+import AiInsight from "@/components/ai/AiInsight";
 
 // Roles allowed to write payroll/HRMS data — mirrors the backend hrms WRITE_ROLES gate.
 const PAYROLL_WRITE_ROLES = new Set(["super_admin", "owner", "finance_manager"]);
@@ -304,6 +305,31 @@ export default function PayrollPage() {
           </div>
         ))}
       </div>
+
+      <AiInsight
+        collapsed
+        className="w-full"
+        title="AI insight — payroll"
+        question="Given my payroll data, what's my upcoming monthly payroll obligation (gross, net and TDS) and are there any cost concentration or statutory-compliance issues to watch?"
+        context={{
+          payrollMonth: `${MONTH_NAMES[runMonth - 1]} ${runYear}`,
+          totalEmployees: employees.length,
+          activeEmployees: employees.filter(e => e.status === "active").length,
+          grossMonthly: Math.round(totalMonthly),
+          tdsMonthly: Math.round(totalTds),
+          completedRuns: runs.length,
+          employees: employees.slice(0, 20).map(e => {
+            const calc = computeStatutoryNet(parseFloat(String(e.gross_salary)) || 0, statCfg);
+            return {
+              name: e.name,
+              status: e.status,
+              gross: calc.gross,
+              tds: calc.tds,
+              net: calc.net,
+            };
+          }),
+        }}
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit flex-wrap">

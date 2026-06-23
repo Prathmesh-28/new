@@ -3,6 +3,7 @@ import { useFeatureState } from "@/hooks/useFeatureState";
 import { api } from "@/lib/api";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import { useApp } from "@/context/AppContext";
+import AiInsight from "@/components/ai/AiInsight";
 import { gstLedger } from "@/lib/finance";
 import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt, Truck, X, TrendingUp, MapPin, Building2, Percent, Ban, Divide, Star, Banknote, Wallet, Globe, Activity, Timer, Gauge, Scale, RotateCcw, CalendarClock, Coins, FileMinus, Flame, ClipboardCheck, Hammer, Network, ArrowLeftRight, Split, Users, Gift, UserCheck, ListChecks } from "lucide-react";
 import { toast } from "sonner";
@@ -249,6 +250,27 @@ export default function GstPage() {
           </button>
         ))}
       </div>
+
+      <AiInsight
+        collapsed
+        title="✨ AI insight"
+        question="Given my GST position this period and the 12-month ledger trend, what should I prioritise, and are there any filing or ITC-mismatch risks (e.g. unused ITC carry-forward, output > input swings, GSTR-1 vs net liability gaps) I should act on?"
+        context={{
+          gstRegistered: firm.gstRegistered,
+          gstin: firm.gstNumber,
+          gstRate: firm.gstRate ?? 18,
+          ledger12mo: ledgerTotals,
+          thisPeriod: {
+            month: selMonth.m,
+            year: selMonth.y,
+            taxableTotal: gstr1Data.taxableTotal,
+            cgst: gstr1Data.cgstTotal,
+            sgst: gstr1Data.sgstTotal,
+            totalTax: gstr1Data.totalTax,
+            invoiceCount: gstr1Data.lines.length,
+          },
+        }}
+      />
 
       {/* ── LEDGER ── */}
       {tab === "ledger" && (

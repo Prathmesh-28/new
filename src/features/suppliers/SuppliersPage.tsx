@@ -6,6 +6,7 @@ import { Package, Zap, TrendingDown, Check, Award, RefreshCw, FileText, BadgeChe
 import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
 import EmptyState from "@/components/EmptyState";
+import AiInsight from "@/components/ai/AiInsight";
 
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
@@ -165,6 +166,30 @@ function EarlyPaySection() {
           </div>
         ))}
       </div>
+
+      <AiInsight
+        collapsed
+        className="w-full"
+        title="AI insight — suppliers"
+        question="Looking at my suppliers and their open early-pay offers, where are the concentration risks and which relationships should I act on? Call out the highest-saving offers worth paying early and any MSME suppliers that need priority."
+        context={{
+          openOffers: offers.filter(o => !paid[o.id]).length,
+          totalPayable: Math.round(offers.reduce((s, o) => s + o.invoice_amount, 0)),
+          savingsAvailable: Math.round(totalSavings),
+          offers: offers.slice(0, 20).map(o => ({
+            supplier: o.supplier_name,
+            invoiceAmount: Math.round(o.invoice_amount),
+            earlyPayDiscountPct: o.early_pay_discount,
+            saving: Math.round(o.saving),
+            daysEarly: o.days_early,
+            dueDate: o.due_date,
+            isMsme: o.is_msme ?? false,
+            billCount: o.bill_count,
+            totalSpend: o.total_spend != null ? Math.round(o.total_spend) : undefined,
+            paid: !!paid[o.id],
+          })),
+        }}
+      />
 
       {loading ? (
         <div className="py-10 flex justify-center"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>

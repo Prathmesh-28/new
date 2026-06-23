@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays, addMonths, differenceInCalendarDays } from "date-fns";
+import AiInsight from "@/components/ai/AiInsight";
 
 // shared styles (reused from TaxPage/DebtPage input convention)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -173,6 +174,17 @@ export default function TreasuryPage() {
           ))}
         </div>
       </div>
+
+      <AiInsight
+        collapsed
+        title="✨ AI insight — treasury"
+        question="Given my cash and treasury position, how should I optimise idle balances and what risks (concentration, idle yield, maturities) should I watch?"
+        context={{
+          totalCash: totalBalance,
+          accountCount: store.bankAccounts.length,
+          accounts: store.bankAccounts.slice(0, 20).map(b => ({ name: b.name, balance: b.balance })),
+        }}
+      />
 
       {tab === "overview" && <Overview totalBalance={totalBalance} />}
       {tab === "sweep" && <IdleCashSweepPlanner totalBalance={totalBalance} />}

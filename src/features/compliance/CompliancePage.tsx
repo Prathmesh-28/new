@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { useApp } from "@/context/AppContext";
+import AiInsight from "@/components/ai/AiInsight";
 import { computeFinancialSnapshot, gstLatePenalty } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
 import {
@@ -216,6 +217,22 @@ export default function CompliancePage() {
           </div>
         ))}
       </div>
+
+      <AiInsight
+        collapsed
+        title="✨ AI insight"
+        question="Which compliance items are most urgent, and what's at risk (interest, late fees, penalties) if I miss the nearest deadlines? Prioritise by cash impact and how soon they fall due."
+        context={{
+          deadlinesNext30: next30.length,
+          cashDueNext30: cashDue30,
+          cashOnHand: snap.cash,
+          overdueCount: overdueObligations.length,
+          gstThisMonth: snap.gstThisMonth,
+          estAnnualTax: snap.advanceTax[3]?.cumulativeTax ?? 0,
+          gstRegistered: store.firm.gstRegistered ?? false,
+          upcoming: next30.map(e => ({ label: e.label, kind: e.kind, date: e.date.toISOString().split("T")[0], inDays: differenceInDays(e.date, new Date()), amount: e.amount })).slice(0, 20),
+        }}
+      />
 
       {!store.firm.gstRegistered && (
         <div className="bg-yellow-950/30 border border-yellow-800/40 rounded-lg px-4 py-3 flex items-center justify-between gap-4">

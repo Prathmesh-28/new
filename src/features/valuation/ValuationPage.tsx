@@ -8,6 +8,7 @@ import { formatAmount, formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { Gem, Rocket, ArrowRight, Users, Building2, Sprout, SlidersHorizontal, FileSpreadsheet, Calculator, Dice5, Hourglass, Layers, PieChart, Repeat, Gift, CalendarClock, Activity, Scale, Receipt, TrendingDown, TrendingUp, GitBranch, Infinity as InfinityIcon, Timer } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import AiInsight from "@/components/ai/AiInsight";
 
 const INDUSTRY_MULTIPLES: Record<string, number> = {
   "SaaS / Fintech": 8, "SaaS": 8, "Fintech": 6, "E-commerce": 2.5, "Manufacturing": 1.5,
@@ -165,6 +166,26 @@ export default function ValuationPage() {
           </div>
         ))}
       </div>
+
+      <AiInsight
+        collapsed
+        title="How should I read this valuation?"
+        question="Based on these valuation inputs and multiples, how should I interpret my valuation and what drives it most?"
+        context={{
+          industry: store.firm.industry,
+          annualRevenue,
+          baseAnnualFcf: baseFcf,
+          assumptions: { revenueMultiple: multiple, industryMedianMultiple: defaultMultiple, growthPct: growth, discountPct: discount },
+          methods: {
+            revenueMultipleValue: Math.round(multipleVal),
+            dcfEnterpriseValue: Math.round(dcf.enterpriseValue),
+            dcfTerminalValue: Math.round(dcf.terminalValue),
+          },
+          impliedMultiple: annualRevenue > 0 ? Number((range.mid / annualRevenue).toFixed(2)) : null,
+          valuationRange: { low: Math.round(range.low), mid: Math.round(range.mid), high: Math.round(range.high) },
+          raise: { amount: raiseAmount, raisedSoFar, preMoney: Math.round(range.mid), postMoney: Math.round(dil.postMoney), investorPct: Number(dil.investorPct.toFixed(1)), founderRetainedPct: Number(dil.founderRetainedPct.toFixed(1)) },
+        }}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Assumptions */}

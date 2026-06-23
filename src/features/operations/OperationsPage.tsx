@@ -20,6 +20,7 @@ import { callNumber, whatsappTo, smsNumber } from "@/lib/nativeFeatures";
 import { api } from "@/lib/api";
 import { detectAnomalies, type Anomaly } from "@/lib/anomalies";
 import EmptyState from "@/components/EmptyState";
+import AiInsight from "@/components/ai/AiInsight";
 
 type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom" | "leadtime" | "reorder" | "payables"
   | "stockledger" | "batchtrack" | "jobwork" | "production" | "warehouse" | "stocktake" | "dispatch"
@@ -228,6 +229,34 @@ export default function OperationsPage() {
               </div>
             ))}
           </div>
+
+          <AiInsight
+            collapsed
+            title="AI operations insight"
+            question="Looking at my operational metrics, what's trending the wrong way and what should I fix first? Flag pending orders, low-stock SKUs and any high-severity anomalies."
+            context={{
+              totalOrderValue,
+              pendingOrders,
+              totalOrders: orders.length,
+              inventoryValue: totalInventoryVal,
+              skuCount: inventory.length,
+              lowStockCount: lowStockItems.length,
+              lowStockItems: lowStockItems.slice(0, 20).map(i => ({
+                product: i.productName,
+                sku: i.sku,
+                quantity: i.quantity,
+                reorderLevel: i.reorderLevel,
+              })),
+              anomalies: anomalies.slice(0, 20).map(a => ({
+                type: a.type,
+                severity: a.severity,
+                title: a.title,
+                amount: a.amount,
+                counterparty: a.counterparty,
+                date: a.date,
+              })),
+            }}
+          />
 
           {/* WhatsApp integration card */}
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">

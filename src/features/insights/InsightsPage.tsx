@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import AiInsight from "@/components/ai/AiInsight";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, XAxis, YAxis,
   ResponsiveContainer, Cell, Tooltip, Legend, CartesianGrid,
@@ -695,6 +696,19 @@ export default function InsightsPage() {
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
           {overview ? `Financial year ${overview.financialYear}` : `Financial year ${fy}`}
         </p>
+
+        <AiInsight
+          className="mt-4"
+          collapsed
+          title="AI insight"
+          question="What are the most important signals across finance, sales and people in this data, and what 2-3 actions should I take now?"
+          context={{
+            financialYear: overview?.financialYear ?? fy,
+            finance: overview?.finance ?? null,
+            sales: overview?.sales ?? null,
+            people: overview?.people ?? null,
+          }}
+        />
 
         {/* Finance */}
         <SectionLabel>Finance</SectionLabel>

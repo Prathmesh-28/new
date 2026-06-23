@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
+import AiInsight from "@/components/ai/AiInsight";
 
 // ── shared styles (mirrors TaxPage/DebtPage input + card classes) ────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -97,6 +98,25 @@ export default function BankingPage() {
           ))}
         </div>
       </div>
+
+      <AiInsight
+        collapsed
+        title="✨ AI insight — banking"
+        question="Looking at my bank accounts and balances, what should I act on — idle cash, low balances, feed issues, or single-bank concentration (DICGC insures only ₹5L per bank)?"
+        context={{
+          totalCash: totalBalance,
+          accountCount: accounts.length,
+          connectedFeeds: connected,
+          feedIssues: issues,
+          accounts: accounts.slice(0, 20).map(a => ({
+            name: a.name,
+            provider: a.provider,
+            balance: a.balance,
+            status: a.status,
+            sharePct: totalBalance > 0 ? Math.round((a.balance / totalBalance) * 100) : 0,
+          })),
+        }}
+      />
 
       {tab === "overview" && (
         <div className="space-y-5">

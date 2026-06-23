@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
+import AiInsight from "@/components/ai/AiInsight";
 import { formatCurrency } from "@/lib/utils";
 import {
   ShieldCheck, AlertTriangle, Calendar, CheckCircle2, ChevronRight,
@@ -429,6 +430,22 @@ export default function TaxPage() {
           </div>
         ))}
       </div>
+
+      <AiInsight
+        collapsed
+        title="✨ AI insight"
+        question="Based on my YTD P&L and computed tax position, what are my upcoming liabilities and what should I set aside or act on now? Flag the nearest deadline and any advance-tax / TDS / GST instalment that needs cash."
+        context={{
+          ytd: { revenue: ytdRevenue, expenses: ytdExpenses, profit: ytdProfit, from: format(startOfYear(today), "yyyy-MM-dd") },
+          annualTaxEstimate: annualTaxEst,
+          effectiveRate,
+          advanceTaxInstalments: installmentDue,
+          tdsThisMonth: { estimate: tdsEst, base: tdsBase },
+          gst: { registered: firm?.gstRegistered ?? false, rate: gstRate, liabilityLastMonth: gstLiability },
+          nextDeadline: nextDeadline ? { label: nextDeadline.label, desc: nextDeadline.desc, date: nextDeadline.date.toISOString().split("T")[0], inDays: nextDays } : null,
+          upcomingDeadlines: deadlines.map(d => ({ label: d.label, date: d.date.toISOString().split("T")[0], type: d.type })),
+        }}
+      />
 
       {/* YTD P&L bar */}
       {ytdRevenue > 0 && (
