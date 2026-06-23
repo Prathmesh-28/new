@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import FixedAssetRegister from "./FixedAssetRegister";
+import AiInsight from "@/components/ai/AiInsight";
 
 type Tab =
   | "income" | "balance" | "cashflow" | "assets"
@@ -249,6 +250,31 @@ export default function StatementsPage() {
           </div>
         )}
       </div>
+
+      <AiInsight
+        collapsed
+        title="Statement commentary"
+        question="Write a short MD&A-style commentary on these statements."
+        context={{
+          period: range.label,
+          profitAndLoss: {
+            revenue: pl.revenue,
+            totalExpense: pl.cogs + pl.payroll + pl.otherOpex + pl.depreciation + pl.interest + pl.tax,
+            grossProfit: pl.grossProfit,
+            ebitda: pl.ebitda,
+            netProfit: pl.netProfit,
+            grossMarginPct: pl.grossMarginPct,
+            netMarginPct: pl.netMarginPct,
+          },
+          balanceSheet: {
+            totalAssets: bs.totalAssets,
+            totalLiabilities: bs.totalLiabilities,
+            totalEquity: bs.totalEquity,
+            currentAssets: bs.currentAssets,
+            currentLiabilities: bs.currentLiabilities,
+          },
+        }}
+      />
 
       {/* Period selector */}
       {(tab === "income" || tab === "cashflow") && (

@@ -16,6 +16,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
 import { format, addMonths } from "date-fns";
+import AiInsight from "@/components/ai/AiInsight";
 
 const COMPONENT_ICON: Record<string, React.ElementType> = {
   liquidity: Droplets, profitability: PiggyBank, collections: Receipt,
@@ -173,6 +174,34 @@ export default function FinancialHealthPage() {
           </div>
         </div>
       </div>
+
+      <AiInsight
+        collapsed
+        question="Explain my financial-health score in plain English and the top 2 things to improve it."
+        context={{
+          score: health.score,
+          grade: health.grade,
+          lenderReady,
+          weakestComponents: weakest.map(c => ({ label: c.label, score: Math.round(c.score), weight: c.weight, detail: c.detail })),
+          liquidity: {
+            currentRatio: snap.currentRatio,
+            quickRatio: snap.quickRatio,
+            netWorkingCapital: snap.netWorkingCapital,
+            runwayDays: snap.runwayDays,
+            cccDays: snap.cccDays,
+          },
+          solvency: {
+            dscr: snap.dscr,
+            interestCoverage: snap.interestCoverage,
+            debtOutstanding: snap.debtOutstanding,
+          },
+          trend: {
+            revenueGrowthPct: snap.revenueGrowthPct,
+            netMarginPct: snap.grossMarginPct,
+            ebitdaMarginPct: ebitdaMgnPct,
+          },
+        }}
+      />
 
       {/* Component breakdown */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">

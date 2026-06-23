@@ -17,6 +17,7 @@ import {
   QrCode, Link2, X,
 } from "lucide-react";
 import { toast } from "sonner";
+import AiDraft from "@/components/ai/AiDraft";
 
 type Aging = "current" | "1-30" | "31-60" | "61-90" | "90+";
 
@@ -50,9 +51,12 @@ function ReminderModal({
 }: { name: string; amount: number; days: number; onClose: () => void; onSent: () => void }) {
   const [selected, setSelected] = useState("soft");
   const [channel, setChannel]   = useState<"whatsapp" | "email" | "sms">("whatsapp");
+  // When the user edits the field or generates an AI draft, that text overrides
+  // the template; picking a template clears the override.
+  const [override, setOverride] = useState<string | null>(null);
 
   const template = REMINDER_TEMPLATES.find(t => t.id === selected)!;
-  const text = template.text(name, formatCurrency(amount), days);
+  const text = override ?? template.text(name, formatCurrency(amount), days);
 
   // Open the message in the user's own WhatsApp / email / SMS, prefilled. This
   // genuinely sends (the user picks the recipient + hits send) without claiming
@@ -89,14 +93,14 @@ function ReminderModal({
           ))}
         </div>
 
-        {/* Template select */}
-        <div className="flex gap-2 mb-3">
+        {/* Template select + Draft with AI */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           {REMINDER_TEMPLATES.map(t => (
             <button
               key={t.id}
-              onClick={() => setSelected(t.id)}
+              onClick={() => { setSelected(t.id); setOverride(null); }}
               className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-all ${
-                selected === t.id
+                selected === t.id && override === null
                   ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-[var(--color-primary)]/30"
                   : "border-[var(--color-border)] text-[var(--color-muted)]"
               }`}
@@ -104,12 +108,21 @@ function ReminderModal({
               {t.label}
             </button>
           ))}
+          <AiDraft
+            className="ml-auto"
+            prompt="a polite, firm payment reminder"
+            context={{ customer: name, amount: formatCurrency(amount), daysOverdue: days }}
+            onInsert={setOverride}
+          />
         </div>
 
-        {/* Preview */}
-        <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 mb-4">
-          <p className="text-xs text-[var(--color-text)] leading-relaxed">{text}</p>
-        </div>
+        {/* Editable message */}
+        <textarea
+          value={text}
+          onChange={e => setOverride(e.target.value)}
+          rows={4}
+          className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 mb-4 text-xs text-[var(--color-text)] leading-relaxed outline-none focus:border-[var(--color-primary)]/40 resize-none"
+        />
 
         <div className="flex gap-2">
           <button

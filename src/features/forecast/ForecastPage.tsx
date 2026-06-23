@@ -21,6 +21,7 @@ import {
   Line, ComposedChart, ReferenceLine, Bar, Cell,
 } from "recharts";
 import { format } from "date-fns";
+import AiInsight from "@/components/ai/AiInsight";
 import { SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -313,6 +314,26 @@ export default function ForecastPage() {
               </div>
             ))}
           </div>
+
+          {/* AI reads the forecast — grounded in the same Monte-Carlo risk metrics */}
+          <AiInsight
+            collapsed
+            className="w-full"
+            question="Read my cash-flow forecast: runway, biggest risks, and what to do."
+            context={{
+              currentBalance: bankAccounts.reduce((a, b) => a + b.balance, 0),
+              safetyThresholdDays: firm.safetyThresholdDays,
+              thresholdCash: Math.round(risk.thresholdCash),
+              runwayDays: { p10: risk.runwayDist.p10, p50: risk.runwayDist.p50, p90: risk.runwayDist.p90 },
+              probBreachBuffer: Math.round(risk.probBreach * 100) / 100,
+              expectedTimeToPressureDays: pressureDay,
+              earliestPressureDays: risk.p10TimeToBreachDays,
+              cashFlowAtRisk95: Math.round(risk.cfar95),
+              projection90dEndBalance: (() => { const last = result.points[result.points.length - 1]; return { p10: Math.round(last?.p10 ?? 0), p50: Math.round(last?.p50 ?? 0), p90: Math.round(last?.p90 ?? 0) }; })(),
+              activeScenarios: scenarios.filter(s => s.active).map(s => s.name),
+              upcomingObligations: obligations.slice(0, 6).map(o => ({ name: o.name, amount: o.amount, dueDate: o.dueDate })),
+            }}
+          />
 
           {/* Pressure alert — fires 45-day-early when the hazard says so */}
           {risk.probBreachByDay[Math.min(44, risk.probBreachByDay.length - 1)] >= 0.5 && (

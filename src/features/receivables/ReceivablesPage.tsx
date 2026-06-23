@@ -7,6 +7,7 @@ import { Plus, X, Send, CheckCircle2, AlertTriangle, Clock, Kanban, List, Award,
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import EmptyState from "@/components/EmptyState";
+import AiInsight from "@/components/ai/AiInsight";
 import type { Invoice } from "@/data/types";
 
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -211,6 +212,17 @@ export default function ReceivablesPage() {
     { count: withDays.filter(i => i.bucket === b).length, amount: withDays.filter(i => i.bucket === b).reduce((s, i) => s + i.amount, 0) },
   ]));
 
+  // Compact AI context: top overdue customers + a simple DSO proxy.
+  const overdue = withDays.filter(i => i.daysOverdue > 0);
+  const topOverdue = [...overdue]
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5)
+    .map(i => ({ customer: i.customer, amount: i.amount, daysOverdue: i.daysOverdue }));
+  // DSO proxy: weighted average age of open invoices (days since due) clamped at 0.
+  const dso = pending.length > 0
+    ? Math.round(withDays.reduce((s, i) => s + Math.max(0, i.daysOverdue), 0) / pending.length)
+    : 0;
+
   const handleChase = (inv: typeof withDays[0]) => {
     const msg = chaseMessage(inv, inv.daysOverdue);
     const mailto = `mailto:?subject=${encodeURIComponent(`Payment reminder: Invoice ${inv.invoiceNumber ?? ""} (${formatCurrency(inv.amount)})`)}&body=${encodeURIComponent(msg)}`;
@@ -282,6 +294,23 @@ export default function ReceivablesPage() {
           </button>
         ))}
       </div>
+
+      <AiInsight
+        collapsed
+        question="Which receivables are most at risk and what collection actions should I prioritise?"
+        context={{
+          totalOutstanding,
+          openInvoiceCount: pending.length,
+          dsoDays: dso,
+          ageingBuckets: {
+            current: bucketTotals["current"],
+            "1-30d": bucketTotals["30d"],
+            "31-60d": bucketTotals["60d"],
+            "60d+": bucketTotals["90d"],
+          },
+          topOverdueCustomers: topOverdue,
+        }}
+      />
 
       {tab === "risk-score" && <CustomerRiskScoring />}
       {tab === "factoring" && <FactoringEstimator />}

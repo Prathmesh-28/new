@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { subMonths, format, startOfMonth, endOfMonth } from "date-fns";
 import type { Transaction } from "@/data/types";
+import AiInsight from "@/components/ai/AiInsight";
 
 interface BriefSection {
   title: string;
@@ -270,6 +271,28 @@ Be specific with numbers. Use ₹ for amounts. Max 400 words total. Speak direct
           </div>
         ))}
       </div>
+
+      <AiInsight
+        collapsed
+        title="AI CFO commentary"
+        question="Give me a board-ready commentary on this brief + 3 recommended actions."
+        context={{
+          cashBalance: formatAmount(balance),
+          runwayDays: runway,
+          monthlyBurn: formatAmount(burn),
+          thisMonthRevenue: formatAmount(thisMRev),
+          lastMonthRevenue: formatAmount(lastMRev),
+          revenueMoM: momPct,
+          thisMonthExpenses: formatAmount(thisMExp),
+          lastMonthExpenses: formatAmount(lastMExp),
+          activeLoans: activeLoans.length,
+          totalDebt: formatAmount(totalDebt),
+          monthlyEmi: formatAmount(totalEmi),
+          openAlerts: unreadAlerts.length,
+          topVendors: topVendors || "none",
+          industry: firm.industry || "unknown",
+        }}
+      />
 
       {!brief && !loading && (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-12 text-center">

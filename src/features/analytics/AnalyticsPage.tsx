@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { format, subMonths, startOfMonth, endOfMonth, parseISO, getDay, subYears } from "date-fns";
 import { SegmentedToggle, SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
+import AiInsight from "@/components/ai/AiInsight";
 
 const CATEGORY_COLORS: Record<string, string> = {
   expense:  "#ef4444",
@@ -273,6 +274,23 @@ export default function AnalyticsPage() {
           </div>
         ))}
       </div>
+
+      <AiInsight
+        collapsed
+        question="What do these revenue, expense and margin trends tell me, and where should I act?"
+        context={{
+          periodMonths: rangeN,
+          totalRevenue,
+          totalExpense,
+          netPnL: totalNet,
+          avgNetMarginPct: Math.round(avgMargin),
+          currentMonth: { month: currMonth.month, revenue: currMonth.revenue, expense: currMonth.expense, net: currMonth.net, margin: currMonth.margin },
+          previousMonth: { month: prevMonth.month, revenue: prevMonth.revenue, expense: prevMonth.expense, net: prevMonth.net, margin: prevMonth.margin },
+          monthlyTrend: monthlyData,
+          topCustomers,
+          topVendors,
+        }}
+      />
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">

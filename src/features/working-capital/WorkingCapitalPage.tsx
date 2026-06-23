@@ -9,6 +9,7 @@ import { RefreshCcw, ArrowRight, Receipt, Package, Building2, AlertTriangle, Han
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, CartesianGrid, ReferenceLine } from "recharts";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import AiInsight from "@/components/ai/AiInsight";
 
 const BUCKET_COLORS = ["#22c55e", "#eab308", "#f97316", "#ef4444", "#b91c1c"];
 
@@ -82,6 +83,32 @@ export default function WorkingCapitalPage() {
           </div>
         </div>
       )}
+
+      <AiInsight
+        collapsed
+        className="w-full"
+        question="Read my working-capital position and suggest how to free up cash."
+        context={{
+          cashConversionCycleDays: snap.cccDays,
+          dsoDays: snap.dsoDays,
+          dioDays: snap.dioDays,
+          dpoDays: snap.dpoDays,
+          accountsReceivable: snap.accountsReceivable,
+          overdueReceivable: snap.overdueReceivable,
+          overduePctOfAR: overduePct,
+          inventoryValue: snap.inventoryValue,
+          accountsPayable: snap.accountsPayable,
+          workingCapitalGap: snap.workingCapitalGap,
+          netWorkingCapital: snap.netWorkingCapital,
+          currentRatio: snap.currentRatio,
+          quickRatio: snap.quickRatio,
+          monthlyExpense: snap.monthlyExpense,
+          cheapestFundingOption: options[0]
+            ? { name: options[0].name, effectiveAnnualCostPct: options[0].effectiveAnnualCostPct }
+            : null,
+          termsNegotiationCashImpact: totalTermsImpact,
+        }}
+      />
 
       {/* Cycle visual */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">

@@ -4,6 +4,7 @@ import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import { percentiles } from "@/lib/finance";
 import EmptyState from "@/components/EmptyState";
+import AiInsight from "@/components/ai/AiInsight";
 import {
   TrendingUp, TrendingDown, AlertTriangle, Repeat, Eye, ChevronRight,
   PieChart, CreditCard, CalendarClock, Wallet, Copy, Building2, Trash2,
@@ -64,6 +65,16 @@ export default function SpendPage() {
   const prv2Spend = groupByCategory(expenses.filter(t => inWindow(t.date, prv2Start, prv2End)));
 
   const totalCur = Object.values(curSpend).reduce((s, v) => s + v, 0);
+
+  // Top vendors across all history — used for the AI insight context.
+  const topVendorsAll = useMemo(() => {
+    const byVendor: Record<string, number> = {};
+    expenses.forEach(t => { byVendor[t.counterparty] = (byVendor[t.counterparty] ?? 0) + Math.abs(t.amount); });
+    return Object.entries(byVendor)
+      .map(([name, amount]) => ({ name, amount: Math.round(amount) }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+  }, [expenses]);
 
   // ── Duplicate vendor detection ────────────────────────────────────────────
   type DupGroup = { category: string; vendors: string[]; totalSpend: number; topVendor: string };
@@ -194,6 +205,36 @@ export default function SpendPage() {
           </div>
         ))}
       </div>
+
+      <AiInsight
+        collapsed
+        className="w-full"
+        question="Where is my money going and where can I cut without hurting the business?"
+        context={{
+          thisMonthSpend: Math.round(totalCur),
+          spendTrend3mo: months.map(m => ({ month: m.label, spend: Math.round(m.spend) })),
+          spendByCategory: categoryBenchmarks.map(c => ({
+            category: c.label,
+            amount: Math.round(c.actual),
+            pctOfSpend: Math.round(c.actual_pct),
+            vsNormPct: Math.round(c.delta),
+          })),
+          topVendors: topVendorsAll,
+          duplicateVendorGroups: duplicates.map(d => ({
+            category: d.category,
+            vendorCount: d.vendors.length,
+            consolidateTo: d.topVendor,
+            totalSpend: Math.round(d.totalSpend),
+          })),
+          growingSubscriptions: growingSubscriptions.map(s => ({
+            vendor: s.vendor,
+            growthPct: s.growth_pct,
+            now: Math.round(s.m0),
+            threeMonthsAgo: Math.round(s.m3),
+          })),
+          categoriesOverBenchmark: categoryBenchmarks.filter(c => c.delta > 5).length,
+        }}
+      />
 
       {/* 3-month trend bar */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">

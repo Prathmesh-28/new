@@ -6,6 +6,7 @@ import { formatCurrency, monthlyBurn } from "@/lib/utils";
 import { percentiles, cmgr, dso, dio, dpo, gstSummary } from "@/lib/finance";
 import { BarChart3, TrendingUp, TrendingDown, Minus, Award, AlertTriangle, ChevronDown, Info, Scale, PieChart, Gauge, Recycle, Percent, Receipt, UsersRound, Activity, Building2, Boxes, Coins, Layers, Waves, Wallet, Landmark, SlidersHorizontal, Banknote, Timer, HeartHandshake } from "lucide-react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from "recharts";
+import AiInsight from "@/components/ai/AiInsight";
 
 const SECTORS = [
   "Manufacturing (SMB)",
@@ -217,6 +218,28 @@ export default function BenchmarksPage() {
           )}
         </div>
       </div>
+
+      <AiInsight
+        collapsed
+        question="Where am I an outlier vs peers and how do I close the gap?"
+        context={{
+          sector,
+          benchmarkBasis: usingSelf ? "your own trailing-12-month quartiles + sector reference" : "sector reference ranges",
+          overallPercentile: overallPct,
+          metricsScored: scored.length,
+          metricsTotal: metrics.length,
+          metrics: metrics.map(m => ({
+            metric: m.label,
+            unit: m.unit,
+            yours: m.yours,
+            p25: m.p25,
+            median: m.p50,
+            p75: m.p75,
+            higherIsBetter: m.higherIsBetter,
+            percentile: m.yours !== null ? getPercentile(m.yours, m.p25, m.p50, m.p75, m.higherIsBetter) : null,
+          })),
+        }}
+      />
 
       {/* Tool selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">

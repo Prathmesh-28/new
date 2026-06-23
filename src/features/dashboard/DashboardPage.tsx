@@ -15,6 +15,7 @@ import { useCountUp } from "@/hooks/useCountUp";
 import { toast } from "sonner";
 import TransactionImportModal from "@/components/TransactionImportModal";
 import PreviewBadge from "@/components/PreviewBadge";
+import AiInsight from "@/components/ai/AiInsight";
 import { api } from "@/lib/api";
 import type { BankAccount } from "@/data/types";
 
@@ -1980,6 +1981,12 @@ export default function DashboardPage() {
   const taxDates = getUpcomingTaxDates();
   const today    = new Date();
 
+  // Overdue receivables (from store invoices) — for the AI cash-position summary
+  const todayStr = today.toISOString().split("T")[0];
+  const invoices = (store as { invoices?: { dueDate: string; amount: number; status: string }[] }).invoices ?? [];
+  const overdueInvoices = invoices.filter(i => i.dueDate < todayStr && i.status !== "paid");
+  const overdueTotal = overdueInvoices.reduce((s, i) => s + i.amount, 0);
+
   // Estimated monthly GST liability from last month's revenue
   const lastMonthStr = (() => {
     const d = new Date(); d.setMonth(d.getMonth() - 1);
@@ -2131,6 +2138,22 @@ export default function DashboardPage() {
               </div>
             );
           })()}
+
+          {/* AI cash-position summary — full-width, collapsed (no auto-call) */}
+          <AiInsight
+            collapsed
+            question="Summarise my cash position, runway and what I should do this week."
+            context={{
+              totalBalance,
+              monthlyBurn: burn,
+              runwayDays: runway,
+              overdueTotal,
+              overdueInvoiceCount: overdueInvoices.length,
+              upcomingObligations: taxDates.map(d => ({ item: d.label, due: d.desc })),
+              estimatedMonthlyGst: gstEstimate,
+              unreadAlerts: unread,
+            }}
+          />
 
           {/* Quick-actions row */}
           <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
