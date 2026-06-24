@@ -3190,6 +3190,9 @@ interface MsmeDue { id: string; vendor: string; amount: string; acceptedOn: stri
 function MsmeInterestLiability() {
   const [dues, setDues] = useFeatureState<MsmeDue[]>("ven-msme-dues", []);
   const [bankRate, setBankRate] = useFeatureState<number>("ven-msme-bank-rate", 6.5);
+  // Live 43B(h) radar: real unpaid Bills (Bills tab) to MSME-tagged vendors.
+  const [autoBills] = useFeatureState<Bill[]>("payables-bills", []);
+  const { vendors: vmaster } = useVendorMaster();
 
   const add = () => setDues(prev => [{ id: crypto.randomUUID(), vendor: "", amount: "", acceptedOn: new Date().toISOString().split("T")[0] }, ...prev]);
   const update = (id: string, patch: Partial<MsmeDue>) => setDues(prev => prev.map(d => d.id === id ? { ...d, ...patch } : d));
@@ -3214,6 +3217,41 @@ function MsmeInterestLiability() {
   const totalPrincipal = computed.reduce((s, c) => s + c.amt, 0);
   const breachCount = computed.filter(c => c.overdueDays > 0).length;
 
+  // ── Live 43B(h) radar from real payables ────────────────────────────────────
+  // Each unpaid bill to an MSME vendor runs against ITS OWN clock: 15 days with no
+  // written agreement, up to 45 with one (we read the vendor's agreed payment terms,
+  // capped at 45). Past the deadline the expense is disallowed (added back to taxable
+  // income, ~25% tax) AND attracts the 3× penal interest above — both real cash.
+  const TAX_RATE = 0.25;
+  const auto = useMemo(() => {
+    const idx: Record<string, VendorMaster> = {};
+    for (const v of vmaster) idx[v.name.toLowerCase()] = v;
+    const day = 86400000;
+    return (autoBills || [])
+      .filter(b => b.status === "unpaid")
+      .map(b => {
+        const vm = idx[(b.vendorName || "").toLowerCase()];
+        if (!vm?.is_msme) return null;
+        const terms = vm.payment_terms_days;
+        const limit = terms && terms > 0 ? Math.min(terms, 45) : 15;
+        const deadline = new Date(new Date(b.billDate).getTime() + limit * day);
+        const daysToDeadline = Math.floor((deadline.getTime() - today.getTime()) / day);
+        const overdueDays = daysToDeadline < 0 ? -daysToDeadline : 0;
+        const months = overdueDays / 30;
+        const interest = overdueDays > 0 ? b.amount * (Math.pow(1 + annualRate / 100 / 12, months) - 1) : 0;
+        return { id: b.id, vendor: b.vendorName, amount: b.amount, limit, deadline, daysToDeadline, overdueDays, interest };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null)
+      .sort((a, b) => a.daysToDeadline - b.daysToDeadline);
+  }, [autoBills, vmaster, today, annualRate]);
+
+  const autoBreached = auto.filter(r => r.daysToDeadline < 0);
+  const autoDisallow = autoBreached.reduce((s, r) => s + r.amount, 0); // expense added back to income
+  const autoInterest = auto.reduce((s, r) => s + r.interest, 0);
+  const autoTaxHit = autoDisallow * TAX_RATE;
+  const autoCashAtRisk = autoTaxHit + autoInterest;
+  const nextDeadline = auto.find(r => r.daysToDeadline >= 0);
+
   return (
     <div className="space-y-4">
       <div className="bg-red-950/20 border border-red-800/30 rounded-lg px-4 py-3 flex items-start gap-3">
@@ -3223,6 +3261,61 @@ function MsmeInterestLiability() {
           <p className="text-xs text-[var(--color-muted)] mt-0.5">Dues to a Micro/Small vendor unpaid beyond 45 days attract compound interest at 3× the RBI bank rate, compounded monthly. This interest is <span className="font-medium">not</span> tax-deductible (Sec 23). Estimate the running liability per vendor below.</p>
         </div>
       </div>
+
+      {/* Live 43B(h) radar — auto-detected from real unpaid MSME bills */}
+      {auto.length > 0 ? (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-lg p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <ShieldAlert size={15} className="text-[var(--color-primary)]" />
+            <h3 className="text-sm font-semibold">Live 43B(h) exposure — from your unpaid MSME bills</h3>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Cash at risk", value: formatCurrency(Math.round(autoCashAtRisk)), color: autoCashAtRisk > 0 ? "text-red-400" : "text-green-400", sub: "disallowance tax + interest" },
+              { label: "Disallowed expense", value: formatCurrency(Math.round(autoDisallow)), color: autoDisallow > 0 ? "text-orange-400" : "text-green-400", sub: `${autoBreached.length} bill(s) past deadline` },
+              { label: "Non-deductible interest", value: formatCurrency(Math.round(autoInterest)), color: autoInterest > 0 ? "text-orange-400" : "text-green-400", sub: `@ ${annualRate.toFixed(1)}% p.a.` },
+              { label: "Next deadline", value: nextDeadline ? `${nextDeadline.daysToDeadline}d` : "—", color: nextDeadline && nextDeadline.daysToDeadline <= 7 ? "text-red-400" : "text-[var(--color-text)]", sub: nextDeadline ? nextDeadline.vendor : "all clear" },
+            ].map(c => (
+              <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                <p className="text-[11px] text-[var(--color-muted)]">{c.label}</p>
+                <p className={`text-lg font-bold tabular-nums mt-0.5 ${c.color}`}>{c.value}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5 truncate">{c.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead className="border-b border-[var(--color-border)]">
+                <tr>{["Pay before", "MSME vendor", "Amount", "Status", "Interest if unpaid"].map((h, i) => (
+                  <th key={h} className={`px-3 py-2 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i >= 2 ? "text-right" : "text-left"}`}>{h}</th>
+                ))}</tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {auto.slice(0, 25).map(r => (
+                  <tr key={r.id} className="hover:bg-white/2">
+                    <td className="px-3 py-2 text-xs">{r.deadline.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</td>
+                    <td className="px-3 py-2 font-medium">{r.vendor}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(r.amount)}</td>
+                    <td className="px-3 py-2 text-right">
+                      {r.daysToDeadline < 0
+                        ? <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-red-950/30 text-red-400 border-red-800/40">{r.overdueDays}d overdue — disallowed</span>
+                        : r.daysToDeadline <= 7
+                        ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded border bg-orange-950/30 text-orange-400 border-orange-800/40">pay in {r.daysToDeadline}d</span>
+                        : <span className="text-[10px] px-2 py-0.5 rounded border bg-green-950/20 text-green-400 border-green-800/30">{r.daysToDeadline}d left</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-orange-400">{r.interest > 0 ? formatCurrency(Math.round(r.interest)) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[10px] text-[var(--color-muted)]">Auto-tracked from unpaid bills (Bills tab) to vendors tagged MSME. Clock: 15 days, or up to 45 with a written agreement (your saved payment terms). Pay the top rows first to protect the cash shown above.</p>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/40 px-4 py-3 text-xs text-[var(--color-muted)]">
+          No MSME payables detected yet. Add unpaid bills in the <span className="text-[var(--color-text)] font-medium">Bills</span> tab and tag those vendors as MSME (Directory → edit a vendor) to auto-track your 43B(h) exposure here. You can also track dues manually below.
+        </div>
+      )}
 
       <div className="flex items-center gap-3 flex-wrap">
         <label className="text-xs text-[var(--color-muted)]">RBI bank rate (%)</label>
