@@ -39,6 +39,18 @@ export default function BankingPage() {
   const totalBalance = useMemo(() => accounts.reduce((s, a) => s + a.balance, 0), [accounts]);
   const connected = accounts.filter(a => a.status === "connected").length;
   const issues = accounts.filter(a => a.status === "error").length;
+  // Balances are only as good as the last sync — surface age + flag stale (>24h) so
+  // owners don't make sweep/transfer decisions on days-old numbers.
+  const syncInfo = (lastSync: string | null | undefined): { label: string; stale: boolean } => {
+    if (!lastSync) return { label: "Never synced", stale: true };
+    const t = new Date(lastSync).getTime();
+    if (isNaN(t)) return { label: String(lastSync), stale: false };
+    const ms = Date.now() - t;
+    const mins = Math.floor(ms / 60000), hrs = Math.floor(mins / 60), days = Math.floor(hrs / 24);
+    const label = days > 0 ? `${days}d ago` : hrs > 0 ? `${hrs}h ago` : mins > 0 ? `${mins}m ago` : "just now";
+    return { label, stale: ms > 24 * 3600 * 1000 };
+  };
+  const staleCount = accounts.filter(a => syncInfo(a.lastSync).stale).length;
 
   return (
     <div className="space-y-5">
@@ -135,6 +147,12 @@ export default function BankingPage() {
             ))}
           </div>
 
+          {staleCount > 0 && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-2 text-xs text-red-300">
+              <span className="font-semibold">{staleCount} account{staleCount === 1 ? "" : "s"} not synced in over 24h.</span>
+              <span className="text-red-300/70">Balances below may be out of date — reconnect the feed before making sweep or transfer decisions.</span>
+            </div>
+          )}
           {accounts.length === 0 ? (
             <EmptyState
               icon={Landmark}
@@ -179,7 +197,13 @@ export default function BankingPage() {
                               {a.status}
                             </span>
                           </td>
-                          <td className="px-5 py-3 text-[var(--color-muted)] text-xs">{a.lastSync ? a.lastSync : "—"}</td>
+                          <td className="px-5 py-3 text-xs">
+                            {(() => { const s = syncInfo(a.lastSync); return (
+                              <span className={s.stale ? "text-red-400" : "text-[var(--color-muted)]"} title={a.lastSync || "Never synced"}>
+                                {s.label}{s.stale ? " · stale" : ""}
+                              </span>
+                            ); })()}
+                          </td>
                         </tr>
                       );
                     })}
