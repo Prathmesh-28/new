@@ -285,6 +285,70 @@ function CollectionAutoPanel({ invoices, onRefresh }: { invoices: Invoice[]; onR
   );
 }
 
+// ── Billing-tool tabs, grouped for progressive disclosure ──────────────────
+// All 28 tools are preserved; they're just organised into a few clear
+// categories so the tab bar reads as a calm group selector instead of a wall.
+type ToolTabId =
+  | "quote" | "proforma" | "recurring" | "paylink" | "creditnote" | "creditlimit"
+  | "multicurrency" | "approval" | "template" | "challan" | "latefee"
+  | "ageing" | "bulk" | "pomatch" | "tds" | "dispute" | "terms" | "milestone" | "advance"
+  | "einvoicejson" | "statement" | "partial" | "profit" | "tcs"
+  | "gstr1" | "duedate" | "duplicate" | "discount";
+
+type ToolGroupKey = "documents" | "compliance" | "collections" | "advanced";
+
+const TOOL_TABS: readonly (readonly [ToolTabId, string, typeof Plus])[] = [
+  ["quote", "Quotation", FileSignature],
+  ["proforma", "Proforma", FilePlus2],
+  ["recurring", "Recurring", Repeat],
+  ["paylink", "Pay Links", Link2],
+  ["creditnote", "Credit/Debit Note", FileMinus2],
+  ["creditlimit", "Credit Limit", ShieldAlert],
+  ["multicurrency", "Multi-Currency", Globe],
+  ["approval", "Approval", GitPullRequestArrow],
+  ["template", "Template Studio", Palette],
+  ["challan", "Delivery Challan", Truck],
+  ["latefee", "Late-Fee/Interest", Percent],
+  ["ageing", "Ageing Buckets", Layers],
+  ["bulk", "Bulk (CSV)", UploadCloud],
+  ["pomatch", "PO Matcher", FileSearch],
+  ["tds", "TDS & Round-off", Calculator],
+  ["dispute", "Dispute Tracker", MessageSquareWarning],
+  ["terms", "Payment Terms", ScrollText],
+  ["milestone", "Milestone Billing", Milestone],
+  ["advance", "Advance/Retainer", PiggyBank],
+  ["einvoicejson", "e-Invoice JSON", FileJson],
+  ["statement", "Statement of A/c", BookUser],
+  ["partial", "Partial Payments", Wallet],
+  ["profit", "Invoice Margin", TrendingUp],
+  ["tcs", "TCS u/s 206C", Receipt],
+  ["gstr1", "GSTR-1 Summary", Table2],
+  ["duedate", "Smart Due-Date", CalendarClock],
+  ["duplicate", "Duplicate Check", CopyCheck],
+  ["discount", "Discount + GST", BadgePercent],
+] as const;
+
+const TOOL_GROUPS: readonly { key: ToolGroupKey; label: string; icon: typeof Plus; tabs: readonly ToolTabId[] }[] = [
+  // Documents you raise & get paid on
+  { key: "documents", label: "Documents", icon: FileSignature,
+    tabs: ["quote", "proforma", "recurring", "paylink", "creditnote", "challan", "advance", "milestone"] },
+  // GST / statutory tax tooling
+  { key: "compliance", label: "GST & Tax", icon: FileJson,
+    tabs: ["einvoicejson", "gstr1", "tcs", "tds", "discount"] },
+  // Receivables, risk & follow-up
+  { key: "collections", label: "Collections & Risk", icon: ShieldAlert,
+    tabs: ["creditlimit", "latefee", "ageing", "dispute", "statement", "partial", "duedate", "terms"] },
+  // Power tools / everything else
+  { key: "advanced", label: "Advanced", icon: Layers,
+    tabs: ["multicurrency", "approval", "template", "bulk", "pomatch", "profit", "duplicate"] },
+] as const;
+
+// Reverse lookup: which group does a given tool tab belong to?
+const TOOL_TAB_GROUP: Record<ToolTabId, ToolGroupKey> = TOOL_GROUPS.reduce(
+  (acc, g) => { g.tabs.forEach(t => { acc[t] = g.key; }); return acc; },
+  {} as Record<ToolTabId, ToolGroupKey>,
+);
+
 export default function InvoicesPage() {
   const { setStore } = useApp();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -317,6 +381,22 @@ export default function InvoicesPage() {
     | "einvoicejson" | "statement" | "partial" | "profit" | "tcs"
     | "gstr1" | "duedate" | "duplicate" | "discount"
   >("all");
+
+  // Which billing-tool GROUP is currently revealed. Defaults to the first
+  // group; we keep it in sync below so the active tool's group stays open.
+  const [toolGroup, setToolGroup] = useState<ToolGroupKey>("documents");
+
+  // If the active tab is a billing tool, make sure its group is the one shown
+  // (handles deep-links / programmatic tab changes without clicking a group).
+  const activeToolGroup = (TOOL_TAB_GROUP as Record<string, ToolGroupKey>)[tab];
+  useEffect(() => {
+    if (activeToolGroup) setToolGroup(activeToolGroup);
+  }, [activeToolGroup]);
+
+  const visibleTools = useMemo(
+    () => TOOL_TABS.filter(([id]) => TOOL_TAB_GROUP[id] === toolGroup),
+    [toolGroup],
+  );
 
   // Mirror the backend invoices into the shared store so the analytics engine,
   // Collections, Working Capital and Dashboard all read ONE unified AR list.
@@ -436,43 +516,30 @@ export default function InvoicesPage() {
         ))}
       </div>
 
-      {/* Billing tools selector */}
-      <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-        {([
-          ["quote", "Quotation", FileSignature],
-          ["proforma", "Proforma", FilePlus2],
-          ["recurring", "Recurring", Repeat],
-          ["paylink", "Pay Links", Link2],
-          ["creditnote", "Credit/Debit Note", FileMinus2],
-          ["creditlimit", "Credit Limit", ShieldAlert],
-          ["multicurrency", "Multi-Currency", Globe],
-          ["approval", "Approval", GitPullRequestArrow],
-          ["template", "Template Studio", Palette],
-          ["challan", "Delivery Challan", Truck],
-          ["latefee", "Late-Fee/Interest", Percent],
-          ["ageing", "Ageing Buckets", Layers],
-          ["bulk", "Bulk (CSV)", UploadCloud],
-          ["pomatch", "PO Matcher", FileSearch],
-          ["tds", "TDS & Round-off", Calculator],
-          ["dispute", "Dispute Tracker", MessageSquareWarning],
-          ["terms", "Payment Terms", ScrollText],
-          ["milestone", "Milestone Billing", Milestone],
-          ["advance", "Advance/Retainer", PiggyBank],
-          ["einvoicejson", "e-Invoice JSON", FileJson],
-          ["statement", "Statement of A/c", BookUser],
-          ["partial", "Partial Payments", Wallet],
-          ["profit", "Invoice Margin", TrendingUp],
-          ["tcs", "TCS u/s 206C", Receipt],
-          ["gstr1", "GSTR-1 Summary", Table2],
-          ["duedate", "Smart Due-Date", CalendarClock],
-          ["duplicate", "Duplicate Check", CopyCheck],
-          ["discount", "Discount + GST", BadgePercent],
-        ] as const).map(([id, label, Icon]) => (
-          <button key={id} onClick={() => setTab(id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-            <Icon size={11} />{label}
-          </button>
-        ))}
+      {/* Billing tools — grouped to keep the bar calm. Pick a category, then
+          its tools appear below. The active tool's group stays selected. */}
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
+          {TOOL_GROUPS.map(({ key, label, icon: GroupIcon, tabs }) => {
+            const active = toolGroup === key;
+            return (
+              <button key={key} onClick={() => setToolGroup(key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${active ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                <GroupIcon size={11} />{label}
+                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${active ? "bg-white/20 text-white" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{tabs.length}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
+          {visibleTools.map(([id, label, Icon]) => (
+            <button key={id} onClick={() => setTab(id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              <Icon size={11} />{label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === "quote"         ? <QuotationBuilder /> :

@@ -28,8 +28,12 @@ router.post("/slas", canWrite, async (req, res) => { try { res.status(201).json(
 // ── Accounts / contacts ──────────────────────────────────────────────────────────────
 router.get("/accounts", async (req, res) => { try { res.json(await crm.listAccounts(tenantOf(req))); } catch (e) { fail(res, e); } });
 router.post("/accounts", canWrite, async (req, res) => { try { res.status(201).json(await crm.createAccount(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.patch("/accounts/:id", canWrite, async (req, res) => { try { res.json(await crm.updateAccount(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.delete("/accounts/:id", canWrite, async (req, res) => { try { res.json(await crm.deleteAccount(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.get("/contacts", async (req, res) => { try { res.json(await crm.listContacts(tenantOf(req))); } catch (e) { fail(res, e); } });
 router.post("/contacts", canWrite, async (req, res) => { try { res.status(201).json(await crm.createContact(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.patch("/contacts/:id", canWrite, async (req, res) => { try { res.json(await crm.updateContact(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.delete("/contacts/:id", canWrite, async (req, res) => { try { res.json(await crm.deleteContact(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 
 // ── Leads ────────────────────────────────────────────────────────────────────────────
 router.get("/leads", async (req, res) => { try { res.json(await crm.listLeads(tenantOf(req))); } catch (e) { fail(res, e); } });
@@ -44,6 +48,7 @@ router.get("/leads/:id/timeline", async (req, res) => { try { res.json(await crm
 router.get("/deals", async (req, res) => { try { res.json(await crm.listDeals(tenantOf(req))); } catch (e) { fail(res, e); } });
 router.post("/deals", canWrite, async (req, res) => { try { res.status(201).json(await crm.createDeal(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/deals/:id", async (req, res) => { try { res.json(await crm.getDeal(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.patch("/deals/:id", canWrite, async (req, res) => { try { res.json(await crm.updateDeal(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/deals/:id/stage", canWrite, async (req, res) => { try { res.json(await crm.moveStage(tenantOf(req), req.user.id, req.params.id, (req.body || {}).stage, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/deals/:id/win", canWrite, async (req, res) => { try { res.json(await crm.winDeal(tenantOf(req), req.user.id, req.params.id)); } catch (e) { fail(res, e); } });
 router.delete("/deals/:id", canWrite, async (req, res) => { try { res.json(await crm.deleteDeal(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });

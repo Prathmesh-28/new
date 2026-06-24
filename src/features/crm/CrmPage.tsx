@@ -6,7 +6,7 @@ import {
   Users, KanbanSquare, UserPlus, Building2, Contact as ContactIcon,
   Plus, RefreshCw, ArrowLeft, ArrowRight, Trophy, ArrowRightCircle,
   CheckCircle2, Mail, Phone, Globe, X, Clock, AlertTriangle, ShieldCheck,
-  ListChecks, StickyNote, Send, Gauge, Timer, Trash2,
+  ListChecks, StickyNote, Send, Gauge, Timer, Trash2, Pencil,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 
@@ -346,12 +346,24 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [busyDeal, setBusyDeal] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Deal | null>(null);
 
   const [title, setTitle] = useState("");
   const [value, setValue] = useState("");
   const [stage, setStage] = useState<OpenStage>("QUALIFICATION");
   const [accountId, setAccountId] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const resetForm = () => { setTitle(""); setValue(""); setStage("QUALIFICATION"); setAccountId(""); setEditing(null); };
+
+  const startEdit = (deal: Deal) => {
+    setEditing(deal);
+    setTitle(deal.title);
+    setValue(deal.value != null ? String(deal.value) : "");
+    setStage(BOARD_STAGES.includes(deal.stage as OpenStage) ? (deal.stage as OpenStage) : "QUALIFICATION");
+    setAccountId(deal.account_id ?? "");
+    setOpen(true);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -442,17 +454,24 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
     }
     setSaving(true);
     try {
-      await api.post<Deal>("/api/crm/deals", {
-        title: title.trim(),
-        value: value.trim() ? Number(value) : undefined,
-        stage,
-        accountId: accountId || undefined,
-      });
-      toast.success(`Deal "${title.trim()}" created`);
-      setTitle("");
-      setValue("");
-      setStage("QUALIFICATION");
-      setAccountId("");
+      if (editing) {
+        // stage transitions go through moveStage/Win/Lose — edit only the simple fields
+        await api.patch<Deal>(`/api/crm/deals/${editing.id}`, {
+          title: title.trim(),
+          value: value.trim() ? Number(value) : 0,
+          accountId: accountId || undefined,
+        });
+        toast.success(`Deal "${title.trim()}" updated`);
+      } else {
+        await api.post<Deal>("/api/crm/deals", {
+          title: title.trim(),
+          value: value.trim() ? Number(value) : undefined,
+          stage,
+          accountId: accountId || undefined,
+        });
+        toast.success(`Deal "${title.trim()}" created`);
+      }
+      resetForm();
       setOpen(false);
       await load();
     } catch (e) {
@@ -492,7 +511,7 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
           {pipeline?.wonCount ?? 0} won · {pipeline?.openCount ?? 0} open · {pipeline?.lostCount ?? 0} lost
         </p>
         {canWrite && (
-          <button type="button" onClick={() => setOpen((o) => !o)} className={btnPrimary}>
+          <button type="button" onClick={() => { if (open) { resetForm(); setOpen(false); } else { resetForm(); setOpen(true); } }} className={btnPrimary}>
             <Plus size={14} /> New deal
           </button>
         )}
@@ -500,7 +519,7 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
 
       {open && canWrite && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-          <h3 className="text-sm font-semibold mb-4">New deal</h3>
+          <h3 className="text-sm font-semibold mb-4">{editing ? "Edit deal" : "New deal"}</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="md:col-span-2">
               <label className={labelCls}>Title</label>
@@ -510,14 +529,16 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
               <label className={labelCls}>Value (₹)</label>
               <input value={value} onChange={(e) => setValue(e.target.value)} inputMode="decimal" placeholder="0" className={`${inputCls} font-mono tabular-nums`} />
             </div>
-            <div>
-              <label className={labelCls}>Stage</label>
-              <select value={stage} onChange={(e) => setStage(e.target.value as OpenStage)} className={inputCls}>
-                {BOARD_STAGES.map((s) => (
-                  <option key={s} value={s}>{STAGE_LABEL[s]}</option>
-                ))}
-              </select>
-            </div>
+            {!editing && (
+              <div>
+                <label className={labelCls}>Stage</label>
+                <select value={stage} onChange={(e) => setStage(e.target.value as OpenStage)} className={inputCls}>
+                  {BOARD_STAGES.map((s) => (
+                    <option key={s} value={s}>{STAGE_LABEL[s]}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="md:col-span-2">
               <label className={labelCls}>Account (optional)</label>
               <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={inputCls}>
@@ -529,10 +550,10 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <button type="button" onClick={() => setOpen(false)} className={btnGhost}>Cancel</button>
+            <button type="button" onClick={() => { resetForm(); setOpen(false); }} className={btnGhost}>Cancel</button>
             <button type="button" onClick={submit} disabled={saving} className={btnPrimary}>
-              {saving ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
-              Create deal
+              {saving ? <RefreshCw size={14} className="animate-spin" /> : editing ? <Pencil size={14} /> : <Plus size={14} />}
+              {editing ? "Save deal" : "Create deal"}
             </button>
           </div>
         </div>
@@ -598,6 +619,15 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
                               className="p-1.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                               <ArrowRight size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(d)}
+                              disabled={busy}
+                              title="Edit deal"
+                              className="p-1.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] disabled:opacity-30"
+                            >
+                              <Pencil size={13} />
                             </button>
                             <button
                               type="button"
@@ -1300,6 +1330,8 @@ function AccountsTab({ canWrite }: { canWrite: boolean }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Account | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [industry, setIndustry] = useState("");
@@ -1307,6 +1339,18 @@ function AccountsTab({ canWrite }: { canWrite: boolean }) {
   const [phone, setPhone] = useState("");
   const [gstin, setGstin] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const resetForm = () => { setName(""); setIndustry(""); setWebsite(""); setPhone(""); setGstin(""); setEditing(null); };
+
+  const startEdit = (a: Account) => {
+    setEditing(a);
+    setName(a.name);
+    setIndustry(a.industry ?? "");
+    setWebsite(a.website ?? "");
+    setPhone(a.phone ?? "");
+    setGstin(a.gstin ?? "");
+    setOpen(true);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1326,15 +1370,21 @@ function AccountsTab({ canWrite }: { canWrite: boolean }) {
     if (!name.trim()) { toast.error("Enter an account name"); return; }
     setSaving(true);
     try {
-      await api.post<Account>("/api/crm/accounts", {
+      const payload = {
         name: name.trim(),
         industry: industry.trim() || undefined,
         website: website.trim() || undefined,
         phone: phone.trim() || undefined,
         gstin: gstin.trim() || undefined,
-      });
-      toast.success(`Account "${name.trim()}" created`);
-      setName(""); setIndustry(""); setWebsite(""); setPhone(""); setGstin(""); setOpen(false);
+      };
+      if (editing) {
+        await api.patch<Account>(`/api/crm/accounts/${editing.id}`, payload);
+        toast.success(`Account "${name.trim()}" updated`);
+      } else {
+        await api.post<Account>("/api/crm/accounts", payload);
+        toast.success(`Account "${name.trim()}" created`);
+      }
+      resetForm(); setOpen(false);
       await load();
     } catch (e) {
       toast.error(errMsg(e));
@@ -1343,12 +1393,26 @@ function AccountsTab({ canWrite }: { canWrite: boolean }) {
     }
   };
 
+  const remove = async (a: Account) => {
+    if (!window.confirm(`Delete account "${a.name}"? This can't be undone.`)) return;
+    setBusy(a.id);
+    try {
+      await api.delete<{ ok: boolean; deleted: number }>(`/api/crm/accounts/${a.id}`);
+      toast.success(`Account "${a.name}" deleted`);
+      await load();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-sm text-[var(--color-muted)] tabular-nums">{accounts.length} accounts</p>
         {canWrite && (
-          <button type="button" onClick={() => setOpen((o) => !o)} className={btnPrimary}>
+          <button type="button" onClick={() => { if (open) { resetForm(); setOpen(false); } else { resetForm(); setOpen(true); } }} className={btnPrimary}>
             <Plus size={14} /> New account
           </button>
         )}
@@ -1356,7 +1420,7 @@ function AccountsTab({ canWrite }: { canWrite: boolean }) {
 
       {open && canWrite && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-          <h3 className="text-sm font-semibold mb-4">New account</h3>
+          <h3 className="text-sm font-semibold mb-4">{editing ? "Edit account" : "New account"}</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className={labelCls}>Name</label>
@@ -1380,10 +1444,10 @@ function AccountsTab({ canWrite }: { canWrite: boolean }) {
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <button type="button" onClick={() => setOpen(false)} className={btnGhost}>Cancel</button>
+            <button type="button" onClick={() => { resetForm(); setOpen(false); }} className={btnGhost}>Cancel</button>
             <button type="button" onClick={submit} disabled={saving} className={btnPrimary}>
-              {saving ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
-              Create account
+              {saving ? <RefreshCw size={14} className="animate-spin" /> : editing ? <Pencil size={14} /> : <Plus size={14} />}
+              {editing ? "Save account" : "Create account"}
             </button>
           </div>
         </div>
@@ -1399,13 +1463,14 @@ function AccountsTab({ canWrite }: { canWrite: boolean }) {
                 <Th>Phone</Th>
                 <Th>GSTIN</Th>
                 <Th>Books</Th>
+                {canWrite && <Th right>Actions</Th>}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <SkeletonRows cols={5} />
+                <SkeletonRows cols={canWrite ? 6 : 5} />
               ) : accounts.length === 0 ? (
-                <EmptyRow cols={5} text="No accounts yet." />
+                <EmptyRow cols={canWrite ? 6 : 5} text="No accounts yet." />
               ) : (
                 accounts.map((a) => (
                   <tr key={a.id} className="border-b border-[var(--color-border)] last:border-b-0">
@@ -1429,6 +1494,30 @@ function AccountsTab({ canWrite }: { canWrite: boolean }) {
                         <span className="text-xs text-[var(--color-muted)]">—</span>
                       )}
                     </td>
+                    {canWrite && (
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(a)}
+                            disabled={busy === a.id}
+                            title="Edit account"
+                            className="p-1.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] disabled:opacity-30"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => remove(a)}
+                            disabled={busy === a.id}
+                            title="Delete account"
+                            className="p-1.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-300 hover:border-red-700/50 disabled:opacity-30"
+                          >
+                            {busy === a.id ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -1448,6 +1537,8 @@ function ContactsTab({ canWrite }: { canWrite: boolean }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<ContactRow | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -1455,6 +1546,18 @@ function ContactsTab({ canWrite }: { canWrite: boolean }) {
   const [designation, setDesignation] = useState("");
   const [accountId, setAccountId] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const resetForm = () => { setName(""); setEmail(""); setPhone(""); setDesignation(""); setAccountId(""); setEditing(null); };
+
+  const startEdit = (c: ContactRow) => {
+    setEditing(c);
+    setName(c.name);
+    setEmail(c.email ?? "");
+    setPhone(c.phone ?? "");
+    setDesignation(c.designation ?? "");
+    setAccountId(c.account_id ?? "");
+    setOpen(true);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1480,15 +1583,21 @@ function ContactsTab({ canWrite }: { canWrite: boolean }) {
     if (!name.trim()) { toast.error("Enter a contact name"); return; }
     setSaving(true);
     try {
-      await api.post<ContactRow>("/api/crm/contacts", {
+      const payload = {
         name: name.trim(),
         accountId: accountId || undefined,
         email: email.trim() || undefined,
         phone: phone.trim() || undefined,
         designation: designation.trim() || undefined,
-      });
-      toast.success(`Contact "${name.trim()}" added`);
-      setName(""); setEmail(""); setPhone(""); setDesignation(""); setAccountId(""); setOpen(false);
+      };
+      if (editing) {
+        await api.patch<ContactRow>(`/api/crm/contacts/${editing.id}`, payload);
+        toast.success(`Contact "${name.trim()}" updated`);
+      } else {
+        await api.post<ContactRow>("/api/crm/contacts", payload);
+        toast.success(`Contact "${name.trim()}" added`);
+      }
+      resetForm(); setOpen(false);
       await load();
     } catch (e) {
       toast.error(errMsg(e));
@@ -1497,12 +1606,26 @@ function ContactsTab({ canWrite }: { canWrite: boolean }) {
     }
   };
 
+  const remove = async (c: ContactRow) => {
+    if (!window.confirm(`Delete contact "${c.name}"? This can't be undone.`)) return;
+    setBusy(c.id);
+    try {
+      await api.delete<{ ok: boolean; deleted: number }>(`/api/crm/contacts/${c.id}`);
+      toast.success(`Contact "${c.name}" deleted`);
+      await load();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-sm text-[var(--color-muted)] tabular-nums">{contacts.length} contacts</p>
         {canWrite && (
-          <button type="button" onClick={() => setOpen((o) => !o)} className={btnPrimary}>
+          <button type="button" onClick={() => { if (open) { resetForm(); setOpen(false); } else { resetForm(); setOpen(true); } }} className={btnPrimary}>
             <Plus size={14} /> New contact
           </button>
         )}
@@ -1510,7 +1633,7 @@ function ContactsTab({ canWrite }: { canWrite: boolean }) {
 
       {open && canWrite && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-          <h3 className="text-sm font-semibold mb-4">New contact</h3>
+          <h3 className="text-sm font-semibold mb-4">{editing ? "Edit contact" : "New contact"}</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className={labelCls}>Name</label>
@@ -1539,10 +1662,10 @@ function ContactsTab({ canWrite }: { canWrite: boolean }) {
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <button type="button" onClick={() => setOpen(false)} className={btnGhost}>Cancel</button>
+            <button type="button" onClick={() => { resetForm(); setOpen(false); }} className={btnGhost}>Cancel</button>
             <button type="button" onClick={submit} disabled={saving} className={btnPrimary}>
-              {saving ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
-              Add contact
+              {saving ? <RefreshCw size={14} className="animate-spin" /> : editing ? <Pencil size={14} /> : <Plus size={14} />}
+              {editing ? "Save contact" : "Add contact"}
             </button>
           </div>
         </div>
@@ -1557,13 +1680,14 @@ function ContactsTab({ canWrite }: { canWrite: boolean }) {
                 <Th>Designation</Th>
                 <Th>Email</Th>
                 <Th>Account</Th>
+                {canWrite && <Th right>Actions</Th>}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <SkeletonRows cols={4} />
+                <SkeletonRows cols={canWrite ? 5 : 4} />
               ) : contacts.length === 0 ? (
-                <EmptyRow cols={4} text="No contacts yet." />
+                <EmptyRow cols={canWrite ? 5 : 4} text="No contacts yet." />
               ) : (
                 contacts.map((c) => (
                   <tr key={c.id} className="border-b border-[var(--color-border)] last:border-b-0">
@@ -1581,6 +1705,30 @@ function ContactsTab({ canWrite }: { canWrite: boolean }) {
                       ) : "—"}
                     </td>
                     <td className="px-3 py-2.5 text-[var(--color-muted)]">{accountName(c.account_id) || "—"}</td>
+                    {canWrite && (
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(c)}
+                            disabled={busy === c.id}
+                            title="Edit contact"
+                            className="p-1.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] disabled:opacity-30"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => remove(c)}
+                            disabled={busy === c.id}
+                            title="Delete contact"
+                            className="p-1.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-300 hover:border-red-700/50 disabled:opacity-30"
+                          >
+                            {busy === c.id ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}

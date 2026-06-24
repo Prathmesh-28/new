@@ -22,6 +22,7 @@ import {
 } from "recharts";
 import { format } from "date-fns";
 import AiInsight from "@/components/ai/AiInsight";
+import EmptyState from "@/components/EmptyState";
 import { SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -284,19 +285,25 @@ export default function ForecastPage() {
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Empty state — no forecast generated yet */}
       {forecast.length === 0 ? (
-        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
-          <TrendingUp size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
-          <h2 className="text-base font-semibold mb-1">No forecast yet</h2>
-          <p className="text-sm text-[var(--color-muted)] mb-5 max-w-xs mx-auto">
-            Add transactions in the Dashboard, then generate your 90-day P10/P50/P90 forecast.
-          </p>
-          <button onClick={handleGenerate} disabled={generating}
-            className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90 disabled:opacity-40">
-            {generating ? "Generating…" : "Generate Forecast"}
-          </button>
-        </div>
+        transactions.length === 0 ? (
+          <EmptyState
+            icon={TrendingUp}
+            title="No forecast yet"
+            description="Connect a bank account and record a few transactions — we'll project your cash 13 weeks out with P10/P50/P90 bands."
+            ctaText="Add transactions"
+            ctaHref="/transactions"
+          />
+        ) : (
+          <EmptyState
+            icon={TrendingUp}
+            title="No forecast yet"
+            description="You have transactions ready. Generate your 90-day probabilistic forecast (P10/P50/P90) to see your projected cash and runway."
+            ctaText={generating ? "Generating…" : "Generate Forecast"}
+            onCta={generating ? undefined : handleGenerate}
+          />
+        )
       ) : (
         <>
           {/* Risk strip — calibrated probabilities from the Monte-Carlo paths */}

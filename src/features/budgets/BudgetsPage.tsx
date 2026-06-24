@@ -3,7 +3,8 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import AiInsight from "@/components/ai/AiInsight";
-import { Plus, X, AlertTriangle, TrendingUp, TrendingDown, RotateCcw, Building2, HardHat, CheckCircle2, Clock, CalendarRange, GitCompareArrows, SlidersHorizontal, Wallet, Users, FolderKanban, Gauge, Repeat, Megaphone, Scissors, ArrowLeftRight, CalendarClock, ShieldCheck } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
+import { Plus, X, AlertTriangle, TrendingUp, TrendingDown, RotateCcw, Building2, HardHat, CheckCircle2, Clock, CalendarRange, GitCompareArrows, SlidersHorizontal, Wallet, Users, FolderKanban, Gauge, Repeat, Megaphone, Scissors, ArrowLeftRight, CalendarClock, ShieldCheck, PiggyBank } from "lucide-react";
 import { toast } from "sonner";
 import { startOfMonth, endOfMonth, format, subMonths } from "date-fns";
 import type { Budget } from "@/data/types";
@@ -137,6 +138,16 @@ export default function BudgetsPage() {
         </button>
       </div>
 
+      {budgets.length === 0 ? (
+        <EmptyState
+          icon={PiggyBank}
+          title="No budgets yet"
+          description="Set monthly limits by category to track budget vs actual — we'll flag overspends and categories trending up versus last month, live from your transactions."
+          ctaText="Create your first budget"
+          onCta={() => setAdding(true)}
+        />
+      ) : (
+      <>
       {/* Summary row */}
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -266,6 +277,8 @@ export default function BudgetsPage() {
           <p className="text-sm text-[var(--color-muted)] group-hover:text-[var(--color-text)]">Add budget category</p>
         </button>
       </div>
+      </>
+      )}
 
       {/* Advanced budgeting tools (#198–#200) */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">

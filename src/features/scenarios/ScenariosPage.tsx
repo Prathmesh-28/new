@@ -7,6 +7,7 @@ import { AreaChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Refe
 import { format, addDays } from "date-fns";
 import { toast } from "sonner";
 import { runForecast } from "@/lib/forecastEngine";
+import EmptyState from "@/components/EmptyState";
 import type { Scenario } from "@/data/types";
 
 const HORIZON = 180; // 6-month planning window, driven by the real Monte-Carlo engine
@@ -140,6 +141,10 @@ export default function ScenariosPage() {
   const breakeven = scen.points.find(p => p.p50 <= 0);
   const scenarioHealthy = finalScenario > 0 && !breakeven;
 
+  // The planner projects off live data (transactions + bank balances). With none,
+  // the base Monte-Carlo run is flat/zero — show a helpful empty state instead.
+  const hasLiveData = (store.transactions?.length ?? 0) > 0 || (store.bankAccounts?.length ?? 0) > 0;
+
   return (
     <div className="space-y-6 max-w-5xl">
       <div>
@@ -205,7 +210,17 @@ export default function ScenariosPage() {
       {scenTab === "capacity-expansion" && <CapacityExpansionModel />}
       {scenTab === "cost-inflation" && <CostInflationPassthrough />}
 
-      {scenTab === "planner" && <>
+      {scenTab === "planner" && !hasLiveData && (
+        <EmptyState
+          icon={Sliders}
+          title="No scenarios yet"
+          description="Model best/worst-case cash outcomes from your live data. Connect a bank account and record a few transactions, then build a forecast — the planner runs your what-ifs through the same Monte-Carlo engine."
+          ctaText="Go to Forecast"
+          ctaHref="/forecast"
+        />
+      )}
+
+      {scenTab === "planner" && hasLiveData && <>
       {/* Presets */}
       <div>
         <p className="text-xs text-[var(--color-muted)] font-medium mb-2">Quick scenarios</p>

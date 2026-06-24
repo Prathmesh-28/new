@@ -758,9 +758,30 @@ function KpiWidgetBuilder() {
 // ── #148 Daily Cash Position Snapshot ────────────────────────────────────────
 // All-bank balances + today's movements from the store, per account.
 function DailyCashSnapshot() {
+  const navigate = useNavigate();
   const { store } = useApp();
   const { transactions, bankAccounts } = store;
   const todayStr = new Date().toISOString().split("T")[0];
+
+  // No bank accounts yet — show a small inline hint instead of all-zero cards.
+  if (bankAccounts.length === 0) {
+    return (
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold flex items-center gap-1.5">
+            <Wallet size={13} className="text-[var(--color-primary)]" />
+            Daily Cash Position
+          </h2>
+          <span className="text-[10px] text-[var(--color-muted)]">{format(new Date(), "EEE, d MMM yyyy")}</span>
+        </div>
+        <button onClick={() => navigate("/banking")}
+          className="w-full flex items-center justify-between gap-3 text-left px-3 py-4 rounded-lg border border-dashed border-[var(--color-border)] hover:border-[var(--color-primary)]/40 transition-colors">
+          <span className="text-sm text-[var(--color-muted)]">Add a bank account to see today's cash movements.</span>
+          <ChevronRight size={14} className="text-[var(--color-primary)] shrink-0" />
+        </button>
+      </div>
+    );
+  }
 
   const todays = transactions.filter(t => t.date === todayStr);
   const totalBalance = bankAccounts.reduce((s, a) => s + a.balance, 0);
@@ -2042,6 +2063,38 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Quick actions — derived from real store data; only shows rows that apply */}
+      {(() => {
+        const quickActions: { icon: React.ElementType; label: string; path: string; color: string }[] = [];
+        if (overdueInvoices.length > 0)
+          quickActions.push({ icon: FileWarning, label: `${overdueInvoices.length} overdue invoice${overdueInvoices.length > 1 ? "s" : ""} · ${formatCurrency(overdueTotal)}`, path: "/collections", color: "text-red-400" });
+        if (unread > 0)
+          quickActions.push({ icon: Bell, label: `${unread} unread alert${unread > 1 ? "s" : ""}`, path: "/alerts", color: "text-orange-400" });
+        quickActions.push({ icon: Receipt, label: "GST filing", path: "/gst", color: "text-yellow-400" });
+        if (bankAccounts.length === 0)
+          quickActions.push({ icon: Landmark, label: "Add a bank account", path: "/banking", color: "text-[var(--color-primary)]" });
+        quickActions.push({ icon: Plus, label: "Record a transaction", path: "/transactions", color: "text-green-400" });
+
+        return (
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="flex items-center gap-1.5 mb-3">
+              <Zap size={13} className="text-[var(--color-primary)]" />
+              <h2 className="text-sm font-semibold">Quick actions</h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {quickActions.map(({ icon: Icon, label, path, color }) => (
+                <button key={path} onClick={() => navigate(path)}
+                  className="flex items-center gap-2 text-xs font-medium bg-[var(--color-bg)] border border-[var(--color-border)] rounded-full pl-3 pr-2.5 py-1.5 hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-accent)] transition-colors">
+                  <Icon size={13} className={color} />
+                  <span className="text-[var(--color-text)]">{label}</span>
+                  <ChevronRight size={12} className="text-[var(--color-muted)]" />
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Onboarding wizard */}
       {showWizard && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-lg p-5">
@@ -2086,14 +2139,6 @@ export default function DashboardPage() {
               </button>
             ))}
           </div>
-
-          {completedCount === 3 && (
-            <div className="mt-3 p-3 bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 rounded-lg">
-              <p className="text-xs text-[var(--color-primary)] font-medium">
-                One more step — run your credit pre-qualification to unlock working capital options and see your "aha moment."
-              </p>
-            </div>
-          )}
         </div>
       )}
 

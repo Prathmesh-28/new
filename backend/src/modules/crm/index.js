@@ -302,6 +302,37 @@ async function createAccount(tenantId, actorId, a) {
 }
 const listAccounts = async (t) => (await pool.query("SELECT * FROM crm_accounts WHERE tenant_id=$1 ORDER BY name", [t])).rows;
 
+// Update an account's editable fields (tenant-scoped). Only columns present on
+// crm_accounts; COALESCE keeps the existing value when a field is omitted (undefined).
+async function updateAccount(tenantId, id, patch) {
+  const p = patch || {};
+  if (p.name != null && !String(p.name).trim()) throw new CrmError("name required");
+  const { rows } = await pool.query(
+    `UPDATE crm_accounts SET
+        name = COALESCE($3, name),
+        industry = COALESCE($4, industry),
+        website = COALESCE($5, website),
+        phone = COALESCE($6, phone),
+        gstin = COALESCE($7, gstin),
+        annual_revenue = COALESCE($8, annual_revenue),
+        territory = COALESCE($9, territory)
+       WHERE tenant_id=$1 AND id=$2 RETURNING *`,
+    [tenantId, id, p.name != null ? p.name : null, p.industry != null ? p.industry : null,
+     p.website != null ? p.website : null, p.phone != null ? p.phone : null,
+     p.gstin != null ? p.gstin : null, p.annualRevenue != null ? p.annualRevenue : null,
+     p.territory != null ? p.territory : null]
+  );
+  if (!rows[0]) throw new CrmError("Account not found", 404);
+  return rows[0];
+}
+
+// Delete an account (tenant-scoped). 404 if it doesn't belong to the tenant.
+async function deleteAccount(tenantId, id) {
+  const { rows } = await pool.query("DELETE FROM crm_accounts WHERE tenant_id=$1 AND id=$2 RETURNING id", [tenantId, id]);
+  if (!rows.length) throw new CrmError("Account not found", 404);
+  return { ok: true, deleted: rows.length };
+}
+
 // Faithful to lead.create_contact: split a single name into first/last when not given.
 function splitName(name) {
   const parts = String(name || "").trim().split(/\s+/);
@@ -320,6 +351,46 @@ async function createContact(tenantId, c) {
   return rows[0];
 }
 const listContacts = async (t) => (await pool.query("SELECT * FROM crm_contacts WHERE tenant_id=$1 ORDER BY name", [t])).rows;
+
+// Update a contact's editable fields (tenant-scoped). Only columns present on
+// crm_contacts; COALESCE keeps the existing value when a field is omitted. When the
+// name changes we re-split first/last (faithful to createContact) unless explicit
+// firstName/lastName are supplied.
+async function updateContact(tenantId, id, patch) {
+  const p = patch || {};
+  if (p.name != null && !String(p.name).trim()) throw new CrmError("name required");
+  let first = null, last = null;
+  if (p.firstName != null) { first = p.firstName; last = p.lastName != null ? p.lastName : ""; }
+  else if (p.name != null) { const s = splitName(p.name); first = s.first; last = s.last; }
+  const { rows } = await pool.query(
+    `UPDATE crm_contacts SET
+        account_id = COALESCE($3, account_id),
+        name = COALESCE($4, name),
+        salutation = COALESCE($5, salutation),
+        first_name = COALESCE($6, first_name),
+        last_name = COALESCE($7, last_name),
+        email = COALESCE($8, email),
+        phone = COALESCE($9, phone),
+        mobile_no = COALESCE($10, mobile_no),
+        designation = COALESCE($11, designation),
+        gender = COALESCE($12, gender)
+       WHERE tenant_id=$1 AND id=$2 RETURNING *`,
+    [tenantId, id, p.accountId != null ? p.accountId : null, p.name != null ? p.name : null,
+     p.salutation != null ? p.salutation : null, first, last,
+     p.email != null ? p.email : null, p.phone != null ? p.phone : null,
+     p.mobileNo != null ? p.mobileNo : (p.phone != null ? p.phone : null),
+     p.designation != null ? p.designation : null, p.gender != null ? p.gender : null]
+  );
+  if (!rows[0]) throw new CrmError("Contact not found", 404);
+  return rows[0];
+}
+
+// Delete a contact (tenant-scoped). 404 if it doesn't belong to the tenant.
+async function deleteContact(tenantId, id) {
+  const { rows } = await pool.query("DELETE FROM crm_contacts WHERE tenant_id=$1 AND id=$2 RETURNING id", [tenantId, id]);
+  if (!rows.length) throw new CrmError("Contact not found", 404);
+  return { ok: true, deleted: rows.length };
+}
 
 // Match an existing contact by email (port of lead.contact_exists — email uniquely
 // identifies a person), then mobile.
@@ -504,6 +575,32 @@ async function createDeal(tenantId, actorId, d) {
 const listDeals = async (t) => (await pool.query("SELECT * FROM crm_deals WHERE tenant_id=$1 ORDER BY created_at DESC", [t])).rows;
 async function getDeal(tenantId, dealId) {
   const { rows } = await pool.query("SELECT * FROM crm_deals WHERE tenant_id=$1 AND id=$2", [tenantId, dealId]);
+  if (!rows[0]) throw new CrmError("Deal not found", 404);
+  return rows[0];
+}
+
+// Update a deal's editable fields (tenant-scoped). Covers the simple attributes only;
+// stage/status transitions go through moveStage (which owns probability / closed_at /
+// lost-reason + SLA logic). COALESCE keeps the existing value when a field is omitted.
+async function updateDeal(tenantId, id, patch) {
+  const p = patch || {};
+  if (p.title != null && !String(p.title).trim()) throw new CrmError("title required");
+  const { rows } = await pool.query(
+    `UPDATE crm_deals SET
+        title = COALESCE($3, title),
+        account_id = COALESCE($4, account_id),
+        contact_id = COALESCE($5, contact_id),
+        value = COALESCE($6, value),
+        expected_close = COALESCE($7, expected_close),
+        next_step = COALESCE($8, next_step),
+        source = COALESCE($9, source),
+        priority = COALESCE($10, priority)
+       WHERE tenant_id=$1 AND id=$2 RETURNING *`,
+    [tenantId, id, p.title != null ? p.title : null, p.accountId != null ? p.accountId : null,
+     p.contactId != null ? p.contactId : null, p.value != null ? p.value : null,
+     p.expectedClose != null ? p.expectedClose : null, p.nextStep != null ? p.nextStep : null,
+     p.source != null ? p.source : null, p.priority != null ? p.priority : null]
+  );
   if (!rows[0]) throw new CrmError("Deal not found", 404);
   return rows[0];
 }
@@ -853,11 +950,12 @@ module.exports = {
   // SLA
   createSla, listSlas, findSla,
   // accounts / contacts
-  createAccount, listAccounts, createContact, listContacts, findContact,
+  createAccount, listAccounts, updateAccount, deleteAccount,
+  createContact, listContacts, updateContact, deleteContact, findContact,
   // leads
   createLead, listLeads, getLead, setLeadStatus, setLeadLostReason, convertLead, refreshLeadSla,
   // deals
-  createDeal, listDeals, getDeal, moveStage, winDeal, deleteDeal, pipeline, setPrimaryContact,
+  createDeal, listDeals, getDeal, updateDeal, moveStage, winDeal, deleteDeal, pipeline, setPrimaryContact,
   // tasks / notes
   createTask, listTasks, setTaskStatus, completeTask, createNote, listNotes,
   // activities / status / timeline
