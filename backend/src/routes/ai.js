@@ -4,6 +4,7 @@ const { authenticate } = require("../middleware/auth");
 // All app AI runs on the tenant's own engine (OpenRouter by default, self-host later) —
 // the same per-tenant gateway the agents use. No direct Anthropic dependency.
 const llm = require("../modules/books/llm");
+const platformConfig = require("../lib/platformConfig");
 
 const VALID_CATEGORIES = ["revenue", "expense", "payroll", "loan", "tax", "transfer"];
 
@@ -117,7 +118,8 @@ router.post("/categorize", authenticate, async (req, res) => {
 router.post("/categorize/bulk", authenticate, async (req, res) => {
   const { transactions } = req.body;
   if (!Array.isArray(transactions) || !transactions.length) return res.status(400).json({ error: "transactions array required" });
-  if (transactions.length > 100) return res.status(400).json({ error: "max 100 transactions per bulk call" });
+  const maxBulk = await platformConfig.num("limits", "maxBulkRows", 100);
+  if (transactions.length > maxBulk) return res.status(400).json({ error: `max ${maxBulk} transactions per bulk call` });
 
   const results = await Promise.all(
     transactions.map(async t => {

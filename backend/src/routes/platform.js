@@ -15,6 +15,7 @@ const express = require("express");
 const router = express.Router();
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
+const platformConfig = require("../lib/platformConfig");
 
 const GROUPS = {
   // ── public: marketing + app chrome ──────────────────────────────────────────
@@ -96,9 +97,9 @@ const GROUPS = {
   },
   limits: {
     public: false,
-    keys: ["maxAgentsPerTenant", "monthlyTokenCap", "maxUploadMb", "maxBulkRows", "trialDays"],
-    num: ["maxAgentsPerTenant", "monthlyTokenCap", "maxUploadMb", "maxBulkRows", "trialDays"],
-    defaults: { maxAgentsPerTenant: 25, monthlyTokenCap: 0, maxUploadMb: 10, maxBulkRows: 100, trialDays: 14 },
+    keys: ["maxAgentsPerTenant", "monthlyTokenCap", "maxUploadMb", "maxBulkRows", "trialDays", "reminderMaxPer7d", "creditMinScore"],
+    num: ["maxAgentsPerTenant", "monthlyTokenCap", "maxUploadMb", "maxBulkRows", "trialDays", "reminderMaxPer7d", "creditMinScore"],
+    defaults: { maxAgentsPerTenant: 25, monthlyTokenCap: 0, maxUploadMb: 10, maxBulkRows: 100, trialDays: 14, reminderMaxPer7d: 3, creditMinScore: 35 },
   },
   signup: {
     public: true,
@@ -189,6 +190,7 @@ router.put("/settings/:group", authenticate, async (req, res) => {
      ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = now()`,
     [group, JSON.stringify(clean)],
   );
+  platformConfig.bust(); // so the new value takes effect on the very next read
   res.json(clean);
 });
 

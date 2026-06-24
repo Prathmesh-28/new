@@ -5,6 +5,7 @@ const { pool }  = require("../db");
 const { authenticate } = require("../middleware/auth");
 const { sendMail } = require("../lib/email");
 const { sendWhatsApp } = require("../lib/whatsapp");
+const platformConfig = require("../lib/platformConfig");
 
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant","sales"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
@@ -209,14 +210,15 @@ router.post("/:id/remind", authenticate, canWrite, async (req, res) => {
     const invoice = rows[0];
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
 
-    // Spam-guard: protect the SMB's relationship with its customer — don't let more
-    // than 3 reminders go out for one invoice in a 7-day window.
+    // Spam-guard: protect the SMB's relationship with its customer. The cap (per
+    // 7-day window) is a super-admin-tunable platform setting, defaulting to 3.
+    const reminderCap = await platformConfig.num("limits", "reminderMaxPer7d", 3);
     const { rows: recent } = await pool.query(
       "SELECT count(*)::int AS n FROM invoice_reminders WHERE invoice_id=$1 AND tenant_id=$2 AND created_at > now() - interval '7 days'",
       [id, tenantId]
     ).catch(() => ({ rows: [{ n: 0 }] }));
-    if ((recent[0]?.n ?? 0) >= 3) {
-      return res.status(429).json({ error: "You've already sent 3 reminders for this invoice in the last 7 days — give the customer some space before nudging again." });
+    if (reminderCap > 0 && (recent[0]?.n ?? 0) >= reminderCap) {
+      return res.status(429).json({ error: `You've already sent ${reminderCap} reminders for this invoice in the last 7 days — give the customer some space before nudging again.` });
     }
 
     const amount = Number(invoice.total_amount || 0);

@@ -2,6 +2,7 @@ const router = require("express").Router();
 const { pool } = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 const { score: underwrite } = require("../lib/underwriting");
+const platformConfig = require("../lib/platformConfig");
 
 const WRITE_ROLES = ["super_admin", "owner", "finance_manager"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
@@ -59,7 +60,9 @@ router.post("/apply", authenticate, canWrite, async (req, res) => {
   // Run underwriting
   const result = await underwrite(req.user.tenant_id, pool);
 
-  const status = result.score >= 35 ? "pre_qualified" : "declined";
+  // Minimum pre-qualification score is a super-admin-tunable platform setting (default 35).
+  const minScore = await platformConfig.num("limits", "creditMinScore", 35);
+  const status = result.score >= minScore ? "pre_qualified" : "declined";
   const expiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const { rows: appRows } = await pool.query(
