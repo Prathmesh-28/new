@@ -1,5 +1,6 @@
 import { useState, useMemo, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
+import FinancingReadiness from "@/features/credit/FinancingReadiness";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId, runwayDays, monthlyBurn } from "@/lib/utils";
 import { AlertTriangle, CreditCard, TrendingUp, CheckCircle2, Clock, ChevronDown, ChevronUp, Info, X, Users, Calculator, Landmark, Target, Gauge, FileText, Scale, Receipt, Percent, TrendingDown, Building2, Coins, Wallet, Banknote } from "lucide-react";
@@ -221,6 +222,9 @@ export default function CreditPage() {
       {/* ── OVERVIEW ── */}
       {tab === "overview" && (
         <div className="space-y-5">
+          {/* Proactive financing readiness — live underwriting score before applying */}
+          <FinancingReadiness onApply={() => setTab("apply")} />
+
           {/* Stats */}
           <div className="grid grid-cols-3 gap-3">
             {[
