@@ -1787,7 +1787,13 @@ function LwfCalculatorTab({ employees }: { employees: { id: string; name: string
             </tr>
           </thead>
           <tbody>
-            {(employees.length > 0 ? employees : [{ id: "demo", name: "Sample Employee", gross_salary: 30000 }]).map(e => (
+            {employees.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">
+                  No employees yet — add your team in the Employees tab to see LWF contributions.
+                </td>
+              </tr>
+            ) : employees.map(e => (
               <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
                 <td className="px-4 py-3 font-medium">{e.name}</td>
                 <td className="px-4 py-3 tabular-nums">₹{slab.employee * annualMultiplier}</td>

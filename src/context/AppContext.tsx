@@ -129,7 +129,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const roleRef = useRef<UserRole>(role);
   useEffect(() => { roleRef.current = currentRole; }, [currentRole]);
   const [store, _setStore] = useState<AppStore>(() => {
-    try { return { ...defaultConfig, ...JSON.parse(localStorage.getItem(LS_KEY) ?? "{}") }; }
+    try {
+      const merged = { ...defaultConfig, ...JSON.parse(localStorage.getItem(LS_KEY) ?? "{}") } as AppStore;
+      // Safety: a stale/partial saved store can carry null or non-array fields, which
+      // would crash .filter()/.map() on dashboard cards. Any field that's an array in
+      // the defaults is coerced back to its default array.
+      const def = defaultConfig as unknown as Record<string, unknown>;
+      const m = merged as unknown as Record<string, unknown>;
+      for (const k of Object.keys(def)) {
+        if (Array.isArray(def[k]) && !Array.isArray(m[k])) m[k] = def[k];
+      }
+      return merged;
+    }
     catch { return defaultConfig; }
   });
   const [loading, setLoading] = useState(true);
