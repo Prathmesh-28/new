@@ -514,6 +514,8 @@ export default function GstPage() {
                 ))}
               </div>
 
+              <ImsCockpit lines={recon.lines} />
+
               <div className="flex justify-end">
                 <button onClick={downloadReconReport} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
                   <Download size={12} /> Download report (CSV)
@@ -4410,6 +4412,72 @@ function AuditReadinessChecklist() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── IMS accept/reject cockpit ──────────────────────────────────────────────────
+// From the 2025-26 return cycle, every inward invoice must be actioned in the GST
+// portal's Invoice Management System before filing GSTR-3B; UNACTIONED invoices are
+// DEEMED ACCEPTED. This layers an accept/reject/pending decision on the reconciled
+// lines (persisted) + the live 20th-of-next-month filing deadline, so the owner has
+// one worklist to clear before mirroring it on the portal.
+function ImsCockpit({ lines }: { lines: ReconResult[] }) {
+  const [decisions, setDecisions] = useFeatureState<Record<string, "accept" | "reject">>("gst-ims-decisions", {});
+  const setD = (key: string, d: "accept" | "reject") =>
+    setDecisions(prev => {
+      if (prev[key] === d) { const n = { ...prev }; delete n[key]; return n; }
+      return { ...prev, [key]: d };
+    });
+  const accepted = lines.filter(l => decisions[l.key] === "accept").length;
+  const rejected = lines.filter(l => decisions[l.key] === "reject").length;
+  const pending = lines.length - accepted - rejected;
+  const needs = lines.filter(l => l.status !== "matched" && !decisions[l.key]);
+  const acceptMatched = () => setDecisions(prev => {
+    const n = { ...prev };
+    for (const l of lines) if (l.status === "matched") n[l.key] = "accept";
+    return n;
+  });
+  const now = new Date();
+  const due = new Date(now.getFullYear(), now.getMonth() + 1, 20);
+  const daysToDue = Math.ceil((due.getTime() - now.getTime()) / 86400000);
+
+  return (
+    <div className="rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-surface)] p-4 space-y-3">
+      <div className="flex items-start gap-2">
+        <ShieldCheck size={15} className="text-[var(--color-primary)] mt-0.5 shrink-0" />
+        <div>
+          <h3 className="text-sm font-semibold">IMS — accept / reject before you file</h3>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">
+            Every inward invoice must be actioned in the portal's IMS before GSTR-3B.{" "}
+            <span className="text-orange-400 font-medium">Unactioned invoices are deemed accepted</span> on filing — due{" "}
+            <span className="text-[var(--color-text)] font-medium">{due.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span> ({daysToDue}d). Decide here, then mirror on the portal.
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="px-2 py-1 rounded-full border border-green-800/40 bg-green-950/30 text-green-400">{accepted} accept</span>
+        <span className="px-2 py-1 rounded-full border border-red-800/40 bg-red-950/30 text-red-400">{rejected} reject</span>
+        <span className={`px-2 py-1 rounded-full border ${pending > 0 ? "border-orange-800/40 bg-orange-950/30 text-orange-400" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{pending} pending → deemed accepted</span>
+        <button onClick={acceptMatched} className="ml-auto text-[11px] border border-[var(--color-border)] hover:border-[var(--color-primary)] px-2.5 py-1 rounded-lg transition-colors">Accept all clean matches</button>
+      </div>
+      {needs.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-[var(--color-muted)]">{needs.length} invoice(s) need a decision (mismatch / not in your books / not in 2B):</p>
+          <div className="max-h-60 overflow-y-auto divide-y divide-[var(--color-border)] border border-[var(--color-border)] rounded-lg">
+            {needs.slice(0, 50).map(l => (
+              <div key={l.key} className="flex items-center gap-2 px-3 py-2 text-xs">
+                <span className="flex-1 min-w-0 truncate">
+                  <span className="font-medium">{l.party || l.gstin}</span> · <span className="font-mono">{l.invoiceNo}</span>
+                  <span className="text-[var(--color-muted)]"> · {l.status === "missing_in_2b" ? "not in 2B (ITC blocked — chase vendor)" : l.status === "missing_in_books" ? "only in 2B (record it)" : "tax mismatch"}</span>
+                </span>
+                <button onClick={() => setD(l.key, "accept")} className={`px-2 py-0.5 rounded border text-[10px] ${decisions[l.key] === "accept" ? "bg-green-900/40 text-green-300 border-green-700/50" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-green-400"}`}>Accept</button>
+                <button onClick={() => setD(l.key, "reject")} className={`px-2 py-0.5 rounded border text-[10px] ${decisions[l.key] === "reject" ? "bg-red-900/40 text-red-300 border-red-700/50" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-400"}`}>Reject</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
