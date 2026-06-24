@@ -169,6 +169,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const pollRef     = useRef<ReturnType<typeof setInterval> | null>(null);
   const [syncStatus, setSyncStatus] = useState<"saved" | "saving" | "error">("saved");
 
+  // Celebrate when an invoice transitions to "paid" (e.g. a Razorpay webhook came
+  // through and the poll picked it up) — closes the "did the money land?" loop with
+  // visible feedback. Seeds on first run so we don't toast historical paids on load.
+  const paidSeenRef = useRef<Set<string>>(new Set());
+  const paidInitRef = useRef(false);
+  useEffect(() => {
+    const paidNow = (store.invoices ?? []).filter(i => i.status === "paid");
+    if (!paidInitRef.current) {
+      paidNow.forEach(i => paidSeenRef.current.add(i.id));
+      paidInitRef.current = true;
+      return;
+    }
+    for (const inv of paidNow) {
+      if (!paidSeenRef.current.has(inv.id)) {
+        paidSeenRef.current.add(inv.id);
+        toast.success(`Payment received — ₹${Number(inv.amount ?? 0).toLocaleString("en-IN")}${inv.customer ? ` from ${inv.customer}` : ""}`);
+      }
+    }
+  }, [store.invoices]);
+
   const persist = useCallback(async (s: AppStore, clientId: string | null) => {
     // Only cache OWN data locally — never clobber it with an inspected tenant's data.
     if (!clientId) localStorage.setItem(LS_KEY, JSON.stringify(s));
