@@ -80,14 +80,14 @@ async function markPaidByProviderRef(providerRef) {
   if (!undep) return null;
   // Claim the row: only the caller whose UPDATE flips status<>'PAID'→'PAID' wins.
   // A concurrent double-click / duplicate webhook gets rowCount 0 and bails.
-  const claim = await pool.query("UPDATE book_payment_links SET status='PAID' WHERE id=$1 AND status<>'PAID'", [link.id]);
+  const claim = await pool.query("UPDATE book_payment_links SET status='PAID' WHERE id=$1 AND tenant_id=$2 AND status<>'PAID'", [link.id, link.tenant_id]);
   if (claim.rowCount !== 1) return null;
   // postVoucher dedupes on idempotencyKey, so even an in-flight retry posts once.
   const r = await postVoucher(link.tenant_id, null,
     { voucherType: "RECEIPT", voucherDate: new Date().toISOString().slice(0, 10), narration: "Online payment (gateway)", source: "api", partyLedgerId: link.party_ledger_id },
     [{ ledgerId: undep, debit: toDb(link.amount), credit: "0" }, { ledgerId: link.party_ledger_id, debit: "0", credit: toDb(link.amount) }],
     { idempotencyKey: `recv:${link.id}` });
-  await pool.query("UPDATE book_payment_links SET receipt_voucher_id=$2 WHERE id=$1", [link.id, r.voucherId]);
+  await pool.query("UPDATE book_payment_links SET receipt_voucher_id=$2 WHERE id=$1 AND tenant_id=$3", [link.id, r.voucherId, link.tenant_id]);
   if (link.invoice_voucher_id) await pool.query("INSERT INTO book_allocations(tenant_id,source_voucher_id,target_voucher_id,amount) VALUES($1,$2,$3,$4)", [link.tenant_id, r.voucherId, link.invoice_voucher_id, toDb(link.amount)]);
   return { ok: true, voucherId: r.voucherId };
 }

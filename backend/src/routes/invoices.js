@@ -315,7 +315,7 @@ router.post("/:id/send", authenticate, canWrite, async (req, res) => {
     html:    `<p>Dear ${inv.customer_name},</p><p>Please find your invoice <strong>${inv.invoice_number}</strong> for <strong>₹${parseFloat(inv.total_amount).toLocaleString("en-IN")}</strong>.</p><p>Due date: <strong>${inv.due_date || "On receipt"}</strong></p><p>Thank you for your business.</p>`,
   }).catch(() => {});
 
-  await pool.query("UPDATE invoices SET status='sent' WHERE id=$1", [inv.id]);
+  await pool.query("UPDATE invoices SET status='sent' WHERE id=$1 AND tenant_id=$2", [inv.id, req.user.tenant_id]);
   res.json({ ok: true });
 });
 
@@ -328,15 +328,18 @@ router.post("/:id/upi-link", authenticate, canWrite, async (req, res) => {
   if (!inv) return res.status(404).json({ error: "Invoice not found" });
 
   const firm = inv.kv?.value?.firm ?? {};
-  const upiId = firm.upiId || `${req.user.tenant_id.replace(/[^a-z0-9]/g, "")}@upi`;
-  const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(firm.name || "Headroom")}&am=${inv.total_amount}&tn=${encodeURIComponent(inv.invoice_number)}&cu=INR`;
+  // Never fabricate a payee VPA — a placeholder/wrong UPI id sends the customer's
+  // money to the wrong place. Require the firm's real UPI ID (set in Settings).
+  const upiId = firm.upiId || null;
+  if (!upiId) return res.status(400).json({ error: "Add your UPI ID in Settings before generating a payment link — we won't send a placeholder account to your customer." });
+  const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(firm.name || "")}&am=${inv.total_amount}&tn=${encodeURIComponent(inv.invoice_number)}&cu=INR`;
 
   let qrDataUrl = null;
   try {
     qrDataUrl = await QRCode.toDataURL(upiLink, { width: 200 });
   } catch { /* ok */ }
 
-  await pool.query("UPDATE invoices SET upi_link=$1 WHERE id=$2", [upiLink, inv.id]);
+  await pool.query("UPDATE invoices SET upi_link=$1 WHERE id=$2 AND tenant_id=$3", [upiLink, inv.id, req.user.tenant_id]);
   res.json({ upi_link: upiLink, qr: qrDataUrl });
 });
 

@@ -75,7 +75,7 @@ async function autoMatch(tenantId, toleranceDays = 3) {
       [tenantId, line.bank_ledger_id, line.txn_date, line.amount, toleranceDays]
     );
     const hit = cand.find((c) => lineMatches(line, c, c.voucher_date, toleranceDays));
-    if (hit) { await pool.query("UPDATE book_bank_lines SET status='MATCHED', voucher_id=$2 WHERE id=$1", [line.id, hit.id]); matched += 1; }
+    if (hit) { await pool.query("UPDATE book_bank_lines SET status='MATCHED', voucher_id=$2 WHERE id=$1 AND tenant_id=$3", [line.id, hit.id, tenantId]); matched += 1; }
   }
   return { matched, scanned: lines.length };
 }
@@ -113,8 +113,8 @@ async function confirmLine(tenantId, actorId, lineId, counterLedgerId) {
     );
     // Conditional update: only flip to POSTED if the row is still UNMATCHED.
     const { rowCount } = await client.query(
-      "UPDATE book_bank_lines SET status='POSTED', voucher_id=$2 WHERE id=$1 AND status='UNMATCHED'",
-      [lineId, r.voucherId]
+      "UPDATE book_bank_lines SET status='POSTED', voucher_id=$2 WHERE id=$1 AND tenant_id=$3 AND status='UNMATCHED'",
+      [lineId, r.voucherId, tenantId]
     );
     if (rowCount !== 1) throw new PostError("BAD_STATE", "Line already posted", 409);
     await client.query("COMMIT");

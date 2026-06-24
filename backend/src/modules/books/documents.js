@@ -122,7 +122,7 @@ async function convertDocument(tenantId, actorId, docId, toKind, opts = {}) {
       }
     }
     const r = await postVoucher(tenantId, actorId, m.voucher, m.entries, { taxes: m.taxes });
-    await pool.query("UPDATE book_documents SET status='CONVERTED', converted_voucher_id=$2 WHERE id=$1", [docId, r.voucherId]);
+    await pool.query("UPDATE book_documents SET status='CONVERTED', converted_voucher_id=$2 WHERE id=$1 AND tenant_id=$3", [docId, r.voucherId, tenantId]);
     return { document: docId, voucher: r };
   }
 
@@ -131,7 +131,7 @@ async function convertDocument(tenantId, actorId, docId, toKind, opts = {}) {
     docKind: toKind, docDate: opts.date || doc.doc_date, partyLedgerId: doc.party_ledger_id, parentDocumentId: docId,
     subtotal: doc.subtotal, gstRate: doc.gst_rate, interState: doc.inter_state, hsn: doc.hsn_sac, lines: doc.lines, narration: doc.narration, reference: doc.reference,
   });
-  await pool.query("UPDATE book_documents SET status='CONVERTED' WHERE id=$1", [docId]);
+  await pool.query("UPDATE book_documents SET status='CONVERTED' WHERE id=$1 AND tenant_id=$2", [docId, tenantId]);
   return { document: docId, child };
 }
 

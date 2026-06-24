@@ -302,7 +302,8 @@ export default function TransactionsPage() {
     const undo = () => {
       prior.forEach(p => updateTransaction({ ...p.txn, category: p.category }));
       if (apiState !== "offline") {
-        void Promise.allSettled(prior.map(p => api.patch(`/api/transactions/${p.txn.id}`, { category: catToApi(p.category) })));
+        Promise.allSettled(prior.map(p => api.patch(`/api/transactions/${p.txn.id}`, { category: catToApi(p.category) })))
+          .then(rs => { const f = rs.filter(r => r.status === "rejected").length; if (f) toast.error(`${f} categor${f !== 1 ? "ies" : "y"} couldn't sync to the server`); });
       }
       toast.success(`Reverted ${prior.length} categor${prior.length !== 1 ? "ies" : "y"}`);
     };
@@ -349,11 +350,11 @@ export default function TransactionsPage() {
       lastDeletedRef.current = [];
       deleted.forEach(t => addTransaction(t));
       if (apiState !== "offline") {
-        void Promise.allSettled(deleted.map(async t => {
+        Promise.allSettled(deleted.map(async t => {
           const created = await api.post<any>("/api/transactions", txnToApiBody(t));
           const saved = Array.isArray(created) ? created[0] : created;
           if (saved) { deleteTransaction(t.id); addTransaction(txnFromApi(saved)); }
-        }));
+        })).then(rs => { const f = rs.filter(r => r.status === "rejected").length; if (f) toast.error(`${f} transaction${f !== 1 ? "s" : ""} couldn't be restored on the server`); });
       }
       setServerTotal(prev => (prev == null ? prev : prev + deleted.length));
       toast.success(`Restored ${deleted.length} transaction${deleted.length !== 1 ? "s" : ""}`);
@@ -393,7 +394,8 @@ export default function TransactionsPage() {
     matching.forEach(t => updateTransaction({ ...t, category: bulkCat }));
     setSelected(new Set());
     if (apiState !== "offline") {
-      void Promise.allSettled(matching.map(t => api.patch(`/api/transactions/${t.id}`, { category: catToApi(bulkCat) })));
+      Promise.allSettled(matching.map(t => api.patch(`/api/transactions/${t.id}`, { category: catToApi(bulkCat) })))
+        .then(rs => { const f = rs.filter(r => r.status === "rejected").length; if (f) toast.error(`${f} of ${matching.length} couldn't sync to the server`); });
     }
     toast.success(`Rule saved: all "${counterparty}" → ${bulkCat} (${matching.length} updated)`);
   };

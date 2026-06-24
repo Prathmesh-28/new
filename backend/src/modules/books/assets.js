@@ -134,7 +134,7 @@ async function disposeAsset(tenantId, actorId, { assetId, disposalValue, date, b
     { voucherType: "JOURNAL", voucherDate: date, narration: `Disposal — ${a.name} (WDV ${toDb(wdv)}, ${gt(gainLoss, 0) ? "gain" : gainLoss.isZero() ? "no gain/loss" : "loss"} ${toDb(gainLoss.abs())})`, source: "api" },
     legs);
 
-  await pool.query("UPDATE book_fixed_assets SET disposed_on=$2, disposal_value=$3, is_active=false WHERE id=$1", [assetId, date, toDb(proceeds)]);
+  await pool.query("UPDATE book_fixed_assets SET disposed_on=$2, disposal_value=$3, is_active=false WHERE id=$1 AND tenant_id=$4", [assetId, date, toDb(proceeds), tenantId]);
   return { assetId, wdv: toDb(wdv), gainLoss: toDb(gainLoss), voucher };
 }
 
