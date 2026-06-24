@@ -5,7 +5,7 @@ import type { AppStore, UserRole, RoleConfig } from "@/data/types";
 import { FIELD_NAMESPACE, ROLE_NAMESPACES } from "@/data/types";
 import { isReadOnlyRole } from "@/data/roles";
 import { defaultConfig } from "@/data/defaultConfig";
-import { api, clientId } from "@/lib/api";
+import { api, clientId, setApiTenant } from "@/lib/api";
 import { API_BASE } from "@/lib/apiBase";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
@@ -161,6 +161,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clientIdRef.current = tenantId;
     _setClientTenantId(tenantId);
     setSelectedClientLabel(label);
+    // Carry the opened tenant on every API call so the backend scopes ALL routes
+    // (not just the KV store) to it — full read/write for the super-admin ombudsman.
+    setApiTenant(tenantId);
     // When exiting client view, restore the CA's own data from localStorage
     if (!tenantId) {
       try {

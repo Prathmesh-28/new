@@ -11,6 +11,14 @@ export function clientId() {
   return CLIENT_ID;
 }
 
+// Super-admin impersonation: when the platform owner opens a tenant, every API call
+// carries X-Tenant-Id so the backend scopes reads/writes to that tenant. Set by
+// AppContext.setSelectedClient; the backend ignores it for non-super_admins.
+let impersonatedTenant: string | null = null;
+export function setApiTenant(tenantId: string | null) {
+  impersonatedTenant = tenantId;
+}
+
 function getToken() {
   return localStorage.getItem("hr_access");
 }
@@ -25,6 +33,7 @@ export async function authFetch<T = unknown>(
     headers: {
       "Content-Type": "application/json",
       "X-Client-Id": CLIENT_ID,
+      ...(impersonatedTenant ? { "X-Tenant-Id": impersonatedTenant } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers as Record<string, string> ?? {}),
     },

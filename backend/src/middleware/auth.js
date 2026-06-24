@@ -11,6 +11,29 @@ async function authenticate(req, res, next) {
     const { rows } = await pool.query("SELECT * FROM users WHERE id=$1", [payload.sub]);
     if (!rows[0]) return res.status(401).json({ error: "User not found" });
     req.user = rows[0];
+
+    // ── Super-admin impersonation ("ombudsman" god-mode) ───────────────────────
+    // When the platform owner opens a tenant from the admin console, the client
+    // sends X-Tenant-Id. We transparently make EVERY downstream route act on that
+    // tenant (read AND write), without touching each route — they all read
+    // req.user.tenant_id. STRICTLY gated: only a real super_admin, only when the
+    // target differs. Mutations are recorded in audit_log for accountability.
+    const target = req.headers["x-tenant-id"];
+    if (target && rows[0].role === "super_admin" && String(target) !== rows[0].tenant_id) {
+      req.realTenantId = rows[0].tenant_id;
+      req.impersonatedTenantId = String(target);
+      req.user = { ...rows[0], tenant_id: String(target) };
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        res.on("finish", () => {
+          if (res.statusCode < 400) {
+            pool.query(
+              "INSERT INTO audit_log(user_id, action, entity, entity_id, meta) VALUES($1,$2,$3,$4,$5)",
+              [rows[0].id, "impersonated_write", "tenant", String(target), { method: req.method, path: req.path, realTenant: rows[0].tenant_id }]
+            ).catch(() => {});
+          }
+        });
+      }
+    }
     next();
   } catch {
     res.status(401).json({ error: "Invalid or expired token" });
