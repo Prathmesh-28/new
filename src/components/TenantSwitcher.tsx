@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { Building2, ChevronDown, Check, Globe, Search, Loader2, Eye, SlidersHorizontal } from "lucide-react";
+import { Building2, ChevronDown, Check, Globe, Search, Loader2, Eye, SlidersHorizontal, Pencil } from "lucide-react";
 import { PLAN_LABEL, type PlanTier } from "@/data/types";
 
 interface Company {
@@ -169,6 +169,12 @@ export default function TenantSwitcher() {
         )}
       </div>
 
+      {selectedClientTenantId && (
+        <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold text-amber-200 bg-amber-900/40 border border-amber-700/50 px-2 py-1 rounded-md whitespace-nowrap shrink-0"
+          title="Full edit access — every change you make here saves to this company's live account (and is recorded in the audit log).">
+          <Pencil size={11} /> Editing live — saves to {selectedClientLabel || "this company"}
+        </span>
+      )}
       {selectedClientTenantId && (
         <button onClick={() => pick(null)}
           className="text-[11px] font-semibold bg-purple-800/60 text-purple-100 border border-purple-600/50 px-2.5 py-1 rounded-md hover:bg-purple-800/90 whitespace-nowrap shrink-0">
