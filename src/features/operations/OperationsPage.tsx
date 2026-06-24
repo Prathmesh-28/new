@@ -68,6 +68,24 @@ const SEV_DOT: Record<Anomaly["severity"], string> = {
   high: "bg-red-400", medium: "bg-orange-400", low: "bg-[var(--color-muted)]",
 };
 
+// Available-to-promise: can this order be fulfilled from inventory on hand?
+// Match each line to an InventoryItem by SKU (preferred) then product name.
+// Lines with no matching SKU are "untracked" and don't count against ATP.
+type AtpResult = { ok: boolean; untracked: boolean; short: { name: string; need: number; have: number }[] };
+function checkAtp(order: Order, inventory: InventoryItem[]): AtpResult {
+  const bySku  = new Map(inventory.filter(i => i.sku).map(i => [i.sku.toLowerCase(), i]));
+  const byName = new Map(inventory.map(i => [i.productName.trim().toLowerCase(), i]));
+  let matched = 0;
+  const short: AtpResult["short"] = [];
+  for (const line of order.items) {
+    const match = (line.sku && bySku.get(line.sku.toLowerCase())) || byName.get(line.productName.trim().toLowerCase());
+    if (!match) continue;
+    matched++;
+    if (match.quantity < line.quantity) short.push({ name: line.productName, need: line.quantity, have: match.quantity });
+  }
+  return { ok: short.length === 0, untracked: matched === 0, short };
+}
+
 export default function OperationsPage() {
   const { store, addOrder, updateOrder, deleteOrder, addInventoryItem, deleteInventoryItem, addProcurement, updateProcurement } = useApp();
   const { orders, inventory, procurement, transactions } = store;
@@ -369,18 +387,34 @@ export default function OperationsPage() {
               <table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="border-b border-[var(--color-border)]">
-                    {["Source","Order #","Buyer","Value","Status","Actions"].map(h => (
+                    {["Source","Order #","Buyer","Value","Stock","Status","Actions"].map(h => (
                       <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-3">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map(o => (
+                  {orders.map(o => {
+                    // Available-to-promise: match each order line to inventory on hand
+                    // (by SKU first, falling back to product name) and flag whether we
+                    // can fulfil the order from current stock before dispatching.
+                    const atp = checkAtp(o, inventory);
+                    return (
                     <tr key={o.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)] transition-colors">
                       <td className="px-4 py-3">{SOURCE_ICON[o.source]}</td>
                       <td className="px-4 py-3 font-mono text-xs text-[var(--color-muted)]">{o.orderNumber}</td>
                       <td className="px-4 py-3 font-medium">{o.buyerName}</td>
                       <td className="px-4 py-3 font-bold text-[var(--color-primary)]">{formatCurrency(o.totalValue)}</td>
+                      <td className="px-4 py-3">
+                        {["delivered","cancelled"].includes(o.status) ? (
+                          <span className="text-xs text-[var(--color-muted)]">—</span>
+                        ) : atp.untracked ? (
+                          <span className="text-xs text-[var(--color-muted)]" title="No matching inventory SKU — add the product to inventory to track stock">Untracked</span>
+                        ) : atp.ok ? (
+                          <span className="text-xs text-green-400 flex items-center gap-1" title="Enough stock on hand to fulfil this order"><CheckCircle2 size={11} />Stock OK</span>
+                        ) : (
+                          <span className="text-xs text-red-400 flex items-center gap-1" title={atp.short.map(s => `${s.name}: need ${s.need}, have ${s.have}`).join(" · ")}><AlertTriangle size={11} />Short {atp.short.reduce((s, x) => s + (x.need - x.have), 0)}</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLOR[o.status]}`}>{o.status}</span>
                       </td>
@@ -397,13 +431,16 @@ export default function OperationsPage() {
                             </>
                           )}
                           {o.status === "pending"   && <button onClick={() => handleStatusChange(o, "confirmed")}  className="text-xs bg-blue-900/30 text-blue-400 border border-blue-800/30 px-2 py-0.5 rounded hover:bg-blue-900/50">Confirm</button>}
-                          {o.status === "confirmed" && <button onClick={() => handleStatusChange(o, "dispatched")} className="text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-0.5 rounded">Dispatch</button>}
+                          {o.status === "confirmed" && <button onClick={() => {
+                            if (!atp.ok && !atp.untracked && !window.confirm(`Short on stock — ${atp.short.map(s => `${s.name} (need ${s.need}, have ${s.have})`).join(", ")}. Dispatch anyway?`)) return;
+                            handleStatusChange(o, "dispatched");
+                          }} className="text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-0.5 rounded">Dispatch</button>}
                           {o.status === "dispatched"&& <button onClick={() => handleStatusChange(o, "delivered")}  className="text-xs bg-green-900/30 text-green-400 border border-green-800/30 px-2 py-0.5 rounded">Delivered</button>}
                           {!["delivered","cancelled"].includes(o.status) && <button onClick={() => deleteOrder(o.id)} className="text-xs text-[var(--color-muted)] hover:text-red-400 ml-1">✕</button>}
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>
@@ -1323,7 +1360,7 @@ function BomCostingTab() {
 }
 
 function ReorderAlertTab() {
-  const { store } = useApp();
+  const { store, addProcurement } = useApp();
   type ReorderItem = {
     id: string; name: string; currentStock: number; reorderPoint: number;
     reorderQty: number; leadTimeDays: number; unitCost: number; supplier: string;
@@ -1377,6 +1414,52 @@ function ReorderAlertTab() {
   const fc = formatCurrency;
   const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] w-full";
 
+  // Suggested order qty: take the configured reorder qty, but never less than
+  // enough to clear the reorder point (reorderPoint - currentStock), min 1.
+  const suggestedQty = (i: ReorderItem) =>
+    Math.max(1, i.reorderQty || 0, Math.ceil(i.reorderPoint - i.currentStock));
+
+  // Append a draft ProcurementOrder to store.procurement for a single SKU.
+  const createPoFor = (i: ReorderItem) => {
+    const qty = suggestedQty(i);
+    addProcurement({
+      id: generateId(),
+      supplierName: i.supplier || "To be assigned",
+      status: "draft",
+      totalValue: qty * (i.unitCost || 0),
+      expectedDate: "",
+      items: [{ productName: i.name, sku: "", quantity: qty, unitCost: i.unitCost || 0 }],
+      createdAt: new Date().toISOString(),
+    });
+  };
+
+  // Bulk: one PO per below-ROP SKU, grouped by supplier so a supplier with
+  // multiple short items gets a single multi-line PO.
+  const createAllPos = () => {
+    if (needsReorder.length === 0) { toast.error("Nothing below reorder point"); return; }
+    const bySupplier = new Map<string, ReorderItem[]>();
+    needsReorder.forEach(i => {
+      const key = (i.supplier || "To be assigned").trim();
+      bySupplier.set(key, [...(bySupplier.get(key) ?? []), i]);
+    });
+    bySupplier.forEach((group, supplier) => {
+      const lines = group.map(i => {
+        const qty = suggestedQty(i);
+        return { productName: i.name, sku: "", quantity: qty, unitCost: i.unitCost || 0 };
+      });
+      addProcurement({
+        id: generateId(),
+        supplierName: supplier,
+        status: "draft",
+        totalValue: lines.reduce((s, l) => s + l.quantity * l.unitCost, 0),
+        expectedDate: "",
+        items: lines,
+        createdAt: new Date().toISOString(),
+      });
+    });
+    toast.success(`Created ${bySupplier.size} draft PO${bySupplier.size > 1 ? "s" : ""} for ${needsReorder.length} item${needsReorder.length > 1 ? "s" : ""} — review in Procurement`);
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
@@ -1401,10 +1484,18 @@ function ReorderAlertTab() {
               <span className="text-xs bg-red-950/30 text-red-400 font-semibold px-2 py-0.5 rounded-full">{needsReorder.length} items below ROP</span>
             )}
           </div>
-          <button onClick={() => setShowForm(f => !f)}
-            className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
-            <Plus size={11} /> Add SKU
-          </button>
+          <div className="flex items-center gap-2">
+            {needsReorder.length > 0 && (
+              <button onClick={createAllPos}
+                className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
+                <Truck size={11} /> Create POs for all ({needsReorder.length})
+              </button>
+            )}
+            <button onClick={() => setShowForm(f => !f)}
+              className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
+              <Plus size={11} /> Add SKU
+            </button>
+          </div>
         </div>
 
         {showForm && (
@@ -1466,7 +1557,14 @@ function ReorderAlertTab() {
                       <td className="px-3 py-2.5 tabular-nums">{item.unitCost > 0 ? fc(item.reorderQty * item.unitCost) : "—"}</td>
                       <td className="px-3 py-2.5 text-[var(--color-muted)] text-xs">{item.supplier || "—"}</td>
                       <td className="px-3 py-2.5">
-                        <button onClick={() => setItems(prev => prev.filter(x => x.id !== item.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+                        <div className="flex items-center gap-2">
+                          {below && (
+                            <button onClick={() => { createPoFor(item); toast.success(`Draft PO created for ${item.name} — review in Procurement`); }}
+                              title={`Create a draft PO for ${suggestedQty(item)} units`}
+                              className="text-xs text-[var(--color-primary)] hover:underline whitespace-nowrap">Create PO →</button>
+                          )}
+                          <button onClick={() => setItems(prev => prev.filter(x => x.id !== item.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+                        </div>
                       </td>
                     </tr>
                   );

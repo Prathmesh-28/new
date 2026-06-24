@@ -162,6 +162,9 @@ export interface Transaction {
   bankAccountId: string;
   notes?: string;
   flagged?: boolean;
+  // Cash application: links a received/paid transaction to the invoice/bill it
+  // settles, so AR/AP reconcile against the ledger instead of living in silos.
+  invoiceId?: string;
 }
 
 export interface Alert {

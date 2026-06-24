@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -6,7 +7,7 @@ import {
   Users, KanbanSquare, UserPlus, Building2, Contact as ContactIcon,
   Plus, RefreshCw, ArrowLeft, ArrowRight, Trophy, ArrowRightCircle,
   CheckCircle2, Mail, Phone, Globe, X, Clock, AlertTriangle, ShieldCheck,
-  ListChecks, StickyNote, Send, Gauge, Timer, Trash2, Pencil,
+  ListChecks, StickyNote, Send, Gauge, Timer, Trash2, Pencil, FileText,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 
@@ -341,9 +342,11 @@ export default function CrmPage() {
 // PIPELINE TAB
 // ─────────────────────────────────────────────────────────────────────────────
 function PipelineTab({ canWrite }: { canWrite: boolean }) {
+  const navigate = useNavigate();
   const [pipeline, setPipeline] = useState<Pipeline | null>(null);
   const [loading, setLoading] = useState(true);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [wonDeals, setWonDeals] = useState<Deal[]>([]);
   const [busyDeal, setBusyDeal] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Deal | null>(null);
@@ -368,12 +371,14 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [p, a] = await Promise.all([
+      const [p, a, d] = await Promise.all([
         api.get<Pipeline>("/api/crm/pipeline"),
         api.get<Account[]>("/api/crm/accounts"),
+        api.get<Deal[]>("/api/crm/deals"),
       ]);
       setPipeline(p);
       setAccounts(Array.isArray(a) ? a : []);
+      setWonDeals(Array.isArray(d) ? d.filter((x) => x.stage === "WON" || x.status === "WON") : []);
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -386,6 +391,17 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
   }, [load]);
 
   const accountName = (id: string | null) => (id ? accounts.find((a) => a.id === id)?.name ?? null : null);
+
+  // Deep-link to the invoice composer, pre-filled from the won deal. Uses the
+  // /invoices?compose=1 surface (POST /api/invoices — which DOES permit "sales"),
+  // never the books documents/sales ledger path (which excludes sales). Customer
+  // defaults to the linked account name, falling back to the deal title.
+  const raiseInvoice = (deal: Deal) => {
+    const customer = accountName(deal.account_id) ?? deal.title;
+    const params = new URLSearchParams({ compose: "1", customer, desc: deal.title });
+    if (deal.value != null && Number(deal.value) > 0) params.set("amount", String(deal.value));
+    navigate(`/invoices?${params.toString()}`);
+  };
 
   const moveStage = async (deal: Deal, dir: -1 | 1) => {
     const idx = BOARD_STAGES.indexOf(deal.stage as OpenStage);
@@ -411,6 +427,11 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
       await api.post<unknown>(`/api/crm/deals/${deal.id}/win`, {});
       toast.success(`"${deal.title}" won — customer created in Books`);
       await load();
+      // Closing the deal is the moment to bill it — offer to raise the invoice
+      // now (the won card leaves the open board, so this is the natural handoff).
+      if (window.confirm(`Raise an invoice for "${deal.title}" now?`)) {
+        raiseInvoice(deal);
+      }
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -667,6 +688,42 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
           );
         })}
       </div>
+      )}
+
+      {/* WON — READY TO INVOICE. A won deal leaves the open board, so this is
+          where a rep closes the loop: raise the invoice for what they just won
+          (or come back to bill it later). Routes to /invoices?compose=1, which
+          posts to /api/invoices — the path that permits the "sales" role. */}
+      {wonDeals.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
+            <Trophy size={14} className="text-green-400" />
+            <h3 className="text-sm font-semibold">Won — ready to invoice</h3>
+            <span className="text-[11px] text-[var(--color-muted)] tabular-nums">{wonDeals.length}</span>
+          </div>
+          <div className="divide-y divide-[var(--color-border)]">
+            {wonDeals.map((d) => (
+              <div key={d.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{d.title}</p>
+                  <p className="text-xs text-[var(--color-muted)] tabular-nums">
+                    {rupee(d.value)}{accountName(d.account_id) ? ` · ${accountName(d.account_id)}` : ""}
+                  </p>
+                </div>
+                {canWrite && (
+                  <button
+                    type="button"
+                    onClick={() => raiseInvoice(d)}
+                    title="Create invoice for this won deal"
+                    className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+                  >
+                    <FileText size={13} /> Create invoice
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

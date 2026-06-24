@@ -214,7 +214,7 @@ function AppShell() {
       {/* pt-12 clears the fixed 48px mobile top bar so the banner strips below
           (offline / client-view / read-only / preview) aren't hidden behind it;
           no offset on md+ where the desktop sidebar is used. */}
-      <div className="flex-1 flex flex-col min-w-0 pt-12 md:pt-0">
+      <div className="flex-1 flex flex-col min-w-0 pt-[calc(3rem+env(safe-area-inset-top))] md:pt-0">
         <OfflineBanner />
         <AnnouncementBanner />
         <TenantSwitcher />

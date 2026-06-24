@@ -209,10 +209,20 @@ router.post("/:id/remind", authenticate, canWrite, async (req, res) => {
     const invoice = rows[0];
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
 
+    // Spam-guard: protect the SMB's relationship with its customer — don't let more
+    // than 3 reminders go out for one invoice in a 7-day window.
+    const { rows: recent } = await pool.query(
+      "SELECT count(*)::int AS n FROM invoice_reminders WHERE invoice_id=$1 AND tenant_id=$2 AND created_at > now() - interval '7 days'",
+      [id, tenantId]
+    ).catch(() => ({ rows: [{ n: 0 }] }));
+    if ((recent[0]?.n ?? 0) >= 3) {
+      return res.status(429).json({ error: "You've already sent 3 reminders for this invoice in the last 7 days — give the customer some space before nudging again." });
+    }
+
     const amount = Number(invoice.total_amount || 0);
     const sender = (await firmNameOf(tenantId)) || req.user.display_name || "your supplier";
-    const msg = `Reminder from ${sender}: invoice ${invoice.invoice_number} for ₹${amount.toLocaleString("en-IN")} is due${invoice.due_date ? ` on ${new Date(invoice.due_date).toLocaleDateString("en-IN")}` : ""}.` +
-      (invoice.upi_link ? ` Pay here: ${invoice.upi_link}` : "");
+    const baseMsg = `Reminder from ${sender}: invoice ${invoice.invoice_number} for ₹${amount.toLocaleString("en-IN")} is due${invoice.due_date ? ` on ${new Date(invoice.due_date).toLocaleDateString("en-IN")}` : ""}.`;
+    const msg = baseMsg + (invoice.upi_link ? ` Pay here: ${invoice.upi_link}` : "");
 
     // Try WhatsApp first (if we have a phone), then email. Record what happened.
     let channel = null, delivered = false;
@@ -221,10 +231,14 @@ router.post("/:id/remind", authenticate, canWrite, async (req, res) => {
       delivered = await sendWhatsApp(invoice.customer_phone, msg).catch(() => false);
     } else if (invoice.customer_email) {
       channel = "email";
+      const esc = baseMsg.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      const payBtn = invoice.upi_link
+        ? `<p style="margin:18px 0"><a href="${invoice.upi_link}" style="background:#5FBE7C;color:#0d0d09;font-weight:700;padding:11px 20px;border-radius:8px;text-decoration:none;display:inline-block">Pay ₹${amount.toLocaleString("en-IN")} now</a></p>`
+        : "";
       delivered = await sendMail({
         to: invoice.customer_email,
         subject: `Payment reminder — invoice ${invoice.invoice_number}`,
-        html: `<p>${msg.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>`,
+        html: `<div style="font-family:system-ui,-apple-system,sans-serif"><p>${esc}</p>${payBtn}<p style="color:#8a8a8a;font-size:12px;margin-top:20px">Sent by ${sender}.</p></div>`,
       }).then(() => true).catch(() => false);
     }
     if (!channel) {

@@ -452,7 +452,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
       </aside>
 
       {/* ── Mobile top bar ───────────────────────────────────────────── */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-12 z-50 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center justify-between px-4">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-50 h-[calc(3rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center justify-between px-4">
         <button onClick={() => navigate("/dashboard")} aria-label="Go to dashboard" className="hover:opacity-80 transition-opacity">
           <Logo variant="horizontal" size={20} className="text-[var(--color-text)] select-none" />
         </button>

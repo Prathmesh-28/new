@@ -2,10 +2,10 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
-import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText, Repeat, Wand2, GitCompareArrows, Split, Layers, ArrowLeftRight, FolderTree, Scale, NotebookPen, Calculator, BookOpen, BookText, Wallet, Eraser, Lock, ListTree, Percent, Receipt, Banknote, Target, Users, Trash2, RefreshCw, CloudOff } from "lucide-react";
+import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText, Repeat, Wand2, GitCompareArrows, Split, Layers, ArrowLeftRight, FolderTree, Scale, NotebookPen, Calculator, BookOpen, BookText, Wallet, Eraser, Lock, ListTree, Percent, Receipt, Banknote, Target, Users, Trash2, RefreshCw, CloudOff, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import type { Transaction } from "@/data/types";
+import type { Transaction, Invoice } from "@/data/types";
 import { capturePhoto } from "@/lib/nativeFeatures";
 import { api } from "@/lib/api";
 import ReconcileModal from "./ReconcileModal";
@@ -171,7 +171,7 @@ export default function TransactionsPage() {
 
   useEffect(() => { void loadFromServer(); }, [loadFromServer]);
 
-  const [view, setView] = useState<"transactions" | "pdc" | "bounce" | "upi" | "recon" | "recurring" | "cat-rules" | "recon-workbench" | "split-txn" | "bulk-tag" | "transfer-detect" | "cost-center" | "cash-accrual" | "journal-entry" | "trial-balance" | "day-book" | "ledger-account" | "opening-balance" | "write-off" | "period-lock" | "chart-of-accounts" | "gst-ledger" | "tds-ledger" | "cash-bank-split" | "counterparty-360" | "budget-actual">("transactions");
+  const [view, setView] = useState<"transactions" | "pdc" | "bounce" | "upi" | "recon" | "recurring" | "cat-rules" | "recon-workbench" | "split-txn" | "bulk-tag" | "transfer-detect" | "cost-center" | "cash-accrual" | "journal-entry" | "trial-balance" | "day-book" | "ledger-account" | "opening-balance" | "write-off" | "period-lock" | "chart-of-accounts" | "gst-ledger" | "tds-ledger" | "cash-bank-split" | "counterparty-360" | "budget-actual" | "cash-application">("transactions");
   const [scanning, setScanning] = useState(false);
   const [showReconcile, setShowReconcile] = useState(false);
   // Snap a receipt/bill → Claude vision extracts vendor/amount/date/category →
@@ -482,6 +482,11 @@ export default function TransactionsPage() {
             className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
             <CheckCheck size={12} /> Reconcile
           </button>
+          <button onClick={() => setView(v => v === "cash-application" ? "transactions" : "cash-application")}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === "cash-application" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}
+            title="Match received cash to open customer invoices and mark them paid">
+            <Link2 size={12} /> Cash Application
+          </button>
           {canExport() && (
             <button onClick={() => { exportCsv(filtered, bankAccounts); toast.success("CSV downloaded"); }}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
@@ -565,6 +570,7 @@ export default function TransactionsPage() {
       {view === "cash-bank-split"   && <CashBankSplit />}
       {view === "counterparty-360"  && <Counterparty360 />}
       {view === "budget-actual"     && <BudgetVsActual />}
+      {view === "cash-application"  && <CashApplication />}
 
       {view === "pdc" && <PDCRegister />}
       {view === "bounce" && <BounceTracker />}
@@ -3158,6 +3164,256 @@ function BudgetVsActual() {
         ))}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Set a monthly budget per spend category and compare it against actual outflow for the chosen month. Budgets are saved and synced across devices; the bar turns amber past 80% and red on overrun.</p>
+    </div>
+  );
+}
+
+// ── #206 CASH APPLICATION — MATCH PAYMENTS TO INVOICES ──────────────────────
+// The finance manager's core reconciliation loop: received cash (revenue
+// transactions) and open customer invoices live in separate lists and never
+// link, so invoices get marked paid by hand. This view auto-suggests which
+// payment settles which invoice (exact = high confidence, ±5% / ±₹500 = medium),
+// then on "Match" stamps the transaction's invoiceId and flips the invoice to
+// paid — closing AR against the ledger in one click. Pure store writes:
+// updateTransaction (set invoiceId) + updateInvoice (status → paid).
+type CashMatch = {
+  invoice: Invoice;
+  txn: Transaction;
+  confidence: "high" | "medium";
+  diff: number; // signed: txn.amount − invoice.amount
+};
+
+function CashApplication() {
+  const { store, updateTransaction, updateInvoice } = useApp();
+  const fc = formatCurrency;
+  const transactions = useMemo(() => store.transactions ?? [], [store.transactions]);
+  const invoices     = useMemo(() => store.invoices ?? [], [store.invoices]);
+
+  // Received cash with no invoice linked yet. Treat category 'revenue' or any
+  // positive (money-in) transaction as a candidate receipt.
+  const unmatchedReceipts = useMemo(
+    () => transactions.filter(t => !t.invoiceId && (t.category === "revenue" || t.amount > 0)),
+    [transactions],
+  );
+  const openInvoices = useMemo(
+    () => invoices.filter(i => i.status !== "paid"),
+    [invoices],
+  );
+
+  // Auto-suggest one best candidate receipt per open invoice. A receipt is only
+  // a candidate if it lands on/after the invoice date (you don't get paid before
+  // you bill). Exact amount (within ₹1) is high confidence; within ±5% OR ±₹500
+  // is medium. Each receipt can back only one invoice — greedily assign the
+  // strongest matches first so a single payment isn't double-counted.
+  const suggestions = useMemo<CashMatch[]>(() => {
+    const used = new Set<string>();
+    const out: CashMatch[] = [];
+    // High-confidence (exact) pass first, then medium — so exact matches win the
+    // receipt before a looser invoice can claim it.
+    const ranked = [...openInvoices].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    const findFor = (inv: Invoice, want: "high" | "medium"): CashMatch | null => {
+      const tol = Math.max(inv.amount * 0.05, 500);
+      let best: CashMatch | null = null;
+      for (const t of unmatchedReceipts) {
+        if (used.has(t.id)) continue;
+        if (t.date < inv.invoiceDate) continue; // payment can't predate the bill
+        const diff = t.amount - inv.amount;
+        const abs = Math.abs(diff);
+        const isHigh = abs <= 1;
+        const isMedium = abs <= tol;
+        if (want === "high" ? !isHigh : !(isMedium && !isHigh)) continue;
+        const cand: CashMatch = { invoice: inv, txn: t, confidence: want, diff };
+        // Prefer the closest amount, then the earliest payment after the invoice.
+        if (!best || abs < Math.abs(best.diff) || (abs === Math.abs(best.diff) && t.date < best.txn.date)) best = cand;
+      }
+      return best;
+    };
+    for (const inv of ranked) {
+      const hit = findFor(inv, "high");
+      if (hit) { used.add(hit.txn.id); out.push(hit); }
+    }
+    for (const inv of ranked) {
+      if (out.some(m => m.invoice.id === inv.id)) continue; // already matched exactly
+      const hit = findFor(inv, "medium");
+      if (hit) { used.add(hit.txn.id); out.push(hit); }
+    }
+    return out;
+  }, [openInvoices, unmatchedReceipts]);
+
+  const highMatches = useMemo(() => suggestions.filter(m => m.confidence === "high"), [suggestions]);
+
+  // Summary metrics.
+  const unmatchedCashTotal = useMemo(() => unmatchedReceipts.reduce((s, t) => s + t.amount, 0), [unmatchedReceipts]);
+  const openInvoiceTotal   = useMemo(() => openInvoices.reduce((s, i) => s + i.amount, 0), [openInvoices]);
+  const totalInvoices      = invoices.length;
+  const paidInvoices       = invoices.filter(i => i.status === "paid").length;
+  const pctReconciled      = totalInvoices > 0 ? Math.round((paidInvoices / totalInvoices) * 100) : 0;
+
+  // Apply one match: stamp the receipt with the invoice id and mark the invoice
+  // paid. Toast offers Undo (revert both writes) within the standard window.
+  const applyMatch = useCallback((m: CashMatch, silent = false) => {
+    const priorTxn = m.txn;
+    const priorInv = m.invoice;
+    updateTransaction({ ...priorTxn, invoiceId: priorInv.id });
+    updateInvoice({ ...priorInv, status: "paid" });
+    if (silent) return;
+    toast.success(`Matched ${fc(priorTxn.amount)} → ${priorInv.customer}'s invoice — marked paid`, {
+      action: {
+        label: "Undo",
+        onClick: () => {
+          updateTransaction({ ...priorTxn, invoiceId: undefined });
+          updateInvoice({ ...priorInv });
+          toast.success("Match undone");
+        },
+      },
+      duration: 10000,
+    });
+  }, [updateTransaction, updateInvoice, fc]);
+
+  // Apply every high-confidence (exact) match in one go, with a batched Undo.
+  const autoMatchAll = useCallback(() => {
+    if (highMatches.length === 0) return;
+    const batch = highMatches;
+    batch.forEach(m => applyMatch(m, true));
+    toast.success(`Auto-matched ${batch.length} exact payment${batch.length !== 1 ? "s" : ""} to invoices`, {
+      action: {
+        label: "Undo all",
+        onClick: () => {
+          batch.forEach(m => {
+            updateTransaction({ ...m.txn, invoiceId: undefined });
+            updateInvoice({ ...m.invoice });
+          });
+          toast.success(`Reverted ${batch.length} match${batch.length !== 1 ? "es" : ""}`);
+        },
+      },
+      duration: 10000,
+    });
+  }, [highMatches, applyMatch, updateTransaction, updateInvoice]);
+
+  const suggForInvoice = useCallback((invId: string) => suggestions.find(m => m.invoice.id === invId) ?? null, [suggestions]);
+
+  return (
+    <div className="space-y-4">
+      {/* Summary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Unmatched received cash", value: fc(unmatchedCashTotal), sub: `${unmatchedReceipts.length} receipt${unmatchedReceipts.length !== 1 ? "s" : ""} unapplied`, color: unmatchedReceipts.length ? "text-yellow-400" : "text-green-400" },
+          { label: "Open invoices", value: fc(openInvoiceTotal), sub: `${openInvoices.length} awaiting payment`, color: openInvoices.length ? "text-orange-400" : "text-green-400" },
+          { label: "Suggested matches", value: suggestions.length.toString(), sub: `${highMatches.length} exact · ${suggestions.length - highMatches.length} approximate`, color: suggestions.length ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]" },
+          { label: "Invoices reconciled", value: `${pctReconciled}%`, sub: `${paidInvoices} of ${totalInvoices} marked paid`, color: pctReconciled >= 100 ? "text-green-400" : "text-[var(--color-text)]" },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{c.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Title + auto-match action */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Link2 size={14} className="text-[var(--color-primary)]" />
+            <div>
+              <h3 className="text-sm font-semibold">Match payments to invoices</h3>
+              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">Suggestions pair received cash with the open invoice it most likely settles. Matching stamps the payment with the invoice and marks the invoice paid.</p>
+            </div>
+          </div>
+          <button onClick={autoMatchAll} disabled={highMatches.length === 0}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity">
+            <CheckCheck size={12} /> Auto-match {highMatches.length} exact
+          </button>
+        </div>
+      </div>
+
+      {/* Two-column board: open invoices (left) ↔ unmatched receipts (right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Open invoices with suggestions */}
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+            <Receipt size={13} className="text-orange-400" />
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]">Open invoices ({openInvoices.length})</h4>
+          </div>
+          {openInvoices.length === 0 ? (
+            <p className="px-4 py-8 text-center text-xs text-[var(--color-muted)]">No open invoices — everything is reconciled.</p>
+          ) : (
+            <div className="divide-y divide-[var(--color-border)] max-h-[28rem] overflow-y-auto">
+              {[...openInvoices].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map(inv => {
+                const sugg = suggForInvoice(inv.id);
+                return (
+                  <div key={inv.id} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{inv.customer}</p>
+                        <p className="text-[10px] text-[var(--color-muted)] truncate">
+                          {inv.invoiceNumber ? `${inv.invoiceNumber} · ` : ""}{inv.description || "Invoice"} · due {inv.dueDate}
+                          <span className={`ml-1.5 ${inv.status === "overdue" ? "text-red-400" : "text-yellow-400"}`}>{inv.status}</span>
+                        </p>
+                      </div>
+                      <span className="tabular-nums font-semibold text-sm whitespace-nowrap">{fc(inv.amount)}</span>
+                    </div>
+                    {sugg ? (
+                      <div className="mt-2 flex items-center justify-between gap-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${sugg.confidence === "high" ? "bg-green-950/40 text-green-400" : "bg-yellow-950/40 text-yellow-400"}`}>
+                              {sugg.confidence === "high" ? "Exact match" : "Likely match"}
+                            </span>
+                            {sugg.diff !== 0 && <span className="text-[9px] text-[var(--color-muted)] tabular-nums">{sugg.diff > 0 ? "+" : "−"}{fc(Math.abs(sugg.diff))} vs invoice</span>}
+                          </div>
+                          <p className="text-[10px] text-[var(--color-muted)] truncate mt-0.5">
+                            {sugg.txn.date} · {sugg.txn.description}{sugg.txn.counterparty ? ` · ${sugg.txn.counterparty}` : ""} · <span className="text-green-400 tabular-nums">{fc(sugg.txn.amount)}</span>
+                          </p>
+                        </div>
+                        <button onClick={() => applyMatch(sugg)}
+                          className="shrink-0 text-[10px] bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity">
+                          Match
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-[10px] text-[var(--color-muted)]">No matching receipt found yet.</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Unmatched receipts */}
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+            <Banknote size={13} className="text-green-400" />
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]">Unmatched received cash ({unmatchedReceipts.length})</h4>
+          </div>
+          {unmatchedReceipts.length === 0 ? (
+            <p className="px-4 py-8 text-center text-xs text-[var(--color-muted)]">Every received payment is applied to an invoice.</p>
+          ) : (
+            <div className="divide-y divide-[var(--color-border)] max-h-[28rem] overflow-y-auto">
+              {[...unmatchedReceipts].sort((a, b) => b.date.localeCompare(a.date)).map(t => {
+                const linkedSugg = suggestions.find(m => m.txn.id === t.id);
+                return (
+                  <div key={t.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{t.description}</p>
+                      <p className="text-[10px] text-[var(--color-muted)] truncate">
+                        {t.date}{t.counterparty ? ` · ${t.counterparty}` : ""}
+                        {linkedSugg && <span className="ml-1.5 text-[var(--color-primary)]">→ suggested for {linkedSugg.invoice.customer}</span>}
+                      </p>
+                    </div>
+                    <span className="tabular-nums font-semibold text-sm text-green-400 whitespace-nowrap">+{fc(t.amount)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <p className="text-[10px] text-[var(--color-muted)]">
+        Candidates only include payments dated on or after the invoice. Exact amounts (within ₹1) are high-confidence; amounts within ±5% or ±₹500 are flagged as approximate so you can confirm before applying. Matching is reversible from the toast.
+      </p>
     </div>
   );
 }

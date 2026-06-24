@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { formatCurrency, formatAmount } from "@/lib/utils";
+import { formatCurrency, formatAmount, generateId } from "@/lib/utils";
 import { api } from "@/lib/api";
 import EmptyState from "@/components/EmptyState";
 import AiInsight from "@/components/ai/AiInsight";
@@ -382,7 +382,7 @@ function apAgingBucket(daysOverdue: number): AgingBucket {
 export default function VendorsPage() {
   const { store } = useApp();
   const { transactions } = store;
-  const [view, setView] = useState<"directory" | "aging" | "msme" | "po" | "three-way" | "vendor-tds" | "kyc-vault" | "early-pay" | "pay-run" | "spend-analysis" | "dup-vendor" | "requisition" | "vendor-score" | "rfq" | "advances" | "debit-notes" | "pay-forecast" | "blanket-po" | "concentration" | "stmt-recon" | "msme-interest" | "savings" | "form16a" | "rebate" | "watchlist" | "pay-mode" | "recurring-bills" | "landed-cost" | "dup-invoice" | "approval-sla" | "wc-simulator">("directory");
+  const [view, setView] = useState<"directory" | "bills" | "aging" | "msme" | "po" | "three-way" | "vendor-tds" | "kyc-vault" | "early-pay" | "pay-run" | "spend-analysis" | "dup-vendor" | "requisition" | "vendor-score" | "rfq" | "advances" | "debit-notes" | "pay-forecast" | "blanket-po" | "concentration" | "stmt-recon" | "msme-interest" | "savings" | "form16a" | "rebate" | "watchlist" | "pay-mode" | "recurring-bills" | "landed-cost" | "dup-invoice" | "approval-sla" | "wc-simulator">("directory");
   const [search,   setSearch]   = useState("");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [sortKey,  setSortKey]  = useState<SortKey>("totalSpend");
@@ -566,6 +566,7 @@ export default function VendorsPage() {
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
           {([
             ["directory", "Directory", Package],
+            ["bills", "Bills / Payables", Banknote],
             ["aging", "AP Aging", Clock],
             ["msme", "MSME 45-Day", ShieldAlert],
             ["po", "Purchase Orders", ClipboardList],
@@ -1010,6 +1011,7 @@ export default function VendorsPage() {
         );
       })()}
 
+      {view === "bills"         && <BillsPayables />}
       {view === "po"            && <PurchaseOrderManager />}
       {view === "three-way"     && <ThreeWayMatch />}
       {view === "vendor-tds"    && <VendorTdsLedger />}
@@ -4358,6 +4360,275 @@ function WorkingCapitalSimulator() {
               : <>Shortening terms from {cur} to {tgt} days consumes a one-time <span className="font-semibold text-red-400">{formatCurrency(Math.abs(Math.round(cashFreed)))}</span> of cash, costing roughly <span className="font-semibold text-red-400">{formatCurrency(Math.abs(Math.round(annualValue)))}</span> a year in carry — justify it with early-pay discounts.</>}
         </p>
       </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Bills / Payables — the missing core Accounts Payable register. Record vendor
+   bills (against a saved vendor master profile or a free-typed name), track the
+   open balance by aging bucket, and mark them paid. Frontend-only durable
+   records via useFeatureState ("payables-bills"); due date defaults from the
+   chosen vendor's saved payment_terms_days. Complements AP Aging (derived from
+   transactions) with explicit, user-entered open bills.
+   ───────────────────────────────────────────────────────────────────────── */
+interface Bill {
+  id: string;
+  vendorId?: string;
+  vendorName: string;
+  billNumber?: string;
+  billDate: string;
+  dueDate: string;
+  amount: number;
+  status: "unpaid" | "paid";
+  notes?: string;
+}
+
+type BillBucket = "not-due" | "0-30" | "31-60" | "61-90" | "90+";
+const BILL_BUCKET_LABEL: Record<BillBucket, string> = {
+  "not-due": "Not due",
+  "0-30": "0–30 days",
+  "31-60": "31–60 days",
+  "61-90": "61–90 days",
+  "90+": "90+ days",
+};
+const BILL_BUCKET_COLOR: Record<BillBucket, string> = {
+  "not-due": "text-[var(--color-muted)]",
+  "0-30": "text-yellow-400",
+  "31-60": "text-orange-400",
+  "61-90": "text-red-400",
+  "90+": "text-red-500",
+};
+
+// Whole-day difference (today - dueDate); negative ⇒ not yet due, positive ⇒ overdue.
+function billDaysOverdue(dueDate: string): number {
+  const due = new Date(dueDate + "T00:00:00");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((today.getTime() - due.getTime()) / 86_400_000);
+}
+function billBucket(dueDate: string): BillBucket {
+  const d = billDaysOverdue(dueDate);
+  if (d <= 0) return "not-due";
+  if (d <= 30) return "0-30";
+  if (d <= 60) return "31-60";
+  if (d <= 90) return "61-90";
+  return "90+";
+}
+
+function BillsPayables() {
+  const { vendors: master } = useVendorMaster();
+  const [bills, setBills] = useFeatureState<Bill[]>("payables-bills", []);
+
+  const [vendorName, setVendorName] = useState("");
+  const [vendorId, setVendorId] = useState<string | undefined>(undefined);
+  const [billNumber, setBillNumber] = useState("");
+  const [billDate, setBillDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [dueDate, setDueDate] = useState("");
+  const [dueTouched, setDueTouched] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [notes, setNotes] = useState("");
+
+  // Resolve a typed/picked name back to a saved master profile (case-insensitive).
+  const matchedMaster = useMemo(
+    () => master.find(v => v.name.toLowerCase() === vendorName.trim().toLowerCase()) ?? null,
+    [master, vendorName],
+  );
+
+  // Default the due date from the matched vendor's payment terms (bill date + terms),
+  // unless the user has manually edited the due date.
+  useEffect(() => {
+    if (dueTouched) return;
+    const terms = matchedMaster?.payment_terms_days;
+    if (terms != null && billDate) {
+      const d = new Date(billDate + "T00:00:00");
+      d.setDate(d.getDate() + terms);
+      setDueDate(d.toISOString().split("T")[0]);
+    }
+  }, [matchedMaster, billDate, dueTouched]);
+
+  const add = () => {
+    const name = vendorName.trim();
+    const amt = parseFloat(amount) || 0;
+    if (!name) { toast.error("Pick or type a vendor"); return; }
+    if (amt <= 0) { toast.error("Enter a bill amount"); return; }
+    if (!billDate || !dueDate) { toast.error("Bill date and due date are required"); return; }
+    const bill: Bill = {
+      id: generateId(),
+      vendorId: matchedMaster?.id ?? vendorId,
+      vendorName: name,
+      billNumber: billNumber.trim() || undefined,
+      billDate,
+      dueDate,
+      amount: amt,
+      status: "unpaid",
+      notes: notes.trim() || undefined,
+    };
+    setBills(prev => [bill, ...prev]);
+    setVendorName(""); setVendorId(undefined); setBillNumber("");
+    setAmount(""); setNotes(""); setDueDate(""); setDueTouched(false);
+    toast.success(`Bill of ${formatCurrency(amt)} for ${name} recorded`);
+  };
+
+  const markPaid = (id: string) => {
+    setBills(prev => prev.map(b => b.id === id ? { ...b, status: "paid" } : b));
+    toast.success("Bill marked paid");
+  };
+  const markUnpaid = (id: string) => {
+    setBills(prev => prev.map(b => b.id === id ? { ...b, status: "unpaid" } : b));
+  };
+  const remove = (id: string) => {
+    setBills(prev => prev.filter(b => b.id !== id));
+    toast.success("Bill deleted");
+  };
+
+  const open = bills.filter(b => b.status === "unpaid");
+
+  // KPI strip + aging buckets, computed over OPEN bills only.
+  const totalOutstanding = open.reduce((s, b) => s + b.amount, 0);
+  const overdueAmount = open.reduce((s, b) => s + (billDaysOverdue(b.dueDate) > 0 ? b.amount : 0), 0);
+  const dueSoonCount = open.filter(b => {
+    const d = billDaysOverdue(b.dueDate);
+    return d <= 0 && d > -8; // due within the next 7 days (and not yet overdue)
+  }).length;
+
+  const bucketTotals = useMemo(() => {
+    const init: Record<BillBucket, { amount: number; count: number }> = {
+      "not-due": { amount: 0, count: 0 },
+      "0-30": { amount: 0, count: 0 },
+      "31-60": { amount: 0, count: 0 },
+      "61-90": { amount: 0, count: 0 },
+      "90+": { amount: 0, count: 0 },
+    };
+    for (const b of open) {
+      const k = billBucket(b.dueDate);
+      init[k].amount += b.amount;
+      init[k].count += 1;
+    }
+    return init;
+  }, [open]);
+
+  // Open bills first (most overdue at the top), then paid ones.
+  const sorted = useMemo(
+    () => [...bills].sort((a, b) => {
+      if (a.status !== b.status) return a.status === "unpaid" ? -1 : 1;
+      return billDaysOverdue(b.dueDate) - billDaysOverdue(a.dueDate);
+    }),
+    [bills],
+  );
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Record what you owe each vendor and track it to its due date. The AP Aging tab is derived from your bank transactions; this is your explicit bill register — every open payable, bucketed by how overdue it is, so nothing slips past its due date.</p>
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total Outstanding", value: formatCurrency(totalOutstanding), color: totalOutstanding > 0 ? "text-[var(--color-primary)]" : "text-green-400" },
+          { label: "Overdue", value: formatCurrency(overdueAmount), color: overdueAmount > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Due in next 7 days", value: dueSoonCount.toString(), color: dueSoonCount > 0 ? "text-orange-400" : "text-[var(--color-muted)]" },
+        ].map(s => (
+          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Add bill form */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Banknote size={15} className="text-[var(--color-primary)]" /> Record Bill</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div>
+            <input
+              list="bill-vendors"
+              value={vendorName}
+              onChange={e => {
+                const v = e.target.value;
+                setVendorName(v);
+                const m = master.find(x => x.name.toLowerCase() === v.trim().toLowerCase());
+                setVendorId(m?.id);
+              }}
+              placeholder="Vendor * (pick or type)"
+              className={inpCls}
+            />
+            <datalist id="bill-vendors">{master.map(v => <option key={v.id} value={v.name} />)}</datalist>
+            {matchedMaster?.payment_terms_days != null && (
+              <p className="text-[10px] text-[var(--color-muted)] mt-1">Terms: {matchedMaster.payment_terms_days} days{matchedMaster.is_msme ? " · MSME" : ""}</p>
+            )}
+          </div>
+          <input value={billNumber} onChange={e => setBillNumber(e.target.value)} placeholder="Bill / invoice no." className={inpCls} />
+          <input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount ₹ *" className={inpCls} />
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Bill date</label>
+            <input type="date" value={billDate} onChange={e => setBillDate(e.target.value)} className={inpCls} />
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Due date{matchedMaster?.payment_terms_days != null && !dueTouched ? " (from terms)" : ""}</label>
+            <input type="date" value={dueDate} onChange={e => { setDueDate(e.target.value); setDueTouched(true); }} className={inpCls} />
+          </div>
+          <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes" className={inpCls} />
+        </div>
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Plus size={13} /> Record Bill</button>
+      </div>
+
+      {/* Aging buckets */}
+      {open.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {(Object.keys(BILL_BUCKET_LABEL) as BillBucket[]).map(k => (
+            <div key={k} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3">
+              <p className="text-[11px] text-[var(--color-muted)] mb-1">{BILL_BUCKET_LABEL[k]}</p>
+              <p className={`text-base font-bold tabular-nums ${BILL_BUCKET_COLOR[k]}`}>{formatCurrency(bucketTotals[k].amount)}</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{bucketTotals[k].count} bill{bucketTotals[k].count !== 1 ? "s" : ""}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Bill list */}
+      {bills.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Banknote size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No bills recorded yet. Add a vendor bill above to start tracking what you owe and when it's due.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {sorted.map(b => {
+            const d = billDaysOverdue(b.dueDate);
+            const bucket = billBucket(b.dueDate);
+            const paid = b.status === "paid";
+            return (
+              <div key={b.id} className={`bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 ${paid ? "opacity-60" : ""}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate">
+                      {b.vendorName}
+                      {b.billNumber ? <span className="text-[var(--color-muted)] font-normal text-xs"> · {b.billNumber}</span> : null}
+                      {paid
+                        ? <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold text-green-400"><CheckCircle2 size={11} /> Paid</span>
+                        : d > 0
+                          ? <span className={`ml-2 inline-flex items-center gap-1 text-[10px] font-semibold ${BILL_BUCKET_COLOR[bucket]}`}><AlertTriangle size={11} /> {d}d overdue</span>
+                          : <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--color-muted)]"><CalendarClock size={11} /> due in {Math.abs(d)}d</span>}
+                    </p>
+                    <p className="text-[11px] text-[var(--color-muted)] mt-1">
+                      {formatCurrency(b.amount)} · billed {format(new Date(b.billDate + "T00:00:00"), "dd MMM yyyy")} · due {format(new Date(b.dueDate + "T00:00:00"), "dd MMM yyyy")}
+                      {b.notes ? ` · ${b.notes}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {paid ? (
+                      <button onClick={() => markUnpaid(b.id)} className="text-[10px] font-semibold px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-primary)]">Reopen</button>
+                    ) : (
+                      <button onClick={() => markPaid(b.id)} className="text-[10px] font-semibold px-2.5 py-1 rounded border border-green-800/40 text-green-400 hover:bg-green-950/30">Mark paid</button>
+                    )}
+                    <button onClick={() => remove(b.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

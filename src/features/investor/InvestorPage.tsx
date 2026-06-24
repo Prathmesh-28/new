@@ -2,10 +2,11 @@ import { useState, useEffect, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { Navigate } from "react-router-dom";
-import { Briefcase, TrendingUp, Rocket, X, ShieldCheck, AlertTriangle, Bell, Search, Plus, CheckCircle2, ArrowDownRight, ArrowUpRight, ChevronRight, Mail, FolderLock, FileText, Layers, Copy, Trash2, Gauge, Grid3x3, Target, ClipboardList, CalendarClock, PieChart } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { Briefcase, TrendingUp, Rocket, X, ShieldCheck, AlertTriangle, Bell, Search, Plus, CheckCircle2, ArrowDownRight, ArrowUpRight, ChevronRight, Mail, FolderLock, FileText, Layers, Copy, Trash2, Gauge, Grid3x3, Target, ClipboardList, CalendarClock, PieChart, Pencil, Link2 } from "lucide-react";
+import { formatCurrency, generateId } from "@/lib/utils";
 import { computeFinancialSnapshot } from "@/lib/finance";
 import { useFeatureState } from "@/hooks/useFeatureState";
+import EmptyState from "@/components/EmptyState";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { differenceInCalendarDays, format } from "date-fns";
@@ -34,7 +35,11 @@ type PublicRaise = {
   closes_at: string | null;
 };
 
-// Simulated portfolio company monitoring data
+// Portfolio company monitoring record.
+// `aa_verified` is true ONLY when a founder has linked their Headroom tenant and
+// granted Account Aggregator consent — then runway/burn/revenue are bank-pulled.
+// Self-added companies (no linked tenant) are self-reported and badged as such.
+// `sample` marks the illustrative preview rows (never persisted to the real list).
 type PortfolioCompany = {
   id: string;
   name: string;
@@ -49,6 +54,8 @@ type PortfolioCompany = {
   aa_verified: boolean;
   last_alert: { severity: "critical" | "high" | "medium" | "low"; msg: string } | null;
   last_updated: string;
+  linked_tenant?: string;   // founder's Headroom tenant id / email, if linked
+  sample?: boolean;          // true for the illustrative preview rows only
 };
 
 type Syndicate = {
@@ -63,34 +70,39 @@ type Syndicate = {
   closes_at: string;
 };
 
-const MOCK_PORTFOLIO: PortfolioCompany[] = [
+// Illustrative preview only — surfaced behind the "Sample data" toggle so an
+// investor can see how monitoring looks once founders link & grant AA consent.
+// These are never written to the persisted portfolio list.
+const SAMPLE_PORTFOLIO: PortfolioCompany[] = [
   {
     id: "p1", name: "Raj Traders Pvt Ltd", sector: "Distribution", invested: 2500000,
     equity_pct: 2.5, runway_days: 142, monthly_burn: 380000, monthly_revenue: 520000,
-    burn_trend: "down", revenue_trend: "up", aa_verified: true,
+    burn_trend: "down", revenue_trend: "up", aa_verified: true, sample: true,
     last_alert: null, last_updated: "2026-06-10T10:00:00Z",
   },
   {
     id: "p2", name: "Priya Tech Services", sector: "SaaS", invested: 1000000,
     equity_pct: 1.2, runway_days: 38, monthly_burn: 610000, monthly_revenue: 480000,
-    burn_trend: "up", revenue_trend: "flat", aa_verified: true,
+    burn_trend: "up", revenue_trend: "flat", aa_verified: true, sample: true,
     last_alert: { severity: "high", msg: "Cash runway below 45 days — fundraising urgency" },
     last_updated: "2026-06-11T08:30:00Z",
   },
   {
     id: "p3", name: "Greenfield Agro", sector: "AgriTech", invested: 5000000,
     equity_pct: 5.0, runway_days: 289, monthly_burn: 210000, monthly_revenue: 860000,
-    burn_trend: "flat", revenue_trend: "up", aa_verified: true,
+    burn_trend: "flat", revenue_trend: "up", aa_verified: true, sample: true,
     last_alert: null, last_updated: "2026-06-11T06:00:00Z",
   },
   {
     id: "p4", name: "Urban Logistics Co", sector: "Logistics", invested: 750000,
     equity_pct: 0.8, runway_days: 22, monthly_burn: 920000, monthly_revenue: 760000,
-    burn_trend: "up", revenue_trend: "down", aa_verified: false,
+    burn_trend: "up", revenue_trend: "down", aa_verified: false, sample: true,
     last_alert: { severity: "critical", msg: "Runway critical — 22 days. Revenue declining MoM." },
     last_updated: "2026-06-11T09:15:00Z",
   },
 ];
+
+const SECTOR_OPTIONS = ["SaaS", "D2C", "AgriTech", "Logistics", "Manufacturing", "Distribution", "HealthTech", "EdTech", "FinTech", "Other"];
 
 const MOCK_SYNDICATES: Syndicate[] = [
   {
@@ -107,85 +119,252 @@ const MOCK_SYNDICATES: Syndicate[] = [
 
 // ── Portfolio Monitoring ──────────────────────────────────────────────────────
 
-function PortfolioTab({ portfolio }: { portfolio: PortfolioCompany[] }) {
-  const atRisk  = portfolio.filter(c => c.runway_days < 60 || c.last_alert?.severity === "critical" || c.last_alert?.severity === "high");
-  const healthy = portfolio.filter(c => !atRisk.includes(c));
+const PORTFOLIO_KEY = "investor-portfolio";
 
-  const totalInvested = portfolio.reduce((s, c) => s + c.invested, 0);
-  const withAlerts    = portfolio.filter(c => c.last_alert).length;
-  const avgRunway     = portfolio.length > 0 ? Math.round(portfolio.reduce((s, c) => s + c.runway_days, 0) / portfolio.length) : 0;
+function PortfolioTab() {
+  // Real, user-owned portfolio — persisted via the synced featureData bag.
+  const [portfolio, setPortfolio] = useFeatureState<PortfolioCompany[]>(PORTFOLIO_KEY, []);
+  const [showSample, setShowSample] = useState(false);
+  const [editing, setEditing]       = useState<PortfolioCompany | null>(null);
+  const [showForm, setShowForm]     = useState(false);
+
+  // Never write sample rows to the persisted list — they're preview-only.
+  const view = showSample ? SAMPLE_PORTFOLIO : portfolio;
+
+  const atRisk  = view.filter(c => c.runway_days < 60 || c.last_alert?.severity === "critical" || c.last_alert?.severity === "high");
+  const healthy = view.filter(c => !atRisk.includes(c));
+
+  const totalInvested = view.reduce((s, c) => s + c.invested, 0);
+  const withAlerts    = view.filter(c => c.last_alert).length;
+  const verifiedCount = view.filter(c => c.aa_verified).length;
+  const avgRunway     = view.length > 0 ? Math.round(view.reduce((s, c) => s + c.runway_days, 0) / view.length) : 0;
+
+  const upsert = (c: PortfolioCompany) => {
+    setPortfolio(prev => prev.some(p => p.id === c.id)
+      ? prev.map(p => (p.id === c.id ? c : p))
+      : [c, ...prev]);
+    toast.success(editing ? "Company updated." : "Portfolio company added.");
+    setShowForm(false); setEditing(null);
+  };
+  const remove = (id: string, name: string) => {
+    setPortfolio(prev => prev.filter(p => p.id !== id));
+    toast.success(`Removed "${name}" from your portfolio.`);
+  };
+  const openAdd  = () => { setEditing(null); setShowForm(true); };
+  const openEdit = (c: PortfolioCompany) => { setEditing(c); setShowForm(true); };
+
+  // Honest empty state — no fabricated rows when the investor has added nothing.
+  const isEmpty = !showSample && portfolio.length === 0;
 
   return (
     <div className="space-y-4">
-      {/* AA trust banner */}
+      {/* Header: real vs sample toggle + add CTA */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold flex items-center gap-1.5"><Briefcase size={14} className="text-[var(--color-primary)]" /> My Portfolio</h2>
+          <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-0.5">
+            <button onClick={() => setShowSample(false)}
+              className={`px-2.5 py-1 text-[11px] rounded font-medium transition-colors ${!showSample ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              My companies
+            </button>
+            <button onClick={() => setShowSample(true)}
+              className={`px-2.5 py-1 text-[11px] rounded font-medium transition-colors ${showSample ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+              Sample preview
+            </button>
+          </div>
+        </div>
+        {!showSample && (
+          <button onClick={openAdd}
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90 whitespace-nowrap">
+            <Plus size={11} /> Add portfolio company
+          </button>
+        )}
+      </div>
+
+      {/* Trust banner — honest about what's verified vs self-reported */}
       <div className="bg-[var(--color-primary)]/8 border border-[var(--color-primary)]/25 rounded-lg px-4 py-3">
         <div className="flex items-start gap-3">
           <ShieldCheck size={15} className="text-[var(--color-primary)] mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-semibold">AA-Verified Financials — sample preview</p>
+            <p className="text-sm font-semibold">
+              {showSample ? "Sample preview — illustrative data only" : "Bank-verified vs self-reported"}
+            </p>
             <p className="text-xs text-[var(--color-muted)] mt-0.5">
-              The companies below are <span className="text-[var(--color-text)]">illustrative sample data</span> showing how portfolio monitoring works. Once a founder grants Account Aggregator consent, revenue, burn, and runway here are pulled directly from their bank — not typed into a deck —
-              <span className="text-[var(--color-primary)] font-semibold"> so you see distress the same moment they do.</span>
+              {showSample
+                ? <>These rows are <span className="text-[var(--color-text)]">illustrative sample data</span>, not your portfolio. They show how monitoring looks once a founder links their Headroom account and grants Account Aggregator consent — revenue, burn and runway then come straight from their bank.</>
+                : <>Companies you add are <span className="text-yellow-400">self-reported</span> until the founder links their Headroom tenant and grants AA consent. Once linked, their cash, runway and burn become <span className="text-[var(--color-primary)] font-semibold">bank-verified — not deck-typed</span>, so you see distress the same moment they do.</>}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: "Total Deployed",   value: formatCurrency(totalInvested),         color: "text-[var(--color-primary)]" },
-          { label: "Portfolio Companies", value: portfolio.length.toString(),           color: "text-[var(--color-text)]" },
-          { label: "Avg Runway",       value: `${avgRunway}d`,                        color: avgRunway < 60 ? "text-red-400" : avgRunway < 90 ? "text-yellow-400" : "text-green-400" },
-          { label: "Active Alerts",    value: withAlerts.toString(),                  color: withAlerts > 0 ? "text-red-400" : "text-green-400" },
-        ].map(s => (
-          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
-            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+      {isEmpty ? (
+        <EmptyState
+          icon={Briefcase}
+          title="Add your portfolio companies"
+          description="Once a founder links their Headroom account & grants AA consent, their cash/runway/burn here are bank-verified, not deck-typed. Add a company to start tracking — or flip to Sample preview to see how monitoring looks."
+          ctaText="Add portfolio company"
+          onCta={openAdd}
+        />
+      ) : (
+        <>
+          {/* Summary */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Total Deployed",      value: formatCurrency(totalInvested),  color: "text-[var(--color-primary)]" },
+              { label: "Portfolio Companies", value: view.length.toString(),         color: "text-[var(--color-text)]" },
+              { label: "Bank-Verified",       value: `${verifiedCount}/${view.length}`, color: verifiedCount > 0 ? "text-green-400" : "text-yellow-400" },
+              { label: "Active Alerts",       value: withAlerts.toString(),          color: withAlerts > 0 ? "text-red-400" : "text-green-400" },
+            ].map(s => (
+              <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* At-risk companies */}
-      {atRisk.length > 0 && (
-        <div>
-          <h2 className="text-xs font-semibold text-red-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-            <AlertTriangle size={11} /> Early Warning — Needs Attention ({atRisk.length})
-          </h2>
-          <div className="space-y-2">
-            {atRisk.map(c => <CompanyCard key={c.id} company={c} />)}
-          </div>
-        </div>
+          {/* At-risk companies */}
+          {atRisk.length > 0 && (
+            <div>
+              <h2 className="text-xs font-semibold text-red-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <AlertTriangle size={11} /> Early Warning — Needs Attention ({atRisk.length})
+              </h2>
+              <div className="space-y-2">
+                {atRisk.map(c => <CompanyCard key={c.id} company={c} onEdit={showSample ? undefined : openEdit} onDelete={showSample ? undefined : remove} />)}
+              </div>
+            </div>
+          )}
+
+          {/* Healthy companies */}
+          {healthy.length > 0 && (
+            <div>
+              <h2 className="text-xs font-semibold text-green-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <CheckCircle2 size={11} /> On Track ({healthy.length})
+              </h2>
+              <div className="space-y-2">
+                {healthy.map(c => <CompanyCard key={c.id} company={c} onEdit={showSample ? undefined : openEdit} onDelete={showSample ? undefined : remove} />)}
+              </div>
+            </div>
+          )}
+
+          <p className="text-[10px] text-[var(--color-muted)] text-center">
+            {showSample
+              ? "Sample data — flip to “My companies” to manage your real portfolio."
+              : `Avg runway ${avgRunway}d · metrics for unlinked companies are self-reported until AA consent is granted.`}
+          </p>
+        </>
       )}
 
-      {/* Healthy companies */}
-      {healthy.length > 0 && (
-        <div>
-          <h2 className="text-xs font-semibold text-green-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-            <CheckCircle2 size={11} /> On Track ({healthy.length})
-          </h2>
-          <div className="space-y-2">
-            {healthy.map(c => <CompanyCard key={c.id} company={c} />)}
-          </div>
-        </div>
+      {showForm && (
+        <CompanyFormModal
+          existing={editing}
+          onClose={() => { setShowForm(false); setEditing(null); }}
+          onSave={upsert}
+        />
       )}
-
-      {portfolio.length === 0 && (
-        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
-          <Briefcase size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-          <p className="text-sm font-semibold mb-1">No portfolio companies yet</p>
-          <p className="text-sm text-[var(--color-muted)]">Invest in a raise to start monitoring in real time.</p>
-        </div>
-      )}
-
-      <p className="text-[10px] text-[var(--color-muted)] text-center">
-        Sample data · connect Account Aggregator to populate with live bank-verified metrics
-      </p>
     </div>
   );
 }
 
-function CompanyCard({ company: c }: { company: PortfolioCompany }) {
+// ── Add / edit a portfolio company ──────────────────────────────────────────────
+
+function CompanyFormModal({ existing, onClose, onSave }: {
+  existing: PortfolioCompany | null;
+  onClose: () => void;
+  onSave: (c: PortfolioCompany) => void;
+}) {
+  const [name, setName]           = useState(existing?.name ?? "");
+  const [sector, setSector]       = useState(existing?.sector ?? SECTOR_OPTIONS[0]);
+  const [invested, setInvested]   = useState(existing ? String(existing.invested) : "");
+  const [equityPct, setEquityPct] = useState(existing ? String(existing.equity_pct) : "");
+  const [tenant, setTenant]       = useState(existing?.linked_tenant ?? "");
+
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+
+  const submit = () => {
+    if (!name.trim()) { toast.error("Enter a company name"); return; }
+    const amt = Number(invested);
+    if (!Number.isFinite(amt) || amt <= 0) { toast.error("Enter a valid invested amount"); return; }
+    const linked = tenant.trim() || undefined;
+    onSave({
+      id: existing?.id ?? generateId(),
+      name: name.trim(),
+      sector,
+      invested: amt,
+      equity_pct: Number(equityPct) || 0,
+      // Frontend-only: we never fabricate live metrics. Until a founder links their
+      // tenant + grants AA consent we have no bank data, so verified = false and
+      // metrics stay zeroed/self-reported rather than procedurally faked.
+      runway_days: existing?.runway_days ?? 0,
+      monthly_burn: existing?.monthly_burn ?? 0,
+      monthly_revenue: existing?.monthly_revenue ?? 0,
+      burn_trend: existing?.burn_trend ?? "flat",
+      revenue_trend: existing?.revenue_trend ?? "flat",
+      aa_verified: false,
+      last_alert: existing?.last_alert ?? null,
+      last_updated: new Date().toISOString(),
+      linked_tenant: linked,
+      sample: false,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-md space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold">{existing ? "Edit company" : "Add portfolio company"}</h2>
+          <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
+        </div>
+
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Company name *</label>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Acme Foods Pvt Ltd" className={inp} autoFocus />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Sector</label>
+            <select value={sector} onChange={e => setSector(e.target.value)} className={inp}>
+              {SECTOR_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Equity % (optional)</label>
+            <input type="number" min="0" step="0.1" value={equityPct} onChange={e => setEquityPct(e.target.value)} placeholder="e.g. 2.5" className={inp} />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Invested amount (₹) *</label>
+          <input type="number" min="0" step="10000" value={invested} onChange={e => setInvested(e.target.value)} placeholder="e.g. 2500000" className={inp} />
+        </div>
+
+        <div>
+          <label className="text-xs text-[var(--color-muted)] block mb-1 flex items-center gap-1.5">
+            <Link2 size={11} /> Link via Headroom tenant ID (optional)
+          </label>
+          <input value={tenant} onChange={e => setTenant(e.target.value)} placeholder="founder's tenant ID or email" className={inp} />
+          <p className="text-[10px] text-[var(--color-muted)] mt-1 leading-relaxed">
+            When the founder grants Account Aggregator consent on this account, their cash, runway and burn become bank-verified here — until then this company shows as self-reported.
+          </p>
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          <button onClick={submit} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90">
+            {existing ? "Save changes" : "Add company"}
+          </button>
+          <button onClick={onClose} className="px-4 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-lg hover:bg-[var(--color-accent)]">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CompanyCard({ company: c, onEdit, onDelete }: {
+  company: PortfolioCompany;
+  onEdit?: (c: PortfolioCompany) => void;
+  onDelete?: (id: string, name: string) => void;
+}) {
   const runwayColor = c.runway_days < 30 ? "text-red-400" : c.runway_days < 60 ? "text-yellow-400" : "text-green-400";
   const severityColor: Record<string, string> = {
     critical: "text-red-400 border-red-800/40 bg-red-950/20",
@@ -194,56 +373,97 @@ function CompanyCard({ company: c }: { company: PortfolioCompany }) {
     low:      "text-green-400 border-green-800/40 bg-green-950/20",
   };
 
+  // Only sample rows and AA-linked tenants have trustworthy live metrics. A real,
+  // unlinked company is self-reported — we have no bank feed, so we DON'T render
+  // fabricated runway/revenue/burn; we show "—" with an explicit notice instead.
+  const hasLiveMetrics = c.aa_verified;
+
   return (
     <div className={`bg-[var(--color-surface)] border rounded-lg p-4 ${c.last_alert?.severity === "critical" ? "border-red-700/50" : c.last_alert?.severity === "high" ? "border-orange-700/40" : "border-[var(--color-border)]"}`}>
       <div className="flex items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <p className="text-sm font-semibold">{c.name}</p>
-            {c.aa_verified && (
-              <span className="flex items-center gap-0.5 text-[10px] bg-green-900/30 text-green-400 border border-green-800/30 px-1.5 py-0.5 rounded-full">
+            {c.sample ? (
+              <span className="flex items-center gap-0.5 text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full">
                 <ShieldCheck size={8} /> Sample
               </span>
-            )}
-            {!c.aa_verified && (
-              <span className="text-[10px] text-yellow-400 border border-yellow-800/30 bg-yellow-950/20 px-1.5 py-0.5 rounded-full">
-                Self-reported
+            ) : c.aa_verified ? (
+              <span className="flex items-center gap-0.5 text-[10px] bg-green-900/30 text-green-400 border border-green-800/30 px-1.5 py-0.5 rounded-full">
+                <ShieldCheck size={8} /> AA-verified
+              </span>
+            ) : (
+              <span className="flex items-center gap-0.5 text-[10px] text-yellow-400 border border-yellow-800/30 bg-yellow-950/20 px-1.5 py-0.5 rounded-full">
+                <AlertTriangle size={8} /> Unverified / self-reported
               </span>
             )}
             <span className="text-[10px] text-[var(--color-muted)] bg-[var(--color-accent)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full">{c.sector}</span>
+            {c.linked_tenant && !c.aa_verified && (
+              <span className="flex items-center gap-0.5 text-[10px] text-[var(--color-muted)] bg-[var(--color-accent)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full">
+                <Link2 size={8} /> link pending AA consent
+              </span>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div>
-              <p className="text-[10px] text-[var(--color-muted)]">Runway</p>
-              <p className={`text-sm font-bold tabular-nums ${runwayColor}`}>{c.runway_days}d</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-[var(--color-muted)]">Monthly Revenue</p>
-              <div className="flex items-center gap-1">
-                <p className="text-sm font-bold tabular-nums text-green-400">{formatCurrency(c.monthly_revenue)}</p>
-                {c.revenue_trend === "up"   ? <ArrowUpRight size={10} className="text-green-400" />
-                 : c.revenue_trend === "down" ? <ArrowDownRight size={10} className="text-red-400" />
-                 : null}
+          {hasLiveMetrics ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <p className="text-[10px] text-[var(--color-muted)]">Runway</p>
+                <p className={`text-sm font-bold tabular-nums ${runwayColor}`}>{c.runway_days}d</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[var(--color-muted)]">Monthly Revenue</p>
+                <div className="flex items-center gap-1">
+                  <p className="text-sm font-bold tabular-nums text-green-400">{formatCurrency(c.monthly_revenue)}</p>
+                  {c.revenue_trend === "up"   ? <ArrowUpRight size={10} className="text-green-400" />
+                   : c.revenue_trend === "down" ? <ArrowDownRight size={10} className="text-red-400" />
+                   : null}
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] text-[var(--color-muted)]">Monthly Burn</p>
+                <div className="flex items-center gap-1">
+                  <p className="text-sm font-bold tabular-nums text-red-400">{formatCurrency(c.monthly_burn)}</p>
+                  {c.burn_trend === "up"   ? <ArrowUpRight size={10} className="text-red-400" />
+                   : c.burn_trend === "down" ? <ArrowDownRight size={10} className="text-green-400" />
+                   : null}
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] text-[var(--color-muted)]">My Investment</p>
+                <p className="text-sm font-bold tabular-nums">{formatCurrency(c.invested)}</p>
+                <p className="text-[10px] text-[var(--color-muted)]">{c.equity_pct}% equity</p>
               </div>
             </div>
-            <div>
-              <p className="text-[10px] text-[var(--color-muted)]">Monthly Burn</p>
-              <div className="flex items-center gap-1">
-                <p className="text-sm font-bold tabular-nums text-red-400">{formatCurrency(c.monthly_burn)}</p>
-                {c.burn_trend === "up"   ? <ArrowUpRight size={10} className="text-red-400" />
-                 : c.burn_trend === "down" ? <ArrowDownRight size={10} className="text-green-400" />
-                 : null}
+          ) : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="opacity-50">
+                  <p className="text-[10px] text-[var(--color-muted)]">Runway</p>
+                  <p className="text-sm font-bold tabular-nums text-[var(--color-muted)]">—</p>
+                </div>
+                <div className="opacity-50">
+                  <p className="text-[10px] text-[var(--color-muted)]">Monthly Revenue</p>
+                  <p className="text-sm font-bold tabular-nums text-[var(--color-muted)]">—</p>
+                </div>
+                <div className="opacity-50">
+                  <p className="text-[10px] text-[var(--color-muted)]">Monthly Burn</p>
+                  <p className="text-sm font-bold tabular-nums text-[var(--color-muted)]">—</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-[var(--color-muted)]">My Investment</p>
+                  <p className="text-sm font-bold tabular-nums">{formatCurrency(c.invested)}</p>
+                  {c.equity_pct > 0 && <p className="text-[10px] text-[var(--color-muted)]">{c.equity_pct}% equity</p>}
+                </div>
               </div>
-            </div>
-            <div>
-              <p className="text-[10px] text-[var(--color-muted)]">My Investment</p>
-              <p className="text-sm font-bold tabular-nums">{formatCurrency(c.invested)}</p>
-              <p className="text-[10px] text-[var(--color-muted)]">{c.equity_pct}% equity</p>
-            </div>
-          </div>
+              <div className="mt-2 text-[11px] rounded-lg px-2.5 py-1.5 border border-yellow-800/30 bg-yellow-950/20 text-yellow-400/90 flex items-start gap-1.5">
+                <AlertTriangle size={10} className="mt-0.5 shrink-0" />
+                <span>No bank-verified metrics yet. Runway, revenue and burn appear once the founder links their Headroom tenant and grants Account Aggregator consent.</span>
+              </div>
+            </>
+          )}
 
-          {c.last_alert && (
+          {c.last_alert && hasLiveMetrics && (
             <div className={`mt-2 text-xs rounded-lg px-2.5 py-1.5 border flex items-start gap-1.5 ${severityColor[c.last_alert.severity]}`}>
               <Bell size={10} className="mt-0.5 shrink-0" />
               <span>{c.last_alert.msg}</span>
@@ -251,9 +471,27 @@ function CompanyCard({ company: c }: { company: PortfolioCompany }) {
           )}
         </div>
 
-        <div className="shrink-0 text-right">
-          <p className="text-[10px] text-[var(--color-muted)]">Updated</p>
-          <p className="text-[10px] text-[var(--color-muted)]">{format(new Date(c.last_updated), "d MMM HH:mm")}</p>
+        <div className="shrink-0 text-right flex flex-col items-end gap-1.5">
+          <div>
+            <p className="text-[10px] text-[var(--color-muted)]">Updated</p>
+            <p className="text-[10px] text-[var(--color-muted)]">{format(new Date(c.last_updated), "d MMM HH:mm")}</p>
+          </div>
+          {(onEdit || onDelete) && (
+            <div className="flex gap-1">
+              {onEdit && (
+                <button onClick={() => onEdit(c)} title="Edit"
+                  className="text-[var(--color-muted)] hover:text-[var(--color-text)] p-1 rounded hover:bg-[var(--color-accent)]">
+                  <Pencil size={12} />
+                </button>
+              )}
+              {onDelete && (
+                <button onClick={() => onDelete(c.id, c.name)} title="Remove"
+                  className="text-[var(--color-muted)] hover:text-red-400 p-1 rounded hover:bg-[var(--color-accent)]">
+                  <Trash2 size={12} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -541,6 +779,10 @@ export default function InvestorPage() {
   const [committing,    setCommitting]    = useState(false);
   const [tab,           setTab]           = useState<"portfolio" | "dealflow" | "syndicates" | "update-composer" | "data-room" | "tearsheet" | "exit-waterfall" | "mrr-movement" | "burn-efficiency" | "cohort-retention" | "fundraise-pipeline" | "board-agenda" | "runway-timing" | "esop-pool">("portfolio");
 
+  // Read the real, persisted portfolio so the tab label/badge reflect live data
+  // (the same featureData key PortfolioTab writes to — cheap, always in sync).
+  const [portfolio] = useFeatureState<PortfolioCompany[]>(PORTFOLIO_KEY, []);
+
   if (!user || !["investor", "super_admin"].includes(user.role)) return <Navigate to="/dashboard" replace />;
 
   const myInvestments = capitalInvestments.filter(i => i.investorEmail === user.email);
@@ -576,7 +818,7 @@ export default function InvestorPage() {
   };
 
   const TABS = [
-    { id: "portfolio"       as const, label: `Portfolio (${MOCK_PORTFOLIO.length})`, badge: MOCK_PORTFOLIO.filter(c => c.last_alert?.severity === "critical").length || undefined },
+    { id: "portfolio"       as const, label: `Portfolio${portfolio.length > 0 ? ` (${portfolio.length})` : ""}`, badge: portfolio.filter(c => c.last_alert?.severity === "critical").length || undefined },
     { id: "dealflow"        as const, label: `Deal Flow${publicRaises.length > 0 ? ` (${publicRaises.length})` : ""}`, badge: undefined },
     { id: "syndicates"      as const, label: "Syndicates",        badge: undefined },
     { id: "update-composer" as const, label: "Investor Update",   badge: undefined },
@@ -614,7 +856,7 @@ export default function InvestorPage() {
         ))}
       </div>
 
-      {tab === "portfolio"  && <PortfolioTab portfolio={MOCK_PORTFOLIO} />}
+      {tab === "portfolio"  && <PortfolioTab />}
       {tab === "dealflow"   && (
         <DealFlowTab
           publicRaises={publicRaises}
