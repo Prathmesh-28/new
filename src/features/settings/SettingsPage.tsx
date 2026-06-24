@@ -1763,6 +1763,28 @@ export function OrgActivityCard() {
   );
 }
 
+// Jump-nav for the long settings page — anchors to each section below so users
+// don't scroll a 2000-line wall. Order matches the render order.
+const SETTINGS_SECTIONS: { id: string; label: string }[] = [
+  { id: "app-lock", label: "App lock" },
+  { id: "notifications", label: "Notifications" },
+  { id: "privacy", label: "Privacy" },
+  { id: "invoice-defaults", label: "Invoice defaults" },
+  { id: "currency", label: "Currency & locale" },
+  { id: "branding", label: "Branding" },
+  { id: "reminders", label: "Reminders" },
+  { id: "number-format", label: "Number format" },
+  { id: "theme", label: "Theme" },
+  { id: "einvoice", label: "E-invoice / e-way" },
+  { id: "bank-defaults", label: "Bank defaults" },
+  { id: "sender", label: "Sender identity" },
+  { id: "workspace", label: "Workspace" },
+  { id: "late-fees", label: "Late fees" },
+  { id: "tax-codes", label: "Tax codes" },
+  { id: "statement", label: "Statements" },
+  { id: "whatsapp", label: "WhatsApp" },
+];
+
 export default function SettingsPage() {
   const { user }  = useAuth();
   const { store, updateFirm, setPreviewRole, roleTabs, setRoleTabs, resetRole } = useApp();
@@ -1966,6 +1988,19 @@ export default function SettingsPage() {
         <p className="text-sm text-[var(--color-muted)] mt-0.5">Your personal &amp; workspace preferences — appearance, notifications, and document defaults.</p>
       </div>
 
+      {/* Sticky jump-nav — quick access to any section without scrolling the whole page */}
+      <div className="sticky top-0 z-20 -mx-1 bg-[var(--color-bg)]/90 px-1 py-2 backdrop-blur border-b border-[var(--color-border)] overflow-x-auto">
+        <div className="flex gap-1.5 min-w-max">
+          {SETTINGS_SECTIONS.map(s => (
+            <button key={s.id} type="button"
+              onClick={() => document.getElementById(s.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              className="shrink-0 rounded-full border border-[var(--color-border)] px-3 py-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Pointer to the company-admin console (members, access, billing, company, audit) */}
       <button
         onClick={() => navigate("/organization")}
@@ -1982,55 +2017,55 @@ export default function SettingsPage() {
       </button>
 
       {/* App lock */}
-      <AppLockCard />
+      <div id="app-lock" className="scroll-mt-24"><AppLockCard /></div>
 
       {/* Push notifications */}
-      <NotificationsCard />
+      <div id="notifications" className="scroll-mt-24"><NotificationsCard /></div>
 
       {/* Privacy & data rights (DPDP) */}
-      <PrivacyCard />
+      <div id="privacy" className="scroll-mt-24"><PrivacyCard /></div>
 
       {/* #174 Invoice defaults */}
-      <InvoiceDefaultsCard />
+      <div id="invoice-defaults" className="scroll-mt-24"><InvoiceDefaultsCard /></div>
 
       {/* #175 Currency & locale */}
-      <CurrencyLocaleCard />
+      <div id="currency" className="scroll-mt-24"><CurrencyLocaleCard /></div>
 
       {/* #176 Document branding */}
-      <DocumentBrandingCard />
+      <div id="branding" className="scroll-mt-24"><DocumentBrandingCard /></div>
 
       {/* #177 Payment reminder cadence */}
-      <ReminderCadenceCard />
+      <div id="reminders" className="scroll-mt-24"><ReminderCadenceCard /></div>
 
       {/* #178 Number format & rounding */}
-      <NumberRoundingCard />
+      <div id="number-format" className="scroll-mt-24"><NumberRoundingCard /></div>
 
       {/* #179 Theme & density */}
-      <ThemeDensityCard />
+      <div id="theme" className="scroll-mt-24"><ThemeDensityCard /></div>
 
       {/* #180 E-invoice & e-way-bill defaults */}
-      <EInvoiceDefaultsCard />
+      <div id="einvoice" className="scroll-mt-24"><EInvoiceDefaultsCard /></div>
 
       {/* #181 Bank account defaults */}
-      <BankAccountDefaultsCard />
+      <div id="bank-defaults" className="scroll-mt-24"><BankAccountDefaultsCard /></div>
 
       {/* #182 Email & SMS sender identity */}
-      <SenderIdentityCard />
+      <div id="sender" className="scroll-mt-24"><SenderIdentityCard /></div>
 
       {/* #184 Dashboard default & export format */}
-      <WorkspaceDefaultsCard />
+      <div id="workspace" className="scroll-mt-24"><WorkspaceDefaultsCard /></div>
 
       {/* #185 Late-fee / overdue interest policy */}
-      <LateFeePolicyCard />
+      <div id="late-fees" className="scroll-mt-24"><LateFeePolicyCard /></div>
 
       {/* #186 Tax-code defaults (HSN/SAC & TDS) */}
-      <TaxCodeDefaultsCard />
+      <div id="tax-codes" className="scroll-mt-24"><TaxCodeDefaultsCard /></div>
 
       {/* #188 Customer-statement template */}
-      <StatementTemplateCard />
+      <div id="statement" className="scroll-mt-24"><StatementTemplateCard /></div>
 
       {/* WhatsApp */}
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div id="whatsapp" className="scroll-mt-24 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
         <div className="flex items-center gap-2 mb-1">
           <MessageCircle size={15} className="text-green-400" />
           <h2 className="text-sm font-semibold">WhatsApp Alerts</h2>
