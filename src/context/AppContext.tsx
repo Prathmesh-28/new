@@ -318,7 +318,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       es = new EventSource(url);
       es.onmessage = (ev) => {
         try {
-          const msg = JSON.parse(ev.data) as { ns?: string; clientId?: string };
+          const msg = JSON.parse(ev.data) as { ns?: string; clientId?: string; type?: string };
+          // Platform-wide broadcast (super-admin changed platform settings) — re-emit
+          // as a window event so usePlatformSettings refetches in real time everywhere.
+          if (msg?.type === "platform") { window.dispatchEvent(new CustomEvent("headroom:platform")); return; }
           if (!msg?.ns) return;
           if (msg.clientId && msg.clientId === clientId()) return; // ignore our own echo
           const owned = clientIdRef.current ? ["app", "forecast"] : (ROLE_NAMESPACES[currentRole] ?? []);

@@ -33,4 +33,15 @@ function publish(tenantId, payload) {
   }
 }
 
-module.exports = { subscribe, publish };
+// Broadcast to EVERY open connection across all tenants — used for platform-wide
+// events (e.g. a super-admin changed platform settings) so every user refetches live.
+function publishAll(payload) {
+  const line = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const set of channels.values()) {
+    for (const res of set) {
+      try { res.write(line); } catch { /* dead socket — cleaned up on its own close */ }
+    }
+  }
+}
+
+module.exports = { subscribe, publish, publishAll };

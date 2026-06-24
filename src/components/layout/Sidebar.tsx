@@ -18,6 +18,14 @@ import {
 
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
 import { getFrequentPages } from "@/components/CommandPalette";
+import { usePlatformSettings } from "@/lib/usePlatformSettings";
+
+// Maps a nav tab → its super-admin feature switch (Console → Platform → Features).
+// A tab not listed here is always on. Turning a switch off hides the module live.
+const FEATURE_TAB: Record<string, string> = {
+  agents: "enableAgents", whatsapp: "enableWhatsapp", marketplace: "enableMarketplace",
+  investor: "enableInvestor", esg: "enableEsg", global: "enableGlobal", tokens: "enableTokens",
+};
 
 interface NavItem  { to: string; label: string; icon: React.ElementType; tab: string }
 interface NavGroup { label: string; items: NavItem[] }
@@ -234,9 +242,17 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
   // When previewing "as" another role, render that role's navigation.
   const role   = previewRole ?? user?.role ?? "owner";
   const location = useLocation();
-  // One catalogue, filtered to what this role can actually reach. Empty groups drop out.
+  // Super-admin feature switches (Console → Platform → Feature switches). When a
+  // module is turned off it disappears from every user's nav in real time. The
+  // super_admin still sees everything (so they can turn it back on).
+  const { features } = usePlatformSettings();
+  const featureOn = (tab: string) => {
+    const flag = FEATURE_TAB[tab];
+    return role === "super_admin" || !flag || features[flag] !== false;
+  };
+  // One catalogue, filtered to what this role can reach AND what's enabled. Empty groups drop out.
   const groupsRaw = NAV_CATALOG
-    .map(g => ({ ...g, items: g.items.filter(n => canAccess(n.tab)) }))
+    .map(g => ({ ...g, items: g.items.filter(n => canAccess(n.tab) && featureOn(n.tab)) }))
     .filter(g => g.items.length > 0);
 
   // What plan a tab needs if the current plan can't reach it (null = accessible).

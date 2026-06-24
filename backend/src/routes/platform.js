@@ -191,6 +191,8 @@ router.put("/settings/:group", authenticate, async (req, res) => {
     [group, JSON.stringify(clean)],
   );
   platformConfig.bust(); // so the new value takes effect on the very next read
+  // Real-time: tell every open client to refetch platform settings now (no reload).
+  try { require("../lib/realtime").publishAll({ type: "platform", group, updatedAt: Date.now() }); } catch { /* best-effort */ }
   res.json(clean);
 });
 

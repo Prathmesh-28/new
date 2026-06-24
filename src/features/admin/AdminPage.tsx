@@ -1828,6 +1828,13 @@ function AuditSection({ rows, loading }: { rows: AuditRow[]; loading: boolean })
           <option value="all">All actions</option>
           {actions.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
+        {/* One-click: review every god-mode edit you made inside a customer's account. */}
+        <button type="button"
+          onClick={() => setActionType(actionType === "impersonated_write" ? "all" : "impersonated_write")}
+          title="Show only edits made while impersonating a tenant (super-admin god-mode writes)"
+          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${actionType === "impersonated_write" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
+          🛡 God-mode edits
+        </button>
         <PillTabs<DateRange>
           value={range}
           onChange={setRange}

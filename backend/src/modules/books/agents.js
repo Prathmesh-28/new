@@ -37,6 +37,15 @@ function _normSchedule(v) {
 async function createAgent(tenantId, d) {
   d = d || {};
   if (!d.name) throw new PostError("BAD_INPUT", "name required", 400);
+  // Enforce the super-admin-set cap on agents per tenant (limits.maxAgentsPerTenant,
+  // default 25; 0 = unlimited). Tunable live in the console.
+  const cap = await require("../../lib/platformConfig").num("limits", "maxAgentsPerTenant", 25);
+  if (cap > 0) {
+    const { rows: cnt } = await pool.query("SELECT count(*)::int AS n FROM book_agents WHERE tenant_id=$1", [tenantId]);
+    if ((cnt[0]?.n ?? 0) >= cap) {
+      throw new PostError("AGENT_LIMIT", `Agent limit reached (${cap}). Delete an agent or ask your admin to raise the limit.`, 422);
+    }
+  }
   const { rows } = await pool.query(
     `INSERT INTO book_agents
        (tenant_id,name,instructions,model,tools,enabled,created_by,
@@ -118,6 +127,18 @@ async function deleteAgent(tenantId, id) {
 async function runAgent(tenantId, actorId, agentId, userMessage) {
   const agent = await getAgent(tenantId, agentId);
   if (agent.enabled === false) throw new PostError("AGENT_DISABLED", "This agent is disabled", 422);
+
+  // Enforce the super-admin-set monthly AI token cap (limits.monthlyTokenCap; 0 = unlimited).
+  const tokenCap = await require("../../lib/platformConfig").num("limits", "monthlyTokenCap", 0);
+  if (tokenCap > 0) {
+    const { rows: used } = await pool.query(
+      "SELECT COALESCE(SUM(value),0)::bigint AS n FROM book_usage_events WHERE tenant_id=$1 AND metric='agent_tokens' AND event_time >= date_trunc('month', now())",
+      [tenantId]
+    ).catch(() => ({ rows: [{ n: 0 }] }));
+    if (Number(used[0]?.n ?? 0) >= tokenCap) {
+      throw new PostError("TOKEN_CAP", `This month's AI usage cap (${tokenCap.toLocaleString("en-IN")} tokens) is reached. It resets next month, or your admin can raise it.`, 422);
+    }
+  }
 
   const runId = _newRunId();
   const steps = [];
