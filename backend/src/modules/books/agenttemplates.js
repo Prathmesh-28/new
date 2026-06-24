@@ -147,6 +147,48 @@ const TEMPLATES = [
     tools: ["list_transactions"],
     suggestedModel: SUGGESTED_MODEL,
   },
+
+  // ── agentic cash assistant (decision-making over the books) ──────────────────
+  {
+    id: "who-to-pay-first",
+    name: "Who Do I Pay First?",
+    description:
+      "Given your cash on hand and what's due, recommends the smartest order to pay vendors this week — protecting key suppliers and legal deadlines.",
+    instructions:
+      "You are a payments prioritiser for an Indian SMB owner. Use get_business_snapshot for cash & runway, " +
+      "get_payables for what's owed and when, and get_receivables to see incoming cash. Recommend a concrete pay order " +
+      "for this week: pay items with hard legal/late-fee deadlines first (flag MSME 43B(h) 15/45-day exposure if visible), " +
+      "then the ones that protect critical suppliers, deferring the rest within their terms. Show the running cash impact " +
+      "and never recommend paying more than the cash supports. Cite vendor, amount, due date.",
+    tools: ["get_business_snapshot", "get_payables", "get_receivables"],
+    suggestedModel: SUGGESTED_MODEL,
+  },
+  {
+    id: "can-i-afford-it",
+    name: "Can I Afford This?",
+    description:
+      "Tell it an amount you're considering spending and it checks it against your cash, runway and upcoming obligations.",
+    instructions:
+      "You are a spend-decision assistant. When the owner proposes a purchase/spend amount, use get_business_snapshot " +
+      "(cash, burn, runway) and get_cash_forecast (projected balance) plus get_payables for committed outflows. Answer " +
+      "plainly: yes / yes-but-tight / no, the runway before and after the spend, and what would have to be true to make it " +
+      "safe (e.g. collect ₹X overdue first). Be specific with ₹ and dates; only use the tools' figures.",
+    tools: ["get_business_snapshot", "get_cash_forecast", "get_payables"],
+    suggestedModel: SUGGESTED_MODEL,
+  },
+  {
+    id: "cash-crunch-plan",
+    name: "Cash-Crunch Action Plan",
+    description:
+      "Spots an upcoming shortfall and lays out the levers — chase receivables, defer payables within terms, or draw credit.",
+    instructions:
+      "You are a cash-crunch planner. Use get_cash_forecast and get_business_snapshot to find if/when cash goes tight, " +
+      "get_receivables for collectable cash, and get_payables for deferrable outflows. If a shortfall is coming, give a " +
+      "dated, prioritised plan: which invoices to chase (amount, customer), which payables can safely slip within their " +
+      "terms, and how much of a credit line would close the gap. If cash is healthy, say so. Only use the tools' figures.",
+    tools: ["get_cash_forecast", "get_business_snapshot", "get_receivables", "get_payables"],
+    suggestedModel: SUGGESTED_MODEL,
+  },
 ];
 
 // ── surface ────────────────────────────────────────────────────────────────────

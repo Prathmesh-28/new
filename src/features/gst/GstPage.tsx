@@ -11,6 +11,12 @@ import * as XLSX from "xlsx";
 import { parse2BJson, parseRegisterRows, reconcile, type ReconResult, type ReconSummary } from "@/lib/gstReconcile";
 import { addDays, format } from "date-fns";
 
+// GST 2.0 (effective 2025-26) rationalised the slabs to 0 / 5 / 18 / 40% — most 12%
+// goods moved to 18% and 28% to 40%. Current-rate pickers use these; the rate-change
+// simulator's "old rate" keeps the full historical set so transitions can be modelled.
+const GST_RATES = [0, 5, 18, 40];
+const GST_RATES_ALL = [0, 5, 12, 18, 28, 40];
+
 interface Liability { month: number; year: number; output_tax: number; input_tax_credit: number; net_liability: number; breakdown: Record<string, number>; }
 interface GstReturn  { id: string; return_type: string; period_month: number; period_year: number; output_tax: number; input_tax_credit: number; net_liability: number; status: string; filed_at?: string; gstn_arn?: string; }
 interface CalDate    { label: string; due: string; penalty: string; }
@@ -828,7 +834,7 @@ export default function GstPage() {
                   className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
                 <select value={rcmRate} onChange={e => setRcmRate(Number(e.target.value))}
                   className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]">
-                  {[0, 5, 12, 18, 28].map(r => <option key={r} value={r}>{r}% GST</option>)}
+                  {GST_RATES.map(r => <option key={r} value={r}>{r}% GST</option>)}
                 </select>
               </div>
               {rcmAmount && parseFloat(rcmAmount) > 0 && (
@@ -921,7 +927,7 @@ export default function GstPage() {
                 <BookOpen size={12} className="text-[var(--color-primary)]" />
                 <span className="text-xs font-semibold">{results.length} codes</span>
                 <div className="ml-auto flex items-center gap-1.5 flex-wrap">
-                  {[0, 5, 12, 18, 28].map(r => (
+                  {GST_RATES.map(r => (
                     <span key={r} className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold ${RATE_CHIP[r]}`}>{r}%</span>
                   ))}
                 </div>
@@ -2456,7 +2462,7 @@ function PlaceOfSupplyDeterminer() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Taxable value (₹)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">GST rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">{[0, 5, 12, 18, 28].map(r => <option key={r} value={r}>{r}%</option>)}</select></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">GST rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">{GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}</select></div>
         </div>
       </div>
 
@@ -2599,8 +2605,8 @@ function RateChangeSimulator() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Item / SKU *" className={inp} />
           <input type="number" value={base} onChange={e => setBase(e.target.value)} placeholder={inclusive ? "Current MRP ₹ *" : "Base price ₹ *"} className={inp} />
-          <select value={oldRate} onChange={e => setOldRate(Number(e.target.value))} className={inp}>{[0, 5, 12, 18, 28].map(r => <option key={r} value={r}>Old {r}%</option>)}</select>
-          <select value={newRate} onChange={e => setNewRate(Number(e.target.value))} className={inp}>{[0, 5, 12, 18, 28].map(r => <option key={r} value={r}>New {r}%</option>)}</select>
+          <select value={oldRate} onChange={e => setOldRate(Number(e.target.value))} className={inp}>{GST_RATES_ALL.map(r => <option key={r} value={r}>Old {r}%</option>)}</select>
+          <select value={newRate} onChange={e => setNewRate(Number(e.target.value))} className={inp}>{GST_RATES.map(r => <option key={r} value={r}>New {r}%</option>)}</select>
           <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={inclusive} onChange={e => setInclusive(e.target.checked)} className="accent-[var(--color-primary)]" /> Price is GST-inclusive</label>
         </div>
         <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add item</button>
@@ -2949,7 +2955,7 @@ function GstAdvancesTracker() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer *" className={inp} />
           <input type="number" value={advance} onChange={e => setAdvance(e.target.value)} placeholder="Advance received ₹ *" className={inp} />
-          <select value={rate} onChange={e => setRate(Number(e.target.value))} className={inp}>{[5, 12, 18, 28].map(r => <option key={r} value={r}>{r}% GST</option>)}</select>
+          <select value={rate} onChange={e => setRate(Number(e.target.value))} className={inp}>{GST_RATES.map(r => <option key={r} value={r}>{r}% GST</option>)}</select>
           <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} />
         </div>
         <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Record advance</button>
@@ -3034,7 +3040,7 @@ function ZeroRatedInvoiceKit() {
             <option value="lut">Under LUT (no IGST)</option>
             <option value="with-igst">With IGST (claim refund)</option>
           </select>
-          {method === "with-igst" && <select value={rate} onChange={e => setRate(Number(e.target.value))} className={inp}>{[5, 12, 18, 28].map(r => <option key={r} value={r}>IGST {r}%</option>)}</select>}
+          {method === "with-igst" && <select value={rate} onChange={e => setRate(Number(e.target.value))} className={inp}>{GST_RATES.map(r => <option key={r} value={r}>IGST {r}%</option>)}</select>}
         </div>
         <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add export invoice</button>
       </div>
@@ -3454,7 +3460,7 @@ function Rule180ReversalTracker() {
           <input value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} placeholder="Invoice no" className={GST_INPUT} />
           <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className={GST_INPUT} />
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Taxable amount (₹) *" className={GST_INPUT} />
-          <select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{[0, 5, 12, 18, 28].map(r => <option key={r} value={r}>{r}% GST</option>)}</select>
+          <select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{GST_RATES.map(r => <option key={r} value={r}>{r}% GST</option>)}</select>
           <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add</button>
         </div>
       </div>
@@ -3655,7 +3661,7 @@ function CreditDebitNoteRegister() {
           <input value={origInvoice} onChange={e => setOrigInvoice(e.target.value)} placeholder="Original invoice no" className={GST_INPUT} />
           <input type="date" value={date} onChange={e => setDate(e.target.value)} className={GST_INPUT} />
           <input type="number" value={taxable} onChange={e => setTaxable(e.target.value)} placeholder="Taxable value (₹) *" className={GST_INPUT} />
-          <select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{[0, 5, 12, 18, 28].map(r => <option key={r} value={r}>{r}% GST</option>)}</select>
+          <select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{GST_RATES.map(r => <option key={r} value={r}>{r}% GST</option>)}</select>
           <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add note</button>
         </div>
       </div>
@@ -4009,7 +4015,7 @@ function BranchTransferInvoicer() {
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">From state (sending GSTIN)</label><input value={fromState} onChange={e => setFromState(e.target.value)} placeholder="e.g. Maharashtra" className={GST_INPUT} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">To state (receiving GSTIN)</label><input value={toState} onChange={e => setToState(e.target.value)} placeholder="e.g. Karnataka" className={GST_INPUT} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Cost / declared value (₹)</label><input type="number" value={cost} onChange={e => setCost(e.target.value)} placeholder="e.g. 250000" className={GST_INPUT} /></div>
-          <div><label className="block text-xs text-[var(--color-muted)] mb-1">GST rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{[0, 5, 12, 18, 28].map(x => <option key={x} value={x}>{x}%</option>)}</select></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">GST rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{GST_RATES.map(x => <option key={x} value={x}>{x}%</option>)}</select></div>
         </div>
       </div>
 
@@ -4160,7 +4166,7 @@ function CrossChargeCalculator() {
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Total common cost (₹)</label><input type="number" value={commonCost} onChange={e => setCommonCost(e.target.value)} placeholder="e.g. 1200000" className={GST_INPUT} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">HO state</label><input value={hoState} onChange={e => setHoState(e.target.value)} placeholder="e.g. Maharashtra" className={GST_INPUT} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Notional markup %</label><input type="number" value={markup} onChange={e => setMarkup(e.target.value)} placeholder="0" className={GST_INPUT} /></div>
-          <div><label className="block text-xs text-[var(--color-muted)] mb-1">GST rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{[5, 12, 18, 28].map(x => <option key={x} value={x}>{x}%</option>)}</select></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">GST rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{GST_RATES.map(x => <option key={x} value={x}>{x}%</option>)}</select></div>
         </div>
       </div>
 
@@ -4246,7 +4252,7 @@ function FreeSamplesItcReversal() {
           <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">Type</label><select value={kind} onChange={e => setKind(e.target.value as Item["kind"])} className={GST_INPUT}>{(["Free sample", "Gift / promo", "Buy-one-get-one"] as const).map(k => <option key={k} value={k}>{k}</option>)}</select></div>
           <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">Cost/unit (₹)</label><input type="number" value={cost} onChange={e => setCost(e.target.value)} placeholder="e.g. 80" className={GST_INPUT} /></div>
           <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">Qty given</label><input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder="e.g. 500" className={GST_INPUT} /></div>
-          <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">ITC rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{[5, 12, 18, 28].map(x => <option key={x} value={x}>{x}%</option>)}</select></div>
+          <div><label className="block text-[10px] text-[var(--color-muted)] mb-1">ITC rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{GST_RATES.map(x => <option key={x} value={x}>{x}%</option>)}</select></div>
         </div>
         <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add</button>
       </div>
@@ -4333,7 +4339,7 @@ function PureAgentTagger() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-3">
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Your own fee (₹)</label><input type="number" value={ownFee} onChange={e => setOwnFee(e.target.value)} placeholder="e.g. 15000" className={GST_INPUT} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Reimbursed cost (₹)</label><input type="number" value={reimburse} onChange={e => setReimburse(e.target.value)} placeholder="e.g. 40000" className={GST_INPUT} /></div>
-          <div><label className="block text-xs text-[var(--color-muted)] mb-1">GST rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{[5, 12, 18, 28].map(x => <option key={x} value={x}>{x}%</option>)}</select></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">GST rate</label><select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{GST_RATES.map(x => <option key={x} value={x}>{x}%</option>)}</select></div>
         </div>
       </div>
 
