@@ -128,6 +128,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Ref mirror so the write-gate inside setStore never reads a stale role.
   const roleRef = useRef<UserRole>(role);
   useEffect(() => { roleRef.current = currentRole; }, [currentRole]);
+  // Keep the acting role in sync with the authenticated user once it resolves. Without
+  // this, a user whose auth loaded AFTER the provider's first render (so `role` was the
+  // "owner" fallback) stays stuck on the wrong role — locking a super_admin out of
+  // role-gated routes like /admin. ("View as" uses previewRole, so this never fights it.)
+  useEffect(() => { if (user?.role) setCurrentRole(user.role); }, [user?.role]);
   const [store, _setStore] = useState<AppStore>(() => {
     try {
       const merged = { ...defaultConfig, ...JSON.parse(localStorage.getItem(LS_KEY) ?? "{}") } as AppStore;

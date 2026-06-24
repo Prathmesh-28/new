@@ -594,7 +594,10 @@ export default function AdminPage() {
   }, [setSelectedClient, navigate]);
 
   // ── Guard (declared AFTER all hooks so hook order stays stable) ──
-  if (user?.role !== "super_admin") return <Navigate to="/dashboard" replace />;
+  // While `user` is still resolving, render nothing rather than bouncing — a transient
+  // null must not kick the real super_admin to /dashboard. Only a CONFIRMED non-admin redirects.
+  if (!user) return null;
+  if (user.role !== "super_admin") return <Navigate to="/dashboard" replace />;
 
   const NAV: { id: SectionId; label: string; icon: typeof ShieldCheck }[] = [
     { id: "overview", label: "Overview", icon: ShieldCheck },
