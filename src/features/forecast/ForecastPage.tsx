@@ -23,6 +23,7 @@ import {
 import { format } from "date-fns";
 import AiInsight from "@/components/ai/AiInsight";
 import EmptyState from "@/components/EmptyState";
+import ObligationsShortfall from "@/features/forecast/ObligationsShortfall";
 import { SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -192,6 +193,9 @@ export default function ForecastPage() {
           </button>
         </div>
       </div>
+
+      {/* Dated-obligations runway — first shortfall + the lever to fix it */}
+      <ObligationsShortfall />
 
       {/* Tool tab selector */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 overflow-x-auto">
