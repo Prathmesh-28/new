@@ -6,7 +6,7 @@ import {
   Users, KanbanSquare, UserPlus, Building2, Contact as ContactIcon,
   Plus, RefreshCw, ArrowLeft, ArrowRight, Trophy, ArrowRightCircle,
   CheckCircle2, Mail, Phone, Globe, X, Clock, AlertTriangle, ShieldCheck,
-  ListChecks, StickyNote, Send, Gauge, Timer,
+  ListChecks, StickyNote, Send, Gauge, Timer, Trash2,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 
@@ -421,6 +421,20 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
     }
   };
 
+  const removeDeal = async (deal: Deal) => {
+    if (!window.confirm(`Delete deal "${deal.title}"? This can't be undone.`)) return;
+    setBusyDeal(deal.id);
+    try {
+      await api.delete<{ ok: boolean; deleted: number }>(`/api/crm/deals/${deal.id}`);
+      toast.success(`Deal "${deal.title}" deleted`);
+      await load();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusyDeal(null);
+    }
+  };
+
   const submit = async () => {
     if (!title.trim()) {
       toast.error("Enter a deal title");
@@ -593,6 +607,15 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
                               className="p-1.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-300 hover:border-red-700/50 disabled:opacity-30"
                             >
                               <X size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeDeal(d)}
+                              disabled={busy}
+                              title="Delete deal"
+                              className="p-1.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-300 hover:border-red-700/50 disabled:opacity-30"
+                            >
+                              <Trash2 size={13} />
                             </button>
                             <button
                               type="button"

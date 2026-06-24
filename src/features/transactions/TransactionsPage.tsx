@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
@@ -190,6 +190,17 @@ export default function TransactionsPage() {
         category: r.category, counterparty: r.vendor || "Scanned", isRecurring: false,
         bankAccountId: bankAccounts[0]?.id ?? "",
       };
+      // Review gate: never commit the parsed receipt straight to the ledger. Show
+      // the extracted fields and let the user confirm before anything is written.
+      const ok = window.confirm(
+        `Review scanned receipt before adding to your ledger:\n\n` +
+        `Vendor:   ${draft.counterparty}\n` +
+        `Amount:   ${draft.amount < 0 ? "−" : "+"}${formatCurrency(Math.abs(draft.amount))}\n` +
+        `Date:     ${draft.date}\n` +
+        `Category: ${draft.category}\n\n` +
+        `Add this transaction? You can edit any field on the row afterward.`,
+      );
+      if (!ok) { toast("Scan discarded — nothing was added."); setScanning(false); return; }
       // Persist server-side so the row computes into summaries and survives reload.
       try {
         const created = await api.post<any>("/api/transactions", txnToApiBody(draft));
@@ -198,7 +209,7 @@ export default function TransactionsPage() {
       } catch {
         addTransaction(draft); // offline fallback: keep it locally
       }
-      toast.success(`Scanned: ${formatCurrency(Math.abs(r.amount))} · ${r.vendor || "receipt"} — review below`);
+      toast.success(`Added: ${formatCurrency(Math.abs(r.amount))} · ${r.vendor || "receipt"} — review on the row below`);
     } catch {
       toast.error("Receipt scan failed. Check your connection and try again.");
     } finally { setScanning(false); }
@@ -216,6 +227,9 @@ export default function TransactionsPage() {
   const [selected,    setSelected]    = useState<Set<string>>(new Set());
   const [bulkCat,     setBulkCat]     = useState<Transaction["category"]>("expense");
   const [editCatId,   setEditCatId]   = useState<string | null>(null);
+  // Holds the rows most recently removed by a bulk delete so the Undo toast can
+  // re-add them. Cleared after the undo window so a stale click can't resurrect.
+  const lastDeletedRef = useRef<Transaction[]>([]);
 
   const catAvgs = useMemo(() => computeCategoryAverages(transactions), [transactions]);
 
@@ -278,36 +292,96 @@ export default function TransactionsPage() {
 
   const applyBulkCat = async () => {
     const targets = transactions.filter(t => selected.has(t.id) && t.category !== bulkCat);
+    if (targets.length === 0) { setSelected(new Set()); return; }
+    // Snapshot prior categories so Undo can restore each row exactly.
+    const prior = targets.map(t => ({ txn: t, category: t.category }));
     targets.forEach(t => updateTransaction({ ...t, category: bulkCat }));
     setSelected(new Set());
+
+    // Revert: put each row back to its original category (store + server).
+    const undo = () => {
+      prior.forEach(p => updateTransaction({ ...p.txn, category: p.category }));
+      if (apiState !== "offline") {
+        void Promise.allSettled(prior.map(p => api.patch(`/api/transactions/${p.txn.id}`, { category: catToApi(p.category) })));
+      }
+      toast.success(`Reverted ${prior.length} categor${prior.length !== 1 ? "ies" : "y"}`);
+    };
+
     if (apiState !== "offline") {
       const results = await Promise.allSettled(
         targets.map(t => api.patch(`/api/transactions/${t.id}`, { category: catToApi(bulkCat) })),
       );
       const failed = results.filter(r => r.status === "rejected").length;
-      if (failed) toast.error(`${failed} change${failed !== 1 ? "s" : ""} saved locally but not synced.`);
+      if (failed) toast.error(`${failed} of ${targets.length} categor${failed !== 1 ? "ies" : "y"} saved locally but not synced to the server.`);
     }
-    toast.success(`Updated ${targets.length} transaction${targets.length !== 1 ? "s" : ""} to "${bulkCat}"`);
+    toast.success(`Updated ${targets.length} transaction${targets.length !== 1 ? "s" : ""} to "${bulkCat}"`, {
+      action: { label: "Undo", onClick: undo },
+      duration: 10000,
+    });
   };
 
   // Delete selected transactions on the server (DELETE /api/transactions/:id),
   // then drop them from the store. Falls back to a local-only delete offline.
   const deleteSelected = async () => {
-    const ids = transactions.filter(t => selected.has(t.id)).map(t => t.id);
-    if (ids.length === 0) return;
-    if (!window.confirm(`Delete ${ids.length} transaction${ids.length !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    const rows = transactions.filter(t => selected.has(t.id));
+    if (rows.length === 0) return;
+    // Richer confirm: show what's about to go — count, net total, and a few names —
+    // not just an opaque ID list.
+    const total = rows.reduce((s, t) => s + Math.abs(t.amount), 0);
+    const names = rows
+      .map(t => t.counterparty || t.description)
+      .filter(Boolean)
+      .slice(0, 3);
+    const namePreview = names.length
+      ? `\n${names.join(", ")}${rows.length > names.length ? `, +${rows.length - names.length} more` : ""}`
+      : "";
+    if (!window.confirm(
+      `Delete ${rows.length} transaction${rows.length !== 1 ? "s" : ""} totalling ${formatCurrency(total)}?${namePreview}\n\nYou'll have a few seconds to undo.`,
+    )) return;
+
+    const ids = rows.map(t => t.id);
     setSelected(new Set());
+
+    // Re-add the removed rows. Within the undo window we still hold the original
+    // objects, so we can restore them to the store and (online) re-POST them.
+    const undo = (deleted: Transaction[]) => {
+      if (lastDeletedRef.current.length === 0) return; // window elapsed / already undone
+      lastDeletedRef.current = [];
+      deleted.forEach(t => addTransaction(t));
+      if (apiState !== "offline") {
+        void Promise.allSettled(deleted.map(async t => {
+          const created = await api.post<any>("/api/transactions", txnToApiBody(t));
+          const saved = Array.isArray(created) ? created[0] : created;
+          if (saved) { deleteTransaction(t.id); addTransaction(txnFromApi(saved)); }
+        }));
+      }
+      setServerTotal(prev => (prev == null ? prev : prev + deleted.length));
+      toast.success(`Restored ${deleted.length} transaction${deleted.length !== 1 ? "s" : ""}`);
+    };
+
     if (apiState === "offline") {
       ids.forEach(id => deleteTransaction(id));
-      toast.success(`Removed ${ids.length} locally (offline)`);
+      lastDeletedRef.current = rows;
+      setTimeout(() => { lastDeletedRef.current = []; }, 10000);
+      toast.success(`Removed ${rows.length} locally (offline)`, {
+        action: { label: "Undo", onClick: () => undo(rows) },
+        duration: 10000,
+      });
       return;
     }
     const results = await Promise.allSettled(ids.map(id => api.delete(`/api/transactions/${id}`)));
     let ok = 0;
-    results.forEach((r, i) => { if (r.status === "fulfilled") { deleteTransaction(ids[i]); ok++; } });
+    const deleted: Transaction[] = [];
+    results.forEach((r, i) => { if (r.status === "fulfilled") { deleteTransaction(ids[i]); ok++; deleted.push(rows[i]); } });
     setServerTotal(prev => (prev == null ? prev : Math.max(0, prev - ok)));
-    if (ok === ids.length) toast.success(`Deleted ${ok} transaction${ok !== 1 ? "s" : ""}`);
-    else toast.error(`Deleted ${ok} of ${ids.length} — the rest failed.`);
+    if (ok === 0) { toast.error(`Couldn't delete — all ${ids.length} failed.`); return; }
+    lastDeletedRef.current = deleted;
+    setTimeout(() => { lastDeletedRef.current = []; }, 10000);
+    const msg = ok === ids.length
+      ? `Deleted ${ok} transaction${ok !== 1 ? "s" : ""}`
+      : `Deleted ${ok} of ${ids.length} — the rest failed.`;
+    const opts = { action: { label: "Undo", onClick: () => undo(deleted) }, duration: 10000 };
+    ok === ids.length ? toast.success(msg, opts) : toast.error(msg, opts);
   };
 
   const applyRule = (counterparty: string) => {

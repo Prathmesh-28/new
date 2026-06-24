@@ -322,21 +322,67 @@ function EmptyState({ icon, message }: { icon: ReactNode; message: string }) {
 // Super-admin editor for all super-admin-editable platform settings — social links,
 // brand/contact, footer legal links, and the site-wide announcement banner. Each card
 // PUTs its own group to /api/platform/settings/:group and goes live immediately.
-interface PlatformGroup { title: string; hint: string; fields: [string, string][]; toggle?: string }
+type FieldType = "text" | "number" | "bool" | "url" | "email" | "textarea" | "select";
+interface FieldDef { key: string; label: string; type?: FieldType; options?: string[] }
+interface PlatformGroup { title: string; hint: string; fields: FieldDef[]; custom?: boolean }
 const PLATFORM_GROUPS: Record<string, PlatformGroup> = {
-  brand: { title: "Brand & contact", hint: "Company identity used in the footer and documents.", fields: [["companyName", "Company name"], ["supportEmail", "Support email"], ["salesEmail", "Sales email"], ["phone", "Phone"], ["address", "Address"], ["tagline", "Tagline"]] },
-  social: { title: "Social links (footer icons)", hint: "Full https:// URLs. Blank hides that icon.", fields: [["linkedin", "LinkedIn"], ["instagram", "Instagram"], ["twitter", "X / Twitter"], ["youtube", "YouTube"], ["facebook", "Facebook"]] },
-  links: { title: "Footer legal links", hint: "Privacy / Terms / Security URLs shown in the footer.", fields: [["privacyUrl", "Privacy URL"], ["termsUrl", "Terms URL"], ["securityUrl", "Security URL"]] },
-  banner: { title: "Announcement banner", hint: "A site-wide banner (shown in-app). Off by default.", toggle: "enabled", fields: [["text", "Banner text"], ["linkUrl", "Link URL"], ["linkLabel", "Link label"]] },
-  payments: { title: "Payments & collections", hint: "Default UPI ID used on invoice payment links when a business hasn't set its own. Shown to customers — use a real VPA you control.", fields: [["upiId", "UPI ID (VPA)"], ["payeeName", "Payee name"], ["paymentNote", "Payment note"]] },
+  brand: { title: "Brand & contact", hint: "Company identity used in the footer and documents.", fields: [{ key: "companyName", label: "Company name" }, { key: "supportEmail", label: "Support email", type: "email" }, { key: "salesEmail", label: "Sales email", type: "email" }, { key: "phone", label: "Phone" }, { key: "address", label: "Address" }, { key: "tagline", label: "Tagline" }] },
+  social: { title: "Social links (footer icons)", hint: "Full https:// URLs. Blank hides that icon.", fields: [{ key: "linkedin", label: "LinkedIn", type: "url" }, { key: "instagram", label: "Instagram", type: "url" }, { key: "twitter", label: "X / Twitter", type: "url" }, { key: "youtube", label: "YouTube", type: "url" }, { key: "facebook", label: "Facebook", type: "url" }] },
+  links: { title: "Footer legal links", hint: "Privacy / Terms / Security URLs shown in the footer.", fields: [{ key: "privacyUrl", label: "Privacy URL", type: "url" }, { key: "termsUrl", label: "Terms URL", type: "url" }, { key: "securityUrl", label: "Security URL", type: "url" }] },
+  banner: { title: "Announcement banner", hint: "A site-wide banner (shown in-app). Off by default.", fields: [{ key: "enabled", label: "Show banner", type: "bool" }, { key: "text", label: "Banner text" }, { key: "linkUrl", label: "Link URL", type: "url" }, { key: "linkLabel", label: "Link label" }] },
+  payments: { title: "Payments & collections", hint: "Default UPI ID used on invoice payment links when a business hasn't set its own. Shown to customers — use a real VPA you control.", fields: [{ key: "upiId", label: "UPI ID (VPA)" }, { key: "payeeName", label: "Payee name" }, { key: "paymentNote", label: "Payment note", type: "textarea" }] },
+  features: { title: "Feature switches", hint: "Turn whole modules on or off across the app — instantly.", fields: [{ key: "enableAgents", label: "AI Agents", type: "bool" }, { key: "enableWhatsapp", label: "WhatsApp", type: "bool" }, { key: "enableMarketplace", label: "Marketplace", type: "bool" }, { key: "enableInvestor", label: "Investor portal", type: "bool" }, { key: "enableEsg", label: "ESG", type: "bool" }, { key: "enableGlobal", label: "Global", type: "bool" }, { key: "enableTokens", label: "Tokens", type: "bool" }] },
+  localization: { title: "Localization", hint: "Currency, locale, timezone and fiscal year used across the app.", fields: [{ key: "currency", label: "Currency" }, { key: "locale", label: "Locale" }, { key: "timezone", label: "Timezone" }, { key: "fiscalYearStart", label: "FY start (MM-DD)" }, { key: "dateFormat", label: "Date format" }] },
+  support: { title: "Support & help", hint: "Help / docs / status links and support contact shown in-app.", fields: [{ key: "helpUrl", label: "Help URL", type: "url" }, { key: "docsUrl", label: "Docs URL", type: "url" }, { key: "statusUrl", label: "Status URL", type: "url" }, { key: "whatsappNumber", label: "WhatsApp number" }, { key: "hours", label: "Support hours" }] },
+  seo: { title: "SEO / meta", hint: "Default page title, description and social share image.", fields: [{ key: "title", label: "Meta title" }, { key: "description", label: "Meta description", type: "textarea" }, { key: "ogImageUrl", label: "OG image URL", type: "url" }, { key: "keywords", label: "Keywords" }] },
+  maintenance: { title: "Maintenance mode", hint: "Show a site-wide maintenance message. Off by default.", fields: [{ key: "enabled", label: "Maintenance mode on", type: "bool" }, { key: "message", label: "Message", type: "textarea" }] },
+  ai: { title: "AI engine defaults", hint: "Default models used when a tenant hasn't picked their own. Runs on your OpenRouter key.", fields: [{ key: "defaultModel", label: "Default chat model" }, { key: "visionModel", label: "Vision model" }, { key: "embedModel", label: "Embedding model" }, { key: "allowByoKey", label: "Allow tenant's own key", type: "bool" }, { key: "engineNote", label: "Engine note", type: "textarea" }] },
+  limits: { title: "Limits & quotas", hint: "Platform caps. 0 means unlimited.", fields: [{ key: "maxAgentsPerTenant", label: "Max agents / tenant", type: "number" }, { key: "monthlyTokenCap", label: "Monthly token cap", type: "number" }, { key: "maxUploadMb", label: "Max upload (MB)", type: "number" }, { key: "maxBulkRows", label: "Max bulk rows", type: "number" }, { key: "trialDays", label: "Trial days", type: "number" }] },
+  signup: { title: "Signup", hint: "How new accounts are created and what they default to.", fields: [{ key: "mode", label: "Signup mode", type: "select", options: ["open", "invite-only", "closed"] }, { key: "defaultPlan", label: "Default plan", type: "select", options: ["free", "starter", "growth", "pro"] }, { key: "defaultRole", label: "Default role" }, { key: "allowAdvisorSignup", label: "Allow advisor signup", type: "bool" }] },
+  pricing: { title: "Pricing", hint: "Plan labels and prices shown on the pricing page.", fields: [{ key: "freeLabel", label: "Free label" }, { key: "starterPrice", label: "Starter price", type: "number" }, { key: "growthPrice", label: "Growth price", type: "number" }, { key: "proPrice", label: "Pro price", type: "number" }, { key: "currencySymbol", label: "Currency symbol" }] },
+  custom: { title: "Custom settings", hint: "Add ANY key/value you need — now or in future. Read it anywhere via the platform settings API. Your zero-code escape hatch.", fields: [], custom: true },
 };
+
+const SETTING_INPUT = "flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]";
+
+// Dynamic key/value editor for the `custom` group — add/edit/remove arbitrary settings.
+function CustomSettingsEditor({ value, onChange }: { value: Record<string, any>; onChange: (v: Record<string, any>) => void }) {
+  const [newKey, setNewKey] = useState("");
+  const entries = Object.entries(value || {});
+  const setVal = (k: string, v: any) => onChange({ ...value, [k]: v });
+  const remove = (k: string) => { const next = { ...value }; delete next[k]; onChange(next); };
+  const add = () => {
+    const k = newKey.trim();
+    if (!k || !/^[A-Za-z0-9_.-]{1,64}$/.test(k) || value[k] !== undefined) return;
+    onChange({ ...value, [k]: "" });
+    setNewKey("");
+  };
+  return (
+    <div className="space-y-2.5">
+      {entries.length === 0 && <p className="text-xs text-[var(--color-muted)]">No custom settings yet — add one below.</p>}
+      {entries.map(([k, v]) => (
+        <div key={k} className="flex items-center gap-3">
+          <label className="w-40 shrink-0 text-xs font-mono text-[var(--color-muted)] truncate" title={k}>{k}</label>
+          <input value={typeof v === "boolean" ? String(v) : (v ?? "")} onChange={e => setVal(k, e.target.value)} className={SETTING_INPUT} />
+          <button onClick={() => remove(k)} className="shrink-0 text-[var(--color-muted)] hover:text-red-400 text-xs px-2 py-1">Remove</button>
+        </div>
+      ))}
+      <div className="flex items-center gap-3 pt-1">
+        <input value={newKey} onChange={e => setNewKey(e.target.value)} placeholder="new_key_name"
+          onKeyDown={e => { if (e.key === "Enter") add(); }}
+          className="w-40 shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs font-mono outline-none focus:border-[var(--color-primary)]" />
+        <button onClick={add} className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs hover:border-[var(--color-primary)]">+ Add field</button>
+      </div>
+    </div>
+  );
+}
 
 function PlatformSettingsAdmin() {
   const [data, setData] = useState<Record<string, Record<string, any>>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    api.get<Record<string, Record<string, any>>>("/api/platform/settings")
+    api.get<Record<string, Record<string, any>>>("/api/platform/settings/all")
       .then(d => setData(d || {})).catch(() => { /* keep blanks */ }).finally(() => setLoaded(true));
   }, []);
   const set = (g: string, k: string, v: any) => setData(s => ({ ...s, [g]: { ...(s[g] || {}), [k]: v } }));
@@ -346,6 +392,36 @@ function PlatformSettingsAdmin() {
     catch (err) { toast.error(errMsg(err)); }
     finally { setSaving(null); }
   };
+  const field = (g: string, f: FieldDef) => {
+    const v = data[g]?.[f.key];
+    if (f.type === "bool") return (
+      <label key={f.key} className="flex items-center gap-2 text-xs cursor-pointer">
+        <input type="checkbox" checked={!!v} onChange={e => set(g, f.key, e.target.checked)} /> {f.label}
+      </label>
+    );
+    if (f.type === "select") return (
+      <div key={f.key} className="flex items-center gap-3">
+        <label className="w-40 shrink-0 text-xs text-[var(--color-muted)]">{f.label}</label>
+        <select value={v ?? ""} onChange={e => set(g, f.key, e.target.value)} className={SETTING_INPUT}>
+          {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </div>
+    );
+    if (f.type === "textarea") return (
+      <div key={f.key} className="flex items-start gap-3">
+        <label className="w-40 shrink-0 text-xs text-[var(--color-muted)] pt-1.5">{f.label}</label>
+        <textarea value={v ?? ""} onChange={e => set(g, f.key, e.target.value)} rows={2} className={SETTING_INPUT} />
+      </div>
+    );
+    return (
+      <div key={f.key} className="flex items-center gap-3">
+        <label className="w-40 shrink-0 text-xs text-[var(--color-muted)]">{f.label}</label>
+        <input type={f.type === "number" ? "number" : "text"} value={v ?? ""}
+          onChange={e => set(g, f.key, f.type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value)}
+          className={SETTING_INPUT} />
+      </div>
+    );
+  };
   if (!loaded) return <div className="text-xs text-[var(--color-muted)]">Loading platform settings…</div>;
   return (
     <div className="space-y-4">
@@ -354,20 +430,11 @@ function PlatformSettingsAdmin() {
         <div key={g} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
           <h3 className="text-sm font-semibold mb-1">{cfg.title}</h3>
           <p className="text-xs text-[var(--color-muted)] mb-4">{cfg.hint}</p>
-          {cfg.toggle && (
-            <label className="flex items-center gap-2 mb-3 text-xs cursor-pointer">
-              <input type="checkbox" checked={!!data[g]?.[cfg.toggle]} onChange={e => set(g, cfg.toggle!, e.target.checked)} /> Show the banner
-            </label>
+          {cfg.custom ? (
+            <CustomSettingsEditor value={data[g] || {}} onChange={v => setData(s => ({ ...s, [g]: v }))} />
+          ) : (
+            <div className="space-y-2.5">{cfg.fields.map(f => field(g, f))}</div>
           )}
-          <div className="space-y-2.5">
-            {cfg.fields.map(([k, label]) => (
-              <div key={k} className="flex items-center gap-3">
-                <label className="w-28 shrink-0 text-xs text-[var(--color-muted)]">{label}</label>
-                <input value={data[g]?.[k] ?? ""} onChange={e => set(g, k, e.target.value)} placeholder="…"
-                  className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
-              </div>
-            ))}
-          </div>
           <button onClick={() => save(g)} disabled={saving === g}
             className="mt-4 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-[var(--color-bg)] disabled:opacity-50">
             {saving === g ? "Saving…" : "Save"}
