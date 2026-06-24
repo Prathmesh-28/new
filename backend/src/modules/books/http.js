@@ -628,10 +628,9 @@ router.post("/documents/:id/send", canPost, async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
-// ── M2: allocations, deposits, recurring ─────────────────────────────────────
-router.post("/allocations", canPost, async (req, res) => {
-  try { const b = req.body || {}; res.status(201).json(await docs.allocate(tenantOf(req), req.user.id, b.sourceVoucherId, b.targetVoucherId, b.amount)); } catch (e) { fail(res, e); }
-});
+// ── M2: deposits, recurring ──────────────────────────────────────────────────
+// (POST /allocations is registered earlier via billwise.allocateBill — the
+// duplicate docs.allocate handler that used to sit here was unreachable, so removed.)
 router.get("/allocations", async (req, res) => {
   try {
     const t = tenantOf(req); const v = req.query.voucher;

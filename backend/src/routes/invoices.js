@@ -108,6 +108,18 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
   res.json(inv);
 });
 
+// DELETE /api/invoices/:id — remove an invoice (and its line items), tenant-scoped.
+// The Receivables page calls this to sync a deletion to the ledger.
+router.delete("/:id", authenticate, canWrite, async (req, res) => {
+  const { rows: [inv] } = await pool.query(
+    "DELETE FROM invoices WHERE id=$1 AND tenant_id=$2 RETURNING id",
+    [req.params.id, req.user.tenant_id]
+  );
+  if (!inv) return res.status(404).json({ error: "Invoice not found" });
+  await pool.query("DELETE FROM invoice_items WHERE invoice_id=$1", [inv.id]).catch(() => {});
+  res.status(204).end();
+});
+
 // GET /api/invoices/:id/pdf — generate PDF with PDFKit
 router.get("/:id/pdf", authenticate, async (req, res) => {
   const { rows: [inv] } = await pool.query(
