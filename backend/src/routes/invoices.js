@@ -9,6 +9,16 @@ const { sendWhatsApp } = require("../lib/whatsapp");
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant","sales"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
+// The SMB's own firm name — so a reminder a CUSTOMER receives is signed by the
+// business, not the logged-in user's display name or a generic "your supplier".
+async function firmNameOf(tenantId) {
+  try {
+    const { rows } = await pool.query("SELECT value FROM kv_store WHERE tenant_id=$1 AND key='store'", [tenantId]);
+    for (const r of rows) { const n = r.value?.value?.firm?.name; if (n) return n; }
+  } catch { /* fall through */ }
+  return null;
+}
+
 function nextInvoiceNumber(existing) {
   const year = new Date().getFullYear();
   const nums = existing
@@ -200,7 +210,8 @@ router.post("/:id/remind", authenticate, canWrite, async (req, res) => {
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
 
     const amount = Number(invoice.total_amount || 0);
-    const msg = `Reminder from ${req.user.display_name || "your supplier"}: invoice ${invoice.invoice_number} for ₹${amount.toLocaleString("en-IN")} is due${invoice.due_date ? ` on ${new Date(invoice.due_date).toLocaleDateString("en-IN")}` : ""}.` +
+    const sender = (await firmNameOf(tenantId)) || req.user.display_name || "your supplier";
+    const msg = `Reminder from ${sender}: invoice ${invoice.invoice_number} for ₹${amount.toLocaleString("en-IN")} is due${invoice.due_date ? ` on ${new Date(invoice.due_date).toLocaleDateString("en-IN")}` : ""}.` +
       (invoice.upi_link ? ` Pay here: ${invoice.upi_link}` : "");
 
     // Try WhatsApp first (if we have a phone), then email. Record what happened.
