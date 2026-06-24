@@ -390,9 +390,27 @@ export default function VendorsPage() {
   const [schedVendor, setSchedVendor] = useState<Vendor | null>(null);
 
   // Real persisted vendor master (GSTIN/PAN/bank/terms/MSME) backing the directory.
-  const { vendors: master, loading: masterLoading, upsert, remove } = useVendorMaster();
+  const { vendors: master, loading: masterLoading, upsert, remove, refresh } = useVendorMaster();
   // Profile editor: null = closed; { name, record } = open (record null for create).
   const [profileEdit, setProfileEdit] = useState<{ record: VendorMaster | null; presetName?: string } | null>(null);
+
+  // Bulk edit — multi-select over directory rows that have a saved master profile
+  // (PATCH /vendors/:id needs a persisted record). Keyed by vendor master id.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkMsme, setBulkMsme] = useState<"" | "yes" | "no">("");
+  const [bulkCategory, setBulkCategory] = useState<string>("");
+  const [bulkTerms, setBulkTerms] = useState<string>("");
+  const [bulkApplying, setBulkApplying] = useState(false);
+
+  const toggleSelect = (id: string) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const clearBulk = () => {
+    setSelectedIds(new Set());
+    setBulkMsme(""); setBulkCategory(""); setBulkTerms("");
+  };
   const masterByName = useMemo(() => {
     const idx: Record<string, VendorMaster> = {};
     for (const v of master) idx[v.name.toLowerCase()] = v;
@@ -458,6 +476,55 @@ export default function VendorsPage() {
   const totalSpend   = vendors.reduce((s, v) => s + v.totalSpend, 0);
   const thisMSpend   = vendors.reduce((s, v) => s + v.thisMonth, 0);
   const recurringN   = vendors.filter(v => v.txnCount >= 2).length;
+
+  // Only rows with a saved master profile are bulk-editable (need an id to PATCH).
+  const selectableIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const v of filtered) {
+      const prof = masterByName[v.name.toLowerCase()];
+      if (prof) ids.push(prof.id);
+    }
+    return ids;
+  }, [filtered, masterByName]);
+  const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
+  const someSelected = selectedIds.size > 0 && !allSelected;
+  const toggleSelectAll = () => setSelectedIds(prev => {
+    if (selectableIds.every(id => prev.has(id))) {
+      const next = new Set(prev);
+      selectableIds.forEach(id => next.delete(id));
+      return next;
+    }
+    return new Set([...prev, ...selectableIds]);
+  });
+
+  // Apply only the fields the user actually changed to every selected vendor, in
+  // parallel, via the existing PATCH /vendors/:id endpoint. Single summary toast.
+  const applyBulk = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const patch: Partial<VendorMaster> = {};
+    if (bulkMsme) patch.is_msme = bulkMsme === "yes";
+    if (bulkCategory) patch.category = bulkCategory;
+    if (bulkTerms.trim() !== "") {
+      const n = Number(bulkTerms);
+      if (Number.isNaN(n) || n < 0) { toast.error("Enter a valid number of payment-term days"); return; }
+      patch.payment_terms_days = n;
+    }
+    if (Object.keys(patch).length === 0) { toast.error("Choose at least one field to update"); return; }
+
+    setBulkApplying(true);
+    const results = await Promise.allSettled(ids.map(id => api.patch<VendorMaster>(`/vendors/${id}`, patch)));
+    setBulkApplying(false);
+
+    const ok = results.filter(r => r.status === "fulfilled").length;
+    const failed = results.length - ok;
+    if (failed === 0) toast.success(`Updated ${ok} vendor${ok !== 1 ? "s" : ""}`);
+    else if (ok === 0) toast.error(`Could not update ${failed} vendor${failed !== 1 ? "s" : ""}`);
+    else toast.warning(`${ok} updated, ${failed} failed`);
+
+    await refresh();
+    clearBulk();
+  };
 
   // AP Aging: obligations that represent vendor payables (type="other")
   const apAging = useMemo(() => {
@@ -606,6 +673,49 @@ export default function VendorsPage() {
             </button>
           </div>
 
+          {/* Bulk edit bar — only the controls you change are applied to the selected vendors */}
+          {selectedIds.size > 0 && (
+            <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/40 rounded-lg p-3 flex flex-wrap items-end gap-3">
+              <div className="flex items-center gap-2 mr-1">
+                <ListChecks size={15} className="text-[var(--color-primary)]" />
+                <span className="text-sm font-semibold">{selectedIds.size} selected</span>
+              </div>
+              <div>
+                <label className="text-[10px] text-[var(--color-muted)] block mb-1 uppercase tracking-wider">MSME</label>
+                <select value={bulkMsme} onChange={e => setBulkMsme(e.target.value as "" | "yes" | "no")}
+                  className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]">
+                  <option value="">Keep as-is</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-[var(--color-muted)] block mb-1 uppercase tracking-wider">Category</label>
+                <select value={bulkCategory} onChange={e => setBulkCategory(e.target.value)}
+                  className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]">
+                  <option value="">Keep as-is</option>
+                  {PROFILE_CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABEL[c] ?? (c.charAt(0).toUpperCase() + c.slice(1).replace("-", " "))}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-[var(--color-muted)] block mb-1 uppercase tracking-wider">Payment terms (days)</label>
+                <input type="number" min="0" value={bulkTerms} onChange={e => setBulkTerms(e.target.value)} placeholder="Keep as-is"
+                  className="w-32 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
+              </div>
+              <div className="flex items-center gap-2 ml-auto">
+                <button onClick={applyBulk} disabled={bulkApplying}
+                  className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
+                  {bulkApplying ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                  Apply to {selectedIds.size} vendor{selectedIds.size !== 1 ? "s" : ""}
+                </button>
+                <button onClick={clearBulk} disabled={bulkApplying}
+                  className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] px-2 py-2 rounded-lg disabled:opacity-50">
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+
           {filtered.length === 0 ? (
             masterLoading ? (
               <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
@@ -631,6 +741,14 @@ export default function VendorsPage() {
               <table className="w-full text-sm min-w-[620px]">
                 <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
                   <tr>
+                    <th className="px-4 py-3 text-left w-10">
+                      <input type="checkbox" aria-label="Select all vendors with a saved profile"
+                        disabled={selectableIds.length === 0}
+                        checked={allSelected}
+                        ref={el => { if (el) el.indeterminate = someSelected; }}
+                        onChange={toggleSelectAll}
+                        className="accent-[var(--color-primary)] cursor-pointer disabled:cursor-not-allowed" />
+                    </th>
                     <th className="px-4 py-3 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">Vendor</th>
                     <th className="px-4 py-3 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider hidden md:table-cell">Category</th>
                     <th className="px-4 py-3 text-right text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider cursor-pointer select-none hover:text-[var(--color-text)]" onClick={() => toggleSort("totalSpend")}>
@@ -651,6 +769,15 @@ export default function VendorsPage() {
                     const prof = masterByName[v.name.toLowerCase()];
                     return (
                     <tr key={i} className="hover:bg-white/2 transition-colors cursor-pointer" onClick={() => setProfileEdit({ record: prof ?? null, presetName: v.name })}>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox"
+                          aria-label={prof ? `Select ${v.name}` : `${v.name} has no saved profile`}
+                          title={prof ? undefined : "Add a profile to bulk-edit this vendor"}
+                          disabled={!prof}
+                          checked={prof ? selectedIds.has(prof.id) : false}
+                          onChange={() => prof && toggleSelect(prof.id)}
+                          className="accent-[var(--color-primary)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-30" />
+                      </td>
                       <td className="px-4 py-3">
                         <p className="font-medium text-sm flex items-center gap-1.5">
                           {v.name}
