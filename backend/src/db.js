@@ -609,6 +609,8 @@ async function initDb() {
   await pool.query(require("./modules/erp/schema").ERP_SCHEMA);
   await pool.query(require("./modules/hrms/schema").HRMS_SCHEMA);
   await pool.query(require("./modules/insights/schema").INSIGHTS_SCHEMA);
+  // collab module (Teams-style real-time collaboration) — Phase 0 data model + RLS
+  await pool.query(require("./modules/collab/schema").COLLAB_SCHEMA);
 
   // Platform-level settings (super-admin editable, e.g. social links) — key/value JSON.
   await pool.query(`
