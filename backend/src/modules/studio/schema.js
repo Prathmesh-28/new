@@ -48,11 +48,16 @@ const STUDIO_SCHEMA = `
     project_id  UUID NOT NULL REFERENCES studio_projects(id) ON DELETE CASCADE,
     tenant_id   TEXT NOT NULL,
     version_id  UUID REFERENCES studio_project_versions(id),
+    token       TEXT,                          -- public, unguessable id for /api/pub/:token (v1 publish)
     url         TEXT,
     status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','building','live','failed')),
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
   );
+  ALTER TABLE studio_deployments ADD COLUMN IF NOT EXISTS token TEXT;
+  ALTER TABLE studio_deployments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
   CREATE INDEX IF NOT EXISTS studio_deployments_project ON studio_deployments(project_id, created_at DESC);
+  CREATE UNIQUE INDEX IF NOT EXISTS studio_deployments_token ON studio_deployments(token) WHERE token IS NOT NULL;
 `;
 
 module.exports = { STUDIO_SCHEMA };

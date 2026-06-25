@@ -114,6 +114,7 @@ app.use("/api/erp",                require("./modules/erp/http"));   // ERP: BOM
 app.use("/api/hrms",               require("./modules/hrms/http"));  // HRMS: employees, attendance, leave, payroll
 app.use("/api/insights",           require("./modules/insights/http")); // Insights: cross-module KPIs + dashboards
 app.use("/api/studio",             require("./modules/studio/http")); // App Builder: projects + versions + deployments
+app.use("/api/pub",                require("./routes/studiopublic")); // PUBLIC: serve published App Builder apps (sandboxed, token-addressed)
 app.use("/api/account",            require("./routes/account")); // DPDP consent/export/erasure
 app.use("/api/notes",              require("./routes/notes"));
 app.use("/api/files",              require("./routes/files"));

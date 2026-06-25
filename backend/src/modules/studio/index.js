@@ -165,6 +165,67 @@ async function getVersion(tenantId, id) {
   return rows[0];
 }
 
+// Restore a past version by appending a NEW version that copies its file tree
+// (history stays append-only) and making it current. Returns the new version.
+async function restoreVersion(tenantId, projectId, versionId) {
+  const src = await getVersion(tenantId, versionId);  // throws NOT_FOUND across tenants/projects
+  if (src.project_id !== projectId) throw new StudioError("NOT_FOUND", "Version not in this project", 404);
+  return createVersion(tenantId, projectId, src.created_by, {
+    file_tree: src.file_tree,
+    prompt: src.prompt,
+    summary: `Restored from an earlier version`,
+    parent_version_id: src.id,
+  });
+}
+
+// Publish the project's CURRENT version to a public, token-addressed URL. Re-publishing
+// reuses the project's existing token (stable shareable link) and just points it at the
+// latest version. Returns { token, path, deployment }.
+async function publish(tenantId, projectId) {
+  const project = await getProject(tenantId, projectId);
+  if (!project.current_version_id) throw new StudioError("NOTHING_TO_PUBLISH", "Build the app first", 422);
+  const { rows: existing } = await pool.query(
+    "SELECT * FROM studio_deployments WHERE tenant_id=$1 AND project_id=$2 AND token IS NOT NULL ORDER BY created_at DESC LIMIT 1",
+    [tenantId, projectId]
+  );
+  const token = existing[0]?.token || ("app_" + require("crypto").randomBytes(12).toString("hex"));
+  const path = `/api/pub/${token}`;
+  let deployment;
+  if (existing[0]) {
+    const { rows } = await pool.query(
+      "UPDATE studio_deployments SET version_id=$1, url=$2, status='live', updated_at=now() WHERE id=$3 RETURNING *",
+      [project.current_version_id, path, existing[0].id]
+    );
+    deployment = rows[0];
+  } else {
+    const { rows } = await pool.query(
+      "INSERT INTO studio_deployments(project_id, tenant_id, version_id, token, url, status) VALUES($1,$2,$3,$4,$5,'live') RETURNING *",
+      [projectId, tenantId, project.current_version_id, token, path]
+    );
+    deployment = rows[0];
+  }
+  return { token, path, deployment };
+}
+
+// Public (no tenant scope — addressed by an unguessable token). Returns the published
+// app's HTML + project name, or null if the token is unknown / not live.
+async function getPublished(token) {
+  if (!token) return null;
+  const { rows } = await pool.query(
+    `SELECT d.version_id, p.name, v.file_tree
+       FROM studio_deployments d
+       JOIN studio_projects p ON p.id = d.project_id
+       JOIN studio_project_versions v ON v.id = d.version_id
+      WHERE d.token=$1 AND d.status='live'
+      LIMIT 1`,
+    [token]
+  );
+  if (!rows[0]) return null;
+  const html = rows[0].file_tree && rows[0].file_tree["index.html"];
+  if (!html) return null;
+  return { name: rows[0].name, html };
+}
+
 async function listDeployments(tenantId, projectId) {
   const { rows } = await pool.query(
     `SELECT id, project_id, version_id, url, status, created_at
@@ -181,4 +242,5 @@ module.exports = {
   StudioError,
   createProject, listProjects, getProject, updateProject,
   createVersion, listVersions, getVersion, listDeployments,
+  restoreVersion, publish, getPublished,
 };

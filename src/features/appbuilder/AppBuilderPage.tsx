@@ -1,17 +1,24 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
+import { API_BASE } from "@/lib/apiBase";
 import { toast } from "sonner";
 import { humanizeAiError } from "@/components/ai/aiError";
-import { Blocks, Plus, Search, Loader2, Sparkles, FileCode2, Monitor, ShieldCheck, Cpu } from "lucide-react";
+import {
+  Blocks, Plus, Search, Loader2, Sparkles, FileCode2, Monitor, ShieldCheck, Cpu,
+  Send, ExternalLink, Share2, History, RotateCcw, RefreshCw, Lightbulb,
+} from "lucide-react";
 
 /**
- * App Builder — the Lovable/Emergent half of Headroom Studio. Describe an app →
- * a codegen agent generates a React project → live preview → iterate by chat →
- * publish. Phase 0 is the FOUNDATION only: project list + create (backed by
- * /api/studio), and the three-pane shell (projects · prompt+file-tree · preview)
- * with the codegen/preview panes as labelled placeholders for Phase 1/2.
+ * App Builder — the Lovable/Emergent half of Headroom Studio. Describe an app in
+ * plain English → the codegen orchestrator (runs on your OpenRouter engine,
+ * grounded on your real business data) generates a self-contained app → it renders
+ * live in a sandboxed preview → iterate by chat (each prompt = a new version) →
+ * restore any version → publish to a shareable sandboxed link. Backed by /api/studio.
  */
-interface Project { id: string; name: string; slug: string; current_version_id?: string | null; created_at?: string; updated_at?: string }
+interface Project { id: string; name: string; slug: string; current_version_id?: string | null }
+interface Version { id: string; summary?: string | null; prompt?: string | null; created_at?: string; file_tree?: Record<string, string> }
+interface LogEntry { role: "user" | "system"; text: string; plan?: boolean; error?: boolean }
+interface GenResult { mode: "plan" | "build"; plan?: string; html?: string; summary?: string; version?: Version }
 
 export default function AppBuilderPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -19,6 +26,20 @@ export default function AppBuilderPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [q, setQ] = useState("");
+
+  // Per-project state (keyed by project id) so switching projects keeps context.
+  const [htmlById, setHtmlById] = useState<Record<string, string>>({});
+  const [logById, setLogById] = useState<Record<string, LogEntry[]>>({});
+  const [versionsById, setVersionsById] = useState<Record<string, Version[]>>({});
+  const [pubById, setPubById] = useState<Record<string, string>>({}); // projectId → public url
+
+  const [prompt, setPrompt] = useState("");
+  const [building, setBuilding] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [showVersions, setShowVersions] = useState(false);
+  const [previewNonce, setPreviewNonce] = useState(0);
+  const loaded = useRef<Set<string>>(new Set());
+  const logRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,19 +53,104 @@ export default function AppBuilderPage() {
   }, []);
   useEffect(() => { void load(); }, [load]);
 
+  const refreshVersions = useCallback(async (id: string) => {
+    try {
+      const v = await api.get<{ versions: Version[] }>(`/api/studio/projects/${id}/versions`);
+      setVersionsById((m) => ({ ...m, [id]: Array.isArray(v?.versions) ? v.versions : [] }));
+    } catch { /* non-fatal */ }
+  }, []);
+
+  // Hydrate a project's html + versions + publish state when first opened.
+  useEffect(() => {
+    if (!activeId || loaded.current.has(activeId)) return;
+    loaded.current.add(activeId);
+    (async () => {
+      try {
+        const p = await api.get<Project & { current_version?: Version }>(`/api/studio/projects/${activeId}`);
+        const html = p.current_version?.file_tree?.["index.html"] || "";
+        setHtmlById((m) => ({ ...m, [activeId]: html }));
+      } catch { /* ignore */ }
+      refreshVersions(activeId);
+      api.get<{ url?: string; token?: string }[]>(`/api/studio/projects/${activeId}/deployments`)
+        .then((d) => { const live = Array.isArray(d) ? d.find((x) => x.url) : null; if (live?.url) setPubById((m) => ({ ...m, [activeId]: (API_BASE || window.location.origin) + live.url })); })
+        .catch(() => {});
+    })();
+  }, [activeId, refreshVersions]);
+
+  useEffect(() => { logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" }); }, [logById, activeId, building]);
+
   const createProject = async () => {
     setCreating(true);
     try {
       const created = await api.post<Project>("/api/studio/projects", { name: "Untitled app" });
       await load();
       if (created?.id) setActiveId(created.id);
-      toast.success("Project created — describe your app to build it (Phase 1).");
+      toast.success("Project created — describe the app you want to build.");
     } catch (e) { toast.error(humanizeAiError(e)); }
     finally { setCreating(false); }
   };
 
+  const appendLog = (id: string, entry: LogEntry) => setLogById((m) => ({ ...m, [id]: [...(m[id] ?? []), entry] }));
+
+  const generate = async (mode: "plan" | "build") => {
+    const text = prompt.trim();
+    if (!text || !activeId || building) return;
+    setPrompt("");
+    appendLog(activeId, { role: "user", text });
+    setBuilding(true);
+    try {
+      const res = await api.post<GenResult>(`/api/studio/projects/${activeId}/generate`, { prompt: text, mode });
+      if (mode === "plan") {
+        appendLog(activeId, { role: "system", text: res?.plan || "(no plan)", plan: true });
+      } else {
+        setHtmlById((m) => ({ ...m, [activeId]: res?.html || "" }));
+        setPreviewNonce((n) => n + 1);
+        appendLog(activeId, { role: "system", text: `Built · ${res?.summary || "updated the app"}` });
+        refreshVersions(activeId);
+      }
+    } catch (e) {
+      appendLog(activeId, { role: "system", text: humanizeAiError(e), error: true });
+    } finally { setBuilding(false); }
+  };
+
+  const restore = async (versionId: string) => {
+    try {
+      const v = await api.post<Version>(`/api/studio/projects/${activeId}/restore/${versionId}`, {});
+      setHtmlById((m) => ({ ...m, [activeId]: v?.file_tree?.["index.html"] || "" }));
+      setPreviewNonce((n) => n + 1);
+      appendLog(activeId, { role: "system", text: "Restored an earlier version" });
+      refreshVersions(activeId);
+      setShowVersions(false);
+      toast.success("Restored");
+    } catch (e) { toast.error(humanizeAiError(e)); }
+  };
+
+  const publish = async () => {
+    if (!activeId) return;
+    setPublishing(true);
+    try {
+      const r = await api.post<{ token: string; path: string }>(`/api/studio/projects/${activeId}/publish`, {});
+      const url = (API_BASE || window.location.origin) + r.path;
+      setPubById((m) => ({ ...m, [activeId]: url }));
+      try { await navigator.clipboard?.writeText(url); toast.success("Published — link copied to clipboard"); }
+      catch { toast.success("Published"); }
+    } catch (e) { toast.error(humanizeAiError(e)); }
+    finally { setPublishing(false); }
+  };
+
+  const openPreview = () => {
+    const html = htmlById[activeId];
+    const pub = pubById[activeId];
+    if (pub) { window.open(pub, "_blank", "noopener"); return; }
+    if (html) { const blob = new Blob([html], { type: "text/html" }); window.open(URL.createObjectURL(blob), "_blank", "noopener"); }
+  };
+
   const active = projects.find((p) => p.id === activeId);
   const filtered = projects.filter((p) => (p.name ?? "").toLowerCase().includes(q.trim().toLowerCase()));
+  const html = htmlById[activeId] || "";
+  const log = logById[activeId] ?? [];
+  const versions = versionsById[activeId] ?? [];
+  const pub = pubById[activeId];
 
   return (
     <div className="space-y-5">
@@ -52,19 +158,13 @@ export default function AppBuilderPage() {
         <h1 className="text-2xl font-bold flex items-center gap-2 mr-auto">
           <Blocks className="text-[var(--color-primary)]" size={24} /> App Builder
         </h1>
-        <span className="text-[11px] px-2 py-1 rounded-full border border-[var(--color-primary)]/40 text-[var(--color-primary)] font-medium">Phase 0 · foundation</span>
+        <span className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]"><Cpu size={12} /> Your engine</span>
+        <span className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]"><ShieldCheck size={12} /> Sandboxed</span>
       </div>
 
-      <p className="text-sm text-[var(--color-muted)] max-w-3xl">
-        Describe an app in plain English and Headroom builds it — a real React app with a live preview you can
-        publish and share. Runs on <strong className="text-[var(--color-text)]">your own engine</strong>, and can
-        embed your <strong className="text-[var(--color-text)]">Agent Studio</strong> agents. The builder pane goes
-        live in the next phase; create a project to get set up.
-      </p>
-
-      <div className="flex h-[calc(100vh-15rem)] min-h-[28rem] rounded-xl border border-[var(--color-border)] overflow-hidden bg-[var(--color-bg)]">
+      <div className="flex h-[calc(100vh-13rem)] min-h-[30rem] rounded-xl border border-[var(--color-border)] overflow-hidden bg-[var(--color-bg)]">
         {/* ── Projects rail ──────────────────────────────────────────── */}
-        <aside className="w-60 shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col">
+        <aside className="w-52 shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col">
           <div className="p-3 border-b border-[var(--color-border)]">
             <button onClick={createProject} disabled={creating}
               className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold py-2 hover:opacity-90 disabled:opacity-50">
@@ -91,37 +191,72 @@ export default function AppBuilderPage() {
           </div>
         </aside>
 
-        {/* ── Center: prompt + file tree (placeholder) ───────────────── */}
+        {/* ── Center: build chat + composer ──────────────────────────── */}
         <main className="flex-1 min-w-0 flex flex-col border-r border-[var(--color-border)]">
           {!active ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
               <Blocks size={32} className="text-[var(--color-primary)] mb-3" />
               <p className="text-sm font-semibold">Create a project to start building</p>
-              <p className="text-xs text-[var(--color-muted)] mt-1 max-w-sm">Each project is an app with its own files, versions, and (soon) a published URL.</p>
+              <p className="text-xs text-[var(--color-muted)] mt-1 max-w-sm">Describe an app and Headroom builds it — using your real business data, with a live preview you can publish.</p>
             </div>
           ) : (
             <>
               <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-[var(--color-border)]">
                 <FileCode2 size={16} className="text-[var(--color-primary)] shrink-0" />
                 <span className="font-semibold truncate">{active.name || "Untitled app"}</span>
-                <span className="text-[11px] font-mono text-[var(--color-muted)] truncate">· {active.slug}.headroom.app</span>
-              </div>
-              <div className="flex-1 overflow-y-auto px-4 py-4">
-                <div className="rounded-lg border border-dashed border-[var(--color-border)] p-6 text-center text-xs text-[var(--color-muted)] flex flex-col items-center gap-2">
-                  <FileCode2 size={20} className="text-[var(--color-muted)]" />
-                  Generated files will appear here once the codegen agent runs (Phase 1).
+                <div className="ml-auto relative">
+                  <button onClick={() => setShowVersions((v) => !v)} disabled={versions.length === 0}
+                    className="flex items-center gap-1 text-xs rounded-lg border border-[var(--color-border)] px-2 py-1 text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-40">
+                    <History size={12} /> {versions.length} version{versions.length === 1 ? "" : "s"}
+                  </button>
+                  {showVersions && (
+                    <div className="absolute right-0 top-8 z-20 w-72 max-h-72 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl p-1">
+                      {versions.map((v) => (
+                        <div key={v.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-xs">
+                          <span className="flex-1 truncate text-[var(--color-muted)]">{v.summary || v.prompt || "version"}</span>
+                          <button onClick={() => restore(v.id)} title="Restore this version" className="text-[var(--color-primary)] hover:opacity-80"><RotateCcw size={13} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-              {/* Composer (disabled until Phase 1) */}
+
+              {/* Build log */}
+              <div ref={logRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+                {log.length === 0 ? (
+                  <div className="text-center text-[var(--color-muted)] py-8 text-sm">
+                    Describe the app you want. Try{" "}
+                    <button onClick={() => setPrompt("Build a VC dashboard with my cash, runway, monthly burn and overdue receivables, with charts.")} className="text-[var(--color-primary)] hover:underline">“a VC dashboard with my cash, runway & overdue receivables”</button>.
+                  </div>
+                ) : log.map((e, i) => e.role === "user" ? (
+                  <div key={i} className="flex justify-end">
+                    <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3.5 py-2 text-sm whitespace-pre-wrap">{e.text}</div>
+                  </div>
+                ) : (
+                  <div key={i} className={`max-w-[90%] rounded-2xl rounded-bl-sm border px-3.5 py-2 text-sm whitespace-pre-wrap ${e.error ? "border-red-700/40 text-red-300 bg-red-900/10" : e.plan ? "border-[var(--color-primary)]/30 bg-[var(--color-primary)]/5" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
+                    {e.plan && <div className="flex items-center gap-1 text-[11px] text-[var(--color-primary)] mb-1 font-semibold"><Lightbulb size={12} /> Plan</div>}
+                    {e.text}
+                  </div>
+                ))}
+                {building && <div className="flex items-center gap-2 text-sm text-[var(--color-muted)]"><Loader2 size={13} className="animate-spin" /> Building your app…</div>}
+              </div>
+
+              {/* Composer */}
               <div className="shrink-0 border-t border-[var(--color-border)] p-3">
-                <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 opacity-70">
-                  <textarea rows={1} disabled placeholder="Describe your app — e.g. “a VC dashboard with my cash, runway and overdue receivables” (Phase 1)"
-                    className="w-full bg-transparent px-2 py-1.5 text-sm outline-none resize-none cursor-not-allowed" />
+                <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                  <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={1} disabled={building}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void generate("build"); } }}
+                    placeholder={html ? "Describe a change — e.g. “make the header sticky and add a date filter”" : "Describe your app — e.g. “a VC dashboard with my cash, runway and overdue receivables”"}
+                    className="w-full bg-transparent px-2 py-1.5 text-sm outline-none resize-none disabled:opacity-60" />
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]"><Cpu size={12} /> Your engine</span>
-                    <span className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]"><ShieldCheck size={12} /> Sandboxed preview</span>
-                    <button disabled className="ml-auto flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-3.5 py-1.5 opacity-50 cursor-not-allowed">
-                      <Sparkles size={14} /> Build
+                    <button onClick={() => void generate("plan")} disabled={building || !prompt.trim()}
+                      className="flex items-center gap-1.5 text-xs rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] disabled:opacity-40">
+                      <Lightbulb size={12} /> Plan first
+                    </button>
+                    <button onClick={() => void generate("build")} disabled={building || !prompt.trim()}
+                      className="ml-auto flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-3.5 py-1.5 hover:opacity-90 disabled:opacity-50">
+                      {building ? <Loader2 size={14} className="animate-spin" /> : html ? <Send size={14} /> : <Sparkles size={14} />} {html ? "Update" : "Build"}
                     </button>
                   </div>
                 </div>
@@ -130,15 +265,36 @@ export default function AppBuilderPage() {
           )}
         </main>
 
-        {/* ── Right: live preview (placeholder) ──────────────────────── */}
-        <section className="w-[40%] max-w-[34rem] shrink-0 hidden lg:flex flex-col bg-[var(--color-surface)]">
-          <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-[var(--color-border)]">
+        {/* ── Right: live preview ────────────────────────────────────── */}
+        <section className="w-[44%] max-w-[40rem] shrink-0 hidden lg:flex flex-col bg-[var(--color-surface)]">
+          <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-[var(--color-border)]">
             <Monitor size={15} className="text-[var(--color-primary)]" />
             <span className="text-sm font-semibold">Live preview</span>
+            <div className="ml-auto flex items-center gap-1.5">
+              <button onClick={() => setPreviewNonce((n) => n + 1)} disabled={!html} title="Refresh preview" className="p-1.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-40"><RefreshCw size={13} /></button>
+              <button onClick={openPreview} disabled={!html} title="Open in new tab" className="p-1.5 rounded-md border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-40"><ExternalLink size={13} /></button>
+              <button onClick={publish} disabled={!html || publishing} title="Publish to a shareable link"
+                className="flex items-center gap-1.5 text-xs rounded-md bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-2.5 py-1.5 hover:opacity-90 disabled:opacity-40">
+                {publishing ? <Loader2 size={13} className="animate-spin" /> : <Share2 size={13} />} Publish
+              </button>
+            </div>
           </div>
-          <div className="flex-1 flex flex-col items-center justify-center text-center px-6 text-[var(--color-muted)]">
-            <Monitor size={28} className="mb-3 opacity-60" />
-            <p className="text-xs max-w-xs">Your app's live preview appears here once it's built (Phase 2). Publish to share it at a <span className="font-mono text-[var(--color-text)]">.headroom.app</span> link.</p>
+          {pub && (
+            <div className="shrink-0 px-3 py-1.5 border-b border-[var(--color-border)] text-[11px] flex items-center gap-2">
+              <span className="text-[var(--color-muted)]">Live:</span>
+              <a href={pub} target="_blank" rel="noopener noreferrer" className="text-[var(--color-primary)] truncate hover:underline">{pub}</a>
+              <button onClick={() => { navigator.clipboard?.writeText(pub); toast.success("Link copied"); }} className="ml-auto text-[var(--color-muted)] hover:text-[var(--color-text)]">Copy</button>
+            </div>
+          )}
+          <div className="flex-1 bg-white">
+            {html ? (
+              <iframe key={previewNonce} title="App preview" srcDoc={html} sandbox="allow-scripts allow-popups allow-forms allow-modals allow-downloads" className="w-full h-full border-0" />
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center px-6 text-[var(--color-muted)] bg-[var(--color-surface)]">
+                <Monitor size={28} className="mb-3 opacity-60" />
+                <p className="text-xs max-w-xs">Your app's live preview appears here once you build it. Then publish to share it at a sandboxed link.</p>
+              </div>
+            )}
           </div>
         </section>
       </div>
