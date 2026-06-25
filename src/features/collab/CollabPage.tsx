@@ -13,7 +13,7 @@ import { MessageSquare, Hash, Plus, Send, Loader2, Users, X, AtSign, Search, Bel
  *  + membership-checked server-side. Backed by /api/collab.
  */
 interface Reaction { emoji: string; userIds: string[] }
-interface Convo { id: string; type: "channel" | "group" | "dm"; title?: string | null; name?: string | null; unread: number; last_message_at?: string | null }
+interface Convo { id: string; type: "channel" | "group" | "dm"; title?: string | null; name?: string | null; unread: number; last_message_at?: string | null; dm_peer_id?: string | null }
 interface Msg { id: string; conversation_id: string; sender_id: string; body: string; created_at: string; edited_at?: string | null; deleted_at?: string | null; reactions?: Reaction[]; thread_reply_count?: number; parent_message_id?: string | null }
 interface Teammate { id: string; name: string; email: string; self?: boolean }
 interface Notif { id: string; kind: string; conversation_id?: string | null; source_message_id?: string | null; actor_id?: string | null; read_at?: string | null; created_at: string }
@@ -42,9 +42,25 @@ export default function CollabPage() {
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState<SearchHit[] | null>(null);
   const [links, setLinks] = useState<Link[]>([]);
+  const [online, setOnline] = useState<Set<string>>(new Set());
+  const [typingMap, setTypingMap] = useState<Record<string, string[]>>({}); // convId → userIds typing
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const lastTypingRef = useRef(0);
   const activeIdRef = useRef("");
+
+  // Add/remove a typing user for a conversation, auto-expiring after 4s of silence.
+  const markTyping = useCallback((convId: string, userId: string, isTyping: boolean) => {
+    const k = `${convId}|${userId}`;
+    if (typingTimers.current[k]) { clearTimeout(typingTimers.current[k]); delete typingTimers.current[k]; }
+    if (isTyping) {
+      setTypingMap((m) => ({ ...m, [convId]: Array.from(new Set([...(m[convId] || []), userId])) }));
+      typingTimers.current[k] = setTimeout(() => { setTypingMap((m) => ({ ...m, [convId]: (m[convId] || []).filter((u) => u !== userId) })); delete typingTimers.current[k]; }, 4000);
+    } else {
+      setTypingMap((m) => ({ ...m, [convId]: (m[convId] || []).filter((u) => u !== userId) }));
+    }
+  }, []);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   const nameOf = useCallback((id: string) => members.find((m) => m.id === id)?.name || "Someone", [members]);
 
@@ -106,8 +122,11 @@ export default function CollabPage() {
     if (!token || typeof EventSource === "undefined") return;
     const es = new EventSource(`${API_BASE}/api/collab/stream?token=${encodeURIComponent(token)}`);
     es.onmessage = (ev) => {
-      let e: { type: string; conversationId?: string; messageId?: string; message?: Msg; emoji?: string; userId?: string; added?: boolean; notification?: Notif };
+      let e: { type: string; conversationId?: string; messageId?: string; message?: Msg; emoji?: string; userId?: string; added?: boolean; notification?: Notif; userIds?: string[]; status?: string; typing?: boolean };
       try { e = JSON.parse(ev.data); } catch { return; }
+      if (e.type === "presence:snapshot") { setOnline(new Set(e.userIds || [])); return; }
+      if (e.type === "presence:update" && e.userId) { setOnline((s) => { const n = new Set(s); if (e.status === "online") n.add(e.userId!); else n.delete(e.userId!); return n; }); return; }
+      if (e.type === "typing" && e.conversationId && e.userId) { markTyping(e.conversationId, e.userId, !!e.typing); return; }
       if (e.type === "message:new" && e.conversationId) {
         const cid = e.conversationId; void loadConvos();
         if (cid === activeIdRef.current && e.message) {
@@ -126,7 +145,7 @@ export default function CollabPage() {
       }
     };
     return () => es.close();
-  }, [loadConvos]);
+  }, [loadConvos, markTyping]);
 
   // Slow backstop poll.
   useEffect(() => {
@@ -159,6 +178,8 @@ export default function CollabPage() {
     try {
       const msg = await api.post<Msg>(`/api/collab/conversations/${activeId}/messages`, { body, mentions: parseMentions(body) });
       setMsgsById((m) => ({ ...m, [activeId]: [...(m[activeId] ?? []), msg] }));
+      lastTypingRef.current = 0;
+      api.post(`/api/collab/conversations/${activeId}/typing`, { typing: false }).catch(() => {});
       void loadConvos();
     } catch (e) { toast.error(humanizeAiError(e)); setDraft(body); }
     finally { setSending(false); }
@@ -283,7 +304,7 @@ export default function CollabPage() {
                 <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-muted)]/60">Direct messages</span>
                 <button onClick={() => setPicker("dm")} title="New direct message" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Plus size={13} /></button>
               </div>
-              {dms.map((c) => <ConvBtn key={c.id} c={c} active={c.id === activeId} onClick={() => setActiveId(c.id)} label={title(c)} icon={<AtSign size={13} />} />)}
+              {dms.map((c) => <ConvBtn key={c.id} c={c} active={c.id === activeId} onClick={() => setActiveId(c.id)} label={title(c)} icon={<AtSign size={13} />} online={c.dm_peer_id ? online.has(c.dm_peer_id) : false} />)}
             </div>
           </div>
         </aside>
@@ -301,6 +322,7 @@ export default function CollabPage() {
               <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-[var(--color-border)]">
                 {active.type === "dm" ? <AtSign size={15} className="text-[var(--color-primary)]" /> : <Hash size={15} className="text-[var(--color-primary)]" />}
                 <span className="font-semibold truncate">{title(active)}</span>
+                {active.type === "dm" && active.dm_peer_id && <span className={`w-2 h-2 rounded-full ${online.has(active.dm_peer_id) ? "bg-green-500" : "bg-[var(--color-muted)]/40"}`} title={online.has(active.dm_peer_id) ? "Online" : "Offline"} />}
                 {links.map((l) => <span key={l.entity_type + l.entity_id} className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border border-[var(--color-primary)]/40 text-[var(--color-primary)]"><Link2 size={10} /> {l.entity_type}</span>)}
                 <div className="ml-auto flex items-center gap-2">
                   <button onClick={linkInvoice} title="Link to a financial object" className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><Link2 size={14} /></button>
@@ -316,8 +338,11 @@ export default function CollabPage() {
                   ))}
               </div>
               <div className="shrink-0 border-t border-[var(--color-border)] p-3">
+                {(() => { const who = (typingMap[activeId] || []).filter((id) => id !== myId).map(nameOf); return who.length > 0 ? <div className="text-[11px] text-[var(--color-muted)] px-2 pb-1 italic">{who.join(", ")} {who.length === 1 ? "is" : "are"} typing…</div> : null; })()}
                 <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 flex items-end gap-2">
-                  <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={1}
+                  <textarea value={draft}
+                    onChange={(e) => { setDraft(e.target.value); const now = Date.now(); if (activeId && now - lastTypingRef.current > 3000) { lastTypingRef.current = now; api.post(`/api/collab/conversations/${activeId}/typing`, { typing: true }).catch(() => {}); } }}
+                    rows={1}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
                     placeholder={`Message ${title(active)} — @mention a teammate`} className="flex-1 bg-transparent px-2 py-1.5 text-sm outline-none resize-none" />
                   <button onClick={() => void send()} disabled={sending || !draft.trim()} className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-3 py-1.5 hover:opacity-90 disabled:opacity-40">
@@ -359,7 +384,7 @@ export default function CollabPage() {
       </div>
 
       {picker && (
-        <TeammatePicker members={members.filter((m) => !m.self)} title={picker === "dm" ? "Start a direct message" : "Add people to the channel"} onClose={() => setPicker(null)}
+        <TeammatePicker members={members.filter((m) => !m.self)} online={online} title={picker === "dm" ? "Start a direct message" : "Add people to the channel"} onClose={() => setPicker(null)}
           onPick={async (t) => {
             if (picker === "dm") return startDm(t);
             try { await api.post(`/api/collab/conversations/${activeId}/members`, { userId: t.id }); toast.success(`Added ${t.name}`); setPicker(null); } catch (e) { toast.error(humanizeAiError(e)); }
@@ -410,17 +435,20 @@ function RowActions({ onReactToggle, onThread }: { onReactToggle: () => void; on
   );
 }
 
-function ConvBtn({ c, active, onClick, label, icon }: { c: Convo; active: boolean; onClick: () => void; label: string; icon: ReactNode }) {
+function ConvBtn({ c, active, onClick, label, icon, online }: { c: Convo; active: boolean; onClick: () => void; label: string; icon: ReactNode; online?: boolean }) {
   return (
     <button onClick={onClick} className={`w-full text-left flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors ${active ? "bg-[var(--color-primary)]/15 text-[var(--color-text)]" : "text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-text)]"}`}>
-      <span className="shrink-0 text-[var(--color-primary)]">{icon}</span>
+      <span className="shrink-0 text-[var(--color-primary)] relative">
+        {icon}
+        {online !== undefined && <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-1 ring-[var(--color-surface)] ${online ? "bg-green-500" : "bg-[var(--color-muted)]/40"}`} />}
+      </span>
       <span className="truncate flex-1">{label}</span>
       {c.unread > 0 && <span className="shrink-0 text-[10px] font-bold min-w-[18px] text-center bg-[var(--color-primary)] text-[var(--color-bg)] rounded-full px-1.5 py-0.5">{c.unread}</span>}
     </button>
   );
 }
 
-function TeammatePicker({ members, title, onClose, onPick }: { members: Teammate[]; title: string; onClose: () => void; onPick: (t: Teammate) => void }) {
+function TeammatePicker({ members, online, title, onClose, onPick }: { members: Teammate[]; online: Set<string>; title: string; onClose: () => void; onPick: (t: Teammate) => void }) {
   const [q, setQ] = useState("");
   const list = members.filter((m) => (m.name + m.email).toLowerCase().includes(q.trim().toLowerCase()));
   return (
@@ -440,7 +468,10 @@ function TeammatePicker({ members, title, onClose, onPick }: { members: Teammate
             {list.length === 0 ? <p className="text-xs text-[var(--color-muted)] py-2 text-center">No teammates found.</p> :
               list.map((m) => (
                 <button key={m.id} onClick={() => onPick(m)} className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-white/5 text-left">
-                  <div className="w-7 h-7 rounded-full bg-[var(--color-primary)]/15 flex items-center justify-center text-[var(--color-primary)] text-xs font-bold shrink-0">{m.name.charAt(0).toUpperCase()}</div>
+                  <div className="relative shrink-0">
+                    <div className="w-7 h-7 rounded-full bg-[var(--color-primary)]/15 flex items-center justify-center text-[var(--color-primary)] text-xs font-bold">{m.name.charAt(0).toUpperCase()}</div>
+                    {online.has(m.id) && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-[var(--color-surface)]" />}
+                  </div>
                   <div className="min-w-0"><div className="text-sm truncate">{m.name}</div><div className="text-[11px] text-[var(--color-muted)] truncate">{m.email}</div></div>
                 </button>
               ))}

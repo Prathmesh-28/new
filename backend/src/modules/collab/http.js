@@ -31,6 +31,9 @@ router.get("/stream", async (req, res) => {
   if (typeof res.flushHeaders === "function") res.flushHeaders();
   res.write("retry: 5000\n\n");
   res.write(": connected\n\n");
+  // Snapshot of who's currently online (before we add ourselves), so the new client
+  // can render presence immediately without waiting for the next presence:update.
+  res.write(`data: ${JSON.stringify({ type: "presence:snapshot", userIds: collabRealtime.onlineUsers(user.tenant_id) })}\n\n`);
   const unsubscribe = collabRealtime.subscribe(user.tenant_id, user.id, res);
   const hb = setInterval(() => { try { res.write(": ping\n\n"); } catch { /* closed */ } }, 25000);
   req.on("close", () => { clearInterval(hb); unsubscribe(); });
@@ -75,6 +78,7 @@ router.post("/conversations/:id/read", async (req, res) => {
 });
 router.get("/me/unreads", async (req, res) => { try { res.json(await collab.unreads(T(req), U(req))); } catch (e) { fail(res, e); } });
 router.get("/members", async (req, res) => { try { res.json(await collab.listTeammates(T(req), U(req))); } catch (e) { fail(res, e); } });
+router.post("/conversations/:id/typing", async (req, res) => { try { res.json(await collab.typing(T(req), U(req), req.params.id, (req.body || {}).typing)); } catch (e) { fail(res, e); } });
 
 // ── Reactions ────────────────────────────────────────────────────────────────
 router.put("/messages/:id/reactions/:emoji", async (req, res) => { try { res.json(await collab.addReaction(T(req), U(req), req.params.id, req.params.emoji)); } catch (e) { fail(res, e); } });

@@ -132,6 +132,10 @@ async function listConversations(tenantId, userId) {
                   FROM collab_conversation_members mm JOIN users u ON u.id=mm.user_id
                  WHERE mm.conversation_id=c.id AND mm.user_id <> $1 LIMIT 1)
               ELSE c.name END AS title,
+              CASE WHEN c.type='dm' THEN (
+                SELECT mm.user_id FROM collab_conversation_members mm
+                 WHERE mm.conversation_id=c.id AND mm.user_id <> $1 LIMIT 1)
+              END AS dm_peer_id,
               (SELECT count(*) FROM collab_messages msg
                  WHERE msg.conversation_id=c.id AND msg.deleted_at IS NULL
                    AND msg.sender_id <> $1
@@ -344,6 +348,16 @@ async function unreads(tenantId, userId) {
   });
 }
 
+// ── Typing indicator (ephemeral — never persisted) ──────────────────────────
+async function typing(tenantId, userId, conversationId, isTyping) {
+  return withTenant(tenantId, async (c) => {
+    await requireMember(c, conversationId, userId);
+    const others = (await memberIds(c, conversationId)).filter((id) => id !== userId);
+    realtime.emitToUsers(tenantId, others, { type: "typing", conversationId, userId, typing: !!isTyping });
+    return { ok: true };
+  });
+}
+
 // ── Reactions ────────────────────────────────────────────────────────────────
 async function _convOfMessage(c, messageId) {
   const { rows } = await c.query("SELECT conversation_id, sender_id FROM collab_messages WHERE id=$1", [messageId]);
@@ -490,7 +504,7 @@ async function conversationsForEntity(tenantId, userId, entityType, entityId) {
 }
 
 module.exports = {
-  CollabError, listTeammates,
+  CollabError, listTeammates, typing,
   addReaction, removeReaction, listThread,
   listNotifications, markNotificationsRead,
   pinMessage, unpinMessage, listPins,
