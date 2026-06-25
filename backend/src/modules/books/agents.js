@@ -541,22 +541,69 @@ async function runSwarm(tenantId, actorId, agentId, userMessage) {
   const pendingActions = subRuns.flatMap((r) => r.pending);
   const subResults = subRuns.map((r) => ({ task: `${r.role}: ${r.task}`, reply: r.reply, steps: r.steps }));
 
-  // 3) Synthesise
-  let reply;
-  try {
-    const synth = await llm.chat(tenantId, {
-      system: "You are the lead agent. Synthesise the specialist sub-agents' findings into ONE clear, actionable answer for an Indian SMB owner. Be concise, use ₹ with Indian grouping, resolve any conflicts, and only use the findings provided.",
-      messages: [{ role: "user", content: `Goal: ${userMessage}\n\n${subResults.map((r, i) => `Sub-agent ${i + 1} — ${r.task}\nFinding: ${r.reply}`).join("\n\n")}` }],
-      model: agent.model || undefined,
-    });
-    totalTokens += synth?.usage?.total_tokens || 0;
-    reply = synth.content || "";
-  } catch (e) { reply = ""; }
+  // 3) Discussion round — INTER-AGENT MESSAGING: each sub-agent reads the shared
+  //    blackboard (all peers' findings) and posts one short cross-check / build-on /
+  //    conflict note, so the agents actually engage with each other before synthesis.
+  let messages = [];
+  if (subRuns.length > 1) {
+    const board = subRuns.map((r) => `[${r.role}] ${r.reply}`).join("\n\n");
+    messages = (await Promise.all(subRuns.map(async (r) => {
+      try {
+        const m = await llm.chat(tenantId, {
+          system: `You are the "${r.role}" sub-agent. Read your peers' findings and post ONE short message (1-2 sentences, no tools): cross-check against your own finding, build on a peer, or flag a conflict or gap. Be specific and useful to the lead.`,
+          messages: [{ role: "user", content: `Goal: ${userMessage}\n\nAll findings:\n${board}\n\nYour own finding: ${r.reply}` }],
+          model: agent.model || undefined,
+        });
+        totalTokens += m?.usage?.total_tokens || 0;
+        const text = (m.content || "").trim();
+        return text ? { role: r.role, message: text } : null;
+      } catch { return null; }
+    }))).filter(Boolean);
+  }
+
+  // 4) Synthesise, then 5) SELF-REVIEW / RETRY: a strict reviewer checks the draft;
+  //    if it flags issues the lead revises (up to MAX_REVIEW rounds). Every round is
+  //    recorded so the UI can show the self-correction transparently.
+  const findingsBlock = subResults.map((r, i) => `Sub-agent ${i + 1} — ${r.task}\nFinding: ${r.reply}`).join("\n\n");
+  const discussionBlock = messages.length ? `\n\nInter-agent discussion:\n${messages.map((m) => `- ${m.role}: ${m.message}`).join("\n")}` : "";
+  const critiques = [];
+  const MAX_REVIEW = 2;
+  let reply = "";
+  let critiqueNote = "";
+  for (let round = 1; round <= MAX_REVIEW + 1; round++) {
+    try {
+      const synth = await llm.chat(tenantId, {
+        system: "You are the lead agent. Produce ONE clear, actionable answer for an Indian SMB owner from the specialists' findings and their discussion. Be concise, use ₹ with Indian grouping, resolve conflicts, and use ONLY the findings provided." + (critiqueNote ? " A reviewer flagged issues with your previous draft — fix every one." : ""),
+        messages: [{ role: "user", content: `Goal: ${userMessage}\n\n${findingsBlock}${discussionBlock}` + (critiqueNote ? `\n\nYour previous draft:\n${reply}\n\nReviewer's required fixes:\n${critiqueNote}` : "") }],
+        model: agent.model || undefined,
+      });
+      totalTokens += synth?.usage?.total_tokens || 0;
+      reply = synth.content || reply;
+    } catch { /* keep prior draft */ }
+    if (round > MAX_REVIEW) break; // already did the final allowed revision
+    try {
+      const crit = await llm.chat(tenantId, {
+        system: 'You are a strict reviewer. Check the draft answers the goal FULLY and correctly using ONLY the findings (no invented numbers, no ignored sub-task, no unresolved conflict). Return ONLY JSON: {"approved": true or false, "issues": "concise required fixes, empty if approved"}.',
+        messages: [{ role: "user", content: `Goal: ${userMessage}\n\nFindings:\n${findingsBlock}\n\nDraft answer:\n${reply}` }],
+        model: agent.model || undefined,
+      });
+      totalTokens += crit?.usage?.total_tokens || 0;
+      let verdict = { approved: true, issues: "" };
+      try { verdict = JSON.parse((crit.content || "{}").match(/\{[\s\S]*\}/)?.[0] ?? "{}"); } catch { /* lenient: treat as approved */ }
+      critiques.push({ round, approved: !!verdict.approved, issues: String(verdict.issues || "") });
+      if (verdict.approved) break;
+      critiqueNote = String(verdict.issues || "");
+    } catch { break; }
+  }
   if (!reply) reply = subResults.map((r) => `• ${r.task}: ${r.reply}`).join("\n");
 
   await persistRun(tenantId, agentId, actorId, userMessage, reply, subResults.flatMap((r) => r.steps), "swarm", pendingActions);
   await _recordUsage(tenantId, runId, totalTokens);
-  return { reply, plan: plan.map((p) => `${p.role}: ${p.task}${p.dependsOn.length ? ` (after ${p.dependsOn.join(", ")})` : ""}`), subResults, pendingActions };
+  return {
+    reply,
+    plan: plan.map((p) => `${p.role}: ${p.task}${p.dependsOn.length ? ` (after ${p.dependsOn.join(", ")})` : ""}`),
+    subResults, messages, critiques, pendingActions,
+  };
 }
 
 // Monthly agent usage for the workspace "credits" meter.

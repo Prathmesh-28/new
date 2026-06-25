@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { humanizeAiError } from "@/components/ai/aiError";
 import {
   Bot, Plus, Search, Send, Loader2, Wrench, ChevronDown, ChevronRight, X,
-  ShieldAlert, Check, Cpu, Sparkles, Clock, Coins, Network, Slash,
+  ShieldAlert, Check, Cpu, Sparkles, Clock, Coins, Network, Slash, MessageSquare, RefreshCw,
 } from "lucide-react";
 
 /**
@@ -19,8 +19,10 @@ interface ToolDef { name: string; description?: string; scope?: "read" | "write"
 interface RunStep { tool?: string; args?: unknown; result?: unknown }
 interface PendingAction { id: string; tool: string; args?: unknown; label?: string }
 interface SubResult { task: string; reply: string; steps?: RunStep[] }
-interface RunResponse { reply?: string; steps?: RunStep[]; pendingActions?: PendingAction[]; plan?: string[]; subResults?: SubResult[] }
-interface Turn { role: "user" | "assistant"; text: string; steps?: RunStep[]; pending?: PendingAction[]; plan?: string[]; subResults?: SubResult[] }
+interface SwarmMsg { role: string; message: string }
+interface Critique { round: number; approved: boolean; issues: string }
+interface RunResponse { reply?: string; steps?: RunStep[]; pendingActions?: PendingAction[]; plan?: string[]; subResults?: SubResult[]; messages?: SwarmMsg[]; critiques?: Critique[] }
+interface Turn { role: "user" | "assistant"; text: string; steps?: RunStep[]; pending?: PendingAction[]; plan?: string[]; subResults?: SubResult[]; messages?: SwarmMsg[]; critiques?: Critique[] }
 interface Usage { tokensThisMonth: number; cap: number; runs: number }
 
 // LLM-agnostic, like Kogo: pick the engine per agent. Free default first.
@@ -110,7 +112,7 @@ export default function AgentWorkspace() {
         text: res?.reply || "(no reply)",
         steps: res?.steps || [],
         pending: Array.isArray(res?.pendingActions) ? res!.pendingActions : [],
-        plan: res?.plan, subResults: res?.subResults,
+        plan: res?.plan, subResults: res?.subResults, messages: res?.messages, critiques: res?.critiques,
       }] }));
       loadUsage();
     } catch (e) {
@@ -213,7 +215,7 @@ export default function AgentWorkspace() {
                 </div>
               ) : (
                 <div key={i} className="flex flex-col items-start gap-2">
-                  {t.subResults && t.subResults.length > 0 && <SwarmAccordion plan={t.plan ?? []} subResults={t.subResults} />}
+                  {t.subResults && t.subResults.length > 0 && <SwarmAccordion plan={t.plan ?? []} subResults={t.subResults} messages={t.messages ?? []} critiques={t.critiques ?? []} />}
                   {t.steps && t.steps.length > 0 && (!t.subResults || t.subResults.length === 0) && <TaskAccordion steps={t.steps} />}
                   <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-[var(--color-surface)] border border-[var(--color-border)] px-3.5 py-2 text-sm whitespace-pre-wrap">{t.text}</div>
                   {t.pending && t.pending.length > 0 && (
@@ -304,24 +306,54 @@ export default function AgentWorkspace() {
   );
 }
 
-// Sub-agent swarm result — the plan + each sub-task's answer, then the synthesis.
-function SwarmAccordion({ plan, subResults }: { plan: string[]; subResults: SubResult[] }) {
+// Sub-agent swarm result — the specialists + their inter-agent discussion + the
+// lead's self-review rounds. Surfaces the full collaboration, not just the answer.
+function SwarmAccordion({ plan, subResults, messages, critiques }: { plan: string[]; subResults: SubResult[]; messages: SwarmMsg[]; critiques: Critique[] }) {
   const [open, setOpen] = useState(false);
+  const reviewRounds = critiques.length;
+  const selfFixed = critiques.some(c => !c.approved);
   return (
     <div className="w-full max-w-[85%] rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-surface)] overflow-hidden">
-      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-white/5">
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-white/5 flex-wrap">
         {open ? <ChevronDown size={13} className="text-[var(--color-muted)]" /> : <ChevronRight size={13} className="text-[var(--color-muted)]" />}
         <Network size={12} className="text-[var(--color-primary)]" />
-        <span className="text-xs font-medium text-[var(--color-primary)]">Swarm · {subResults.length} sub-agent{subResults.length === 1 ? "" : "s"} completed</span>
+        <span className="text-xs font-medium text-[var(--color-primary)]">Swarm · {subResults.length} sub-agent{subResults.length === 1 ? "" : "s"}</span>
+        {messages.length > 0 && <span className="text-[10px] text-[var(--color-muted)] flex items-center gap-1"><MessageSquare size={10} /> {messages.length} discussed</span>}
+        {reviewRounds > 0 && <span className={`text-[10px] flex items-center gap-1 ${selfFixed ? "text-amber-400" : "text-green-400"}`}>{selfFixed ? <RefreshCw size={10} /> : <Check size={10} />} {selfFixed ? `self-revised ${reviewRounds}×` : "reviewed ✓"}</span>}
       </button>
       {open && (
-        <div className="px-3 pb-2 space-y-2 border-t border-[var(--color-border)]">
-          {subResults.map((r, j) => (
-            <div key={j} className="mt-2">
-              <p className="text-[11px] font-semibold flex items-start gap-1.5"><span className="text-[var(--color-primary)]">{j + 1}.</span> {r.task}</p>
-              <p className="text-[11px] text-[var(--color-muted)] whitespace-pre-wrap mt-0.5 pl-4">{r.reply}</p>
+        <div className="px-3 pb-2.5 space-y-3 border-t border-[var(--color-border)]">
+          {/* Specialists + their findings */}
+          <div className="space-y-2 mt-2">
+            <p className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]/70">Specialists</p>
+            {subResults.map((r, j) => (
+              <div key={j}>
+                <p className="text-[11px] font-semibold flex items-start gap-1.5"><span className="text-[var(--color-primary)]">{j + 1}.</span> {r.task}</p>
+                <p className="text-[11px] text-[var(--color-muted)] whitespace-pre-wrap mt-0.5 pl-4">{r.reply}</p>
+              </div>
+            ))}
+          </div>
+          {/* Inter-agent discussion */}
+          {messages.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]/70 flex items-center gap-1"><MessageSquare size={10} /> Discussion</p>
+              {messages.map((m, j) => (
+                <p key={j} className="text-[11px] pl-1"><span className="font-medium text-[var(--color-primary)]">{m.role}:</span> <span className="text-[var(--color-muted)]">{m.message}</span></p>
+              ))}
             </div>
-          ))}
+          )}
+          {/* Self-review / retry rounds */}
+          {critiques.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]/70 flex items-center gap-1"><ShieldAlert size={10} /> Self-review</p>
+              {critiques.map((c, j) => (
+                <p key={j} className="text-[11px] pl-1 flex items-start gap-1.5">
+                  {c.approved ? <Check size={11} className="text-green-400 mt-0.5 shrink-0" /> : <RefreshCw size={11} className="text-amber-400 mt-0.5 shrink-0" />}
+                  <span className={c.approved ? "text-green-400" : "text-[var(--color-muted)]"}>Round {c.round}: {c.approved ? "approved" : `revised — ${c.issues}`}</span>
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
