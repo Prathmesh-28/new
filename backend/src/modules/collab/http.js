@@ -76,4 +76,29 @@ router.post("/conversations/:id/read", async (req, res) => {
 router.get("/me/unreads", async (req, res) => { try { res.json(await collab.unreads(T(req), U(req))); } catch (e) { fail(res, e); } });
 router.get("/members", async (req, res) => { try { res.json(await collab.listTeammates(T(req), U(req))); } catch (e) { fail(res, e); } });
 
+// ── Reactions ────────────────────────────────────────────────────────────────
+router.put("/messages/:id/reactions/:emoji", async (req, res) => { try { res.json(await collab.addReaction(T(req), U(req), req.params.id, req.params.emoji)); } catch (e) { fail(res, e); } });
+router.delete("/messages/:id/reactions/:emoji", async (req, res) => { try { res.json(await collab.removeReaction(T(req), U(req), req.params.id, req.params.emoji)); } catch (e) { fail(res, e); } });
+
+// ── Threads ──────────────────────────────────────────────────────────────────
+router.get("/messages/:id/thread", async (req, res) => { try { res.json(await collab.listThread(T(req), U(req), req.params.id)); } catch (e) { fail(res, e); } });
+
+// ── Notifications ────────────────────────────────────────────────────────────
+router.get("/notifications", async (req, res) => { try { res.json(await collab.listNotifications(T(req), U(req), { unreadOnly: req.query.unread === "1" })); } catch (e) { fail(res, e); } });
+router.post("/notifications/read", async (req, res) => { try { res.json(await collab.markNotificationsRead(T(req), U(req), (req.body || {}).ids)); } catch (e) { fail(res, e); } });
+
+// ── Pins ─────────────────────────────────────────────────────────────────────
+router.get("/conversations/:id/pins", async (req, res) => { try { res.json(await collab.listPins(T(req), U(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/conversations/:id/pins", async (req, res) => { try { res.json(await collab.pinMessage(T(req), U(req), req.params.id, (req.body || {}).messageId)); } catch (e) { fail(res, e); } });
+router.delete("/conversations/:id/pins/:messageId", async (req, res) => { try { res.json(await collab.unpinMessage(T(req), U(req), req.params.id, req.params.messageId)); } catch (e) { fail(res, e); } });
+
+// ── Search ───────────────────────────────────────────────────────────────────
+router.get("/search", async (req, res) => { try { res.json(await collab.searchMessages(T(req), U(req), req.query.q)); } catch (e) { fail(res, e); } });
+
+// ── Contextual links (anchor a conversation to a financial object) ────────────
+router.get("/conversations/:id/links", async (req, res) => { try { res.json(await collab.listLinks(T(req), U(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/conversations/:id/links", async (req, res) => { try { const b = req.body || {}; res.status(201).json(await collab.addLink(T(req), U(req), req.params.id, b.entityType, b.entityId)); } catch (e) { fail(res, e); } });
+router.delete("/conversations/:id/links/:entityType/:entityId", async (req, res) => { try { res.json(await collab.removeLink(T(req), U(req), req.params.id, req.params.entityType, req.params.entityId)); } catch (e) { fail(res, e); } });
+router.get("/entity-conversations", async (req, res) => { try { res.json(await collab.conversationsForEntity(T(req), U(req), req.query.type, req.query.id)); } catch (e) { fail(res, e); } });
+
 module.exports = router;

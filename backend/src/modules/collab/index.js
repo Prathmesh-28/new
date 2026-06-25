@@ -198,7 +198,22 @@ async function removeMember(tenantId, userId, conversationId, memberId) {
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────
-async function postMessage(tenantId, userId, conversationId, { body, richContent, parentMessageId } = {}) {
+// Create in-app notifications for recipients (skipping the actor) + push notification:new.
+async function _notify(c, tenantId, recipients, { kind, conversationId, sourceMessageId, actorId }) {
+  for (const uid of Array.from(new Set(recipients))) {
+    if (!uid || uid === actorId) continue;
+    const { rows } = await c.query(
+      `INSERT INTO collab_notifications(tenant_id, user_id, kind, conversation_id, source_message_id, actor_id)
+       VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [tenantId, uid, kind, conversationId || null, sourceMessageId || null, actorId || null]
+    );
+    realtime.emitToUsers(tenantId, [uid], { type: "notification:new", notification: rows[0] });
+  }
+}
+
+// mentions: array of member user-ids the client resolved from "@" tokens (+ optional
+// "everyone" string → all members). Mentions always notify; plain messages drive unread.
+async function postMessage(tenantId, userId, conversationId, { body, richContent, parentMessageId, mentions } = {}) {
   const text = body == null ? "" : String(body);
   if (!text.trim() && !richContent) throw new CollabError("BAD_INPUT", "Message body is required", 400);
   return withTenant(tenantId, async (c) => {
@@ -209,13 +224,29 @@ async function postMessage(tenantId, userId, conversationId, { body, richContent
       [conversationId, tenantId, userId, parentMessageId || null, text, richContent ? JSON.stringify(richContent) : null]
     );
     const msg = rows[0];
+    msg.reactions = [];
     await c.query("UPDATE collab_conversations SET last_message_id=$1, last_message_at=now() WHERE id=$2", [msg.id, conversationId]);
     if (parentMessageId) {
       await c.query("UPDATE collab_messages SET thread_reply_count=thread_reply_count+1, thread_last_reply_at=now() WHERE id=$1 AND conversation_id=$2", [parentMessageId, conversationId]);
     }
-    // Advance the sender's own read pointer (they've "seen" their own message).
     await c.query("UPDATE collab_conversation_members SET last_read_message_id=$1, last_read_at=now() WHERE conversation_id=$2 AND user_id=$3", [msg.id, conversationId, userId]);
-    realtime.emitToUsers(tenantId, await memberIds(c, conversationId), { type: "message:new", conversationId, message: msg });
+
+    const members = await memberIds(c, conversationId);
+    // @mentions
+    const wantsEveryone = Array.isArray(mentions) && mentions.includes("everyone");
+    const userMentions = Array.isArray(mentions) ? mentions.filter((m) => m !== "everyone" && members.includes(m)) : [];
+    for (const mid of userMentions) {
+      await c.query("INSERT INTO collab_message_mentions(message_id, mentioned_user_id, tenant_id, kind) VALUES($1,$2,$3,'user') ON CONFLICT DO NOTHING", [msg.id, mid, tenantId]);
+    }
+    if (wantsEveryone) await c.query("INSERT INTO collab_message_mentions(message_id, mentioned_user_id, tenant_id, kind) VALUES($1,NULL,$2,'everyone') ON CONFLICT DO NOTHING", [msg.id, tenantId]);
+    const mentionRecipients = wantsEveryone ? members : userMentions;
+    await _notify(c, tenantId, mentionRecipients, { kind: "mention", conversationId, sourceMessageId: msg.id, actorId: userId });
+    // thread-reply notification to the parent's author
+    if (parentMessageId) {
+      const { rows: par } = await c.query("SELECT sender_id FROM collab_messages WHERE id=$1", [parentMessageId]);
+      if (par[0]) await _notify(c, tenantId, [par[0].sender_id], { kind: "thread_reply", conversationId, sourceMessageId: msg.id, actorId: userId });
+    }
+    realtime.emitToUsers(tenantId, members, { type: "message:new", conversationId, message: msg });
     return msg;
   });
 }
@@ -240,6 +271,16 @@ async function listMessages(tenantId, userId, conversationId, { before, after, l
         `SELECT * FROM collab_messages WHERE ${where} ORDER BY id DESC LIMIT $${params.length}`,
         params
       ));
+    }
+    if (rows.length) {
+      const ids = rows.map((r) => r.id);
+      const { rows: rx } = await c.query(
+        "SELECT message_id, emoji, array_agg(user_id) AS user_ids FROM collab_message_reactions WHERE message_id = ANY($1::uuid[]) GROUP BY message_id, emoji",
+        [ids]
+      );
+      const byMsg = {};
+      for (const r of rx) (byMsg[r.message_id] ||= []).push({ emoji: r.emoji, userIds: r.user_ids });
+      for (const m of rows) m.reactions = byMsg[m.id] || [];
     }
     const nextCursor = !after && rows.length === lim ? rows[rows.length - 1].id : null;
     return { messages: rows, nextCursor };
@@ -303,8 +344,158 @@ async function unreads(tenantId, userId) {
   });
 }
 
+// ── Reactions ────────────────────────────────────────────────────────────────
+async function _convOfMessage(c, messageId) {
+  const { rows } = await c.query("SELECT conversation_id, sender_id FROM collab_messages WHERE id=$1", [messageId]);
+  if (!rows[0]) throw new CollabError("NOT_FOUND", "Message not found", 404);
+  return rows[0];
+}
+async function addReaction(tenantId, userId, messageId, emoji) {
+  const e = String(emoji || "").slice(0, 16);
+  if (!e) throw new CollabError("BAD_INPUT", "emoji required", 400);
+  return withTenant(tenantId, async (c) => {
+    const { conversation_id } = await _convOfMessage(c, messageId);
+    await requireMember(c, conversation_id, userId);
+    await c.query("INSERT INTO collab_message_reactions(message_id, user_id, tenant_id, emoji) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING", [messageId, userId, tenantId, e]);
+    realtime.emitToUsers(tenantId, await memberIds(c, conversation_id), { type: "reaction:updated", conversationId: conversation_id, messageId, emoji: e, userId, added: true });
+    return { ok: true };
+  });
+}
+async function removeReaction(tenantId, userId, messageId, emoji) {
+  const e = String(emoji || "").slice(0, 16);
+  return withTenant(tenantId, async (c) => {
+    const { conversation_id } = await _convOfMessage(c, messageId);
+    await requireMember(c, conversation_id, userId);
+    await c.query("DELETE FROM collab_message_reactions WHERE message_id=$1 AND user_id=$2 AND emoji=$3", [messageId, userId, e]);
+    realtime.emitToUsers(tenantId, await memberIds(c, conversation_id), { type: "reaction:updated", conversationId: conversation_id, messageId, emoji: e, userId, added: false });
+    return { ok: true };
+  });
+}
+
+// ── Threads ──────────────────────────────────────────────────────────────────
+async function listThread(tenantId, userId, parentId) {
+  return withTenant(tenantId, async (c) => {
+    const { conversation_id } = await _convOfMessage(c, parentId);
+    await requireMember(c, conversation_id, userId);
+    const { rows } = await c.query("SELECT * FROM collab_messages WHERE parent_message_id=$1 ORDER BY id ASC LIMIT 200", [parentId]);
+    return { messages: rows };
+  });
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+async function listNotifications(tenantId, userId, { unreadOnly } = {}) {
+  return withTenant(tenantId, async (c) => {
+    const { rows } = await c.query(
+      `SELECT * FROM collab_notifications WHERE user_id=$1 ${unreadOnly ? "AND read_at IS NULL" : ""} ORDER BY created_at DESC LIMIT 50`,
+      [userId]
+    );
+    const { rows: cnt } = await c.query("SELECT count(*)::int n FROM collab_notifications WHERE user_id=$1 AND read_at IS NULL", [userId]);
+    return { notifications: rows, unread: cnt[0].n };
+  });
+}
+async function markNotificationsRead(tenantId, userId, ids) {
+  return withTenant(tenantId, async (c) => {
+    if (Array.isArray(ids) && ids.length) await c.query("UPDATE collab_notifications SET read_at=now() WHERE user_id=$1 AND id = ANY($2::uuid[])", [userId, ids]);
+    else await c.query("UPDATE collab_notifications SET read_at=now() WHERE user_id=$1 AND read_at IS NULL", [userId]);
+    return { ok: true };
+  });
+}
+
+// ── Pinned messages ──────────────────────────────────────────────────────────
+async function pinMessage(tenantId, userId, conversationId, messageId) {
+  return withTenant(tenantId, async (c) => {
+    await requireMember(c, conversationId, userId);
+    await c.query("INSERT INTO collab_pinned_messages(conversation_id, message_id, tenant_id, pinned_by) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING", [conversationId, messageId, tenantId, userId]);
+    return { ok: true };
+  });
+}
+async function unpinMessage(tenantId, userId, conversationId, messageId) {
+  return withTenant(tenantId, async (c) => {
+    await requireMember(c, conversationId, userId);
+    await c.query("DELETE FROM collab_pinned_messages WHERE conversation_id=$1 AND message_id=$2", [conversationId, messageId]);
+    return { ok: true };
+  });
+}
+async function listPins(tenantId, userId, conversationId) {
+  return withTenant(tenantId, async (c) => {
+    await requireMember(c, conversationId, userId);
+    const { rows } = await c.query(
+      `SELECT m.* FROM collab_pinned_messages p JOIN collab_messages m ON m.id=p.message_id
+        WHERE p.conversation_id=$1 ORDER BY p.pinned_at DESC`,
+      [conversationId]
+    );
+    return { pins: rows };
+  });
+}
+
+// ── Full-text search (scoped to the user's conversations) ────────────────────
+async function searchMessages(tenantId, userId, q) {
+  const term = String(q || "").trim();
+  if (!term) return { results: [] };
+  return withTenant(tenantId, async (c) => {
+    const { rows } = await c.query(
+      `SELECT m.id, m.conversation_id, m.sender_id, m.body, m.created_at, c.name, c.type
+         FROM collab_messages m
+         JOIN collab_conversation_members cm ON cm.conversation_id=m.conversation_id AND cm.user_id=$1
+         JOIN collab_conversations c ON c.id=m.conversation_id
+        WHERE m.deleted_at IS NULL AND m.search_tsv @@ websearch_to_tsquery('simple', $2)
+        ORDER BY m.id DESC LIMIT 30`,
+      [userId, term]
+    );
+    return { results: rows };
+  });
+}
+
+// ── Contextual links (the Headroom differentiator) ───────────────────────────
+const ENTITY_TYPES = ["client", "deal", "reconciliation", "invoice", "gst_filing"];
+async function addLink(tenantId, userId, conversationId, entityType, entityId) {
+  if (!ENTITY_TYPES.includes(entityType)) throw new CollabError("BAD_INPUT", "Invalid entity type", 400);
+  if (!entityId) throw new CollabError("BAD_INPUT", "entityId required", 400);
+  return withTenant(tenantId, async (c) => {
+    await requireMember(c, conversationId, userId);
+    await c.query(
+      "INSERT INTO collab_contextual_links(conversation_id, tenant_id, entity_type, entity_id) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING",
+      [conversationId, tenantId, entityType, String(entityId)]
+    );
+    return { ok: true };
+  });
+}
+async function removeLink(tenantId, userId, conversationId, entityType, entityId) {
+  return withTenant(tenantId, async (c) => {
+    await requireMember(c, conversationId, userId);
+    await c.query("DELETE FROM collab_contextual_links WHERE conversation_id=$1 AND entity_type=$2 AND entity_id=$3", [conversationId, entityType, String(entityId)]);
+    return { ok: true };
+  });
+}
+async function listLinks(tenantId, userId, conversationId) {
+  return withTenant(tenantId, async (c) => {
+    await requireMember(c, conversationId, userId);
+    const { rows } = await c.query("SELECT entity_type, entity_id, created_at FROM collab_contextual_links WHERE conversation_id=$1 ORDER BY created_at DESC", [conversationId]);
+    return { links: rows };
+  });
+}
+// Reverse lookup: the user's conversations anchored to a given financial object (for
+// an "Discuss" affordance on invoice/client/etc. pages). Membership-scoped.
+async function conversationsForEntity(tenantId, userId, entityType, entityId) {
+  return withTenant(tenantId, async (c) => {
+    const { rows } = await c.query(
+      `SELECT c.id, c.type, c.name FROM collab_contextual_links l
+         JOIN collab_conversations c ON c.id=l.conversation_id
+         JOIN collab_conversation_members cm ON cm.conversation_id=c.id AND cm.user_id=$1
+        WHERE l.entity_type=$2 AND l.entity_id=$3`,
+      [userId, entityType, String(entityId)]
+    );
+    return { conversations: rows };
+  });
+}
+
 module.exports = {
   CollabError, listTeammates,
+  addReaction, removeReaction, listThread,
+  listNotifications, markNotificationsRead,
+  pinMessage, unpinMessage, listPins,
+  searchMessages,
+  addLink, removeLink, listLinks, conversationsForEntity,
   createTeam, listTeams, addTeamMember,
   createConversation, listConversations, getConversation, updateConversation, addMember, removeMember,
   postMessage, listMessages, editMessage, deleteMessage,
