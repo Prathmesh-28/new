@@ -11,6 +11,14 @@
 
 const { withTenant } = require("./tenantContext");
 const { pool } = require("../../db");
+const realtime = require("../../lib/collabRealtime");
+
+// Member ids of a conversation (for realtime fan-out). Runs on the given client so it
+// shares the caller's tenant GUC.
+async function memberIds(c, conversationId) {
+  const { rows } = await c.query("SELECT user_id FROM collab_conversation_members WHERE conversation_id=$1", [conversationId]);
+  return rows.map((r) => r.user_id);
+}
 
 // Teammates in the tenant (for member pickers / DMs). Available to every member —
 // collaboration needs to know who's in the org. The users table isn't RLS'd, so this
@@ -207,6 +215,7 @@ async function postMessage(tenantId, userId, conversationId, { body, richContent
     }
     // Advance the sender's own read pointer (they've "seen" their own message).
     await c.query("UPDATE collab_conversation_members SET last_read_message_id=$1, last_read_at=now() WHERE conversation_id=$2 AND user_id=$3", [msg.id, conversationId, userId]);
+    realtime.emitToUsers(tenantId, await memberIds(c, conversationId), { type: "message:new", conversationId, message: msg });
     return msg;
   });
 }
@@ -246,16 +255,18 @@ async function editMessage(tenantId, userId, messageId, { body, richContent } = 
       "UPDATE collab_messages SET body=$1, rich_content=$2, edited_at=now() WHERE id=$3 RETURNING *",
       [body == null ? "" : String(body), richContent ? JSON.stringify(richContent) : null, messageId]
     );
+    realtime.emitToUsers(tenantId, await memberIds(c, upd[0].conversation_id), { type: "message:updated", conversationId: upd[0].conversation_id, message: upd[0] });
     return upd[0];
   });
 }
 
 async function deleteMessage(tenantId, userId, messageId) {
   return withTenant(tenantId, async (c) => {
-    const { rows } = await c.query("SELECT sender_id FROM collab_messages WHERE id=$1", [messageId]);
+    const { rows } = await c.query("SELECT sender_id, conversation_id FROM collab_messages WHERE id=$1", [messageId]);
     if (!rows[0]) throw new CollabError("NOT_FOUND", "Message not found", 404);
     if (rows[0].sender_id !== userId) throw new CollabError("FORBIDDEN", "You can only delete your own messages", 403);
     await c.query("UPDATE collab_messages SET deleted_at=now(), body='' WHERE id=$1", [messageId]);
+    realtime.emitToUsers(tenantId, await memberIds(c, rows[0].conversation_id), { type: "message:deleted", conversationId: rows[0].conversation_id, messageId });
     return { ok: true };
   });
 }

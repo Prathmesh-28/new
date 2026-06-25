@@ -9,8 +9,32 @@
 
 const router = require("express").Router();
 const { authenticate } = require("../../middleware/auth");
+const { verifyAccess } = require("../../lib/jwt");
+const { pool } = require("../../db");
 const { collabContext } = require("./tenantContext");
+const collabRealtime = require("../../lib/collabRealtime");
 const collab = require("./index");
+
+// ── Realtime stream (SSE, Phase 2) ───────────────────────────────────────────
+// Declared BEFORE the header-auth middleware: EventSource can't send Authorization,
+// so the token rides as a query param (same pattern as /api/kv/stream). Per-user
+// fan-out — a connection only receives events for conversations the user is in.
+router.get("/stream", async (req, res) => {
+  let user;
+  try {
+    const payload = verifyAccess(String(req.query.token || ""));
+    const { rows } = await pool.query("SELECT id, tenant_id FROM users WHERE id=$1", [payload.sub]);
+    user = rows[0];
+    if (!user) throw new Error("user not found");
+  } catch { return res.status(401).end(); }
+  res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" });
+  if (typeof res.flushHeaders === "function") res.flushHeaders();
+  res.write("retry: 5000\n\n");
+  res.write(": connected\n\n");
+  const unsubscribe = collabRealtime.subscribe(user.tenant_id, user.id, res);
+  const hb = setInterval(() => { try { res.write(": ping\n\n"); } catch { /* closed */ } }, 25000);
+  req.on("close", () => { clearInterval(hb); unsubscribe(); });
+});
 
 router.use(authenticate, collabContext);
 

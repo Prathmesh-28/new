@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { api } from "@/lib/api";
+import { API_BASE } from "@/lib/apiBase";
 import { toast } from "sonner";
 import { humanizeAiError } from "@/components/ai/aiError";
 import { MessageSquare, Hash, Plus, Send, Loader2, Users, X, AtSign, Search } from "lucide-react";
@@ -25,6 +26,8 @@ export default function CollabPage() {
   const [sending, setSending] = useState(false);
   const [picker, setPicker] = useState<null | "dm" | "channel">(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const activeIdRef = useRef("");
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   const nameOf = useCallback((id: string) => members.find((m) => m.id === id)?.name || "Someone", [members]);
 
   const loadConvos = useCallback(async () => {
@@ -71,7 +74,34 @@ export default function CollabPage() {
   // Open a conversation → initial load.
   useEffect(() => { if (activeId && !msgsById[activeId]) void loadMessages(activeId); }, [activeId, msgsById, loadMessages]);
 
-  // Poll: refresh sidebar + gap-recover the open conversation every 4s.
+  // Realtime: SSE pushes message events the instant they happen (Phase 2). The poll
+  // below stays as a slow backstop (reconnect gaps / environments without EventSource).
+  useEffect(() => {
+    const token = localStorage.getItem("hr_access");
+    if (!token || typeof EventSource === "undefined") return;
+    const es = new EventSource(`${API_BASE}/api/collab/stream?token=${encodeURIComponent(token)}`);
+    es.onmessage = (ev) => {
+      let e: { type: string; conversationId?: string; messageId?: string; message?: Msg };
+      try { e = JSON.parse(ev.data); } catch { return; }
+      if (e.type === "message:new" && e.conversationId) {
+        const cid = e.conversationId;
+        void loadConvos();
+        if (cid === activeIdRef.current && e.message) {
+          const m = e.message;
+          setMsgsById((s) => { const prev = s[cid] ?? []; return prev.some((x) => x.id === m.id) ? s : { ...s, [cid]: [...prev, m] }; });
+          api.post(`/api/collab/conversations/${cid}/read`, { lastReadMessageId: m.id }).catch(() => {});
+        }
+      } else if (e.type === "message:updated" && e.conversationId && e.message) {
+        const m = e.message;
+        setMsgsById((s) => (s[e.conversationId!] ? { ...s, [e.conversationId!]: s[e.conversationId!].map((x) => (x.id === m.id ? m : x)) } : s));
+      } else if (e.type === "message:deleted" && e.conversationId && e.messageId) {
+        setMsgsById((s) => (s[e.conversationId!] ? { ...s, [e.conversationId!]: s[e.conversationId!].map((x) => (x.id === e.messageId ? { ...x, deleted_at: new Date().toISOString(), body: "" } : x)) } : s));
+      }
+    };
+    return () => es.close();
+  }, [loadConvos]);
+
+  // Backstop poll (slow — SSE handles the fast path): refresh sidebar + gap-recover.
   useEffect(() => {
     const t = setInterval(() => {
       void loadConvos();
@@ -80,7 +110,7 @@ export default function CollabPage() {
         const last = cur && cur.length ? cur[cur.length - 1].id : undefined;
         void loadMessages(activeId, last ? { after: last } : {});
       }
-    }, 4000);
+    }, 15000);
     return () => clearInterval(t);
   }, [activeId, msgsById, loadConvos, loadMessages]);
 
