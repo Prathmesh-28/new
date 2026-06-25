@@ -148,18 +148,20 @@ async function runAgent(tenantId, actorId, agentId, userMessage) {
   let totalTokens = 0;
 
   try {
-    const out = await _driveLoop(tenantId, actorId, agent, userMessage, steps, pendingActions, false);
+    // readOnly when there's no actor (e.g. the public agent bridge) — defense-in-depth
+    // on top of write tools never executing inline.
+    const out = await _driveLoop(tenantId, actorId, agent, userMessage, steps, pendingActions, !actorId);
     reply = out.reply;
     totalTokens = out.totalTokens;
   } catch (e) {
     status = "error";
     reply = e.message || String(e);
-    await persistRun(tenantId, agentId, actorId, userMessage, reply, steps, status);
+    await persistRun(tenantId, agentId, actorId, userMessage, reply, steps, status, pendingActions);
     await _recordUsage(tenantId, runId, totalTokens);
     throw e;
   }
 
-  await persistRun(tenantId, agentId, actorId, userMessage, reply, steps, status);
+  await persistRun(tenantId, agentId, actorId, userMessage, reply, steps, status, pendingActions);
   // Best-effort token metering — must never throw or affect the run's result.
   await _recordUsage(tenantId, runId, totalTokens);
   return { reply, steps, pendingActions };

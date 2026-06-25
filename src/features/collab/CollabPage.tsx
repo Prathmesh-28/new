@@ -105,8 +105,11 @@ export default function CollabPage() {
 
   useEffect(() => { if (activeId && !msgsById[activeId]) void loadMessages(activeId); }, [activeId, msgsById, loadMessages]);
   // Deep link from a "Discuss" button (/collab?c=<conversationId>) → open that conversation.
+  // Depend on the string value (searchParams object identity changes every render) and skip
+  // when it already matches the open conversation.
   const [searchParams] = useSearchParams();
-  useEffect(() => { const c = searchParams.get("c"); if (c) { setActiveId(c); if (!msgsById[c]) void loadMessages(c); } }, [searchParams, loadMessages]); // eslint-disable-line react-hooks/exhaustive-deps
+  const linkC = searchParams.get("c");
+  useEffect(() => { if (linkC && linkC !== activeIdRef.current) { setActiveId(linkC); if (!msgsById[linkC]) void loadMessages(linkC); } }, [linkC, loadMessages]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (activeId) api.get<{ links: Link[] }>(`/api/collab/conversations/${activeId}/links`).then((r) => setLinks(r.links || [])).catch(() => setLinks([])); }, [activeId]);
 
   // helper to mutate a reaction set in place (used by SSE + optimistic)
@@ -120,12 +123,15 @@ export default function CollabPage() {
       return { ...m, reactions: rx.filter((r) => r.userIds.length) };
     });
 
-  // Realtime (SSE) — Phase 2/3 events.
+  // Realtime (SSE) — Phase 2/3 events. On error we recreate the connection reading a FRESH
+  // token (EventSource would otherwise auto-retry the stale token captured in the URL, so a
+  // token refresh would silently kill realtime until reload).
   useEffect(() => {
-    const token = localStorage.getItem("hr_access");
-    if (!token || typeof EventSource === "undefined") return;
-    const es = new EventSource(`${API_BASE}/api/collab/stream?token=${encodeURIComponent(token)}`);
-    es.onmessage = (ev) => {
+    if (typeof EventSource === "undefined") return;
+    let es: EventSource | null = null;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    let closed = false;
+    const handle = (ev: MessageEvent) => {
       let e: { type: string; conversationId?: string; messageId?: string; message?: Msg; emoji?: string; userId?: string; added?: boolean; notification?: Notif; userIds?: string[]; status?: string; typing?: boolean };
       try { e = JSON.parse(ev.data); } catch { return; }
       if (e.type === "presence:snapshot") { setOnline(new Set(e.userIds || [])); return; }
@@ -148,17 +154,29 @@ export default function CollabPage() {
         const n = e.notification; setNotifs((p) => ({ notifications: [n, ...p.notifications].slice(0, 50), unread: p.unread + 1 }));
       }
     };
-    return () => es.close();
+    const connect = () => {
+      const token = localStorage.getItem("hr_access");
+      if (!token) { retry = setTimeout(connect, 3000); return; }
+      es = new EventSource(`${API_BASE}/api/collab/stream?token=${encodeURIComponent(token)}`);
+      es.onmessage = handle;
+      es.onerror = () => { es?.close(); es = null; if (!closed && !retry) retry = setTimeout(() => { retry = null; connect(); }, 3000); };
+    };
+    connect();
+    return () => { closed = true; if (retry) clearTimeout(retry); es?.close(); };
   }, [loadConvos, markTyping]);
 
-  // Slow backstop poll.
+  // Slow backstop poll (SSE handles the fast path). Stable interval — reads latest
+  // activeId/messages from a ref so it isn't torn down + reset on every message.
+  const pollRef = useRef({ activeId, msgsById });
+  useEffect(() => { pollRef.current = { activeId, msgsById }; }, [activeId, msgsById]);
   useEffect(() => {
     const t = setInterval(() => {
       void loadConvos();
-      if (activeId) { const cur = msgsById[activeId]; const last = cur && cur.length ? cur[cur.length - 1].id : undefined; void loadMessages(activeId, last ? { after: last } : {}); }
+      const { activeId: aid, msgsById: mm } = pollRef.current;
+      if (aid) { const cur = mm[aid]; const last = cur && cur.length ? cur[cur.length - 1].id : undefined; void loadMessages(aid, last ? { after: last } : {}); }
     }, 15000);
     return () => clearInterval(t);
-  }, [activeId, msgsById, loadConvos, loadMessages]);
+  }, [loadConvos, loadMessages]);
 
   const msgs = msgsById[activeId] ?? [];
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [msgs.length, activeId]);

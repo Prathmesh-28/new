@@ -77,6 +77,7 @@ async function addTeamMember(tenantId, userId, teamId, memberId) {
   return withTenant(tenantId, async (c) => {
     const { rows } = await c.query("SELECT role FROM collab_team_members WHERE team_id=$1 AND user_id=$2", [teamId, userId]);
     if (!rows[0]) throw new CollabError("FORBIDDEN", "Not a team member", 403);
+    if (!["owner", "admin"].includes(rows[0].role)) throw new CollabError("FORBIDDEN", "Only team owners can add members", 403);
     await c.query(
       "INSERT INTO collab_team_members(team_id, user_id, tenant_id, role) VALUES($1,$2,$3,'member') ON CONFLICT DO NOTHING",
       [teamId, memberId, tenantId]
@@ -168,6 +169,12 @@ async function getConversation(tenantId, userId, id) {
 async function updateConversation(tenantId, userId, id, patch = {}) {
   return withTenant(tenantId, async (c) => {
     await requireMember(c, id, userId);
+    // Archiving is destructive for everyone — restrict it to owners/admins. Rename/topic
+    // stay open to any member (light-touch collaboration, not enterprise RBAC).
+    if (typeof patch.archived === "boolean") {
+      const { rows: r } = await c.query("SELECT role FROM collab_conversation_members WHERE conversation_id=$1 AND user_id=$2", [id, userId]);
+      if (!r[0] || !["owner", "admin"].includes(r[0].role)) throw new CollabError("FORBIDDEN", "Only conversation owners can archive", 403);
+    }
     const sets = []; const params = [id];
     if (typeof patch.name === "string") { params.push(patch.name); sets.push(`name=$${params.length}`); }
     if (typeof patch.topic === "string") { params.push(patch.topic); sets.push(`topic=$${params.length}`); }
@@ -191,6 +198,7 @@ async function addMember(tenantId, userId, conversationId, memberId) {
 
 async function removeMember(tenantId, userId, conversationId, memberId) {
   return withTenant(tenantId, async (c) => {
+    await requireMember(c, conversationId, userId);
     // A member may remove themselves (leave); owners may remove others.
     if (memberId !== userId) {
       const { rows } = await c.query("SELECT role FROM collab_conversation_members WHERE conversation_id=$1 AND user_id=$2", [conversationId, userId]);
@@ -222,6 +230,13 @@ async function postMessage(tenantId, userId, conversationId, { body, richContent
   if (!text.trim() && !richContent) throw new CollabError("BAD_INPUT", "Message body is required", 400);
   return withTenant(tenantId, async (c) => {
     await requireMember(c, conversationId, userId);
+    // A thread reply's parent must live in THIS conversation — otherwise a reply could
+    // be parented to a message in a conversation the sender isn't in, leaking it into
+    // that conversation's thread view.
+    if (parentMessageId) {
+      const { rows: par } = await c.query("SELECT conversation_id FROM collab_messages WHERE id=$1", [parentMessageId]);
+      if (!par[0] || par[0].conversation_id !== conversationId) throw new CollabError("BAD_INPUT", "Parent message is not in this conversation", 400);
+    }
     const { rows } = await c.query(
       `INSERT INTO collab_messages(conversation_id, tenant_id, sender_id, parent_message_id, body, rich_content)
        VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
