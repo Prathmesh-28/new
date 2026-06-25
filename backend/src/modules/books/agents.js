@@ -165,6 +165,54 @@ async function runAgent(tenantId, actorId, agentId, userMessage) {
   return { reply, steps, pendingActions };
 }
 
+// Streaming variant of runAgent: drives the same loop but emits SSE-friendly events
+// (start → token/tool_call/tool_result … → final → done, or error→done) via emit().
+// The run is still persisted (so it shows in history) and metered. emit() must never
+// throw (the route wraps res.write). `signal` aborts the upstream LLM on disconnect.
+async function runAgentStream(tenantId, actorId, agentId, userMessage, emit, signal) {
+  const runId = _newRunId();
+  const steps = [];
+  const pendingActions = [];
+  let agent = null;
+  let reply = null;
+  let status = "ok";
+  let totalTokens = 0;
+  try {
+    agent = await getAgent(tenantId, agentId);
+    if (agent.enabled === false) throw new PostError("AGENT_DISABLED", "This agent is disabled", 422);
+
+    const tokenCap = await require("../../lib/platformConfig").num("limits", "monthlyTokenCap", 0);
+    if (tokenCap > 0) {
+      const { rows: used } = await pool.query(
+        "SELECT COALESCE(SUM(value),0)::bigint AS n FROM book_usage_events WHERE tenant_id=$1 AND metric='agent_tokens' AND event_time >= date_trunc('month', now())",
+        [tenantId]
+      ).catch(() => ({ rows: [{ n: 0 }] }));
+      if (Number(used[0]?.n ?? 0) >= tokenCap) {
+        throw new PostError("TOKEN_CAP", `This month's AI usage cap (${tokenCap.toLocaleString("en-IN")} tokens) is reached. It resets next month, or your admin can raise it.`, 422);
+      }
+    }
+
+    emit({ type: "start", agent: { id: agent.id, name: agent.name } });
+    const out = await _driveLoop(tenantId, actorId, agent, userMessage, steps, pendingActions, false, emit, signal);
+    reply = out.reply;
+    totalTokens = out.totalTokens;
+
+    await persistRun(tenantId, agentId, actorId, userMessage, reply, steps, status, pendingActions);
+    await _recordUsage(tenantId, runId, totalTokens);
+    emit({ type: "final", reply, steps, pendingActions });
+    emit({ type: "done", status });
+  } catch (e) {
+    status = "error";
+    reply = e && e.message ? e.message : String(e);
+    if (agent) {
+      await persistRun(tenantId, agentId, actorId, userMessage, reply, steps, status, pendingActions).catch(() => {});
+      await _recordUsage(tenantId, runId, totalTokens).catch(() => {});
+    }
+    emit({ type: "error", message: reply, code: e && e.code });
+    emit({ type: "done", status: "error" });
+  }
+}
+
 // Generate a stable per-run id used as the usage dedupKey (the runs table assigns
 // its own UUID, so we keep an independent token-meter key here).
 function _newRunId() {
@@ -191,7 +239,8 @@ async function _recordUsage(tenantId, runId, totalTokens) {
 // autonomous runs) forces ALL write tools to be recorded for human approval and never
 // executed — the inline path already does this, so readOnly is reserved for clarity
 // and to forbid any future inline-write behaviour. Returns { reply, totalTokens }.
-async function _driveLoop(tenantId, actorId, agent, userMessage, steps, pendingActions, readOnly) {
+async function _driveLoop(tenantId, actorId, agent, userMessage, steps, pendingActions, readOnly, onEvent = null, signal = null) {
+  const useStream = typeof onEvent === "function";
   const llm = require("./llm");
   const tools = require("./agenttools");
   const rag = require("./agentrag");
@@ -210,12 +259,14 @@ async function _driveLoop(tenantId, actorId, agent, userMessage, steps, pendingA
   let totalTokens = 0;
 
   for (let i = 0; i < MAX_STEPS; i++) {
-    const message = await llm.chat(tenantId, {
-      system,
-      messages,
-      tools: tools.toolSchemas(allowed),
-      model: agent.model || undefined,
-    });
+    const toolSchemas = tools.toolSchemas(allowed);
+    const message = useStream
+      ? await llm.chatStream(
+          tenantId,
+          { system, messages, tools: toolSchemas, model: agent.model || undefined, signal },
+          (d) => { if (d.type === "token") onEvent({ type: "token", text: d.text }); }
+        )
+      : await llm.chat(tenantId, { system, messages, tools: toolSchemas, model: agent.model || undefined });
     totalTokens += (message && message.usage && Number(message.usage.total_tokens)) || 0;
 
     const toolCalls = message && message.tool_calls;
@@ -245,6 +296,8 @@ async function _driveLoop(tenantId, actorId, agent, userMessage, steps, pendingA
         parseError = true;
       }
 
+      if (useStream) onEvent({ type: "tool_call", tool: name, args });
+
       // WRITE tools are NEVER executed inline — collect them for human approval
       // and feed the model an "awaiting_approval" result so it stops retrying.
       // (readOnly is true for autonomous scheduled runs; the inline path is already
@@ -265,6 +318,7 @@ async function _driveLoop(tenantId, actorId, agent, userMessage, steps, pendingA
       }
 
       steps.push({ tool: name, args, result });
+      if (useStream) onEvent({ type: "tool_result", tool: name, ok: !(result && result.error), result });
       messages.push({
         role: "tool",
         tool_call_id: call.id,
@@ -646,6 +700,6 @@ async function usageSummary(tenantId) {
 }
 
 module.exports = {
-  createAgent, listAgents, getAgent, updateAgent, deleteAgent, runAgent, confirmAction,
+  createAgent, listAgents, getAgent, updateAgent, deleteAgent, runAgent, runAgentStream, confirmAction,
   runScheduledAgents, runSwarm, usageSummary, listRuns,
 };

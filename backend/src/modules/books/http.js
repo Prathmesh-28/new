@@ -815,6 +815,22 @@ router.get("/agents/:id", async (req, res) => { try { res.json(await agents.getA
 router.patch("/agents/:id", canPost, async (req, res) => { try { res.json(await agents.updateAgent(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.delete("/agents/:id", canPost, async (req, res) => { try { res.json(await agents.deleteAgent(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.post("/agents/:id/run", async (req, res) => { try { res.json(await agents.runAgent(tenantOf(req), req.user.id, req.params.id, (req.body || {}).message || "")); } catch (e) { fail(res, e); } });
+// Live-streaming run (SSE): emits the agent's reasoning + tool steps as they happen.
+router.post("/agents/:id/run/stream", async (req, res) => {
+  res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" });
+  if (typeof res.flushHeaders === "function") res.flushHeaders();
+  res.write("retry: 3000\n\n");
+  const controller = new AbortController();
+  req.on("close", () => controller.abort());
+  const emit = (ev) => { try { res.write(`data: ${JSON.stringify(ev)}\n\n`); } catch { /* socket closed */ } };
+  try {
+    await agents.runAgentStream(tenantOf(req), req.user.id, req.params.id, (req.body || {}).message || "", emit, controller.signal);
+  } catch (e) {
+    emit({ type: "error", message: e.message || String(e) });
+    emit({ type: "done", status: "error" });
+  }
+  res.end();
+});
 router.post("/agents/:id/swarm", async (req, res) => { try { res.json(await agents.runSwarm(tenantOf(req), req.user.id, req.params.id, (req.body || {}).message || "")); } catch (e) { fail(res, e); } });
 // Past runs (chat history) — so the workspace transcript survives a reload instead of living only in browser memory.
 router.get("/agents/:id/runs", async (req, res) => { try { res.json(await agents.listRuns(tenantOf(req), req.params.id, req.query.limit)); } catch (e) { fail(res, e); } });

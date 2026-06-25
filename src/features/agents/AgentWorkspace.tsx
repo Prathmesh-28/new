@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { api } from "@/lib/api";
+import { api, authHeaders } from "@/lib/api";
+import { API_BASE } from "@/lib/apiBase";
+import { Capacitor } from "@capacitor/core";
 import { toast } from "sonner";
 import { humanizeAiError } from "@/components/ai/aiError";
 import {
@@ -16,13 +18,14 @@ import {
  */
 interface Agent { id: string; name?: string; instructions?: string; model?: string | null; tools?: string[]; enabled?: boolean }
 interface ToolDef { name: string; description?: string; scope?: "read" | "write" }
-interface RunStep { tool?: string; args?: unknown; result?: unknown }
+interface RunStep { tool?: string; args?: unknown; result?: unknown; status?: "running" | "done" }
 interface PendingAction { id: string; tool: string; args?: unknown; label?: string }
 interface SubResult { task: string; reply: string; steps?: RunStep[] }
 interface SwarmMsg { role: string; message: string }
 interface Critique { round: number; approved: boolean; issues: string }
 interface RunResponse { reply?: string; steps?: RunStep[]; pendingActions?: PendingAction[]; plan?: string[]; subResults?: SubResult[]; messages?: SwarmMsg[]; critiques?: Critique[] }
-interface Turn { role: "user" | "assistant"; text: string; steps?: RunStep[]; pending?: PendingAction[]; plan?: string[]; subResults?: SubResult[]; messages?: SwarmMsg[]; critiques?: Critique[] }
+interface Turn { role: "user" | "assistant"; text: string; steps?: RunStep[]; pending?: PendingAction[]; plan?: string[]; subResults?: SubResult[]; messages?: SwarmMsg[]; critiques?: Critique[]; streaming?: boolean }
+interface StreamEvent { type: string; text?: string; tool?: string; args?: unknown; result?: unknown; ok?: boolean; reply?: string; steps?: RunStep[]; pendingActions?: PendingAction[]; message?: string }
 interface RunRow { id: string; input?: string; reply?: string; steps?: RunStep[]; pendingActions?: PendingAction[]; status?: string; created_at?: string }
 interface Usage { tokensThisMonth: number; cap: number; runs: number }
 
@@ -119,27 +122,111 @@ export default function AgentWorkspace() {
     } catch (e) { toast.error(humanizeAiError(e)); }
   };
 
+  // Mutate the single in-flight streaming assistant turn for this agent.
+  const patchStreamingTurn = (agentId: string, mut: (t: Turn) => Turn) =>
+    setConvos(c => {
+      const arr = [...(c[agentId] ?? [])];
+      const i = arr.findIndex(t => t.streaming);
+      if (i >= 0) arr[i] = mut(arr[i]);
+      return { ...c, [agentId]: arr };
+    });
+
+  // Stream a run via SSE so the agent's reasoning + tool steps appear live. Returns
+  // false (without consuming anything) when streaming isn't viable — native shell
+  // (CapacitorHttp buffers), no ReadableStream, or the request didn't start (e.g. 401)
+  // — so the caller can fall back to the plain /run request.
+  const streamRun = async (agentId: string, message: string, onEvent: (e: StreamEvent) => void): Promise<boolean> => {
+    if (Capacitor.isNativePlatform() || typeof ReadableStream === "undefined") return false;
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/api/books/agents/${agentId}/run/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ message }),
+      });
+    } catch { return false; }
+    if (!res.ok || !res.body) return false; // 401/5xx → fall back (api.post handles refresh)
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf("\n\n")) >= 0) {
+          const block = buf.slice(0, nl); buf = buf.slice(nl + 2);
+          for (const line of block.split("\n")) {
+            const t = line.trim();
+            if (!t.startsWith("data:")) continue;
+            const payload = t.slice(5).trim();
+            if (!payload) continue;
+            try { onEvent(JSON.parse(payload) as StreamEvent); } catch { /* keepalive/comment */ }
+          }
+        }
+      }
+    } catch {
+      onEvent({ type: "error", message: "Connection lost — the answer may be incomplete." });
+    }
+    return true; // started streaming → handled (don't double-run via fallback)
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text || !activeId) return;
+    const agentId = activeId;
     setInput("");
-    setConvos(c => ({ ...c, [activeId]: [...(c[activeId] ?? []), { role: "user", text }] }));
+    setConvos(c => ({ ...c, [agentId]: [...(c[agentId] ?? []), { role: "user", text }] }));
     setRunning(true);
+
+    // Task mode (swarm) stays request/response — it has its own multi-stage UI.
+    if (taskMode) {
+      try {
+        const res = await api.post<RunResponse>(`/api/books/agents/${agentId}/swarm`, { message: text });
+        setConvos(c => ({ ...c, [agentId]: [...(c[agentId] ?? []), {
+          role: "assistant", text: res?.reply || "(no reply)", steps: res?.steps || [],
+          pending: Array.isArray(res?.pendingActions) ? res!.pendingActions : [],
+          plan: res?.plan, subResults: res?.subResults, messages: res?.messages, critiques: res?.critiques,
+        }] }));
+        loadUsage();
+      } catch (e) {
+        setConvos(c => ({ ...c, [agentId]: [...(c[agentId] ?? []), { role: "assistant", text: humanizeAiError(e) }] }));
+      } finally { setRunning(false); }
+      return;
+    }
+
+    // Normal run: live-stream the reasoning. Add a placeholder turn we mutate as events arrive.
+    setConvos(c => ({ ...c, [agentId]: [...(c[agentId] ?? []), { role: "assistant", text: "", streaming: true, steps: [] }] }));
+    const onEvent = (e: StreamEvent) => {
+      if (e.type === "token") patchStreamingTurn(agentId, t => ({ ...t, text: t.text + (e.text || "") }));
+      else if (e.type === "tool_call") patchStreamingTurn(agentId, t => ({ ...t, steps: [...(t.steps ?? []), { tool: e.tool, args: e.args, status: "running" }] }));
+      else if (e.type === "tool_result") patchStreamingTurn(agentId, t => {
+        const steps = [...(t.steps ?? [])];
+        for (let k = steps.length - 1; k >= 0; k--) if (steps[k].tool === e.tool && steps[k].status === "running") { steps[k] = { ...steps[k], status: "done", result: e.result }; break; }
+        return { ...t, steps };
+      });
+      else if (e.type === "final") patchStreamingTurn(agentId, t => ({ ...t, text: e.reply || t.text || "(no reply)", steps: e.steps ?? t.steps, pending: Array.isArray(e.pendingActions) ? e.pendingActions : [], streaming: false }));
+      else if (e.type === "error") patchStreamingTurn(agentId, t => ({ ...t, text: e.message || "Something went wrong", streaming: false }));
+    };
+
     try {
-      const endpoint = taskMode ? "swarm" : "run";
-      const res = await api.post<RunResponse>(`/api/books/agents/${activeId}/${endpoint}`, { message: text });
-      setConvos(c => ({ ...c, [activeId]: [...(c[activeId] ?? []), {
-        role: "assistant",
-        text: res?.reply || "(no reply)",
-        steps: res?.steps || [],
-        pending: Array.isArray(res?.pendingActions) ? res!.pendingActions : [],
-        plan: res?.plan, subResults: res?.subResults, messages: res?.messages, critiques: res?.critiques,
-      }] }));
+      const streamed = await streamRun(agentId, text, onEvent);
+      if (!streamed) {
+        // Fallback (native / no stream): reuse the placeholder turn for the synchronous result.
+        try {
+          const res = await api.post<RunResponse>(`/api/books/agents/${agentId}/run`, { message: text });
+          patchStreamingTurn(agentId, t => ({ ...t, text: res?.reply || "(no reply)", steps: res?.steps || [], pending: Array.isArray(res?.pendingActions) ? res!.pendingActions : [], streaming: false }));
+        } catch (e) {
+          patchStreamingTurn(agentId, t => ({ ...t, text: humanizeAiError(e), streaming: false }));
+        }
+      }
+    } finally {
+      // Safety net: ensure no turn is left stuck in the streaming state.
+      patchStreamingTurn(agentId, t => ({ ...t, streaming: false }));
       loadUsage();
-    } catch (e) {
-      const m = humanizeAiError(e);
-      setConvos(c => ({ ...c, [activeId]: [...(c[activeId] ?? []), { role: "assistant", text: m }] }));
-    } finally { setRunning(false); }
+      setRunning(false);
+    }
   };
 
   const toggleTool = async (name: string) => {
@@ -234,6 +321,28 @@ export default function AgentWorkspace() {
                 <div key={i} className="flex justify-end">
                   <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3.5 py-2 text-sm whitespace-pre-wrap">{t.text}</div>
                 </div>
+              ) : t.streaming ? (
+                // Live run: reasoning tokens stream in + tool steps light up as they run.
+                <div key={i} className="flex flex-col items-start gap-2 w-full">
+                  {(t.steps ?? []).length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      {t.steps!.map((s, k) => (
+                        <div key={k} className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]">
+                          {s.status === "running"
+                            ? <Loader2 size={11} className="animate-spin text-[var(--color-primary)]" />
+                            : <Check size={11} className="text-[var(--color-primary)]" />}
+                          <span className="font-mono">{s.tool}</span>
+                          <span className="text-[10px] opacity-70">{s.status === "running" ? "running…" : "done"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-[var(--color-surface)] border border-[var(--color-border)] px-3.5 py-2 text-sm whitespace-pre-wrap">
+                    {t.text
+                      ? <>{t.text}<span className="inline-block w-1.5 h-3.5 ml-0.5 align-middle bg-[var(--color-primary)] animate-pulse" /></>
+                      : <span className="text-[var(--color-muted)] inline-flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Thinking…</span>}
+                  </div>
+                </div>
               ) : (
                 <div key={i} className="flex flex-col items-start gap-2">
                   {t.subResults && t.subResults.length > 0 && <SwarmAccordion plan={t.plan ?? []} subResults={t.subResults} messages={t.messages ?? []} critiques={t.critiques ?? []} />}
@@ -244,7 +353,7 @@ export default function AgentWorkspace() {
                   )}
                 </div>
               ))}
-              {running && <div className="flex items-center gap-2 text-sm text-[var(--color-muted)]"><Loader2 size={13} className="animate-spin" /> {taskMode ? "Coordinating sub-agents…" : "Working…"}</div>}
+              {running && !turns.some(t => t.streaming) && <div className="flex items-center gap-2 text-sm text-[var(--color-muted)]"><Loader2 size={13} className="animate-spin" /> {taskMode ? "Coordinating sub-agents…" : "Working…"}</div>}
             </div>
 
             {/* Composer */}

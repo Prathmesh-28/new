@@ -186,6 +186,98 @@ async function chat(tenantId, { system, messages = [], tools, model: modelOverri
   }
 }
 
+// --- streaming chat -----------------------------------------------------------
+// Same contract as chat() but streams the completion: calls onDelta({type:"token",
+// text}) for each content fragment as it arrives, and returns the fully-assembled
+// { content, tool_calls, usage } once the stream ends. Used to show the agent's
+// reasoning live (vs. an opaque spinner). Preserves the tool-use message protocol
+// (assistant tool_calls turns + tool results) and keeps the 402→free-model fallback
+// for the pre-stream phase. `signal` lets the caller abort on client disconnect.
+async function chatStream(tenantId, { system, messages = [], tools, model: modelOverride, signal } = {}, onDelta) {
+  const { baseUrl, model: tenantModel, key } = await _resolveSecret(tenantId);
+  const requestedModel = modelOverride || tenantModel;
+  if (!key) throw new PostError("LLM_NOT_CONFIGURED", "Connect an LLM provider (OpenRouter key) in Agents settings", 422);
+
+  const oaMessages = [];
+  if (system) oaMessages.push({ role: "system", content: String(system) });
+  for (const m of messages) {
+    const msg = { role: m.role };
+    if (m.content !== undefined) msg.content = m.content;
+    if (m.tool_calls) msg.tool_calls = m.tool_calls;       // preserve the tool-use protocol
+    if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
+    oaMessages.push(msg);
+  }
+  const url = baseUrl.replace(/\/+$/, "") + "/chat/completions";
+
+  const attempt = async (useModel) => {
+    const body = { model: useModel, messages: oaMessages, stream: true, stream_options: { include_usage: true } };
+    if (tools && tools.length) body.tools = tools;
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        body: JSON.stringify(body),
+        signal,
+      });
+    } catch (e) {
+      if (e.name === "AbortError") throw e;
+      throw new PostError("LLM_NETWORK", `LLM request failed: ${e.message}`, 502);
+    }
+    if (!resp.ok || !resp.body) {
+      let text; try { text = await resp.text(); } catch { text = ""; }
+      const err = new PostError("LLM_ERROR", `LLM provider error (${resp.status}): ${text}`, 502);
+      err.providerStatus = resp.status; err.providerText = text; throw err;
+    }
+    let content = "";
+    const acc = [];          // tool_calls accumulated by index across fragments
+    let usage = null;
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n\n")) >= 0) {
+        const block = buf.slice(0, nl); buf = buf.slice(nl + 2);
+        for (const line of block.split("\n")) {
+          const t = line.trim();
+          if (!t.startsWith("data:")) continue;
+          const payload = t.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          let j; try { j = JSON.parse(payload); } catch { continue; }
+          if (j.usage) usage = j.usage;
+          const d = j.choices && j.choices[0] && j.choices[0].delta;
+          if (!d) continue;
+          if (d.content) { content += d.content; if (onDelta) { try { onDelta({ type: "token", text: d.content }); } catch { /* ignore sink errors */ } } }
+          if (Array.isArray(d.tool_calls)) {
+            for (const tc of d.tool_calls) {
+              const i = Number.isInteger(tc.index) ? tc.index : 0;
+              if (!acc[i]) acc[i] = { id: tc.id || `call_${i}`, type: "function", function: { name: "", arguments: "" } };
+              if (tc.id) acc[i].id = tc.id;
+              if (tc.function && tc.function.name) acc[i].function.name += tc.function.name;
+              if (tc.function && tc.function.arguments) acc[i].function.arguments += tc.function.arguments;
+            }
+          }
+        }
+      }
+    }
+    const tool_calls = acc.filter(Boolean);
+    return { content, tool_calls: tool_calls.length ? tool_calls : undefined, usage: parseUsage({ usage }) };
+  };
+
+  try {
+    return await attempt(requestedModel);
+  } catch (e) {
+    if (e.name === "AbortError") throw e;
+    const freeModel = DEFAULT_MODEL();
+    if (_isPaymentError(e) && requestedModel !== freeModel) return await attempt(freeModel);
+    throw e;
+  }
+}
+
 // --- embeddings ---------------------------------------------------------------
 // Maps texts[] onto an OpenAI-shape /embeddings request and returns a parallel
 // array of vectors (number[][]). Uses the tenant's embed model. Throws a typed
@@ -279,4 +371,4 @@ async function vision(tenantId, { system, prompt, imageDataUrl, model: modelOver
   }
 }
 
-module.exports = { getTenantLlm, setTenantLlm, chat, embed, vision, encryptKey, decryptKey };
+module.exports = { getTenantLlm, setTenantLlm, chat, chatStream, embed, vision, encryptKey, decryptKey };

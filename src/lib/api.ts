@@ -23,6 +23,18 @@ function getToken() {
   return localStorage.getItem("hr_access");
 }
 
+// Headers identical to what authFetch sends (auth + client id + impersonation), for
+// callers that need a raw fetch — e.g. streaming SSE responses that can't go through
+// authFetch's JSON parsing.
+export function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return {
+    "X-Client-Id": CLIENT_ID,
+    ...(impersonatedTenant ? { "X-Tenant-Id": impersonatedTenant } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
 export async function authFetch<T = unknown>(
   path: string,
   init?: RequestInit
