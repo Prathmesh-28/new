@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import DiscussButton from "@/features/collab/DiscussButton";
 import {
   Users, KanbanSquare, UserPlus, Building2, Contact as ContactIcon,
   Plus, RefreshCw, ArrowLeft, ArrowRight, Trophy, ArrowRightCircle,
@@ -621,6 +622,7 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
                           </p>
                         )}
                         {d.sla_status && <div className="mt-1.5"><SlaBadge status={d.sla_status} escalated={d.escalated} /></div>}
+                        <div className="mt-2"><DiscussButton entityType="deal" entityId={d.id} entityLabel={d.title} /></div>
                         {canWrite && (
                           <div className="flex items-center gap-1.5 mt-3">
                             <button

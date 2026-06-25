@@ -19,7 +19,7 @@ interface Project { id: string; name: string; slug: string; current_version_id?:
 interface Version { id: string; summary?: string | null; prompt?: string | null; created_at?: string; file_tree?: Record<string, string> }
 interface AgentRef { id: string; name: string }
 interface AppAgents { granted: AgentRef[]; available: AgentRef[] }
-interface LogEntry { role: "user" | "system"; text: string; plan?: boolean; error?: boolean }
+interface LogEntry { role: "user" | "system"; text: string; plan?: boolean; error?: boolean; buildPrompt?: string }
 interface GenResult { mode: "plan" | "build"; plan?: string; html?: string; summary?: string; version?: Version }
 
 // Starter apps — one click creates a project and builds it from your real business data.
@@ -136,7 +136,7 @@ export default function AppBuilderPage() {
     try {
       const res = await api.post<GenResult>(`/api/studio/projects/${projectId}/generate`, { prompt: text, mode });
       if (mode === "plan") {
-        appendLog(projectId, { role: "system", text: res?.plan || "(no plan)", plan: true });
+        appendLog(projectId, { role: "system", text: res?.plan || "(no plan)", plan: true, buildPrompt: text });
       } else {
         setHtmlById((m) => ({ ...m, [projectId]: res?.html || "" }));
         setPreviewNonce((n) => n + 1);
@@ -335,6 +335,12 @@ export default function AppBuilderPage() {
                   <div key={i} className={`max-w-[90%] rounded-2xl rounded-bl-sm border px-3.5 py-2 text-sm whitespace-pre-wrap ${e.error ? "border-red-700/40 text-red-300 bg-red-900/10" : e.plan ? "border-[var(--color-primary)]/30 bg-[var(--color-primary)]/5" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
                     {e.plan && <div className="flex items-center gap-1 text-[11px] text-[var(--color-primary)] mb-1 font-semibold"><Lightbulb size={12} /> Plan</div>}
                     {e.text}
+                    {e.plan && e.buildPrompt && (
+                      <button onClick={() => runBuild(activeId, e.buildPrompt!, "build")} disabled={building}
+                        className="mt-2 flex items-center gap-1.5 text-xs rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 hover:opacity-90 disabled:opacity-50">
+                        <Check size={13} /> Approve &amp; build
+                      </button>
+                    )}
                   </div>
                 ))}
                 {building && <div className="flex items-center gap-2 text-sm text-[var(--color-muted)]"><Loader2 size={13} className="animate-spin" /> Building your app…</div>}
