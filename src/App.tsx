@@ -100,6 +100,7 @@ const TokensPage         = lazy(() => import("@/features/tokens/TokensPage"));
 const FrontierPage       = lazy(() => import("@/features/frontier/FrontierPage"));
 const AgentStudioPage    = lazy(() => import("@/features/agents/AgentStudioPage"));
 const AppBuilderPage     = lazy(() => import("@/features/appbuilder/AppBuilderPage"));
+const CollabPage         = lazy(() => import("@/features/collab/CollabPage"));
 
 function PageLoader() {
   return (
@@ -286,6 +287,7 @@ function AppShell() {
                 <Route path="/automation"    element={<AutomationPage />} />
                 <Route path="/agents"        element={<AgentStudioPage />} />
                 <Route path="/studio"        element={<AppBuilderPage />} />
+                <Route path="/collab"        element={<CollabPage />} />
                 <Route path="/copilot"       element={<CopilotPage />} />
                 <Route path="/security"      element={<SecurityPage />} />
                 <Route path="/privacy"       element={<PrivacyPage />} />

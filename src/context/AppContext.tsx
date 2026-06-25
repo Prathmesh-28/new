@@ -361,6 +361,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // App Builder (Headroom Studio) — open to every member, like Agent Studio.
     // Writes are role-gated server-side (studio WRITE_ROLES).
     if (tab === "studio") return true;
+    // Collab (Messages) — open to every member; access is per-conversation membership.
+    if (tab === "collab") return true;
     return getRoleConfig(effectiveRole)?.accessibleTabs.includes(tab) ?? false;
   };
 

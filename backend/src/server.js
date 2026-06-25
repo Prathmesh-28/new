@@ -113,6 +113,7 @@ app.use("/api/crm",                require("./modules/crm/http"));   // CRM: lea
 app.use("/api/erp",                require("./modules/erp/http"));   // ERP: BOMs + work orders (manufacturing)
 app.use("/api/hrms",               require("./modules/hrms/http"));  // HRMS: employees, attendance, leave, payroll
 app.use("/api/insights",           require("./modules/insights/http")); // Insights: cross-module KPIs + dashboards
+app.use("/api/collab",             require("./modules/collab/http")); // Collab: Teams-style channels/DMs/messages (Phase 1 REST)
 app.use("/api/studio",             require("./modules/studio/http")); // App Builder: projects + versions + deployments
 app.use("/api/pub",                require("./routes/studiopublic")); // PUBLIC: serve published App Builder apps (sandboxed, token-addressed)
 app.use("/api/agent-bridge",       require("./routes/agentbridge")); // PUBLIC: published apps call their granted Agent Studio agents (scoped, metered)
