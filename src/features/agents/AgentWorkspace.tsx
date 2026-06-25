@@ -4,22 +4,24 @@ import { toast } from "sonner";
 import { humanizeAiError } from "@/components/ai/aiError";
 import {
   Bot, Plus, Search, Send, Loader2, Wrench, ChevronDown, ChevronRight, X,
-  ShieldAlert, Check, Cpu, MessageSquare, Sparkles, Clock,
+  ShieldAlert, Check, Cpu, Sparkles, Clock, Coins, Network, Slash,
 } from "lucide-react";
 
 /**
  * Agent Workspace — a Kogo-OS-style chat surface over our agent engine. Left: agents
  * as "workspaces" + search + history. Right: a conversation with task-progress
- * accordions (the tool steps the agent ran) and approval cards for writes. Composer
- * has a Tools slide-over (toggle the agent's tools from the live catalogue) and a
- * model selector. All backed by the existing /api/books/agents/* routes.
+ * accordions, approval cards for writes, a usage/credits meter, a Tools slide-over,
+ * a model selector, a "/" command menu, and a Task-mode toggle that runs a sub-agent
+ * SWARM (planner → sub-agents → synthesis). Backed by /api/books/agents/*.
  */
 interface Agent { id: string; name?: string; instructions?: string; model?: string | null; tools?: string[]; enabled?: boolean }
 interface ToolDef { name: string; description?: string; scope?: "read" | "write" }
 interface RunStep { tool?: string; args?: unknown; result?: unknown }
 interface PendingAction { id: string; tool: string; args?: unknown; label?: string }
-interface RunResponse { reply?: string; steps?: RunStep[]; pendingActions?: PendingAction[] }
-interface Turn { role: "user" | "assistant"; text: string; steps?: RunStep[]; pending?: PendingAction[] }
+interface SubResult { task: string; reply: string; steps?: RunStep[] }
+interface RunResponse { reply?: string; steps?: RunStep[]; pendingActions?: PendingAction[]; plan?: string[]; subResults?: SubResult[] }
+interface Turn { role: "user" | "assistant"; text: string; steps?: RunStep[]; pending?: PendingAction[]; plan?: string[]; subResults?: SubResult[] }
+interface Usage { tokensThisMonth: number; cap: number; runs: number }
 
 // LLM-agnostic, like Kogo: pick the engine per agent. Free default first.
 const MODELS = [
@@ -31,7 +33,17 @@ const MODELS = [
   { id: "deepseek/deepseek-chat", label: "DeepSeek V3" },
 ];
 
+// "/" task-mode commands — insert a ready-made prompt (Kogo's "/ to use task mode").
+const SLASH = [
+  { cmd: "/briefing", prompt: "Give me today's business briefing — cash, runway, what needs attention.", swarm: false },
+  { cmd: "/pay", prompt: "Who should I pay first this week, and in what order?", swarm: false },
+  { cmd: "/afford", prompt: "Can I afford a ₹2,00,000 purchase this month? Check my runway.", swarm: false },
+  { cmd: "/itc", prompt: "What's my ITC at risk this cycle and what should I action?", swarm: false },
+  { cmd: "/plan", prompt: "Build me a cash-crunch action plan for the next 30 days.", swarm: true },
+];
+
 const pretty = (v: unknown) => { try { return typeof v === "string" ? v : JSON.stringify(v, null, 2); } catch { return String(v); } };
+const fmtTokens = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : String(n));
 
 export default function AgentWorkspace() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -44,7 +56,13 @@ export default function AgentWorkspace() {
   const [running, setRunning] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [hasKey, setHasKey] = useState<boolean | null>(null);
+  const [usage, setUsage] = useState<Usage | null>(null);
+  const [taskMode, setTaskMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const loadUsage = useCallback(() => {
+    api.get<Usage>("/api/books/agents/usage").then(setUsage).catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,9 +77,10 @@ export default function AgentWorkspace() {
       setCatalog(Array.isArray(tools) ? tools : []);
       setHasKey(!!cfg?.hasKey);
       setActiveId(prev => prev || list[0]?.id || "");
+      loadUsage();
     } catch (e) { toast.error(humanizeAiError(e)); }
     finally { setLoading(false); }
-  }, []);
+  }, [loadUsage]);
   useEffect(() => { void load(); }, [load]);
 
   const active = agents.find(a => a.id === activeId);
@@ -84,8 +103,16 @@ export default function AgentWorkspace() {
     setConvos(c => ({ ...c, [activeId]: [...(c[activeId] ?? []), { role: "user", text }] }));
     setRunning(true);
     try {
-      const res = await api.post<RunResponse>(`/api/books/agents/${activeId}/run`, { message: text });
-      setConvos(c => ({ ...c, [activeId]: [...(c[activeId] ?? []), { role: "assistant", text: res?.reply || "(no reply)", steps: res?.steps || [], pending: Array.isArray(res?.pendingActions) ? res!.pendingActions : [] }] }));
+      const endpoint = taskMode ? "swarm" : "run";
+      const res = await api.post<RunResponse>(`/api/books/agents/${activeId}/${endpoint}`, { message: text });
+      setConvos(c => ({ ...c, [activeId]: [...(c[activeId] ?? []), {
+        role: "assistant",
+        text: res?.reply || "(no reply)",
+        steps: res?.steps || [],
+        pending: Array.isArray(res?.pendingActions) ? res!.pendingActions : [],
+        plan: res?.plan, subResults: res?.subResults,
+      }] }));
+      loadUsage();
     } catch (e) {
       const m = humanizeAiError(e);
       setConvos(c => ({ ...c, [activeId]: [...(c[activeId] ?? []), { role: "assistant", text: m }] }));
@@ -96,7 +123,7 @@ export default function AgentWorkspace() {
     if (!active) return;
     const cur = active.tools ?? [];
     const next = cur.includes(name) ? cur.filter(t => t !== name) : [...cur, name];
-    setAgents(as => as.map(a => a.id === active.id ? { ...a, tools: next } : a)); // optimistic
+    setAgents(as => as.map(a => a.id === active.id ? { ...a, tools: next } : a));
     try { await api.patch(`/api/books/agents/${active.id}`, { tools: next }); }
     catch (e) { toast.error(humanizeAiError(e)); void load(); }
   };
@@ -110,6 +137,8 @@ export default function AgentWorkspace() {
 
   const filtered = agents.filter(a => (a.name ?? "").toLowerCase().includes(q.trim().toLowerCase()));
   const activeTools = active?.tools ?? [];
+  const slashOpen = input.startsWith("/");
+  const slashMatches = SLASH.filter(s => s.cmd.startsWith(input.split(" ")[0].toLowerCase()));
 
   return (
     <div className="flex h-[calc(100vh-9rem)] min-h-[30rem] rounded-xl border border-[var(--color-border)] overflow-hidden bg-[var(--color-bg)]">
@@ -144,6 +173,12 @@ export default function AgentWorkspace() {
             </>
           )}
         </div>
+        {usage && (
+          <div className="border-t border-[var(--color-border)] px-3 py-2 text-[11px] text-[var(--color-muted)] flex items-center gap-1.5" title="Agent AI usage this month">
+            <Coins size={12} className="text-[var(--color-primary)]" />
+            {fmtTokens(usage.tokensThisMonth)}{usage.cap > 0 ? ` / ${fmtTokens(usage.cap)}` : ""} tokens · {usage.runs} runs
+          </div>
+        )}
       </aside>
 
       {/* ── Conversation ───────────────────────────────────────────── */}
@@ -170,7 +205,7 @@ export default function AgentWorkspace() {
             <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
               {turns.length === 0 ? (
                 <div className="text-center text-[var(--color-muted)] py-10 text-sm">
-                  Ask <span className="font-medium text-[var(--color-text)]">{active.name || "this agent"}</span> anything — e.g. "What's my cash position and who should I pay first?"
+                  Ask <span className="font-medium text-[var(--color-text)]">{active.name || "this agent"}</span> anything — or type <span className="font-mono text-[var(--color-primary)]">/</span> for tasks. Toggle <span className="text-[var(--color-text)]">Task mode</span> to run a sub-agent swarm.
                 </div>
               ) : turns.map((t, i) => t.role === "user" ? (
                 <div key={i} className="flex justify-end">
@@ -178,26 +213,44 @@ export default function AgentWorkspace() {
                 </div>
               ) : (
                 <div key={i} className="flex flex-col items-start gap-2">
-                  {t.steps && t.steps.length > 0 && <TaskAccordion steps={t.steps} />}
+                  {t.subResults && t.subResults.length > 0 && <SwarmAccordion plan={t.plan ?? []} subResults={t.subResults} />}
+                  {t.steps && t.steps.length > 0 && (!t.subResults || t.subResults.length === 0) && <TaskAccordion steps={t.steps} />}
                   <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-[var(--color-surface)] border border-[var(--color-border)] px-3.5 py-2 text-sm whitespace-pre-wrap">{t.text}</div>
                   {t.pending && t.pending.length > 0 && (
                     <div className="w-full space-y-1.5">{t.pending.map(p => <ApprovalCard key={p.id} action={p} agentId={active.id} />)}</div>
                   )}
                 </div>
               ))}
-              {running && <div className="flex items-center gap-2 text-sm text-[var(--color-muted)]"><Loader2 size={13} className="animate-spin" /> Working…</div>}
+              {running && <div className="flex items-center gap-2 text-sm text-[var(--color-muted)]"><Loader2 size={13} className="animate-spin" /> {taskMode ? "Coordinating sub-agents…" : "Working…"}</div>}
             </div>
 
             {/* Composer */}
             <div className="shrink-0 border-t border-[var(--color-border)] p-3">
+              {slashOpen && slashMatches.length > 0 && (
+                <div className="mb-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+                  {slashMatches.map(s => (
+                    <button key={s.cmd} onClick={() => { setInput(s.prompt); if (s.swarm) setTaskMode(true); }}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-white/5">
+                      <Slash size={11} className="text-[var(--color-primary)]" />
+                      <span className="font-mono text-[var(--color-primary)]">{s.cmd}</span>
+                      <span className="text-[var(--color-muted)] truncate">{s.prompt}</span>
+                      {s.swarm && <span className="ml-auto text-[9px] text-[var(--color-primary)] border border-[var(--color-primary)]/40 rounded-full px-1.5">task</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
                 <textarea value={input} onChange={e => setInput(e.target.value)} rows={1}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
-                  placeholder="Ask anything…  (Enter to send)"
+                  placeholder='Ask anything — "@" to reference, "/" for tasks'
                   className="w-full bg-transparent px-2 py-1.5 text-sm outline-none resize-none" />
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <button onClick={() => setToolsOpen(true)} className="flex items-center gap-1.5 text-xs rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]">
                     <Wrench size={12} /> Tools <span className="text-[var(--color-primary)] font-semibold">{activeTools.length}</span>
+                  </button>
+                  <button onClick={() => setTaskMode(v => !v)} title="Task mode: a planner coordinates sub-agents to complete the goal"
+                    className={`flex items-center gap-1.5 text-xs rounded-lg border px-2.5 py-1.5 transition-colors ${taskMode ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)] font-semibold" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
+                    <Network size={12} /> Task mode {taskMode ? "on" : "off"}
                   </button>
                   <div className="flex items-center gap-1.5 text-xs rounded-lg border border-[var(--color-border)] px-2 py-1 text-[var(--color-muted)]">
                     <Cpu size={12} />
@@ -251,7 +304,31 @@ export default function AgentWorkspace() {
   );
 }
 
-// Kogo-style "N Tasks Completed" accordion over the tool steps the agent ran.
+// Sub-agent swarm result — the plan + each sub-task's answer, then the synthesis.
+function SwarmAccordion({ plan, subResults }: { plan: string[]; subResults: SubResult[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="w-full max-w-[85%] rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-surface)] overflow-hidden">
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-white/5">
+        {open ? <ChevronDown size={13} className="text-[var(--color-muted)]" /> : <ChevronRight size={13} className="text-[var(--color-muted)]" />}
+        <Network size={12} className="text-[var(--color-primary)]" />
+        <span className="text-xs font-medium text-[var(--color-primary)]">Swarm · {subResults.length} sub-agent{subResults.length === 1 ? "" : "s"} completed</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-2 space-y-2 border-t border-[var(--color-border)]">
+          {subResults.map((r, j) => (
+            <div key={j} className="mt-2">
+              <p className="text-[11px] font-semibold flex items-start gap-1.5"><span className="text-[var(--color-primary)]">{j + 1}.</span> {r.task}</p>
+              <p className="text-[11px] text-[var(--color-muted)] whitespace-pre-wrap mt-0.5 pl-4">{r.reply}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Kogo-style "N tasks completed" accordion over the tool steps the agent ran.
 function TaskAccordion({ steps }: { steps: RunStep[] }) {
   const [open, setOpen] = useState(false);
   return (

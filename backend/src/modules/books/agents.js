@@ -453,7 +453,90 @@ async function persistRun(tenantId, agentId, actorId, input, reply, steps, statu
   }
 }
 
+// ── Sub-agent swarm (task mode) ────────────────────────────────────────────────
+// Kogo-style: a planner decomposes the goal into 2-4 sub-tasks, each runs through
+// the agent's own tool-loop (read-only — any write becomes a pending approval), then
+// a lead synthesises one answer. Returns { reply, plan[], subResults[], pendingActions[] }.
+async function runSwarm(tenantId, actorId, agentId, userMessage) {
+  const agent = await getAgent(tenantId, agentId);
+  if (agent.enabled === false) throw new PostError("AGENT_DISABLED", "This agent is disabled", 422);
+
+  const tokenCap = await require("../../lib/platformConfig").num("limits", "monthlyTokenCap", 0);
+  if (tokenCap > 0) {
+    const { rows: used } = await pool.query(
+      "SELECT COALESCE(SUM(value),0)::bigint AS n FROM book_usage_events WHERE tenant_id=$1 AND metric='agent_tokens' AND event_time >= date_trunc('month', now())",
+      [tenantId]
+    ).catch(() => ({ rows: [{ n: 0 }] }));
+    if (Number(used[0]?.n ?? 0) >= tokenCap) throw new PostError("TOKEN_CAP", `This month's AI usage cap (${tokenCap.toLocaleString("en-IN")} tokens) is reached.`, 422);
+  }
+
+  const llm = require("./llm");
+  const runId = _newRunId();
+  let totalTokens = 0;
+
+  // 1) Plan
+  let plan = [];
+  try {
+    const planMsg = await llm.chat(tenantId, {
+      system: "You are a planner coordinating sub-agents for an Indian SMB. Break the user's goal into 2-4 concrete, INDEPENDENT sub-tasks, each answerable from the business's tools/data. Return ONLY a JSON array of short task strings — no prose.",
+      messages: [{ role: "user", content: userMessage }],
+      model: agent.model || undefined,
+    });
+    totalTokens += planMsg?.usage?.total_tokens || 0;
+    const j = (planMsg.content || "[]").match(/\[[\s\S]*\]/)?.[0] ?? "[]";
+    plan = JSON.parse(j);
+  } catch { plan = []; }
+  plan = (Array.isArray(plan) ? plan : []).filter((t) => typeof t === "string" && t.trim()).slice(0, 4);
+  if (!plan.length) plan = [userMessage];
+
+  // 2) Run each sub-task through the agent's tool-loop (writes → pending, never executed here)
+  const subResults = [];
+  const pendingActions = [];
+  for (const task of plan) {
+    const steps = [];
+    const pending = [];
+    try {
+      const out = await _driveLoop(tenantId, actorId, agent, task, steps, pending, true);
+      totalTokens += out.totalTokens || 0;
+      subResults.push({ task, reply: out.reply, steps });
+    } catch (e) {
+      subResults.push({ task, reply: `Error: ${e.message || String(e)}`, steps });
+    }
+    for (const p of pending) pendingActions.push(p);
+  }
+
+  // 3) Synthesise
+  let reply;
+  try {
+    const synth = await llm.chat(tenantId, {
+      system: "You are the lead agent. Synthesise the sub-task results into ONE clear, actionable answer for an Indian SMB owner. Be concise, use ₹ with Indian grouping, and only use the findings provided.",
+      messages: [{ role: "user", content: `Goal: ${userMessage}\n\n${subResults.map((r, i) => `Sub-task ${i + 1}: ${r.task}\nResult: ${r.reply}`).join("\n\n")}` }],
+      model: agent.model || undefined,
+    });
+    totalTokens += synth?.usage?.total_tokens || 0;
+    reply = synth.content || "";
+  } catch (e) { reply = ""; }
+  if (!reply) reply = subResults.map((r) => `• ${r.task}: ${r.reply}`).join("\n");
+
+  await persistRun(tenantId, agentId, actorId, userMessage, reply, subResults.flatMap((r) => r.steps), "swarm", pendingActions);
+  await _recordUsage(tenantId, runId, totalTokens);
+  return { reply, plan, subResults, pendingActions };
+}
+
+// Monthly agent usage for the workspace "credits" meter.
+async function usageSummary(tenantId) {
+  const cap = await require("../../lib/platformConfig").num("limits", "monthlyTokenCap", 0);
+  let tokensThisMonth = 0, runs = 0;
+  try {
+    const { rows } = await pool.query("SELECT COALESCE(SUM(value),0)::bigint AS n FROM book_usage_events WHERE tenant_id=$1 AND metric='agent_tokens' AND event_time >= date_trunc('month', now())", [tenantId]);
+    tokensThisMonth = Number(rows[0]?.n ?? 0);
+    const r2 = await pool.query("SELECT count(*)::int AS c FROM book_agent_runs WHERE tenant_id=$1 AND created_at >= date_trunc('month', now())", [tenantId]).catch(() => ({ rows: [{ c: 0 }] }));
+    runs = Number(r2.rows[0]?.c ?? 0);
+  } catch { /* table may be empty/absent — return zeros */ }
+  return { tokensThisMonth, cap, runs };
+}
+
 module.exports = {
   createAgent, listAgents, getAgent, updateAgent, deleteAgent, runAgent, confirmAction,
-  runScheduledAgents,
+  runScheduledAgents, runSwarm, usageSummary,
 };

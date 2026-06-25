@@ -802,6 +802,7 @@ router.post("/itc04/bulk", canPost, async (req, res) => { try { res.json(await b
 router.post("/documents/bulk", canPost, async (req, res) => { try { res.json(await docs.bulkCreateInvoices(tenantOf(req), req.user.id, (req.body || {}).rows || [])); } catch (e) { fail(res, e); } });
 // ── SMB AI agents (per-tenant LLM engine + read-only agents). Specific paths before /:id. ──
 router.get("/agents/tools", async (_req, res) => { try { res.json(agenttools.toolCatalog()); } catch (e) { fail(res, e); } });
+router.get("/agents/usage", async (req, res) => { try { res.json(await agents.usageSummary(tenantOf(req))); } catch (e) { fail(res, e); } });
 router.get("/agents/llm-config", async (req, res) => { try { res.json(await llm.getTenantLlm(tenantOf(req))); } catch (e) { fail(res, e); } });
 router.put("/agents/llm-config", canPost, async (req, res) => { try { const b = req.body || {}; await llm.setTenantLlm(tenantOf(req), { baseUrl: b.baseUrl, model: b.model, apiKey: b.apiKey, embedModel: b.embedModel }); res.json(await llm.getTenantLlm(tenantOf(req))); } catch (e) { fail(res, e); } });
 router.get("/agents/templates", async (_req, res) => { try { res.json(agenttemplates.listTemplates()); } catch (e) { fail(res, e); } });
@@ -814,6 +815,7 @@ router.get("/agents/:id", async (req, res) => { try { res.json(await agents.getA
 router.patch("/agents/:id", canPost, async (req, res) => { try { res.json(await agents.updateAgent(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.delete("/agents/:id", canPost, async (req, res) => { try { res.json(await agents.deleteAgent(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.post("/agents/:id/run", async (req, res) => { try { res.json(await agents.runAgent(tenantOf(req), req.user.id, req.params.id, (req.body || {}).message || "")); } catch (e) { fail(res, e); } });
+router.post("/agents/:id/swarm", async (req, res) => { try { res.json(await agents.runSwarm(tenantOf(req), req.user.id, req.params.id, (req.body || {}).message || "")); } catch (e) { fail(res, e); } });
 // Approve a proposed write action (human-in-the-loop) — re-checks the actor's role.
 router.post("/agents/:id/confirm", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await agents.confirmAction(tenantOf(req), req.user.id, { tool: b.tool, args: b.args, role: req.user.role })); } catch (e) { fail(res, e); } });
 // Agent knowledge (RAG) docs.
