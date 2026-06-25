@@ -22,6 +22,18 @@ interface AppAgents { granted: AgentRef[]; available: AgentRef[] }
 interface LogEntry { role: "user" | "system"; text: string; plan?: boolean; error?: boolean }
 interface GenResult { mode: "plan" | "build"; plan?: string; html?: string; summary?: string; version?: Version }
 
+// Starter apps — one click creates a project and builds it from your real business data.
+const APP_TEMPLATES: { name: string; tag: string; prompt: string }[] = [
+  { name: "VC Dashboard", tag: "Fundraising", prompt: "Build a VC/board dashboard with my cash on hand, monthly burn, runway in days, and overdue receivables — with charts and a clean executive summary." },
+  { name: "Cash Runway Monitor", tag: "Cash", prompt: "Build a cash runway monitor: current cash, daily burn trend, projected zero-cash date, and a traffic-light status." },
+  { name: "Invoice Tracker", tag: "Receivables", prompt: "Build an invoice tracker showing outstanding invoices, aging buckets (0-30 / 31-60 / 61-90 / 90+ days), and total receivable, sortable." },
+  { name: "Collections Tracker", tag: "Receivables", prompt: "Build a collections tracker: who owes the most, days overdue, and a follow-up checklist." },
+  { name: "Expense Report", tag: "Spend", prompt: "Build an expense report grouped by category with a chart and the top 10 expenses, for the current month." },
+  { name: "GST Summary", tag: "Compliance", prompt: "Build a GST summary page showing output tax, input tax credit, and net payable for the current period." },
+  { name: "KPI Scorecard", tag: "Overview", prompt: "Build a one-screen KPI scorecard with revenue, profit, cash, and receivables — each with a trend sparkline." },
+  { name: "Sales Pipeline", tag: "Sales", prompt: "Build a sales pipeline board (leads → won) with deal values and a weighted forecast." },
+];
+
 export default function AppBuilderPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeId, setActiveId] = useState<string>("");
@@ -116,25 +128,43 @@ export default function AppBuilderPage() {
 
   const appendLog = (id: string, entry: LogEntry) => setLogById((m) => ({ ...m, [id]: [...(m[id] ?? []), entry] }));
 
+  // Core build/plan call for a specific project (used by the composer + templates).
+  const runBuild = async (projectId: string, text: string, mode: "plan" | "build") => {
+    if (!text || building) return;
+    appendLog(projectId, { role: "user", text });
+    setBuilding(true);
+    try {
+      const res = await api.post<GenResult>(`/api/studio/projects/${projectId}/generate`, { prompt: text, mode });
+      if (mode === "plan") {
+        appendLog(projectId, { role: "system", text: res?.plan || "(no plan)", plan: true });
+      } else {
+        setHtmlById((m) => ({ ...m, [projectId]: res?.html || "" }));
+        setPreviewNonce((n) => n + 1);
+        appendLog(projectId, { role: "system", text: `Built · ${res?.summary || "updated the app"}` });
+        refreshVersions(projectId);
+      }
+    } catch (e) {
+      appendLog(projectId, { role: "system", text: humanizeAiError(e), error: true });
+    } finally { setBuilding(false); }
+  };
+
   const generate = async (mode: "plan" | "build") => {
     const text = prompt.trim();
     if (!text || !activeId || building) return;
     setPrompt("");
-    appendLog(activeId, { role: "user", text });
-    setBuilding(true);
+    await runBuild(activeId, text, mode);
+  };
+
+  // One-click starter: create a project, open it, and build from the template prompt.
+  const startFromTemplate = async (tpl: { name: string; prompt: string }) => {
+    if (building) return;
     try {
-      const res = await api.post<GenResult>(`/api/studio/projects/${activeId}/generate`, { prompt: text, mode });
-      if (mode === "plan") {
-        appendLog(activeId, { role: "system", text: res?.plan || "(no plan)", plan: true });
-      } else {
-        setHtmlById((m) => ({ ...m, [activeId]: res?.html || "" }));
-        setPreviewNonce((n) => n + 1);
-        appendLog(activeId, { role: "system", text: `Built · ${res?.summary || "updated the app"}` });
-        refreshVersions(activeId);
-      }
-    } catch (e) {
-      appendLog(activeId, { role: "system", text: humanizeAiError(e), error: true });
-    } finally { setBuilding(false); }
+      const created = await api.post<Project>("/api/studio/projects", { name: tpl.name });
+      loaded.current.add(created.id);
+      await load();
+      setActiveId(created.id);
+      await runBuild(created.id, tpl.prompt, "build");
+    } catch (e) { toast.error(humanizeAiError(e)); }
   };
 
   const restore = async (versionId: string) => {
@@ -221,10 +251,26 @@ export default function AppBuilderPage() {
         {/* ── Center: build chat + composer ──────────────────────────── */}
         <main className="flex-1 min-w-0 flex flex-col border-r border-[var(--color-border)]">
           {!active ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
-              <Blocks size={32} className="text-[var(--color-primary)] mb-3" />
-              <p className="text-sm font-semibold">Create a project to start building</p>
-              <p className="text-xs text-[var(--color-muted)] mt-1 max-w-sm">Describe an app and Headroom builds it — using your real business data, with a live preview you can publish.</p>
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              <div className="text-center mb-5">
+                <Blocks size={30} className="text-[var(--color-primary)] mb-2 mx-auto" />
+                <p className="text-sm font-semibold">Start from a template — or describe your own</p>
+                <p className="text-xs text-[var(--color-muted)] mt-1 max-w-md mx-auto">One click builds a real app from your live business data, with a preview you can publish. Or hit “New project” to start blank.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-2xl mx-auto">
+                {APP_TEMPLATES.map((t) => (
+                  <button key={t.name} onClick={() => startFromTemplate(t)} disabled={building}
+                    className="text-left rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3.5 hover:border-[var(--color-primary)]/50 transition-colors disabled:opacity-50">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-7 h-7 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0"><Sparkles size={14} className="text-[var(--color-primary)]" /></div>
+                      <span className="text-sm font-semibold">{t.name}</span>
+                      <span className="ml-auto text-[10px] text-[var(--color-muted)] border border-[var(--color-border)] rounded-full px-1.5 py-0.5">{t.tag}</span>
+                    </div>
+                    <p className="text-[11px] text-[var(--color-muted)] leading-relaxed line-clamp-2">{t.prompt}</p>
+                  </button>
+                ))}
+              </div>
+              {building && <p className="text-center text-xs text-[var(--color-muted)] mt-4 flex items-center justify-center gap-2"><Loader2 size={13} className="animate-spin" /> Building your app…</p>}
             </div>
           ) : (
             <>
