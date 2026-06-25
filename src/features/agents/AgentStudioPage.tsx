@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { Wand2, Sparkles, Loader2, Bot, ShieldCheck, Cpu } from "lucide-react";
+import { Wand2, Sparkles, Loader2, Bot, ShieldCheck, Cpu, MessageSquare, Settings2 } from "lucide-react";
 import BooksAgentsTab from "@/features/books/BooksAgentsTab";
+import AgentWorkspace from "@/features/agents/AgentWorkspace";
 import { humanizeAiError } from "@/components/ai/aiError";
 
 interface ToolDef { name: string; description?: string; scope?: "read" | "write" }
@@ -20,9 +21,29 @@ export default function AgentStudioPage() {
   const [reloadKey, setReloadKey] = useState(0);
   // The just-built agent — its row auto-opens its Run panel so it's ready to test.
   const [autoRunId, setAutoRunId] = useState<string | undefined>(undefined);
+  // Workspace (Kogo-style chat) is the default surface; Build = engine/templates/editor.
+  const [view, setView] = useState<"workspace" | "build">("workspace");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      <div className="flex items-center gap-2">
+        <h1 className="text-2xl font-bold flex items-center gap-2 mr-auto">
+          <Bot className="text-[var(--color-primary)]" size={24} /> Agent Studio
+        </h1>
+        <div className="flex rounded-lg border border-[var(--color-border)] p-0.5 text-sm">
+          <button onClick={() => setView("workspace")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-colors ${view === "workspace" ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+            <MessageSquare size={14} /> Workspace
+          </button>
+          <button onClick={() => setView("build")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-colors ${view === "build" ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+            <Settings2 size={14} /> Build &amp; manage
+          </button>
+        </div>
+      </div>
+
+      {view === "workspace" ? (
+        <AgentWorkspace />
+      ) : (
+      <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Bot className="text-[var(--color-primary)]" size={26} /> Agent Studio
@@ -43,6 +64,8 @@ export default function AgentStudioPage() {
       <NaturalLanguageBuilder onCreated={(id) => { setAutoRunId(id); setReloadKey((k) => k + 1); }} />
 
       <BooksAgentsTab key={reloadKey} autoRunAgentId={autoRunId} />
+      </div>
+      )}
     </div>
   );
 }
