@@ -67,4 +67,20 @@ router.get("/projects/:id/deployments", async (req, res) => {
   try { res.json(await studio.listDeployments(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); }
 });
 
+// ── Agent bridge grants (P6) — which agents this app may embed ────────────────
+router.get("/projects/:id/agents", async (req, res) => {
+  try { res.json(await studio.listAppAgents(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); }
+});
+router.post("/projects/:id/agents", canWrite, async (req, res) => {
+  try { res.json(await studio.grantAgent(tenantOf(req), req.params.id, (req.body || {}).agentId)); } catch (e) { fail(res, e); }
+});
+router.delete("/projects/:id/agents/:agentId", canWrite, async (req, res) => {
+  try { res.json(await studio.revokeAgent(tenantOf(req), req.params.id, req.params.agentId)); } catch (e) { fail(res, e); }
+});
+
+// Delete (archive) a project.
+router.delete("/projects/:id", canWrite, async (req, res) => {
+  try { res.json(await studio.updateProject(tenantOf(req), req.params.id, { archived: true })); } catch (e) { fail(res, e); }
+});
+
 module.exports = router;

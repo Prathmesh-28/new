@@ -113,6 +113,16 @@ async function generate(tenantId, actorId, projectId, { prompt, mode = "build", 
   const current = currentRaw && currentRaw.length > MAX_CONTEXT_HTML ? currentRaw.slice(0, MAX_CONTEXT_HTML) + "\n<!-- …truncated for length; preserve overall structure --> " : currentRaw;
   let system = BUILD_SYSTEM;
   if (ctx) system += `\n\n--- Business data (real; inline what's relevant) ---\n${ctx}`;
+
+  // Agent bridge: if this project has granted agents, tell the model how to embed them.
+  const grants = await studio.listAppAgents(tenantId, projectId).then((g) => g.granted).catch(() => []);
+  if (grants && grants.length) {
+    system += `\n\n--- Embeddable agents (this app may call these) ---\n`
+      + `When the user asks for a chatbot/assistant/"ask" feature, add a chat widget that calls:\n`
+      + `  window.HEADROOM.askAgent(agentId, message)  // returns a Promise<{reply:string}>\n`
+      + `(window.HEADROOM is injected at runtime; guard with: if (window.HEADROOM) { ... } else show "Publish to enable the assistant".)\n`
+      + `Available agents: ${grants.map((a) => `"${a.name}" (id ${a.id})`).join(", ")}.`;
+  }
   if (current) system += `\n\n--- Current app HTML (apply the requested change and return the FULL updated document) ---\n${current}`;
 
   const res = await llm.chat(tenantId, {

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { humanizeAiError } from "@/components/ai/aiError";
 import {
   Blocks, Plus, Search, Loader2, Sparkles, FileCode2, Monitor, ShieldCheck, Cpu,
-  Send, ExternalLink, Share2, History, RotateCcw, RefreshCw, Lightbulb,
+  Send, ExternalLink, Share2, History, RotateCcw, RefreshCw, Lightbulb, Bot, Trash2, Check,
 } from "lucide-react";
 
 /**
@@ -17,6 +17,8 @@ import {
  */
 interface Project { id: string; name: string; slug: string; current_version_id?: string | null }
 interface Version { id: string; summary?: string | null; prompt?: string | null; created_at?: string; file_tree?: Record<string, string> }
+interface AgentRef { id: string; name: string }
+interface AppAgents { granted: AgentRef[]; available: AgentRef[] }
 interface LogEntry { role: "user" | "system"; text: string; plan?: boolean; error?: boolean }
 interface GenResult { mode: "plan" | "build"; plan?: string; html?: string; summary?: string; version?: Version }
 
@@ -33,10 +35,12 @@ export default function AppBuilderPage() {
   const [versionsById, setVersionsById] = useState<Record<string, Version[]>>({});
   const [pubById, setPubById] = useState<Record<string, string>>({}); // projectId → public url
 
+  const [agentsById, setAgentsById] = useState<Record<string, AppAgents>>({});
   const [prompt, setPrompt] = useState("");
   const [building, setBuilding] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
+  const [showAgents, setShowAgents] = useState(false);
   const [previewNonce, setPreviewNonce] = useState(0);
   const loaded = useRef<Set<string>>(new Set());
   const logRef = useRef<HTMLDivElement>(null);
@@ -74,8 +78,28 @@ export default function AppBuilderPage() {
       api.get<{ url?: string; token?: string }[]>(`/api/studio/projects/${activeId}/deployments`)
         .then((d) => { const live = Array.isArray(d) ? d.find((x) => x.url) : null; if (live?.url) setPubById((m) => ({ ...m, [activeId]: (API_BASE || window.location.origin) + live.url })); })
         .catch(() => {});
+      api.get<AppAgents>(`/api/studio/projects/${activeId}/agents`).then((a) => setAgentsById((m) => ({ ...m, [activeId]: a }))).catch(() => {});
     })();
   }, [activeId, refreshVersions]);
+
+  const toggleAgent = async (agentId: string, grant: boolean) => {
+    try {
+      const res = grant
+        ? await api.post<AppAgents>(`/api/studio/projects/${activeId}/agents`, { agentId })
+        : await api.delete<AppAgents>(`/api/studio/projects/${activeId}/agents/${agentId}`);
+      setAgentsById((m) => ({ ...m, [activeId]: res }));
+    } catch (e) { toast.error(humanizeAiError(e)); }
+  };
+
+  const deleteProject = async (id: string) => {
+    try {
+      await api.delete(`/api/studio/projects/${id}`);
+      loaded.current.delete(id);
+      if (activeId === id) setActiveId("");
+      await load();
+      toast.success("Project deleted");
+    } catch (e) { toast.error(humanizeAiError(e)); }
+  };
 
   useEffect(() => { logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" }); }, [logById, activeId, building]);
 
@@ -151,6 +175,7 @@ export default function AppBuilderPage() {
   const log = logById[activeId] ?? [];
   const versions = versionsById[activeId] ?? [];
   const pub = pubById[activeId];
+  const appAgents = agentsById[activeId] ?? { granted: [], available: [] };
 
   return (
     <div className="space-y-5">
@@ -182,11 +207,13 @@ export default function AppBuilderPage() {
             ) : filtered.length === 0 ? (
               <p className="px-2 py-2 text-xs text-[var(--color-muted)]">No projects yet — create one to start.</p>
             ) : filtered.map((p) => (
-              <button key={p.id} onClick={() => setActiveId(p.id)}
-                className={`w-full text-left flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${p.id === activeId ? "bg-[var(--color-primary)]/15 text-[var(--color-text)]" : "text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-text)]"}`}>
+              <div key={p.id} onClick={() => setActiveId(p.id)} role="button" tabIndex={0}
+                className={`group w-full text-left flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors cursor-pointer ${p.id === activeId ? "bg-[var(--color-primary)]/15 text-[var(--color-text)]" : "text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-text)]"}`}>
                 <FileCode2 size={14} className="shrink-0 text-[var(--color-primary)]" />
-                <span className="truncate">{p.name || "Untitled app"}</span>
-              </button>
+                <span className="truncate flex-1">{p.name || "Untitled app"}</span>
+                <button onClick={(e) => { e.stopPropagation(); if (confirm(`Delete "${p.name || "this app"}"? This can't be undone.`)) deleteProject(p.id); }}
+                  title="Delete project" className="opacity-0 group-hover:opacity-100 text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={13} /></button>
+              </div>
             ))}
           </div>
         </aside>
@@ -204,7 +231,32 @@ export default function AppBuilderPage() {
               <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-[var(--color-border)]">
                 <FileCode2 size={16} className="text-[var(--color-primary)] shrink-0" />
                 <span className="font-semibold truncate">{active.name || "Untitled app"}</span>
+                {/* Agents this app may embed (the wedge) */}
                 <div className="ml-auto relative">
+                  <button onClick={() => setShowAgents((v) => !v)}
+                    className="flex items-center gap-1 text-xs rounded-lg border border-[var(--color-border)] px-2 py-1 text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Embed your agents in this app">
+                    <Bot size={12} /> Agents{appAgents.granted.length ? ` ${appAgents.granted.length}` : ""}
+                  </button>
+                  {showAgents && (
+                    <div className="absolute right-0 top-8 z-20 w-72 max-h-72 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl p-2">
+                      <p className="text-[11px] text-[var(--color-muted)] px-1 pb-1.5">Let this app call your agents via <span className="font-mono">window.HEADROOM.askAgent()</span>. Then ask the builder to "add a chatbot powered by &lt;agent&gt;".</p>
+                      {appAgents.available.length === 0 ? (
+                        <p className="text-xs text-[var(--color-muted)] px-1 py-2">No agents yet — build one in Agent Studio.</p>
+                      ) : appAgents.available.map((a) => {
+                        const on = appAgents.granted.some((g) => g.id === a.id);
+                        return (
+                          <button key={a.id} onClick={() => toggleAgent(a.id, !on)}
+                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${on ? "bg-[var(--color-primary)]/10 text-[var(--color-text)]" : "text-[var(--color-muted)] hover:bg-white/5"}`}>
+                            <Bot size={13} className="text-[var(--color-primary)] shrink-0" />
+                            <span className="flex-1 truncate text-left">{a.name}</span>
+                            {on && <Check size={13} className="text-[var(--color-primary)]" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="relative">
                   <button onClick={() => setShowVersions((v) => !v)} disabled={versions.length === 0}
                     className="flex items-center gap-1 text-xs rounded-lg border border-[var(--color-border)] px-2 py-1 text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-40">
                     <History size={12} /> {versions.length} version{versions.length === 1 ? "" : "s"}

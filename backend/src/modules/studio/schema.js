@@ -58,6 +58,18 @@ const STUDIO_SCHEMA = `
   ALTER TABLE studio_deployments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
   CREATE INDEX IF NOT EXISTS studio_deployments_project ON studio_deployments(project_id, created_at DESC);
   CREATE UNIQUE INDEX IF NOT EXISTS studio_deployments_token ON studio_deployments(token) WHERE token IS NOT NULL;
+
+  -- ── Agent bridge (the wedge) — which Agent Studio agents an app may embed ─────
+  -- A grant lets the project's published app call that agent through the public,
+  -- metered bridge (/api/agent-bridge/:appToken/chat). Tenant-scoped both ways.
+  CREATE TABLE IF NOT EXISTS studio_app_agents (
+    project_id  UUID NOT NULL REFERENCES studio_projects(id) ON DELETE CASCADE,
+    tenant_id   TEXT NOT NULL,
+    agent_id    UUID NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (project_id, agent_id)
+  );
+  CREATE INDEX IF NOT EXISTS studio_app_agents_tenant ON studio_app_agents(tenant_id, project_id);
 `;
 
 module.exports = { STUDIO_SCHEMA };

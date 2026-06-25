@@ -214,11 +214,11 @@ async function publish(tenantId, projectId) {
 }
 
 // Public (no tenant scope — addressed by an unguessable token). Returns the published
-// app's HTML + project name, or null if the token is unknown / not live.
+// app's HTML + name + the agents it may embed (for the bridge bootstrap), or null.
 async function getPublished(token) {
   if (!token) return null;
   const { rows } = await pool.query(
-    `SELECT d.version_id, p.name, v.file_tree
+    `SELECT d.project_id, p.name, v.file_tree
        FROM studio_deployments d
        JOIN studio_projects p ON p.id = d.project_id
        JOIN studio_project_versions v ON v.id = d.version_id
@@ -227,9 +227,63 @@ async function getPublished(token) {
     [token]
   );
   if (!rows[0]) return null;
-  const html = rows[0].file_tree && rows[0].file_tree["index.html"];
+  const r = rows[0];
+  const html = r.file_tree && r.file_tree["index.html"];
   if (!html) return null;
-  return { name: rows[0].name, html };
+  const { rows: agents } = await pool.query(
+    `SELECT a.id, a.name FROM studio_app_agents g
+       JOIN book_agents a ON a.id = g.agent_id AND a.tenant_id = g.tenant_id
+      WHERE g.project_id=$1 AND a.enabled=true ORDER BY a.name`,
+    [r.project_id]
+  );
+  return { name: r.name, html, agents };
+}
+
+// ── Agent-bridge grants (P6) ─────────────────────────────────────────────────
+async function listAppAgents(tenantId, projectId) {
+  await getProject(tenantId, projectId); // tenant/ownership check
+  const granted = (await pool.query(
+    `SELECT a.id, a.name FROM studio_app_agents g
+       JOIN book_agents a ON a.id = g.agent_id AND a.tenant_id = g.tenant_id
+      WHERE g.project_id=$1 AND g.tenant_id=$2 ORDER BY a.name`,
+    [projectId, tenantId]
+  )).rows;
+  const available = (await pool.query(
+    `SELECT id, name FROM book_agents WHERE tenant_id=$1 AND enabled=true ORDER BY name`,
+    [tenantId]
+  )).rows;
+  return { granted, available };
+}
+
+async function grantAgent(tenantId, projectId, agentId) {
+  await getProject(tenantId, projectId);
+  const { rows } = await pool.query("SELECT id FROM book_agents WHERE tenant_id=$1 AND id=$2", [tenantId, agentId]);
+  if (!rows[0]) throw new StudioError("NOT_FOUND", "Agent not found in this workspace", 404);
+  await pool.query(
+    "INSERT INTO studio_app_agents(project_id, tenant_id, agent_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
+    [projectId, tenantId, agentId]
+  );
+  return listAppAgents(tenantId, projectId);
+}
+
+async function revokeAgent(tenantId, projectId, agentId) {
+  await getProject(tenantId, projectId);
+  await pool.query("DELETE FROM studio_app_agents WHERE project_id=$1 AND tenant_id=$2 AND agent_id=$3", [projectId, tenantId, agentId]);
+  return listAppAgents(tenantId, projectId);
+}
+
+// Public bridge resolver: returns { tenantId } iff the app token is live AND that
+// agent is granted to its project — else null. The token is the capability.
+async function resolveBridgeGrant(token, agentId) {
+  if (!token || !agentId) return null;
+  const { rows } = await pool.query(
+    `SELECT g.tenant_id
+       FROM studio_deployments d
+       JOIN studio_app_agents g ON g.project_id = d.project_id AND g.agent_id = $2
+      WHERE d.token=$1 AND d.status='live' LIMIT 1`,
+    [token, agentId]
+  );
+  return rows[0] ? { tenantId: rows[0].tenant_id, agentId } : null;
 }
 
 async function listDeployments(tenantId, projectId) {
@@ -249,4 +303,5 @@ module.exports = {
   createProject, listProjects, getProject, updateProject,
   createVersion, listVersions, getVersion, listDeployments,
   restoreVersion, publish, getPublished,
+  listAppAgents, grantAgent, revokeAgent, resolveBridgeGrant,
 };
