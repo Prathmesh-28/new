@@ -23,6 +23,7 @@ interface SwarmMsg { role: string; message: string }
 interface Critique { round: number; approved: boolean; issues: string }
 interface RunResponse { reply?: string; steps?: RunStep[]; pendingActions?: PendingAction[]; plan?: string[]; subResults?: SubResult[]; messages?: SwarmMsg[]; critiques?: Critique[] }
 interface Turn { role: "user" | "assistant"; text: string; steps?: RunStep[]; pending?: PendingAction[]; plan?: string[]; subResults?: SubResult[]; messages?: SwarmMsg[]; critiques?: Critique[] }
+interface RunRow { id: string; input?: string; reply?: string; steps?: RunStep[]; pendingActions?: PendingAction[]; status?: string; created_at?: string }
 interface Usage { tokensThisMonth: number; cap: number; runs: number }
 
 // LLM-agnostic, like Kogo: pick the engine per agent. Free default first.
@@ -88,6 +89,26 @@ export default function AgentWorkspace() {
   const active = agents.find(a => a.id === activeId);
   const turns = convos[activeId] ?? [];
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [turns, running]);
+
+  // Chat history: runs are persisted server-side (book_agent_runs) but the transcript
+  // otherwise lives only in browser memory and is lost on reload/navigation. Hydrate it
+  // from the server once per workspace, without clobbering a live in-session conversation.
+  const historyLoaded = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!activeId || historyLoaded.current.has(activeId)) return;
+    historyLoaded.current.add(activeId);
+    api.get<RunRow[]>(`/api/books/agents/${activeId}/runs?limit=50`)
+      .then(runs => {
+        if (!Array.isArray(runs) || runs.length === 0) return;
+        const hist: Turn[] = [];
+        for (const r of [...runs].reverse()) {
+          if (r.input) hist.push({ role: "user", text: r.input });
+          hist.push({ role: "assistant", text: r.reply || "(no reply)", steps: r.steps || [], pending: r.pendingActions || [] });
+        }
+        setConvos(c => ((c[activeId]?.length ?? 0) > 0 ? c : { ...c, [activeId]: hist }));
+      })
+      .catch(() => {});
+  }, [activeId]);
 
   const createWorkspace = async () => {
     try {

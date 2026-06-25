@@ -816,6 +816,8 @@ router.patch("/agents/:id", canPost, async (req, res) => { try { res.json(await 
 router.delete("/agents/:id", canPost, async (req, res) => { try { res.json(await agents.deleteAgent(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.post("/agents/:id/run", async (req, res) => { try { res.json(await agents.runAgent(tenantOf(req), req.user.id, req.params.id, (req.body || {}).message || "")); } catch (e) { fail(res, e); } });
 router.post("/agents/:id/swarm", async (req, res) => { try { res.json(await agents.runSwarm(tenantOf(req), req.user.id, req.params.id, (req.body || {}).message || "")); } catch (e) { fail(res, e); } });
+// Past runs (chat history) — so the workspace transcript survives a reload instead of living only in browser memory.
+router.get("/agents/:id/runs", async (req, res) => { try { res.json(await agents.listRuns(tenantOf(req), req.params.id, req.query.limit)); } catch (e) { fail(res, e); } });
 // Approve a proposed write action (human-in-the-loop) — re-checks the actor's role.
 router.post("/agents/:id/confirm", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await agents.confirmAction(tenantOf(req), req.user.id, { tool: b.tool, args: b.args, role: req.user.role })); } catch (e) { fail(res, e); } });
 // Agent knowledge (RAG) docs.

@@ -434,6 +434,32 @@ async function runScheduledAgents(now = new Date()) {
   return { ran, skipped };
 }
 
+// Load an agent's past runs (newest-first) so the workspace transcript survives a
+// reload/navigation instead of living only in browser memory. The trailing
+// {pendingActions} marker that persistRun folds into steps is split back out so the
+// approval cards re-render. Returns chronological-ready rows (caller reverses).
+async function listRuns(tenantId, agentId, limit = 50) {
+  const lim = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+  const { rows } = await pool.query(
+    `SELECT id, input, reply, steps, status, created_at
+       FROM book_agent_runs
+      WHERE tenant_id=$1 AND agent_id=$2
+      ORDER BY created_at DESC
+      LIMIT $3`,
+    [tenantId, agentId, lim]
+  ).catch(() => ({ rows: [] }));
+  return rows.map((r) => {
+    const raw = Array.isArray(r.steps) ? r.steps : [];
+    const steps = [];
+    let pendingActions = [];
+    for (const s of raw) {
+      if (s && Array.isArray(s.pendingActions)) pendingActions = s.pendingActions;
+      else steps.push(s);
+    }
+    return { id: r.id, input: r.input, reply: r.reply, steps, pendingActions, status: r.status, created_at: r.created_at };
+  });
+}
+
 async function persistRun(tenantId, agentId, actorId, input, reply, steps, status, pendingActions) {
   // pendingActions (autonomous scheduled runs) have no dedicated column, so they
   // ride along inside the steps JSONB as a single trailing marker entry. This keeps
@@ -621,5 +647,5 @@ async function usageSummary(tenantId) {
 
 module.exports = {
   createAgent, listAgents, getAgent, updateAgent, deleteAgent, runAgent, confirmAction,
-  runScheduledAgents, runSwarm, usageSummary,
+  runScheduledAgents, runSwarm, usageSummary, listRuns,
 };
