@@ -106,7 +106,11 @@ async function generate(tenantId, actorId, projectId, { prompt, mode = "build", 
   }
 
   const ctx = await businessContext(tenantId, actorId);
-  const current = project.current_version && project.current_version.file_tree && project.current_version.file_tree["index.html"];
+  const currentRaw = project.current_version && project.current_version.file_tree && project.current_version.file_tree["index.html"];
+  // Cap the fed-back HTML so an ever-growing app can't blow the model's context/cost.
+  // Generous (self-contained apps are usually well under this); only pathological sizes truncate.
+  const MAX_CONTEXT_HTML = 60000;
+  const current = currentRaw && currentRaw.length > MAX_CONTEXT_HTML ? currentRaw.slice(0, MAX_CONTEXT_HTML) + "\n<!-- …truncated for length; preserve overall structure --> " : currentRaw;
   let system = BUILD_SYSTEM;
   if (ctx) system += `\n\n--- Business data (real; inline what's relevant) ---\n${ctx}`;
   if (current) system += `\n\n--- Current app HTML (apply the requested change and return the FULL updated document) ---\n${current}`;

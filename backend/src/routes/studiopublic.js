@@ -14,6 +14,11 @@ router.get("/:token", async (req, res) => {
   try {
     const app = await studio.getPublished(req.params.token);
     if (!app) return res.status(404).type("html").send("<!doctype html><meta charset=utf-8><title>Not found</title><body style=\"font-family:system-ui;background:#101830;color:#E8EDF6;display:grid;place-items:center;height:100vh;margin:0\"><p>This app link is no longer available.</p>");
+    // The global securityHeaders middleware set X-Frame-Options: DENY + a strict CSP
+    // on this response; replace them so the published app can be embedded (it stays
+    // isolated via the CSP `sandbox` directive — a unique opaque origin, scripts but
+    // no same-origin access — so framing it is safe).
+    res.removeHeader("X-Frame-Options");
     res.set({
       "Content-Type": "text/html; charset=utf-8",
       "Content-Security-Policy": "sandbox allow-scripts allow-popups allow-forms allow-modals allow-downloads",

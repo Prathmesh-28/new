@@ -149,23 +149,24 @@ export default function AgentWorkspace() {
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let buf = "";
+    const consume = (block: string) => {
+      for (const line of block.split("\n")) {
+        const t = line.trim();
+        if (!t.startsWith("data:")) continue;
+        const payload = t.slice(5).trim();
+        if (!payload) continue;
+        try { onEvent(JSON.parse(payload) as StreamEvent); } catch { /* keepalive/comment */ }
+      }
+    };
     try {
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         buf += dec.decode(value, { stream: true });
         let nl;
-        while ((nl = buf.indexOf("\n\n")) >= 0) {
-          const block = buf.slice(0, nl); buf = buf.slice(nl + 2);
-          for (const line of block.split("\n")) {
-            const t = line.trim();
-            if (!t.startsWith("data:")) continue;
-            const payload = t.slice(5).trim();
-            if (!payload) continue;
-            try { onEvent(JSON.parse(payload) as StreamEvent); } catch { /* keepalive/comment */ }
-          }
-        }
+        while ((nl = buf.indexOf("\n\n")) >= 0) { consume(buf.slice(0, nl)); buf = buf.slice(nl + 2); }
       }
+      if (buf.trim()) consume(buf); // flush a final frame not terminated by \n\n
     } catch {
       onEvent({ type: "error", message: "Connection lost — the answer may be incomplete." });
     }
@@ -174,7 +175,7 @@ export default function AgentWorkspace() {
 
   const send = async () => {
     const text = input.trim();
-    if (!text || !activeId) return;
+    if (!text || !activeId || running) return;   // ignore re-entrant sends (avoids garbling the live turn)
     const agentId = activeId;
     setInput("");
     setConvos(c => ({ ...c, [agentId]: [...(c[agentId] ?? []), { role: "user", text }] }));

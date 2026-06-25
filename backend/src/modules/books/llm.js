@@ -235,35 +235,39 @@ async function chatStream(tenantId, { system, messages = [], tools, model: model
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
+    // Parse one SSE block (one or more "data:" lines), accumulating into closures.
+    const consume = (block) => {
+      for (const line of block.split("\n")) {
+        const t = line.trim();
+        if (!t.startsWith("data:")) continue;
+        const payload = t.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
+        let j; try { j = JSON.parse(payload); } catch { continue; }
+        if (j.usage) usage = j.usage;
+        const d = j.choices && j.choices[0] && j.choices[0].delta;
+        if (!d) continue;
+        if (d.content) { content += d.content; if (onDelta) { try { onDelta({ type: "token", text: d.content }); } catch { /* ignore sink errors */ } } }
+        if (Array.isArray(d.tool_calls)) {
+          for (const tc of d.tool_calls) {
+            const i = Number.isInteger(tc.index) ? tc.index : 0;
+            if (!acc[i]) acc[i] = { id: tc.id || `call_${i}`, type: "function", function: { name: "", arguments: "" } };
+            if (tc.id) acc[i].id = tc.id;
+            if (tc.function && tc.function.name) acc[i].function.name += tc.function.name;
+            if (tc.function && tc.function.arguments) acc[i].function.arguments += tc.function.arguments;
+          }
+        }
+      }
+    };
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       buf += decoder.decode(value, { stream: true });
       let nl;
       while ((nl = buf.indexOf("\n\n")) >= 0) {
-        const block = buf.slice(0, nl); buf = buf.slice(nl + 2);
-        for (const line of block.split("\n")) {
-          const t = line.trim();
-          if (!t.startsWith("data:")) continue;
-          const payload = t.slice(5).trim();
-          if (!payload || payload === "[DONE]") continue;
-          let j; try { j = JSON.parse(payload); } catch { continue; }
-          if (j.usage) usage = j.usage;
-          const d = j.choices && j.choices[0] && j.choices[0].delta;
-          if (!d) continue;
-          if (d.content) { content += d.content; if (onDelta) { try { onDelta({ type: "token", text: d.content }); } catch { /* ignore sink errors */ } } }
-          if (Array.isArray(d.tool_calls)) {
-            for (const tc of d.tool_calls) {
-              const i = Number.isInteger(tc.index) ? tc.index : 0;
-              if (!acc[i]) acc[i] = { id: tc.id || `call_${i}`, type: "function", function: { name: "", arguments: "" } };
-              if (tc.id) acc[i].id = tc.id;
-              if (tc.function && tc.function.name) acc[i].function.name += tc.function.name;
-              if (tc.function && tc.function.arguments) acc[i].function.arguments += tc.function.arguments;
-            }
-          }
-        }
+        consume(buf.slice(0, nl)); buf = buf.slice(nl + 2);
       }
     }
+    if (buf.trim()) consume(buf);   // flush a trailing frame not terminated by \n\n
     const tool_calls = acc.filter(Boolean);
     return { content, tool_calls: tool_calls.length ? tool_calls : undefined, usage: parseUsage({ usage }) };
   };

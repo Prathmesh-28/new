@@ -203,9 +203,9 @@ async function runAgentStream(tenantId, actorId, agentId, userMessage, emit, sig
     emit({ type: "done", status });
   } catch (e) {
     status = "error";
-    reply = e && e.message ? e.message : String(e);
+    reply = e instanceof Error ? e.message : (e && e.message ? e.message : String(e));
     if (agent) {
-      await persistRun(tenantId, agentId, actorId, userMessage, reply, steps, status, pendingActions).catch(() => {});
+      await persistRun(tenantId, agentId, actorId, userMessage, reply, steps, status, pendingActions).catch((err) => console.error("[agents] runAgentStream persist failed:", err.message));
       await _recordUsage(tenantId, runId, totalTokens).catch(() => {});
     }
     emit({ type: "error", message: reply, code: e && e.code });

@@ -43,30 +43,36 @@ async function uniqueSlug(tenantId, name) {
 
 async function createProject(tenantId, createdBy, { name } = {}) {
   const projName = String(name || "").trim() || "Untitled app";
-  const slug = await uniqueSlug(tenantId, projName);
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const { rows: pr } = await client.query(
-      `INSERT INTO studio_projects(tenant_id, name, slug, created_by)
-       VALUES($1,$2,$3,$4) RETURNING *`,
-      [tenantId, projName, slug, createdBy || null]
-    );
-    const project = pr[0];
-    // Seed an empty initial version so every project always has a current version.
-    const { rows: vr } = await client.query(
-      `INSERT INTO studio_project_versions(project_id, tenant_id, file_tree, summary, created_by)
-       VALUES($1,$2,'{}'::jsonb,'Empty project',$3) RETURNING *`,
-      [project.id, tenantId, createdBy || null]
-    );
-    await client.query("UPDATE studio_projects SET current_version_id=$1 WHERE id=$2", [vr[0].id, project.id]);
-    await client.query("COMMIT");
-    return { ...project, current_version_id: vr[0].id, current_version: vr[0] };
-  } catch (e) {
-    await client.query("ROLLBACK").catch(() => {});
-    throw e;
-  } finally {
-    client.release();
+  let slug = await uniqueSlug(tenantId, projName);
+  // Retry on a unique-slug race: uniqueSlug → INSERT is not atomic, so a concurrent
+  // create of the same name can collide on UNIQUE(tenant_id, slug). The DB constraint
+  // protects integrity; here we just recover with a random suffix instead of erroring.
+  for (let attempt = 0; ; attempt++) {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const { rows: pr } = await client.query(
+        `INSERT INTO studio_projects(tenant_id, name, slug, created_by)
+         VALUES($1,$2,$3,$4) RETURNING *`,
+        [tenantId, projName, slug, createdBy || null]
+      );
+      const project = pr[0];
+      // Seed an empty initial version so every project always has a current version.
+      const { rows: vr } = await client.query(
+        `INSERT INTO studio_project_versions(project_id, tenant_id, file_tree, summary, created_by)
+         VALUES($1,$2,'{}'::jsonb,'Empty project',$3) RETURNING *`,
+        [project.id, tenantId, createdBy || null]
+      );
+      await client.query("UPDATE studio_projects SET current_version_id=$1 WHERE id=$2", [vr[0].id, project.id]);
+      await client.query("COMMIT");
+      return { ...project, current_version_id: vr[0].id, current_version: vr[0] };
+    } catch (e) {
+      await client.query("ROLLBACK").catch(() => {});
+      if (e.code === "23505" && attempt < 3) { slug = `${slugify(projName)}-${require("crypto").randomBytes(3).toString("hex")}`; continue; }
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 }
 
