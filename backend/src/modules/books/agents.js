@@ -478,11 +478,11 @@ async function runSwarm(tenantId, actorId, agentId, userMessage) {
   const allowed = Array.isArray(agent.tools) ? agent.tools : [];
   const catalogDesc = toolsLib.toolCatalog().filter((t) => allowed.includes(t.name)).map((t) => `${t.name} (${t.scope || "read"}): ${t.description || ""}`).join("\n");
 
-  // 1) Plan — specialists with a role + an assigned tool subset (from the agent's allowed set).
+  // 1) Plan — specialists with role, tool subset, AND dependencies (a small DAG).
   let plan = [];
   try {
     const planMsg = await llm.chat(tenantId, {
-      system: `You are the lead of a SWARM of specialist sub-agents for an Indian SMB. Break the goal into 2-4 INDEPENDENT sub-tasks that can run IN PARALLEL. For each, give a short "role" (e.g. "Collections analyst"), the "task", and "tools" it needs (choose ONLY from the available tools below; [] if none needed). Return ONLY a JSON array: [{"role":"","task":"","tools":[]}]. No prose.\n\nAvailable tools:\n${catalogDesc || "(none)"}`,
+      system: `You are the lead of a SWARM of specialist sub-agents for an Indian SMB. Break the goal into 2-5 sub-tasks. Independent ones run in parallel; a sub-task that NEEDS another's output lists that other's id in "dependsOn". For each give: "id" (e.g. "t1"), a short "role" (e.g. "Collections analyst"), the "task", "tools" (ONLY from the available tools below; [] if none), and "dependsOn" (array of other ids; [] if independent). Return ONLY a JSON array: [{"id":"t1","role":"","task":"","tools":[],"dependsOn":[]}]. No prose.\n\nAvailable tools:\n${catalogDesc || "(none)"}`,
       messages: [{ role: "user", content: userMessage }],
       model: agent.model || undefined,
     });
@@ -491,31 +491,52 @@ async function runSwarm(tenantId, actorId, agentId, userMessage) {
     plan = JSON.parse(j);
   } catch { plan = []; }
   plan = (Array.isArray(plan) ? plan : [])
-    .map((p) => ({
+    .map((p, i) => ({
+      id: String(p?.id || `t${i + 1}`),
       role: String(p?.role || "Specialist").slice(0, 40),
       task: String(p?.task || "").trim(),
       tools: Array.isArray(p?.tools) ? p.tools.filter((t) => allowed.includes(t)) : [],
+      dependsOn: Array.isArray(p?.dependsOn) ? p.dependsOn.map(String) : [],
     }))
     .filter((p) => p.task)
-    .slice(0, 4);
-  if (!plan.length) plan = [{ role: "Generalist", task: userMessage, tools: allowed }];
+    .slice(0, 5);
+  if (!plan.length) plan = [{ id: "t1", role: "Generalist", task: userMessage, tools: allowed, dependsOn: [] }];
+  // Keep only edges that point at real ids in this plan (and never self).
+  const planIds = new Set(plan.map((p) => p.id));
+  for (const p of plan) p.dependsOn = p.dependsOn.filter((d) => planIds.has(d) && d !== p.id);
 
-  // 2) Run specialists IN PARALLEL — each a derived agent with only its tools + a role prompt.
-  const subRuns = await Promise.all(plan.map(async (p) => {
+  // 2) Execute the DAG — each "wave" of ready sub-tasks runs IN PARALLEL; a dependent
+  //    sub-agent receives its upstream dependencies' findings as context (chained agents).
+  const runOne = async (p, depContext) => {
     const steps = [];
     const pending = [];
+    const ctx = depContext ? `\n\nUpstream sub-agent findings you must build on:\n${depContext}` : "";
     const subAgent = {
       ...agent,
       tools: p.tools.length ? p.tools : allowed,
-      instructions: `${agent.instructions || ""}\n\nYou are the "${p.role}" sub-agent in a swarm. Focus ONLY on this sub-task: ${p.task}. Use your tools, and return a tight, factual result (with ₹ figures where relevant) the lead can synthesise.`,
+      instructions: `${agent.instructions || ""}\n\nYou are the "${p.role}" sub-agent in a swarm. Focus ONLY on this sub-task: ${p.task}.${ctx}\nUse your tools and return a tight, factual result (with ₹ where relevant) the lead can synthesise.`,
     };
     try {
       const out = await _driveLoop(tenantId, actorId, subAgent, p.task, steps, pending, true);
-      return { role: p.role, task: p.task, reply: out.reply, steps, tokens: out.totalTokens || 0, pending };
+      return { id: p.id, role: p.role, task: p.task, reply: out.reply, steps, tokens: out.totalTokens || 0, pending };
     } catch (e) {
-      return { role: p.role, task: p.task, reply: `Error: ${e.message || String(e)}`, steps, tokens: 0, pending };
+      return { id: p.id, role: p.role, task: p.task, reply: `Error: ${e.message || String(e)}`, steps, tokens: 0, pending };
     }
-  }));
+  };
+  const done = {};                 // id -> completed run result
+  let remaining = plan.slice();
+  let guard = 0;
+  while (remaining.length && guard++ <= plan.length) {
+    let ready = remaining.filter((p) => p.dependsOn.every((d) => done[d]));
+    if (!ready.length) ready = remaining; // unsatisfiable/cycle — break it, run the rest
+    const wave = await Promise.all(ready.map((p) => {
+      const depContext = p.dependsOn.map((d) => done[d]).filter(Boolean).map((r) => `- ${r.role}: ${r.reply}`).join("\n");
+      return runOne(p, depContext);
+    }));
+    for (const r of wave) done[r.id] = r;
+    remaining = remaining.filter((p) => !ready.includes(p));
+  }
+  const subRuns = plan.map((p) => done[p.id]).filter(Boolean);
   for (const r of subRuns) totalTokens += r.tokens;
   const pendingActions = subRuns.flatMap((r) => r.pending);
   const subResults = subRuns.map((r) => ({ task: `${r.role}: ${r.task}`, reply: r.reply, steps: r.steps }));
@@ -535,7 +556,7 @@ async function runSwarm(tenantId, actorId, agentId, userMessage) {
 
   await persistRun(tenantId, agentId, actorId, userMessage, reply, subResults.flatMap((r) => r.steps), "swarm", pendingActions);
   await _recordUsage(tenantId, runId, totalTokens);
-  return { reply, plan: plan.map((p) => `${p.role}: ${p.task}`), subResults, pendingActions };
+  return { reply, plan: plan.map((p) => `${p.role}: ${p.task}${p.dependsOn.length ? ` (after ${p.dependsOn.join(", ")})` : ""}`), subResults, pendingActions };
 }
 
 // Monthly agent usage for the workspace "credits" meter.
