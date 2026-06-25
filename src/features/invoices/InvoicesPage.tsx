@@ -5,6 +5,7 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import type { Invoice as StoreInvoice } from "@/data/types";
 import { formatCurrency } from "@/lib/utils";
+import DiscussButton from "@/features/collab/DiscussButton";
 import {
   Plus, FileText, Send, Download, QrCode, X, Check, Clock, AlertCircle, MessageCircle, Bell, Zap,
   FileSignature, FilePlus2, Repeat, Link2, FileMinus2, ShieldAlert, Globe, GitPullRequestArrow,
@@ -265,6 +266,7 @@ function CollectionAutoPanel({ invoices, onRefresh }: { invoices: Invoice[]; onR
               <p className="text-xs text-[var(--color-muted)]">{inv.invoice_number} · Due {inv.due_date}</p>
             </div>
             <p className="text-sm font-bold tabular-nums text-red-400 shrink-0">{formatCurrency(parseFloat(String(inv.total_amount)))}</p>
+            <DiscussButton entityType="invoice" entityId={inv.id} entityLabel={inv.invoice_number} />
             {reminded.has(inv.id) ? (
               <span className="flex items-center gap-1 text-[10px] text-green-400 bg-green-900/20 border border-green-800/30 px-2 py-1 rounded-lg shrink-0">
                 <Check size={10} /> Sent

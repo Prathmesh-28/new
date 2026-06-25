@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { API_BASE } from "@/lib/apiBase";
 import { toast } from "sonner";
@@ -103,6 +104,9 @@ export default function CollabPage() {
   }, [loadConvos]);
 
   useEffect(() => { if (activeId && !msgsById[activeId]) void loadMessages(activeId); }, [activeId, msgsById, loadMessages]);
+  // Deep link from a "Discuss" button (/collab?c=<conversationId>) → open that conversation.
+  const [searchParams] = useSearchParams();
+  useEffect(() => { const c = searchParams.get("c"); if (c) { setActiveId(c); if (!msgsById[c]) void loadMessages(c); } }, [searchParams, loadMessages]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (activeId) api.get<{ links: Link[] }>(`/api/collab/conversations/${activeId}/links`).then((r) => setLinks(r.links || [])).catch(() => setLinks([])); }, [activeId]);
 
   // helper to mutate a reaction set in place (used by SSE + optimistic)
