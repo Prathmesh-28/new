@@ -454,9 +454,10 @@ async function persistRun(tenantId, agentId, actorId, input, reply, steps, statu
 }
 
 // ── Sub-agent swarm (task mode) ────────────────────────────────────────────────
-// Kogo-style: a planner decomposes the goal into 2-4 sub-tasks, each runs through
-// the agent's own tool-loop (read-only — any write becomes a pending approval), then
-// a lead synthesises one answer. Returns { reply, plan[], subResults[], pendingActions[] }.
+// Kogo-style: a planner decomposes the goal into 2-4 SPECIALIST sub-agents, each with
+// its own ROLE + a focused subset of the agent's tools. The specialists run IN
+// PARALLEL (each through the tool-loop, read-only — writes become pending approvals),
+// then a lead synthesises one answer. Returns { reply, plan[], subResults[], pendingActions[] }.
 async function runSwarm(tenantId, actorId, agentId, userMessage) {
   const agent = await getAgent(tenantId, agentId);
   if (agent.enabled === false) throw new PostError("AGENT_DISABLED", "This agent is disabled", 422);
@@ -471,14 +472,17 @@ async function runSwarm(tenantId, actorId, agentId, userMessage) {
   }
 
   const llm = require("./llm");
+  const toolsLib = require("./agenttools");
   const runId = _newRunId();
   let totalTokens = 0;
+  const allowed = Array.isArray(agent.tools) ? agent.tools : [];
+  const catalogDesc = toolsLib.toolCatalog().filter((t) => allowed.includes(t.name)).map((t) => `${t.name} (${t.scope || "read"}): ${t.description || ""}`).join("\n");
 
-  // 1) Plan
+  // 1) Plan — specialists with a role + an assigned tool subset (from the agent's allowed set).
   let plan = [];
   try {
     const planMsg = await llm.chat(tenantId, {
-      system: "You are a planner coordinating sub-agents for an Indian SMB. Break the user's goal into 2-4 concrete, INDEPENDENT sub-tasks, each answerable from the business's tools/data. Return ONLY a JSON array of short task strings — no prose.",
+      system: `You are the lead of a SWARM of specialist sub-agents for an Indian SMB. Break the goal into 2-4 INDEPENDENT sub-tasks that can run IN PARALLEL. For each, give a short "role" (e.g. "Collections analyst"), the "task", and "tools" it needs (choose ONLY from the available tools below; [] if none needed). Return ONLY a JSON array: [{"role":"","task":"","tools":[]}]. No prose.\n\nAvailable tools:\n${catalogDesc || "(none)"}`,
       messages: [{ role: "user", content: userMessage }],
       model: agent.model || undefined,
     });
@@ -486,31 +490,42 @@ async function runSwarm(tenantId, actorId, agentId, userMessage) {
     const j = (planMsg.content || "[]").match(/\[[\s\S]*\]/)?.[0] ?? "[]";
     plan = JSON.parse(j);
   } catch { plan = []; }
-  plan = (Array.isArray(plan) ? plan : []).filter((t) => typeof t === "string" && t.trim()).slice(0, 4);
-  if (!plan.length) plan = [userMessage];
+  plan = (Array.isArray(plan) ? plan : [])
+    .map((p) => ({
+      role: String(p?.role || "Specialist").slice(0, 40),
+      task: String(p?.task || "").trim(),
+      tools: Array.isArray(p?.tools) ? p.tools.filter((t) => allowed.includes(t)) : [],
+    }))
+    .filter((p) => p.task)
+    .slice(0, 4);
+  if (!plan.length) plan = [{ role: "Generalist", task: userMessage, tools: allowed }];
 
-  // 2) Run each sub-task through the agent's tool-loop (writes → pending, never executed here)
-  const subResults = [];
-  const pendingActions = [];
-  for (const task of plan) {
+  // 2) Run specialists IN PARALLEL — each a derived agent with only its tools + a role prompt.
+  const subRuns = await Promise.all(plan.map(async (p) => {
     const steps = [];
     const pending = [];
+    const subAgent = {
+      ...agent,
+      tools: p.tools.length ? p.tools : allowed,
+      instructions: `${agent.instructions || ""}\n\nYou are the "${p.role}" sub-agent in a swarm. Focus ONLY on this sub-task: ${p.task}. Use your tools, and return a tight, factual result (with ₹ figures where relevant) the lead can synthesise.`,
+    };
     try {
-      const out = await _driveLoop(tenantId, actorId, agent, task, steps, pending, true);
-      totalTokens += out.totalTokens || 0;
-      subResults.push({ task, reply: out.reply, steps });
+      const out = await _driveLoop(tenantId, actorId, subAgent, p.task, steps, pending, true);
+      return { role: p.role, task: p.task, reply: out.reply, steps, tokens: out.totalTokens || 0, pending };
     } catch (e) {
-      subResults.push({ task, reply: `Error: ${e.message || String(e)}`, steps });
+      return { role: p.role, task: p.task, reply: `Error: ${e.message || String(e)}`, steps, tokens: 0, pending };
     }
-    for (const p of pending) pendingActions.push(p);
-  }
+  }));
+  for (const r of subRuns) totalTokens += r.tokens;
+  const pendingActions = subRuns.flatMap((r) => r.pending);
+  const subResults = subRuns.map((r) => ({ task: `${r.role}: ${r.task}`, reply: r.reply, steps: r.steps }));
 
   // 3) Synthesise
   let reply;
   try {
     const synth = await llm.chat(tenantId, {
-      system: "You are the lead agent. Synthesise the sub-task results into ONE clear, actionable answer for an Indian SMB owner. Be concise, use ₹ with Indian grouping, and only use the findings provided.",
-      messages: [{ role: "user", content: `Goal: ${userMessage}\n\n${subResults.map((r, i) => `Sub-task ${i + 1}: ${r.task}\nResult: ${r.reply}`).join("\n\n")}` }],
+      system: "You are the lead agent. Synthesise the specialist sub-agents' findings into ONE clear, actionable answer for an Indian SMB owner. Be concise, use ₹ with Indian grouping, resolve any conflicts, and only use the findings provided.",
+      messages: [{ role: "user", content: `Goal: ${userMessage}\n\n${subResults.map((r, i) => `Sub-agent ${i + 1} — ${r.task}\nFinding: ${r.reply}`).join("\n\n")}` }],
       model: agent.model || undefined,
     });
     totalTokens += synth?.usage?.total_tokens || 0;
@@ -520,7 +535,7 @@ async function runSwarm(tenantId, actorId, agentId, userMessage) {
 
   await persistRun(tenantId, agentId, actorId, userMessage, reply, subResults.flatMap((r) => r.steps), "swarm", pendingActions);
   await _recordUsage(tenantId, runId, totalTokens);
-  return { reply, plan, subResults, pendingActions };
+  return { reply, plan: plan.map((p) => `${p.role}: ${p.task}`), subResults, pendingActions };
 }
 
 // Monthly agent usage for the workspace "credits" meter.
