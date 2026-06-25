@@ -113,6 +113,7 @@ app.use("/api/crm",                require("./modules/crm/http"));   // CRM: lea
 app.use("/api/erp",                require("./modules/erp/http"));   // ERP: BOMs + work orders (manufacturing)
 app.use("/api/hrms",               require("./modules/hrms/http"));  // HRMS: employees, attendance, leave, payroll
 app.use("/api/insights",           require("./modules/insights/http")); // Insights: cross-module KPIs + dashboards
+app.use("/api/studio",             require("./modules/studio/http")); // App Builder: projects + versions + deployments
 app.use("/api/account",            require("./routes/account")); // DPDP consent/export/erasure
 app.use("/api/notes",              require("./routes/notes"));
 app.use("/api/files",              require("./routes/files"));

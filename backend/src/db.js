@@ -611,6 +611,8 @@ async function initDb() {
   await pool.query(require("./modules/insights/schema").INSIGHTS_SCHEMA);
   // collab module (Teams-style real-time collaboration) — Phase 0 data model + RLS
   await pool.query(require("./modules/collab/schema").COLLAB_SCHEMA);
+  // studio module (App Builder) — Phase 0; reuses collab_uuidv7() (applied above)
+  await pool.query(require("./modules/studio/schema").STUDIO_SCHEMA);
 
   // Platform-level settings (super-admin editable, e.g. social links) — key/value JSON.
   await pool.query(`

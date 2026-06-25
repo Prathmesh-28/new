@@ -13,7 +13,7 @@ import {
   MessageCircle, Sliders, PhoneCall, Award, FolderOpen, FileSpreadsheet, ScrollText, Database,
   Handshake, IndianRupee, Umbrella, Coins, Leaf, Globe,
   ShoppingCart, Network, Workflow, Bot, ShieldAlert, KeyRound, Banknote, Radar,
-  Mic, Smartphone, Blocks, FlaskConical, BookOpen, Factory, LineChart, UsersRound, Wand2,
+  Mic, Smartphone, Blocks, FlaskConical, BookOpen, Factory, LineChart, UsersRound, Wand2, AppWindow,
 } from "lucide-react";
 
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
@@ -96,6 +96,7 @@ const NAV_CATALOG: NavGroup[] = [
   ]},
   { label: "AI & Automation", items: [
     { to: "/agents",          label: "Agent Studio",  icon: Wand2,           tab: "agents"     },
+    { to: "/studio",          label: "App Builder",   icon: AppWindow,       tab: "studio"     },
     { to: "/copilot",         label: "AI CFO",        icon: Bot,             tab: "copilot"    },
     { to: "/automation",      label: "Automation",    icon: Workflow,        tab: "automation" },
     { to: "/whatsapp",        label: "WhatsApp",      icon: MessageCircle,   tab: "whatsapp"   },
@@ -129,12 +130,12 @@ const NAV_CATALOG: NavGroup[] = [
 // Audit #1 — the 6-8 daily-driver pages per role shown up top as "Main"; the rest
 // stay collapsed under their user-flow group. The 20% of features used 80% of the time.
 const PRIMARY_NAV: Record<string, string[]> = {
-  super_admin:        ["dashboard", "transactions", "invoices", "gst", "forecast", "agents", "admin", "settings"],
-  owner:              ["dashboard", "transactions", "invoices", "gst", "forecast", "agents", "settings"],
-  finance_manager:    ["dashboard", "transactions", "invoices", "receivables", "gst", "agents", "forecast"],
-  accountant:         ["dashboard", "transactions", "books", "gst", "tax", "agents", "compliance", "advisor"],
-  sales:              ["dashboard", "crm", "invoices", "receivables", "collections", "agents"],
-  operations_manager: ["dashboard", "operations", "erp", "vendors", "suppliers", "agents", "spend"],
+  super_admin:        ["dashboard", "transactions", "invoices", "gst", "forecast", "agents", "studio", "admin", "settings"],
+  owner:              ["dashboard", "transactions", "invoices", "gst", "forecast", "agents", "studio", "settings"],
+  finance_manager:    ["dashboard", "transactions", "invoices", "receivables", "gst", "agents", "studio", "forecast"],
+  accountant:         ["dashboard", "transactions", "books", "gst", "tax", "agents", "studio", "compliance", "advisor"],
+  sales:              ["dashboard", "crm", "invoices", "receivables", "collections", "agents", "studio"],
+  operations_manager: ["dashboard", "operations", "erp", "vendors", "suppliers", "agents", "studio", "spend"],
   viewer:             ["dashboard", "analytics", "health", "cfo-brief", "forecast", "agents"],
   investor:           ["investor", "capital", "valuation", "term-sheet", "lenders"],
 };

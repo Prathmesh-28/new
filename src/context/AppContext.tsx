@@ -358,6 +358,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Agent Studio is open to every member — anyone can build/run agents for their
     // business (write-actions are still role-gated server-side at confirm time).
     if (tab === "agents") return true;
+    // App Builder (Headroom Studio) — open to every member, like Agent Studio.
+    // Writes are role-gated server-side (studio WRITE_ROLES).
+    if (tab === "studio") return true;
     return getRoleConfig(effectiveRole)?.accessibleTabs.includes(tab) ?? false;
   };
 
