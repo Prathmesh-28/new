@@ -115,6 +115,7 @@ app.use("/api/hrms",               require("./modules/hrms/http"));  // HRMS: em
 app.use("/api/insights",           require("./modules/insights/http")); // Insights: cross-module KPIs + dashboards
 app.use("/api/collab",             require("./modules/collab/http")); // Collab: Teams-style channels/DMs/messages (Phase 1 REST)
 app.use("/api/studio",             require("./modules/studio/http")); // App Builder: projects + versions + deployments
+app.use("/api/flows",              require("./modules/flows/http")); // Flows: native workflow automation engine
 app.use("/api/pub",                require("./routes/studiopublic")); // PUBLIC: serve published App Builder apps (sandboxed, token-addressed)
 app.use("/api/agent-bridge",       require("./routes/agentbridge")); // PUBLIC: published apps call their granted Agent Studio agents (scoped, metered)
 app.use("/api/account",            require("./routes/account")); // DPDP consent/export/erasure
@@ -437,6 +438,10 @@ initDb()
       require("./modules/books").agents.runScheduledAgents(new Date())
         .then(r => { if (r && r.ran) console.log(`[agents] ran ${r.ran} scheduled agent(s)`); })
         .catch(err => console.error("[agents-scheduled]", err.message));
+      // Flows: run scheduled workflows that are due this hour.
+      require("./modules/flows/runner").runDueScheduled(new Date())
+        .then(r => { if (r && r.ran) console.log(`[flows] ran ${r.ran} scheduled flow(s)`); })
+        .catch(err => console.error("[flows-scheduled]", err.message));
     }, { timezone: "UTC" });
     // Overdue-invoice reminders daily at 08:30 IST (03:00 UTC) — raises in-app alerts.
     cron.schedule("0 3 * * *", () => {
