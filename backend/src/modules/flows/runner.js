@@ -105,6 +105,20 @@ const NODES = {
     if (typeof v === "string") { try { v = JSON.parse(v); } catch { v = { value: v }; } }
     return v && typeof v === "object" ? v : {};
   },
+  async whatsapp(cfg) {
+    const { sendWhatsApp, normalizePhone } = require("../../lib/whatsapp");
+    const to = normalizePhone(String(cfg.to || ""));
+    if (!to) throw new FlowError("BAD_INPUT", "WhatsApp node needs a 'to' phone number", 400);
+    const delivered = await sendWhatsApp(to, String(cfg.message || "")); // false if Twilio not configured (mock)
+    return { sent: !!delivered, to };
+  },
+  async email(cfg) {
+    const { sendMail } = require("../../lib/email");
+    const to = String(cfg.to || "");
+    if (!to) throw new FlowError("BAD_INPUT", "Email node needs a 'to' address", 400);
+    await sendMail({ to, subject: String(cfg.subject || "(no subject)"), html: String(cfg.body || "") });
+    return { sent: !!process.env.SMTP_USER, to }; // sent only if SMTP is configured
+  },
   async notify(cfg, ctx, env) {
     await pool.query(
       "INSERT INTO alerts(tenant_id, rule_id, severity, title, message) VALUES($1,'flow',$2,$3,$4)",
@@ -123,6 +137,8 @@ const NODE_CATALOG = [
   { type: "branch", label: "If / branch", desc: "Route by a condition (edges labelled true/false)", fields: [{ key: "left", type: "text", label: "Left ({{...}})" }, { key: "op", type: "select", label: "Operator", options: ["==", "!=", ">", "<", ">=", "<=", "contains", "truthy", "empty"] }, { key: "right", type: "text", label: "Right" }] },
   { type: "set", label: "Set values", desc: "Build a small object for later nodes", fields: [{ key: "values", type: "json", label: "Values" }] },
   { type: "notify", label: "Create alert", desc: "Raise an in-app alert", fields: [{ key: "title", type: "text", label: "Title" }, { key: "severity", type: "select", label: "Severity", options: ["low", "medium", "high"] }, { key: "message", type: "textarea", label: "Message" }] },
+  { type: "whatsapp", label: "Send WhatsApp", desc: "Message a number (needs Twilio configured)", fields: [{ key: "to", type: "text", label: "To (phone, e.g. +9198…)" }, { key: "message", type: "textarea", label: "Message" }] },
+  { type: "email", label: "Send email", desc: "Email someone (needs SMTP configured)", fields: [{ key: "to", type: "text", label: "To (address)" }, { key: "subject", type: "text", label: "Subject" }, { key: "body", type: "textarea", label: "Body (HTML allowed)" }] },
 ];
 
 // ── graph walk ────────────────────────────────────────────────────────────────
