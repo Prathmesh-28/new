@@ -9,7 +9,7 @@ const INDUSTRY_RISK = {
   default: 1.0,
 };
 
-async function score(tenantId, pool) {
+async function score(tenantId, pool, enrichment) {
   const cutoff90  = daysAgo(90);
   const cutoff180 = daysAgo(180);
 
@@ -101,6 +101,13 @@ async function score(tenantId, pool) {
     { key: "payments",     label: "Payment behaviour",      score: s8,  weight: 0.05, hint: "Keep regular, on-time recurring payments." },
     { key: "activity",     label: "Account activity",       score: Math.round(activityScore), weight: 0.02, hint: "More transaction history strengthens the picture." },
   ];
+  // Optional FinBox/bureau enrichment — adds a credit-bureau factor when available, then
+  // renormalizes weights to 1.0. Absent → scorecard is exactly the internal-data version.
+  if (enrichment && enrichment.bureau && enrichment.bureau.score != null) {
+    factorDefs.push({ key: "bureau", label: "Credit bureau score", score: bureauToScore(enrichment.bureau.score), weight: 0.25, hint: "Keep your CIBIL / commercial bureau score healthy." });
+    const wsum0 = factorDefs.reduce((s, f) => s + f.weight, 0);
+    factorDefs.forEach((f) => (f.weight = f.weight / wsum0));
+  }
   const raw = factorDefs.reduce((s, f) => s + f.score * f.weight, 0); // weights sum to 1.0
 
   const multiplier = INDUSTRY_RISK["default"];
@@ -143,6 +150,13 @@ async function score(tenantId, pool) {
 
 // Grade bands for a human-readable risk tier.
 function gradeOf(s) { return s >= 80 ? "A" : s >= 65 ? "B" : s >= 50 ? "C" : s >= 35 ? "D" : "E"; }
+
+// Map a 300–900 bureau score (CIBIL / commercial) to our 0–100 factor scale.
+function bureauToScore(c) {
+  if (c == null || isNaN(Number(c))) return 50;
+  const v = Number(c);
+  return v >= 800 ? 98 : v >= 750 ? 88 : v >= 700 ? 75 : v >= 650 ? 58 : v >= 600 ? 40 : 20;
+}
 
 // Decisioning layer (Headroom's own BRE output): turn the score/grade into an explainable
 // outcome + reasons + eligible amount. Pre-qualified (A/B/C) · refer (D) · declined (E / ₹0).

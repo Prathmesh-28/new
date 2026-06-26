@@ -172,6 +172,21 @@ router.get("/score", authenticate, requireOwnerOrAdmin, async (req, res) => {
   res.json(result);
 });
 
+// POST /api/credit/enrich — pull bureau + bank-statement enrichment via FinBox and
+// re-underwrite with it. Degrades cleanly (enrichment.configured=false) without a key.
+router.post("/enrich", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  const finbox = require("../lib/finbox");
+  const { rows: kvRows } = await pool.query(
+    "SELECT value FROM kv_store WHERE tenant_id=$1 AND namespace='app' AND key='store' LIMIT 1",
+    [req.user.tenant_id]
+  );
+  const firm = kvRows[0]?.value?.value?.firm ?? {};
+  const enrichment = await finbox.enrich({ pan: firm.pan, gstin: firm.gstNumber, mobile: firm.phone, name: firm.name });
+  const usable = enrichment.configured && !enrichment.error ? enrichment : undefined;
+  const result = await underwrite(req.user.tenant_id, pool, usable);
+  res.json({ enrichment, result, enriched: !!usable });
+});
+
 // GET /api/credit/report — formal JSON creditworthiness report (Headroom's own "output
 // layer", the artifact that flows into a lender/LOS). Read-only; no application created.
 router.get("/report", authenticate, requireOwnerOrAdmin, async (req, res) => {
