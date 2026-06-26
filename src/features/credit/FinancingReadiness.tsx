@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
-import { Gauge, TrendingUp, ArrowRight, Loader2 } from "lucide-react";
+import { Gauge, TrendingUp, ArrowRight, Loader2, Sparkles, ShieldCheck } from "lucide-react";
 
 /**
  * Financing readiness — the embedded-working-capital wedge. Runs the same live
@@ -44,6 +45,17 @@ const STATUS_META: Record<string, { color: string; bar: string; tag: string }> =
 export default function FinancingReadiness({ onApply }: { onApply?: () => void }) {
   const [data, setData] = useState<ScoreResult | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "forbidden" | "error">("loading");
+  const [enriching, setEnriching] = useState(false);
+
+  const enrichScore = async () => {
+    setEnriching(true);
+    try {
+      const r = await api.post<{ enrichment?: { note?: string; error?: string }; result: ScoreResult; enriched: boolean }>("/api/credit/enrich", {});
+      if (r.enriched) { setData(r.result); toast.success("Sharpened with bureau data"); }
+      else toast(r.enrichment?.error || r.enrichment?.note || "Bureau enrichment isn't connected yet.");
+    } catch { toast.error("Couldn't fetch bureau data right now."); }
+    finally { setEnriching(false); }
+  };
 
   useEffect(() => {
     let on = true;
@@ -70,6 +82,7 @@ export default function FinancingReadiness({ onApply }: { onApply?: () => void }
   const band = GRADE_META[grade] || GRADE_META.E;
   const factors = (data.factors || []).slice().sort((a, b) => a.score - b.score); // weakest first
   const weak = factors.filter((f) => f.status === "weak").slice(0, 3);
+  const enriched = factors.some((f) => f.key === "bureau");
 
   return (
     <div className={`rounded-xl border ${band.ring} bg-[var(--color-surface)] p-5`}>
@@ -82,11 +95,14 @@ export default function FinancingReadiness({ onApply }: { onApply?: () => void }
           <div>
             <p className="text-sm font-semibold flex items-center gap-1.5"><Gauge size={15} className="text-[var(--color-primary)]" /> Financing readiness</p>
             <p className={`text-xs font-medium ${band.color}`}>Grade {grade} · {band.label}</p>
-            {data.decision && (
-              <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${data.decision.outcome === "pre_qualified" ? "text-green-400 border-green-500/40 bg-green-500/10" : data.decision.outcome === "refer" ? "text-yellow-400 border-yellow-500/40 bg-yellow-500/10" : "text-red-400 border-red-500/40 bg-red-500/10"}`}>
-                {data.decision.label}
-              </span>
-            )}
+            <span className="inline-flex items-center gap-1 flex-wrap mt-1">
+              {data.decision && (
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${data.decision.outcome === "pre_qualified" ? "text-green-400 border-green-500/40 bg-green-500/10" : data.decision.outcome === "refer" ? "text-yellow-400 border-yellow-500/40 bg-yellow-500/10" : "text-red-400 border-red-500/40 bg-red-500/10"}`}>
+                  {data.decision.label}
+                </span>
+              )}
+              {enriched && <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border text-green-400 border-green-500/40 bg-green-500/10"><ShieldCheck size={10} /> Bureau-enriched</span>}
+            </span>
           </div>
         </div>
         <div className="flex-1 min-w-[180px]">
@@ -94,10 +110,16 @@ export default function FinancingReadiness({ onApply }: { onApply?: () => void }
           <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(data.approved_amount || 0))}</p>
           {data.recommended_product && <p className="text-[11px] text-[var(--color-muted)] mt-0.5 capitalize">Best fit: {String(data.recommended_product).replace(/_/g, " ")}</p>}
         </div>
-        <button onClick={onApply}
-          className="inline-flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 self-center">
-          See loan options <ArrowRight size={14} />
-        </button>
+        <div className="flex flex-col gap-1.5 self-center">
+          <button onClick={onApply}
+            className="inline-flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90">
+            See loan options <ArrowRight size={14} />
+          </button>
+          <button onClick={enrichScore} disabled={enriching} title="Pull bureau + bank-statement data (FinBox) to sharpen the score"
+            className="inline-flex items-center justify-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] px-4 py-1.5 rounded-lg disabled:opacity-50">
+            {enriching ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Sharpen with bureau
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mt-4">
