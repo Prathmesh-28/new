@@ -10,27 +10,33 @@ import { Gauge, TrendingUp, ArrowRight, Loader2 } from "lucide-react";
  * so the owner sees "you're financing-ready for ₹X" + how to lift the score. Pairs
  * with the Forecast shortfall card ("shortfall on [date] → draw here").
  */
+interface Factor { key: string; label: string; score: number; weight: number; status: "strong" | "ok" | "weak"; contribution: number; hint: string }
 interface ScoreResult {
   score: number;
+  grade?: string;
   approved_amount: number;
   recommended_product?: string;
+  factors?: Factor[];
   breakdown?: {
     monthly_revenue?: number;
     runway_months?: number;
     debt_service_ratio?: number;
+    overdue_ratio?: number;
     signals?: Record<string, number>;
   };
 }
 
-const SIGNAL_TIP: Record<string, string> = {
-  s1: "Grow monthly revenue — higher, steadier sales lift eligibility most.",
-  s2: "Even out month-to-month inflows — lumpy revenue lowers the score.",
-  s3: "Business age helps — the score climbs past 12 months of history.",
-  s4: "Reduce customer concentration — spread revenue across more customers.",
-  s5: "Avoid overdrafts / negative balances on your accounts.",
-  s6: "Bring down your debt-service ratio — pay down existing loans.",
-  s7: "Extend cash runway above ~3 months of buffer.",
-  s8: "Keep outgoing payments consistent and on time.",
+const GRADE_META: Record<string, { label: string; color: string; ring: string }> = {
+  A: { label: "Prime", color: "text-green-400", ring: "border-green-500/50" },
+  B: { label: "Strong", color: "text-green-400", ring: "border-green-500/40" },
+  C: { label: "Building", color: "text-yellow-400", ring: "border-yellow-500/40" },
+  D: { label: "Early-stage", color: "text-orange-400", ring: "border-orange-500/40" },
+  E: { label: "Thin file", color: "text-red-400", ring: "border-red-500/40" },
+};
+const STATUS_META: Record<string, { color: string; bar: string; tag: string }> = {
+  strong: { color: "text-green-400", bar: "bg-green-500", tag: "strong" },
+  ok:     { color: "text-yellow-400", bar: "bg-yellow-500", tag: "ok" },
+  weak:   { color: "text-orange-400", bar: "bg-orange-500", tag: "needs work" },
 };
 
 export default function FinancingReadiness({ onApply }: { onApply?: () => void }) {
@@ -58,27 +64,22 @@ export default function FinancingReadiness({ onApply }: { onApply?: () => void }
   );
 
   const score = Math.round(data.score || 0);
-  const band = score >= 75 ? { label: "Excellent", color: "text-green-400", ring: "border-green-500/40" }
-    : score >= 60 ? { label: "Strong", color: "text-green-400", ring: "border-green-500/40" }
-    : score >= 45 ? { label: "Building", color: "text-yellow-400", ring: "border-yellow-500/40" }
-    : { label: "Early-stage", color: "text-orange-400", ring: "border-orange-500/40" };
-  const signals = data.breakdown?.signals || {};
-  const tips = Object.entries(signals)
-    .filter(([k]) => SIGNAL_TIP[k])
-    .sort((a, b) => (a[1] as number) - (b[1] as number))
-    .slice(0, 2)
-    .map(([k]) => SIGNAL_TIP[k]);
+  const grade = data.grade || (score >= 80 ? "A" : score >= 65 ? "B" : score >= 50 ? "C" : score >= 35 ? "D" : "E");
+  const band = GRADE_META[grade] || GRADE_META.E;
+  const factors = (data.factors || []).slice().sort((a, b) => a.score - b.score); // weakest first
+  const weak = factors.filter((f) => f.status === "weak").slice(0, 3);
 
   return (
     <div className={`rounded-xl border ${band.ring} bg-[var(--color-surface)] p-5`}>
       <div className="flex items-start gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className={`w-16 h-16 rounded-full border-4 ${band.ring} flex items-center justify-center shrink-0`}>
+          <div className={`relative w-16 h-16 rounded-full border-4 ${band.ring} flex items-center justify-center shrink-0`}>
             <span className={`text-xl font-bold tabular-nums ${band.color}`}>{score}</span>
+            <span className={`absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full bg-[var(--color-bg)] border-2 ${band.ring} flex items-center justify-center text-[11px] font-bold ${band.color}`}>{grade}</span>
           </div>
           <div>
             <p className="text-sm font-semibold flex items-center gap-1.5"><Gauge size={15} className="text-[var(--color-primary)]" /> Financing readiness</p>
-            <p className={`text-xs font-medium ${band.color}`}>{band.label}</p>
+            <p className={`text-xs font-medium ${band.color}`}>Grade {grade} · {band.label}</p>
           </div>
         </div>
         <div className="flex-1 min-w-[180px]">
@@ -105,15 +106,34 @@ export default function FinancingReadiness({ onApply }: { onApply?: () => void }
         ))}
       </div>
 
-      {tips.length > 0 && (
+      {factors.length > 0 && (
+        <div className="mt-4">
+          <p className="text-[11px] font-semibold text-[var(--color-muted)] mb-1.5">What drives your grade</p>
+          <div className="space-y-1.5">
+            {factors.map((f) => {
+              const sm = STATUS_META[f.status] || STATUS_META.ok;
+              return (
+                <div key={f.key} className="flex items-center gap-2">
+                  <span className="text-xs w-36 shrink-0 truncate" title={f.label}>{f.label}</span>
+                  <div className="flex-1 h-1.5 rounded-full bg-[var(--color-bg)] overflow-hidden">
+                    <div className={`h-full ${sm.bar}`} style={{ width: `${Math.max(4, Math.min(100, f.score))}%` }} />
+                  </div>
+                  <span className={`text-[10px] w-[72px] text-right ${sm.color}`}>{sm.tag}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {weak.length > 0 && (
         <div className="mt-3">
-          <p className="text-[11px] font-semibold text-[var(--color-muted)] flex items-center gap-1 mb-1"><TrendingUp size={12} /> Lift your score</p>
+          <p className="text-[11px] font-semibold text-[var(--color-muted)] flex items-center gap-1 mb-1"><TrendingUp size={12} /> Lift your grade</p>
           <ul className="space-y-1">
-            {tips.map((t, i) => <li key={i} className="text-xs text-[var(--color-muted)] flex gap-1.5"><span className="text-[var(--color-primary)]">•</span> {t}</li>)}
+            {weak.map((f) => <li key={f.key} className="text-xs text-[var(--color-muted)] flex gap-1.5"><span className="text-[var(--color-primary)]">•</span> {f.hint}</li>)}
           </ul>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)] mt-3">Computed live from your cash flows on the same engine lenders underwrite on — no document uploads. Indicative only; final terms depend on the lender.</p>
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Computed live from your cash flows, GST filings and receivables on the same engine lenders underwrite on — no document uploads. Indicative only; final terms depend on the lender.</p>
     </div>
   );
 }

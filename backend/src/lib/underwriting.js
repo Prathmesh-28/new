@@ -13,8 +13,8 @@ async function score(tenantId, pool) {
   const cutoff90  = daysAgo(90);
   const cutoff180 = daysAgo(180);
 
-  // Fetch raw data
-  const [txnRes, accountRes, loanRes, userRes] = await Promise.all([
+  // Fetch raw data. GST + receivables are SMB-specific signals Headroom uniquely has.
+  const [txnRes, accountRes, loanRes, userRes, gstRes, invRes] = await Promise.all([
     pool.query(
       "SELECT * FROM transactions WHERE tenant_id=$1 AND transaction_date>=$2 ORDER BY transaction_date",
       [tenantId, cutoff180]
@@ -22,12 +22,16 @@ async function score(tenantId, pool) {
     pool.query("SELECT * FROM bank_accounts WHERE tenant_id=$1 AND is_active=true", [tenantId]),
     pool.query("SELECT * FROM active_loans WHERE tenant_id=$1", [tenantId]),
     pool.query("SELECT created_at FROM users WHERE tenant_id=$1 ORDER BY created_at LIMIT 1", [tenantId]),
+    pool.query("SELECT period_year, period_month, status, filed_at, output_tax FROM gst_returns WHERE tenant_id=$1 ORDER BY period_year DESC, period_month DESC LIMIT 24", [tenantId]).catch(() => ({ rows: [] })),
+    pool.query("SELECT total_amount, status, due_date FROM invoices WHERE tenant_id=$1 AND status <> 'cancelled'", [tenantId]).catch(() => ({ rows: [] })),
   ]);
 
   const txns     = txnRes.rows;
   const accounts = accountRes.rows;
   const loans    = loanRes.rows;
   const joinDate = userRes.rows[0]?.created_at || new Date();
+  const gstRows  = gstRes.rows;
+  const invRows  = invRes.rows;
 
   const currentBalance = accounts.reduce((s, a) => s + Number(a.current_balance), 0);
 
@@ -75,28 +79,50 @@ async function score(tenantId, pool) {
   // S9 — Volume / activity signal
   const activityScore = Math.min(100, txns.length / 2);
 
-  const raw = (
-    s1 * 0.22 +
-    s2 * 0.15 +
-    s3 * 0.10 +
-    s4 * 0.08 +
-    s5 * 0.12 +
-    s6 * 0.10 +
-    s7 * 0.12 +
-    s8 * 0.07 +
-    activityScore * 0.04
-  );
+  // S10 — GST filing regularity (compliance + verifiable, lender-trusted turnover)
+  const s10 = scoreGst(gstRows);
+
+  // S11 — Receivables health (overdue as a share of what's outstanding)
+  const recv = receivablesHealth(invRows);
+  const s11 = recv.score;
+
+  // Explainable, weighted factors — single source of truth for both the score and the
+  // per-factor breakdown the owner sees (label · weight · status · how to improve).
+  const factorDefs = [
+    { key: "revenue",      label: "Monthly revenue",        score: s1,  weight: 0.20, hint: "Higher, steadier sales lift eligibility the most." },
+    { key: "consistency",  label: "Revenue consistency",    score: s2,  weight: 0.13, hint: "Smooth out lumpy month-to-month inflows." },
+    { key: "overdraft",    label: "Account conduct",        score: s5,  weight: 0.10, hint: "Avoid letting the balance dip negative." },
+    { key: "debt_service", label: "Debt-service ratio",     score: s6,  weight: 0.10, hint: "Carry less existing-loan load vs revenue." },
+    { key: "runway",       label: "Cash runway",            score: s7,  weight: 0.10, hint: "Keep a bigger cash buffer vs monthly burn." },
+    { key: "gst",          label: "GST filing regularity",  score: s10, weight: 0.08, hint: "File GST returns on time, every period." },
+    { key: "age",          label: "Business vintage",       score: s3,  weight: 0.08, hint: "Track record builds with age — automatic over time." },
+    { key: "concentration",label: "Customer diversity",     score: s4,  weight: 0.07, hint: "Reduce reliance on one large customer." },
+    { key: "receivables",  label: "Receivables health",     score: s11, weight: 0.07, hint: "Collect overdue invoices to cut your overdue %." },
+    { key: "payments",     label: "Payment behaviour",      score: s8,  weight: 0.05, hint: "Keep regular, on-time recurring payments." },
+    { key: "activity",     label: "Account activity",       score: Math.round(activityScore), weight: 0.02, hint: "More transaction history strengthens the picture." },
+  ];
+  const raw = factorDefs.reduce((s, f) => s + f.score * f.weight, 0); // weights sum to 1.0
 
   const multiplier = INDUSTRY_RISK["default"];
   const finalScore = Math.min(100, Math.round(raw / multiplier));
+  const grade = gradeOf(finalScore);
+
+  const factors = factorDefs.map((f) => ({
+    key: f.key, label: f.label, score: Math.round(f.score), weight: f.weight,
+    status: f.score >= 75 ? "strong" : f.score >= 50 ? "ok" : "weak",
+    contribution: Math.round(f.score * f.weight),
+    hint: f.hint,
+  }));
 
   const approvedAmount = calcApproved(finalScore, monthlyRevenue90);
   const product = recommendProduct(finalScore, txns);
 
   return {
     score: finalScore,
+    grade,
     approved_amount: approvedAmount,
     recommended_product: product,
+    factors,
     breakdown: {
       monthly_revenue: Math.round(monthlyRevenue90),
       monthly_revenue_180: Math.round(monthlyRevenue180),
@@ -104,9 +130,43 @@ async function score(tenantId, pool) {
       debt_service_ratio: Math.round(dsr * 100) / 100,
       runway_months: Math.round(runwayMonths * 10) / 10,
       current_balance: currentBalance,
-      signals: { s1, s2, s3, s4, s5, s6, s7, s8, activity: activityScore },
+      gst_periods_filed: recv ? s10 : 0,
+      overdue_ratio: Math.round(recv.overdueRatio * 100) / 100,
+      outstanding_receivables: recv.outstanding,
+      overdue_receivables: recv.overdue,
+      signals: { s1, s2, s3, s4, s5, s6, s7, s8, gst: s10, receivables: s11, activity: activityScore },
     },
   };
+}
+
+// Grade bands for a human-readable risk tier.
+function gradeOf(s) { return s >= 80 ? "A" : s >= 65 ? "B" : s >= 50 ? "C" : s >= 35 ? "D" : "E"; }
+
+// GST filing regularity — distinct GST periods FILED in the last ~7 months. Filing on
+// time signals compliance and gives a lender verifiable turnover. No returns → no track record.
+function scoreGst(rows) {
+  if (!rows.length) return 0;
+  const cut = new Date(); cut.setMonth(cut.getMonth() - 7);
+  const recentFiled = new Set(
+    rows
+      .filter((r) => r.filed_at || ["filed", "accepted"].includes(r.status))
+      .filter((r) => new Date(r.period_year, (r.period_month || 1) - 1, 1) >= cut)
+      .map((r) => `${r.period_year}-${r.period_month}`)
+  );
+  const n = recentFiled.size;
+  return n >= 6 ? 100 : n === 5 ? 88 : n === 4 ? 70 : n === 3 ? 50 : n === 2 ? 30 : n === 1 ? 15 : 5;
+}
+
+// Receivables health — overdue as a share of outstanding. No open invoices → neutral.
+function receivablesHealth(invs) {
+  const today = new Date();
+  const open = invs.filter((i) => i.status !== "paid");
+  const outstanding = open.reduce((s, i) => s + Number(i.total_amount || 0), 0);
+  if (outstanding <= 0) return { score: 60, overdueRatio: 0, outstanding: 0, overdue: 0 };
+  const overdue = open.filter((i) => i.due_date && new Date(i.due_date) < today).reduce((s, i) => s + Number(i.total_amount || 0), 0);
+  const ratio = overdue / outstanding;
+  const score = ratio === 0 ? 100 : ratio < 0.1 ? 85 : ratio < 0.25 ? 65 : ratio < 0.5 ? 45 : ratio < 0.75 ? 25 : 10;
+  return { score, overdueRatio: ratio, outstanding: Math.round(outstanding), overdue: Math.round(overdue) };
 }
 
 // ── Signal implementations ─────────────────────────────────────────────────
@@ -210,4 +270,4 @@ function daysAgo(n) {
   return d.toISOString().slice(0, 10);
 }
 
-module.exports = { score };
+module.exports = { score, scoreGst, receivablesHealth, gradeOf };
