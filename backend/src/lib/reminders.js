@@ -41,6 +41,7 @@ async function runOverdueReminders() {
         ]
       );
       created++;
+      require("../modules/flows/runner").emitEvent(inv.tenant_id, "invoice.overdue", { invoice: inv, days_overdue: days }).catch(() => {});
     } catch (e) {
       console.error("[reminders] insert failed for", inv.id, e.message);
     }

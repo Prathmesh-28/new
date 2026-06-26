@@ -38,6 +38,7 @@ router.get("/catalog", async (req, res) => {
     const list = await agents.listAgents(tenantOf(req)).catch(() => []);
     res.json({
       nodes: runner.NODE_CATALOG,
+      events: runner.EVENT_CATALOG,
       tools: agenttools.toolCatalog(),
       agents: (Array.isArray(list) ? list : []).map((a) => ({ id: a.id, name: a.name })),
     });

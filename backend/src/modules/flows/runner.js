@@ -7,8 +7,14 @@
 // flow_run. Errors stop the run (the failing node + the reason are recorded).
 
 const { pool } = require("../../db");
+const { AsyncLocalStorage } = require("async_hooks");
 const flows = require("./index");
 const { FlowError } = flows;
+
+// Tracks whether the current async chain is already inside a flow run, so an event
+// emitted BY a flow's own action can't recurse into more event-triggered flows.
+// (Uses async-context, not a global counter, so concurrent unrelated events aren't dropped.)
+const als = new AsyncLocalStorage();
 
 // ── templating ────────────────────────────────────────────────────────────────
 function getPath(obj, path) {
@@ -174,7 +180,10 @@ async function runGraph(graph, ctx, env, record) {
 }
 
 // ── public ────────────────────────────────────────────────────────────────────
-async function runFlow(tenantId, flowId, { triggerKind = "manual", input = {}, actorId } = {}) {
+function runFlow(tenantId, flowId, opts = {}) {
+  return als.run({ inFlow: true }, () => _runFlow(tenantId, flowId, opts));
+}
+async function _runFlow(tenantId, flowId, { triggerKind = "manual", input = {}, actorId } = {}) {
   const flow = await flows.getFlow(tenantId, flowId);
   if (flow.enabled === false && triggerKind !== "manual") throw new FlowError("DISABLED", "Flow is disabled", 422);
   const run = await flows.createRun(tenantId, flowId, triggerKind, input);
@@ -216,4 +225,27 @@ async function runDueScheduled(now = new Date()) {
   return { ran };
 }
 
-module.exports = { runFlow, runDueScheduled, NODE_CATALOG, NODES, resolveTemplates, isDue };
+// Events the platform emits that flows can trigger on (shown in the builder).
+const EVENT_CATALOG = [
+  { event: "invoice.created", label: "Invoice created", desc: "A new invoice was created" },
+  { event: "invoice.paid", label: "Invoice paid", desc: "An invoice was marked paid / payment received" },
+  { event: "invoice.overdue", label: "Invoice overdue", desc: "An invoice became overdue (daily check)" },
+];
+
+// Fire a platform event → run every enabled event-flow subscribed to it for that tenant.
+// Best-effort + fire-and-forget at call sites; never throws into the caller. Suppressed if
+// emitted from within a flow run (prevents flow→event→flow recursion).
+async function emitEvent(tenantId, event, payload = {}) {
+  if (!tenantId || !event) return { ran: 0 };
+  const store = als.getStore();
+  if (store && store.inFlow) return { ran: 0, skipped: "in-flow" };
+  const list = await flows.listEventFlows(tenantId, event).catch(() => []);
+  let ran = 0;
+  for (const f of list) {
+    try { await runFlow(tenantId, f.id, { triggerKind: "event", input: { event, ...payload }, actorId: f.created_by }); ran++; }
+    catch (e) { console.error("[flows] event-run failed", f.id, e.message); }
+  }
+  return { ran };
+}
+
+module.exports = { runFlow, runDueScheduled, emitEvent, NODE_CATALOG, EVENT_CATALOG, NODES, resolveTemplates, isDue };

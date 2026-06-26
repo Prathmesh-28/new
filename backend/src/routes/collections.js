@@ -128,6 +128,7 @@ router.post("/", async (req, res) => {
           "UPDATE invoices SET status='paid', paid_at=now() WHERE id=$1 AND tenant_id=$2",
           [inv.id, inv.tenant_id]
         );
+        require("../modules/flows/runner").emitEvent(inv.tenant_id, "invoice.paid", { invoice: { ...inv, status: "paid" } }).catch(() => {});
         // Create revenue transaction in KV store is done client-side via polling
         // Could also push via Server-Sent Events or WebSocket in production
         console.log(`[razorpay] Invoice ${invoiceNumber} (tenant ${inv.tenant_id}) marked paid — ₹${payment.amount / 100}`);

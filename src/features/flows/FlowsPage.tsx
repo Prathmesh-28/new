@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { humanizeAiError } from "@/components/ai/aiError";
 import {
   Workflow, Plus, Search, Loader2, Play, Save, Trash2, ChevronRight, ChevronDown,
-  Zap, Clock, Webhook, Check, X, CircleDot, AlertTriangle, History,
+  Zap, Clock, Webhook, Check, X, CircleDot, AlertTriangle, History, Activity,
 } from "lucide-react";
 
 /**
@@ -13,8 +13,8 @@ import {
  * (trigger + node graph) · run it · read the per-node execution log + history.
  * Backed by /api/flows (the engine is in modules/flows/runner.js).
  */
-type TriggerType = "manual" | "schedule" | "webhook";
-interface Trigger { type: TriggerType; config?: { frequency?: string; hour?: number; dow?: number } }
+type TriggerType = "manual" | "schedule" | "webhook" | "event";
+interface Trigger { type: TriggerType; config?: { frequency?: string; hour?: number; dow?: number; event?: string } }
 interface FlowNode { id: string; type: string; config: Record<string, unknown> }
 interface Edge { from: string; to: string; branch?: string }
 interface Graph { nodes: FlowNode[]; edges: Edge[] }
@@ -22,11 +22,11 @@ interface FlowListItem { id: string; name: string; enabled: boolean; trigger: Tr
 interface FullFlow extends FlowListItem { description?: string; graph: Graph; webhook_token?: string | null }
 interface CatalogField { key: string; type: string; label: string; options?: string[] }
 interface CatalogNode { type: string; label: string; desc: string; fields: CatalogField[] }
-interface Catalog { nodes: CatalogNode[]; tools: { name: string; scope?: string }[]; agents: { id: string; name: string }[] }
+interface Catalog { nodes: CatalogNode[]; tools: { name: string; scope?: string }[]; agents: { id: string; name: string }[]; events?: { event: string; label: string; desc: string }[] }
 interface NodeResult { type?: string; status: string; output?: unknown; error?: string; ms?: number }
 interface FlowRun { id: string; status: string; trigger_kind?: string; error?: string | null; created_at: string; results?: Record<string, NodeResult> }
 
-const TRIGGER_ICON: Record<TriggerType, typeof Zap> = { manual: Zap, schedule: Clock, webhook: Webhook };
+const TRIGGER_ICON: Record<TriggerType, typeof Zap> = { manual: Zap, schedule: Clock, webhook: Webhook, event: Activity };
 
 export default function FlowsPage() {
   const [flows, setFlows] = useState<FlowListItem[]>([]);
@@ -195,10 +195,16 @@ function FlowEditor({ flowId, catalog, onSaved, onDeleted }: { flowId: string; c
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <div className="flex items-center gap-2 text-xs font-semibold text-[var(--color-muted)] mb-2">TRIGGER</div>
         <div className="flex items-center gap-2 flex-wrap">
-          {(["manual", "schedule", "webhook"] as TriggerType[]).map((t) => {
+          {(["manual", "event", "schedule", "webhook"] as TriggerType[]).map((t) => {
             const I = TRIGGER_ICON[t];
             return <button key={t} onClick={() => setTrigger({ type: t, config: trigger.type === t ? trigger.config : {} })} className={`flex items-center gap-1.5 text-xs rounded-lg border px-2.5 py-1.5 ${trigger.type === t ? "border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-text)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}><I size={12} /> {t}</button>;
           })}
+          {trigger.type === "event" && (
+            <select value={trigger.config?.event || ""} onChange={(e) => setTrigger({ type: "event", config: { ...trigger.config, event: e.target.value } })} className="text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-1.5 py-1 outline-none">
+              <option value="">— pick an event —</option>
+              {(catalog.events || []).map((ev) => <option key={ev.event} value={ev.event}>{ev.label}</option>)}
+            </select>
+          )}
           {trigger.type === "schedule" && (
             <div className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
               <select value={trigger.config?.frequency || "daily"} onChange={(e) => setTrigger({ type: "schedule", config: { ...trigger.config, frequency: e.target.value } })} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-1.5 py-1 outline-none">

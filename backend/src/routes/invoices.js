@@ -91,6 +91,7 @@ router.post("/", authenticate, canWrite, async (req, res) => {
     );
   }
 
+  require("../modules/flows/runner").emitEvent(req.user.tenant_id, "invoice.created", { invoice: inv }).catch(() => {});
   res.status(201).json(inv);
 });
 
@@ -105,6 +106,7 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
     [status, req.params.id, req.user.tenant_id]
   );
   if (!inv) return res.status(404).json({ error: "Invoice not found" });
+  if (status === "paid") require("../modules/flows/runner").emitEvent(req.user.tenant_id, "invoice.paid", { invoice: inv }).catch(() => {});
   res.json(inv);
 });
 

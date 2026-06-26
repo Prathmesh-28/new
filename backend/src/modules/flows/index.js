@@ -122,6 +122,16 @@ async function markRan(flowId) {
   await pool.query("UPDATE flows SET last_run_at=now() WHERE id=$1", [flowId]).catch(() => {});
 }
 
+// Enabled flows subscribed to a given platform event (trigger.config.event).
+async function listEventFlows(tenantId, event) {
+  const { rows } = await pool.query(
+    `SELECT * FROM flows WHERE tenant_id=$1 AND enabled=true AND archived_at IS NULL
+       AND trigger->>'type'='event' AND trigger->'config'->>'event'=$2`,
+    [tenantId, event]
+  );
+  return rows;
+}
+
 // Enabled, scheduled flows (the cron filters by due-ness via the runner's _isDue).
 async function listScheduledFlows() {
   const { rows } = await pool.query(
@@ -132,5 +142,5 @@ async function listScheduledFlows() {
 
 module.exports = {
   FlowError, createFlow, listFlows, getFlow, updateFlow, deleteFlow,
-  listRuns, getRun, getFlowByWebhookToken, createRun, finishRun, markRan, listScheduledFlows,
+  listRuns, getRun, getFlowByWebhookToken, createRun, finishRun, markRan, listScheduledFlows, listEventFlows,
 };
