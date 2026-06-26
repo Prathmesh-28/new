@@ -39,6 +39,7 @@ router.get("/catalog", async (req, res) => {
     res.json({
       nodes: runner.NODE_CATALOG,
       events: runner.EVENT_CATALOG,
+      templates: require("./templates").FLOW_TEMPLATES,
       tools: agenttools.toolCatalog(),
       agents: (Array.isArray(list) ? list : []).map((a) => ({ id: a.id, name: a.name })),
     });

@@ -22,7 +22,8 @@ interface FlowListItem { id: string; name: string; enabled: boolean; trigger: Tr
 interface FullFlow extends FlowListItem { description?: string; graph: Graph; webhook_token?: string | null }
 interface CatalogField { key: string; type: string; label: string; options?: string[] }
 interface CatalogNode { type: string; label: string; desc: string; fields: CatalogField[] }
-interface Catalog { nodes: CatalogNode[]; tools: { name: string; scope?: string }[]; agents: { id: string; name: string }[]; events?: { event: string; label: string; desc: string }[] }
+interface FlowTemplate { id: string; name: string; description: string; trigger: Trigger; graph: Graph }
+interface Catalog { nodes: CatalogNode[]; tools: { name: string; scope?: string }[]; agents: { id: string; name: string }[]; events?: { event: string; label: string; desc: string }[]; templates?: FlowTemplate[] }
 interface NodeResult { type?: string; status: string; output?: unknown; error?: string; ms?: number }
 interface FlowRun { id: string; status: string; trigger_kind?: string; error?: string | null; created_at: string; results?: Record<string, NodeResult> }
 
@@ -56,6 +57,14 @@ export default function FlowsPage() {
     try {
       const f = await api.post<FullFlow>("/api/flows/flows", { name: "Untitled flow", trigger: { type: "manual" }, graph: { nodes: [], edges: [] } });
       await loadFlows(); setActiveId(f.id);
+    } catch (e) { toast.error(humanizeAiError(e)); }
+  };
+
+  const createFromTemplate = async (t: FlowTemplate) => {
+    try {
+      const f = await api.post<FullFlow>("/api/flows/flows", { name: t.name, trigger: t.trigger, graph: t.graph });
+      await loadFlows(); setActiveId(f.id);
+      toast.success(`Created "${t.name}" — review and run it`);
     } catch (e) { toast.error(humanizeAiError(e)); }
   };
 
@@ -96,10 +105,26 @@ export default function FlowsPage() {
 
         <main className="flex-1 min-w-0 overflow-y-auto">
           {!activeId || !catalog ? (
-            <div className="h-full flex flex-col items-center justify-center text-center px-6">
-              <Workflow size={32} className="text-[var(--color-primary)] mb-3" />
-              <p className="text-sm font-semibold">Create a flow to start automating</p>
-              <p className="text-xs text-[var(--color-muted)] mt-1 max-w-sm">A flow is a trigger plus a graph of nodes. Build one, run it, and watch each step in the execution log.</p>
+            <div className="h-full overflow-y-auto px-6 py-6">
+              <div className="text-center mb-5">
+                <Workflow size={30} className="text-[var(--color-primary)] mb-2 mx-auto" />
+                <p className="text-sm font-semibold">Start from a template — or build your own</p>
+                <p className="text-xs text-[var(--color-muted)] mt-1 max-w-md mx-auto">One click installs a working automation you can review and run. Or hit “New flow” for a blank canvas.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-2xl mx-auto">
+                {(catalog?.templates || []).map((t) => {
+                  const I = TRIGGER_ICON[t.trigger?.type] || Zap;
+                  return (
+                    <button key={t.id} onClick={() => createFromTemplate(t)} className="text-left rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3.5 hover:border-[var(--color-primary)]/50 transition-colors">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-7 h-7 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0"><I size={14} className="text-[var(--color-primary)]" /></div>
+                        <span className="text-sm font-semibold">{t.name}</span>
+                      </div>
+                      <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">{t.description}</p>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ) : (
             <FlowEditor key={activeId} flowId={activeId} catalog={catalog} onSaved={loadFlows} onDeleted={() => { setActiveId(""); loadFlows(); }} />
