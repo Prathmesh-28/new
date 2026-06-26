@@ -124,6 +124,17 @@ function _isPaymentError(e) {
   return /insufficient credit|payment required|\(402\)|\b402\b/i.test(e.providerText || e.message || "");
 }
 
+// --- Gemini fallback ----------------------------------------------------------
+// Google's Gemini exposes an OpenAI-COMPATIBLE endpoint, so it slots into the same
+// attempt() path as a fallback provider. Used when the primary (OpenRouter) fails, or
+// as the engine when no OpenRouter key is configured at all. Platform-level key (env).
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai";
+function geminiProvider() {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  return { baseUrl: GEMINI_BASE, key, model: process.env.GEMINI_MODEL || "gemini-2.0-flash" };
+}
+
 // --- chat ---------------------------------------------------------------------
 // Maps our { system, messages, tools } onto an OpenAI chat-completions request and
 // returns the assistant message { content, tool_calls, usage }. Throws PostError on
@@ -133,7 +144,8 @@ function _isPaymentError(e) {
 async function chat(tenantId, { system, messages = [], tools, model: modelOverride } = {}) {
   const { baseUrl, model: tenantModel, key } = await _resolveSecret(tenantId);
   const requestedModel = modelOverride || tenantModel;   // per-agent / tenant model wins
-  if (!key) {
+  const gem = geminiProvider();
+  if (!key && !gem) {
     throw new PostError(
       "LLM_NOT_CONFIGURED",
       "Connect an LLM provider (OpenRouter key) in Agents settings",
@@ -145,16 +157,20 @@ async function chat(tenantId, { system, messages = [], tools, model: modelOverri
   if (system) oaMessages.push({ role: "system", content: String(system) });
   for (const m of messages) oaMessages.push({ role: m.role, content: m.content });
 
-  const url = baseUrl.replace(/\/+$/, "") + "/chat/completions";
-
-  const attempt = async (useModel) => {
-    const body = { model: useModel, messages: oaMessages };
+  // attempt() targets the tenant's OpenRouter by default, or an override provider
+  // (e.g. Gemini) when one is passed.
+  const attempt = async (useModel, provider) => {
+    const pBase = provider ? provider.baseUrl : baseUrl;
+    const pKey = provider ? provider.key : key;
+    const pModel = provider ? provider.model : useModel;
+    const url = pBase.replace(/\/+$/, "") + "/chat/completions";
+    const body = { model: pModel, messages: oaMessages };
     if (tools && tools.length) body.tools = tools;
     let resp;
     try {
       resp = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${pKey}` },
         body: JSON.stringify(body),
       });
     } catch (e) {
@@ -174,13 +190,21 @@ async function chat(tenantId, { system, messages = [], tools, model: modelOverri
     return { content: msg.content || "", tool_calls: msg.tool_calls, usage: parseUsage(data) };
   };
 
+  // No OpenRouter key but Gemini is configured → Gemini is the engine.
+  if (!key && gem) return await attempt(null, gem);
+
   try {
     return await attempt(requestedModel);
   } catch (e) {
     const freeModel = DEFAULT_MODEL();
     if (_isPaymentError(e) && requestedModel !== freeModel) {
       try { console.warn(`[llm] model "${requestedModel}" out of credits — falling back to free "${freeModel}"`); } catch {}
-      return await attempt(freeModel);
+      try { return await attempt(freeModel); } catch (e2) { e = e2; }
+    }
+    // Last resort: Gemini fallback when the primary provider is failing.
+    if (gem) {
+      try { console.warn(`[llm] primary failed (${e.providerStatus || e.code || ""}) — falling back to Gemini`); } catch {}
+      try { return await attempt(null, gem); } catch { /* Gemini also failed → surface the original error */ }
     }
     throw e;
   }
@@ -196,7 +220,8 @@ async function chat(tenantId, { system, messages = [], tools, model: modelOverri
 async function chatStream(tenantId, { system, messages = [], tools, model: modelOverride, signal } = {}, onDelta) {
   const { baseUrl, model: tenantModel, key } = await _resolveSecret(tenantId);
   const requestedModel = modelOverride || tenantModel;
-  if (!key) throw new PostError("LLM_NOT_CONFIGURED", "Connect an LLM provider (OpenRouter key) in Agents settings", 422);
+  const gem = geminiProvider();
+  if (!key && !gem) throw new PostError("LLM_NOT_CONFIGURED", "Connect an LLM provider (OpenRouter key) in Agents settings", 422);
 
   const oaMessages = [];
   if (system) oaMessages.push({ role: "system", content: String(system) });
@@ -207,16 +232,19 @@ async function chatStream(tenantId, { system, messages = [], tools, model: model
     if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
     oaMessages.push(msg);
   }
-  const url = baseUrl.replace(/\/+$/, "") + "/chat/completions";
 
-  const attempt = async (useModel) => {
-    const body = { model: useModel, messages: oaMessages, stream: true, stream_options: { include_usage: true } };
+  const attempt = async (useModel, provider) => {
+    const pBase = provider ? provider.baseUrl : baseUrl;
+    const pKey = provider ? provider.key : key;
+    const pModel = provider ? provider.model : useModel;
+    const url = pBase.replace(/\/+$/, "") + "/chat/completions";
+    const body = { model: pModel, messages: oaMessages, stream: true, stream_options: { include_usage: true } };
     if (tools && tools.length) body.tools = tools;
     let resp;
     try {
       resp = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${pKey}` },
         body: JSON.stringify(body),
         signal,
       });
@@ -272,12 +300,26 @@ async function chatStream(tenantId, { system, messages = [], tools, model: model
     return { content, tool_calls: tool_calls.length ? tool_calls : undefined, usage: parseUsage({ usage }) };
   };
 
+  // No OpenRouter key but Gemini is configured → Gemini is the engine.
+  if (!key && gem) return await attempt(null, gem);
+
+  // A fallback is only safe BEFORE any token is emitted (a pre-stream error:
+  // a non-2xx response sets providerStatus, a fetch failure carries LLM_NETWORK).
+  // A mid-stream break must not retry — that would replay already-shown tokens.
+  const preStream = (e) => e && (e.providerStatus || e.code === "LLM_NETWORK");
+
   try {
     return await attempt(requestedModel);
   } catch (e) {
     if (e.name === "AbortError") throw e;
     const freeModel = DEFAULT_MODEL();
-    if (_isPaymentError(e) && requestedModel !== freeModel) return await attempt(freeModel);
+    if (_isPaymentError(e) && requestedModel !== freeModel) {
+      try { return await attempt(freeModel); } catch (e2) { if (e2.name === "AbortError") throw e2; e = e2; }
+    }
+    if (gem && preStream(e)) {
+      try { console.warn(`[llm] stream primary failed (${e.providerStatus || e.code || ""}) — falling back to Gemini`); } catch {}
+      try { return await attempt(null, gem); } catch { /* Gemini also failed → surface the original error */ }
+    }
     throw e;
   }
 }
