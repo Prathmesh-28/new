@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
+import Markdown from "@/components/ai/Markdown";
 import { toast } from "sonner";
 import { Sparkles, X, Send, Loader2, ArrowRight, List, MessageSquare, ArrowLeft, RotateCcw, Mic, Bot, CheckCircle2, XCircle } from "lucide-react";
 import { FEATURE_GUIDES } from "@/data/featureGuides";
@@ -229,8 +230,8 @@ export default function HeadroomAssistant() {
                 {msgs.map((m, i) => (
                   <div key={i}>
                     <div className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-xs leading-relaxed ${m.role === "user" ? "rounded-br-sm bg-[var(--color-primary)] text-white" : "rounded-bl-sm bg-[var(--color-surface-2)] text-[var(--color-text)]"}`}>
-                        {m.content}
+                      <div className={`max-w-[88%] rounded-2xl px-3 py-2 text-xs leading-relaxed ${m.role === "user" ? "rounded-br-sm bg-[var(--color-primary)] text-white whitespace-pre-wrap" : "rounded-bl-sm bg-[var(--color-surface-2)] text-[var(--color-text)]"}`}>
+                        {m.role === "user" ? m.content : <Markdown text={m.content} />}
                       </div>
                     </div>
                     {m.role === "assistant" && m.route && (

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { humanizeAiError } from "./aiError";
 import { Sparkles, RefreshCw, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import Markdown from "./Markdown";
 
 /**
  * Drop-in "✨ AI insight" panel — give it a question + the on-screen data and it
@@ -86,8 +87,10 @@ export default function AiInsight({ question, context, title = "AI insight", sys
         <div className="border-t border-[var(--color-border)] px-4 py-3">
           {busy ? (
             <p className="flex items-center gap-2 text-xs text-[var(--color-muted)]"><Loader2 size={13} className="animate-spin" /> Analysing your numbers…</p>
+          ) : text ? (
+            <Markdown text={text} className="text-xs leading-relaxed text-[var(--color-text)]" />
           ) : (
-            <p className="whitespace-pre-wrap text-xs leading-relaxed text-[var(--color-text)]">{text || "Expand to generate."}</p>
+            <p className="text-xs text-[var(--color-muted)]">Expand to generate.</p>
           )}
         </div>
       )}
