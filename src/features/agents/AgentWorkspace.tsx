@@ -349,7 +349,7 @@ export default function AgentWorkspace() {
                 <div key={i} className="flex flex-col items-start gap-2">
                   {t.subResults && t.subResults.length > 0 && <SwarmAccordion plan={t.plan ?? []} subResults={t.subResults} messages={t.messages ?? []} critiques={t.critiques ?? []} />}
                   {t.steps && t.steps.length > 0 && (!t.subResults || t.subResults.length === 0) && <TaskAccordion steps={t.steps} />}
-                  <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-[var(--color-surface)] border border-[var(--color-border)] px-3.5 py-2 text-sm"><Markdown text={t.text} /></div>
+                  <div className="max-w-[88%] rounded-2xl rounded-bl-sm bg-[var(--color-surface)] border border-[var(--color-border)] px-4 py-3 text-sm leading-relaxed"><Markdown text={t.text} /></div>
                   {t.pending && t.pending.length > 0 && (
                     <div className="w-full space-y-1.5">{t.pending.map(p => <ApprovalCard key={p.id} action={p} agentId={active.id} />)}</div>
                   )}
