@@ -363,6 +363,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (tab === "studio") return true;
     // Collab (Messages) — open to every member; access is per-conversation membership.
     if (tab === "collab") return true;
+    // Flows (automation) — visible to all members; write/run is role-gated server-side.
+    if (tab === "flows") return true;
     return getRoleConfig(effectiveRole)?.accessibleTabs.includes(tab) ?? false;
   };
 
