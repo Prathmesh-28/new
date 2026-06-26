@@ -448,6 +448,10 @@ initDb()
       require("./lib/reminders").runOverdueReminders()
         .then(n => { if (n) console.log(`[reminders] raised ${n} overdue-invoice alert(s)`); })
         .catch(err => console.error("[reminders]", err.message));
+      // Flows: emit the daily cash pulse to tenants with a cash.daily flow.
+      require("./modules/flows/runner").runDailyCashEvents()
+        .then(r => { if (r && r.fired) console.log(`[flows] cash.daily fired ${r.fired} flow(s)`); })
+        .catch(err => console.error("[flows-cash-daily]", err.message));
     }, { timezone: "UTC" });
     // Subscriptions: generate due recurring invoices daily at 07:45 IST (02:15 UTC).
     cron.schedule("15 2 * * *", async () => {

@@ -246,6 +246,7 @@ const EVENT_CATALOG = [
   { event: "invoice.created", label: "Invoice created", desc: "A new invoice was created" },
   { event: "invoice.paid", label: "Invoice paid", desc: "An invoice was marked paid / payment received" },
   { event: "invoice.overdue", label: "Invoice overdue", desc: "An invoice became overdue (daily check)" },
+  { event: "cash.daily", label: "Daily cash pulse", desc: "Each morning with cash, runway & receivables ({{trigger.snapshot.runwayDays}}, .cash.total, …)" },
 ];
 
 // Fire a platform event → run every enabled event-flow subscribed to it for that tenant.
@@ -264,4 +265,19 @@ async function emitEvent(tenantId, event, payload = {}) {
   return { ran };
 }
 
-module.exports = { runFlow, runDueScheduled, emitEvent, NODE_CATALOG, EVENT_CATALOG, NODES, resolveTemplates, isDue };
+// Daily cron entry: emit a `cash.daily` event (carrying the business snapshot) to every
+// tenant that has a flow subscribed to it. Only computes snapshots for subscribed tenants.
+async function runDailyCashEvents() {
+  const tenants = await flows.tenantsSubscribedTo("cash.daily").catch(() => []);
+  let fired = 0;
+  for (const tenantId of tenants) {
+    try {
+      const snapshot = await require("../books/agenttools").runTool(tenantId, "get_business_snapshot", {}, null);
+      const r = await emitEvent(tenantId, "cash.daily", { snapshot });
+      fired += r.ran || 0;
+    } catch (e) { console.error("[flows] cash.daily failed", tenantId, e.message); }
+  }
+  return { fired };
+}
+
+module.exports = { runFlow, runDueScheduled, runDailyCashEvents, emitEvent, NODE_CATALOG, EVENT_CATALOG, NODES, resolveTemplates, isDue };

@@ -132,6 +132,17 @@ async function listEventFlows(tenantId, event) {
   return rows;
 }
 
+// Distinct tenants that have an enabled flow subscribed to a given event — so the
+// daily emitter only computes snapshots for tenants that actually use the event.
+async function tenantsSubscribedTo(event) {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT tenant_id FROM flows WHERE enabled=true AND archived_at IS NULL
+       AND trigger->>'type'='event' AND trigger->'config'->>'event'=$1`,
+    [event]
+  );
+  return rows.map((r) => r.tenant_id);
+}
+
 // Enabled, scheduled flows (the cron filters by due-ness via the runner's _isDue).
 async function listScheduledFlows() {
   const { rows } = await pool.query(
@@ -142,5 +153,5 @@ async function listScheduledFlows() {
 
 module.exports = {
   FlowError, createFlow, listFlows, getFlow, updateFlow, deleteFlow,
-  listRuns, getRun, getFlowByWebhookToken, createRun, finishRun, markRan, listScheduledFlows, listEventFlows,
+  listRuns, getRun, getFlowByWebhookToken, createRun, finishRun, markRan, listScheduledFlows, listEventFlows, tenantsSubscribedTo,
 };
