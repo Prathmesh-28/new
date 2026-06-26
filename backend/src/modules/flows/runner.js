@@ -119,6 +119,11 @@ const NODES = {
     await sendMail({ to, subject: String(cfg.subject || "(no subject)"), html: String(cfg.body || "") });
     return { sent: !!process.env.SMTP_USER, to }; // sent only if SMTP is configured
   },
+  async underwrite(cfg, ctx, env) {
+    const r = await require("../../lib/underwriting").score(env.tenantId, pool);
+    // compact, templatable shape for downstream branch/notify nodes
+    return { score: r.score, grade: r.grade, decision: r.decision && r.decision.outcome, eligible_amount: r.approved_amount, recommended_product: r.recommended_product };
+  },
   async notify(cfg, ctx, env) {
     await pool.query(
       "INSERT INTO alerts(tenant_id, rule_id, severity, title, message) VALUES($1,'flow',$2,$3,$4)",
@@ -133,6 +138,7 @@ const NODE_CATALOG = [
   { type: "tool", label: "Run a tool", desc: "Read or write business data via an agent tool", fields: [{ key: "tool", type: "toolselect", label: "Tool" }, { key: "args", type: "json", label: "Arguments" }] },
   { type: "llm", label: "Ask AI", desc: "Prompt your engine; use {{...}} for upstream data", fields: [{ key: "system", type: "text", label: "System (optional)" }, { key: "prompt", type: "textarea", label: "Prompt" }] },
   { type: "agent", label: "Run an agent", desc: "Run one of your Agent Studio agents", fields: [{ key: "agentId", type: "agentselect", label: "Agent" }, { key: "message", type: "textarea", label: "Message" }] },
+  { type: "underwrite", label: "Underwrite (credit)", desc: "Run financing-readiness → {{nodes.id.grade / decision / eligible_amount}}", fields: [] },
   { type: "http", label: "HTTP request", desc: "Call an external API", fields: [{ key: "method", type: "select", label: "Method", options: ["GET", "POST", "PUT", "DELETE"] }, { key: "url", type: "text", label: "URL" }, { key: "headers", type: "json", label: "Headers" }, { key: "body", type: "textarea", label: "Body" }] },
   { type: "branch", label: "If / branch", desc: "Route by a condition (edges labelled true/false)", fields: [{ key: "left", type: "text", label: "Left ({{...}})" }, { key: "op", type: "select", label: "Operator", options: ["==", "!=", ">", "<", ">=", "<=", "contains", "truthy", "empty"] }, { key: "right", type: "text", label: "Right" }] },
   { type: "set", label: "Set values", desc: "Build a small object for later nodes", fields: [{ key: "values", type: "json", label: "Values" }] },

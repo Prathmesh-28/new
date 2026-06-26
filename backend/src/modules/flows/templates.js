@@ -46,6 +46,20 @@ const FLOW_TEMPLATES = [
     },
   },
   {
+    id: "financing-ready",
+    name: "Financing-ready watch",
+    description: "Daily: run underwriting and alert you the moment the business is pre-qualified for credit.",
+    trigger: { type: "schedule", config: { frequency: "daily", hour: 4 } },
+    graph: {
+      nodes: [
+        { id: "uw", type: "underwrite", config: {} },
+        { id: "chk", type: "branch", config: { left: "{{nodes.uw.decision}}", op: "==", right: "pre_qualified" } },
+        { id: "alert", type: "notify", config: { title: "You're financing-ready", severity: "low", message: "Pre-qualified for ₹{{nodes.uw.eligible_amount}} (grade {{nodes.uw.grade}}). Review loan options on the Credit page." } },
+      ],
+      edges: [{ from: "uw", to: "chk" }, { from: "chk", to: "alert", branch: "true" }],
+    },
+  },
+  {
     id: "runway-watch",
     name: "Daily runway watch",
     description: "Every morning, check cash runway and raise an alert if it drops below 30 days.",

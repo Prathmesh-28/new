@@ -172,6 +172,27 @@ router.get("/score", authenticate, requireOwnerOrAdmin, async (req, res) => {
   res.json(result);
 });
 
+// GET /api/credit/report — formal JSON creditworthiness report (Headroom's own "output
+// layer", the artifact that flows into a lender/LOS). Read-only; no application created.
+router.get("/report", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  const result = await underwrite(req.user.tenant_id, pool);
+  res.json({
+    report_id: "rpt_" + require("crypto").randomBytes(6).toString("hex"),
+    schema_version: "1.0",
+    generated_at: new Date().toISOString(),
+    tenant_id: req.user.tenant_id,
+    creditworthiness: {
+      score: result.score,
+      grade: result.grade,
+      decision: result.decision,
+      eligible_amount: result.approved_amount,
+      recommended_product: result.recommended_product,
+    },
+    factors: result.factors,
+    metrics: result.breakdown,
+  });
+});
+
 // POST /api/credit/finbox — submit lead to Finbox Credit API (NBFC routing)
 router.post("/finbox", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { requested_amount, purpose } = req.body;

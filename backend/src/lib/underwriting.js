@@ -117,7 +117,7 @@ async function score(tenantId, pool) {
   const approvedAmount = calcApproved(finalScore, monthlyRevenue90);
   const product = recommendProduct(finalScore, txns);
 
-  return {
+  const result = {
     score: finalScore,
     grade,
     approved_amount: approvedAmount,
@@ -137,10 +137,34 @@ async function score(tenantId, pool) {
       signals: { s1, s2, s3, s4, s5, s6, s7, s8, gst: s10, receivables: s11, activity: activityScore },
     },
   };
+  result.decision = decide(result);
+  return result;
 }
 
 // Grade bands for a human-readable risk tier.
 function gradeOf(s) { return s >= 80 ? "A" : s >= 65 ? "B" : s >= 50 ? "C" : s >= 35 ? "D" : "E"; }
+
+// Decisioning layer (Headroom's own BRE output): turn the score/grade into an explainable
+// outcome + reasons + eligible amount. Pre-qualified (A/B/C) · refer (D) · declined (E / ₹0).
+function decide(r) {
+  const grade = r.grade;
+  const overdue = (r.breakdown && r.breakdown.overdue_ratio) || 0;
+  const gstScore = (r.breakdown && r.breakdown.signals && r.breakdown.signals.gst) || 0;
+  const amt = Math.round(r.approved_amount || 0);
+  const reasons = [];
+  let outcome;
+  if (grade === "E" || amt <= 0) { outcome = "declined"; reasons.push({ code: "low_score", text: `Score ${r.score} (grade ${grade}) is below the lending threshold.` }); }
+  else if (grade === "D") { outcome = "refer"; reasons.push({ code: "borderline", text: `Grade ${grade} — borderline; a manual review is recommended.` }); }
+  else { outcome = "pre_qualified"; reasons.push({ code: "qualified", text: `Grade ${grade} — pre-qualified up to ₹${amt.toLocaleString("en-IN")}.` }); }
+  if (overdue > 0.4) reasons.push({ code: "high_overdue", text: `High overdue receivables (${Math.round(overdue * 100)}%) — collections risk.` });
+  if (gstScore <= 5) reasons.push({ code: "no_gst", text: "No recent GST filing track record — verifiable turnover is limited." });
+  return {
+    outcome,
+    label: outcome === "pre_qualified" ? "Pre-qualified" : outcome === "refer" ? "Refer for review" : "Not yet eligible",
+    reasons,
+    eligible_amount: amt,
+  };
+}
 
 // GST filing regularity — distinct GST periods FILED in the last ~7 months. Filing on
 // time signals compliance and gives a lender verifiable turnover. No returns → no track record.
@@ -270,4 +294,4 @@ function daysAgo(n) {
   return d.toISOString().slice(0, 10);
 }
 
-module.exports = { score, scoreGst, receivablesHealth, gradeOf };
+module.exports = { score, scoreGst, receivablesHealth, gradeOf, decide };

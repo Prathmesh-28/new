@@ -11,11 +11,13 @@ import { Gauge, TrendingUp, ArrowRight, Loader2 } from "lucide-react";
  * with the Forecast shortfall card ("shortfall on [date] → draw here").
  */
 interface Factor { key: string; label: string; score: number; weight: number; status: "strong" | "ok" | "weak"; contribution: number; hint: string }
+interface Decision { outcome: "pre_qualified" | "refer" | "declined"; label: string; reasons: { code: string; text: string }[]; eligible_amount: number }
 interface ScoreResult {
   score: number;
   grade?: string;
   approved_amount: number;
   recommended_product?: string;
+  decision?: Decision;
   factors?: Factor[];
   breakdown?: {
     monthly_revenue?: number;
@@ -80,6 +82,11 @@ export default function FinancingReadiness({ onApply }: { onApply?: () => void }
           <div>
             <p className="text-sm font-semibold flex items-center gap-1.5"><Gauge size={15} className="text-[var(--color-primary)]" /> Financing readiness</p>
             <p className={`text-xs font-medium ${band.color}`}>Grade {grade} · {band.label}</p>
+            {data.decision && (
+              <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${data.decision.outcome === "pre_qualified" ? "text-green-400 border-green-500/40 bg-green-500/10" : data.decision.outcome === "refer" ? "text-yellow-400 border-yellow-500/40 bg-yellow-500/10" : "text-red-400 border-red-500/40 bg-red-500/10"}`}>
+                {data.decision.label}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex-1 min-w-[180px]">
