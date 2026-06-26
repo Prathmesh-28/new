@@ -7,13 +7,13 @@ import Logo from "@/components/Logo";
 import {
   Eye, ChevronLeft, ChevronRight, ChevronDown, Lock, LogOut, Menu, X, Search, User,
   LayoutDashboard, TrendingUp, CreditCard, Rocket, ShieldCheck, Settings2,
-  Package, Users, Briefcase, PlugZap, FileText, Bell, Receipt,
-  FilePlus, Calculator, Wallet, Store, Landmark, BarChart3, Sparkles, Building2,
-  PiggyBank, HeartPulse, RefreshCcw, Scale, Gem, CalendarCheck, ScanSearch,
-  MessageCircle, Sliders, PhoneCall, Award, FolderOpen, FileSpreadsheet, ScrollText, Database,
-  Handshake, IndianRupee, Umbrella, Coins, Leaf, Globe,
-  ShoppingCart, Network, Workflow, Bot, ShieldAlert, KeyRound, Banknote, Radar,
-  Mic, Smartphone, Blocks, FlaskConical, BookOpen, Factory, LineChart, UsersRound, Wand2, AppWindow, MessagesSquare, Waypoints,
+  Users, Briefcase, PlugZap, FileText, Bell,
+  FilePlus, Calculator, Wallet, Landmark, Sparkles, Building2,
+  PiggyBank, HeartPulse, RefreshCcw, CalendarCheck,
+  MessageCircle, PhoneCall, FolderOpen, Database,
+  Handshake, IndianRupee, Umbrella, Coins,
+  ShoppingCart, ShieldAlert, KeyRound, Banknote,
+  Smartphone, FlaskConical, BookOpen, Factory, LineChart, UsersRound, Wand2, AppWindow, MessagesSquare, Waypoints,
 } from "lucide-react";
 
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
@@ -38,83 +38,61 @@ interface NavGroup { label: string; items: NavItem[] }
 // role. Order of groups = the natural daily flow: understand → sell → record →
 // run → people → plan → fund → automate → extend → administer.
 // ─────────────────────────────────────────────────────────────────────────────
+// IA redesign (2026-06): grouped by the JOB the owner does, not by tech. Every
+// nav item is a CANONICAL page for its job. Duplicate / thin / stub pages (e.g.
+// Analytics→Insights, Debt→Credit, Scenarios→Forecast, Automation→Flows, Voice,
+// ESG, Tokens) are intentionally NOT listed here — their ROUTES stay alive in
+// App.tsx and remain reachable via ⌘K search (CommandPalette has its own list).
+// This is the nav layer only: no feature page was merged or rewritten.
 const NAV_CATALOG: NavGroup[] = [
-  { label: "Overview", items: [
-    { to: "/dashboard",       label: "Dashboard",     icon: LayoutDashboard, tab: "dashboard"  },
-    { to: "/analytics",       label: "Analytics",     icon: BarChart3,       tab: "analytics"  },
-    { to: "/insights",        label: "Insights",      icon: LineChart,       tab: "insights"   },
-    { to: "/health",          label: "Fin Health",    icon: HeartPulse,      tab: "health"     },
-    { to: "/cfo-brief",       label: "CFO Brief",     icon: Sparkles,        tab: "cfo-brief"  },
-    { to: "/benchmarks",      label: "Benchmarks",    icon: Award,           tab: "benchmarks" },
+  { label: "Home", items: [
+    { to: "/dashboard",       label: "Dashboard",          icon: LayoutDashboard, tab: "dashboard"  },
+    { to: "/health",          label: "Financial Health",   icon: HeartPulse,      tab: "health"     },
+    { to: "/cfo-brief",       label: "CFO Brief",          icon: Sparkles,        tab: "cfo-brief"  },
+    { to: "/alerts",          label: "Alerts",             icon: Bell,            tab: "alerts"     },
   ]},
-  { label: "Sales & CRM", items: [
-    { to: "/crm",             label: "CRM",           icon: Handshake,       tab: "crm"         },
-    { to: "/sales",           label: "Sales Pipeline",icon: TrendingUp,      tab: "sales"       },
-    { to: "/invoices",        label: "Invoices",      icon: FilePlus,        tab: "invoices"    },
-    { to: "/receivables",     label: "Receivables",   icon: Receipt,         tab: "receivables" },
-    { to: "/collections",     label: "Collections",   icon: PhoneCall,       tab: "collections" },
+  { label: "Get Paid & Sell", items: [
+    { to: "/sales",           label: "Sales & CRM",        icon: Handshake,       tab: "sales"       },
+    { to: "/invoices",        label: "Invoices",           icon: FilePlus,        tab: "invoices"    },
+    { to: "/collections",     label: "Receivables & Collections", icon: PhoneCall, tab: "collections" },
+    { to: "/payments",        label: "Payments",           icon: IndianRupee,     tab: "payments"    },
+    { to: "/field",           label: "Field Sales",        icon: Smartphone,      tab: "field"       },
   ]},
-  { label: "Accounting & Tax", items: [
-    { to: "/transactions",    label: "Transactions",  icon: FileText,        tab: "transactions" },
-    { to: "/books",           label: "Books (GL)",    icon: BookOpen,        tab: "books"        },
-    { to: "/gst",             label: "GST",           icon: Calculator,      tab: "gst"          },
-    { to: "/tax",             label: "Tax Autopilot", icon: ShieldCheck,     tab: "tax"          },
-    { to: "/statements",      label: "Statements",    icon: FileSpreadsheet, tab: "statements"   },
-    { to: "/payments",        label: "Payments",      icon: IndianRupee,     tab: "payments"     },
-    { to: "/banking",         label: "Banking",       icon: Banknote,        tab: "banking"      },
+  { label: "Money & Books", items: [
+    { to: "/transactions",    label: "Transactions",       icon: FileText,        tab: "transactions" },
+    { to: "/books",           label: "Books (GL)",         icon: BookOpen,        tab: "books"        },
+    { to: "/gst",             label: "GST",                icon: Calculator,      tab: "gst"          },
+    { to: "/compliance",      label: "Compliance",         icon: CalendarCheck,   tab: "compliance"   },
+    { to: "/insights",        label: "Reports & Analytics",icon: LineChart,       tab: "insights"     },
+    { to: "/banking",         label: "Banking",            icon: Banknote,        tab: "banking"      },
+    { to: "/documents",       label: "Documents",          icon: FolderOpen,      tab: "documents"    },
   ]},
-  { label: "Operations", items: [
-    { to: "/erp",             label: "ERP / Mfg",     icon: Factory,         tab: "erp"         },
-    { to: "/operations",      label: "Operations",    icon: Package,         tab: "operations"  },
-    { to: "/vendors",         label: "Vendors",       icon: Building2,       tab: "vendors"     },
-    { to: "/suppliers",       label: "Suppliers",     icon: Store,           tab: "suppliers"   },
-    { to: "/spend",           label: "Spend Intel",   icon: ScanSearch,      tab: "spend"       },
-    { to: "/connectors",      label: "Connectors",    icon: PlugZap,         tab: "connectors"  },
+  { label: "Run Operations", items: [
+    { to: "/operations",      label: "Operations & Mfg",   icon: Factory,         tab: "operations"  },
+    { to: "/vendors",         label: "Vendors & Suppliers",icon: Building2,       tab: "vendors"     },
+    { to: "/marketplace",     label: "Online Seller Finance", icon: ShoppingCart, tab: "marketplace" },
   ]},
-  { label: "People", items: [
-    { to: "/hrms",            label: "HRMS",          icon: Users,           tab: "hrms"    },
-    { to: "/payroll",         label: "Payroll",       icon: Wallet,          tab: "payroll" },
+  { label: "Team", items: [
+    { to: "/hrms",            label: "People (HRMS)",      icon: Users,           tab: "hrms"    },
+    { to: "/payroll",         label: "Payroll",            icon: Wallet,          tab: "payroll" },
+    { to: "/collab",          label: "Messages",           icon: MessagesSquare,  tab: "collab"  },
   ]},
-  { label: "Planning", items: [
-    { to: "/forecast",        label: "Forecast",      icon: TrendingUp,      tab: "forecast"        },
-    { to: "/budgets",         label: "Budgets",       icon: PiggyBank,       tab: "budgets"         },
-    { to: "/working-capital", label: "Working Capital",icon: RefreshCcw,     tab: "working-capital" },
-    { to: "/scenarios",       label: "Scenarios",     icon: Sliders,         tab: "scenarios"       },
-    { to: "/predict",         label: "Predict",       icon: Radar,           tab: "predict"         },
-    { to: "/compliance",      label: "Compliance",    icon: CalendarCheck,   tab: "compliance"      },
+  { label: "Plan & Grow Capital", items: [
+    { to: "/forecast",        label: "Forecast",           icon: TrendingUp,      tab: "forecast"        },
+    { to: "/budgets",         label: "Budgets",            icon: PiggyBank,       tab: "budgets"         },
+    { to: "/working-capital", label: "Working Capital",    icon: RefreshCcw,      tab: "working-capital" },
+    { to: "/credit",          label: "Credit & Loans",     icon: CreditCard,      tab: "credit"          },
+    { to: "/lenders",         label: "Loan Marketplace",   icon: Landmark,        tab: "lenders"         },
+    { to: "/capital",         label: "Fundraise",          icon: Rocket,          tab: "capital"         },
+    { to: "/treasury",        label: "Treasury",           icon: Coins,           tab: "treasury"        },
+    { to: "/insurance",       label: "Insurance",          icon: Umbrella,        tab: "insurance"       },
   ]},
-  { label: "Capital & Treasury", items: [
-    { to: "/capital",         label: "Capital",       icon: Rocket,          tab: "capital"    },
-    { to: "/credit",          label: "Credit",        icon: CreditCard,      tab: "credit"     },
-    { to: "/debt",            label: "Debt",          icon: Scale,           tab: "debt"       },
-    { to: "/valuation",       label: "Valuation",     icon: Gem,             tab: "valuation"  },
-    { to: "/term-sheet",      label: "Term Sheet",    icon: ScrollText,      tab: "term-sheet" },
-    { to: "/lenders",         label: "Lenders",       icon: Landmark,        tab: "lenders"    },
-    { to: "/investor",        label: "Investors",     icon: Briefcase,       tab: "investor"   },
-    { to: "/treasury",        label: "Treasury",      icon: Coins,           tab: "treasury"   },
-    { to: "/insurance",       label: "Insurance",     icon: Umbrella,        tab: "insurance"  },
-  ]},
-  { label: "AI & Automation", items: [
-    { to: "/agents",          label: "Agent Studio",  icon: Wand2,           tab: "agents"     },
-    { to: "/studio",          label: "App Builder",   icon: AppWindow,       tab: "studio"     },
-    { to: "/flows",           label: "Flows",         icon: Waypoints,       tab: "flows"      },
-    { to: "/collab",          label: "Messages",      icon: MessagesSquare,  tab: "collab"     },
-    { to: "/copilot",         label: "AI CFO",        icon: Bot,             tab: "copilot"    },
-    { to: "/automation",      label: "Automation",    icon: Workflow,        tab: "automation" },
-    { to: "/whatsapp",        label: "WhatsApp",      icon: MessageCircle,   tab: "whatsapp"   },
-    { to: "/voice",           label: "Voice",         icon: Mic,             tab: "voice"      },
-    { to: "/documents",       label: "Documents",     icon: FolderOpen,      tab: "documents"  },
-    { to: "/advisor",         label: "Advisor / CA",  icon: Users,           tab: "advisor"    },
-    { to: "/alerts",          label: "Alerts",        icon: Bell,            tab: "alerts"     },
-    { to: "/field",           label: "Field/Offline", icon: Smartphone,      tab: "field"      },
-  ]},
-  { label: "Markets & Labs", items: [
-    { to: "/marketplace",     label: "Marketplace",   icon: ShoppingCart,    tab: "marketplace" },
-    { to: "/network",         label: "B2B Network",   icon: Network,         tab: "network"     },
-    { to: "/global",          label: "Global",        icon: Globe,           tab: "global"      },
-    { to: "/esg",             label: "ESG",           icon: Leaf,            tab: "esg"         },
-    { to: "/tokens",          label: "Tokens",        icon: Blocks,          tab: "tokens"      },
-    { to: "/frontier",        label: "Frontier Lab",  icon: FlaskConical,    tab: "frontier"    },
+  { label: "Build & Automate", items: [
+    { to: "/agents",          label: "Build & Automate",   icon: Wand2,           tab: "agents"   },
+    { to: "/studio",          label: "App Builder",        icon: AppWindow,       tab: "studio"   },
+    { to: "/flows",           label: "Flows",              icon: Waypoints,       tab: "flows"    },
+    { to: "/whatsapp",        label: "WhatsApp",           icon: MessageCircle,   tab: "whatsapp" },
+    { to: "/frontier",        label: "Labs",               icon: FlaskConical,    tab: "frontier" },
   ]},
   { label: "Organization", items: [
     // The company-admin console (members, roles & access, billing, company,
@@ -122,24 +100,36 @@ const NAV_CATALOG: NavGroup[] = [
     { to: "/organization",    label: "Organization",  icon: UsersRound,      tab: "settings"   },
     { to: "/settings",        label: "Settings",      icon: Settings2,       tab: "settings"   },
     { to: "/data",            label: "Data & Import", icon: Database,        tab: "data"        },
+    { to: "/connectors",      label: "Connectors",    icon: PlugZap,         tab: "connectors"  },
     { to: "/security",        label: "Security",      icon: ShieldAlert,     tab: "security"    },
     { to: "/privacy",         label: "Privacy",       icon: KeyRound,        tab: "privacy"     },
+    // Role-scoped consoles (see ROLE_ONLY): the external-CA portal + the investor view.
+    { to: "/advisor",         label: "CA Console",    icon: Users,           tab: "advisor"     },
+    { to: "/investor",        label: "Investors",     icon: Briefcase,       tab: "investor"    },
     { to: "/admin",           label: "Admin Console", icon: ShieldCheck,     tab: "admin"       },
     { to: "/admin/data",      label: "All Data",      icon: Database,        tab: "admin"       },
   ]},
 ];
 
-// Audit #1 — the 6-8 daily-driver pages per role shown up top as "Main"; the rest
-// stay collapsed under their user-flow group. The 20% of features used 80% of the time.
+// Nav-level role gate (on top of canAccess): some real pages serve a NON-owner
+// audience and only clutter the owner's sidebar. The route + canAccess are
+// unchanged — this just decides who sees the nav slot.
+const ROLE_ONLY: Record<string, string[]> = {
+  advisor:  ["accountant", "super_admin"],   // external-CA multi-client console
+  investor: ["investor", "super_admin"],      // the other side of the cap table
+};
+
+// The 6-10 daily-driver pages per role shown up top as "Main"; the rest stay
+// collapsed under their job group. Only references CANONICAL (visible) tabs.
 const PRIMARY_NAV: Record<string, string[]> = {
-  super_admin:        ["dashboard", "transactions", "invoices", "gst", "forecast", "agents", "studio", "flows", "collab", "admin", "settings"],
-  owner:              ["dashboard", "transactions", "invoices", "gst", "forecast", "agents", "studio", "flows", "collab", "settings"],
-  finance_manager:    ["dashboard", "transactions", "invoices", "receivables", "gst", "agents", "studio", "flows", "collab", "forecast"],
-  accountant:         ["dashboard", "transactions", "books", "gst", "tax", "agents", "studio", "flows", "collab", "compliance", "advisor"],
-  sales:              ["dashboard", "crm", "invoices", "receivables", "collections", "agents", "studio", "collab"],
-  operations_manager: ["dashboard", "operations", "erp", "vendors", "suppliers", "agents", "studio", "flows", "collab", "spend"],
-  viewer:             ["dashboard", "analytics", "health", "cfo-brief", "forecast", "agents"],
-  investor:           ["investor", "capital", "valuation", "term-sheet", "lenders"],
+  super_admin:        ["dashboard", "invoices", "collections", "transactions", "gst", "forecast", "agents", "flows", "collab", "insights", "admin"],
+  owner:              ["dashboard", "invoices", "collections", "transactions", "gst", "forecast", "agents", "flows", "collab", "insights"],
+  finance_manager:    ["dashboard", "invoices", "collections", "transactions", "gst", "forecast", "agents", "insights", "banking", "collab"],
+  accountant:         ["dashboard", "transactions", "books", "gst", "compliance", "agents", "insights", "advisor", "collab"],
+  sales:              ["dashboard", "sales", "invoices", "collections", "payments", "agents", "collab", "field"],
+  operations_manager: ["dashboard", "operations", "vendors", "marketplace", "agents", "flows", "collab", "transactions"],
+  viewer:             ["dashboard", "health", "cfo-brief", "insights", "forecast"],
+  investor:           ["investor", "capital", "credit", "lenders"],
 };
 
 function NavItems({ groups, collapsed, onNavigate, badges, expanded, onToggleGroup, lockedPlan }: {
@@ -254,8 +244,9 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
     return role === "super_admin" || !flag || features[flag] !== false;
   };
   // One catalogue, filtered to what this role can reach AND what's enabled. Empty groups drop out.
+  const roleAllows = (tab: string) => !ROLE_ONLY[tab] || ROLE_ONLY[tab].includes(role);
   const groupsRaw = NAV_CATALOG
-    .map(g => ({ ...g, items: g.items.filter(n => canAccess(n.tab) && featureOn(n.tab)) }))
+    .map(g => ({ ...g, items: g.items.filter(n => canAccess(n.tab) && featureOn(n.tab) && roleAllows(n.tab)) }))
     .filter(g => g.items.length > 0);
 
   // What plan a tab needs if the current plan can't reach it (null = accessible).
@@ -344,17 +335,18 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
           }
         </button>
 
-        {/* Always-visible CTA — build your own AI agent, reachable from every tab */}
+        {/* Always-visible CTA — the single Build & Automate hub (agents, app builder,
+            flows). Shares /agents with the "Build & Automate" nav item: one door. */}
         <NavLink
           to="/agents"
-          title="Build your own AI agent"
+          title="Build & Automate — agents, apps, flows"
           className={cn(
             "shrink-0 mx-2 mt-2 flex items-center gap-2 rounded-lg font-semibold text-[var(--color-bg)] bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] hover:opacity-90 transition-opacity",
             collapsed ? "justify-center p-2" : "px-3 py-2 text-sm"
           )}
         >
           <Wand2 size={collapsed ? 16 : 15} className="shrink-0" />
-          {!collapsed && <span>Build an Agent</span>}
+          {!collapsed && <span>Build</span>}
         </NavLink>
 
         {/* Client-view banner */}
@@ -476,9 +468,9 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
           <Logo variant="horizontal" size={20} className="text-[var(--color-text)] select-none" />
         </button>
         <div className="flex items-center gap-1">
-          <NavLink to="/agents" aria-label="Build an Agent" onClick={() => setMobileOpen(false)}
+          <NavLink to="/agents" aria-label="Build & Automate" onClick={() => setMobileOpen(false)}
             className="inline-flex items-center gap-1 rounded-md bg-[var(--color-primary)] text-[var(--color-bg)] text-[11px] font-semibold px-2 py-1">
-            <Wand2 size={13} /> Agent
+            <Wand2 size={13} /> Build
           </NavLink>
           {onOpenSearch && (
             <button onClick={onOpenSearch} aria-label="Search" className="p-1.5 rounded-md text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors">
