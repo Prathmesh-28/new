@@ -3,6 +3,7 @@ import { api, authHeaders } from "@/lib/api";
 import { API_BASE } from "@/lib/apiBase";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "sonner";
+import Markdown from "@/components/ai/Markdown";
 import { humanizeAiError } from "@/components/ai/aiError";
 import {
   Bot, Plus, Search, Send, Loader2, Wrench, ChevronDown, ChevronRight, X,
@@ -348,7 +349,7 @@ export default function AgentWorkspace() {
                 <div key={i} className="flex flex-col items-start gap-2">
                   {t.subResults && t.subResults.length > 0 && <SwarmAccordion plan={t.plan ?? []} subResults={t.subResults} messages={t.messages ?? []} critiques={t.critiques ?? []} />}
                   {t.steps && t.steps.length > 0 && (!t.subResults || t.subResults.length === 0) && <TaskAccordion steps={t.steps} />}
-                  <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-[var(--color-surface)] border border-[var(--color-border)] px-3.5 py-2 text-sm whitespace-pre-wrap">{t.text}</div>
+                  <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-[var(--color-surface)] border border-[var(--color-border)] px-3.5 py-2 text-sm"><Markdown text={t.text} /></div>
                   {t.pending && t.pending.length > 0 && (
                     <div className="w-full space-y-1.5">{t.pending.map(p => <ApprovalCard key={p.id} action={p} agentId={active.id} />)}</div>
                   )}
@@ -460,7 +461,7 @@ function SwarmAccordion({ plan, subResults, messages, critiques }: { plan: strin
             {subResults.map((r, j) => (
               <div key={j}>
                 <p className="text-[11px] font-semibold flex items-start gap-1.5"><span className="text-[var(--color-primary)]">{j + 1}.</span> {r.task}</p>
-                <p className="text-[11px] text-[var(--color-muted)] whitespace-pre-wrap mt-0.5 pl-4">{r.reply}</p>
+                <div className="text-[11px] text-[var(--color-muted)] mt-0.5 pl-4"><Markdown text={r.reply} /></div>
               </div>
             ))}
           </div>
