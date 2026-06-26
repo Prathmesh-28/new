@@ -9,7 +9,8 @@ function capabilities() {
   return {
     // Core services — typically configured in production
     payments:            has("RAZORPAY_KEY_ID"),       // subscription + collections
-    ai:                  has("OPENROUTER_API_KEY"),    // tenant LLM engine fallback (tenants may also BYO-key)
+    ai:                  has("OPENROUTER_API_KEY") || has("GEMINI_API_KEY"), // platform LLM engine (tenants may also BYO-key)
+    aiFallback:          has("GEMINI_API_KEY"),         // Gemini safety net when OpenRouter is unset/out-of-credits
     whatsapp:            has("TWILIO_ACCOUNT_SID"),     // digests + chase
     push:                has("FCM_SERVICE_ACCOUNT"),    // mobile push delivery (FCM v1)
     email:               has("SMTP_USER"),

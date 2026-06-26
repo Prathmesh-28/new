@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 export interface Capabilities {
   payments: boolean;
   ai: boolean;
+  aiFallback: boolean;
   whatsapp: boolean;
   push: boolean;
   email: boolean;
@@ -25,7 +26,7 @@ export type CapabilityKey = keyof Capabilities;
 // confirmed live", and PreviewBadge only renders once `loaded` is true — so a
 // live feature never flashes a Preview badge on first paint.
 const DEFAULTS: Capabilities = {
-  payments: false, ai: false, whatsapp: false, push: false, email: false,
+  payments: false, ai: false, aiFallback: false, whatsapp: false, push: false, email: false,
   bankSync: false, creditDisbursement: false, bnplPayout: false, ewaPayout: false,
   gstEInvoice: false, kyc: false,
   lenderMarketplace: false, supplierMarketplace: false, treasurySweep: false,
