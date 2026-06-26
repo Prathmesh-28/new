@@ -36,7 +36,6 @@ const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage"));
 const SetPasswordPage    = lazy(() => import("@/pages/SetPasswordPage"));
 const NotFoundPage       = lazy(() => import("@/pages/NotFoundPage"));
 const Dashboard          = lazy(() => import("@/features/dashboard/DashboardPage"));
-const Forecast           = lazy(() => import("@/features/forecast/ForecastPage"));
 const Credit             = lazy(() => import("@/features/credit/CreditPage"));
 const Capital            = lazy(() => import("@/features/capital/CapitalPage"));
 const Operations         = lazy(() => import("@/features/operations/OperationsPage"));
@@ -46,7 +45,6 @@ const ConnectorsPage     = lazy(() => import("@/features/connectors/ConnectorsPa
 const AdminPage          = lazy(() => import("@/features/admin/AdminPage"));
 const AllDataPage        = lazy(() => import("@/features/admin/AllDataPage"));
 const BooksPage          = lazy(() => import("@/features/books/BooksPage"));
-const CrmPage            = lazy(() => import("@/features/crm/CrmPage"));
 const ErpPage            = lazy(() => import("@/features/erp/ErpPage"));
 const HrmsPage           = lazy(() => import("@/features/hrms/HrmsPage"));
 const InsightsPage       = lazy(() => import("@/features/insights/InsightsPage"));
@@ -73,14 +71,12 @@ const ValuationPage      = lazy(() => import("@/features/valuation/ValuationPage
 const CompliancePage     = lazy(() => import("@/features/compliance/CompliancePage"));
 const SpendPage          = lazy(() => import("@/features/spend/SpendPage"));
 const WhatsAppPage       = lazy(() => import("@/features/whatsapp/WhatsAppPage"));
-const ScenariosPage      = lazy(() => import("@/features/scenarios/ScenariosPage"));
 const CollectionsPage    = lazy(() => import("@/features/collections/CollectionsPage"));
 const BenchmarksPage     = lazy(() => import("@/features/benchmarks/BenchmarksPage"));
 const DocumentsPage      = lazy(() => import("@/features/documents/DocumentsPage"));
 const StatementsPage     = lazy(() => import("@/features/statements/StatementsPage"));
 const TermSheetPage      = lazy(() => import("@/features/termsheet/TermSheetPage"));
 const DataPage           = lazy(() => import("@/features/data/DataPage"));
-const SalesPage          = lazy(() => import("@/features/sales/SalesPage"));
 const PaymentsPage       = lazy(() => import("@/features/payments/PaymentsPage"));
 const InsurancePage      = lazy(() => import("@/features/insurance/InsurancePage"));
 const TreasuryPage       = lazy(() => import("@/features/treasury/TreasuryPage"));
@@ -88,20 +84,21 @@ const EsgPage            = lazy(() => import("@/features/esg/EsgPage"));
 const GlobalPage         = lazy(() => import("@/features/global/GlobalPage"));
 const MarketplacePage    = lazy(() => import("@/features/marketplace/MarketplacePage"));
 const NetworkPage        = lazy(() => import("@/features/network/NetworkPage"));
-const AutomationPage     = lazy(() => import("@/features/automation/AutomationPage"));
 const CopilotPage        = lazy(() => import("@/features/copilot/CopilotPage"));
 const SecurityPage       = lazy(() => import("@/features/security/SecurityPage"));
 const PrivacyPage        = lazy(() => import("@/features/privacy/PrivacyPage"));
 const BankingPage        = lazy(() => import("@/features/banking/BankingPage"));
-const PredictPage        = lazy(() => import("@/features/predict/PredictPage"));
 const VoicePage          = lazy(() => import("@/features/voice/VoicePage"));
 const FieldPage          = lazy(() => import("@/features/field/FieldPage"));
 const TokensPage         = lazy(() => import("@/features/tokens/TokensPage"));
 const FrontierPage       = lazy(() => import("@/features/frontier/FrontierPage"));
-const AgentStudioPage    = lazy(() => import("@/features/agents/AgentStudioPage"));
-const AppBuilderPage     = lazy(() => import("@/features/appbuilder/AppBuilderPage"));
 const CollabPage         = lazy(() => import("@/features/collab/CollabPage"));
-const FlowsPage          = lazy(() => import("@/features/flows/FlowsPage"));
+// Tabbed hubs (phase-2 IA): each unifies several former standalone pages under one
+// route; the old routes redirect into a tab (see below). The inner pages are still
+// lazy-imported inside each hub, so code-splitting is preserved.
+const BuildHub           = lazy(() => import("@/features/agents/BuildHub"));
+const SalesHub           = lazy(() => import("@/features/sales/SalesHub"));
+const ForecastHub        = lazy(() => import("@/features/forecast/ForecastHub"));
 
 function PageLoader() {
   return (
@@ -238,7 +235,9 @@ function AppShell() {
                 <Route path="/transactions"  element={<TransactionsPage />} />
                 <Route path="/alerts"        element={<AlertsPage />} />
                 <Route path="/receivables"   element={<ReceivablesPage />} />
-                <Route path="/forecast"      element={<Forecast />} />
+                <Route path="/forecast"      element={<ForecastHub />} />
+                <Route path="/scenarios"     element={<Navigate to="/forecast?t=scenarios" replace />} />
+                <Route path="/predict"       element={<Navigate to="/forecast?t=predict" replace />} />
                 <Route path="/credit"        element={<Credit />} />
                 <Route path="/capital"       element={<Capital />} />
                 <Route path="/operations"    element={<Operations />} />
@@ -250,7 +249,7 @@ function AppShell() {
                 <Route path="/admin"         element={<AdminPage />} />
                 <Route path="/admin/data"    element={<AllDataPage />} />
                 <Route path="/books"         element={<BooksPage />} />
-                <Route path="/crm"           element={<CrmPage />} />
+                <Route path="/crm"           element={<Navigate to="/sales?t=crm" replace />} />
                 <Route path="/erp"           element={<ErpPage />} />
                 <Route path="/hrms"          element={<HrmsPage />} />
                 <Route path="/insights"      element={<InsightsPage />} />
@@ -271,13 +270,12 @@ function AppShell() {
                 <Route path="/compliance"    element={<CompliancePage />} />
                 <Route path="/spend"         element={<SpendPage />} />
                 <Route path="/whatsapp"      element={<WhatsAppPage />} />
-                <Route path="/scenarios"     element={<ScenariosPage />} />
                 <Route path="/collections"   element={<CollectionsPage />} />
                 <Route path="/benchmarks"    element={<BenchmarksPage />} />
                 <Route path="/documents"     element={<DocumentsPage />} />
                 <Route path="/statements"    element={<StatementsPage />} />
                 <Route path="/term-sheet"    element={<TermSheetPage />} />
-                <Route path="/sales"         element={<SalesPage />} />
+                <Route path="/sales"         element={<SalesHub />} />
                 <Route path="/payments"      element={<PaymentsPage />} />
                 <Route path="/insurance"     element={<InsurancePage />} />
                 <Route path="/treasury"      element={<TreasuryPage />} />
@@ -285,16 +283,15 @@ function AppShell() {
                 <Route path="/global"        element={<GlobalPage />} />
                 <Route path="/marketplace"   element={<MarketplacePage />} />
                 <Route path="/network"       element={<NetworkPage />} />
-                <Route path="/automation"    element={<AutomationPage />} />
-                <Route path="/agents"        element={<AgentStudioPage />} />
-                <Route path="/studio"        element={<AppBuilderPage />} />
+                <Route path="/agents"        element={<BuildHub />} />
+                <Route path="/studio"        element={<Navigate to="/agents?t=app-builder" replace />} />
+                <Route path="/flows"         element={<Navigate to="/agents?t=flows" replace />} />
+                <Route path="/automation"    element={<Navigate to="/agents?t=automation" replace />} />
                 <Route path="/collab"        element={<CollabPage />} />
-                <Route path="/flows"         element={<FlowsPage />} />
                 <Route path="/copilot"       element={<CopilotPage />} />
                 <Route path="/security"      element={<SecurityPage />} />
                 <Route path="/privacy"       element={<PrivacyPage />} />
                 <Route path="/banking"       element={<BankingPage />} />
-                <Route path="/predict"       element={<PredictPage />} />
                 <Route path="/voice"         element={<VoicePage />} />
                 <Route path="/field"         element={<FieldPage />} />
                 <Route path="/tokens"        element={<TokensPage />} />

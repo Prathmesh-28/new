@@ -17,7 +17,7 @@ interface ToolDef { name: string; description?: string; scope?: "read" | "write"
  * "describe it in plain English → we build it" flow on top of the full agent manager
  * (engine config, template store, editor, knowledge, playground) reused as-is.
  */
-export default function AgentStudioPage() {
+export default function AgentStudioPage({ embedded = false }: { embedded?: boolean } = {}) {
   // Bumping this remounts the manager so a freshly-built agent shows up immediately.
   const [reloadKey, setReloadKey] = useState(0);
   // The just-built agent — its row auto-opens its Run panel so it's ready to test.
@@ -33,10 +33,12 @@ export default function AgentStudioPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-2">
-        <h1 className="text-2xl font-bold flex items-center gap-2 mr-auto">
-          <Bot className="text-[var(--color-primary)]" size={24} /> Agent Studio
-        </h1>
-        <div className="flex rounded-lg border border-[var(--color-border)] p-0.5 text-sm">
+        {!embedded && (
+          <h1 className="text-2xl font-bold flex items-center gap-2 mr-auto">
+            <Bot className="text-[var(--color-primary)]" size={24} /> Agent Studio
+          </h1>
+        )}
+        <div className={`flex rounded-lg border border-[var(--color-border)] p-0.5 text-sm ${embedded ? "ml-auto" : ""}`}>
           {tabBtn("workspace", MessageSquare, "Workspace")}
           {tabBtn("store", Store, "App Store")}
           {tabBtn("build", Settings2, "Build & manage")}
