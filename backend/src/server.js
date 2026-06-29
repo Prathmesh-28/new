@@ -117,6 +117,7 @@ app.use("/api/collab",             require("./modules/collab/http")); // Collab:
 app.use("/api/studio",             require("./modules/studio/http")); // App Builder: projects + versions + deployments
 app.use("/api/flows",              require("./modules/flows/http")); // Flows: native workflow automation engine
 app.use("/api/campaigns",          require("./modules/crowdfunding/http")); // Rewards (pre-order) crowdfunding
+app.use("/api/lending",            require("./modules/lending/http")); // SMB embedded lending (LOS/LMS + invoice financing)
 app.use("/api/pub",                require("./routes/studiopublic")); // PUBLIC: serve published App Builder apps (sandboxed, token-addressed)
 app.use("/api/agent-bridge",       require("./routes/agentbridge")); // PUBLIC: published apps call their granted Agent Studio agents (scoped, metered)
 app.use("/api/account",            require("./routes/account")); // DPDP consent/export/erasure

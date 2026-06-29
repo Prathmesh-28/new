@@ -144,6 +144,8 @@ router.post("/", async (req, res) => {
           [inv.id, inv.tenant_id]
         );
         require("../modules/flows/runner").emitEvent(inv.tenant_id, "invoice.paid", { invoice: { ...inv, status: "paid" } }).catch(() => {});
+        // Invoice-financing wedge: if this invoice backs an active advance, auto-recover it (self-liquidating).
+        require("../modules/lending").onInvoicePaid(inv.tenant_id, inv.id, { ref: `inv_${payment.id}` }).catch(() => {});
         // Create revenue transaction in KV store is done client-side via polling
         // Could also push via Server-Sent Events or WebSocket in production
         console.log(`[razorpay] Invoice ${invoiceNumber} (tenant ${inv.tenant_id}) marked paid — ₹${payment.amount / 100}`);
