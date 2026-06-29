@@ -3,9 +3,10 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
 import { api } from "@/lib/api";
-import { Plus, Rocket, Gauge, FileSignature, Landmark, Wallet, Trash2 } from "lucide-react";
+import { Plus, Rocket, Gauge, FileSignature, Landmark, Wallet, Trash2, Megaphone } from "lucide-react";
 import { toast } from "sonner";
 import AiInsight from "@/components/ai/AiInsight";
+import CampaignsTab from "@/features/capital/CampaignsTab";
 
 // ── Backend-shaped types (rows from /api/capital/raises) ──────────────────────
 // Defined locally to avoid touching the shared data/types.ts. The Raises tab now
@@ -79,7 +80,7 @@ export default function CapitalPage() {
   const { effectiveRole } = useApp();
   const canManageRaises = effectiveRole === "owner" || effectiveRole === "super_admin";
 
-  const [capTab, setCapTab] = useState<"raises" | "runway" | "safe" | "grants" | "use-of-funds">("raises");
+  const [capTab, setCapTab] = useState<"raises" | "campaigns" | "runway" | "safe" | "grants" | "use-of-funds">("raises");
   const [showRaiseForm,   setShowRaiseForm]   = useState(false);
   const [showInvestForm,  setShowInvestForm]  = useState<string | null>(null);
   const [raiseType,       setRaiseType]       = useState<RaiseType>("equity");
@@ -191,7 +192,7 @@ export default function CapitalPage() {
 
       {/* Tab selector */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-        {([["raises", "Raises", Rocket], ["runway", "Runway Planner", Gauge], ["safe", "SAFE / Note Modeller", FileSignature], ["grants", "Grant / Subsidy Finder", Landmark], ["use-of-funds", "Use of Funds", Wallet]] as const).map(([id, label, Icon]) => (
+        {([["raises", "Raises", Rocket], ["campaigns", "Crowdfunding", Megaphone], ["runway", "Runway Planner", Gauge], ["safe", "SAFE / Note Modeller", FileSignature], ["grants", "Grant / Subsidy Finder", Landmark], ["use-of-funds", "Use of Funds", Wallet]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setCapTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${capTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -217,6 +218,7 @@ export default function CapitalPage() {
         }}
       />
 
+      {capTab === "campaigns"    && <CampaignsTab />}
       {capTab === "runway"       && <RunwayExtensionPlanner />}
       {capTab === "safe"         && <SafeNoteModeller />}
       {capTab === "grants"       && <GrantSubsidyFinder />}
