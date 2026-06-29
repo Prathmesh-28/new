@@ -1,6 +1,10 @@
 # Headroom: SMB Cash Flow Forecasting & Capital Platform
 
-Headroom is a production-grade multi-tenant SaaS platform helping SMB owners manage cash flow, access embedded credit, and raise capital. Built with scalable microservices architecture on AWS.
+Headroom is a multi-tenant SaaS platform helping Indian SMB owners manage cash flow, accounting, GST, embedded credit, and capital.
+
+> 🧭 **New here? Read [ARCHITECTURE.md](ARCHITECTURE.md)** — the map of what runs where (React/Vite frontend on Vercel, Node/Express backend on Render, Postgres). All planning, setup & reference docs now live in **[`docs/`](docs/)**.
+>
+> _Note: sections below describing an "AWS microservices" architecture or US lenders (Stripe Capital/OnDeck/Brex) are aspirational/legacy — the running system is the React + Node/Express + Postgres stack described in ARCHITECTURE.md, with India-first rails (Razorpay, GST, UPI)._
 
 ## 🎯 Value Proposition
 

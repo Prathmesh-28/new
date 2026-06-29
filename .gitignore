@@ -25,3 +25,8 @@ android/keystore.properties
 *.keystore
 android/app/google-services.json
 ios/App/App/GoogleService-Info.plist
+
+# OS + build artifacts (added by cleanup)
+**/.DS_Store
+tsconfig.app.tsbuildinfo
+*.tsbuildinfo
