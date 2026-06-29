@@ -208,6 +208,57 @@ router.get("/report", authenticate, requireOwnerOrAdmin, async (req, res) => {
   });
 });
 
+// POST /api/credit/underwrite-agentic — run the multi-agent (LangGraph-pattern)
+// underwriting DAG: 4 deterministic risk agents → weighted decision → LLM
+// explanation/audit → policy-clamped offer. Underwrites an SMB borrower for an
+// investor / crowdfunding lender / NBFC partner. Body may carry an { applicant }
+// signals object (any SMB borrower); when omitted it derives signals from the
+// caller's own tenant via the deterministic scorecard + firm profile.
+router.post("/underwrite-agentic", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const { runUnderwriting } = require("../modules/underwriting/agentEngine");
+    const llm = require("../modules/books/llm");
+    const tid = req.user.tenant_id;
+    const fromBody = !!(req.body && req.body.applicant);
+    let applicant = req.body && req.body.applicant;
+    if (!applicant) {
+      const sc = await underwrite(tid, pool).catch(() => null);
+      const { rows } = await pool.query(
+        "SELECT value FROM kv_store WHERE tenant_id=$1 AND namespace='app' AND key='store' LIMIT 1",
+        [tid]
+      );
+      const firm = rows[0]?.value?.value?.firm ?? {};
+      const b = sc?.breakdown ?? {};
+      applicant = {
+        name: firm.name || "My business",
+        sector: firm.industry || firm.sector || "other",
+        region: firm.region || "tier2",
+        monthlyRevenue: b.monthly_revenue,
+        annualTurnover: (b.monthly_revenue || 0) * 12,
+        receivablesOutstanding: b.outstanding_receivables,
+        receivablesOverdue: b.overdue_receivables,
+        cashBalance: b.current_balance,
+        monthlyBurn: b.monthly_burn,                       // real burn from the scorecard (not balance/runway)
+        gstFilingsOnTime: b.gst_filings_count,             // real COUNT of periods filed
+        gstFilingsTotal: b.gst_window || 6,                // window size (denominator)
+        existingDebt: b.existing_debt,                     // summed active-loan balances
+        businessVintageMonths: b.age_months,
+        hasGstin: !!firm.gstNumber,
+        bureauScore: null,
+      };
+    }
+    const chat = (o) => llm.chat(tid, o).catch(() => null);
+    const report = await runUnderwriting(applicant, {
+      chat,
+      source: fromBody ? "caller_asserted_unverified" : "tenant_books",
+    });
+    res.json(report);
+  } catch (e) {
+    console.error("[underwrite-agentic]", e.message);
+    res.status(500).json({ error: "Underwriting failed" });
+  }
+});
+
 // POST /api/credit/finbox — submit lead to Finbox Credit API (NBFC routing)
 router.post("/finbox", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { requested_amount, purpose } = req.body;

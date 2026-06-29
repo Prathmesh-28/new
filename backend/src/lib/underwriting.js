@@ -137,7 +137,11 @@ async function score(tenantId, pool, enrichment) {
       debt_service_ratio: Math.round(dsr * 100) / 100,
       runway_months: Math.round(runwayMonths * 10) / 10,
       current_balance: currentBalance,
-      gst_periods_filed: recv ? s10 : 0,
+      gst_periods_filed: recv ? s10 : 0,           // NOTE: this is the 0-100 GST SCORE
+      gst_filings_count: gstFiledCount(gstRows),   // the real COUNT of periods filed
+      gst_window: GST_WINDOW,                       // periods in the window (denominator)
+      existing_debt: Math.round(loans.reduce((s, l) => s + Number(l.outstanding_balance || 0), 0)),
+      monthly_burn: Math.round(monthlyBurn),
       overdue_ratio: Math.round(recv.overdueRatio * 100) / 100,
       outstanding_receivables: recv.outstanding,
       overdue_receivables: recv.overdue,
@@ -182,16 +186,21 @@ function decide(r) {
 
 // GST filing regularity — distinct GST periods FILED in the last ~7 months. Filing on
 // time signals compliance and gives a lender verifiable turnover. No returns → no track record.
-function scoreGst(rows) {
+// Distinct GST periods actually filed in the trailing ~7-month window (the real
+// COUNT — distinct from the 0-100 score below). GST_WINDOW periods = full marks.
+const GST_WINDOW = 6;
+function gstFiledCount(rows) {
   if (!rows.length) return 0;
   const cut = new Date(); cut.setMonth(cut.getMonth() - 7);
-  const recentFiled = new Set(
+  return new Set(
     rows
       .filter((r) => r.filed_at || ["filed", "accepted"].includes(r.status))
       .filter((r) => new Date(r.period_year, (r.period_month || 1) - 1, 1) >= cut)
       .map((r) => `${r.period_year}-${r.period_month}`)
-  );
-  const n = recentFiled.size;
+  ).size;
+}
+function scoreGst(rows) {
+  const n = gstFiledCount(rows);
   return n >= 6 ? 100 : n === 5 ? 88 : n === 4 ? 70 : n === 3 ? 50 : n === 2 ? 30 : n === 1 ? 15 : 5;
 }
 
