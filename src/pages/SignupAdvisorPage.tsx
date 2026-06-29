@@ -5,6 +5,7 @@ import { useAuth, BASE } from "@/context/AuthContext";
 import { ArrowLeft, Wifi, WifiOff } from "lucide-react";
 import type { AuthUser } from "@/data/types";
 import Logo from "@/components/Logo";
+import Turnstile, { turnstileEnabled } from "@/components/Turnstile";
 
 export default function SignupAdvisorPage() {
   useSeo({ title: "Headroom for CAs & Accountants — run your client book in one console", description: "Link every client, track GST/TDS/ITR filings, chase documents and send white-label reports — the CA practice console inside Headroom. Free to start." });
@@ -15,15 +16,19 @@ export default function SignupAdvisorPage() {
   const [confirm,  setConfirm]  = useState("");
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
+  const [tsToken,  setTsToken]  = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirm) { setError("Passwords don't match"); return; }
+    if (turnstileEnabled && !tsToken) { setError("Please complete the verification below."); return; }
     setError(""); setLoading(true);
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (tsToken) headers["cf-turnstile-response"] = tsToken;  // Cloudflare Turnstile (no-op until configured)
       const res = await fetch(`${BASE}/auth/signup`, {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body:    JSON.stringify({
           email,
           password,
@@ -161,6 +166,8 @@ export default function SignupAdvisorPage() {
                 {error}
               </div>
             )}
+
+            <Turnstile onVerify={setTsToken} onExpire={() => setTsToken("")} className="flex justify-center" />
 
             <button
               type="submit" disabled={loading}

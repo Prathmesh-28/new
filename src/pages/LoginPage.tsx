@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { ArrowLeft } from "lucide-react";
 import Logo from "@/components/Logo";
+import Turnstile, { turnstileEnabled } from "@/components/Turnstile";
 
 export default function LoginPage() {
   useSeo({ title: "Log in — Headroom", description: "Log in to Headroom — your all-in-one GST billing, accounting and cash-flow workspace for Indian SMBs." });
@@ -14,12 +15,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError]       = useState("");
   const [loading, setLoading]   = useState(false);
+  const [tsToken, setTsToken]   = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (turnstileEnabled && !tsToken) { setError("Please complete the verification below."); return; }
     setError(""); setLoading(true);
     try {
-      const u = await login(email, password);
+      const u = await login(email, password, tsToken);
       if (u.first_login) {
         navigate("/set-password", { replace: true });
       } else {
@@ -110,6 +113,8 @@ export default function LoginPage() {
                 Forgot password?
               </Link>
             </div>
+
+            <Turnstile onVerify={setTsToken} onExpire={() => setTsToken("")} className="flex justify-center" />
 
             <button
               type="submit" disabled={loading}

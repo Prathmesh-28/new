@@ -26,7 +26,7 @@ interface AuthCtx {
   user: AuthUser | null;
   loading: boolean;
   serverReady: boolean;
-  login: (email: string, password: string) => Promise<AuthUser>;
+  login: (email: string, password: string, turnstileToken?: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -90,12 +90,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, [fetchMe, tryRefresh]);
 
-  const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
+  const login = useCallback(async (email: string, password: string, turnstileToken?: string): Promise<AuthUser> => {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (turnstileToken) headers["cf-turnstile-response"] = turnstileToken;  // Cloudflare Turnstile (no-op until configured)
     const res = await fetchWithTimeout(
       `${BASE}/auth/login`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ email, password }),
       },
       65_000  // 65 s — enough for Render cold start
