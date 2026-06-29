@@ -1,350 +1,83 @@
-# Headroom: SMB Cash Flow Forecasting & Capital Platform
+# Headroom
 
-Headroom is a multi-tenant SaaS platform helping Indian SMB owners manage cash flow, accounting, GST, embedded credit, and capital.
+India-first **SMB finance super-app**: a single place for an Indian small-business owner (and their finance/CA/sales/ops team) to run cash flow, accounting, GST, invoicing, credit & capital — plus AI agents, automation, and an app builder on top.
 
-> 🧭 **New here? Read [ARCHITECTURE.md](ARCHITECTURE.md)** — the map of what runs where (React/Vite frontend on Vercel, Node/Express backend on Render, Postgres). All planning, setup & reference docs now live in **[`docs/`](docs/)**.
->
-> _Note: sections below describing an "AWS microservices" architecture or US lenders (Stripe Capital/OnDeck/Brex) are aspirational/legacy — the running system is the React + Node/Express + Postgres stack described in ARCHITECTURE.md, with India-first rails (Razorpay, GST, UPI)._
+> 🧭 **Read [ARCHITECTURE.md](ARCHITECTURE.md) first** — it's the map of what runs where, the directory layout, the module pattern, and a "where do I find/add X" table.
 
-## 🎯 Value Proposition
+## What it does
 
-**Design principle**: An SMB owner with no technical background connects their bank account and sees an accurate 90-day cash forecast within 10 minutes. Complexity lives in the infrastructure, never in the experience.
+- **Money & books** — double-entry general ledger, invoices/bills, GST returns, TDS, inventory, financial statements.
+- **Cash & planning** — 90-day forecast, runway, budgets, scenarios, treasury.
+- **Get paid** — invoices, receivables, collections (UPI/Razorpay links, WhatsApp nudges).
+- **Credit & capital** — own SMB underwriting scorecard, embedded lending (LOS/LMS + invoice financing), rewards crowdfunding, fundraise/cap-table.
+- **Run the business** — CRM/sales pipeline, ERP/manufacturing, HRMS/payroll.
+- **AI & automation** — per-tenant AI agents (Agent Studio), a native workflow engine (Flows), an app builder (Studio), team chat (Collab), and a no-code BI/insights layer.
 
-## 📦 Three Product Pillars
+India-first rails: **Razorpay, GST/e-invoice, UPI, Account Aggregator**. Integrations that need a partner credential degrade to a "Preview" state instead of faking data.
 
-### 1. **Cash Flow Forecasting Engine** 💰
-- Connects bank accounts and accounting platforms
-- Generates 90-day projections with confidence bands (best/expected/downside)
-- Real-time alerts for cash warnings
-- Deduplication and normalization of transactions
-- Machine learning-based pattern detection
+## Stack
 
-### 2. **Embedded Credit Marketplace** 💳
-- Silent underwriting (pre-qualification without explicit application)
-- Aggregated lender offers (Stripe Capital, OnDeck, Brex, etc.)
-- Repayment simulation integrated with forecasts
-- $50K-$500K loan range
+| Layer | Tech | Hosting |
+|---|---|---|
+| Frontend | React 19 · TypeScript · Vite · Tailwind | **Vercel** (web) |
+| Mobile | Capacitor 7 (iOS + Android shells) | App Store / Play Store |
+| Backend | Node + Express (CommonJS) | **Render** |
+| Database | PostgreSQL (multi-tenant, single DB) | **Render Postgres** |
 
-### 3. **Public Capital-Raising Infrastructure** 🚀
-- **Track A**: Revenue-share crowdfunding ($10K-$500K)
-- **Track B**: Reg CF equity raises (up to $5M/year)
-- **Track C**: Reg A+ mini-IPO (up to $75M/year)
-- Investor portal with detailed metrics
+One frontend (`src/`), one backend (`backend/`). See [ARCHITECTURE.md](ARCHITECTURE.md) for the full layout.
 
-## 🏗️ Architecture
+## Backend modules
 
-```
-┌─ Client Layer ────────────────────┐  ┌─ API Gateway ─────────────┐
-│ • React SPA (Vercel)              │  │ • REST + GraphQL           │
-│ • React Native (iOS/Android)      │  │ • Auth, Rate Limiting      │
-└───────────────┬────────────────────┘  └────────┬──────────────────┘
-                │                                 │
-                └─────────────────┬────────────────┘
-                                  ↓
-            ┌─ Microservices ────────────────────┐
-            │ • Forecast Engine (Python/ECS)    │
-            │ • Credit Service (Node/ECS)       │
-            │ • Capital Service (Node/ECS)      │
-            └──────────────────┬─────────────────┘
-                              ↓
-         ┌──── Data Layer ────────────────┐
-         │ • PostgreSQL (Multi-AZ)        │
-         │ • Redis Cache (ElastiCache)    │
-         │ • S3 (Documents, Exports)      │
-         │ • SQS/SNS (Event Bus)          │
-         └────────────────────────────────┘
-```
+The newer backend code is organized as self-contained modules (`schema.js` + `index.js` + `http.js`), each with its own README:
 
-### Tech Stack
+| Module | What | Mount |
+|---|---|---|
+| [books](backend/src/modules/books/) | Double-entry GL + invoices, GST, inventory, TDS, reports — the money engine | `/api/books` |
+| [crm](backend/src/modules/crm/) | Leads → deals pipeline, SLAs, tasks | `/api/crm` |
+| [erp](backend/src/modules/erp/) | Manufacturing: BOMs, work orders, job cards | `/api/erp` |
+| [hrms](backend/src/modules/hrms/) | Employees, attendance, leave, payroll | `/api/hrms` |
+| [insights](backend/src/modules/insights/) | Cross-module KPIs + no-code BI | `/api/insights` |
+| [collab](backend/src/modules/collab/) | Teams-style chat (FORCE RLS) | `/api/collab` |
+| [studio](backend/src/modules/studio/) | App Builder (LLM codegen) | `/api/studio` |
+| [flows](backend/src/modules/flows/) | Native workflow automation engine | `/api/flows` |
+| [crowdfunding](backend/src/modules/crowdfunding/) | Rewards (pre-order) campaigns | `/api/campaigns` |
+| [lending](backend/src/modules/lending/) | Embedded credit: LOS/LMS + invoice financing | `/api/lending` |
+| [underwriting](backend/src/modules/underwriting/) | Agentic credit engine (library, called by `/api/credit`) | — |
 
-| Layer | Technology | Hosting |
-|-------|-----------|---------|
-| **Web Frontend** | React 18 + TypeScript | Vercel (CDN) |
-| **Mobile** | React Native | App Store / Play Store |
-| **API Gateway** | Node.js | AWS API Gateway |
-| **Services** | Python + Node.js | AWS ECS Fargate |
-| **Database** | PostgreSQL 16 | AWS RDS (Multi-AZ) |
-| **Cache** | Redis 7 | AWS ElastiCache |
-| **Message Bus** | - | AWS SQS + SNS |
-| **Storage** | - | AWS S3 + Secrets Manager |
-| **Monitoring** | - | Datadog + PagerDuty |
+Older flat routes live in `backend/src/routes/*.js`; the credit scorecard is `backend/src/lib/underwriting.js`. The full route list is the `app.use(...)` block in `backend/src/server.js`.
 
-## 🚀 Quick Start
-
-### Local Development (5 minutes)
+## Quick start
 
 ```bash
-# Prerequisites: Docker, Node.js 20+, PostgreSQL client
+npm install
+npm run dev          # Vite dev server (frontend)
+npm run typecheck    # tsc -b   (root `tsc --noEmit` is a no-op — always use this)
+npm test             # vitest
+npm run build        # tsc -b && vite build  — the real gate before deploy
 
-# 1. Clone repository
-git clone https://github.com/headroom/headroom.git
-cd headroom
+# Backend (needs DATABASE_URL + JWT_SECRET in env):
+cd backend && npm install && node src/server.js
 
-# 2. Start PostgreSQL and Redis
-docker-compose up -d
-
-# 3. Initialize environment
-cp .env.example .env.local
-
-# 4. Run setup script
-bash scripts/init-dev-env.sh
-
-# 5. Start development server
-npm run dev
-
-# 6. Start local service stack
-# In another terminal, run:
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
-
-# 7. Open the app
-http://localhost:3000
-
-# 8. Local service ports
-- Forecast: http://localhost:8001/health
-- Credit: http://localhost:8002/health
-- Capital: http://localhost:8003/health
+# Mobile:
+npm run mobile:ios   # build + cap sync + open Xcode  (also :android)
 ```
 
-**Demo Credentials:**
-```
-Email: admin@headroom.local
-Password: headroom@2024
-```
+## Multi-tenancy, roles & gating
 
-## 📊 Multi-Tenant Architecture
+- Every table has `tenant_id`; every query filters by it (`req.user.tenant_id` from the JWT). super_admin can act cross-tenant.
+- Roles: `super_admin · owner · finance_manager · accountant · sales · operations_manager · viewer · investor`. Reads are open to members; **writes use a per-domain `WRITE_ROLES`** array in each module's `http.js`.
+- All money posts through `books` `postVoucher()` (idempotent). Credentialed integrations are reported by `routes/capabilities.js` (Live vs Preview).
 
-### User Roles
-- **Owner**: SMB business owner (primary user, all features)
-- **Accountant**: Secondary user (financial data access)
-- **Investor**: Capital layer only (for capital campaigns)
-- **Admin**: Headroom staff (multi-tenant management)
+See [ARCHITECTURE.md](ARCHITECTURE.md) for details and request/money-flow traces.
 
-### Tenant Isolation
-- Database-level multi-tenancy with `tenant_id` foreign keys
-- Row-level security via SQL policies
-- Separate encryption keys per tenant (future)
-- Audit logging for all tenant activities
+## Deploy
 
-## 🔐 Security
+Push-to-deploy on `main`: **Vercel** builds the frontend, **Render** builds the backend. Secrets live in Render/Vercel env — never in the repo (`.gitignore` blocks `.env`, `*.pem`, `*-adminsdk-*.json`, keystores, etc.).
 
-✅ **Implemented**
-- Password hashing (bcryptjs, salt rounds: 12)
-- Secure cookies (httpOnly, sameSite: lax, secure flag)
-- SQL injection prevention (parameterized queries)
-- Multi-tenant isolation (database level)
-- User session management (8-hour TTL)
-- Audit trail logging
+## Docs
 
-🔒 **Enterprise Features (Coming Soon)**
-- Rate limiting per user/API key
-- OAuth 2.0 for third-party integrations
-- Web Application Firewall (AWS WAF)
-- DDoS protection (AWS Shield)
-- Penetration testing results
+All planning, setup & reference docs live in **[`docs/`](docs/)** (operational guides at the top, historical plans/audits under `docs/archive/`).
 
-## 📈 Scalability & Performance
+## License
 
-### Performance Targets
-- API response time (p95): < 200ms
-- Forecast generation: < 30 seconds
-- Page load time: < 2 seconds
-- Uptime: > 99.9%
-
-### Horizontal Scaling
-```
-Forecast Service:  2-10 replicas (auto-scale on CPU)
-Credit Service:    1-5 replicas
-Capital Service:   1-3 replicas
-Database:          Read replicas for queries
-Cache:             3-node Redis (auto-failover)
-```
-
-## 📚 Documentation
-
-- **[PRODUCTION_ARCHITECTURE.md](PRODUCTION_ARCHITECTURE.md)** - Complete architecture overview
-- **[ARCHITECTURE_SETUP.md](ARCHITECTURE_SETUP.md)** - Database and setup guide
-- **[COMPLETION_CHECKLIST.md](COMPLETION_CHECKLIST.md)** - 7-phase implementation tracker
-- **[services/](services/)** - Service-specific documentation
-- **[infrastructure/AWS_INFRASTRUCTURE.md](infrastructure/AWS_INFRASTRUCTURE.md)** - AWS deployment guide
-
-### Service Documentation
-- **[FORECAST_SERVICE.md](services/FORECAST_SERVICE.md)** - 90-day forecasting engine
-- **[CREDIT_SERVICE.md](services/CREDIT_SERVICE.md)** - Credit marketplace & underwriting
-- **[CAPITAL_SERVICE.md](services/CAPITAL_SERVICE.md)** - Reg CF/Reg A+ capital raising
-- **[DATA_INTEGRATION.md](services/DATA_INTEGRATION.md)** - Bank & accounting connectors
-
-## 🧩 Development Setup
-
-### Project Structure
-
-```
-headroom/
-├── src/
-│   ├── app/                  # Next.js App Router (current)
-│   ├── components/           # React components
-│   ├── lib/                  # Shared utilities
-│   │   ├── auth.ts          # Authentication
-│   │   └── db.ts            # PostgreSQL client
-│   └── db/
-│       ├── schema.sql       # Multi-tenant schema
-│       └── seed.sql         # Demo data
-├── services/                 # Microservices (coming)
-│   ├── forecast-service/
-│   ├── credit-service/
-│   └── capital-service/
-├── infrastructure/           # AWS Terraform
-├── scripts/
-│   ├── init-dev-env.sh      # Setup development
-│   └── deploy.sh            # Deploy to AWS
-└── docs/                     # Additional documentation
-```
-
-### Database Schema
-
-**Core Tables:**
-- `tenants` - Multi-tenant companies
-- `users` - All users across tenants
-- `sessions` - Active session tokens
-- `bank_connections` - Connected bank accounts
-- `transactions` - Normalized transaction data
-- `forecasts` - 90-day cash projections
-- `credit_applications` - Loan applications
-- `capital_raises` - Capital campaigns
-
-See [ARCHITECTURE_SETUP.md](ARCHITECTURE_SETUP.md#database-schema) for full schema.
-
-## 🚢 Deployment
-
-### Local Development
-```bash
-docker-compose up -d
-npm run dev
-```
-
-### Staging (AWS)
-```bash
-bash scripts/deploy.sh staging
-```
-
-### Production (AWS)
-```bash
-bash scripts/deploy.sh production
-```
-
-See [infrastructure/AWS_INFRASTRUCTURE.md](infrastructure/AWS_INFRASTRUCTURE.md) for detailed AWS deployment.
-
-## 📊 Monitoring & Observability
-
-- **CloudWatch**: AWS native logs and metrics
-- **Datadog**: APM, dashboards, alerts
-- **PagerDuty**: Incident management
-- **X-Ray**: Distributed tracing
-
-## 🧪 Testing
-
-```bash
-# Unit tests
-npm run test
-
-# Integration tests
-npm run test:integration
-
-# E2E tests
-npm run test:e2e
-
-# Coverage report
-npm run test:coverage
-```
-
-## 📋 Implementation Phases
-
-### ✅ Phase 1: Database & Authentication (COMPLETE)
-- PostgreSQL multi-tenant schema
-- User authentication system
-- Docker-Compose setup
-
-### ⏳ Phase 2: Core Services (4-6 weeks)
-- Forecast Service (Python)
-- Credit Service (Node.js)
-- Capital Service (Node.js)
-
-### ⏳ Phase 3: AWS Infrastructure (2-3 weeks)
-- Terraform configuration
-- ECS Fargate deployment
-- RDS, Redis, S3 setup
-
-### ⏳ Phase 4: Frontend (4-6 weeks)
-- React SPA redesign (multi-tenant)
-- Vercel deployment
-
-### ⏳ Phase 5: Data Connectors (3-4 weeks)
-- Plaid bank integration
-- QuickBooks/Xero integration
-- Lambda data sync workers
-
-### ⏳ Phase 6: Advanced Features (4-6 weeks)
-- ML forecasting models
-- Regulatory compliance
-- React Native mobile app
-
-### ⏳ Phase 7: Production Hardening (2-3 weeks)
-- Security audit
-- Performance optimization
-- Comprehensive testing
-
-See [COMPLETION_CHECKLIST.md](COMPLETION_CHECKLIST.md) for detailed phase breakdown.
-
-## 💡 Key Features
-
-### Forecasting Engine
-- Automatic transaction categorization
-- Recurring pattern detection
-- Seasonality analysis
-- Anomaly detection
-- Confidence-based scenarios (best/expected/downside)
-- 90-day rolling projections
-
-### Credit Marketplace
-- Silent underwriting (no explicit application needed)
-- Multi-lender offer aggregation
-- Personalized rate quotes
-- Repayment impact simulation
-- $50K-$500K loan range
-
-### Capital Raising
-- **Revenue-share**: $10K-$500K with monthly payouts
-- **Reg CF**: Up to $5M equity raises  
-- **Reg A+**: Up to $75M mini-IPO offerings
-- Investor portal with metrics
-- Compliance automation
-
-## 🤝 Contributing
-
-1. Create a feature branch
-2. Make your changes
-3. Submit a pull request
-4. Code review & CI/CD checks
-5. Merge to main (auto-deploys)
-
-## 📝 License
-
-Proprietary - All rights reserved
-
-## 📞 Support
-
-- **Documentation**: See `/docs` and linked markdown files
-- **Issues**: GitHub Issues
-- **Email**: support@headroom.com
-
-## 🎓 Learning Resources
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [PostgreSQL Docs](https://www.postgresql.org/docs/)
-- [AWS ECS Guide](https://docs.aws.amazon.com/AmazonECS/)
-- [Terraform Best Practices](https://www.terraform.io/docs/language/modules/)
-
----
-
-**Status**: Phase 1 Complete ✅ | Phases 2-7 In Development
-
-**Last Updated**: April 2026
+Proprietary — all rights reserved.
