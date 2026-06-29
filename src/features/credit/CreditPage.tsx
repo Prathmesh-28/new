@@ -1,6 +1,7 @@
 import { useState, useMemo, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
 import FinancingReadiness from "@/features/credit/FinancingReadiness";
+import EmbeddedFinancing from "@/features/credit/EmbeddedFinancing";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId, runwayDays, monthlyBurn } from "@/lib/utils";
 import { AlertTriangle, CreditCard, TrendingUp, CheckCircle2, Clock, ChevronDown, ChevronUp, Info, X, Users, Calculator, Landmark, Target, Gauge, FileText, Scale, Receipt, Percent, TrendingDown, Building2, Coins, Wallet, Banknote } from "lucide-react";
@@ -47,7 +48,7 @@ export default function CreditPage() {
   const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
   const showCta  = runway > 0 && runway < 45;
 
-  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd" | "wcscore" | "captable" | "valuation" | "aapull" | "matcher" | "comscore" | "discount" | "docpack" | "foir" | "emicalc" | "flatred" | "dscr" | "drawing" | "gstelig" | "lap" | "prepay" | "odterm" | "scoreplan" | "offercmp" | "invadv" | "nbfcbank" | "scheme">("overview");
+  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd" | "wcscore" | "captable" | "valuation" | "aapull" | "matcher" | "comscore" | "discount" | "docpack" | "foir" | "emicalc" | "flatred" | "dscr" | "drawing" | "gstelig" | "lap" | "prepay" | "odterm" | "scoreplan" | "offercmp" | "invadv" | "nbfcbank" | "scheme" | "livewc">("overview");
   const [amount,       setAmount]       = useState("");
   const [term,         setTerm]         = useState("24");
   const [purpose,      setPurpose]      = useState("");
@@ -208,6 +209,7 @@ export default function CreditPage() {
           ["odterm",   "OD vs Term Loan"],
           ["scoreplan","Score Planner"],
           ["offercmp", "Compare 3 Offers"],
+          ["livewc",   "Get Financing ⚡"],
           ["invadv",   "Invoice Advance"],
           ["nbfcbank", "NBFC vs Bank"],
           ["scheme",   "Scheme Finder"],
@@ -218,6 +220,9 @@ export default function CreditPage() {
           </button>
         ))}
       </div>
+
+      {/* ── GET FINANCING (wired to /api/lending) ── */}
+      {tab === "livewc" && <EmbeddedFinancing />}
 
       {/* ── OVERVIEW ── */}
       {tab === "overview" && (
