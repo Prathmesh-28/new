@@ -615,6 +615,8 @@ async function initDb() {
   await pool.query(require("./modules/studio/schema").STUDIO_SCHEMA);
   // flows module (native workflow automation engine) — reuses collab_uuidv7()
   await pool.query(require("./modules/flows/schema").FLOWS_SCHEMA);
+  // crowdfunding module (rewards / pre-order campaigns) — reuses collab_uuidv7()
+  await pool.query(require("./modules/crowdfunding/schema").CROWDFUNDING_SCHEMA);
 
   // Platform-level settings (super-admin editable, e.g. social links) — key/value JSON.
   await pool.query(`

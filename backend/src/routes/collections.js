@@ -101,6 +101,21 @@ router.post("/", async (req, res) => {
   const event   = req.body.event;
   const payment = req.body.payload?.payment?.entity;
 
+  // Crowdfunding pledge settlement — notes set by /api/campaigns/public/:token/pledge.
+  // markPledgePaid is idempotent (status<>'paid' guard + unique payment_ref) and
+  // tenant-scoped (updates only a backer in notes.tenant_id whose id matches), so a
+  // webhook retry or a forged note can't double-count or cross tenants.
+  if (event === "payment.captured" && payment && payment.notes?.k === "crowd" && payment.notes?.backer_id && payment.notes?.tenant_id) {
+    try {
+      const crowd = require("../modules/crowdfunding");
+      const r = await crowd.markPledgePaid(payment.notes.tenant_id, { backerId: payment.notes.backer_id, paymentRef: payment.id });
+      return res.json({ ok: true, kind: "crowdfunding", ...r });
+    } catch (e) {
+      console.error("[razorpay] crowdfunding settle failed:", e.message);
+      return res.status(500).json({ error: "settle failed" }); // 5xx → Razorpay retries (idempotent)
+    }
+  }
+
   if (event === "payment.captured" && payment) {
     const invoiceNumber = payment.description?.match(/INV-\d{4}-\d+/)?.[0] ?? payment.notes?.invoice_number;
     const noteTenant    = payment.notes?.tenant_id ?? null;
