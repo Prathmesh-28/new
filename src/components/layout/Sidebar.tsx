@@ -121,6 +121,7 @@ const NAV_CATALOG: NavGroup[] = [
     // The company-admin console (members, roles & access, billing, company,
     // audit). Gated on the "settings" tab, so only owner + super_admin see it.
     { to: "/organization",    label: "Organization",  icon: UsersRound,      tab: "settings"   },
+    { to: "/product-analytics", label: "Product Analytics", icon: BarChart3,  tab: "product-analytics" },
     { to: "/settings",        label: "Settings",      icon: Settings2,       tab: "settings"   },
     { to: "/data",            label: "Data & Import", icon: Database,        tab: "data"        },
     { to: "/connectors",      label: "Connectors",    icon: PlugZap,         tab: "connectors"  },

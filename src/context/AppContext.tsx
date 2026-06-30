@@ -365,6 +365,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (tab === "collab") return true;
     // Flows (automation) - visible to all members; write/run is role-gated server-side.
     if (tab === "flows") return true;
+    // Product Analytics - business owner only (super_admin already returned true above).
+    if (tab === "product-analytics") return effectiveRole === "owner";
     return getRoleConfig(effectiveRole)?.accessibleTabs.includes(tab) ?? false;
   };
 

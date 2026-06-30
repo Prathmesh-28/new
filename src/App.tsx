@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { track } from "@/lib/analytics";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { AppProvider, useApp } from "@/context/AppContext";
 import { CapabilitiesProvider } from "@/context/CapabilitiesContext";
@@ -100,6 +101,8 @@ const CollabPage         = lazy(() => import("@/features/collab/CollabPage"));
 const BuildHub           = lazy(() => import("@/features/agents/BuildHub"));
 const SalesHub           = lazy(() => import("@/features/sales/SalesHub"));
 const ForecastHub        = lazy(() => import("@/features/forecast/ForecastHub"));
+const OnboardingWizard   = lazy(() => import("@/features/onboarding/OnboardingWizard"));
+const ProductAnalytics   = lazy(() => import("@/features/admin/ProductAnalytics"));
 
 function PageLoader() {
   return (
@@ -130,7 +133,7 @@ const GUARDED_TABS = new Set([
   "scenarios", "collections", "benchmarks", "documents", "statements", "term-sheet", "data",
   "sales", "payments", "insurance", "treasury", "esg", "global",
   "marketplace", "network", "automation", "copilot", "security", "privacy",
-  "banking", "predict", "voice", "field", "tokens", "frontier",
+  "banking", "predict", "voice", "field", "tokens", "frontier", "product-analytics",
 ]);
 
 function landingFor(role: string): string {
@@ -143,6 +146,7 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
   const { canAccess, effectiveRole } = useApp();
   const { user } = useAuth();
   const location = useLocation();
+  useEffect(() => { track("page_view", { path: location.pathname }); }, [location.pathname]);
   const tab = location.pathname.split("/")[1] ?? "";
   if (GUARDED_TABS.has(tab) && !canAccess(tab)) {
     return <Navigate to={landingFor(effectiveRole)} replace />;
@@ -284,6 +288,8 @@ function AppShell() {
                 <Route path="/global"        element={<GlobalPage />} />
                 <Route path="/marketplace"   element={<MarketplacePage />} />
                 <Route path="/network"       element={<NetworkPage />} />
+                <Route path="/onboarding"    element={<OnboardingWizard />} />
+                <Route path="/product-analytics" element={<ProductAnalytics />} />
                 <Route path="/agents"        element={<BuildHub />} />
                 <Route path="/studio"        element={<Navigate to="/agents?t=app-builder" replace />} />
                 <Route path="/flows"         element={<Navigate to="/agents?t=flows" replace />} />

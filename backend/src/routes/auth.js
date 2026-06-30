@@ -34,6 +34,7 @@ router.post("/signup", validateBody({
     [email.toLowerCase(), hash, role, tenant_id]
   );
   const user = rows[0];
+  require("../modules/analytics").track(user.tenant_id, user.id, { event: "signup_completed", props: { role: user.role } }).catch(() => {});
   const payload = { sub: user.id, role: user.role, tenant: user.tenant_id };
   res.status(201).json({ access: signAccess(payload), refresh: signRefresh(payload), user });
 });
@@ -84,6 +85,7 @@ router.post("/login", validateBody({
      WHERE id=$1`,
     [user.id, firstLogin]
   );
+  require("../modules/analytics").track(user.tenant_id, user.id, { event: "login" }).catch(() => {});
   const payload = { sub: user.id, role: user.role, tenant: user.tenant_id };
   res.json({
     access:  signAccess(payload),

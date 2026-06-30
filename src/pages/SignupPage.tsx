@@ -57,7 +57,7 @@ export default function SignupPage() {
       localStorage.setItem("hr_access", access);
       localStorage.setItem("hr_refresh", refresh);
       // Reload so AuthProvider picks up the new token from localStorage
-      const home = user.role === "investor" ? "/capital" : user.role === "accountant" ? "/advisor" : "/dashboard";
+      const home = user.role === "investor" ? "/capital" : user.role === "accountant" ? "/advisor" : "/onboarding";
       window.location.href = home;
     } catch {
       setError("Cannot connect to server. Please try again.");

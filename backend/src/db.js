@@ -619,6 +619,8 @@ async function initDb() {
   await pool.query(require("./modules/crowdfunding/schema").CROWDFUNDING_SCHEMA);
   // lending module (SMB embedded LOS/LMS + invoice-financing wedge) - reuses collab_uuidv7()
   await pool.query(require("./modules/lending/schema").LENDING_SCHEMA);
+  // analytics module (product analytics events + onboarding profile) - reuses collab_uuidv7()
+  await pool.query(require("./modules/analytics/schema").ANALYTICS_SCHEMA);
 
   // Platform-level settings (super-admin editable, e.g. social links) - key/value JSON.
   await pool.query(`
