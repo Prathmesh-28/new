@@ -1,6 +1,12 @@
 const router   = require("express").Router();
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
+const fc = require("../lib/fieldcrypto");
+
+// Employee PII encrypted at rest: PAN + bank account. Encrypt on write, decrypt on read
+// (authorised finance roles still see plaintext via the API; this protects the DB itself).
+const EMP_PII = ["pan", "bank_account"];
+const decEmp = (r) => fc.decryptFields(r, EMP_PII);
 
 const WRITE_ROLES = ["super_admin", "owner", "finance_manager"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
@@ -31,7 +37,7 @@ router.get("/employees", authenticate, canWrite, async (req, res) => {
     "SELECT * FROM employees WHERE tenant_id=$1 AND status='active' ORDER BY name",
     [req.user.tenant_id]
   );
-  res.json(rows);
+  res.json(rows.map(decEmp));
 });
 
 // POST /api/payroll/employees
@@ -46,19 +52,20 @@ router.post("/employees", authenticate, canWrite, async (req, res) => {
   const { rows: [emp] } = await pool.query(
     `INSERT INTO employees(tenant_id, name, email, pan, bank_account, bank_ifsc, gross_salary, tds_monthly, joining_date)
      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-    [req.user.tenant_id, name, email ?? null, pan ?? null, bank_account ?? null, bank_ifsc ?? null,
+    [req.user.tenant_id, name, email ?? null, fc.encrypt(pan ?? null), fc.encrypt(bank_account ?? null), bank_ifsc ?? null,
      gross_salary, tds_monthly, joining_date ?? null]
   );
-  res.status(201).json(emp);
+  res.status(201).json(decEmp(emp));
 });
 
 // PATCH /api/payroll/employees/:id
 router.patch("/employees/:id", authenticate, canWrite, async (req, res) => {
   const { name, email, gross_salary, bank_account, bank_ifsc, pan, status } = req.body;
-  const { rows: [existing] } = await pool.query(
+  const { rows: exRows } = await pool.query(
     "SELECT * FROM employees WHERE id=$1 AND tenant_id=$2",
     [req.params.id, req.user.tenant_id]
   );
+  const existing = exRows[0] ? decEmp(exRows[0]) : null; // plaintext, so fallbacks re-encrypt cleanly
   if (!existing) return res.status(404).json({ error: "Employee not found" });
 
   const newSalary = gross_salary ? parseFloat(gross_salary) : existing.gross_salary;
@@ -71,10 +78,10 @@ router.patch("/employees/:id", authenticate, canWrite, async (req, res) => {
        pan=$7, status=COALESCE($8, status)
      WHERE id=$9 AND tenant_id=$10 RETURNING *`,
     [name ?? existing.name, email ?? existing.email, newSalary, tds_monthly,
-     bank_account ?? existing.bank_account, bank_ifsc ?? existing.bank_ifsc,
-     pan ?? existing.pan, status ?? null, req.params.id, req.user.tenant_id]
+     fc.encrypt(bank_account ?? existing.bank_account), bank_ifsc ?? existing.bank_ifsc,
+     fc.encrypt(pan ?? existing.pan), status ?? null, req.params.id, req.user.tenant_id]
   );
-  res.json(updated);
+  res.json(decEmp(updated));
 });
 
 // GET /api/payroll/runs - payroll totals expose pay data; owner/admin only.
@@ -92,10 +99,11 @@ router.post("/run", authenticate, canWrite, async (req, res) => {
   const m = run_month ?? new Date().getMonth() + 1;
   const y = run_year  ?? new Date().getFullYear();
 
-  const { rows: employees } = await pool.query(
+  const { rows: empRows } = await pool.query(
     "SELECT * FROM employees WHERE tenant_id=$1 AND status='active'",
     [req.user.tenant_id]
   );
+  const employees = empRows.map(decEmp);
   if (!employees.length) return res.status(400).json({ error: "No active employees" });
 
   const total_gross = employees.reduce((s, e) => s + parseFloat(e.gross_salary), 0);

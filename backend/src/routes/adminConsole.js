@@ -165,4 +165,15 @@ router.get("/subscription/payment-method", async (_req, res) => {
   res.json({ method: null });
 });
 
+// POST /api/admin/pii/backfill — encrypt existing plaintext PII at rest (idempotent;
+// tag-detected, so safe to re-run). Covers the registry in lib/fieldcrypto (employees).
+router.post("/pii/backfill", async (req, res) => {
+  try {
+    const fc = require("../lib/fieldcrypto");
+    const results = await fc.backfillAll(pool);
+    writeAudit(req.user.id, "pii_backfill", "platform", null, { results }).catch(() => {});
+    res.json({ ok: true, results });
+  } catch (e) { console.error("[pii-backfill]", e.message); res.status(500).json({ error: "Backfill failed" }); }
+});
+
 module.exports = router;
