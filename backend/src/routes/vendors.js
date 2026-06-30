@@ -4,6 +4,12 @@
 const router = require("express").Router();
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
+const fc = require("../lib/fieldcrypto");
+
+// Vendor PAN + bank account encrypted at rest (decrypted on read for authorised roles).
+const VENDOR_PII = ["pan", "bank_account"];
+const decV = (r) => fc.decryptFields(r, VENDOR_PII);
+const encV = (v) => { const o = { ...v }; for (const f of VENDOR_PII) if (f in o) o[f] = fc.encrypt(o[f]); return o; };
 
 const WRITE_ROLES = ["super_admin", "owner", "finance_manager", "operations_manager"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
@@ -22,14 +28,14 @@ const pick = (body) => {
 router.get("/", async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT * FROM vendor_master WHERE tenant_id=$1 ORDER BY name", [tenantOf(req)]);
-    res.json(rows);
+    res.json(rows.map(decV));
   } catch (e) { console.error("[vendors]", e.message); res.status(500).json({ error: "Internal error" }); }
 });
 
 // Create a vendor (owner/admin).
 router.post("/", canWrite, async (req, res) => {
   try {
-    const v = pick(req.body || {});
+    const v = encV(pick(req.body || {}));
     if (!v.name) return res.status(400).json({ error: "Vendor name is required" });
     const cols = Object.keys(v);
     const vals = cols.map((_, i) => `$${i + 2}`);
@@ -39,14 +45,14 @@ router.post("/", canWrite, async (req, res) => {
        RETURNING *`,
       [tenantOf(req), ...cols.map(c => v[c])]
     );
-    res.status(201).json(rows[0]);
+    res.status(201).json(decV(rows[0]));
   } catch (e) { console.error("[vendors]", e.message); res.status(500).json({ error: "Internal error" }); }
 });
 
 // Update a vendor (owner/admin).
 router.patch("/:id", canWrite, async (req, res) => {
   try {
-    const v = pick(req.body || {});
+    const v = encV(pick(req.body || {}));
     const cols = Object.keys(v);
     if (cols.length === 0) return res.status(400).json({ error: "Nothing to update" });
     const sets = cols.map((c, i) => `${c}=$${i + 3}`);
@@ -55,7 +61,7 @@ router.patch("/:id", canWrite, async (req, res) => {
       [req.params.id, tenantOf(req), ...cols.map(c => v[c])]
     );
     if (!rows[0]) return res.status(404).json({ error: "Vendor not found" });
-    res.json(rows[0]);
+    res.json(decV(rows[0]));
   } catch (e) { console.error("[vendors]", e.message); res.status(500).json({ error: "Internal error" }); }
 });
 

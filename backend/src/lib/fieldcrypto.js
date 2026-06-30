@@ -52,7 +52,8 @@ const mask = (v, keep = 4) => { const s = v == null ? "" : String(v); if (s.star
 // wiring their reads. Used by the admin backfill — table/field names are from THIS
 // fixed registry, never request input.
 const PII_TARGETS = [
-  { table: "employees", fields: ["pan", "bank_account"] },
+  { table: "employees", fields: ["pan", "bank_account"] },      // wired in routes/payroll.js
+  { table: "vendor_master", fields: ["pan", "bank_account"] },  // wired in routes/vendors.js
 ];
 
 // One-off, IDEMPOTENT backfill: encrypt rows still holding plaintext (tag-detected, so
