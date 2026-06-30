@@ -9,6 +9,13 @@
 //
 // Decimal math reuses books' decimal.js wrapper - never raw JS number for money.
 const { pool } = require("../../db");
+const { withTenant, q } = require("../../lib/tenantDb"); // RLS Phase 3
+// RLS rollout: erp_* tables are FORCE-RLS (migration 0004). Reads/writes go through
+// q(tenantId,...) (simple) or withTenant(tenantId, client => ...) (the 12 multi-statement
+// transactions — client.query inside inherits the GUC). book_* tables are NOT RLS'd:
+// ensureWipLedger + books.* + postVoucher keep using pool/their own connection on purpose
+// (the GL-posting design), and must NOT be switched to q() (that would nest a 2nd
+// connection inside a withTenant txn).
 const books = require("../books");
 const fx = require("../books/fx");
 const { money, toDb } = require("../books/money");
@@ -249,9 +256,7 @@ async function recomputeBomCost(client, tenantId, bomId) {
 
 async function createBom(tenantId, b) {
   if (!b.name || !Array.isArray(b.components) || !b.components.length) throw new ErpError("name and components[] required");
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withTenant(tenantId, async (client) => {
     const { rows } = await client.query(
       "INSERT INTO erp_boms(tenant_id,name,item_id,output_qty,is_default) VALUES($1,$2,$3,$4,$5) RETURNING *",
       [tenantId, b.name, b.itemId || null, b.outputQty || 1, b.isDefault !== false]
@@ -274,27 +279,25 @@ async function createBom(tenantId, b) {
       );
     }
     const roll = await recomputeBomCost(client, tenantId, bom.id);
-    await client.query("COMMIT");
     return { ...bom, ...roll };
-  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+  });
 }
 
 async function listBoms(tenantId) {
-  return (await pool.query("SELECT * FROM erp_boms WHERE tenant_id=$1 ORDER BY name", [tenantId])).rows;
+  return (await q(tenantId,"SELECT * FROM erp_boms WHERE tenant_id=$1 ORDER BY name", [tenantId])).rows;
 }
 
 async function getBom(tenantId, id) {
-  const { rows: b } = await pool.query("SELECT * FROM erp_boms WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
+  const { rows: b } = await q(tenantId,"SELECT * FROM erp_boms WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
   if (!b[0]) throw new ErpError("BOM not found", 404);
-  const { rows: items } = await pool.query("SELECT * FROM erp_bom_items WHERE tenant_id=$1 AND bom_id=$2 ORDER BY seq, id", [tenantId, id]);
-  const { rows: ops } = await pool.query("SELECT * FROM erp_bom_operations WHERE tenant_id=$1 AND bom_id=$2 ORDER BY seq, id", [tenantId, id]);
+  const { rows: items } = await q(tenantId,"SELECT * FROM erp_bom_items WHERE tenant_id=$1 AND bom_id=$2 ORDER BY seq, id", [tenantId, id]);
+  const { rows: ops } = await q(tenantId,"SELECT * FROM erp_bom_operations WHERE tenant_id=$1 AND bom_id=$2 ORDER BY seq, id", [tenantId, id]);
   return { ...b[0], components: items, operations: ops };
 }
 
 // Exploded raw-material view of a BOM for a given qty (default = its output_qty).
 async function explodedBom(tenantId, id, qty) {
-  const client = await pool.connect();
-  try {
+  return withTenant(tenantId, async (client) => {
     const { rows: b } = await client.query("SELECT * FROM erp_boms WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
     if (!b[0]) throw new ErpError("BOM not found", 404);
     const graph = await loadBomGraph(client, tenantId, id);
@@ -315,7 +318,7 @@ async function explodedBom(tenantId, id, qty) {
       rawMaterials: flat.map((f) => ({ ...f, name: names[f.itemId]?.name || "Unknown", unit: names[f.itemId]?.unit || "" })),
       rawMaterialCost: Number(rawMaterialCost.toFixed(6)),
     };
-  } finally { client.release(); }
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -333,9 +336,7 @@ function deriveWoStatus(wo) {
 
 async function createWorkOrder(tenantId, actorId, w) {
   if (!w.bomId || w.qty == null || !(Number(w.qty) > 0)) throw new ErpError("bomId and positive qty required");
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withTenant(tenantId, async (client) => {
     const { rows: br } = await client.query("SELECT * FROM erp_boms WHERE tenant_id=$1 AND id=$2", [tenantId, w.bomId]);
     if (!br[0]) throw new ErpError("BOM not found", 404);
     const bom = br[0];
@@ -385,22 +386,21 @@ async function createWorkOrder(tenantId, actorId, w) {
         [tenantId, wo.id, o.operation, o.workstation || null, toDb(o.timeMins), o.hourly_rate, toDb(o.plannedOperatingCost), o.seq]
       );
     }
-    await client.query("COMMIT");
     return wo;
-  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+  });
 }
 
 async function getWorkOrder(tenantId, id) {
-  const { rows: w } = await pool.query("SELECT * FROM erp_work_orders WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
+  const { rows: w } = await q(tenantId,"SELECT * FROM erp_work_orders WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
   if (!w[0]) throw new ErpError("Work order not found", 404);
-  const { rows: items } = await pool.query("SELECT * FROM erp_work_order_items WHERE tenant_id=$1 AND work_order_id=$2", [tenantId, id]);
-  const { rows: ops } = await pool.query("SELECT * FROM erp_work_order_operations WHERE tenant_id=$1 AND work_order_id=$2 ORDER BY seq, id", [tenantId, id]);
-  const { rows: jcs } = await pool.query("SELECT * FROM erp_job_cards WHERE tenant_id=$1 AND work_order_id=$2 ORDER BY created_at", [tenantId, id]);
+  const { rows: items } = await q(tenantId,"SELECT * FROM erp_work_order_items WHERE tenant_id=$1 AND work_order_id=$2", [tenantId, id]);
+  const { rows: ops } = await q(tenantId,"SELECT * FROM erp_work_order_operations WHERE tenant_id=$1 AND work_order_id=$2 ORDER BY seq, id", [tenantId, id]);
+  const { rows: jcs } = await q(tenantId,"SELECT * FROM erp_job_cards WHERE tenant_id=$1 AND work_order_id=$2 ORDER BY created_at", [tenantId, id]);
   return { ...w[0], requiredItems: items, operations: ops, jobCards: jcs };
 }
 
 async function listWorkOrders(tenantId) {
-  return (await pool.query("SELECT * FROM erp_work_orders WHERE tenant_id=$1 ORDER BY created_at DESC", [tenantId])).rows;
+  return (await q(tenantId,"SELECT * FROM erp_work_orders WHERE tenant_id=$1 ORDER BY created_at DESC", [tenantId])).rows;
 }
 
 // A manufacturing flow moves value between Stock-in-hand and Work-in-Progress.
@@ -412,6 +412,9 @@ const MFG_ACTOR = null; // these flows are system-initiated; created_by may be n
 // runs on its own connection and must be able to SELECT this ledger, so it has to be
 // committed before we post the backing journal.
 async function ensureWipLedger(tenantId) {
+  // book_* tables are NOT RLS'd; keep pool.query (auto-commit, own connection) so the
+  // ledger is committed + visible to books.postVoucher's separate connection, and so we
+  // never nest a withTenant txn inside the manufacturing withTenant txn that calls this.
   const { rows: ex } = await pool.query("SELECT id FROM book_ledgers WHERE tenant_id=$1 AND name=$2", [tenantId, "Work-in-Progress"]);
   if (ex[0]) return ex[0].id;
   const { rows: grp } = await pool.query("SELECT id FROM book_account_groups WHERE tenant_id=$1 AND name=$2", [tenantId, "Stock-in-hand"]);
@@ -444,9 +447,7 @@ async function setMfgJournalAmount(client, voucherId, amount) {
 // the WO to IN_PROCESS (NOT_STARTED → IN_PROCESS). raw_material_cost accumulates
 // the actual COGS so the finished good can be received at component+labour cost.
 async function transferMaterials(tenantId, id) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withTenant(tenantId, async (client) => {
     const { rows: wr } = await client.query("SELECT * FROM erp_work_orders WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [tenantId, id]);
     const wo = wr[0];
     if (!wo) throw new ErpError("Work order not found", 404);
@@ -477,9 +478,8 @@ async function transferMaterials(tenantId, id) {
       "UPDATE erp_work_orders SET material_transferred=qty, raw_material_cost=$3, status='IN_PROCESS', started_at=COALESCE(started_at, now()) WHERE tenant_id=$1 AND id=$2 RETURNING *",
       [tenantId, id, toDb(rmCost)]
     );
-    await client.query("COMMIT");
     return rows[0];
-  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+  });
 }
 
 // Manufacture: receive the finished good at (raw material cost + operating cost)
@@ -487,9 +487,7 @@ async function transferMaterials(tenantId, id) {
 // qty on the WO items, sets produced_qty and COMPLETED. If materials were never
 // transferred, this issues them now (skip-transfer path, like ERPNext).
 async function manufacture(tenantId, id, opts = {}) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withTenant(tenantId, async (client) => {
     const { rows: wr } = await client.query("SELECT * FROM erp_work_orders WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [tenantId, id]);
     const wo = wr[0];
     if (!wo) throw new ErpError("Work order not found", 404);
@@ -556,9 +554,8 @@ async function manufacture(tenantId, id, opts = {}) {
       [tenantId, id, toDb(newProduced), toDb(rmCost), toDb(operatingCost), toDb(totalCogs), toDb(rate),
        completed ? "COMPLETED" : "IN_PROCESS", completed]
     );
-    await client.query("COMMIT");
     return { ...rows[0], producedRate: Number(rate.toFixed(4)), operatingCost: Number(operatingCost.toFixed(4)) };
-  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -566,21 +563,19 @@ async function manufacture(tenantId, id, opts = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function startJobCard(tenantId, woId, body) {
   if (!body.woOperationId) throw new ErpError("woOperationId required");
-  const { rows: op } = await pool.query("SELECT * FROM erp_work_order_operations WHERE tenant_id=$1 AND id=$2 AND work_order_id=$3", [tenantId, body.woOperationId, woId]);
+  const { rows: op } = await q(tenantId,"SELECT * FROM erp_work_order_operations WHERE tenant_id=$1 AND id=$2 AND work_order_id=$3", [tenantId, body.woOperationId, woId]);
   if (!op[0]) throw new ErpError("Work order operation not found", 404);
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO erp_job_cards(tenant_id,work_order_id,wo_operation_id,operation,workstation,hourly_rate,for_qty,from_time,status)
      VALUES($1,$2,$3,$4,$5,$6,$7,COALESCE($8, now()),'IN_PROGRESS') RETURNING *`,
     [tenantId, woId, op[0].id, op[0].operation, op[0].workstation, op[0].hourly_rate, body.forQty || 0, body.fromTime || null]
   );
-  await pool.query("UPDATE erp_work_order_operations SET status='IN_PROGRESS' WHERE id=$1 AND status='PENDING'", [op[0].id]);
+  await q(tenantId,"UPDATE erp_work_order_operations SET status='IN_PROGRESS' WHERE id=$1 AND status='PENDING'", [op[0].id]);
   return rows[0];
 }
 
 async function completeJobCard(tenantId, jobCardId, body) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withTenant(tenantId, async (client) => {
     const { rows: jr } = await client.query("SELECT * FROM erp_job_cards WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [tenantId, jobCardId]);
     const jc = jr[0];
     if (!jc) throw new ErpError("Job card not found", 404);
@@ -608,9 +603,8 @@ async function completeJobCard(tenantId, jobCardId, body) {
         [jc.wo_operation_id, toDb(agg[0].mins), toDb(agg[0].cost), toDb(agg[0].qty), opStatus]
       );
     }
-    await client.query("COMMIT");
     return { id: jobCardId, timeMins, operatingCost, completedQty };
-  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -620,9 +614,7 @@ async function createMaterialRequest(tenantId, actorId, m) {
   const type = (m.requestType || "PURCHASE").toUpperCase();
   if (!["PURCHASE", "TRANSFER", "MANUFACTURE"].includes(type)) throw new ErpError("requestType must be PURCHASE|TRANSFER|MANUFACTURE");
   if (!Array.isArray(m.items) || !m.items.length) throw new ErpError("items[] required");
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withTenant(tenantId, async (client) => {
     const { rows } = await client.query(
       "INSERT INTO erp_material_requests(tenant_id,request_type,source,note,created_by) VALUES($1,$2,$3,$4,$5) RETURNING *",
       [tenantId, type, m.source === "reorder" ? "reorder" : "manual", m.note || null, actorId || null]
@@ -635,15 +627,14 @@ async function createMaterialRequest(tenantId, actorId, m) {
         [tenantId, mr.id, it.itemId, it.qty, it.projectedQty ?? null, it.reorderLevel ?? null]
       );
     }
-    await client.query("COMMIT");
     return mr;
-  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+  });
 }
 
 async function listMaterialRequests(tenantId) {
-  const { rows: mrs } = await pool.query("SELECT * FROM erp_material_requests WHERE tenant_id=$1 ORDER BY created_at DESC", [tenantId]);
+  const { rows: mrs } = await q(tenantId,"SELECT * FROM erp_material_requests WHERE tenant_id=$1 ORDER BY created_at DESC", [tenantId]);
   for (const mr of mrs) {
-    const { rows: items } = await pool.query(
+    const { rows: items } = await q(tenantId,
       `SELECT mi.*, si.name AS item_name, si.unit FROM erp_material_request_items mi
        LEFT JOIN book_stock_items si ON si.id = mi.item_id
        WHERE mi.tenant_id=$1 AND mi.material_request_id=$2`, [tenantId, mr.id]
@@ -656,9 +647,7 @@ async function listMaterialRequests(tenantId) {
 
 // Mark a request (or specific items) as ordered, then re-derive status.
 async function markOrdered(tenantId, id, body = {}) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withTenant(tenantId, async (client) => {
     const { rows: mr } = await client.query("SELECT * FROM erp_material_requests WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [tenantId, id]);
     if (!mr[0]) throw new ErpError("Material request not found", 404);
     if (Array.isArray(body.items) && body.items.length) {
@@ -671,9 +660,8 @@ async function markOrdered(tenantId, id, body = {}) {
     const { rows: items } = await client.query("SELECT * FROM erp_material_request_items WHERE tenant_id=$1 AND material_request_id=$2", [tenantId, id]);
     const status = materialRequestStatus(items);
     const { rows } = await client.query("UPDATE erp_material_requests SET status=$3 WHERE tenant_id=$1 AND id=$2 RETURNING *", [tenantId, id, status]);
-    await client.query("COMMIT");
     return { ...rows[0], items };
-  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+  });
 }
 
 // Reorder report: items whose on-hand qty is at/below reorder level. Suggested
@@ -681,7 +669,7 @@ async function markOrdered(tenantId, id, body = {}) {
 // defaults to the reorder level (so stock is topped up to 2× level) when no
 // explicit per-item reorder qty is stored - books only tracks reorder_level.
 async function reorderReport(tenantId) {
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "SELECT id, name, unit, current_qty, reorder_level FROM book_stock_items WHERE tenant_id=$1 AND is_active=true AND reorder_level > 0 ORDER BY name",
     [tenantId]
   );
@@ -754,9 +742,7 @@ async function onHandQty(client, tenantId, itemId) {
 // [{ itemId, qty, bomId? }]. Each finished item becomes a plan item; net planned
 // qty = max(0, aggregated demand − on-hand).
 async function createProductionPlan(tenantId, actorId, p = {}) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withTenant(tenantId, async (client) => {
     // Pull lines from any referenced sales orders.
     let soLines = [];
     if (Array.isArray(p.salesOrderIds) && p.salesOrderIds.length) {
@@ -785,9 +771,8 @@ async function createProductionPlan(tenantId, actorId, p = {}) {
         [tenantId, plan.id, itemId, bomId, toDb(gross), toDb(avail), toDb(planned), src, seq++]
       );
     }
-    await client.query("COMMIT");
-    return getProductionPlan(tenantId, plan.id);
-  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+    return plan.id;
+  }).then((planId) => getProductionPlan(tenantId, planId)); // read OUTSIDE the txn (no nested withTenant)
 }
 
 // Run MRP: for every plan item with planned_qty>0, explode its BOM (multi-level,
@@ -796,9 +781,7 @@ async function createProductionPlan(tenantId, actorId, p = {}) {
 // the shortfall rows. A component that itself has a default BOM is flagged
 // is_sub_assembly (it could be manufactured rather than purchased). Status → PLANNED.
 async function runMrp(tenantId, planId) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withTenant(tenantId, async (client) => {
     const { rows: pr } = await client.query("SELECT * FROM erp_production_plans WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [tenantId, planId]);
     const plan = pr[0];
     if (!plan) throw new ErpError("Production plan not found", 404);
@@ -834,39 +817,37 @@ async function runMrp(tenantId, planId) {
       materials.push(rows[0]);
     }
     await client.query("UPDATE erp_production_plans SET status='PLANNED', updated_at=now() WHERE tenant_id=$1 AND id=$2", [tenantId, planId]);
-    await client.query("COMMIT");
     return { planId, materials };
-  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+  });
 }
 
 // Execute the plan: auto-raise a Work Order per plan item (planned_qty>0) and a
 // single PURCHASE Material Request covering all raw-material shortfalls. Idempotent
 // per row (skips items that already produced a WO / materials with an MR). → IN_PROCESS.
 async function executePlan(tenantId, actorId, planId) {
-  const { rows: pr } = await pool.query("SELECT * FROM erp_production_plans WHERE tenant_id=$1 AND id=$2", [tenantId, planId]);
+  const { rows: pr } = await q(tenantId,"SELECT * FROM erp_production_plans WHERE tenant_id=$1 AND id=$2", [tenantId, planId]);
   const plan = pr[0];
   if (!plan) throw new ErpError("Production plan not found", 404);
   if (plan.status === "DRAFT") throw new ErpError("Run MRP before executing the plan", 409);
   if (plan.status === "CANCELLED") throw new ErpError("Plan is cancelled", 409);
 
-  const { rows: items } = await pool.query("SELECT * FROM erp_production_plan_items WHERE tenant_id=$1 AND production_plan_id=$2 ORDER BY seq", [tenantId, planId]);
+  const { rows: items } = await q(tenantId,"SELECT * FROM erp_production_plan_items WHERE tenant_id=$1 AND production_plan_id=$2 ORDER BY seq", [tenantId, planId]);
   const workOrders = [];
   for (const pi of items) {
     if (!money(pi.planned_qty).gt(0) || pi.work_order_id) continue;
     let useBom = pi.bom_id;
     if (!useBom) {
-      const client = await pool.connect();
-      try { useBom = await defaultBomForItem(client, tenantId, pi.item_id, null); } finally { client.release(); }
+      useBom = await withTenant(tenantId, (client) => defaultBomForItem(client, tenantId, pi.item_id, null));
     }
     if (!useBom) continue;
     const wo = await createWorkOrder(tenantId, actorId, { bomId: useBom, qty: Number(pi.planned_qty), finishedItemId: pi.item_id, warehouseId: plan.warehouse_id });
-    await pool.query("UPDATE erp_work_orders SET production_plan_id=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, wo.id, planId]);
-    await pool.query("UPDATE erp_production_plan_items SET work_order_id=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, pi.id, wo.id]);
+    await q(tenantId,"UPDATE erp_work_orders SET production_plan_id=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, wo.id, planId]);
+    await q(tenantId,"UPDATE erp_production_plan_items SET work_order_id=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, pi.id, wo.id]);
     workOrders.push(wo.id);
   }
 
   // Shortfalls without an MR yet → one PURCHASE material request.
-  const { rows: shorts } = await pool.query(
+  const { rows: shorts } = await q(tenantId,
     "SELECT * FROM erp_production_plan_materials WHERE tenant_id=$1 AND production_plan_id=$2 AND shortfall_qty > 0 AND material_request_id IS NULL",
     [tenantId, planId]
   );
@@ -877,29 +858,29 @@ async function executePlan(tenantId, actorId, planId) {
       note: `Production plan MRP shortfall (${plan.name || planId})`,
       items: shorts.map((s) => ({ itemId: s.item_id, qty: Number(s.shortfall_qty), projectedQty: Number(s.available_qty) })),
     });
-    await pool.query("UPDATE erp_material_requests SET production_plan_id=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, materialRequest.id, planId]);
-    await pool.query(
+    await q(tenantId,"UPDATE erp_material_requests SET production_plan_id=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, materialRequest.id, planId]);
+    await q(tenantId,
       "UPDATE erp_production_plan_materials SET material_request_id=$3 WHERE tenant_id=$1 AND production_plan_id=$2 AND material_request_id IS NULL AND shortfall_qty > 0",
       [tenantId, planId, materialRequest.id]
     );
   }
-  await pool.query("UPDATE erp_production_plans SET status='IN_PROCESS', updated_at=now() WHERE tenant_id=$1 AND id=$2", [tenantId, planId]);
+  await q(tenantId,"UPDATE erp_production_plans SET status='IN_PROCESS', updated_at=now() WHERE tenant_id=$1 AND id=$2", [tenantId, planId]);
   return { planId, workOrders, materialRequest };
 }
 
 async function listProductionPlans(tenantId) {
-  return (await pool.query("SELECT * FROM erp_production_plans WHERE tenant_id=$1 ORDER BY created_at DESC", [tenantId])).rows;
+  return (await q(tenantId,"SELECT * FROM erp_production_plans WHERE tenant_id=$1 ORDER BY created_at DESC", [tenantId])).rows;
 }
 
 async function getProductionPlan(tenantId, id) {
-  const { rows: pr } = await pool.query("SELECT * FROM erp_production_plans WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
+  const { rows: pr } = await q(tenantId,"SELECT * FROM erp_production_plans WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
   if (!pr[0]) throw new ErpError("Production plan not found", 404);
-  const { rows: items } = await pool.query(
+  const { rows: items } = await q(tenantId,
     `SELECT pi.*, si.name AS item_name, si.unit FROM erp_production_plan_items pi
        LEFT JOIN book_stock_items si ON si.id = pi.item_id
       WHERE pi.tenant_id=$1 AND pi.production_plan_id=$2 ORDER BY pi.seq`, [tenantId, id]
   );
-  const { rows: mats } = await pool.query(
+  const { rows: mats } = await q(tenantId,
     `SELECT pm.*, si.name AS item_name, si.unit FROM erp_production_plan_materials pm
        LEFT JOIN book_stock_items si ON si.id = pm.item_id
       WHERE pm.tenant_id=$1 AND pm.production_plan_id=$2 ORDER BY si.name`, [tenantId, id]
@@ -915,9 +896,7 @@ async function getProductionPlan(tenantId, id) {
 // warehouse where stock physically lives; group nodes are structural (no stock).
 async function createWarehouseNode(tenantId, w = {}) {
   if (!w.name) throw new ErpError("name required");
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withTenant(tenantId, async (client) => {
     if (w.parentId) {
       const { rows: p } = await client.query("SELECT is_group FROM erp_warehouses WHERE tenant_id=$1 AND id=$2", [tenantId, w.parentId]);
       if (!p[0]) throw new ErpError("Parent warehouse not found", 404);
@@ -934,14 +913,13 @@ async function createWarehouseNode(tenantId, w = {}) {
       "INSERT INTO erp_warehouses(tenant_id,name,parent_id,book_warehouse_id,is_group,is_external,location_type,capacity_qty,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *",
       [tenantId, w.name, w.parentId || null, w.isGroup ? null : bookWhId, !!w.isGroup, !!w.isExternal, lt, w.capacityQty != null ? toDb(w.capacityQty) : null, w.sortOrder || 0]
     );
-    await client.query("COMMIT");
     return rows[0];
-  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
+  });
 }
 
 // Flat list (caller can build the tree from parent_id).
 async function listWarehouseNodes(tenantId) {
-  return (await pool.query("SELECT * FROM erp_warehouses WHERE tenant_id=$1 ORDER BY sort_order, name", [tenantId])).rows;
+  return (await q(tenantId,"SELECT * FROM erp_warehouses WHERE tenant_id=$1 ORDER BY sort_order, name", [tenantId])).rows;
 }
 
 // Build a nested tree from the flat rows.
@@ -959,10 +937,10 @@ async function warehouseTree(tenantId) {
 async function createPutawayRule(tenantId, r = {}) {
   if (!r.warehouseId) throw new ErpError("warehouseId (target bin) required");
   if (!(Number(r.capacityQty) > 0)) throw new ErpError("capacityQty must be > 0");
-  const { rows: wh } = await pool.query("SELECT is_group FROM erp_warehouses WHERE tenant_id=$1 AND id=$2", [tenantId, r.warehouseId]);
+  const { rows: wh } = await q(tenantId,"SELECT is_group FROM erp_warehouses WHERE tenant_id=$1 AND id=$2", [tenantId, r.warehouseId]);
   if (!wh[0]) throw new ErpError("Target warehouse not found", 404);
   if (wh[0].is_group) throw new ErpError("Putaway target must be a leaf bin, not a group", 422);
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "INSERT INTO erp_putaway_rules(tenant_id,item_id,warehouse_id,capacity_qty,priority) VALUES($1,$2,$3,$4,$5) RETURNING *",
     [tenantId, r.itemId || null, r.warehouseId, toDb(r.capacityQty), r.priority || 1]
   );
@@ -970,7 +948,7 @@ async function createPutawayRule(tenantId, r = {}) {
 }
 
 async function listPutawayRules(tenantId) {
-  return (await pool.query("SELECT * FROM erp_putaway_rules WHERE tenant_id=$1 ORDER BY priority, created_at", [tenantId])).rows;
+  return (await q(tenantId,"SELECT * FROM erp_putaway_rules WHERE tenant_id=$1 ORDER BY priority, created_at", [tenantId])).rows;
 }
 
 // Pure: split an incoming qty across candidate bins by remaining free capacity,
@@ -996,7 +974,7 @@ function planPutaway(bins, qty) {
 // from books' per-warehouse balance, and split the qty by free capacity. This is
 // a PLAN only - the caller still posts the receipt(s) through books.receive.
 async function resolvePutaway(tenantId, itemId, qty) {
-  const { rows: rules } = await pool.query(
+  const { rows: rules } = await q(tenantId,
     `SELECT pr.*, w.book_warehouse_id FROM erp_putaway_rules pr
        JOIN erp_warehouses w ON w.id = pr.warehouse_id
       WHERE pr.tenant_id=$1 AND pr.is_active=true AND (pr.item_id=$2 OR pr.item_id IS NULL)
@@ -1007,7 +985,7 @@ async function resolvePutaway(tenantId, itemId, qty) {
   for (const r of rules) {
     let occupied = money(0);
     if (r.book_warehouse_id) {
-      const { rows: bal } = await pool.query("SELECT qty FROM book_stock_balances WHERE tenant_id=$1 AND item_id=$2 AND warehouse_id=$3", [tenantId, itemId, r.book_warehouse_id]);
+      const { rows: bal } = await q(tenantId,"SELECT qty FROM book_stock_balances WHERE tenant_id=$1 AND item_id=$2 AND warehouse_id=$3", [tenantId, itemId, r.book_warehouse_id]);
       occupied = money(bal[0] ? bal[0].qty : 0);
     }
     bins.push({ warehouseId: r.warehouse_id, bookWarehouseId: r.book_warehouse_id, capacityQty: r.capacity_qty, occupiedQty: occupied });
@@ -1058,12 +1036,12 @@ async function toBaseRate(tenantId, price, currency, onDate) {
 async function recomputeItemValuation(tenantId, itemId) {
   const today = new Date().toISOString().slice(0, 10);
   // 1) internal
-  const { rows: ir } = await pool.query("SELECT current_qty, current_value FROM book_stock_items WHERE tenant_id=$1 AND id=$2", [tenantId, itemId]);
+  const { rows: ir } = await q(tenantId,"SELECT current_qty, current_value FROM book_stock_items WHERE tenant_id=$1 AND id=$2", [tenantId, itemId]);
   if (!ir[0]) throw new ErpError("Item not found", 404);
   const internal = money(ir[0].current_qty).gt(0) ? money(ir[0].current_value).div(ir[0].current_qty) : null;
 
   // 2) supplier price-breaks (fx-normalised to base)
-  const { rows: spb } = await pool.query("SELECT price, currency FROM erp_supplier_price_breaks WHERE tenant_id=$1 AND item_id=$2", [tenantId, itemId]);
+  const { rows: spb } = await q(tenantId,"SELECT price, currency FROM erp_supplier_price_breaks WHERE tenant_id=$1 AND item_id=$2", [tenantId, itemId]);
   let supMin = null, supMax = null;
   for (const b of spb) {
     const base = await toBaseRate(tenantId, b.price, b.currency, today);
@@ -1072,7 +1050,7 @@ async function recomputeItemValuation(tenantId, itemId) {
   }
 
   // 3) purchase history - inward movements with a positive rate
-  const { rows: pmm } = await pool.query(
+  const { rows: pmm } = await q(tenantId,
     "SELECT MIN(rate) AS mn, MAX(rate) AS mx FROM book_stock_movements WHERE tenant_id=$1 AND item_id=$2 AND qty_in > 0 AND rate > 0",
     [tenantId, itemId]
   );
@@ -1080,7 +1058,7 @@ async function recomputeItemValuation(tenantId, itemId) {
   const purMax = pmm[0] && pmm[0].mx != null ? money(pmm[0].mx) : null;
 
   // 4) BOM rollup - default active BOM for this item
-  const { rows: bom } = await pool.query(
+  const { rows: bom } = await q(tenantId,
     "SELECT total_cost, output_qty FROM erp_boms WHERE tenant_id=$1 AND item_id=$2 AND is_active=true ORDER BY is_default DESC, created_at LIMIT 1",
     [tenantId, itemId]
   );
@@ -1095,7 +1073,7 @@ async function recomputeItemValuation(tenantId, itemId) {
   const oMin = overall.min != null ? overall.min : money(0);
   const oMax = overall.max != null ? overall.max : oMin;
 
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO erp_item_valuation(tenant_id,item_id,internal_rate,supplier_min,supplier_max,purchase_min,purchase_max,bom_rate,overall_min,overall_max,currency,computed_at)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'INR',now())
      ON CONFLICT (tenant_id,item_id) DO UPDATE SET
@@ -1113,14 +1091,14 @@ async function recomputeItemValuation(tenantId, itemId) {
 }
 
 async function getItemValuation(tenantId, itemId) {
-  const { rows } = await pool.query("SELECT * FROM erp_item_valuation WHERE tenant_id=$1 AND item_id=$2", [tenantId, itemId]);
+  const { rows } = await q(tenantId,"SELECT * FROM erp_item_valuation WHERE tenant_id=$1 AND item_id=$2", [tenantId, itemId]);
   if (rows[0]) return rows[0];
   return recomputeItemValuation(tenantId, itemId); // compute on first access
 }
 
 async function addSupplierPriceBreak(tenantId, b = {}) {
   if (!b.itemId || b.price == null) throw new ErpError("itemId and price required");
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "INSERT INTO erp_supplier_price_breaks(tenant_id,item_id,supplier,min_qty,price,currency) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",
     [tenantId, b.itemId, b.supplier || null, toDb(b.minQty || 1), toDb(b.price), (b.currency || "INR").toUpperCase()]
   );
