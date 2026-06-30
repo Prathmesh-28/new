@@ -111,6 +111,15 @@ async function overview(scopeTenantId, { days } = {}) {
      GROUP BY path ORDER BY n DESC LIMIT 12`, args
   );
 
+  // Session engagement: duration = last - first event in a session_id.
+  const sess = await pool.query(
+    `SELECT COUNT(*)::int AS sessions, COALESCE(AVG(secs),0) AS avg_secs, COALESCE(AVG(evts),0) AS avg_events
+     FROM (SELECT session_id, EXTRACT(epoch FROM (MAX(created_at)-MIN(created_at))) AS secs, COUNT(*) AS evts
+           FROM analytics_events WHERE session_id IS NOT NULL AND ${since} ${tFilter}
+           GROUP BY session_id) s`, args
+  );
+  const r1 = (x) => Math.round(Number(x) * 10) / 10;
+
   // Segments only meaningful platform-wide (an owner has one profile).
   const segBy = async (col) => {
     if (scoped) return [];
@@ -129,8 +138,49 @@ async function overview(scopeTenantId, { days } = {}) {
     top_events: top.rows.map((r) => ({ event: r.event, count: Number(r.n), tenants: Number(r.tenants) })),
     by_role: byRole.rows.map((r) => ({ role: r.role, count: Number(r.n), users: Number(r.users) })),
     top_paths: topPaths.rows.map((r) => ({ path: r.path, count: Number(r.n) })),
+    sessions: { count: Number(sess.rows[0].sessions), avg_minutes: r1(Number(sess.rows[0].avg_secs) / 60), avg_events: r1(sess.rows[0].avg_events) },
     segments: { industry: await segBy("industry"), turnover_band: await segBy("turnover_band"), primary_goal: await segBy("primary_goal"), acquisition_source: await segBy("acquisition_source") },
   };
 }
 
-module.exports = { AnalyticsError, track, saveProfile, getProfile, overview, hasAnalyticsConsent };
+// Weekly retention cohorts: group users by the week of their first event, then for
+// each later week show what % of that cohort came back. Optional role filter →
+// retention per stakeholder type.
+async function retention(scopeTenantId, { weeks, role } = {}) {
+  const w = Math.min(Math.max(parseInt(weeks, 10) || 8, 2), 26);
+  const conds = ["user_id IS NOT NULL"]; const args = [];
+  if (scopeTenantId) { args.push(scopeTenantId); conds.push(`tenant_id=$${args.length}`); }
+  if (role) { args.push(role); conds.push(`props->>'role'=$${args.length}`); }
+  const where = conds.join(" AND ");
+  const { rows } = await pool.query(
+    `WITH fs AS (
+        SELECT user_id, date_trunc('week', MIN(created_at)) AS cohort_week
+        FROM analytics_events WHERE ${where} GROUP BY user_id
+     ), act AS (
+        SELECT DISTINCT user_id, date_trunc('week', created_at) AS wk
+        FROM analytics_events WHERE ${where}
+     )
+     SELECT fs.cohort_week::date AS cohort,
+            (EXTRACT(epoch FROM (act.wk - fs.cohort_week)) / 604800)::int AS off,
+            COUNT(DISTINCT act.user_id)::int AS n
+     FROM fs JOIN act ON act.user_id = fs.user_id AND act.wk >= fs.cohort_week
+     WHERE fs.cohort_week >= date_trunc('week', now()) - ($${args.length + 1}::int * interval '1 week')
+     GROUP BY cohort, off ORDER BY cohort, off`,
+    [...args, w]
+  );
+  const byCohort = {};
+  for (const r of rows) {
+    const c = (byCohort[r.cohort] ??= { cohort: r.cohort, size: 0, off: {} });
+    c.off[r.off] = r.n;
+    if (r.off === 0) c.size = r.n;
+  }
+  const cohorts = Object.values(byCohort)
+    .sort((a, b) => (a.cohort < b.cohort ? -1 : 1))
+    .map((c) => ({
+      cohort: c.cohort, size: c.size,
+      retention: Array.from({ length: w + 1 }, (_, k) => (c.size > 0 ? Math.round(((c.off[k] || 0) / c.size) * 100) : 0)),
+    }));
+  return { weeks: w, role: role || null, cohorts };
+}
+
+module.exports = { AnalyticsError, track, saveProfile, getProfile, overview, retention, hasAnalyticsConsent };

@@ -10,14 +10,19 @@ interface Overview {
   top_events: { event: string; count: number; tenants: number }[];
   by_role: { role: string; count: number; users: number }[];
   top_paths: { path: string; count: number }[];
+  sessions: { count: number; avg_minutes: number; avg_events: number };
   segments: Record<string, Seg[]>;
 }
+interface Retention { weeks: number; role: string | null; cohorts: { cohort: string; size: number; retention: number[] }[] }
+const ROLES = ["owner", "finance_manager", "accountant", "sales", "operations_manager", "investor"];
 
 export default function ProductAnalytics() {
   const [d, setD] = useState<Overview | null>(null);
   const [err, setErr] = useState("");
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
+  const [ret, setRet] = useState<Retention | null>(null);
+  const [roleFilter, setRoleFilter] = useState("");
 
   useEffect(() => {
     setLoading(true); setErr("");
@@ -25,6 +30,10 @@ export default function ProductAnalytics() {
       .then(setD).catch((e) => setErr((e as { message?: string })?.message || "Analytics is available to owners/admins."))
       .finally(() => setLoading(false));
   }, [days]);
+
+  useEffect(() => {
+    api.get<Retention>(`/api/analytics/retention?weeks=8${roleFilter ? `&role=${roleFilter}` : ""}`).then(setRet).catch(() => setRet(null));
+  }, [roleFilter]);
 
   const Stat = ({ label, value }: { label: string; value: number }) => (
     <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
@@ -57,6 +66,12 @@ export default function ProductAnalytics() {
             <Stat label="Monthly active" value={d.active.mau} />
             <Stat label={`Events (${d.window_days}d)`} value={d.active.events} />
           </div>
+
+          {d.sessions && d.sessions.count > 0 && (
+            <p className="text-xs text-[var(--color-muted)]">
+              Avg session <span className="text-[var(--color-text)] font-medium">{d.sessions.avg_minutes} min</span> · {d.sessions.avg_events} events/session · {d.sessions.count.toLocaleString("en-IN")} sessions in {d.window_days}d
+            </p>
+          )}
 
           {/* Activation funnel */}
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
@@ -143,6 +158,46 @@ export default function ProductAnalytics() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Weekly retention cohorts */}
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <p className="text-sm font-semibold">Weekly retention <span className="text-xs font-normal text-[var(--color-muted)]">(% of each cohort that returned)</span></p>
+              <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1 outline-none">
+                <option value="">All stakeholders</option>
+                {ROLES.map((r) => <option key={r} value={r}>{r.replace(/_/g, " ")}</option>)}
+              </select>
+            </div>
+            {!ret || ret.cohorts.length === 0 ? (
+              <p className="text-xs text-[var(--color-muted)]">Not enough data yet - cohorts build up after a couple of weeks of usage.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="text-xs border-collapse">
+                  <thead>
+                    <tr className="text-[var(--color-muted)]">
+                      <th className="text-left px-2 py-1 font-medium">Cohort week</th>
+                      <th className="text-right px-2 py-1 font-medium">Users</th>
+                      {Array.from({ length: ret.weeks + 1 }, (_, k) => <th key={k} className="px-2 py-1 text-center font-medium">W{k}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ret.cohorts.map((c) => {
+                      const elapsed = Math.floor((Date.now() - new Date(c.cohort).getTime()) / (7 * 864e5));
+                      return (
+                        <tr key={c.cohort}>
+                          <td className="px-2 py-1 text-[var(--color-muted)] whitespace-nowrap">{c.cohort}</td>
+                          <td className="px-2 py-1 text-right tabular-nums">{c.size}</td>
+                          {c.retention.map((pct, k) => k > elapsed ? <td key={k} className="px-2 py-1" /> : (
+                            <td key={k} className="px-2 py-1 text-center tabular-nums" style={{ background: pct > 0 ? `rgba(47,227,155,${0.1 + (pct / 100) * 0.6})` : "transparent", color: pct > 55 ? "var(--color-bg)" : "var(--color-text)" }}>{pct}%</td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </>
       )}

@@ -41,11 +41,12 @@ router.post("/profile", canWrite, async (req, res) => {
 });
 
 // Admin dashboard data.
+const scopeOf = (req) => (req.user.role === "super_admin" ? (req.query.tenant_id ? String(req.query.tenant_id) : null) : req.user.tenant_id);
 router.get("/overview", canViewAnalytics, async (req, res) => {
-  try {
-    const scope = req.user.role === "super_admin" ? (req.query.tenant_id ? String(req.query.tenant_id) : null) : req.user.tenant_id;
-    res.json(await analytics.overview(scope, { days: req.query.days }));
-  } catch (e) { fail(res, e); }
+  try { res.json(await analytics.overview(scopeOf(req), { days: req.query.days })); } catch (e) { fail(res, e); }
+});
+router.get("/retention", canViewAnalytics, async (req, res) => {
+  try { res.json(await analytics.retention(scopeOf(req), { weeks: req.query.weeks, role: req.query.role })); } catch (e) { fail(res, e); }
 });
 
 module.exports = router;
