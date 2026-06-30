@@ -21,6 +21,13 @@
 //  • LEAVE: allocation → +ledger; approved application → −ledger; balance = Σ ledger
 //    (leave_ledger_entry / leave_allocation / leave_application.get_leave_balance_on).
 const { pool } = require("../../db");
+const { withTenant, q } = require("../../lib/tenantDb"); // RLS Phase 4
+// RLS rollout: hrms_* tables are FORCE-RLS (migration 0005). Simple reads/writes go
+// through q(tenantId,...); the 4 multi-statement transactions (allocateLeave, decideLeave,
+// runPayroll, fullAndFinal) use withTenant(tenantId, client => ...). Payroll GL posting
+// (books.postVoucher / ledgerIdByName) stays on its own connection (book_* not RLS'd) and
+// is called OUTSIDE the withTenant txn, so nothing nests. runPayroll's post-commit TDS
+// refresh also runs OUTSIDE the txn.
 const books = require("../books");
 const { money, sum, toRupees } = require("../books/money");
 
@@ -352,7 +359,7 @@ function normalizeComponentMaster(c) {
 }
 async function createSalaryComponent(tenantId, c) {
   const n = normalizeComponentMaster(c);
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO hrms_salary_components
       (tenant_id,component_name,abbr,type,formula,condition,amount,depends_on_payment_days,
        is_statistical,is_tax_applicable,statutory,variable_based_on_taxable_salary,round_to_integer)
@@ -369,7 +376,7 @@ async function createSalaryComponent(tenantId, c) {
   );
   return rows[0];
 }
-const listSalaryComponents = async (t) => (await pool.query("SELECT * FROM hrms_salary_components WHERE tenant_id=$1 ORDER BY type,component_name", [t])).rows;
+const listSalaryComponents = async (tenantId) => (await q(tenantId,"SELECT * FROM hrms_salary_components WHERE tenant_id=$1 ORDER BY type,component_name", [tenantId])).rows;
 
 // Validate (and topo-order) a set of component rows without persisting - surfaces
 // circular dependencies / formula errors to the UI before a structure is saved.
@@ -488,7 +495,7 @@ function computeSlip({ base, components, month, attendance, structure, paidLeave
 // ─────────────────────────────────────────────────────────────────────────────
 async function createEmployee(tenantId, e) {
   if (!e.name) throw new HrError("name required");
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "INSERT INTO hrms_employees(tenant_id,name,email,phone,department,designation,date_of_joining) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *",
     [tenantId, e.name, e.email || null, e.phone || null, e.department || null, e.designation || null, e.dateOfJoining || null]
   );
@@ -506,9 +513,9 @@ async function bulkCreateEmployees(tenantId, actorId, rows) {
   }
   return { created, failed, errors };
 }
-const listEmployees = async (t) => (await pool.query("SELECT * FROM hrms_employees WHERE tenant_id=$1 ORDER BY name", [t])).rows;
+const listEmployees = async (tenantId) => (await q(tenantId,"SELECT * FROM hrms_employees WHERE tenant_id=$1 ORDER BY name", [tenantId])).rows;
 async function setEmployeeStatus(tenantId, id, status) {
-  await pool.query("UPDATE hrms_employees SET status=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, id, status === "INACTIVE" ? "INACTIVE" : "ACTIVE"]);
+  await q(tenantId,"UPDATE hrms_employees SET status=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, id, status === "INACTIVE" ? "INACTIVE" : "ACTIVE"]);
   return { ok: true };
 }
 
@@ -520,7 +527,7 @@ async function markAttendance(tenantId, a) {
   if (!a.employeeId || !a.date) throw new HrError("employeeId and date required");
   const status = ATT_STATUSES.includes(a.status) ? a.status : "PRESENT";
   const half = status === "HALF_DAY" ? (a.halfDayStatus === "PRESENT" ? "PRESENT" : "ABSENT") : null;
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO hrms_attendance(tenant_id,employee_id,att_date,status,half_day_status,leave_type)
      VALUES($1,$2,$3,$4,$5,$6)
      ON CONFLICT(tenant_id,employee_id,att_date)
@@ -538,7 +545,7 @@ async function bulkMarkAttendance(tenantId, employeeId, days) {
   return { marked: out.length };
 }
 async function attendanceFor(tenantId, employeeId, month) {
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "SELECT att_date, status, half_day_status, leave_type FROM hrms_attendance WHERE tenant_id=$1 AND employee_id=$2 AND to_char(att_date,'YYYY-MM')=$3 ORDER BY att_date",
     [tenantId, employeeId, month]
   );
@@ -566,7 +573,7 @@ async function attendanceSummary(tenantId, employeeId, month) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function createLeaveType(tenantId, t) {
   if (!t.leaveTypeName) throw new HrError("leaveTypeName required");
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO hrms_leave_types(tenant_id,leave_type_name,annual_allocation,is_lwp,include_holiday)
      VALUES($1,$2,$3,$4,$5)
      ON CONFLICT(tenant_id,leave_type_name) DO UPDATE SET annual_allocation=EXCLUDED.annual_allocation, is_lwp=EXCLUDED.is_lwp, include_holiday=EXCLUDED.include_holiday
@@ -575,9 +582,9 @@ async function createLeaveType(tenantId, t) {
   );
   return rows[0];
 }
-const listLeaveTypes = async (t) => (await pool.query("SELECT * FROM hrms_leave_types WHERE tenant_id=$1 ORDER BY leave_type_name", [t])).rows;
+const listLeaveTypes = async (tenantId) => (await q(tenantId,"SELECT * FROM hrms_leave_types WHERE tenant_id=$1 ORDER BY leave_type_name", [tenantId])).rows;
 async function paidLeaveTypeNames(tenantId) {
-  const { rows } = await pool.query("SELECT leave_type_name FROM hrms_leave_types WHERE tenant_id=$1 AND is_lwp=false", [tenantId]);
+  const { rows } = await q(tenantId,"SELECT leave_type_name FROM hrms_leave_types WHERE tenant_id=$1 AND is_lwp=false", [tenantId]);
   return rows.map((r) => r.leave_type_name);
 }
 
@@ -586,9 +593,7 @@ async function allocateLeave(tenantId, a) {
   if (!a.employeeId || !a.leaveType || !a.fromDate || !a.toDate) throw new HrError("employeeId, leaveType, fromDate, toDate required");
   const leaves = Number(a.newLeavesAllocated || 0);
   if (!(leaves > 0)) throw new HrError("newLeavesAllocated must be > 0");
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withTenant(tenantId, async (client) => {
     const { rows } = await client.query(
       "INSERT INTO hrms_leave_allocations(tenant_id,employee_id,leave_type,from_date,to_date,new_leaves_allocated) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",
       [tenantId, a.employeeId, a.leaveType, a.fromDate, a.toDate, leaves]
@@ -598,22 +603,20 @@ async function allocateLeave(tenantId, a) {
       "INSERT INTO hrms_leave_ledger(tenant_id,employee_id,leave_type,transaction_type,transaction_id,leaves,from_date,to_date) VALUES($1,$2,$3,'ALLOCATION',$4,$5,$6,$7)",
       [tenantId, a.employeeId, a.leaveType, alloc.id, leaves, a.fromDate, a.toDate]
     );
-    await client.query("COMMIT");
     return alloc;
-  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; }
-  finally { client.release(); }
+  });
 }
 
 // balance = Σ leaves in the ledger (allocations positive, consumption negative).
 async function leaveBalance(tenantId, employeeId, leaveType) {
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "SELECT COALESCE(SUM(leaves),0) AS bal FROM hrms_leave_ledger WHERE tenant_id=$1 AND employee_id=$2 AND leave_type=$3",
     [tenantId, employeeId, leaveType]
   );
   return flt(rows[0].bal, 2);
 }
 async function leaveBalances(tenantId, employeeId) {
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "SELECT leave_type, COALESCE(SUM(leaves),0) AS balance FROM hrms_leave_ledger WHERE tenant_id=$1 AND employee_id=$2 GROUP BY leave_type ORDER BY leave_type",
     [tenantId, employeeId]
   );
@@ -631,7 +634,7 @@ function leaveDayCount(fromDate, toDate, halfDay) {
 async function requestLeave(tenantId, l) {
   if (!l.employeeId || !l.leaveType || !l.fromDate || !l.toDate) throw new HrError("employeeId, leaveType, fromDate, toDate required");
   const days = leaveDayCount(l.fromDate, l.toDate, !!l.halfDay);
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "INSERT INTO hrms_leave_requests(tenant_id,employee_id,leave_type,from_date,to_date,half_day,days,reason) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
     [tenantId, l.employeeId, l.leaveType, l.fromDate, l.toDate, !!l.halfDay, days, l.reason || null]
   );
@@ -641,9 +644,7 @@ async function requestLeave(tenantId, l) {
 // Approve → a −ledger entry (consumption). Reject → no ledger impact.
 // (Frappe leave_application.create_leave_ledger_entry: leaves = total_leave_days * -1.)
 async function decideLeave(tenantId, id, approve) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withTenant(tenantId, async (client) => {
     const { rows: lr } = await client.query("SELECT * FROM hrms_leave_requests WHERE tenant_id=$1 AND id=$2 AND status='PENDING' FOR UPDATE", [tenantId, id]);
     const req = lr[0];
     if (!req) throw new HrError("Leave request not found or already decided", 409);
@@ -654,12 +655,10 @@ async function decideLeave(tenantId, id, approve) {
         [tenantId, req.employee_id, req.leave_type, req.id, -Number(req.days), req.from_date, req.to_date]
       );
     }
-    await client.query("COMMIT");
     return { ok: true, status: approve ? "APPROVED" : "REJECTED" };
-  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; }
-  finally { client.release(); }
+  });
 }
-const listLeave = async (t) => (await pool.query("SELECT * FROM hrms_leave_requests WHERE tenant_id=$1 ORDER BY created_at DESC", [t])).rows;
+const listLeave = async (tenantId) => (await q(tenantId,"SELECT * FROM hrms_leave_requests WHERE tenant_id=$1 ORDER BY created_at DESC", [tenantId])).rows;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SALARY STRUCTURES + ASSIGNMENTS
@@ -689,7 +688,7 @@ function normalizeComponents(components) {
 async function createStructure(tenantId, s) {
   if (!s.name) throw new HrError("structure name required");
   const components = normalizeComponents(s.components || []);
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO hrms_salary_structures(tenant_id,name,payroll_frequency,components,apply_pf,apply_esi,apply_pt,is_active)
      VALUES($1,$2,$3,$4,$5,$6,$7,$8)
      ON CONFLICT(tenant_id,name) DO UPDATE SET payroll_frequency=EXCLUDED.payroll_frequency, components=EXCLUDED.components,
@@ -700,28 +699,28 @@ async function createStructure(tenantId, s) {
   );
   return rows[0];
 }
-const listStructures = async (t) => (await pool.query("SELECT * FROM hrms_salary_structures WHERE tenant_id=$1 ORDER BY name", [t])).rows;
+const listStructures = async (tenantId) => (await q(tenantId,"SELECT * FROM hrms_salary_structures WHERE tenant_id=$1 ORDER BY name", [tenantId])).rows;
 
 async function assignStructure(tenantId, a) {
   if (!a.employeeId || !a.structureId || !a.fromDate) throw new HrError("employeeId, structureId, fromDate required");
-  const { rows: st } = await pool.query("SELECT id FROM hrms_salary_structures WHERE tenant_id=$1 AND id=$2", [tenantId, a.structureId]);
+  const { rows: st } = await q(tenantId,"SELECT id FROM hrms_salary_structures WHERE tenant_id=$1 AND id=$2", [tenantId, a.structureId]);
   if (!st[0]) throw new HrError("Salary structure not found", 404);
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "INSERT INTO hrms_structure_assignments(tenant_id,employee_id,structure_id,base,from_date) VALUES($1,$2,$3,$4,$5) RETURNING *",
     [tenantId, a.employeeId, a.structureId, flt(a.base || 0, 2), a.fromDate]
   );
   return rows[0];
 }
-const listAssignments = async (t) => (await pool.query(
+const listAssignments = async (tenantId) => (await q(tenantId,
   `SELECT a.*, e.name AS employee_name, s.name AS structure_name
      FROM hrms_structure_assignments a
      JOIN hrms_employees e ON e.id=a.employee_id
      JOIN hrms_salary_structures s ON s.id=a.structure_id
-    WHERE a.tenant_id=$1 ORDER BY a.from_date DESC`, [t])).rows;
+    WHERE a.tenant_id=$1 ORDER BY a.from_date DESC`, [tenantId])).rows;
 
 // The latest assignment effective on/before a date (Frappe SSA "from_date <= date desc limit 1").
 async function activeAssignment(tenantId, employeeId, onDate) {
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `SELECT a.*, s.components, s.apply_pf, s.apply_esi, s.apply_pt, s.payroll_frequency, s.name AS structure_name, s.is_active
        FROM hrms_structure_assignments a JOIN hrms_salary_structures s ON s.id=a.structure_id
       WHERE a.tenant_id=$1 AND a.employee_id=$2 AND a.from_date<=$3
@@ -752,7 +751,7 @@ async function previewSlip(tenantId, employeeId, month) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function runPayroll(tenantId, actorId, month, opts = {}) {
   if (!/^\d{4}-\d{2}$/.test(month || "")) throw new HrError("month=YYYY-MM required");
-  const { rows: ex } = await pool.query("SELECT id FROM hrms_payroll_runs WHERE tenant_id=$1 AND run_month=$2", [tenantId, month]);
+  const { rows: ex } = await q(tenantId,"SELECT id FROM hrms_payroll_runs WHERE tenant_id=$1 AND run_month=$2", [tenantId, month]);
   if (ex[0]) throw new HrError("Payroll already run for this month", 409);
 
   const onDate = `${month}-28`;
@@ -760,7 +759,7 @@ async function runPayroll(tenantId, actorId, month, opts = {}) {
   const costCentreId = opts.costCentreId || null;
 
   // Batch: active employees who have a structure assignment effective on/before the period.
-  const { rows: emps } = await pool.query("SELECT id, name FROM hrms_employees WHERE tenant_id=$1 AND status='ACTIVE' ORDER BY name", [tenantId]);
+  const { rows: emps } = await q(tenantId,"SELECT id, name FROM hrms_employees WHERE tenant_id=$1 AND status='ACTIVE' ORDER BY name", [tenantId]);
 
   const slips = [];
   for (const e of emps) {
@@ -829,41 +828,38 @@ async function runPayroll(tenantId, actorId, month, opts = {}) {
     entries, { idempotencyKey: `payroll-accrual:${tenantId}:${month}` });
 
   // Persist run + payslips with the full breakdown JSON.
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  const run = await withTenant(tenantId, async (client) => {
     const { rows: rr } = await client.query(
       `INSERT INTO hrms_payroll_runs(tenant_id,run_month,gross,total_deduction,net,voucher_id,accrual_voucher_id,cost_centre_id,pay_status)
        VALUES($1,$2,$3,$4,$5,$6,$6,$7,'ACCRUED') RETURNING *`,
       [tenantId, month, toRupees(gross), toRupees(totalDeduction), toRupees(net), voucher.voucherId, costCentreId]
     );
-    const run = rr[0];
+    const r = rr[0];
     for (const s of slips) {
       await client.query(
         `INSERT INTO hrms_payslips(tenant_id,run_id,employee_id,employee_name,total_working_days,payment_days,lop_days,earnings,deductions,gross,total_deduction,net,tds)
          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-        [tenantId, run.id, s.employeeId, s.employeeName, s.total_working_days, s.payment_days, s.lop_days,
+        [tenantId, r.id, s.employeeId, s.employeeName, s.total_working_days, s.payment_days, s.lop_days,
          JSON.stringify(s.earnings), JSON.stringify(s.deductions), s.gross, s.total_deduction, s.net, s.tds || "0.00"]
       );
     }
-    await client.query("COMMIT");
-    // Refresh each employee's projection so tds_paid_to_date / remaining_months /
-    // the next per-month figure reflect this month's deduction (mid-year true-up).
-    const fy = fyForMonth(month);
-    for (const s of slips) await computeTdsProjection(tenantId, s.employeeId, fy).catch(() => {});
-    return {
-      run, voucher, accrual_voucher: voucher, employees: slips.length, pay_status: "ACCRUED",
-      gross: toRupees(gross), total_deduction: toRupees(totalDeduction), net: toRupees(net),
-      breakdown: { pf: toRupees(pf), tds: toRupees(tds), esi: toRupees(esi), pt: toRupees(pt), other: toRupees(otherDed) },
-      slips,
-    };
-  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; }
-  finally { client.release(); }
+    return r;
+  });
+  // Refresh each employee's projection OUTSIDE the txn (computeTdsProjection runs its own
+  // tenant-scoped queries; it must not nest inside the withTenant transaction).
+  const fy = fyForMonth(month);
+  for (const s of slips) await computeTdsProjection(tenantId, s.employeeId, fy).catch(() => {});
+  return {
+    run, voucher, accrual_voucher: voucher, employees: slips.length, pay_status: "ACCRUED",
+    gross: toRupees(gross), total_deduction: toRupees(totalDeduction), net: toRupees(net),
+    breakdown: { pf: toRupees(pf), tds: toRupees(tds), esi: toRupees(esi), pt: toRupees(pt), other: toRupees(otherDed) },
+    slips,
+  };
 }
 
-const listPayrollRuns = async (t) => (await pool.query("SELECT * FROM hrms_payroll_runs WHERE tenant_id=$1 ORDER BY run_month DESC", [t])).rows;
+const listPayrollRuns = async (tenantId) => (await q(tenantId,"SELECT * FROM hrms_payroll_runs WHERE tenant_id=$1 ORDER BY run_month DESC", [tenantId])).rows;
 async function payslipsForRun(tenantId, runId) {
-  const { rows } = await pool.query("SELECT * FROM hrms_payslips WHERE tenant_id=$1 AND run_id=$2 ORDER BY employee_name", [tenantId, runId]);
+  const { rows } = await q(tenantId,"SELECT * FROM hrms_payslips WHERE tenant_id=$1 AND run_id=$2 ORDER BY employee_name", [tenantId, runId]);
   return rows;
 }
 
@@ -907,10 +903,10 @@ function fyForMonth(month) {
 }
 
 async function getOrCreatePayrollPeriod(tenantId, fy) {
-  const { rows } = await pool.query("SELECT * FROM hrms_payroll_periods WHERE tenant_id=$1 AND fy=$2", [tenantId, fy]);
+  const { rows } = await q(tenantId,"SELECT * FROM hrms_payroll_periods WHERE tenant_id=$1 AND fy=$2", [tenantId, fy]);
   if (rows[0]) return rows[0];
   const b = payrollYearBounds(fy);
-  const { rows: ins } = await pool.query(
+  const { rows: ins } = await q(tenantId,
     `INSERT INTO hrms_payroll_periods(tenant_id,fy,assessment_year,start_date,end_date,regime)
      VALUES($1,$2,$3,$4,$5,'new')
      ON CONFLICT(tenant_id,fy) DO UPDATE SET assessment_year=EXCLUDED.assessment_year RETURNING *`,
@@ -920,7 +916,7 @@ async function getOrCreatePayrollPeriod(tenantId, fy) {
 }
 async function setPayrollPeriod(tenantId, fy, opts = {}) {
   const period = await getOrCreatePayrollPeriod(tenantId, fy);
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `UPDATE hrms_payroll_periods SET regime=COALESCE($3,regime), standard_deduction=COALESCE($4,standard_deduction)
        WHERE tenant_id=$1 AND fy=$2 RETURNING *`,
     [tenantId, fy, opts.regime === "old" || opts.regime === "new" ? opts.regime : null,
@@ -983,7 +979,7 @@ async function computeTdsProjection(tenantId, employeeId, fy, opts = {}) {
   const ssa = await activeAssignment(tenantId, employeeId, b.start);
   if (!ssa) {
     // try the earliest assignment within the year if none effective at 1-Apr
-    const { rows } = await pool.query(
+    const { rows } = await q(tenantId,
       `SELECT a.*, s.components, s.apply_pf, s.apply_esi, s.apply_pt
          FROM hrms_structure_assignments a JOIN hrms_salary_structures s ON s.id=a.structure_id
         WHERE a.tenant_id=$1 AND a.employee_id=$2 AND a.from_date<=$3 ORDER BY a.from_date DESC LIMIT 1`,
@@ -1012,7 +1008,7 @@ async function computeTdsProjection(tenantId, employeeId, fy, opts = {}) {
   const annualHra = money(hraComp ? hraComp.amount : 0).times(months);
 
   // Declaration → HRA inputs + Chapter VI-A (proofs override declared once verified).
-  const { rows: dr } = await pool.query("SELECT * FROM hrms_investment_declarations WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, employeeId, fy]);
+  const { rows: dr } = await q(tenantId,"SELECT * FROM hrms_investment_declarations WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, employeeId, fy]);
   const decl = dr[0] || null;
   const useProofs = decl && (decl.status === "PROOF_SUBMITTED" || decl.status === "VERIFIED");
   const sections = decl ? (useProofs ? decl.proofs : decl.declared) || {} : {};
@@ -1043,7 +1039,7 @@ async function computeTdsProjection(tenantId, employeeId, fy, opts = {}) {
   const annualTax = money(tax.total);
 
   // How much TDS has ALREADY been deducted in this payroll year (mid-year true-up).
-  const { rows: paidRows } = await pool.query(
+  const { rows: paidRows } = await q(tenantId,
     `SELECT COALESCE(SUM(p.tds),0) AS paid
        FROM hrms_payslips p JOIN hrms_payroll_runs r ON r.id=p.run_id
       WHERE p.tenant_id=$1 AND p.employee_id=$2 AND r.run_month BETWEEN $3 AND $4`,
@@ -1052,7 +1048,7 @@ async function computeTdsProjection(tenantId, employeeId, fy, opts = {}) {
   const paid = money(paidRows[0].paid);
 
   // Remaining months: from the next un-run month to Mar. Count payslips already run.
-  const ranMonths = Number((await pool.query(
+  const ranMonths = Number((await q(tenantId,
     `SELECT COUNT(*) AS n FROM hrms_payslips p JOIN hrms_payroll_runs r ON r.id=p.run_id
       WHERE p.tenant_id=$1 AND p.employee_id=$2 AND r.run_month BETWEEN $3 AND $4`,
     [tenantId, employeeId, `${b.startYear}-04`, `${b.startYear + 1}-03`]
@@ -1073,7 +1069,7 @@ async function computeTdsProjection(tenantId, employeeId, fy, opts = {}) {
     usedProofs: !!useProofs,
   };
 
-  const { rows: up } = await pool.query(
+  const { rows: up } = await q(tenantId,
     `INSERT INTO hrms_tds_projections
       (tenant_id,employee_id,fy,regime,projected_gross,total_exemptions,chapter_via,
        projected_taxable,annual_tax,tds_paid_to_date,remaining_months,tds_per_month,computation,computed_at)
@@ -1092,7 +1088,7 @@ async function computeTdsProjection(tenantId, employeeId, fy, opts = {}) {
 
 // Recompute projections for all assigned active employees for a payroll year.
 async function projectTdsForYear(tenantId, fy) {
-  const { rows: emps } = await pool.query("SELECT id FROM hrms_employees WHERE tenant_id=$1 AND status='ACTIVE'", [tenantId]);
+  const { rows: emps } = await q(tenantId,"SELECT id FROM hrms_employees WHERE tenant_id=$1 AND status='ACTIVE'", [tenantId]);
   const out = [];
   for (const e of emps) {
     try { out.push(await computeTdsProjection(tenantId, e.id, fy)); }
@@ -1101,10 +1097,10 @@ async function projectTdsForYear(tenantId, fy) {
   return { fy, projected: out.length, projections: out };
 }
 async function getTdsProjection(tenantId, employeeId, fy) {
-  const { rows } = await pool.query("SELECT * FROM hrms_tds_projections WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, employeeId, fy]);
+  const { rows } = await q(tenantId,"SELECT * FROM hrms_tds_projections WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, employeeId, fy]);
   return rows[0] || null;
 }
-const listTdsProjections = async (t, fy) => (await pool.query(
+const listTdsProjections = async (t, fy) => (await q(tenantId,
   `SELECT pr.*, e.name AS employee_name FROM hrms_tds_projections pr JOIN hrms_employees e ON e.id=pr.employee_id
     WHERE pr.tenant_id=$1 AND pr.fy=$2 ORDER BY e.name`, [t, fy])).rows;
 
@@ -1126,7 +1122,7 @@ async function monthlyTdsFor(tenantId, employeeId, month) {
 async function saveDeclaration(tenantId, d) {
   if (!d.employeeId || !d.fy) throw new HrError("employeeId and fy required");
   const declared = d.declared && typeof d.declared === "object" ? d.declared : {};
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO hrms_investment_declarations(tenant_id,employee_id,fy,monthly_rent,is_metro,declared,status)
      VALUES($1,$2,$3,$4,$5,$6,'DRAFT')
      ON CONFLICT(tenant_id,employee_id,fy) DO UPDATE SET
@@ -1140,7 +1136,7 @@ async function saveDeclaration(tenantId, d) {
 // actual proofs; VERIFY marks proofs accepted. Each transition re-projects TDS.
 async function advanceDeclaration(tenantId, d) {
   if (!d.employeeId || !d.fy || !d.action) throw new HrError("employeeId, fy, action required");
-  const { rows: cur } = await pool.query("SELECT * FROM hrms_investment_declarations WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, d.employeeId, d.fy]);
+  const { rows: cur } = await q(tenantId,"SELECT * FROM hrms_investment_declarations WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, d.employeeId, d.fy]);
   if (!cur[0]) throw new HrError("Declaration not found - save it first", 404);
   const action = d.action;
   let sql, params;
@@ -1155,17 +1151,17 @@ async function advanceDeclaration(tenantId, d) {
     sql = "UPDATE hrms_investment_declarations SET status='VERIFIED', verified_at=now() WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3 AND status='PROOF_SUBMITTED' RETURNING *";
     params = [tenantId, d.employeeId, d.fy];
   } else throw new HrError(`Unknown action "${action}" (SUBMIT|SUBMIT_PROOF|VERIFY)`);
-  const { rows } = await pool.query(sql, params);
+  const { rows } = await q(tenantId,sql, params);
   if (!rows[0]) throw new HrError(`Cannot ${action} from current status "${cur[0].status}"`, 409);
   // Re-project so the new figures flow into monthly TDS.
   await computeTdsProjection(tenantId, d.employeeId, d.fy).catch(() => {});
   return rows[0];
 }
 async function getDeclaration(tenantId, employeeId, fy) {
-  const { rows } = await pool.query("SELECT * FROM hrms_investment_declarations WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, employeeId, fy]);
+  const { rows } = await q(tenantId,"SELECT * FROM hrms_investment_declarations WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, employeeId, fy]);
   return rows[0] || null;
 }
-const listDeclarations = async (t, fy) => (await pool.query(
+const listDeclarations = async (t, fy) => (await q(tenantId,
   `SELECT d.*, e.name AS employee_name FROM hrms_investment_declarations d JOIN hrms_employees e ON e.id=d.employee_id
     WHERE d.tenant_id=$1 AND d.fy=$2 ORDER BY e.name`, [t, fy])).rows;
 
@@ -1181,7 +1177,7 @@ async function resolveLedger(tenantId, names) {
   return null;
 }
 async function payPayrollRun(tenantId, actorId, runId, opts = {}) {
-  const { rows: rr } = await pool.query("SELECT * FROM hrms_payroll_runs WHERE tenant_id=$1 AND id=$2", [tenantId, runId]);
+  const { rows: rr } = await q(tenantId,"SELECT * FROM hrms_payroll_runs WHERE tenant_id=$1 AND id=$2", [tenantId, runId]);
   const run = rr[0];
   if (!run) throw new HrError("Payroll run not found", 404);
   if (run.pay_status === "PAID") throw new HrError("Payroll run already paid", 409);
@@ -1200,7 +1196,7 @@ async function payPayrollRun(tenantId, actorId, runId, opts = {}) {
     { voucherType: "PAYMENT", voucherDate: payDate, narration: `Payroll payment ${run.run_month}`, source: "payroll" },
     entries, { idempotencyKey: `payroll-pay:${tenantId}:${runId}` });
 
-  await pool.query("UPDATE hrms_payroll_runs SET pay_status='PAID', payment_voucher_id=$3 WHERE tenant_id=$1 AND id=$2",
+  await q(tenantId,"UPDATE hrms_payroll_runs SET pay_status='PAID', payment_voucher_id=$3 WHERE tenant_id=$1 AND id=$2",
     [tenantId, runId, voucher.voucherId]);
   return { runId, pay_status: "PAID", payment_voucher: voucher, net: toRupees(net) };
 }
@@ -1212,11 +1208,11 @@ async function payPayrollRun(tenantId, actorId, runId, opts = {}) {
 //   default 15/26-per-year (Payment of Gratuity Act) slab on first read.
 // ═════════════════════════════════════════════════════════════════════════════
 async function ensureGratuitySlabs(tenantId) {
-  const { rows } = await pool.query("SELECT 1 FROM hrms_gratuity_slabs WHERE tenant_id=$1 LIMIT 1", [tenantId]);
+  const { rows } = await q(tenantId,"SELECT 1 FROM hrms_gratuity_slabs WHERE tenant_id=$1 LIMIT 1", [tenantId]);
   if (rows[0]) return;
   // India: 15 days' wages per completed year on a 26-day month = 15/26 per year,
   // eligible after 5 years, capped ₹20,00,000.
-  await pool.query(
+  await q(tenantId,
     `INSERT INTO hrms_gratuity_slabs(tenant_id,region,from_year,to_year,fraction_per_year,min_years,max_amount)
      VALUES($1,'India',0,NULL,$2,5,2000000)`,
     [tenantId, 15 / 26]
@@ -1224,13 +1220,13 @@ async function ensureGratuitySlabs(tenantId) {
 }
 async function listGratuitySlabs(tenantId, region) {
   await ensureGratuitySlabs(tenantId);
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "SELECT * FROM hrms_gratuity_slabs WHERE tenant_id=$1 AND ($2::text IS NULL OR region=$2) ORDER BY region, from_year",
     [tenantId, region || null]);
   return rows;
 }
 async function upsertGratuitySlab(tenantId, s) {
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO hrms_gratuity_slabs(tenant_id,region,from_year,to_year,fraction_per_year,min_years,max_amount)
      VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
     [tenantId, s.region || "India", flt(s.fromYear || 0, 2), s.toYear != null ? flt(s.toYear, 2) : null,
@@ -1261,7 +1257,7 @@ function gratuityAmount({ lastBasic, completedYears, slabs, region = "India" }) 
 }
 // DB-backed gratuity for an employee as of a relieving date.
 async function computeGratuity(tenantId, employeeId, relievingDate, opts = {}) {
-  const { rows: er } = await pool.query("SELECT * FROM hrms_employees WHERE tenant_id=$1 AND id=$2", [tenantId, employeeId]);
+  const { rows: er } = await q(tenantId,"SELECT * FROM hrms_employees WHERE tenant_id=$1 AND id=$2", [tenantId, employeeId]);
   const emp = er[0];
   if (!emp) throw new HrError("Employee not found", 404);
   if (!emp.date_of_joining) throw new HrError("Employee has no date_of_joining", 422);
@@ -1287,12 +1283,12 @@ async function computeGratuity(tenantId, employeeId, relievingDate, opts = {}) {
 // ═════════════════════════════════════════════════════════════════════════════
 async function createLoan(tenantId, l) {
   if (!l.employeeId || !(Number(l.principal) > 0)) throw new HrError("employeeId and principal>0 required");
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "INSERT INTO hrms_employee_loans(tenant_id,employee_id,principal,outstanding) VALUES($1,$2,$3,$3) RETURNING *",
     [tenantId, l.employeeId, flt(l.principal, 2)]);
   return rows[0];
 }
-const loansFor = async (t, e) => (await pool.query("SELECT * FROM hrms_employee_loans WHERE tenant_id=$1 AND employee_id=$2 AND status='OPEN' ORDER BY created_at", [t, e])).rows;
+const loansFor = async (t, e) => (await q(tenantId,"SELECT * FROM hrms_employee_loans WHERE tenant_id=$1 AND employee_id=$2 AND status='OPEN' ORDER BY created_at", [t, e])).rows;
 
 // ═════════════════════════════════════════════════════════════════════════════
 // (4d) FULL & FINAL SETTLEMENT  (Frappe "Full and Final Statement")
@@ -1309,7 +1305,7 @@ function leaveEncashmentAmount({ encashableDays, lastBasic, perDayDivisor = 30 }
 }
 async function fullAndFinal(tenantId, actorId, d) {
   if (!d.employeeId || !d.relievingDate) throw new HrError("employeeId and relievingDate required");
-  const { rows: er } = await pool.query("SELECT * FROM hrms_employees WHERE tenant_id=$1 AND id=$2", [tenantId, d.employeeId]);
+  const { rows: er } = await q(tenantId,"SELECT * FROM hrms_employees WHERE tenant_id=$1 AND id=$2", [tenantId, d.employeeId]);
   const emp = er[0];
   if (!emp) throw new HrError("Employee not found", 404);
 
@@ -1370,9 +1366,7 @@ async function fullAndFinal(tenantId, actorId, d) {
       entries, { idempotencyKey: `fnf:${tenantId}:${d.employeeId}:${d.relievingDate}` });
   }
 
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withTenant(tenantId, async (client) => {
     const { rows } = await client.query(
       `INSERT INTO hrms_full_and_final
         (tenant_id,employee_id,relieving_date,gratuity,leave_encashment,pending_salary,other_dues,
@@ -1386,14 +1380,12 @@ async function fullAndFinal(tenantId, actorId, d) {
       await client.query("UPDATE hrms_employee_loans SET outstanding=0, status='CLOSED' WHERE tenant_id=$1 AND employee_id=$2 AND status='OPEN'", [tenantId, d.employeeId]);
     }
     await client.query("UPDATE hrms_employees SET status='INACTIVE', relieving_date=$3 WHERE tenant_id=$1 AND id=$2", [tenantId, d.employeeId, d.relievingDate]);
-    await client.query("COMMIT");
     return { ...rows[0], breakdown, voucher };
-  } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; }
-  finally { client.release(); }
+  });
 }
-const listFullAndFinal = async (t) => (await pool.query(
+const listFullAndFinal = async (tenantId) => (await q(tenantId,
   `SELECT f.*, e.name AS employee_name FROM hrms_full_and_final f JOIN hrms_employees e ON e.id=f.employee_id
-    WHERE f.tenant_id=$1 ORDER BY f.created_at DESC`, [t])).rows;
+    WHERE f.tenant_id=$1 ORDER BY f.created_at DESC`, [tenantId])).rows;
 
 module.exports = {
   HrError,
