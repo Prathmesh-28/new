@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import { Loader2, Activity, Filter, BarChart3 } from "lucide-react";
+import { Loader2, Activity, Filter, BarChart3, Send, MoonStar } from "lucide-react";
 
 interface Seg { key: string; count: number }
 interface Overview {
@@ -14,6 +14,8 @@ interface Overview {
   segments: Record<string, Seg[]>;
 }
 interface Retention { weeks: number; role: string | null; cohorts: { cohort: string; size: number; retention: number[] }[] }
+interface Dormant { tenant_id: string; last_seen: string; days_idle: number }
+interface WinResult { scanned: number; channels: Record<string, number> }
 const ROLES = ["owner", "finance_manager", "accountant", "sales", "operations_manager", "investor"];
 
 export default function ProductAnalytics() {
@@ -23,6 +25,18 @@ export default function ProductAnalytics() {
   const [loading, setLoading] = useState(true);
   const [ret, setRet] = useState<Retention | null>(null);
   const [roleFilter, setRoleFilter] = useState("");
+  const [dormant, setDormant] = useState<Dormant[] | null>(null);
+  const [winRunning, setWinRunning] = useState(false);
+  const [winMsg, setWinMsg] = useState("");
+
+  const loadDormant = () => api.get<{ dormant: Dormant[] }>("/api/analytics/dormant").then((r) => setDormant(r.dormant)).catch(() => setDormant(null));
+  const runWinback = () => {
+    setWinRunning(true); setWinMsg("");
+    api.post<WinResult>("/api/analytics/winback/run", {})
+      .then((r) => { const sent = Object.entries(r.channels).map(([k, v]) => `${v} ${k}`).join(", "); setWinMsg(r.scanned ? `Nudged ${r.scanned} business${r.scanned > 1 ? "es" : ""}${sent ? ` (${sent})` : ""}.` : "No dormant businesses to nudge right now."); loadDormant(); })
+      .catch((e) => setWinMsg((e as { message?: string })?.message || "Could not run win-back."))
+      .finally(() => setWinRunning(false));
+  };
 
   useEffect(() => {
     setLoading(true); setErr("");
@@ -34,6 +48,8 @@ export default function ProductAnalytics() {
   useEffect(() => {
     api.get<Retention>(`/api/analytics/retention?weeks=8${roleFilter ? `&role=${roleFilter}` : ""}`).then(setRet).catch(() => setRet(null));
   }, [roleFilter]);
+
+  useEffect(() => { loadDormant(); }, []);
 
   const Stat = ({ label, value }: { label: string; value: number }) => (
     <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
@@ -198,6 +214,35 @@ export default function ProductAnalytics() {
                 </table>
               </div>
             )}
+          </div>
+
+          {/* Win-back: dormant businesses + one-click nudge */}
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <p className="text-sm font-semibold flex items-center gap-2"><MoonStar size={15} className="text-[var(--color-primary)]" /> Win-back <span className="text-xs font-normal text-[var(--color-muted)]">(gone quiet 14+ days)</span></p>
+              <button onClick={runWinback} disabled={winRunning || (dormant != null && dormant.length === 0)}
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] font-medium disabled:opacity-40">
+                {winRunning ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Send win-back nudges
+              </button>
+            </div>
+            <p className="text-xs text-[var(--color-muted)] mb-3">A daily job nudges these automatically via WhatsApp, email or an in-app alert — each business at most once a month. Use the button to run it now.</p>
+            {dormant == null ? (
+              <p className="text-xs text-[var(--color-muted)] flex items-center gap-2"><Loader2 size={13} className="animate-spin" /> Loading…</p>
+            ) : dormant.length === 0 ? (
+              <p className="text-xs text-[var(--color-muted)]">No dormant businesses — everyone active has been seen recently. 🎉</p>
+            ) : (
+              <div className="space-y-1.5">
+                <p className="text-xs"><span className="text-[var(--color-text)] font-semibold">{dormant.length}</span> <span className="text-[var(--color-muted)]">awaiting a nudge</span></p>
+                {dormant.slice(0, 8).map((t) => (
+                  <div key={t.tenant_id} className="flex items-center justify-between text-sm">
+                    <span className="font-mono text-xs truncate">{t.tenant_id}</span>
+                    <span className="text-[var(--color-muted)] text-xs shrink-0 ml-2">idle {t.days_idle}d</span>
+                  </div>
+                ))}
+                {dormant.length > 8 && <p className="text-xs text-[var(--color-muted)]">+{dormant.length - 8} more</p>}
+              </div>
+            )}
+            {winMsg && <p className="text-xs mt-3 text-[var(--color-primary)]">{winMsg}</p>}
           </div>
         </>
       )}

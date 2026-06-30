@@ -482,6 +482,11 @@ initDb()
       require("./modules/flows/runner").runDailyCashEvents()
         .then(r => { if (r && r.fired) console.log(`[flows] cash.daily fired ${r.fired} flow(s)`); })
         .catch(err => console.error("[flows-cash-daily]", err.message));
+      // Analytics win-back: nudge businesses that have gone quiet (WhatsApp → email →
+      // in-app alert, gated; dedup'd by cooldown). Turns retention data into action.
+      require("./modules/analytics").runWinback({})
+        .then(r => { if (r && r.scanned) console.log(`[winback] nudged ${r.scanned} dormant biz`, r.channels); })
+        .catch(err => console.error("[winback]", err.message));
     }, { timezone: "UTC" });
     // Subscriptions: generate due recurring invoices daily at 07:45 IST (02:15 UTC).
     cron.schedule("15 2 * * *", async () => {

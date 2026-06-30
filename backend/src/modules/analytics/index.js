@@ -183,4 +183,62 @@ async function retention(scopeTenantId, { weeks, role } = {}) {
   return { weeks: w, role: role || null, cohorts };
 }
 
-module.exports = { AnalyticsError, track, saveProfile, getProfile, overview, retention, hasAnalyticsConsent };
+// ── Win-back: detect dormant businesses + nudge them ──────────────────────────
+const ci = (v, d, lo, hi) => Math.min(Math.max(parseInt(v, 10) || d, lo), hi);
+
+// Businesses whose last activity is idleDays-90d ago (active before, gone quiet now)
+// and that haven't already been nudged within cooldownDays.
+async function findDormant(scopeTenantId, { idleDays, cooldownDays } = {}) {
+  const idle = ci(idleDays, 14, 1, 180), cool = ci(cooldownDays, 30, 1, 180);
+  const args = []; let scopeCond = "";
+  if (scopeTenantId) { args.push(scopeTenantId); scopeCond = `WHERE tenant_id=$${args.length}`; }
+  args.push(idle); const idleIdx = args.length;
+  args.push(cool); const coolIdx = args.length;
+  const { rows } = await pool.query(
+    `WITH last AS (SELECT tenant_id, MAX(created_at) AS last_seen FROM analytics_events ${scopeCond} GROUP BY tenant_id),
+          nudged AS (SELECT DISTINCT tenant_id FROM analytics_events WHERE event='winback_nudge' AND created_at > now() - ($${coolIdx} * interval '1 day'))
+     SELECT l.tenant_id, l.last_seen, EXTRACT(day FROM now() - l.last_seen)::int AS days_idle
+     FROM last l
+     WHERE l.last_seen < now() - ($${idleIdx} * interval '1 day')
+       AND l.last_seen > now() - interval '90 days'
+       AND l.tenant_id NOT IN (SELECT tenant_id FROM nudged)
+     ORDER BY l.last_seen ASC LIMIT 500`, args
+  );
+  return rows.map((r) => ({ tenant_id: r.tenant_id, last_seen: r.last_seen, days_idle: Number(r.days_idle) }));
+}
+
+async function firmContact(tenantId) {
+  const { rows } = await pool.query(
+    "SELECT value FROM kv_store WHERE tenant_id=$1 AND namespace='app' AND key='store' LIMIT 1", [tenantId]
+  ).catch(() => ({ rows: [] }));
+  const firm = rows[0]?.value?.value?.firm ?? {};
+  return { name: firm.name || null, phone: firm.phone || null, email: firm.email || null };
+}
+
+// Nudge each dormant business via WhatsApp → email → in-app alert (whichever is
+// available), and record a 'winback_nudge' event so we don't re-nudge within the
+// cooldown. dryRun records the decision without actually sending (used by tests).
+async function runWinback({ idleDays, cooldownDays, dryRun = false, scopeTenantId = null } = {}) {
+  const dormant = await findDormant(scopeTenantId, { idleDays, cooldownDays });
+  const waLive = !!(process.env.TWILIO_ACCOUNT_SID && String(process.env.TWILIO_ACCOUNT_SID).trim());
+  const mailLive = !!(process.env.SMTP_USER && String(process.env.SMTP_USER).trim());
+  const channels = {};
+  for (const t of dormant) {
+    const c = await firmContact(t.tenant_id);
+    const msg = `Hi${c.name ? " " + c.name : ""} - we have not seen you on Headroom in ${t.days_idle} days. Your cash dashboard, GST status and pending invoices are ready whenever you are.`;
+    let channel = "alert";
+    if (dryRun) channel = "dry";
+    else {
+      try {
+        if (waLive && c.phone) { await require("../../lib/whatsapp").sendWhatsApp(c.phone, msg); channel = "whatsapp"; }
+        else if (mailLive && c.email) { await require("../../lib/email").sendMail({ to: c.email, subject: "We miss you at Headroom", html: `<p>${msg}</p>` }); channel = "email"; }
+        else { await pool.query("INSERT INTO alerts(tenant_id, rule_id, severity, title, message, meta) VALUES($1,NULL,'info',$2,$3,$4)", [t.tenant_id, "We miss you", msg, JSON.stringify({ kind: "winback", days_idle: t.days_idle })]).catch(() => {}); channel = "alert"; }
+      } catch (e) { try { console.warn("[winback] send failed", t.tenant_id, e.message); } catch {} channel = "failed"; }
+    }
+    channels[channel] = (channels[channel] || 0) + 1;
+    await track(t.tenant_id, null, { event: "winback_nudge", props: { channel, days_idle: t.days_idle } }).catch(() => {});
+  }
+  return { scanned: dormant.length, channels };
+}
+
+module.exports = { AnalyticsError, track, saveProfile, getProfile, overview, retention, findDormant, runWinback, hasAnalyticsConsent };

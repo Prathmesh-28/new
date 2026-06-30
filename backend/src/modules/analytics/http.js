@@ -49,4 +49,19 @@ router.get("/retention", canViewAnalytics, async (req, res) => {
   try { res.json(await analytics.retention(scopeOf(req), { weeks: req.query.weeks, role: req.query.role })); } catch (e) { fail(res, e); }
 });
 
+// Win-back: who's gone quiet, and a button to nudge them. Owner → own tenant only;
+// super_admin → platform-wide. The daily cron in server.js runs the platform sweep.
+router.get("/dormant", canViewAnalytics, async (req, res) => {
+  try { res.json({ dormant: await analytics.findDormant(scopeOf(req), { idleDays: req.query.idle_days, cooldownDays: req.query.cooldown_days }) }); } catch (e) { fail(res, e); }
+});
+router.post("/winback/run", canViewAnalytics, async (req, res) => {
+  try {
+    res.json(await analytics.runWinback({
+      scopeTenantId: scopeOf(req),
+      idleDays: req.body?.idle_days, cooldownDays: req.body?.cooldown_days,
+      dryRun: req.body?.dry_run === true,
+    }));
+  } catch (e) { fail(res, e); }
+});
+
 module.exports = router;
