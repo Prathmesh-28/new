@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import { Loader2, Activity, Filter, BarChart3, Send, MoonStar, RotateCcw } from "lucide-react";
+import { Loader2, Activity, Filter, BarChart3, Send, MoonStar, RotateCcw, FlaskConical } from "lucide-react";
 
 interface Seg { key: string; count: number }
 interface Overview {
@@ -18,6 +18,8 @@ interface Dormant { tenant_id: string; last_seen: string; days_idle: number; rea
 interface WinResult { scanned: number; channels: Record<string, number>; reasons: Record<string, number> }
 interface ReactBucket { key: string | null; nudges: number; reactivated: number; rate: number | null; reliable: boolean; dry_run?: boolean }
 interface Reactivation { scope: string; window_days: number; min_n: number; overall: ReactBucket; by_reason: ReactBucket[]; by_channel: ReactBucket[]; pending: number; disclaimer: string }
+interface LiftArm { tenants: number; reactivated: number; rate: number | null; ci95: [number, number] | null }
+interface Lift { scope: string; window_days: number; holdout_pct: number; status: "ok" | "building"; min_per_arm: number; treatment: LiftArm; control: LiftArm; lift_pp: number | null; lift_ci95: [number, number] | null; significant: boolean | null; p_value: number | null; mde_pp: number | null; caveat: string }
 const ROLES = ["owner", "finance_manager", "accountant", "sales", "operations_manager", "investor"];
 const REASON_LABELS: Record<string, string> = {
   overdue_invoices: "overdue invoices", unpaid_invoices: "unpaid invoices",
@@ -35,6 +37,7 @@ export default function ProductAnalytics() {
   const [winRunning, setWinRunning] = useState(false);
   const [winMsg, setWinMsg] = useState("");
   const [react, setReact] = useState<Reactivation | null>(null);
+  const [lift, setLift] = useState<Lift | null>(null);
   const [winDays, setWinDays] = useState(14);
 
   const loadDormant = () => api.get<{ dormant: Dormant[] }>("/api/analytics/dormant").then((r) => setDormant(r.dormant)).catch(() => setDormant(null));
@@ -61,6 +64,7 @@ export default function ProductAnalytics() {
 
   useEffect(() => {
     api.get<Reactivation>(`/api/analytics/reactivation?window_days=${winDays}`).then(setReact).catch(() => setReact(null));
+    api.get<Lift>(`/api/analytics/winback/lift?window_days=${winDays}`).then(setLift).catch(() => setLift(null));
   }, [winDays, winMsg]);
 
   const Stat = ({ label, value }: { label: string; value: number }) => (
@@ -295,6 +299,37 @@ export default function ProductAnalytics() {
                 ))}
 
                 <p className="text-[11px] text-[var(--color-muted)] mt-3 leading-relaxed">{react.disclaimer}</p>
+              </>
+            )}
+          </div>
+
+          {/* Causal lift vs a randomized holdout */}
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <p className="text-sm font-semibold flex items-center gap-2 mb-1"><FlaskConical size={15} className="text-[var(--color-primary)]" /> Causal lift <span className="text-xs font-normal text-[var(--color-muted)]">(vs {lift?.holdout_pct ?? 10}% randomized holdout)</span></p>
+            {!lift || (lift.treatment.tenants === 0 && lift.control.tenants === 0) ? (
+              <p className="text-xs text-[var(--color-muted)]">No holdout data yet — once the daily job runs with a holdout (set <span className="font-mono">WINBACK_HOLDOUT_PCT</span>), treated vs held-out returns are compared here.</p>
+            ) : (
+              <>
+                {lift.status === "ok" ? (
+                  <>
+                    <p className="mt-1 flex items-center gap-2 flex-wrap">
+                      <span className="text-3xl font-bold tabular-nums">{lift.lift_pp != null && lift.lift_pp > 0 ? "+" : ""}{lift.lift_pp}pp</span>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full ${lift.significant ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)]" : "bg-[var(--color-bg)] text-[var(--color-muted)]"}`}>{lift.significant ? "significant (p<0.05)" : "not yet significant"}</span>
+                    </p>
+                    <p className="text-xs text-[var(--color-muted)] mt-1">95% CI {lift.lift_ci95?.[0]} to {lift.lift_ci95?.[1]}pp · Fisher p={lift.p_value} · can only detect lifts ≳{lift.mde_pp}pp at this sample</p>
+                  </>
+                ) : (
+                  <p className="mt-1 text-sm">Building — need ≥{lift.min_per_arm} businesses in each arm before a lift is meaningful (treated {lift.treatment.tenants}, holdout {lift.control.tenants}).</p>
+                )}
+                <div className="mt-3 space-y-1">
+                  {([["Treated (nudged)", lift.treatment], ["Holdout (not nudged)", lift.control]] as const).map(([label, a]) => (
+                    <div key={label} className="flex items-center justify-between text-sm">
+                      <span className="text-[var(--color-muted)] text-xs">{label}</span>
+                      <span className="tabular-nums text-xs">{a.rate != null ? `${a.rate}%` : "—"} {a.ci95 ? <span className="text-[var(--color-muted)]">(CI {a.ci95[0]}–{a.ci95[1]})</span> : null} · {a.reactivated}/{a.tenants}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-[var(--color-muted)] mt-3 leading-relaxed">{lift.caveat}</p>
               </>
             )}
           </div>

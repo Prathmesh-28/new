@@ -4,6 +4,7 @@
 // overview() powers the admin dashboard (funnel / active users / top events /
 // segments), tenant-scoped for an owner or platform-wide for super_admin.
 const { pool } = require("../../db");
+const crypto = require("crypto");
 
 class AnalyticsError extends Error {
   constructor(code, message, http = 400) { super(message); this.code = code; this.http = http; }
@@ -210,13 +211,15 @@ const REASON_LABEL = {
 // and that haven't already been nudged within cooldownDays.
 async function findDormant(scopeTenantId, { idleDays, cooldownDays } = {}) {
   const idle = ci(idleDays, 14, 1, 180), cool = ci(cooldownDays, 30, 1, 180);
-  const args = []; let scopeCond = "";
-  if (scopeTenantId) { args.push(scopeTenantId); scopeCond = `WHERE tenant_id=$${args.length}`; }
+  // last_seen counts REAL user activity only — our own nudge/holdout rows are not the
+  // user being active, so they must not reset the dormancy clock.
+  const args = []; let lastWhere = "WHERE event NOT IN ('winback_nudge','winback_holdout')";
+  if (scopeTenantId) { args.push(scopeTenantId); lastWhere += ` AND tenant_id=$${args.length}`; }
   args.push(idle); const idleIdx = args.length;
   args.push(cool); const coolIdx = args.length;
   const { rows } = await pool.query(
-    `WITH last AS (SELECT tenant_id, MAX(created_at) AS last_seen FROM analytics_events ${scopeCond} GROUP BY tenant_id),
-          nudged AS (SELECT DISTINCT tenant_id FROM analytics_events WHERE event='winback_nudge' AND created_at > now() - ($${coolIdx} * interval '1 day'))
+    `WITH last AS (SELECT tenant_id, MAX(created_at) AS last_seen FROM analytics_events ${lastWhere} GROUP BY tenant_id),
+          nudged AS (SELECT DISTINCT tenant_id FROM analytics_events WHERE event IN ('winback_nudge','winback_holdout') AND created_at > now() - ($${coolIdx} * interval '1 day'))
      SELECT l.tenant_id, l.last_seen, EXTRACT(day FROM now() - l.last_seen)::int AS days_idle
      FROM last l
      WHERE l.last_seen < now() - ($${idleIdx} * interval '1 day')
@@ -271,14 +274,36 @@ async function classifyReason(tenantId, daysIdle) {
 // Nudge each dormant business via WhatsApp → email → in-app alert (whichever is
 // available), and record a 'winback_nudge' event so we don't re-nudge within the
 // cooldown. dryRun records the decision without actually sending (used by tests).
+// Holdout assignment: a stable, deterministic per-tenant bucket [0,99] (md5 of the
+// id, unsigned). A business is CONTROL iff bucket < holdoutPct — same business every
+// run, so it never flips arms. Permanent (not per-episode) so a tenant's own past
+// nudges can never contaminate a later holdout episode.
+function holdoutBucket(tenantId) {
+  const h = crypto.createHash("md5").update("winback:" + String(tenantId).trim()).digest();
+  return (h.readUInt32BE(0) >>> 0) % 100;
+}
+function holdoutPctEnv() {
+  const v = parseInt(process.env.WINBACK_HOLDOUT_PCT ?? "10", 10); // 0 disables; unset → 10
+  return Number.isFinite(v) ? Math.min(Math.max(v, 0), 50) : 10;
+}
+
 async function runWinback({ idleDays, cooldownDays, dryRun = false, scopeTenantId = null } = {}) {
   const dormant = await findDormant(scopeTenantId, { idleDays, cooldownDays });
   const waLive = !!(process.env.TWILIO_ACCOUNT_SID && String(process.env.TWILIO_ACCOUNT_SID).trim());
   const mailLive = !!(process.env.SMTP_USER && String(process.env.SMTP_USER).trim());
+  const holdoutPct = holdoutPctEnv();
   const channels = {}, reasons = {};
+  let treated = 0, held = 0;
   for (const t of dormant) {
-    const c = await firmContact(t.tenant_id);
     const { reason, amount } = await classifyReason(t.tenant_id, t.days_idle);
+    // CONTROL: record a symmetric decision row but send nothing, so lift can compare
+    // returns at the same decision point. (holdoutPct=0 disables → everyone treated.)
+    if (holdoutPct > 0 && holdoutBucket(t.tenant_id) < holdoutPct) {
+      held++;
+      await track(t.tenant_id, null, { event: "winback_holdout", props: { reason, days_idle: t.days_idle, group: "control", holdout_pct: holdoutPct, ...(amount ? { amount } : {}) } }).catch(() => {});
+      continue;
+    }
+    const c = await firmContact(t.tenant_id);
     const msg = (REASON_MSG[reason] || REASON_MSG.dormant_generic)(c.name, t.days_idle, amount);
     let channel = "alert";
     if (dryRun) channel = "dry";
@@ -289,12 +314,13 @@ async function runWinback({ idleDays, cooldownDays, dryRun = false, scopeTenantI
         else { await pool.query("INSERT INTO alerts(tenant_id, rule_id, severity, title, message, meta) VALUES($1,NULL,'info',$2,$3,$4)", [t.tenant_id, "We miss you", msg, JSON.stringify({ kind: "winback", days_idle: t.days_idle, reason })]).catch(() => {}); channel = "alert"; }
       } catch (e) { try { console.warn("[winback] send failed", t.tenant_id, e.message); } catch {} channel = "failed"; }
     }
+    treated++;
     channels[channel] = (channels[channel] || 0) + 1;
     reasons[reason] = (reasons[reason] || 0) + 1;
     // Don't burn the 30-day cooldown on a failed send — leave the tenant eligible for retry.
-    if (channel !== "failed") await track(t.tenant_id, null, { event: "winback_nudge", props: { channel, days_idle: t.days_idle, reason, ...(amount ? { amount } : {}) } }).catch(() => {});
+    if (channel !== "failed") await track(t.tenant_id, null, { event: "winback_nudge", props: { channel, days_idle: t.days_idle, reason, holdout_pct: holdoutPct, ...(amount ? { amount } : {}) } }).catch(() => {});
   }
-  return { scanned: dormant.length, channels, reasons };
+  return { scanned: dormant.length, treated, holdout: held, holdout_pct: holdoutPct, channels, reasons };
 }
 
 // ── Did the nudges work? Win-back → reactivation funnel ───────────────────────
@@ -321,7 +347,7 @@ async function reactivation(scopeTenantId, { windowDays } = {}) {
      ), scored AS (
        SELECT n.reason, n.channel, n.matured,
               EXISTS (SELECT 1 FROM analytics_events ae
-                      WHERE ae.tenant_id=n.tenant_id AND ae.event <> 'winback_nudge'
+                      WHERE ae.tenant_id=n.tenant_id AND ae.event NOT IN ('winback_nudge','winback_holdout')
                         AND ae.created_at >  n.created_at
                         AND ae.created_at <= n.created_at + ($2::int * interval '1 day')
                         AND ae.created_at <  COALESCE(n.next_nudge_at, 'infinity'::timestamptz)) AS reactivated
@@ -353,4 +379,102 @@ async function reactivation(scopeTenantId, { windowDays } = {}) {
   };
 }
 
-module.exports = { AnalyticsError, track, saveProfile, getProfile, overview, retention, findDormant, classifyReason, runWinback, reactivation, hasAnalyticsConsent };
+// ── Causal lift: win-back vs a randomized holdout ─────────────────────────────
+// Small-sample-correct statistics (the rates here live at small n and boundary
+// proportions, where the normal/Wald approximations break):
+//   • significance  → Fisher's exact test (exact at any n; no large-sample assumption)
+//   • lift CI        → Agresti-Caffo (add-1-success/1-failure per arm; robust at 0%/100%)
+//   • per-arm CI     → Wilson score (honest bounds when an arm is 0/n or n/n)
+// The unit is ONE observation per tenant per arm (a tenant is re-recorded each cooldown;
+// counting each row would be pseudo-replication and inflate significance), so the
+// outcome is "did this business return at least once after a decision".
+function lnGamma(x) {
+  const c = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+  let y = x, t = x + 5.5; t -= (x + 0.5) * Math.log(t); let s = 1.000000000190015;
+  for (let j = 0; j < 6; j++) s += c[j] / ++y;
+  return -t + Math.log(2.5066282746310005 * s / x);
+}
+const lnFact = (n) => lnGamma(n + 1);
+const lnChoose = (n, k) => (k < 0 || k > n ? -Infinity : lnFact(n) - lnFact(k) - lnFact(n - k));
+// Two-tailed Fisher exact for the 2×2 [[a,b],[c,d]] with fixed margins.
+function fisherExact(a, b, c, d) {
+  const n = a + b + c + d, r1 = a + b, c1 = a + c;
+  if (n === 0) return 1;
+  const lp = (x) => lnChoose(r1, x) + lnChoose(n - r1, c1 - x) - lnChoose(n, c1);
+  const obs = lp(a), thr = obs + Math.log(1 + 1e-7);
+  const lo = Math.max(0, c1 - (n - r1)), hi = Math.min(r1, c1);
+  let p = 0;
+  for (let x = lo; x <= hi; x++) { const v = lp(x); if (v <= thr) p += Math.exp(v); }
+  return Math.min(1, p);
+}
+function wilson(x, n) { // 95% score interval, returned as percent [lo,hi]
+  if (n === 0) return null;
+  const z = 1.96, p = x / n, d = 1 + z * z / n;
+  const c = (p + z * z / (2 * n)) / d, h = (z / d) * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n));
+  return [Math.max(0, Math.round((c - h) * 1000) / 10), Math.min(100, Math.round((c + h) * 1000) / 10)];
+}
+function acDiff(a, n1, c, n2) { // Agresti-Caffo 95% CI for p1−p2, returned as percentage points
+  const p1 = (a + 1) / (n1 + 2), p2 = (c + 1) / (n2 + 2);
+  const se = Math.sqrt(p1 * (1 - p1) / (n1 + 2) + p2 * (1 - p2) / (n2 + 2)), dlt = p1 - p2;
+  return [Math.round(Math.max(-1, dlt - 1.96 * se) * 1000) / 10, Math.round(Math.min(1, dlt + 1.96 * se) * 1000) / 10];
+}
+const WINBACK_LIFT_MIN = 5; // per-arm floor below which we show "building", not a rate
+function liftStats(a, n1, c, n2) {
+  const rate = (x, n) => (n > 0 ? Math.round((x / n) * 1000) / 10 : null);
+  const treatment = { tenants: n1, reactivated: a, rate: rate(a, n1), ci95: wilson(a, n1) };
+  const control = { tenants: n2, reactivated: c, rate: rate(c, n2), ci95: wilson(c, n2) };
+  if (n1 < WINBACK_LIFT_MIN || n2 < WINBACK_LIFT_MIN) {
+    return { status: "building", min_per_arm: WINBACK_LIFT_MIN, treatment, control, lift_pp: null, lift_ci95: null, significant: null, p_value: null, mde_pp: null };
+  }
+  const p = fisherExact(a, n1 - a, c, n2 - c);
+  const pPool = (a + c) / (n1 + n2);
+  const mde = 2.80 * Math.sqrt(pPool * (1 - pPool) * (1 / n1 + 1 / n2)); // ≈(z.975+z.80)·SE, 80% power
+  return {
+    status: "ok", min_per_arm: WINBACK_LIFT_MIN, treatment, control,
+    lift_pp: Math.round((a / n1 - c / n2) * 1000) / 10,
+    lift_ci95: acDiff(a, n1, c, n2),
+    significant: p < 0.05, p_value: Math.round(p * 1e4) / 1e4,
+    mde_pp: Math.round(mde * 1000) / 10,
+  };
+}
+
+// Treatment-vs-holdout lift. One Bernoulli per tenant per arm (collapsed via bool_or),
+// arm tagged by the RECORDED event type (never re-hashed, so changing the holdout %
+// can't relabel history). Same attribution as reactivation() (real event strictly
+// after the decision, within window, before the next decision). dry-run excluded.
+async function winbackLift(scopeTenantId, { windowDays } = {}) {
+  const w = ci(windowDays, 14, 1, 180);
+  const { rows } = await pool.query(
+    `WITH decisions AS (
+       SELECT ae.tenant_id, ae.created_at,
+              CASE WHEN ae.event='winback_holdout' THEN 'control' ELSE 'treatment' END AS grp,
+              COALESCE(ae.props->>'channel','') AS channel,
+              LEAD(ae.created_at) OVER (PARTITION BY ae.tenant_id ORDER BY ae.created_at) AS next_at,
+              (ae.created_at <= now() - ($2::int * interval '1 day')) AS matured
+       FROM analytics_events ae
+       WHERE ae.event IN ('winback_nudge','winback_holdout') AND ($1::text IS NULL OR ae.tenant_id=$1::text)
+     ), scored AS (
+       SELECT d.tenant_id, d.grp,
+              EXISTS (SELECT 1 FROM analytics_events r
+                      WHERE r.tenant_id=d.tenant_id AND r.event NOT IN ('winback_nudge','winback_holdout')
+                        AND r.created_at >  d.created_at
+                        AND r.created_at <= d.created_at + ($2::int * interval '1 day')
+                        AND r.created_at <  COALESCE(d.next_at,'infinity'::timestamptz)) AS reactivated
+       FROM decisions d WHERE d.matured AND d.channel <> 'dry'
+     ), per_tenant AS (
+       SELECT tenant_id, grp, bool_or(reactivated) AS reactivated FROM scored GROUP BY tenant_id, grp
+     )
+     SELECT grp, COUNT(*)::int AS n, COUNT(*) FILTER (WHERE reactivated)::int AS reactivated
+       FROM per_tenant GROUP BY grp`, [scopeTenantId || null, w]
+  );
+  const arm = (g) => rows.find((r) => r.grp === g) || { n: 0, reactivated: 0 };
+  const tr = arm("treatment"), co = arm("control");
+  const holdout_pct = holdoutPctEnv();
+  return {
+    scope: scopeTenantId ? "tenant" : "platform", window_days: w, holdout_pct,
+    ...liftStats(Number(tr.reactivated), Number(tr.n), Number(co.reactivated), Number(co.n)),
+    caveat: `Incremental lift of the win-back message vs a permanent randomized holdout (~${holdout_pct}% of businesses, assigned by a stable hash of business id — never sent the nudge). It is the EXTRA returns the message produces on top of the daily cash digest and overdue-invoice reminders, which every business including the holdout still receives — not nudge-vs-silence. Measured among businesses dormant 14-90 days, each counted once. Significance is Fisher's exact on the overall comparison only; arm balance is assumed, not enforced. The holdout is a real, ongoing cost: those businesses are deliberately not nudged so we can keep measuring whether the nudge works.`,
+  };
+}
+
+module.exports = { AnalyticsError, track, saveProfile, getProfile, overview, retention, findDormant, classifyReason, runWinback, reactivation, liftStats, winbackLift, holdoutBucket, hasAnalyticsConsent };

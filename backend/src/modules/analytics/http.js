@@ -62,6 +62,9 @@ router.get("/dormant", canViewAnalytics, async (req, res) => {
 router.get("/reactivation", canViewAnalytics, async (req, res) => {
   try { res.json(await analytics.reactivation(scopeOf(req), { windowDays: req.query.window_days })); } catch (e) { fail(res, e); }
 });
+router.get("/winback/lift", canViewAnalytics, async (req, res) => {
+  try { res.json(await analytics.winbackLift(scopeOf(req), { windowDays: req.query.window_days })); } catch (e) { fail(res, e); }
+});
 router.post("/winback/run", canViewAnalytics, async (req, res) => {
   try {
     res.json(await analytics.runWinback({
