@@ -1,7 +1,7 @@
-// platformtools.js — cross-domain READ tools for the Agent Studio.
+// platformtools.js - cross-domain READ tools for the Agent Studio.
 //
-// These let an agent reach the WHOLE business — cash, bank balances, transactions,
-// receivables, alerts and the cash forecast — not just the books ledger. They read
+// These let an agent reach the WHOLE business - cash, bank balances, transactions,
+// receivables, alerts and the cash forecast - not just the books ledger. They read
 // the tenant's app store (the same KV the WhatsApp assistant and CFO brief use) and
 // return COMPACT, JSON-able results (big arrays trimmed). All are scope:"read", so
 // they execute inline during a run with no approval step. Same tool contract as
@@ -18,7 +18,7 @@ function trim(arr, n = TOP) {
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 
 // Load the tenant's persisted app store (bankAccounts, transactions, invoices,
-// alerts, forecast, …). Mirrors whatsapp.js getTenantData — the store lives in the
+// alerts, forecast, …). Mirrors whatsapp.js getTenantData - the store lives in the
 // kv_store under key='store'; the real payload is row.value.value.
 async function loadStore(tenantId) {
   const { rows } = await pool.query(
@@ -116,7 +116,7 @@ const TOOLS = {
     scope: "read",
     schema: { type: "function", function: {
       name: "get_receivables",
-      description: "Customer invoices owed to the business — total outstanding, overdue (past due date) and due-soon. Use for 'who owes us', 'overdue invoices', 'collections'. (This is the operational invoices view; for the posted-ledger AR aging use get_overdue_receivables.)",
+      description: "Customer invoices owed to the business - total outstanding, overdue (past due date) and due-soon. Use for 'who owes us', 'overdue invoices', 'collections'. (This is the operational invoices view; for the posted-ledger AR aging use get_overdue_receivables.)",
       parameters: NO_ARGS } },
     async run(tenantId) {
       const d = await loadStore(tenantId);

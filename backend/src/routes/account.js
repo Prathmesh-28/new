@@ -9,7 +9,7 @@ const logger = require("../lib/logger");
 // product; the rest are opt-in under India's DPDP Act.
 const PURPOSES = ["essential", "marketing", "lending_partners", "analytics"];
 
-// GET /api/consent — the current user's consent ledger (defaults applied).
+// GET /api/consent - the current user's consent ledger (defaults applied).
 router.get("/consent", authenticate, async (req, res) => {
   const { rows } = await pool.query(
     "SELECT purpose, granted, version, updated_at FROM consents WHERE user_id=$1",
@@ -24,7 +24,7 @@ router.get("/consent", authenticate, async (req, res) => {
   })));
 });
 
-// POST /api/consent — grant/withdraw a single purpose.
+// POST /api/consent - grant/withdraw a single purpose.
 router.post("/consent", authenticate, validateBody({
   purpose: { type: "string", required: true, enum: PURPOSES },
   granted: { type: "boolean", required: true },
@@ -42,7 +42,7 @@ router.post("/consent", authenticate, validateBody({
   res.json({ ok: true });
 });
 
-// GET /api/account/export — DPDP right to access/portability. Bundles the
+// GET /api/account/export - DPDP right to access/portability. Bundles the
 // tenant's stored data into a single JSON download.
 router.get("/export", authenticate, async (req, res) => {
   const t = req.user.tenant_id;
@@ -61,7 +61,7 @@ router.get("/export", authenticate, async (req, res) => {
   res.send(JSON.stringify(out, null, 2));
 });
 
-// POST /api/account/deletion-request — DPDP right to erasure. Recorded as a
+// POST /api/account/deletion-request - DPDP right to erasure. Recorded as a
 // REQUEST (not an immediate hard delete) because RBI/tax rules require certain
 // financial records to be retained for a statutory period before purge.
 // Requires the owner to re-enter their password.

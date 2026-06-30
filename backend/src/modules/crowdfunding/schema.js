@@ -1,7 +1,7 @@
 "use strict";
-// Rewards (pre-order) crowdfunding — Keep-it-All core. Self-contained tenant-scoped
+// Rewards (pre-order) crowdfunding - Keep-it-All core. Self-contained tenant-scoped
 // tables; only dependency is collab_uuidv7() (applied earlier in initDb) for sortable
-// PKs + keyset pagination. A backer is a CUSTOMER (own table) — NOT an investor, so
+// PKs + keyset pagination. A backer is a CUSTOMER (own table) - NOT an investor, so
 // this never touches the equity capital_raises/investors model. The campaigns.status
 // enum IS the state machine (guarded in http.js / index.js).
 const CROWDFUNDING_SCHEMA = `

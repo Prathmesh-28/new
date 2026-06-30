@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Sparkles, Loader2 } from "lucide-react";
 
 /**
- * Drop-in "✨ Draft with AI" button for any text field — generates a short message
+ * Drop-in "✨ Draft with AI" button for any text field - generates a short message
  * (reminder, email, note, description) into the field via onInsert. Reusable so AI
  * drafting shows up everywhere text is entered. Degrades gracefully when AI is off.
  */
@@ -20,7 +20,7 @@ interface Props {
 }
 
 const DEFAULT_SYSTEM =
-  "You draft short, professional, friendly messages for an Indian SMB. Output ONLY the message text — no preamble, no quotes. Keep it concise. Use ₹ where money is mentioned.";
+  "You draft short, professional, friendly messages for an Indian SMB. Output ONLY the message text - no preamble, no quotes. Keep it concise. Use ₹ where money is mentioned.";
 
 export default function AiDraft({ prompt, context, onInsert, label = "Draft with AI", system, size = "sm", className }: Props) {
   const [busy, setBusy] = useState(false);
@@ -32,7 +32,7 @@ export default function AiDraft({ prompt, context, onInsert, label = "Draft with
         system: system || DEFAULT_SYSTEM,
         messages: [{ role: "user", content: `Write ${prompt}.${ctx}` }],
       });
-      if (res?.content?.trim()) { onInsert(res.content.trim()); toast.success("Draft inserted — edit before sending"); }
+      if (res?.content?.trim()) { onInsert(res.content.trim()); toast.success("Draft inserted - edit before sending"); }
       else toast.error("Couldn't generate a draft");
     } catch (e) {
       toast.error(humanizeAiError(e));

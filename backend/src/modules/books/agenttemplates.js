@@ -1,4 +1,4 @@
-// agenttemplates.js — curated agent-template marketplace for the books module.
+// agenttemplates.js - curated agent-template marketplace for the books module.
 //
 // Surface (CONTRACT):
 //   listTemplates() -> [{ id, name, description, instructions, tools:[toolNames], suggestedModel }]
@@ -39,7 +39,7 @@ const TEMPLATES = [
       "You are a Cash-flow Watchdog. Use get_cash_flow to assess inflows and outflows and get_trial_balance to " +
       "sanity-check balances. Highlight any negative or thin runway, call out the largest swings, and explain the " +
       "likely drivers in plain language. End with 2-3 concrete, prioritised actions the owner can take this week. " +
-      "Do not fabricate figures — only report what the tools return.",
+      "Do not fabricate figures - only report what the tools return.",
     tools: ["get_cash_flow", "get_trial_balance"],
     suggestedModel: SUGGESTED_MODEL,
   },
@@ -52,7 +52,7 @@ const TEMPLATES = [
       "You are a GST Filing Helper. Use get_gst_3b_summary to pull the GSTR-3B figures for the period. " +
       "Summarise outward and inward supplies, tax payable and input tax credit, and flag anything that looks " +
       "off (e.g. zero liability with sales, or ITC larger than expected). Present a clear filing checklist. " +
-      "You are not a substitute for a CA's sign-off — say so when the numbers are ambiguous.",
+      "You are not a substitute for a CA's sign-off - say so when the numbers are ambiguous.",
     tools: ["get_gst_3b_summary"],
     suggestedModel: SUGGESTED_MODEL,
   },
@@ -89,7 +89,7 @@ const TEMPLATES = [
       "You are Reorder Watch. Use get_stock_summary to inspect current inventory. Identify items that are low or " +
       "out of stock, estimate which are most urgent based on quantity on hand, and produce a prioritised reorder " +
       "list. Be clear about what is genuinely low versus merely below a comfortable buffer. Do not create purchase " +
-      "orders yourself — just recommend.",
+      "orders yourself - just recommend.",
     tools: ["get_stock_summary"],
     suggestedModel: SUGGESTED_MODEL,
   },
@@ -112,7 +112,7 @@ const TEMPLATES = [
     id: "cash-runway-sentinel",
     name: "Cash Runway Sentinel",
     description:
-      "Watches your cash runway and warns you — with the reason — when it gets tight, so you're never surprised.",
+      "Watches your cash runway and warns you - with the reason - when it gets tight, so you're never surprised.",
     instructions:
       "You are the Cash Runway Sentinel. Use get_business_snapshot and get_bank_balances for current cash and burn, " +
       "and get_cash_forecast for the projected path. State the current runway in days and whether it is healthy " +
@@ -143,7 +143,7 @@ const TEMPLATES = [
       "You are a Spend Investigator. Use list_transactions (type 'expense') to review recent outflows. Group by " +
       "category and counterparty, surface the largest and any that look unusual or off-pattern, and call out " +
       "possible duplicates or one-offs. Present a tight 'worth a look' list with ₹ amounts and dates. Do not accuse " +
-      "— flag for review. Only report what the data shows.",
+      "- flag for review. Only report what the data shows.",
     tools: ["list_transactions"],
     suggestedModel: SUGGESTED_MODEL,
   },
@@ -153,7 +153,7 @@ const TEMPLATES = [
     id: "who-to-pay-first",
     name: "Who Do I Pay First?",
     description:
-      "Given your cash on hand and what's due, recommends the smartest order to pay vendors this week — protecting key suppliers and legal deadlines.",
+      "Given your cash on hand and what's due, recommends the smartest order to pay vendors this week - protecting key suppliers and legal deadlines.",
     instructions:
       "You are a payments prioritiser for an Indian SMB owner. Use get_business_snapshot for cash & runway, " +
       "get_payables for what's owed and when, and get_receivables to see incoming cash. Recommend a concrete pay order " +
@@ -180,7 +180,7 @@ const TEMPLATES = [
     id: "cash-crunch-plan",
     name: "Cash-Crunch Action Plan",
     description:
-      "Spots an upcoming shortfall and lays out the levers — chase receivables, defer payables within terms, or draw credit.",
+      "Spots an upcoming shortfall and lays out the levers - chase receivables, defer payables within terms, or draw credit.",
     instructions:
       "You are a cash-crunch planner. Use get_cash_forecast and get_business_snapshot to find if/when cash goes tight, " +
       "get_receivables for collectable cash, and get_payables for deferrable outflows. If a shortfall is coming, give a " +

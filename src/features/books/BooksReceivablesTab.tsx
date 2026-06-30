@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES (loose — backend response shapes inlined)
+// TYPES (loose - backend response shapes inlined)
 // ─────────────────────────────────────────────────────────────────────────────
 interface LedgerLite {
   id: string;
@@ -301,9 +301,9 @@ function AgingSection() {
               <tr className="border-b border-[var(--color-border)]">
                 <Th>Party</Th>
                 <Th right>Not Due</Th>
-                <Th right>0–30</Th>
-                <Th right>31–60</Th>
-                <Th right>61–90</Th>
+                <Th right>0-30</Th>
+                <Th right>31-60</Th>
+                <Th right>61-90</Th>
                 <Th right>90+</Th>
                 <Th right>Total</Th>
               </tr>
@@ -462,8 +462,8 @@ function StatementSection({ parties }: { parties: LedgerLite[] }) {
                     <tr key={`${l.date}-${i}`} className="border-b border-[var(--color-border)]">
                       <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{l.date}</td>
                       <td className="px-3 py-2.5 font-mono text-xs">{l.voucher}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{num(l.debit) ? rupee(l.debit) : "—"}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{num(l.credit) ? rupee(l.credit) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{num(l.debit) ? rupee(l.debit) : "-"}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{num(l.credit) ? rupee(l.credit) : "-"}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{rupee(l.balance)}</td>
                     </tr>
                   ))
@@ -602,7 +602,7 @@ function OpenBillsSection({ parties }: { parties: LedgerLite[] }) {
                   <tr key={b.voucherId} className="border-b border-[var(--color-border)] last:border-b-0">
                     <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{b.date}</td>
                     <td className="px-3 py-2.5 font-mono text-xs">{b.voucherNumber}</td>
-                    <td className="px-3 py-2.5 capitalize text-xs">{b.kind ?? "—"}</td>
+                    <td className="px-3 py-2.5 capitalize text-xs">{b.kind ?? "-"}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{rupee(b.amount)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums font-semibold">{rupee(b.outstanding)}</td>
                   </tr>

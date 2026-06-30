@@ -4,7 +4,7 @@ import autoTable from "jspdf-autotable";
 import html2canvas from "html2canvas";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared export helpers — turn statement/analytics data into downloadable
+// Shared export helpers - turn statement/analytics data into downloadable
 // Excel workbooks (multi-sheet) and branded PDFs (multi-table). Client-side only.
 // ─────────────────────────────────────────────────────────────────────────────
 

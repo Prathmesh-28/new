@@ -41,7 +41,7 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
   res.status(201).json(rows[0]);
 });
 
-// GET /api/files — list
+// GET /api/files - list
 router.get("/", authenticate, async (req, res) => {
   const { rows } = await pool.query(
     "SELECT id,name,mime_type,size,created_at,category,tags,expires_at FROM files WHERE tenant_id=$1 ORDER BY created_at DESC",
@@ -50,7 +50,7 @@ router.get("/", authenticate, async (req, res) => {
   res.json(rows);
 });
 
-// GET /api/files/:id — download
+// GET /api/files/:id - download
 router.get("/:id", authenticate, async (req, res) => {
   const { rows } = await pool.query(
     "SELECT name,mime_type,data FROM files WHERE id=$1 AND tenant_id=$2",

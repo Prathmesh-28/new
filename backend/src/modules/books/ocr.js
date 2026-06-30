@@ -1,10 +1,10 @@
-// §M8 — receipt OCR hook. Provider-agnostic; env-gated. Without a provider it
+// §M8 - receipt OCR hook. Provider-agnostic; env-gated. Without a provider it
 // returns a clean manual-entry fallback (no fake extraction).
 const isConfigured = () => !!(process.env.OCR_PROVIDER_URL && process.env.OCR_API_KEY);
 
 async function parseReceipt({ imageUrl }) {
   if (!isConfigured()) {
-    return { parsed: false, note: "OCR provider not configured — enter the expense manually, or set OCR_PROVIDER_URL / OCR_API_KEY to auto-extract amount, date and vendor." };
+    return { parsed: false, note: "OCR provider not configured - enter the expense manually, or set OCR_PROVIDER_URL / OCR_API_KEY to auto-extract amount, date and vendor." };
   }
   try {
     const resp = await fetch(process.env.OCR_PROVIDER_URL, {

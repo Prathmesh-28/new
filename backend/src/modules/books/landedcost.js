@@ -1,7 +1,7 @@
-// §8.L — LANDED COST VOUCHER (landed_cost_voucher, ported in spirit from
+// §8.L - LANDED COST VOUCHER (landed_cost_voucher, ported in spirit from
 // frappe/erpnext stock/doctype/landed_cost_voucher). Goods rarely cost only their
 // invoice price: freight, customs duty, insurance, clearing & forwarding all land
-// on the goods and must be CAPITALISED into stock value — not expensed — so COGS
+// on the goods and must be CAPITALISED into stock value - not expensed - so COGS
 // and closing-stock are right. This voucher takes a set of already-received items
 // and a set of additional charges, APPORTIONS each charge across the receipts by a
 // chosen basis (qty / amount / weight), bumps each receipt's valuation rate, and
@@ -19,9 +19,9 @@ const today = () => new Date().toISOString().slice(0, 10);
 const BASES = new Set(["QTY", "AMOUNT", "WEIGHT"]);
 
 // ── Pure apportionment ────────────────────────────────────────────────────────
-// items:  [{ itemId, qty, amount, weight }] — the received items the charges land on
+// items:  [{ itemId, qty, amount, weight }] - the received items the charges land on
 //         (amount = receipt value used for the AMOUNT basis; weight optional).
-// charges:[{ ledgerName, amount, basis }]   — each cost, with its own basis.
+// charges:[{ ledgerName, amount, basis }]   - each cost, with its own basis.
 // Returns { perItem: Map(itemId → addlCost money), perCharge: [{...,distributed}],
 //           totalCharge }. Distribution weights come from the row's value for the
 // chosen basis; a zero total-basis falls back to QTY, then to equal split, so a
@@ -86,7 +86,7 @@ function apportion(items, charges) {
 // bumps each affected item's current_value by its apportioned cost AND lifts its
 // open FIFO lots' rate proportionally, persists the LCV record, then re-values via
 // reposting.repostFromDate so every downstream issue is re-priced and the GL net
-// is corrected. All ledger lookups go through ledgerIdByName — a missing charge
+// is corrected. All ledger lookups go through ledgerIdByName - a missing charge
 // ledger throws NOT_SEEDED (we never invent ledgers).
 async function createLandedCost(tenantId, actorId, input = {}, opts = {}) {
   const date = input.date || today();
@@ -94,18 +94,18 @@ async function createLandedCost(tenantId, actorId, input = {}, opts = {}) {
   if (!gt(totalCharge, 0)) throw new PostError("BAD_INPUT", "total landed cost is zero", 422);
 
   const adjLedger = await ledgerIdByName(tenantId, "Stock Adjustment");
-  if (!adjLedger) throw new PostError("NOT_SEEDED", "Stock Adjustment ledger missing — seed the books first", 422);
+  if (!adjLedger) throw new PostError("NOT_SEEDED", "Stock Adjustment ledger missing - seed the books first", 422);
   // Resolve each charge ledger up front (fail fast before we post anything).
   const chargeLedgers = [];
   for (const c of perCharge) {
     const lid = await ledgerIdByName(tenantId, c.ledgerName);
-    if (!lid) throw new PostError("NOT_SEEDED", `Charge ledger '${c.ledgerName}' missing — create it first`, 422);
+    if (!lid) throw new PostError("NOT_SEEDED", `Charge ledger '${c.ledgerName}' missing - create it first`, 422);
     chargeLedgers.push({ ledgerId: lid, amount: c.amount, ledgerName: c.ledgerName });
   }
 
   // 1. Charge voucher: Dr Stock Adjustment (Σ charges) / Cr each charge ledger
   // (e.g. Freight Payable / Customs Duty Payable / Insurance). Stock Adjustment is
-  // a WASH account here — step 3's repost posts the matching Dr Stock-in-hand / Cr
+  // a WASH account here - step 3's repost posts the matching Dr Stock-in-hand / Cr
   // Stock Adjustment, so the net is Dr Stock-in-hand / Cr charge ledgers (the charge
   // is capitalised into stock) with no double-count of Stock-in-hand.
   const entries = [{ ledgerId: adjLedger, debit: toDb(totalCharge), credit: "0" }];
@@ -117,7 +117,7 @@ async function createLandedCost(tenantId, actorId, input = {}, opts = {}) {
   // 2. Capitalise into the RECEIPT cost basis: distribute each item's apportioned
   // charge across that item's INWARD movements on/after `date`, bumping their SLE
   // rate + value AND lifting the matching FIFO lots' rate. The inward rate is the
-  // single authoritative input the reposting replay trusts — so once we correct it
+  // single authoritative input the reposting replay trusts - so once we correct it
   // there, step 3's repost re-derives item value, lot consumption, downstream issue
   // rates and the GL net from the corrected basis. Spreading is by inward qty.
   const client = await pool.connect();
@@ -192,7 +192,7 @@ async function createLandedCost(tenantId, actorId, input = {}, opts = {}) {
 
   // 3. Re-value via the reposting path: replay each affected item from `date` so
   // every downstream issue is re-priced. We pass skip of the GL delta by letting
-  // reposting post its own correction — but here the value bump we just made IS the
+  // reposting post its own correction - but here the value bump we just made IS the
   // new closing, so the repost delta nets to ~0 and simply rewrites the SLE rates.
   const reposting = require("./reposting");
   const revaluations = [];
@@ -204,7 +204,7 @@ async function createLandedCost(tenantId, actorId, input = {}, opts = {}) {
   // 4. COGS true-up for the ALREADY-ISSUED share of the freight.
   // The charge voucher (step 1) debited the FULL charge to the Stock Adjustment wash
   // account. The repost correction (step 3) only Dr Stock-in-hand by the CLOSING-stock
-  // valuation delta — i.e. the freight on the stock that is still on hand. Any of the
+  // valuation delta - i.e. the freight on the stock that is still on hand. Any of the
   // received stock that was ISSUED before this LCV carries its share of the freight
   // straight into COGS (the historical issue under-stated cost). That consumed share
   // is otherwise STRANDED as a Dr balance in Stock Adjustment with no offsetting leg.
@@ -231,7 +231,7 @@ async function createLandedCost(tenantId, actorId, input = {}, opts = {}) {
   let cogsCorrection = null;
   if (gt(consumedTotal, 0)) {
     const cogsLedger = await ledgerIdByName(tenantId, "Cost of Goods Sold");
-    if (!cogsLedger) throw new PostError("NOT_SEEDED", "Cost of Goods Sold ledger missing — seed the books first", 422);
+    if (!cogsLedger) throw new PostError("NOT_SEEDED", "Cost of Goods Sold ledger missing - seed the books first", 422);
     cogsCorrection = await postVoucher(tenantId, actorId,
       { voucherType: "JOURNAL", voucherDate: date, reference: input.reference || null,
         narration: `Landed cost COGS true-up (freight on issued stock ${toDb(consumedTotal)})`, source: "landed-cost" },

@@ -42,7 +42,7 @@ export default function SalesPage() {
             <Briefcase size={18} className="text-[var(--color-primary)]" /> Sales &amp; CRM
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Capture leads, run a pipeline, quote with GST, track commissions and targets — built for India's SMB sales teams.
+            Capture leads, run a pipeline, quote with GST, track commissions and targets - built for India's SMB sales teams.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -174,9 +174,9 @@ type CrmLead = { id: string; name: string; phone: string | null; source: string 
 
 function crmDealToLocal(d: CrmDeal): Deal {
   return {
-    id: d.id, crmId: d.id, title: d.title || "Untitled deal", customer: "—", rep: "Unassigned",
+    id: d.id, crmId: d.id, title: d.title || "Untitled deal", customer: "-", rep: "Unassigned",
     value: Number(d.value || 0), stage: CRM_TO_STAGE[(d.stage || "").toUpperCase()] || "enquiry",
-    source: d.source || "—", expectedClose: new Date().toISOString().split("T")[0],
+    source: d.source || "-", expectedClose: new Date().toISOString().split("T")[0],
   };
 }
 
@@ -230,7 +230,7 @@ function PipelineBoard() {
       setDeals(prev => prev.map(d => d.id === localId ? { ...d, crmId: created.id } : d));
       toast.success("Deal added to the pipeline");
     } catch {
-      toast.message("Deal saved locally — couldn't reach the CRM (will stay on this device)");
+      toast.message("Deal saved locally - couldn't reach the CRM (will stay on this device)");
     } finally {
       setSaving(false);
     }
@@ -253,7 +253,7 @@ function PipelineBoard() {
     } catch {
       // revert on failure so the board reflects the server
       setDeals(prev => prev.map(d => d.id === id ? { ...d, stage: target.stage } : d));
-      toast.error("Couldn't move the deal — reverted");
+      toast.error("Couldn't move the deal - reverted");
     }
   };
 
@@ -276,7 +276,7 @@ function PipelineBoard() {
       toast.success(outcome === "won" ? "Deal marked Won" : "Deal marked Lost");
     } catch {
       setDeals(prev => prev.map(d => d.id === id ? { ...d, stage: target.stage } : d));
-      toast.error("Couldn't update the deal — reverted");
+      toast.error("Couldn't update the deal - reverted");
     }
   };
 
@@ -289,7 +289,7 @@ function PipelineBoard() {
       setDeals(prev => prev.filter(x => x.id !== d.id));
       toast.success("Deal deleted");
     } catch {
-      toast.error("Couldn't delete the deal — it may still be on the server");
+      toast.error("Couldn't delete the deal - it may still be on the server");
     }
   };
 
@@ -411,7 +411,7 @@ function DealTracker() {
         next === "lost" ? { stage: "LOST", lostReason } : { stage: STAGE_TO_CRM[next] });
     } catch {
       setDeals(prev => prev.map(x => x.id === d.id ? { ...x, stage: d.stage } : x));
-      toast.error("Couldn't update the stage — reverted");
+      toast.error("Couldn't update the stage - reverted");
     }
   };
 
@@ -423,12 +423,12 @@ function DealTracker() {
       setDeals(prev => prev.filter(x => x.id !== d.id));
       toast.success("Deal deleted");
     } catch {
-      toast.error("Couldn't delete the deal — it may still be on the server");
+      toast.error("Couldn't delete the deal - it may still be on the server");
     }
   };
 
   if (deals.length === 0) {
-    return <p className="text-xs text-[var(--color-muted)] px-1">No deals yet. Add deals in the Pipeline tab — they appear here as a sortable list with aging.</p>;
+    return <p className="text-xs text-[var(--color-muted)] px-1">No deals yet. Add deals in the Pipeline tab - they appear here as a sortable list with aging.</p>;
   }
 
   const sorted = [...deals].sort((a, b) => b.value - a.value);
@@ -436,7 +436,7 @@ function DealTracker() {
   return (
     <div className={`${CARD} overflow-hidden`}>
       <div className="px-5 py-3 border-b border-[var(--color-border)]">
-        <p className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} className="text-[var(--color-primary)]" /> All Deals — {deals.length}</p>
+        <p className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} className="text-[var(--color-primary)]" /> All Deals - {deals.length}</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[720px]">
@@ -553,11 +553,11 @@ function QuoteToOrder() {
       });
       setConverted(true);
       setOrderRef(inv.invoice_number || null);
-      toast.success(`Invoice ${inv.invoice_number || ""} created for ${buyer.trim()} — ${formatCurrency(Math.round(calc.grand))}`);
+      toast.success(`Invoice ${inv.invoice_number || ""} created for ${buyer.trim()} - ${formatCurrency(Math.round(calc.grand))}`);
     } catch (e) {
       const msg = e instanceof Error && e.message.startsWith("403")
-        ? "Only an owner/admin can raise invoices — ask them to convert this order"
-        : "Couldn't create the invoice — try again";
+        ? "Only an owner/admin can raise invoices - ask them to convert this order"
+        : "Couldn't create the invoice - try again";
       toast.error(msg);
     } finally {
       setCreating(false);
@@ -632,7 +632,7 @@ function QuoteToOrder() {
           </button>
           {converted && (
             <div className="bg-green-950/20 border border-green-800/40 rounded-lg p-3 text-xs space-y-1.5">
-              <p className="text-green-400 font-semibold">Invoice {orderRef ? `${orderRef} ` : ""}for {buyer} — {formatCurrency(Math.round(calc.grand))}</p>
+              <p className="text-green-400 font-semibold">Invoice {orderRef ? `${orderRef} ` : ""}for {buyer} - {formatCurrency(Math.round(calc.grand))}</p>
               {upiLink ? (
                 <>
                   <p className="text-[var(--color-muted)] break-all">UPI link: {upiLink}</p>
@@ -640,19 +640,19 @@ function QuoteToOrder() {
                 </>
               ) : (
                 <p className="text-[10px] text-yellow-400 flex items-center gap-1.5">
-                  <BellRing size={12} /> No UPI ID set for your firm — add one in Company settings to attach a real payment link.
+                  <BellRing size={12} /> No UPI ID set for your firm - add one in Company settings to attach a real payment link.
                 </p>
               )}
             </div>
           )}
           {!converted && !firmUpi && company !== null && (
             <p className="text-[10px] text-yellow-400 flex items-center gap-1.5">
-              <BellRing size={12} /> No firm UPI ID found — set it in Company settings so accepted orders carry a real payment link.
+              <BellRing size={12} /> No firm UPI ID found - set it in Company settings so accepted orders carry a real payment link.
             </p>
           )}
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">GST is applied to each line at its slab after order-level discount. Validate the buyer GSTIN before invoicing — wrong place-of-supply/HSN triggers notices.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">GST is applied to each line at its slab after order-level discount. Validate the buyer GSTIN before invoicing - wrong place-of-supply/HSN triggers notices.</p>
     </div>
   );
 }
@@ -717,7 +717,7 @@ function CommissionCalculator() {
             <Plus size={13} /> Add
           </button>
         </div>
-        <p className="text-[10px] text-[var(--color-muted)]">Tiered scheme: 4% under ₹2.5L · 6% ₹2.5L–₹10L · 8% above ₹10L.</p>
+        <p className="text-[10px] text-[var(--color-muted)]">Tiered scheme: 4% under ₹2.5L · 6% ₹2.5L-₹10L · 8% above ₹10L.</p>
       </div>
 
       {rows.length === 0 ? (
@@ -728,7 +728,7 @@ function CommissionCalculator() {
             {[
               { label: "Revenue closed", value: formatCurrency(totalRevenue), color: "text-[var(--color-text)]" },
               { label: "Total commission", value: formatCurrency(Math.round(totalCommission)), color: "text-[var(--color-primary)]" },
-              { label: "Effective payout", value: totalRevenue > 0 ? `${(totalCommission / totalRevenue * 100).toFixed(1)}%` : "—", color: "text-[var(--color-muted)]" },
+              { label: "Effective payout", value: totalRevenue > 0 ? `${(totalCommission / totalRevenue * 100).toFixed(1)}%` : "-", color: "text-[var(--color-muted)]" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -749,7 +749,7 @@ function CommissionCalculator() {
                     <tr key={r.id} className="hover:bg-white/2">
                       <td className="px-4 py-2.5 font-medium">{r.rep}</td>
                       <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.dealValue)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.margin ? `${r.margin}%` : "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.margin ? `${r.margin}%` : "-"}</td>
                       <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.tier === "flat" ? `Flat ${flatPct}%` : "Tiered"}</td>
                       <td className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{formatCurrency(Math.round(commissionFor(r)))}</td>
                       <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
@@ -819,7 +819,7 @@ function Customer360() {
 
       <div className={`${CARD} overflow-hidden`}>
         <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
-          <p className="text-sm font-semibold">Invoices — {active}</p>
+          <p className="text-sm font-semibold">Invoices - {active}</p>
           <span className="text-[10px] text-[var(--color-muted)]">{profile.invoices.length} invoice(s)</span>
         </div>
         {profile.invoices.length === 0 ? (
@@ -851,7 +851,7 @@ function Customer360() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Customer 360 is derived live from your invoices and incoming transactions — no manual entry needed.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Customer 360 is derived live from your invoices and incoming transactions - no manual entry needed.</p>
     </div>
   );
 }
@@ -932,7 +932,7 @@ function crmLeadToLocal(l: CrmLead): Lead {
     : st === "UNQUALIFIED" || st === "JUNK" ? "dropped" : "new";
   return {
     id: l.id, crmId: l.id, name: l.name || "Unnamed lead", phone: l.phone || "",
-    source: l.source || "—", status, nextFollowUp: new Date().toISOString().split("T")[0],
+    source: l.source || "-", status, nextFollowUp: new Date().toISOString().split("T")[0],
     note: "", converted: !!l.converted_deal_id || st === "CONVERTED",
   };
 }
@@ -974,7 +974,7 @@ function LeadFollowUps() {
       setLeads(prev => prev.map(l => l.id === localId ? { ...l, crmId: created.id } : l));
       toast.success("Lead captured");
     } catch {
-      toast.message("Lead saved locally — couldn't reach the CRM");
+      toast.message("Lead saved locally - couldn't reach the CRM");
     } finally {
       setSaving(false);
     }
@@ -991,12 +991,12 @@ function LeadFollowUps() {
 
   // Convert a qualified lead into a pipeline deal via the real endpoint.
   const convert = async (l: Lead) => {
-    if (!l.crmId) { toast.error("This lead isn't synced to the CRM yet — try again in a moment"); return; }
+    if (!l.crmId) { toast.error("This lead isn't synced to the CRM yet - try again in a moment"); return; }
     if (l.converted) { toast.message("Lead already converted to a deal"); return; }
     try {
       await api.post(`/api/crm/leads/${l.crmId}/convert`, {});
       setLeads(prev => prev.map(x => x.id === l.id ? { ...x, status: "qualified", converted: true } : x));
-      toast.success(`${l.name} converted to a deal — see the Pipeline tab`);
+      toast.success(`${l.name} converted to a deal - see the Pipeline tab`);
     } catch {
       toast.error("Couldn't convert the lead");
     }
@@ -1035,7 +1035,7 @@ function LeadFollowUps() {
           </button>
         </div>
         {overdueCount > 0 && (
-          <p className="text-xs text-red-400 flex items-center gap-1.5"><BellRing size={12} /> {overdueCount} follow-up(s) overdue — 80% of SMB deals die from no follow-up.</p>
+          <p className="text-xs text-red-400 flex items-center gap-1.5"><BellRing size={12} /> {overdueCount} follow-up(s) overdue - 80% of SMB deals die from no follow-up.</p>
         )}
       </div>
 
@@ -1059,7 +1059,7 @@ function LeadFollowUps() {
                       <td className="px-4 py-2.5"><p className="font-medium">{l.name}</p><p className="text-[10px] text-[var(--color-muted)]">{l.phone}</p></td>
                       <td className="px-4 py-2.5 text-[var(--color-muted)]">{l.source}</td>
                       <td className={`px-4 py-2.5 tabular-nums ${due ? "text-red-400 font-semibold" : "text-[var(--color-muted)]"}`}>{format(parseISO(l.nextFollowUp), "d MMM")}{due ? ` · ${Math.abs(days)}d late` : ""}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{l.note || "—"}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{l.note || "-"}</td>
                       <td className="px-4 py-2.5">
                         <select value={l.status} onChange={e => setStatus(l.id, e.target.value as Lead["status"])} className={`${INP} py-1 max-w-[130px]`}>
                           {(["new", "contacted", "qualified", "dropped"] as const).map(s => <option key={s} value={s}>{s}</option>)}
@@ -1486,14 +1486,14 @@ function DiscountApproval() {
           </div>
           <div className={`${CARD} p-4 space-y-2 text-sm`}>
             {belowFloor ? (
-              <p className="text-red-400 flex items-center gap-1.5"><XCircle size={14} /> Below floor margin of {floor}% — do not commit this price.</p>
+              <p className="text-red-400 flex items-center gap-1.5"><XCircle size={14} /> Below floor margin of {floor}% - do not commit this price.</p>
             ) : (
               <p className="text-green-400 flex items-center gap-1.5"><CheckCircle2 size={14} /> Margin {calc.marginPct.toFixed(1)}% is above the {floor}% floor.</p>
             )}
             {needsApproval ? (
-              <p className="text-yellow-400 flex items-center gap-1.5"><BellRing size={14} /> Discount {calc.disc}% exceeds {threshold}% — route to owner for approval.</p>
+              <p className="text-yellow-400 flex items-center gap-1.5"><BellRing size={14} /> Discount {calc.disc}% exceeds {threshold}% - route to owner for approval.</p>
             ) : (
-              <p className="text-[var(--color-muted)] flex items-center gap-1.5"><CheckCircle2 size={14} /> Within rep authority ({threshold}% cap) — no approval needed.</p>
+              <p className="text-[var(--color-muted)] flex items-center gap-1.5"><CheckCircle2 size={14} /> Within rep authority ({threshold}% cap) - no approval needed.</p>
             )}
           </div>
         </>
@@ -1587,7 +1587,7 @@ function TerritoryPlanner() {
                     <tr key={r.id} className="hover:bg-white/2">
                       <td className="px-4 py-2.5 font-medium">{r.name}</td>
                       <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.rep}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[180px] truncate">{r.pincodes || "—"}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[180px] truncate">{r.pincodes || "-"}</td>
                       <td className="px-4 py-2.5 tabular-nums">{r.accounts}</td>
                       <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(r.potential)}</td>
                       <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
@@ -1701,8 +1701,8 @@ function ActivityLog() {
                           r.outcome === "no-answer" ? "bg-red-900/30 text-red-400 border-red-800/40" :
                           "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{r.outcome}</span>
                       </td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.duration || "—"}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[200px] truncate">{r.note || "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.duration || "-"}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[200px] truncate">{r.note || "-"}</td>
                       <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                     </tr>
                   ))}
@@ -1767,12 +1767,12 @@ function QuoteExpiryTracker() {
           </button>
         </div>
         {expiringSoon.length > 0 && (
-          <p className="text-xs text-yellow-400 flex items-center gap-1.5"><BellRing size={12} /> {expiringSoon.length} quote(s) expiring within 3 days — remind the buyer before the price lapses.</p>
+          <p className="text-xs text-yellow-400 flex items-center gap-1.5"><BellRing size={12} /> {expiringSoon.length} quote(s) expiring within 3 days - remind the buyer before the price lapses.</p>
         )}
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No quotes tracked yet. Open-ended quotes erode price discipline — set a validity date.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">No quotes tracked yet. Open-ended quotes erode price discipline - set a validity date.</p>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -1957,8 +1957,8 @@ function ChurnRiskList() {
               {risks.map(r => (
                 <tr key={r.customer} className="hover:bg-white/2">
                   <td className="px-5 py-2.5 font-medium">{r.customer}</td>
-                  <td className="px-5 py-2.5 text-[var(--color-muted)] tabular-nums">{r.daysSince >= 999 ? "—" : `${r.daysSince}d ago`}</td>
-                  <td className={`px-5 py-2.5 tabular-nums ${r.overdue > 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.overdue > 0 ? formatCurrency(r.overdue) : "—"}</td>
+                  <td className="px-5 py-2.5 text-[var(--color-muted)] tabular-nums">{r.daysSince >= 999 ? "-" : `${r.daysSince}d ago`}</td>
+                  <td className={`px-5 py-2.5 tabular-nums ${r.overdue > 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.overdue > 0 ? formatCurrency(r.overdue) : "-"}</td>
                   <td className="px-5 py-2.5 tabular-nums">{formatCurrency(r.billed)}</td>
                   <td className="px-5 py-2.5">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
@@ -1987,7 +1987,7 @@ function NpsTracker() {
 
   const add = () => {
     const s = parseInt(score, 10);
-    if (!customer.trim() || isNaN(s) || s < 0 || s > 10) { toast.error("Enter a customer and a score 0–10"); return; }
+    if (!customer.trim() || isNaN(s) || s < 0 || s > 10) { toast.error("Enter a customer and a score 0-10"); return; }
     setRows([{ id: crypto.randomUUID(), customer: customer.trim(), score: s, comment: comment.trim(), at: new Date().toISOString() }, ...rows]);
     setCustomer(""); setComment("");
     toast.success("Feedback recorded");
@@ -2008,7 +2008,7 @@ function NpsTracker() {
             <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Sharma Traders" className={INP} />
           </div>
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Score (0–10)</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Score (0-10)</label>
             <select value={score} onChange={e => setScore(e.target.value)} className={INP}>
               {Array.from({ length: 11 }, (_, i) => 10 - i).map(n => <option key={n} value={n}>{n}</option>)}
             </select>
@@ -2024,7 +2024,7 @@ function NpsTracker() {
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No feedback yet. Send a 0–10 survey after each sale to track satisfaction.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">No feedback yet. Send a 0-10 survey after each sale to track satisfaction.</p>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -2062,7 +2062,7 @@ function NpsTracker() {
                             bucket === "passive" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" :
                             "bg-red-900/30 text-red-400 border-red-800/40"}`}>{bucket}</span>
                         </td>
-                        <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[220px] truncate">{r.comment || "—"}</td>
+                        <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[220px] truncate">{r.comment || "-"}</td>
                         <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                       </tr>
                     );
@@ -2073,7 +2073,7 @@ function NpsTracker() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">NPS = % promoters (9–10) − % detractors (0–6). Above 50 is strong for SMB.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">NPS = % promoters (9-10) − % detractors (0-6). Above 50 is strong for SMB.</p>
     </div>
   );
 }
@@ -2112,7 +2112,7 @@ function SalesPlaybook() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Deal playbook — {done}/{steps.length} done</h3>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Deal playbook - {done}/{steps.length} done</h3>
           <button onClick={reset} className="text-xs text-[var(--color-primary)] hover:underline">Reset for new deal</button>
         </div>
         <div className="h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
@@ -2195,12 +2195,12 @@ function RenewalTracker() {
           </button>
         </div>
         {dueSoon.length > 0 && (
-          <p className="text-xs text-yellow-400 flex items-center gap-1.5"><BellRing size={12} /> {dueSoon.length} renewal(s) due within 14 days — pitch an upsell while you reach out.</p>
+          <p className="text-xs text-yellow-400 flex items-center gap-1.5"><BellRing size={12} /> {dueSoon.length} renewal(s) due within 14 days - pitch an upsell while you reach out.</p>
         )}
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No renewals tracked yet. Recurring orders and contracts default to flat — track them to upsell on renewal.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">No renewals tracked yet. Recurring orders and contracts default to flat - track them to upsell on renewal.</p>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -2392,7 +2392,7 @@ function LeadSourceROI() {
         {[
           { label: "Marketing spend", value: formatCurrency(totalSpend), color: "text-[var(--color-text)]" },
           { label: "Won from sources", value: formatCurrency(totalWon), color: "text-[var(--color-primary)]" },
-          { label: "Blended ROI", value: totalSpend > 0 ? `${(totalWon / totalSpend).toFixed(1)}x` : "—", color: "text-green-400" },
+          { label: "Blended ROI", value: totalSpend > 0 ? `${(totalWon / totalSpend).toFixed(1)}x` : "-", color: "text-green-400" },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -2401,7 +2401,7 @@ function LeadSourceROI() {
         ))}
       </div>
       <div className={`${CARD} p-4`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2 mb-3"><PieChart size={14} className="text-[var(--color-primary)]" /> Channel ROI — enter monthly spend per source</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-3"><PieChart size={14} className="text-[var(--color-primary)]" /> Channel ROI - enter monthly spend per source</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[720px]">
             <thead className="border-b border-[var(--color-border)]">
@@ -2421,8 +2421,8 @@ function LeadSourceROI() {
                   <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{r.won}</td>
                   <td className="px-3 py-2.5 tabular-nums">{r.convRate.toFixed(0)}%</td>
                   <td className="px-3 py-2.5 tabular-nums font-semibold">{formatCurrency(r.wonValue)}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{r.cpl > 0 ? formatCurrency(Math.round(r.cpl)) : "—"}</td>
-                  <td className={`px-3 py-2.5 tabular-nums font-semibold ${r.roi >= 1 ? "text-green-400" : r.spend > 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.spend > 0 ? `${r.roi.toFixed(1)}x` : "—"}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{r.cpl > 0 ? formatCurrency(Math.round(r.cpl)) : "-"}</td>
+                  <td className={`px-3 py-2.5 tabular-nums font-semibold ${r.roi >= 1 ? "text-green-400" : r.spend > 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.spend > 0 ? `${r.roi.toFixed(1)}x` : "-"}</td>
                 </tr>
               ))}
             </tbody>
@@ -2434,7 +2434,7 @@ function LeadSourceROI() {
   );
 }
 
-// ── #45 Rep Scorecard (conversion, cycle time, avg deal — from pipeline + winloss) ─
+// ── #45 Rep Scorecard (conversion, cycle time, avg deal - from pipeline + winloss) ─
 function RepScorecard() {
   const [deals] = useDeals();
 
@@ -2482,7 +2482,7 @@ function RepScorecard() {
                 <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.winRate >= 50 ? "text-green-400" : "text-yellow-400"}`}>{r.winRate.toFixed(0)}%</td>
                 <td className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{formatCurrency(r.wonValue)}</td>
                 <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(r.openValue)}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.avgDeal > 0 ? formatCurrency(Math.round(r.avgDeal)) : "—"}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.avgDeal > 0 ? formatCurrency(Math.round(r.avgDeal)) : "-"}</td>
               </tr>
             ))}
           </tbody>
@@ -2546,7 +2546,7 @@ function RfmSegments() {
       </div>
       <div className={`${CARD} overflow-hidden`}>
         <div className="px-5 py-3 border-b border-[var(--color-border)]">
-          <p className="text-sm font-semibold flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> RFM Segments — {segments.length} customers</p>
+          <p className="text-sm font-semibold flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> RFM Segments - {segments.length} customers</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[720px]">
@@ -2572,7 +2572,7 @@ function RfmSegments() {
           </table>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">R/F/M each scored 1–3 from recency, order count, and total billed. Win back "At risk", reward "Champions".</p>
+      <p className="text-[10px] text-[var(--color-muted)]">R/F/M each scored 1-3 from recency, order count, and total billed. Win back "At risk", reward "Champions".</p>
     </div>
   );
 }
@@ -2629,11 +2629,11 @@ function IncentiveSimulator() {
             <p className="text-xs text-[var(--color-muted)] mb-1">{s.name}</p>
             <p className={`text-2xl font-bold tabular-nums ${s.name === cheaper ? "text-green-400" : "text-[var(--color-text)]"}`}>{formatCurrency(Math.round(s.cost))}</p>
             <p className="text-[10px] text-[var(--color-muted)] mt-1">{s.note}</p>
-            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{rev > 0 ? `${(s.cost / rev * 100).toFixed(2)}% of revenue` : "—"}</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{rev > 0 ? `${(s.cost / rev * 100).toFixed(2)}% of revenue` : "-"}</p>
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Cheaper plan for this scenario: <span className="font-semibold text-[var(--color-text)]">{cheaper}</span>. Accelerators cost more above quota but push reps harder — tune to your margin.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Cheaper plan for this scenario: <span className="font-semibold text-[var(--color-text)]">{cheaper}</span>. Accelerators cost more above quota but push reps harder - tune to your margin.</p>
     </div>
   );
 }
@@ -2851,7 +2851,7 @@ function PipelineVelocity() {
       <div className={`${CARD} p-4`}>
         <p className="text-sm font-semibold mb-1">Projected revenue at this velocity</p>
         <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(m.monthly))}<span className="text-xs font-normal text-[var(--color-muted)]"> / 30 days</span></p>
-        <p className="text-[10px] text-[var(--color-muted)] mt-2">Velocity = (open deals × win rate × avg deal size) ÷ cycle days. Shorten the cycle or lift win rate to speed cash — both beat just adding more leads.</p>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Velocity = (open deals × win rate × avg deal size) ÷ cycle days. Shorten the cycle or lift win rate to speed cash - both beat just adding more leads.</p>
       </div>
     </div>
   );
@@ -2910,7 +2910,7 @@ function ConversionFunnel() {
       </div>
       <div className={`${CARD} p-4`}>
         <p className="text-sm font-semibold mb-1">Marked lost: {lost}</p>
-        <p className="text-[10px] text-[var(--color-muted)]">The biggest single drop is where to focus coaching or process fixes — e.g. a heavy quoted→negotiation drop usually means pricing or follow-up gaps, not lead quality.</p>
+        <p className="text-[10px] text-[var(--color-muted)]">The biggest single drop is where to focus coaching or process fixes - e.g. a heavy quoted→negotiation drop usually means pricing or follow-up gaps, not lead quality.</p>
       </div>
     </div>
   );
@@ -2938,7 +2938,7 @@ function RevenuePerCustomer() {
 
   if (rows.length === 0) {
     return <EmptyState icon={Wallet} title="No invoiced customers yet"
-      description="Once you raise invoices, this ranks customers by lifetime revenue, average invoice size and share of total — so you know which accounts actually carry the business." />;
+      description="Once you raise invoices, this ranks customers by lifetime revenue, average invoice size and share of total - so you know which accounts actually carry the business." />;
   }
 
   return (
@@ -2973,7 +2973,7 @@ function RevenuePerCustomer() {
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)] px-1">If a handful of customers make up most of the revenue, that's concentration risk — protect those relationships and work on broadening the base.</p>
+      <p className="text-[10px] text-[var(--color-muted)] px-1">If a handful of customers make up most of the revenue, that's concentration risk - protect those relationships and work on broadening the base.</p>
     </div>
   );
 }
@@ -3000,7 +3000,7 @@ function QuoteAcceptanceRate() {
 
   if (m.quotedCount === 0) {
     return <EmptyState icon={FileCheck2} title="No quotes sent yet"
-      description="Move deals to the Quoted stage in the Pipeline. This shows what share of quoted deals you actually close — by count and by value — so you can spot leaky pricing or follow-up." />;
+      description="Move deals to the Quoted stage in the Pipeline. This shows what share of quoted deals you actually close - by count and by value - so you can spot leaky pricing or follow-up." />;
   }
 
   return (
@@ -3024,7 +3024,7 @@ function QuoteAcceptanceRate() {
           <div className="h-full bg-[var(--color-primary)]" style={{ width: `${m.valueAcceptance * 100}%` }} />
         </div>
         <p className="text-xs text-[var(--color-muted)] tabular-nums">{formatCurrency(Math.round(m.wonValue))} won of {formatCurrency(Math.round(m.quotedValue))} quoted ({(m.valueAcceptance * 100).toFixed(0)}%)</p>
-        <p className="text-[10px] text-[var(--color-muted)]">Acceptance rate uses only decided quotes ({m.decidedCount}). A low rate with big quote values often means you're pricing above the buyer's budget — try staged or smaller first orders.</p>
+        <p className="text-[10px] text-[var(--color-muted)]">Acceptance rate uses only decided quotes ({m.decidedCount}). A low rate with big quote values often means you're pricing above the buyer's budget - try staged or smaller first orders.</p>
       </div>
     </div>
   );
@@ -3054,7 +3054,7 @@ function SeasonalPattern() {
 
   if (!m.hasData) {
     return <EmptyState icon={CalendarRange} title="No dated invoices yet"
-      description="Once invoices have dates, this maps revenue by calendar month so you can see your busy and lean seasons — and plan stock, staffing and cash around them." />;
+      description="Once invoices have dates, this maps revenue by calendar month so you can see your busy and lean seasons - and plan stock, staffing and cash around them." />;
   }
 
   return (
@@ -3071,7 +3071,7 @@ function SeasonalPattern() {
                 <div className="flex-1 h-4 bg-[var(--color-bg)] rounded overflow-hidden border border-[var(--color-border)]">
                   <div className={`h-full ${i === m.peakMonth ? "bg-[var(--color-primary)]" : aboveAvg ? "bg-green-500/70" : "bg-[var(--color-muted)]/40"}`} style={{ width: `${m.peak ? (t / m.peak) * 100 : 0}%` }} />
                 </div>
-                <span className="text-[10px] w-24 text-right tabular-nums text-[var(--color-muted)]">{t > 0 ? formatCurrency(Math.round(t)) : "—"}</span>
+                <span className="text-[10px] w-24 text-right tabular-nums text-[var(--color-muted)]">{t > 0 ? formatCurrency(Math.round(t)) : "-"}</span>
               </div>
             );
           })}
@@ -3079,7 +3079,7 @@ function SeasonalPattern() {
       </div>
       <div className={`${CARD} p-4`}>
         <p className="text-sm font-semibold mb-1">Peak month: {MONTH_LABEL[m.peakMonth]} ({formatCurrency(Math.round(m.peak))})</p>
-        <p className="text-[10px] text-[var(--color-muted)]">Green bars are above your average active month. Build inventory and working-capital ahead of peaks, and run promotions to lift the lean months — seasonality is easier to fund than to fight.</p>
+        <p className="text-[10px] text-[var(--color-muted)]">Green bars are above your average active month. Build inventory and working-capital ahead of peaks, and run promotions to lift the lean months - seasonality is easier to fund than to fight.</p>
       </div>
     </div>
   );
@@ -3144,7 +3144,7 @@ function NegotiationTracker() {
             <Plus size={13} /> Start
           </button>
         </div>
-        <p className="text-[10px] text-[var(--color-muted)]">Set a floor before you negotiate. The tracker warns you the moment a price dips below it — your concession discipline lives here, not in your head.</p>
+        <p className="text-[10px] text-[var(--color-muted)]">Set a floor before you negotiate. The tracker warns you the moment a price dips below it - your concession discipline lives here, not in your head.</p>
       </div>
 
       {negos.length === 0 ? (
@@ -3254,7 +3254,7 @@ function LeadResponseTime() {
     if (m === null || m < 0) { toast.error("Responded time must be after received time"); return; }
     setRows([...rows, { id: crypto.randomUUID(), lead: lead.trim(), source, receivedAt, respondedAt }]);
     setLead("");
-    toast.success(`Logged — first response in ${m} min`);
+    toast.success(`Logged - first response in ${m} min`);
   };
 
   const stats = useMemo(() => {
@@ -3300,7 +3300,7 @@ function LeadResponseTime() {
       </div>
 
       {stats.count === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No responses logged yet. The lead that gets the first reply usually wins — measure it.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">No responses logged yet. The lead that gets the first reply usually wins - measure it.</p>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -3375,7 +3375,7 @@ function LoyaltyEngine() {
     } else {
       const reqPts = Math.ceil(v);
       const bal = balances.get(name) ?? 0;
-      if (reqPts > bal) { toast.error(`${name} has only ${bal} point(s) — cannot redeem ${reqPts}`); return; }
+      if (reqPts > bal) { toast.error(`${name} has only ${bal} point(s) - cannot redeem ${reqPts}`); return; }
       setEntries([...entries, { id: crypto.randomUUID(), customer: name, kind, amount: reqPts * Math.max(0, pointValue), points: reqPts, at: new Date().toISOString() }]);
       toast.success(`${name} redeemed ${reqPts} point(s) = ${formatCurrency(reqPts * Math.max(0, pointValue))}`);
     }
@@ -3422,7 +3422,7 @@ function LoyaltyEngine() {
       </div>
 
       {sortedBalances.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No loyalty activity yet. Record a purchase to start awarding points — a cheap retention hook Tally and Khatabook don't have.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">No loyalty activity yet. Record a purchase to start awarding points - a cheap retention hook Tally and Khatabook don't have.</p>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -3530,12 +3530,12 @@ function ReorderReminder() {
           </button>
         </div>
         {dueNow.length > 0 && (
-          <p className="text-xs text-[var(--color-primary)] flex items-center gap-1.5"><RotateCw size={12} /> {dueNow.length} customer(s) due to reorder now — about {formatCurrency(Math.round(pipeline))} of easy repeat revenue waiting for a nudge.</p>
+          <p className="text-xs text-[var(--color-primary)] flex items-center gap-1.5"><RotateCw size={12} /> {dueNow.length} customer(s) due to reorder now - about {formatCurrency(Math.round(pipeline))} of easy repeat revenue waiting for a nudge.</p>
         )}
       </div>
 
       {enriched.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No repeat buyers tracked yet. Add your regulars and their typical reorder gap — the tool predicts when to nudge each one.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">No repeat buyers tracked yet. Add your regulars and their typical reorder gap - the tool predicts when to nudge each one.</p>
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
@@ -3557,7 +3557,7 @@ function ReorderReminder() {
                       <td className={`px-4 py-2.5 tabular-nums font-semibold ${dueSoon ? "text-[var(--color-primary)]" : upcoming ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>
                         {format(c.dueDate, "d MMM yyyy")}{dueSoon ? ` · due (${Math.abs(c.daysToDue)}d ago)` : ` · in ${c.daysToDue}d`}
                       </td>
-                      <td className="px-4 py-2.5 tabular-nums">{c.avgValue ? formatCurrency(c.avgValue) : "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{c.avgValue ? formatCurrency(c.avgValue) : "-"}</td>
                       <td className="px-4 py-2.5 text-right"><button onClick={() => setCusts(custs.filter(x => x.id !== c.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                     </tr>
                   );
@@ -3609,7 +3609,7 @@ function RevenueByRegion() {
 
   if (customers.length === 0) {
     return <EmptyState icon={MapIcon} title="No invoiced customers yet"
-      description="Tag each customer to a city or region, and this slices your invoiced revenue by territory — so you can see where your sales actually come from and where to expand." />;
+      description="Tag each customer to a city or region, and this slices your invoiced revenue by territory - so you can see where your sales actually come from and where to expand." />;
   }
 
   return (
@@ -3638,7 +3638,7 @@ function RevenueByRegion() {
         {[
           { label: "Total invoiced", value: formatCurrency(Math.round(totalRevenue)), color: "text-[var(--color-text)]" },
           { label: "Regions", value: `${byRegion.filter(([r]) => r !== "Untagged").length}`, color: "text-[var(--color-primary)]" },
-          { label: "Top region", value: byRegion.length ? byRegion[0][0] : "—", color: "text-green-400" },
+          { label: "Top region", value: byRegion.length ? byRegion[0][0] : "-", color: "text-green-400" },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -3661,7 +3661,7 @@ function RevenueByRegion() {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Built live from your invoices — tag customers once and the split updates itself. Untagged revenue is shown separately so nothing is hidden.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Built live from your invoices - tag customers once and the split updates itself. Untagged revenue is shown separately so nothing is hidden.</p>
     </div>
   );
 }

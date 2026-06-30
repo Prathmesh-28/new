@@ -1,4 +1,4 @@
-// HRMS API — /api/hrms. Reuses Headroom auth.
+// HRMS API - /api/hrms. Reuses Headroom auth.
 //
 // Domain (Frappe HR port): employees, attendance (mark/bulk/summary), leave (types →
 // allocation → ledger → application → balance), salary STRUCTURES with component rows,

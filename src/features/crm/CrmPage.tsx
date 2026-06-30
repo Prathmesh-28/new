@@ -13,7 +13,7 @@ import {
 import EmptyState from "@/components/EmptyState";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES (response shapes inlined — backend confirmed)
+// TYPES (response shapes inlined - backend confirmed)
 // ─────────────────────────────────────────────────────────────────────────────
 type Stage = "QUALIFICATION" | "DEMO" | "PROPOSAL" | "NEGOTIATION" | "WON" | "LOST";
 type OpenStage = "QUALIFICATION" | "DEMO" | "PROPOSAL" | "NEGOTIATION";
@@ -137,9 +137,9 @@ function rupee(v: number | null | undefined): string {
 }
 
 function fmtDate(s: string | null | undefined): string {
-  if (!s) return "—";
+  if (!s) return "-";
   const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+  return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 }
 
 const WRITE_ROLES = new Set([
@@ -200,10 +200,10 @@ function StatCard({ label, value, tint }: { label: string; value: string; tint?:
 function LeadStatusPill({ status }: { status: string }) {
   const key = (status || "").toUpperCase();
   const cls = LEAD_STATUS_STYLE[key] ?? "bg-[var(--color-bg)] text-[var(--color-muted)] border border-[var(--color-border)]";
-  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>{key || "—"}</span>;
+  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>{key || "-"}</span>;
 }
 
-// SLA badge — Fulfilled (within), Failed (breached), First Response Due, escalated.
+// SLA badge - Fulfilled (within), Failed (breached), First Response Due, escalated.
 function SlaBadge({ status, escalated }: { status: string | null; escalated?: boolean | null }) {
   if (!status) return null;
   const s = status.toUpperCase();
@@ -297,7 +297,7 @@ export default function CrmPage() {
       <div className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 sm:px-6 py-4">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <Users size={20} className="text-[var(--color-primary)]" />
-          CRM — pipeline & customers
+          CRM - pipeline & customers
         </h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">Leads → deals → books customers · SLA-tracked</p>
       </div>
@@ -394,7 +394,7 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
   const accountName = (id: string | null) => (id ? accounts.find((a) => a.id === id)?.name ?? null : null);
 
   // Deep-link to the invoice composer, pre-filled from the won deal. Uses the
-  // /invoices?compose=1 surface (POST /api/invoices — which DOES permit "sales"),
+  // /invoices?compose=1 surface (POST /api/invoices - which DOES permit "sales"),
   // never the books documents/sales ledger path (which excludes sales). Customer
   // defaults to the linked account name, falling back to the deal title.
   const raiseInvoice = (deal: Deal) => {
@@ -426,9 +426,9 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
     setBusyDeal(deal.id);
     try {
       await api.post<unknown>(`/api/crm/deals/${deal.id}/win`, {});
-      toast.success(`"${deal.title}" won — customer created in Books`);
+      toast.success(`"${deal.title}" won - customer created in Books`);
       await load();
-      // Closing the deal is the moment to bill it — offer to raise the invoice
+      // Closing the deal is the moment to bill it - offer to raise the invoice
       // now (the won card leaves the open board, so this is the natural handoff).
       if (window.confirm(`Raise an invoice for "${deal.title}" now?`)) {
         raiseInvoice(deal);
@@ -477,7 +477,7 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
     setSaving(true);
     try {
       if (editing) {
-        // stage transitions go through moveStage/Win/Lose — edit only the simple fields
+        // stage transitions go through moveStage/Win/Lose - edit only the simple fields
         await api.patch<Deal>(`/api/crm/deals/${editing.id}`, {
           title: title.trim(),
           value: value.trim() ? Number(value) : 0,
@@ -545,7 +545,7 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="md:col-span-2">
               <label className={labelCls}>Title</label>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Acme — annual contract" className={inputCls} />
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Acme - annual contract" className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Value (₹)</label>
@@ -692,15 +692,15 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
       </div>
       )}
 
-      {/* WON — READY TO INVOICE. A won deal leaves the open board, so this is
+      {/* WON - READY TO INVOICE. A won deal leaves the open board, so this is
           where a rep closes the loop: raise the invoice for what they just won
           (or come back to bill it later). Routes to /invoices?compose=1, which
-          posts to /api/invoices — the path that permits the "sales" role. */}
+          posts to /api/invoices - the path that permits the "sales" role. */}
       {wonDeals.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
             <Trophy size={14} className="text-green-400" />
-            <h3 className="text-sm font-semibold">Won — ready to invoice</h3>
+            <h3 className="text-sm font-semibold">Won - ready to invoice</h3>
             <span className="text-[11px] text-[var(--color-muted)] tabular-nums">{wonDeals.length}</span>
           </div>
           <div className="divide-y divide-[var(--color-border)]">
@@ -732,7 +732,7 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LEAD DETAIL DRAWER — SLA badge + timeline + convert + activity logging
+// LEAD DETAIL DRAWER - SLA badge + timeline + convert + activity logging
 // ─────────────────────────────────────────────────────────────────────────────
 function LeadDrawer({ lead, canWrite, onClose, onChanged }: {
   lead: Lead; canWrite: boolean; onClose: () => void; onChanged: () => void;
@@ -762,7 +762,7 @@ function LeadDrawer({ lead, canWrite, onClose, onChanged }: {
     try {
       // an OUTBOUND activity marks first_response_at + recomputes the SLA status
       await api.post("/api/crm/activities", { kind: "EMAIL", direction: "OUTBOUND", subject: "Reply", body: reply.trim(), leadId: lead.id });
-      toast.success("Response logged — SLA updated");
+      toast.success("Response logged - SLA updated");
       setReply("");
       await load();
       onChanged();
@@ -801,7 +801,7 @@ function LeadDrawer({ lead, canWrite, onClose, onChanged }: {
         value,
         expectedClose: lead.expected_close || undefined,
       });
-      toast.success("Lead converted to deal — account + contact created");
+      toast.success("Lead converted to deal - account + contact created");
       onChanged();
       onClose();
     } catch (e) {
@@ -888,7 +888,7 @@ function LeadDrawer({ lead, canWrite, onClose, onChanged }: {
                   <li key={`${ev.type}-${ev.id}`} className="relative">
                     <span className="absolute -left-[15px] top-1.5 w-1.5 h-1.5 rounded-full bg-[var(--color-primary)]" />
                     <p className="text-xs">
-                      {ev.type === "status" && <span><span className="text-[var(--color-muted)]">Status</span> {ev.from || "—"} → <span className="font-medium">{ev.to || "—"}</span></span>}
+                      {ev.type === "status" && <span><span className="text-[var(--color-muted)]">Status</span> {ev.from || "-"} → <span className="font-medium">{ev.to || "-"}</span></span>}
                       {ev.type === "activity" && <span><span className="text-[var(--color-muted)]">{ev.kind}{ev.direction ? ` · ${ev.direction}` : ""}</span> {ev.subject || ev.body || ""}</span>}
                       {ev.type === "task" && <span><span className="text-[var(--color-muted)]">Task</span> {ev.title} <span className="text-[10px]">({ev.status})</span></span>}
                       {ev.type === "note" && <span><span className="text-[var(--color-muted)]">Note</span> {ev.title || ev.body}</span>}
@@ -1045,10 +1045,10 @@ function LeadsTab({ canWrite }: { canWrite: boolean }) {
                     className="border-b border-[var(--color-border)] last:border-b-0 cursor-pointer hover:bg-[var(--color-bg)]"
                   >
                     <td className="px-3 py-2.5 font-medium">{l.name}</td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{l.company || "—"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{l.company || "-"}</td>
                     <td className="px-3 py-2.5"><ScorePill score={l.score} /></td>
                     <td className="px-3 py-2.5"><LeadStatusPill status={l.status} /></td>
-                    <td className="px-3 py-2.5">{l.sla_status ? <SlaBadge status={l.sla_status} escalated={l.escalated} /> : <span className="text-xs text-[var(--color-muted)]">—</span>}</td>
+                    <td className="px-3 py-2.5">{l.sla_status ? <SlaBadge status={l.sla_status} escalated={l.escalated} /> : <span className="text-xs text-[var(--color-muted)]">-</span>}</td>
                   </tr>
                 ))
               )}
@@ -1196,7 +1196,7 @@ function TasksTab({ canWrite }: { canWrite: boolean }) {
                   <tr key={t.id} className="border-b border-[var(--color-border)] last:border-b-0">
                     <td className="px-3 py-2.5 font-medium">{t.title}</td>
                     <td className="px-3 py-2.5 text-[var(--color-muted)]">{t.priority}</td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)] tabular-nums">{t.due_date ? fmtDate(t.due_date) : "—"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)] tabular-nums">{t.due_date ? fmtDate(t.due_date) : "-"}</td>
                     <td className={`px-3 py-2.5 font-semibold ${TASK_STATUS_STYLE[t.status] || ""}`}>{t.status}</td>
                     <td className="px-3 py-2.5 text-right">
                       {canWrite && t.status !== "DONE" && t.status !== "CANCELED" ? (
@@ -1210,7 +1210,7 @@ function TasksTab({ canWrite }: { canWrite: boolean }) {
                           → {TASK_STATUS_FLOW[t.status]}
                         </button>
                       ) : (
-                        <span className="text-xs text-[var(--color-muted)]">—</span>
+                        <span className="text-xs text-[var(--color-muted)]">-</span>
                       )}
                     </td>
                   </tr>
@@ -1225,7 +1225,7 @@ function TasksTab({ canWrite }: { canWrite: boolean }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SLA TAB — view + create service level agreements
+// SLA TAB - view + create service level agreements
 // ─────────────────────────────────────────────────────────────────────────────
 function SlaTab({ canWrite }: { canWrite: boolean }) {
   const [slas, setSlas] = useState<Sla[]>([]);
@@ -1274,7 +1274,7 @@ function SlaTab({ canWrite }: { canWrite: boolean }) {
           default_priority: !!p.default_priority,
         })),
       });
-      toast.success("SLA saved (9–18 Mon–Fri working hours)");
+      toast.success("SLA saved (9-18 Mon-Fri working hours)");
       setName(""); setOpen(false);
       await load();
     } catch (e) {
@@ -1287,7 +1287,7 @@ function SlaTab({ canWrite }: { canWrite: boolean }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-sm text-[var(--color-muted)]">Response/resolution deadlines by priority · business hours 9–18 Mon–Fri</p>
+        <p className="text-sm text-[var(--color-muted)]">Response/resolution deadlines by priority · business hours 9-18 Mon-Fri</p>
         {canWrite && (
           <button type="button" onClick={() => setOpen((o) => !o)} className={btnPrimary}>
             <Plus size={14} /> New SLA
@@ -1366,10 +1366,10 @@ function SlaTab({ canWrite }: { canWrite: boolean }) {
                     <td className="px-3 py-2.5 font-medium">{s.name}</td>
                     <td className="px-3 py-2.5 text-[var(--color-muted)]">{s.apply_on}</td>
                     <td className="px-3 py-2.5 text-[var(--color-muted)] text-xs">
-                      {(s.priorities || []).map((p) => `${p.priority} (${p.response_time}h)`).join(", ") || "—"}
+                      {(s.priorities || []).map((p) => `${p.priority} (${p.response_time}h)`).join(", ") || "-"}
                     </td>
                     <td className="px-3 py-2.5">
-                      {s.is_default ? <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-300"><CheckCircle2 size={13} /> Default</span> : <span className="text-xs text-[var(--color-muted)]">—</span>}
+                      {s.is_default ? <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-300"><CheckCircle2 size={13} /> Default</span> : <span className="text-xs text-[var(--color-muted)]">-</span>}
                     </td>
                   </tr>
                 ))
@@ -1541,16 +1541,16 @@ function AccountsTab({ canWrite }: { canWrite: boolean }) {
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{a.industry || "—"}</td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)] tabular-nums">{a.phone || "—"}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-[var(--color-muted)]">{a.gstin || "—"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{a.industry || "-"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)] tabular-nums">{a.phone || "-"}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-[var(--color-muted)]">{a.gstin || "-"}</td>
                     <td className="px-3 py-2.5">
                       {a.books_ledger_id ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-300">
                           <CheckCircle2 size={13} /> Linked
                         </span>
                       ) : (
-                        <span className="text-xs text-[var(--color-muted)]">—</span>
+                        <span className="text-xs text-[var(--color-muted)]">-</span>
                       )}
                     </td>
                     {canWrite && (
@@ -1751,7 +1751,7 @@ function ContactsTab({ canWrite }: { canWrite: boolean }) {
                 contacts.map((c) => (
                   <tr key={c.id} className="border-b border-[var(--color-border)] last:border-b-0">
                     <td className="px-3 py-2.5 font-medium">{c.name}</td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{c.designation || "—"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{c.designation || "-"}</td>
                     <td className="px-3 py-2.5 text-[var(--color-muted)]">
                       {c.email ? (
                         <span className="inline-flex items-center gap-1">
@@ -1761,9 +1761,9 @@ function ContactsTab({ canWrite }: { canWrite: boolean }) {
                         <span className="inline-flex items-center gap-1">
                           <Phone size={11} /> {c.phone}
                         </span>
-                      ) : "—"}
+                      ) : "-"}
                     </td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{accountName(c.account_id) || "—"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{accountName(c.account_id) || "-"}</td>
                     {canWrite && (
                       <td className="px-3 py-2.5">
                         <div className="flex items-center justify-end gap-1.5">

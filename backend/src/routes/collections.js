@@ -47,7 +47,7 @@ router.post("/upi-link", authenticate, canWrite, async (req, res) => {
           currency:    "INR",
           description: `Payment for ${inv.invoice_number}`,
           reference_id: inv.invoice_number,
-          // Carry the tenant so the webhook matches the RIGHT tenant's invoice —
+          // Carry the tenant so the webhook matches the RIGHT tenant's invoice -
           // invoice_number is not globally unique across tenants.
           notes: { invoice_number: inv.invoice_number, tenant_id: req.user.tenant_id },
           callback_url:  `${process.env.BACKEND_URL ?? ""}/webhook/razorpay`,
@@ -62,7 +62,7 @@ router.post("/upi-link", authenticate, canWrite, async (req, res) => {
   }
 
   // Fallback: static UPI deep-link. Use the firm's own UPI ID first, else the
-  // platform default the super-admin set in the console. Never a placeholder — a
+  // platform default the super-admin set in the console. Never a placeholder - a
   // wrong VPA would send the customer's money to the wrong place.
   const platformPay = await platformPayments();
   const upiId   = firm.upiId || platformPay.upiId || null;
@@ -72,7 +72,7 @@ router.post("/upi-link", authenticate, canWrite, async (req, res) => {
     : null;
   const payUrl  = razorpay_url || upiLink;
   if (!payUrl) {
-    return res.status(400).json({ error: "No payment method set up yet — add your UPI ID in Settings, or ask your admin to set a default UPI ID in the console (Admin → Payments), or connect Razorpay." });
+    return res.status(400).json({ error: "No payment method set up yet - add your UPI ID in Settings, or ask your admin to set a default UPI ID in the console (Admin → Payments), or connect Razorpay." });
   }
   const qr = await QRCode.toDataURL(payUrl, { width: 200 }).catch(() => null);
 
@@ -80,7 +80,7 @@ router.post("/upi-link", authenticate, canWrite, async (req, res) => {
   res.json({ url: payUrl, qr, provider: razorpay_url ? "razorpay" : "upi", demo: !razorpay_url });
 });
 
-// POST /webhook/razorpay — Razorpay payment captured webhook.
+// POST /webhook/razorpay - Razorpay payment captured webhook.
 // FAIL CLOSED: a "payment.captured" event marks an invoice paid, so we must not
 // trust it unless the HMAC signature verifies. Without a configured webhook
 // secret we cannot verify authenticity → refuse (else anyone could forge a
@@ -101,7 +101,7 @@ router.post("/", async (req, res) => {
   const event   = req.body.event;
   const payment = req.body.payload?.payment?.entity;
 
-  // Crowdfunding pledge settlement — notes set by /api/campaigns/public/:token/pledge.
+  // Crowdfunding pledge settlement - notes set by /api/campaigns/public/:token/pledge.
   // markPledgePaid is idempotent (status<>'paid' guard + unique payment_ref) and
   // tenant-scoped (updates only a backer in notes.tenant_id whose id matches), so a
   // webhook retry or a forged note can't double-count or cross tenants.
@@ -136,7 +136,7 @@ router.post("/", async (req, res) => {
           [invoiceNumber]
         );
         if (rows.length === 1) inv = rows[0];
-        else if (rows.length > 1) console.warn(`[razorpay] invoice_number ${invoiceNumber} is ambiguous across ${rows.length} tenants and the payment has no tenant note — skipping to avoid a cross-tenant write`);
+        else if (rows.length > 1) console.warn(`[razorpay] invoice_number ${invoiceNumber} is ambiguous across ${rows.length} tenants and the payment has no tenant note - skipping to avoid a cross-tenant write`);
       }
       if (inv) {
         await pool.query(
@@ -148,7 +148,7 @@ router.post("/", async (req, res) => {
         require("../modules/lending").onInvoicePaid(inv.tenant_id, inv.id, { ref: `inv_${payment.id}` }).catch(() => {});
         // Create revenue transaction in KV store is done client-side via polling
         // Could also push via Server-Sent Events or WebSocket in production
-        console.log(`[razorpay] Invoice ${invoiceNumber} (tenant ${inv.tenant_id}) marked paid — ₹${payment.amount / 100}`);
+        console.log(`[razorpay] Invoice ${invoiceNumber} (tenant ${inv.tenant_id}) marked paid - ₹${payment.amount / 100}`);
       }
     }
   }

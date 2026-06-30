@@ -1,4 +1,4 @@
-// HRMS module — employees, attendance, leave (allocation→ledger→application balance),
+// HRMS module - employees, attendance, leave (allocation→ledger→application balance),
 // salary STRUCTURES with earning/deduction COMPONENTS (amount | formula | condition |
 // depends_on_payment_days | statutory), structure ASSIGNMENTS (a base salary per employee),
 // salary-slip computation (working days / payment days / LOP proration), and PAYROLL RUNS
@@ -70,7 +70,7 @@ const HRMS_SCHEMA = `
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 
-  -- Leave Ledger Entry — the journal of all leave transactions.
+  -- Leave Ledger Entry - the journal of all leave transactions.
   -- leaves > 0 == allocation (credit balance); leaves < 0 == consumption (an approved application).
   -- balance(employee, leave_type) = Σ leaves.
   CREATE TABLE IF NOT EXISTS hrms_leave_ledger (
@@ -169,7 +169,7 @@ const HRMS_SCHEMA = `
   -- investment declarations, two-stage GL, gratuity, full-and-final.
   -- ════════════════════════════════════════════════════════════════════════════
 
-  -- (3) FORMULA-DRIVEN SALARY COMPONENT MASTER — a first-class entity (Frappe
+  -- (3) FORMULA-DRIVEN SALARY COMPONENT MASTER - a first-class entity (Frappe
   -- "Salary Component"). Each row is an earning|deduction with an optional FORMULA
   -- and CONDITION that may reference OTHER components by their abbreviation, plus a
   -- STATISTICAL flag (a non-paid input row used only to feed other formulas, Frappe
@@ -210,7 +210,7 @@ const HRMS_SCHEMA = `
     UNIQUE (tenant_id, fy)
   );
 
-  -- (1) ANNUALIZED TDS PROJECTION — one row per employee per payroll year. Stores
+  -- (1) ANNUALIZED TDS PROJECTION - one row per employee per payroll year. Stores
   -- the projected annual taxable salary, the total annual tax, tax already deducted
   -- to date, the per-month TDS to deduct going forward (spread over remaining
   -- months), and the full computation JSON for audit. Monthly payroll reads
@@ -290,7 +290,7 @@ const HRMS_SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_hrms_gratuity ON hrms_gratuity_slabs(tenant_id, region, from_year);
 
-  -- (4) EMPLOYEE LOANS — outstanding principal recovered in F&F.
+  -- (4) EMPLOYEE LOANS - outstanding principal recovered in F&F.
   CREATE TABLE IF NOT EXISTS hrms_employee_loans (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       TEXT NOT NULL,
@@ -302,7 +302,7 @@ const HRMS_SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_hrms_loans ON hrms_employee_loans(tenant_id, employee_id, status);
 
-  -- (4) FULL & FINAL settlement — combines outstanding dues, gratuity, leave
+  -- (4) FULL & FINAL settlement - combines outstanding dues, gratuity, leave
   -- encashment and loan recovery into a single net-payable, with the breakdown JSON
   -- and the GL voucher it posted.
   CREATE TABLE IF NOT EXISTS hrms_full_and_final (

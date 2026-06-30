@@ -1,6 +1,6 @@
 // Security response headers for the JSON API. This backend only ever returns
 // JSON (the SPA is served by Vercel), so the CSP can be maximally strict.
-// Dependency-free on purpose — no helmet, nothing to install or version-pin.
+// Dependency-free on purpose - no helmet, nothing to install or version-pin.
 function securityHeaders(req, res, next) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");

@@ -10,7 +10,7 @@ import { humanizeAiError } from "@/components/ai/aiError";
 interface ToolDef { name: string; description?: string; scope?: "read" | "write" }
 
 /**
- * Agent Studio — a platform-wide, no-code AI-agent builder (Kogo-style). NOT limited
+ * Agent Studio - a platform-wide, no-code AI-agent builder (Kogo-style). NOT limited
  * to Books: agents can reach the whole business (cash, transactions, receivables,
  * GST, books, inventory, alerts, forecast) via the cross-domain tool catalogue, and
  * everything runs on the tenant's OWN engine (their OpenRouter key). The page adds a
@@ -20,7 +20,7 @@ interface ToolDef { name: string; description?: string; scope?: "read" | "write"
 export default function AgentStudioPage({ embedded = false }: { embedded?: boolean } = {}) {
   // Bumping this remounts the manager so a freshly-built agent shows up immediately.
   const [reloadKey, setReloadKey] = useState(0);
-  // The just-built agent — its row auto-opens its Run panel so it's ready to test.
+  // The just-built agent - its row auto-opens its Run panel so it's ready to test.
   const [autoRunId, setAutoRunId] = useState<string | undefined>(undefined);
   // Workspace (Kogo-style chat) is the default surface; Build = engine/templates/editor.
   const [view, setView] = useState<"workspace" | "store" | "build">("workspace");
@@ -53,7 +53,7 @@ export default function AgentStudioPage({ embedded = false }: { embedded?: boole
       <div className="space-y-6">
       <header>
         <p className="text-sm text-[var(--color-muted)] max-w-3xl">
-          Build your own AI agents for <strong>anything</strong> in your business — collections, cash, GST, vendors,
+          Build your own AI agents for <strong>anything</strong> in your business - collections, cash, GST, vendors,
           payroll, spend, ops. Describe what you want in plain English and your agent gets built. Runs on{" "}
           <strong className="text-[var(--color-text)]">your own engine</strong> (your OpenRouter key). Read tasks run
           instantly; anything that changes your data waits for your approval.
@@ -76,7 +76,7 @@ export default function AgentStudioPage({ embedded = false }: { embedded?: boole
 
 const EXAMPLES = [
   "Every Monday, review overdue invoices and draft polite reminders for the customers who owe the most.",
-  "Watch my cash runway and warn me — with the reason — when it drops below 60 days.",
+  "Watch my cash runway and warn me - with the reason - when it drops below 60 days.",
   "Summarise this week's spending and flag anything unusual or duplicated.",
   "Prepare my GSTR-3B figures and tell me exactly what to file.",
 ];
@@ -110,7 +110,7 @@ function NaturalLanguageBuilder({ onCreated }: { onCreated: (createdId?: string)
       const tools = Array.isArray(spec.tools) ? spec.tools.filter((t) => valid.has(t)) : [];
       const name = (spec.name || "New agent").slice(0, 60);
       const created = await api.post<{ id?: string }>("/api/books/agents", { name, instructions: spec.instructions || desc.trim(), tools });
-      toast.success(`Built "${name}" with ${tools.length} tool${tools.length === 1 ? "" : "s"} — opening it below to test live.`);
+      toast.success(`Built "${name}" with ${tools.length} tool${tools.length === 1 ? "" : "s"} - opening it below to test live.`);
       setDesc("");
       onCreated(created?.id);
     } catch (e) {
@@ -124,7 +124,7 @@ function NaturalLanguageBuilder({ onCreated }: { onCreated: (createdId?: string)
     <div className="rounded-xl border border-[var(--color-primary)]/30 bg-gradient-to-br from-[var(--color-primary)]/10 to-transparent p-5">
       <div className="flex items-center gap-2 mb-2.5">
         <Sparkles size={18} className="text-[var(--color-primary)]" />
-        <h2 className="text-base font-semibold">Describe what you want — we'll build the agent</h2>
+        <h2 className="text-base font-semibold">Describe what you want - we'll build the agent</h2>
       </div>
       <textarea
         value={desc}
@@ -150,7 +150,7 @@ function NaturalLanguageBuilder({ onCreated }: { onCreated: (createdId?: string)
       </div>
       <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
         <p className="text-[11px] text-[var(--color-muted)] max-w-md">
-          Your agent can read across cash, transactions, receivables, GST, books, inventory &amp; more — and only acts with your approval.
+          Your agent can read across cash, transactions, receivables, GST, books, inventory &amp; more - and only acts with your approval.
         </p>
         <button
           type="button"
@@ -196,7 +196,7 @@ function AgentAppStore({ onAdded }: { onAdded: () => void }) {
     <div className="space-y-4">
       <div className="rounded-xl border border-[var(--color-primary)]/30 bg-gradient-to-br from-[var(--color-primary)]/10 to-transparent p-5">
         <h2 className="text-base font-semibold flex items-center gap-2"><Store size={18} className="text-[var(--color-primary)]" /> AI App Store</h2>
-        <p className="text-sm text-[var(--color-muted)] mt-1 max-w-2xl">Ready-to-deploy agents for your business — collections, cash, GST, payables, ops. Add one to your workspaces and start chatting; everything runs on your own engine, writes need your approval.</p>
+        <p className="text-sm text-[var(--color-muted)] mt-1 max-w-2xl">Ready-to-deploy agents for your business - collections, cash, GST, payables, ops. Add one to your workspaces and start chatting; everything runs on your own engine, writes need your approval.</p>
       </div>
 
       {loading ? (

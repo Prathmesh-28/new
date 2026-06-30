@@ -234,7 +234,7 @@ function CollectionAutoPanel({ invoices, onRefresh }: { invoices: Invoice[]; onR
     return (
       <div className="bg-green-900/20 border border-green-700/40 rounded-lg px-4 py-3 flex items-center gap-3">
         <Check size={14} className="text-green-400 shrink-0" />
-        <p className="text-sm text-green-300">All invoices are current — no overdue collections.</p>
+        <p className="text-sm text-green-300">All invoices are current - no overdue collections.</p>
       </div>
     );
   }
@@ -518,7 +518,7 @@ export default function InvoicesPage() {
         ))}
       </div>
 
-      {/* Billing tools — grouped to keep the bar calm. Pick a category, then
+      {/* Billing tools - grouped to keep the bar calm. Pick a category, then
           its tools appear below. The active tool's group stays selected. */}
       <div className="space-y-2">
         <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
@@ -615,7 +615,7 @@ export default function InvoicesPage() {
                       <span className={`text-xs tabular-nums ${AGING_COLOR[inv.aging ?? "current"] ?? ""}`}>
                         {inv.aging === "90d+" ? "90d+ overdue" : inv.aging === "60d" ? "60d overdue" : inv.aging === "30d" ? "30d overdue" : inv.due_date}
                       </span>
-                    ) : <span className="text-xs text-[var(--color-muted)]">—</span>}
+                    ) : <span className="text-xs text-[var(--color-muted)]">-</span>}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLOR[inv.status] ?? ""}`}>
@@ -764,7 +764,7 @@ function QuotationBuilder() {
   };
   const convert = (id: string) => {
     setQuotes(p => p.map(q => q.id === id ? { ...q, status: "converted" } : q));
-    toast.success("Quotation converted to invoice draft — open 'New Invoice' to finalise");
+    toast.success("Quotation converted to invoice draft - open 'New Invoice' to finalise");
   };
 
   return (
@@ -788,7 +788,7 @@ function QuotationBuilder() {
                 <tr key={q.id} className="hover:bg-white/2">
                   <td className="px-4 py-2.5 font-mono text-xs">{q.number}</td>
                   <td className="px-4 py-2.5">{q.customer}</td>
-                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{q.validUntil || "—"}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{q.validUntil || "-"}</td>
                   <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(c.total)}</td>
                   <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${q.status === "converted" ? "bg-green-900/30 text-green-400 border-green-800/40" : q.status === "accepted" ? "bg-blue-900/30 text-blue-400 border-blue-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{q.status}</span></td>
                   <td className="px-4 py-2.5 text-right">
@@ -828,7 +828,7 @@ function ProformaGenerator() {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
         <h2 className="text-sm font-semibold flex items-center gap-2"><FilePlus2 size={14} className="text-[var(--color-primary)]" /> Proforma Invoice Generator</h2>
-        <p className="text-xs text-[var(--color-muted)]">Issued before supply to request an advance. Not a tax invoice — no ITC for the buyer until the final invoice.</p>
+        <p className="text-xs text-[var(--color-muted)]">Issued before supply to request an advance. Not a tax invoice - no ITC for the buyer until the final invoice.</p>
         <div className="grid grid-cols-2 gap-3">
           <div><label className={LBL}>Customer *</label><input value={customer} onChange={e => setCustomer(e.target.value)} className={INP} placeholder="Acme Pvt Ltd" /></div>
           <div><label className={LBL}>Advance requested (%)</label><input type="number" min="0" max="100" value={advancePct} onChange={e => setAdvancePct(e.target.value)} className={INP} /></div>
@@ -851,7 +851,7 @@ function ProformaGenerator() {
                   <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(adv)}</td>
                   <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${d.converted ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{d.converted ? "converted" : "open"}</span></td>
                   <td className="px-4 py-2.5 text-right">
-                    {!d.converted && <button onClick={() => { setDocs(p => p.map(x => x.id === d.id ? { ...x, converted: true } : x)); toast.success("Marked converted — raise the tax invoice on supply"); }} className="text-xs text-[var(--color-primary)] hover:underline">Mark converted</button>}
+                    {!d.converted && <button onClick={() => { setDocs(p => p.map(x => x.id === d.id ? { ...x, converted: true } : x)); toast.success("Marked converted - raise the tax invoice on supply"); }} className="text-xs text-[var(--color-primary)] hover:underline">Mark converted</button>}
                     <button onClick={() => setDocs(p => p.filter(x => x.id !== d.id))} className="ml-3 text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
                   </td>
                 </tr>
@@ -890,7 +890,7 @@ function RecurringBilling() {
   };
   const runNow = (id: string) => {
     setSubs(p => p.map(s => s.id === id ? { ...s, nextRun: advance(s.nextRun, s.freq), generated: s.generated + 1 } : s));
-    toast.success("Invoice generated — next cycle scheduled");
+    toast.success("Invoice generated - next cycle scheduled");
   };
 
   const today = new Date().toISOString().split("T")[0];
@@ -961,7 +961,7 @@ function PaymentLinkBuilder({ invoices }: { invoices: Invoice[] }) {
   const amount = inv ? Number(inv.total_amount) || 0 : parseFloat(manualAmt) || 0;
   const note = inv ? inv.invoice_number : "Payment";
   const upi = vpa && amount > 0 ? buildUpiLink(vpa, payeeName || "Merchant", amount, note) : "";
-  // Generic web pay URL (card/netbanking) — a hosted checkout page can read these params.
+  // Generic web pay URL (card/netbanking) - a hosted checkout page can read these params.
   const webPay = amount > 0 ? `https://pay.headroom.app/c?${new URLSearchParams({ amt: amount.toFixed(2), cu: "INR", ref: note }).toString()}` : "";
 
   const copy = (text: string) => { navigator.clipboard?.writeText(text); toast.success("Link copied"); };
@@ -979,7 +979,7 @@ function PaymentLinkBuilder({ invoices }: { invoices: Invoice[] }) {
           <div>
             <label className={LBL}>Invoice (live)</label>
             <select value={selected} onChange={e => { setSelected(e.target.value); setManualAmt(""); }} className={INP}>
-              <option value="">— manual amount —</option>
+              <option value="">- manual amount -</option>
               {unpaid.map(i => <option key={i.id} value={i.id}>{i.invoice_number} · {formatCurrency(Number(i.total_amount) || 0)}</option>)}
             </select>
           </div>
@@ -1002,7 +1002,7 @@ function PaymentLinkBuilder({ invoices }: { invoices: Invoice[] }) {
           {!upi && <p className="text-xs text-yellow-400">Enter your UPI VPA above to generate the one-tap UPI link.</p>}
         </div>
       )}
-      {NOTE("Links are built client-side. UPI mark-as-paid is manual here (or via the QR webhook). Settle to your own VPA / PSP — no funds touch Headroom.")}
+      {NOTE("Links are built client-side. UPI mark-as-paid is manual here (or via the QR webhook). Settle to your own VPA / PSP - no funds touch Headroom.")}
     </div>
   );
 }
@@ -1054,7 +1054,7 @@ function CreditDebitNoteManager({ invoices }: { invoices: Invoice[] }) {
           <div>
             <label className={LBL}>Against invoice</label>
             <select value={against} onChange={e => onPickInv(e.target.value)} className={INP}>
-              <option value="">— select / manual —</option>
+              <option value="">- select / manual -</option>
               {invoices.map(i => <option key={i.id} value={i.invoice_number}>{i.invoice_number}</option>)}
             </select>
           </div>
@@ -1075,7 +1075,7 @@ function CreditDebitNoteManager({ invoices }: { invoices: Invoice[] }) {
                 <tr key={n.id} className="hover:bg-white/2">
                   <td className="px-4 py-2.5 font-mono text-xs">{n.number}</td>
                   <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${n.type === "credit" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-orange-900/30 text-orange-400 border-orange-800/40"}`}>{n.type}</span></td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{n.againstInvoice || "—"}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{n.againstInvoice || "-"}</td>
                   <td className="px-4 py-2.5">{n.customer}</td>
                   <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(Math.round(t))}</td>
                   <td className="px-4 py-2.5 text-right"><button onClick={() => setNotes(p => p.filter(x => x.id !== n.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
@@ -1149,7 +1149,7 @@ function CreditLimitManager({ invoices }: { invoices: Invoice[] }) {
                     <td className="px-4 py-2.5 w-32">
                       <div className="flex items-center gap-2"><div className="flex-1 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${Math.min(100, util)}%`, background: util > 100 ? "#ef4444" : util > 80 ? "#f97316" : "#22c55e" }} /></div><span className="text-[10px] tabular-nums">{util}%</span></div>
                     </td>
-                    <td className="px-4 py-2.5 tabular-nums text-red-400">{ex.overdue > 0 ? formatCurrency(Math.round(ex.overdue)) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-red-400">{ex.overdue > 0 ? formatCurrency(Math.round(ex.overdue)) : "-"}</td>
                     <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${onHold ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>{onHold ? "ON HOLD" : "OK to bill"}</span></td>
                     <td className="px-4 py-2.5 text-right"><button onClick={() => setCfgs(p => p.filter(x => x.id !== c.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                   </tr>
@@ -1159,7 +1159,7 @@ function CreditLimitManager({ invoices }: { invoices: Invoice[] }) {
           </table>
         </div>
       )}
-      {NOTE("Exposure is computed from unpaid live invoices. ON HOLD when outstanding exceeds the limit or any invoice is past its due date — block new orders until cleared.")}
+      {NOTE("Exposure is computed from unpaid live invoices. ON HOLD when outstanding exceeds the limit or any invoice is past its due date - block new orders until cleared.")}
     </div>
   );
 }
@@ -1179,11 +1179,11 @@ function MultiCurrencyInvoicing() {
     const number = `EXP-${new Date().getFullYear()}-${String(docs.length + 1).padStart(3, "0")}`;
     setDocs(p => [{ id: uid(), number, customer, currency, fcyAmount: fcy, rateAtInvoice: rate, rateAtRealisation: "", realised: false, createdAt: new Date().toISOString() }, ...p]);
     setCustomer(""); setFcy(""); setRate("");
-    toast.success(`Export invoice ${number} (LUT — 0% IGST) recorded`);
+    toast.success(`Export invoice ${number} (LUT - 0% IGST) recorded`);
   };
   const realise = (id: string, realRate: string) => {
     setDocs(p => p.map(d => d.id === id ? { ...d, rateAtRealisation: realRate, realised: true } : d));
-    toast.success("Realisation booked — FX gain/loss computed");
+    toast.success("Realisation booked - FX gain/loss computed");
   };
 
   const totalGainLoss = docs.reduce((s, d) => {
@@ -1276,7 +1276,7 @@ function ApprovalWorkflow({ invoices }: { invoices: Invoice[] }) {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
         <h2 className="text-sm font-semibold flex items-center gap-2"><GitPullRequestArrow size={14} className="text-[var(--color-primary)]" /> Invoice Approval Workflow</h2>
         <div className="max-w-xs">
-          <label className={LBL}>Approval threshold (₹) — invoices above this need a checker</label>
+          <label className={LBL}>Approval threshold (₹) - invoices above this need a checker</label>
           <input type="number" value={threshold} onChange={e => setThreshold(parseFloat(e.target.value) || 0)} className={INP} />
         </div>
       </div>
@@ -1390,7 +1390,7 @@ function DeliveryChallan() {
   };
   const toInvoice = (id: string) => {
     setDocs(p => p.map(d => d.id === id ? { ...d, invoiced: true } : d));
-    toast.success("Challan converted — raise the tax invoice with these lines in New Invoice");
+    toast.success("Challan converted - raise the tax invoice with these lines in New Invoice");
   };
 
   return (
@@ -1404,7 +1404,7 @@ function DeliveryChallan() {
           <input value={vehicle} onChange={e => setVehicle(e.target.value)} className={INP} placeholder="Vehicle no." />
         </div>
         <LineItemsEditor items={items} setItems={setItems} />
-        <DocTotals subtotal={calc.subtotal} gst={calc.gst} total={calc.total} prefix="Goods value — " />
+        <DocTotals subtotal={calc.subtotal} gst={calc.gst} total={calc.total} prefix="Goods value - " />
         <button onClick={save} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 px-4 rounded-lg text-sm hover:opacity-90">Create challan</button>
       </div>
       {docs.length > 0 && (
@@ -1417,7 +1417,7 @@ function DeliveryChallan() {
                   <td className="px-4 py-2.5 font-mono text-xs">{d.number}</td>
                   <td className="px-4 py-2.5">{d.customer}</td>
                   <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{d.purpose}</td>
-                  <td className="px-4 py-2.5 text-xs">{d.vehicle || "—"}</td>
+                  <td className="px-4 py-2.5 text-xs">{d.vehicle || "-"}</td>
                   <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(c.total)}</td>
                   <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${d.invoiced ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{d.invoiced ? "invoiced" : "open"}</span></td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
@@ -1460,7 +1460,7 @@ function LateFeeApplier({ invoices }: { invoices: Invoice[] }) {
 
   const apply = (id: string, charge: number) => {
     setApplied(p => ({ ...p, [id]: charge }));
-    toast.success("Late charge applied — re-invoice the customer for the higher amount");
+    toast.success("Late charge applied - re-invoice the customer for the higher amount");
   };
 
   return (
@@ -1507,7 +1507,7 @@ function LateFeeApplier({ invoices }: { invoices: Invoice[] }) {
             </tbody>
           </table>
         </div>
-      ) : <div className="bg-green-900/20 border border-green-700/40 rounded-lg px-4 py-3 flex items-center gap-3"><Check size={14} className="text-green-400 shrink-0" /><p className="text-sm text-green-300">No overdue invoices past the grace period — nothing to charge.</p></div>}
+      ) : <div className="bg-green-900/20 border border-green-700/40 rounded-lg px-4 py-3 flex items-center gap-3"><Check size={14} className="text-green-400 shrink-0" /><p className="text-sm text-green-300">No overdue invoices past the grace period - nothing to charge.</p></div>}
       {NOTE("Simple interest = principal × rate% × days/365 (after grace). Late fees/interest are a separate supply; re-invoice with a debit note where GST applies per your terms.")}
     </div>
   );
@@ -1516,7 +1516,7 @@ function LateFeeApplier({ invoices }: { invoices: Invoice[] }) {
 // #50 ── Receivables Ageing Buckets ──────────────────────────────────────────
 // Classic AR ageing report computed from live unpaid invoices, days-past-due.
 function AgeingBuckets({ invoices }: { invoices: Invoice[] }) {
-  const BUCKETS = ["Not due", "1–30", "31–60", "61–90", "90+"] as const;
+  const BUCKETS = ["Not due", "1-30", "31-60", "61-90", "90+"] as const;
 
   const byCustomer = useMemo(() => {
     const now = Date.now();
@@ -1524,16 +1524,16 @@ function AgeingBuckets({ invoices }: { invoices: Invoice[] }) {
       if (!due) return "Not due" as const;
       const days = Math.floor((now - new Date(due).getTime()) / 86400000);
       if (days <= 0) return "Not due" as const;
-      if (days <= 30) return "1–30" as const;
-      if (days <= 60) return "31–60" as const;
-      if (days <= 90) return "61–90" as const;
+      if (days <= 30) return "1-30" as const;
+      if (days <= 60) return "31-60" as const;
+      if (days <= 90) return "61-90" as const;
       return "90+" as const;
     };
     const map: Record<string, Record<string, number>> = {};
     invoices.filter(i => i.status !== "paid" && i.status !== "cancelled").forEach(i => {
       const amt = Number(i.total_amount) || 0;
       const b = bucketOf(i.due_date);
-      map[i.customer_name] = map[i.customer_name] || { "Not due": 0, "1–30": 0, "31–60": 0, "61–90": 0, "90+": 0 };
+      map[i.customer_name] = map[i.customer_name] || { "Not due": 0, "1-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
       map[i.customer_name][b] += amt;
     });
     return map;
@@ -1544,9 +1544,9 @@ function AgeingBuckets({ invoices }: { invoices: Invoice[] }) {
     return acc;
   }, {} as Record<string, number>);
   const grand = BUCKETS.reduce((s, b) => s + (totals[b] || 0), 0);
-  const overdueTotal = (totals["1–30"] || 0) + (totals["31–60"] || 0) + (totals["61–90"] || 0) + (totals["90+"] || 0);
+  const overdueTotal = (totals["1-30"] || 0) + (totals["31-60"] || 0) + (totals["61-90"] || 0) + (totals["90+"] || 0);
 
-  const colour = (b: string) => b === "Not due" ? "text-green-400" : b === "1–30" ? "text-yellow-400" : b === "31–60" ? "text-orange-400" : "text-red-400";
+  const colour = (b: string) => b === "Not due" ? "text-green-400" : b === "1-30" ? "text-yellow-400" : b === "31-60" ? "text-orange-400" : "text-red-400";
 
   return (
     <div className="space-y-4">
@@ -1578,7 +1578,7 @@ function AgeingBuckets({ invoices }: { invoices: Invoice[] }) {
                 return (
                   <tr key={cust} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 font-medium">{cust}</td>
-                    {BUCKETS.map(b => <td key={b} className={`px-4 py-2.5 tabular-nums text-xs ${row[b] ? colour(b) : "text-[var(--color-muted)]"}`}>{row[b] ? formatCurrency(Math.round(row[b])) : "—"}</td>)}
+                    {BUCKETS.map(b => <td key={b} className={`px-4 py-2.5 tabular-nums text-xs ${row[b] ? colour(b) : "text-[var(--color-muted)]"}`}>{row[b] ? formatCurrency(Math.round(row[b])) : "-"}</td>)}
                     <td className="px-4 py-2.5 tabular-nums font-bold">{formatCurrency(Math.round(rowTotal))}</td>
                   </tr>
                 );
@@ -1586,14 +1586,14 @@ function AgeingBuckets({ invoices }: { invoices: Invoice[] }) {
             </tbody>
           </table>
         </div>
-      ) : <div className="bg-green-900/20 border border-green-700/40 rounded-lg px-4 py-3 flex items-center gap-3"><Check size={14} className="text-green-400 shrink-0" /><p className="text-sm text-green-300">No outstanding receivables — all invoices are paid.</p></div>}
-      {NOTE("Buckets are by days past the due date, computed live from unpaid invoices. Use the 61–90 / 90+ columns to prioritise collection calls and provisioning.")}
+      ) : <div className="bg-green-900/20 border border-green-700/40 rounded-lg px-4 py-3 flex items-center gap-3"><Check size={14} className="text-green-400 shrink-0" /><p className="text-sm text-green-300">No outstanding receivables - all invoices are paid.</p></div>}
+      {NOTE("Buckets are by days past the due date, computed live from unpaid invoices. Use the 61-90 / 90+ columns to prioritise collection calls and provisioning.")}
     </div>
   );
 }
 
 // #51 ── Bulk Invoice Generator (CSV) ────────────────────────────────────────
-// Paste/upload CSV: customer,gstin,description,qty,rate,gst,due_date — one invoice per row.
+// Paste/upload CSV: customer,gstin,description,qty,rate,gst,due_date - one invoice per row.
 interface BulkRow { customer: string; gstin: string; description: string; qty: number; rate: number; gst: number; due: string; valid: boolean; error: string; }
 function BulkInvoiceGenerator({ onCreated }: { onCreated: () => void }) {
   const SAMPLE = "customer,gstin,description,qty,rate,gst,due_date\nAcme Pvt Ltd,27AAAAA0000A1Z5,Consulting,10,5000,18,2026-07-31\nBeta Traders,,Annual maintenance,1,120000,18,2026-08-15";
@@ -1679,8 +1679,8 @@ function BulkInvoiceGenerator({ onCreated }: { onCreated: () => void }) {
                 {rows.map((r, i) => (
                   <tr key={i} className={`hover:bg-white/2 ${!r.valid ? "bg-red-950/10" : ""}`}>
                     <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{i + 1}</td>
-                    <td className="px-4 py-2.5">{r.customer || <span className="text-[var(--color-muted)]">—</span>}</td>
-                    <td className="px-4 py-2.5 text-xs">{r.description || <span className="text-[var(--color-muted)]">—</span>}</td>
+                    <td className="px-4 py-2.5">{r.customer || <span className="text-[var(--color-muted)]">-</span>}</td>
+                    <td className="px-4 py-2.5 text-xs">{r.description || <span className="text-[var(--color-muted)]">-</span>}</td>
                     <td className="px-4 py-2.5 tabular-nums text-xs">{r.qty}</td>
                     <td className="px-4 py-2.5 tabular-nums text-xs">{formatCurrency(r.rate)}</td>
                     <td className="px-4 py-2.5 tabular-nums text-xs">{r.gst}%</td>
@@ -1696,7 +1696,7 @@ function BulkInvoiceGenerator({ onCreated }: { onCreated: () => void }) {
           </button>
         </>
       )}
-      {NOTE("Each valid row posts a real GST invoice via the backend (one line item each). Invalid rows are skipped — fix the flagged errors and re-run.")}
+      {NOTE("Each valid row posts a real GST invoice via the backend (one line item each). Invalid rows are skipped - fix the flagged errors and re-run.")}
     </div>
   );
 }
@@ -1733,7 +1733,7 @@ function PoMatcher({ invoices }: { invoices: Invoice[] }) {
           <input value={poNumber} onChange={e => setPoNumber(e.target.value)} className={INP} placeholder="PO number *" />
           <input type="number" value={poAmount} onChange={e => setPoAmount(e.target.value)} className={INP} placeholder="PO amount ₹ *" />
           <select value={invoiceNumber} onChange={e => onPickInv(e.target.value)} className={INP}>
-            <option value="">— match invoice —</option>
+            <option value="">- match invoice -</option>
             {invoices.map(i => <option key={i.id} value={i.invoice_number}>{i.invoice_number}</option>)}
           </select>
           <input value={customer} onChange={e => setCustomer(e.target.value)} className={INP} placeholder="Customer" />
@@ -1759,11 +1759,11 @@ function PoMatcher({ invoices }: { invoices: Invoice[] }) {
                 return (
                   <tr key={p.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 font-mono text-xs">{p.poNumber}</td>
-                    <td className="px-4 py-2.5">{p.customer || "—"}</td>
+                    <td className="px-4 py-2.5">{p.customer || "-"}</td>
                     <td className="px-4 py-2.5 tabular-nums">{formatCurrency(po)}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{p.invoiceNumber || "—"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{inv ? formatCurrency(invAmt) : "—"}</td>
-                    <td className={`px-4 py-2.5 tabular-nums text-xs font-semibold ${!inv ? "text-[var(--color-muted)]" : variance === 0 ? "text-[var(--color-muted)]" : variance > 0 ? "text-red-400" : "text-yellow-400"}`}>{inv ? (variance < 0 ? `(${formatCurrency(Math.abs(Math.round(variance)))})` : formatCurrency(Math.round(variance))) : "—"}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{p.invoiceNumber || "-"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{inv ? formatCurrency(invAmt) : "-"}</td>
+                    <td className={`px-4 py-2.5 tabular-nums text-xs font-semibold ${!inv ? "text-[var(--color-muted)]" : variance === 0 ? "text-[var(--color-muted)]" : variance > 0 ? "text-red-400" : "text-yellow-400"}`}>{inv ? (variance < 0 ? `(${formatCurrency(Math.abs(Math.round(variance)))})` : formatCurrency(Math.round(variance))) : "-"}</td>
                     <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${cls}`}>{status}</span></td>
                     <td className="px-4 py-2.5 text-right"><button onClick={() => setPos(prev => prev.filter(x => x.id !== p.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                   </tr>
@@ -1781,13 +1781,13 @@ function PoMatcher({ invoices }: { invoices: Invoice[] }) {
 // #53 ── TDS-on-Invoice & Round-off Helper ───────────────────────────────────
 // Buyer-side TDS (192J/194C/194Q etc.) net-payable + GST round-off ledger entry.
 const TDS_SECTIONS = [
-  { code: "194C", label: "194C — Contractor/sub-contractor", rate: 1 },
-  { code: "194C-2", label: "194C — Contractor (firm/company)", rate: 2 },
-  { code: "194J", label: "194J — Professional/technical fees", rate: 10 },
-  { code: "194J-T", label: "194J — Technical services", rate: 2 },
-  { code: "194H", label: "194H — Commission/brokerage", rate: 5 },
-  { code: "194I", label: "194I — Rent (plant/machinery)", rate: 2 },
-  { code: "194Q", label: "194Q — Purchase of goods", rate: 0.1 },
+  { code: "194C", label: "194C - Contractor/sub-contractor", rate: 1 },
+  { code: "194C-2", label: "194C - Contractor (firm/company)", rate: 2 },
+  { code: "194J", label: "194J - Professional/technical fees", rate: 10 },
+  { code: "194J-T", label: "194J - Technical services", rate: 2 },
+  { code: "194H", label: "194H - Commission/brokerage", rate: 5 },
+  { code: "194I", label: "194I - Rent (plant/machinery)", rate: 2 },
+  { code: "194Q", label: "194Q - Purchase of goods", rate: 0.1 },
 ] as const;
 function TdsRoundOffHelper() {
   const [taxable, setTaxable] = useState("100000");
@@ -1818,7 +1818,7 @@ function TdsRoundOffHelper() {
         </div>
         <label className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
           <input type="checkbox" checked={tdsOnGst} onChange={e => setTdsOnGst(e.target.checked)} className="accent-[var(--color-primary)]" />
-          Deduct TDS on GST-inclusive value (only if GST is not shown separately — CBDT Circular 23/2017)
+          Deduct TDS on GST-inclusive value (only if GST is not shown separately - CBDT Circular 23/2017)
         </label>
       </div>
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-2 text-sm">
@@ -1881,7 +1881,7 @@ function DisputeTracker({ invoices }: { invoices: Invoice[] }) {
         <h2 className="text-sm font-semibold flex items-center gap-2"><MessageSquareWarning size={14} className="text-[var(--color-primary)]" /> Invoice Dispute Tracker</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <select value={invoiceNumber} onChange={e => onPickInv(e.target.value)} className={INP}>
-            <option value="">— disputed invoice * —</option>
+            <option value="">- disputed invoice * -</option>
             {invoices.map(i => <option key={i.id} value={i.invoice_number}>{i.invoice_number} · {i.customer_name}</option>)}
           </select>
           <input value={customer} onChange={e => setCustomer(e.target.value)} className={INP} placeholder="Customer" />
@@ -1951,7 +1951,7 @@ function PaymentTermsLibrary() {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
         <h2 className="text-sm font-semibold flex items-center gap-2"><ScrollText size={14} className="text-[var(--color-primary)]" /> Payment Terms Library</h2>
-        <p className="text-xs text-[var(--color-muted)]">Reusable terms applied to new invoices — sets due date, early-pay discount and late-interest rate.</p>
+        <p className="text-xs text-[var(--color-muted)]">Reusable terms applied to new invoices - sets due date, early-pay discount and late-interest rate.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <input value={name} onChange={e => setName(e.target.value)} className={INP} placeholder="Term name *" />
           <input type="number" value={netDays} onChange={e => setNetDays(e.target.value)} className={INP} placeholder="Net days" />
@@ -1970,7 +1970,7 @@ function PaymentTermsLibrary() {
                 <td className="px-4 py-2.5 font-medium">{t.name}</td>
                 <td className="px-4 py-2.5 tabular-nums">{t.netDays}d</td>
                 <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{addDays(t.netDays)}</td>
-                <td className="px-4 py-2.5 text-xs">{t.earlyPayDiscount > 0 ? `${t.earlyPayDiscount}% in ${t.earlyPayDays}d` : "—"}</td>
+                <td className="px-4 py-2.5 text-xs">{t.earlyPayDiscount > 0 ? `${t.earlyPayDiscount}% in ${t.earlyPayDays}d` : "-"}</td>
                 <td className="px-4 py-2.5 tabular-nums text-xs">{t.lateRate}% p.a.</td>
                 <td className="px-4 py-2.5">{t.isDefault ? <span className="text-[10px] px-2 py-0.5 rounded-full border font-semibold bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-[var(--color-primary)]/30">default</span> : <button onClick={() => makeDefault(t.id)} className="text-xs text-[var(--color-primary)] hover:underline">Set default</button>}</td>
                 <td className="px-4 py-2.5 text-right"><button onClick={() => setTerms(p => p.filter(x => x.id !== t.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
@@ -2010,7 +2010,7 @@ function MilestoneBilling() {
   };
   const bill = (pid: string, mid: string) => {
     setProjects(p => p.map(pr => pr.id === pid ? { ...pr, milestones: pr.milestones.map(m => m.id === mid ? { ...m, billed: true } : m) } : pr));
-    toast.success("Milestone marked billed — raise the tax invoice for this stage");
+    toast.success("Milestone marked billed - raise the tax invoice for this stage");
   };
 
   return (
@@ -2056,7 +2056,7 @@ function MilestoneBilling() {
                 const withGst = base * (1 + g / 100);
                 return (
                   <div key={m.id} className="flex items-center justify-between gap-3 text-sm bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
-                    <span className="flex-1 min-w-0 truncate">{m.name || "—"} <span className="text-[var(--color-muted)] text-xs">({m.pct}%)</span></span>
+                    <span className="flex-1 min-w-0 truncate">{m.name || "-"} <span className="text-[var(--color-muted)] text-xs">({m.pct}%)</span></span>
                     <span className="tabular-nums text-xs text-[var(--color-muted)]">{formatCurrency(Math.round(base))} + GST</span>
                     <span className="tabular-nums font-semibold">{formatCurrency(Math.round(withGst))}</span>
                     {m.billed ? <span className="text-[10px] text-green-400 inline-flex items-center gap-1 shrink-0"><Check size={10} /> billed</span>
@@ -2088,7 +2088,7 @@ function AdvanceAdjustment({ invoices }: { invoices: Invoice[] }) {
     if (!customer || !received) { toast.error("Add customer and advance amount"); return; }
     setAdvances(p => [{ id: uid(), customer, received, adjusted: "0", createdAt: new Date().toISOString() }, ...p]);
     setCustomer(""); setReceived("");
-    toast.success("Advance recorded (Receipt Voucher — GST on advance for services)");
+    toast.success("Advance recorded (Receipt Voucher - GST on advance for services)");
   };
   const applyAdjust = () => {
     const a = advances.find(x => x.id === adjustId);
@@ -2129,7 +2129,7 @@ function AdvanceAdjustment({ invoices }: { invoices: Invoice[] }) {
             <div className="flex-1 min-w-[180px]">
               <label className={LBL}>Adjust an advance</label>
               <select value={adjustId} onChange={e => setAdjustId(e.target.value)} className={INP}>
-                <option value="">— select advance —</option>
+                <option value="">- select advance -</option>
                 {advances.filter(a => (parseFloat(a.received) || 0) - (parseFloat(a.adjusted) || 0) > 0).map(a => {
                   const rem = (parseFloat(a.received) || 0) - (parseFloat(a.adjusted) || 0);
                   return <option key={a.id} value={a.id}>{a.customer} · {formatCurrency(rem)} left</option>;
@@ -2196,7 +2196,7 @@ function EInvoiceJsonGenerator({ invoices }: { invoices: Invoice[] }) {
       TranDtls: { TaxSch: "GST", SupTyp: "B2B", RegRev: "N", IgstOnIntra: "N" },
       DocDtls: { Typ: "INV", No: inv.invoice_number, Dt: (inv.created_at || "").split("T")[0].split("-").reverse().join("/") },
       SellerDtls: { Gstin: supplierGstin || "URP", LglNm: "Your Business", Loc: "Mumbai", Pin: 400001, Stcd: supplierState },
-      BuyerDtls: { Gstin: inv.customer_gstin || "URP", LglNm: inv.customer_name, Pos: buyerState, Loc: "—", Pin: 999999, Stcd: buyerState },
+      BuyerDtls: { Gstin: inv.customer_gstin || "URP", LglNm: inv.customer_name, Pos: buyerState, Loc: "-", Pin: 999999, Stcd: buyerState },
       ItemList: (inv.items && inv.items.length > 0 ? inv.items : [{ description: inv.invoice_number, hsn_sac: "", quantity: 1, unit_price: sub, gst_rate: inv.gst_rate, amount: sub }]).map((it, i) => {
         const amt = Math.round((parseFloat(String(it.amount)) || (parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.unit_price)) || 0)) * 100) / 100;
         const rate = parseFloat(String(it.gst_rate)) || 0;
@@ -2234,7 +2234,7 @@ function EInvoiceJsonGenerator({ invoices }: { invoices: Invoice[] }) {
           <div>
             <label className={LBL}>Invoice</label>
             <select value={selId} onChange={e => setSelId(e.target.value)} className={INP}>
-              <option value="">— select invoice —</option>
+              <option value="">- select invoice -</option>
               {elig.map(i => <option key={i.id} value={i.id}>{i.invoice_number} · {i.customer_name}</option>)}
             </select>
           </div>
@@ -2253,7 +2253,7 @@ function EInvoiceJsonGenerator({ invoices }: { invoices: Invoice[] }) {
           </>
         )}
       </div>
-      {NOTE("Schema mirrors the mandatory IRP fields (Version 1.1). PIN/place are placeholders — fill registered address before upload. e-Invoicing is mandatory for AATO above ₹5 crore.")}
+      {NOTE("Schema mirrors the mandatory IRP fields (Version 1.1). PIN/place are placeholders - fill registered address before upload. e-Invoicing is mandatory for AATO above ₹5 crore.")}
     </div>
   );
 }
@@ -2288,7 +2288,7 @@ function StatementOfAccount({ invoices }: { invoices: Invoice[] }) {
         <div className="max-w-sm">
           <label className={LBL}>Customer</label>
           <select value={customer} onChange={e => setCustomer(e.target.value)} className={INP}>
-            <option value="">— select customer —</option>
+            <option value="">- select customer -</option>
             {customers.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
@@ -2310,7 +2310,7 @@ function StatementOfAccount({ invoices }: { invoices: Invoice[] }) {
                   <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{(r.created_at || "").split("T")[0]}</td>
                   <td className="px-4 py-2.5 font-mono text-xs">{r.invoice_number}</td>
                   <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amt)}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-green-400">{r.paid ? formatCurrency(r.amt) : "—"}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-green-400">{r.paid ? formatCurrency(r.amt) : "-"}</td>
                   <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(r.balance)}</td>
                 </tr>
               ))}
@@ -2359,7 +2359,7 @@ function PartialPaymentTracker({ invoices }: { invoices: Invoice[] }) {
           <div className="col-span-2">
             <label className={LBL}>Invoice</label>
             <select value={invoiceId} onChange={e => setInvoiceId(e.target.value)} className={INP}>
-              <option value="">— select open invoice —</option>
+              <option value="">- select open invoice -</option>
               {open.map(i => { const out = (parseFloat(String(i.total_amount)) || 0) - paidFor(i.id); return <option key={i.id} value={i.id}>{i.invoice_number} · {formatCurrency(out)} due</option>; })}
             </select>
           </div>
@@ -2406,7 +2406,7 @@ function PartialPaymentTracker({ invoices }: { invoices: Invoice[] }) {
                 return (
                   <tr key={p.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{p.date}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs">{inv ? inv.invoice_number : "—"}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs">{inv ? inv.invoice_number : "-"}</td>
                     <td className="px-4 py-2.5 tabular-nums">{formatCurrency(parseFloat(p.amount) || 0)}</td>
                     <td className="px-4 py-2.5 text-xs">{p.mode}</td>
                     <td className="px-4 py-2.5 text-right"><button onClick={() => setPays(v => v.filter(x => x.id !== p.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
@@ -2444,7 +2444,7 @@ function InvoiceMarginAnalyzer({ invoices }: { invoices: Invoice[] }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
         <h2 className="text-sm font-semibold flex items-center gap-2"><TrendingUp size={14} className="text-[var(--color-primary)]" /> Invoice Margin Analyzer</h2>
-        <p className="text-xs text-[var(--color-muted)]">Enter the cost of goods/services for each invoice to see profit per invoice. Margin is computed on taxable value (GST excluded — it is a pass-through).</p>
+        <p className="text-xs text-[var(--color-muted)]">Enter the cost of goods/services for each invoice to see profit per invoice. Margin is computed on taxable value (GST excluded - it is a pass-through).</p>
         {withCost.length > 0 && (
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Revenue (costed)</p><p className="text-base font-bold tabular-nums">{formatCurrency(totalRev)}</p></div>
@@ -2464,8 +2464,8 @@ function InvoiceMarginAnalyzer({ invoices }: { invoices: Invoice[] }) {
                   <td className="px-4 py-2.5 truncate max-w-[150px]">{i.customer_name}</td>
                   <td className="px-4 py-2.5 tabular-nums">{formatCurrency(revenue)}</td>
                   <td className="px-4 py-2.5"><input type="number" min="0" step="0.01" value={costs[i.id] || ""} onChange={e => setCosts(c => ({ ...c, [i.id]: e.target.value }))} className={`${INP} w-28 py-1`} placeholder="0" /></td>
-                  <td className={`px-4 py-2.5 tabular-nums font-semibold ${marginPct === null ? "text-[var(--color-muted)]" : margin >= 0 ? "text-green-400" : "text-red-400"}`}>{marginPct === null ? "—" : formatCurrency(margin)}</td>
-                  <td className={`px-4 py-2.5 tabular-nums ${marginPct === null ? "text-[var(--color-muted)]" : marginPct >= 0 ? "text-green-400" : "text-red-400"}`}>{marginPct === null ? "—" : `${marginPct}%`}</td>
+                  <td className={`px-4 py-2.5 tabular-nums font-semibold ${marginPct === null ? "text-[var(--color-muted)]" : margin >= 0 ? "text-green-400" : "text-red-400"}`}>{marginPct === null ? "-" : formatCurrency(margin)}</td>
+                  <td className={`px-4 py-2.5 tabular-nums ${marginPct === null ? "text-[var(--color-muted)]" : marginPct >= 0 ? "text-green-400" : "text-red-400"}`}>{marginPct === null ? "-" : `${marginPct}%`}</td>
                 </tr>
               ))}
             </tbody>
@@ -2682,7 +2682,7 @@ function DueDateSuggester({ invoices }: { invoices: Invoice[] }) {
           <div>
             <label className={LBL}>Customer</label>
             <select value={customer} onChange={e => setCustomer(e.target.value)} className={INP}>
-              <option value="">— select customer —</option>
+              <option value="">- select customer -</option>
               {customers.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
@@ -2691,14 +2691,14 @@ function DueDateSuggester({ invoices }: { invoices: Invoice[] }) {
         {customer && (
           <div className="border-t border-[var(--color-border)] pt-3 grid grid-cols-3 gap-3">
             <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Paid invoices</p><p className="text-base font-bold tabular-nums">{paid.length}</p></div>
-            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Avg days-to-pay</p><p className="text-base font-bold tabular-nums">{avgDays === null ? "—" : `${avgDays}d`}</p></div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Avg days-to-pay</p><p className="text-base font-bold tabular-nums">{avgDays === null ? "-" : `${avgDays}d`}</p></div>
             <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Suggested due date</p><p className="text-base font-bold tabular-nums text-[var(--color-primary)]">{suggestedDate}</p></div>
           </div>
         )}
         {customer && (
           <div className="text-xs text-[var(--color-muted)]">
             {avgDays === null
-              ? `No settled history for this buyer — using your default of ${fallback} days (Net ${fallback}).`
+              ? `No settled history for this buyer - using your default of ${fallback} days (Net ${fallback}).`
               : `Based on ${paid.length} paid invoice${paid.length === 1 ? "" : "s"}, this buyer pays in ~${avgDays} days. Suggested term: Net ${suggested}.`}
           </div>
         )}
@@ -2744,7 +2744,7 @@ function DuplicateDetector({ invoices }: { invoices: Invoice[] }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
         <h2 className="text-sm font-semibold flex items-center gap-2"><CopyCheck size={14} className="text-[var(--color-primary)]" /> Duplicate Invoice Detector</h2>
-        <p className="text-xs text-[var(--color-muted)]">Flags invoices to the same customer for an identical total raised within a short window — a common double-billing slip.</p>
+        <p className="text-xs text-[var(--color-muted)]">Flags invoices to the same customer for an identical total raised within a short window - a common double-billing slip.</p>
         <div className="w-48"><label className={LBL}>Match window (days)</label><input type="number" min="1" value={windowDays} onChange={e => setWindowDays(e.target.value)} className={INP} /></div>
       </div>
       {groups.length > 0 ? (
@@ -2777,7 +2777,7 @@ function DuplicateDetector({ invoices }: { invoices: Invoice[] }) {
           <p className="text-sm text-green-300">No suspected duplicates within a {days}-day window.</p>
         </div>
       )}
-      {NOTE("Detection is heuristic — matched by customer name and identical GST-inclusive total. Genuine repeat orders may appear; verify before cancelling. Cancel a true duplicate within the IRN window to avoid GST mismatch.")}
+      {NOTE("Detection is heuristic - matched by customer name and identical GST-inclusive total. Genuine repeat orders may appear; verify before cancelling. Cancel a true duplicate within the IRN window to avoid GST mismatch.")}
     </div>
   );
 }

@@ -1,10 +1,10 @@
-// §12 — Transaction Rules engine (Firefly-III-style, logic ported not copied).
+// §12 - Transaction Rules engine (Firefly-III-style, logic ported not copied).
 //
 // Shape:  rule_groups → rules → { triggers[], actions[] }
 //   • A rule_group is an ordered bucket of rules (lower order_index runs first).
 //   • A rule has strict_mode = 'AND' (all triggers must hit) or 'OR' (any trigger),
 //     an active flag, an order_index, and stop_processing (halt the whole engine
-//     once this rule fires — mirrors Firefly's "stop processing" switch).
+//     once this rule fires - mirrors Firefly's "stop processing" switch).
 //   • A trigger is { field, operator, value, negate } evaluated over a transaction
 //     row. Negate inverts the single trigger's boolean result.
 //   • An action mutates the row: set_category / add_tag / set_ledger (the GL ledger
@@ -12,7 +12,7 @@
 //
 // applyRules(tenantId, rows) loads the tenant's active rules once, runs them over an
 // array of plain transaction/bank rows, and returns the MUTATED rows plus a per-row
-// audit of which rules fired. It never touches the GL — categorisation is metadata;
+// audit of which rules fired. It never touches the GL - categorisation is metadata;
 // posting still goes through ./posting-engine when a line is confirmed.
 //
 // Also exports a unified search-operator parser so a single string like
@@ -32,7 +32,7 @@ const FIELDS = {
   description: (row) => String(row.description == null ? "" : row.description),
   reference: (row) => String(row.reference == null ? "" : row.reference),
   // "account" = the bank ledger the line belongs to; "category"/"tag"/"ledger" are
-  // the categorisation slots actions write — so later rules can react to them.
+  // the categorisation slots actions write - so later rules can react to them.
   account: (row) => String(row.bank_ledger_id == null ? (row.account || "") : row.bank_ledger_id),
   category: (row) => String(row.category == null ? "" : row.category),
   ledger: (row) => String(row.suggested_ledger_id == null ? (row.ledger || "") : row.suggested_ledger_id),
@@ -82,7 +82,7 @@ const OP_NAMES = Object.keys(OPERATORS)
 function splitFieldOp(key) {
   // key like "amount_abs_more" → field "amount_abs", op "more".
   for (const op of OP_NAMES) {
-    if (key === op) return null; // bare operator with no field — invalid
+    if (key === op) return null; // bare operator with no field - invalid
     if (key.endsWith("_" + op)) {
       const field = key.slice(0, -(op.length + 1));
       if (FIELDS[field]) return { field, operator: op };
@@ -151,7 +151,7 @@ function runAction(action, row) {
     case "set_flag": r.flagged = action.value == null ? true : !!action.value; break;
     case "clear_category": r.category = null; break;
     case "convert": {
-      // Flip the sign (e.g. a refund miscoded as a debit) — money-safe, never float.
+      // Flip the sign (e.g. a refund miscoded as a debit) - money-safe, never float.
       r.amount = money(r.amount == null ? 0 : r.amount).neg().toFixed(4);
       break;
     }

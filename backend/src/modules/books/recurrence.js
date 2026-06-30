@@ -1,4 +1,4 @@
-// §M-REC — RECURRENCE ENGINE. A Firefly-III-style Recurrence + RecurrenceRepetition
+// §M-REC - RECURRENCE ENGINE. A Firefly-III-style Recurrence + RecurrenceRepetition
 // model that generalises the legacy book_recurring (vouchertools/documents) into a
 // proper schedule with: repetition TYPE (daily/weekly/monthly/yearly/ndom), a MOMENT
 // (which weekday/day-of-month/etc.), SKIP-N (every Nth occurrence), a WEEKEND strategy

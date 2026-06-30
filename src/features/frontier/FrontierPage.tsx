@@ -56,7 +56,7 @@ export default function FrontierPage() {
             <FlaskConical size={18} className="text-[var(--color-primary)]" /> Frontier Lab
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Where Headroom prototypes the next decade of SMB finance — real-time, ambient, autonomous and quantum-safe.
+            Where Headroom prototypes the next decade of SMB finance - real-time, ambient, autonomous and quantum-safe.
           </p>
         </div>
         <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
@@ -69,10 +69,10 @@ export default function FrontierPage() {
         </div>
       </div>
 
-      {/* Honest top note — shown on every tab */}
+      {/* Honest top note - shown on every tab */}
       <div className="rounded-lg px-4 py-2.5 border border-[var(--color-border)] bg-[var(--color-accent)]/40 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px text-yellow-400" />
-        Experimental &amp; forward-looking — real tools you can use today plus a preview of what's coming. Tools marked
+        Experimental &amp; forward-looking - real tools you can use today plus a preview of what's coming. Tools marked
         <span className="inline-block"><PreviewBadge /></span> are honest interactive mockups, not live money rails.
       </div>
 
@@ -114,9 +114,9 @@ function Overview({ onOpen }: { onOpen: (t: TabId) => void }) {
       <div className={`${CARD} p-5`}>
         <p className="text-sm font-semibold mb-1">What this lab is for</p>
         <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-          Headroom's roadmap points at finance that senses, decides and settles in the moment — and stays secure against
+          Headroom's roadmap points at finance that senses, decides and settles in the moment - and stays secure against
           tomorrow's quantum computers. Some of that is buildable on today's data and is shipped here as working tools.
-          The rest depends on rails (RTP, programmable CBDC, streaming payroll) that are still maturing — those appear as
+          The rest depends on rails (RTP, programmable CBDC, streaming payroll) that are still maturing - those appear as
           honest, interactive previews so you can shape the design without us faking live money movement.
         </p>
       </div>
@@ -232,7 +232,7 @@ function AlertTriggers() {
       </div>
 
       {rules.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No trigger rules yet. Add one above — start with a low-cash-balance alert.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">No trigger rules yet. Add one above - start with a low-cash-balance alert.</p>
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <table className="w-full text-sm">
@@ -269,7 +269,7 @@ function AlertTriggers() {
   );
 }
 
-// ── #2 Ambient automation rules — evaluated live against the store ───────────────
+// ── #2 Ambient automation rules - evaluated live against the store ───────────────
 type AmbientMetric = "cash" | "runway" | "monthly_net" | "debt_outstanding";
 type AmbientOp = "<" | ">";
 interface AmbientRule {
@@ -320,7 +320,7 @@ function AmbientRules() {
           <h3 className="text-sm font-semibold flex items-center gap-2"><Radar size={14} className="text-[var(--color-primary)]" /> Background Watch Rules</h3>
           <LiveBadge />
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Arm "if &lt;metric&gt; &lt;op&gt; &lt;value&gt; then &lt;action&gt;" rules. They evaluate live against your current financials below — no waiting for a batch job.</p>
+        <p className="text-xs text-[var(--color-muted)]">Arm "if &lt;metric&gt; &lt;op&gt; &lt;value&gt; then &lt;action&gt;" rules. They evaluate live against your current financials below - no waiting for a batch job.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">If</label>
@@ -406,7 +406,7 @@ function AmbientRules() {
   );
 }
 
-// ── #3 Scenario supercompute — heavy Monte-Carlo ─────────────────────────────────
+// ── #3 Scenario supercompute - heavy Monte-Carlo ─────────────────────────────────
 interface SimResult { p10: number; p50: number; p90: number; pNegative: number; runs: number; min: number; max: number }
 
 function ScenarioSupercompute() {
@@ -577,12 +577,12 @@ function QuantumReadiness() {
           );
         })}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Based on NIST PQC guidance (Kyber/Dilithium/SPHINCS+). "Harvest-now-decrypt-later" means data exfiltrated today can be decrypted once quantum computers mature — long-lived financial records are the priority.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Based on NIST PQC guidance (Kyber/Dilithium/SPHINCS+). "Harvest-now-decrypt-later" means data exfiltrated today can be decrypted once quantum computers mature - long-lived financial records are the priority.</p>
     </div>
   );
 }
 
-// ── #5 Event stream / activity feed — derived from the live store ────────────────
+// ── #5 Event stream / activity feed - derived from the live store ────────────────
 interface FeedEvent { ts: number; label: string; detail: string; tone: "pos" | "neg" | "neutral" | "warn" }
 
 function EventStream() {
@@ -629,7 +629,7 @@ function EventStream() {
       <div className={`${CARD} p-4 flex items-center justify-between`}>
         <div>
           <h3 className="text-sm font-semibold flex items-center gap-2"><Activity size={14} className="text-[var(--color-primary)]" /> Live Event Stream</h3>
-          <p className="text-xs text-[var(--color-muted)] mt-1">Recent changes across your store, rendered as an "event bus" feed — a preview of event-driven finance.</p>
+          <p className="text-xs text-[var(--color-muted)] mt-1">Recent changes across your store, rendered as an "event bus" feed - a preview of event-driven finance.</p>
         </div>
         <LiveBadge />
       </div>
@@ -651,7 +651,7 @@ function EventStream() {
   );
 }
 
-// ── #6 Tech-readiness radar — self-assessment scored ─────────────────────────────
+// ── #6 Tech-readiness radar - self-assessment scored ─────────────────────────────
 type Axis = "ai" | "realtime" | "tokenization" | "quantum";
 const AXES: ReadonlyArray<readonly [Axis, string, string]> = [
   ["ai", "AI / Agentic", "Autonomous agents reasoning over your books."],
@@ -697,7 +697,7 @@ function TechReadinessRadar() {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A self-assessment to focus your roadmap — the lowest axis is usually the best next investment. Headroom ships tools against each as they become buildable on Indian rails.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A self-assessment to focus your roadmap - the lowest axis is usually the best next investment. Headroom ships tools against each as they become buildable on Indian rails.</p>
     </div>
   );
 }
@@ -714,7 +714,7 @@ function RequestToPayDesigner() {
   return (
     <div className="space-y-4">
       <PreviewHeader Icon={Banknote} title="Request-to-Pay Designer"
-        blurb="Design the structured RTP object a vendor would receive once UPI Request-to-Pay rails mature for businesses. This builds a preview payload — it does not send a real payment request yet." />
+        blurb="Design the structured RTP object a vendor would receive once UPI Request-to-Pay rails mature for businesses. This builds a preview payload - it does not send a real payment request yet." />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className={`${CARD} p-4 space-y-3`}>
@@ -757,7 +757,7 @@ function StreamingPayroll() {
   return (
     <div className="space-y-4">
       <PreviewHeader Icon={Workflow} title="Streaming-Payroll Simulator"
-        blurb="Model wages accruing per second instead of monthly. Illustrative maths only — real continuous payout needs streaming rails and is not wired to your payroll." />
+        blurb="Model wages accruing per second instead of monthly. Illustrative maths only - real continuous payout needs streaming rails and is not wired to your payroll." />
       <div className={`${CARD} p-4 grid grid-cols-1 md:grid-cols-3 gap-3`}>
         <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly wage / head (₹)</label><input type="number" value={monthly} onChange={e => setMonthly(e.target.value)} className={INP} /></div>
         <div><label className="text-xs text-[var(--color-muted)] block mb-1">Headcount</label><input type="number" value={headcount} onChange={e => setHeadcount(e.target.value)} className={INP} /></div>
@@ -790,7 +790,7 @@ function AutonomousTreasury() {
   return (
     <div className="space-y-4">
       <PreviewHeader Icon={Sparkles} title="Autonomous-Treasury Policy"
-        blurb="Define the guardrails a self-driving treasury agent would obey — minimum buffer, sweep limits, yield floor. Saved as your intended policy; no funds move until autonomous treasury is enabled." />
+        blurb="Define the guardrails a self-driving treasury agent would obey - minimum buffer, sweep limits, yield floor. Saved as your intended policy; no funds move until autonomous treasury is enabled." />
       <div className={`${CARD} p-4 grid grid-cols-1 md:grid-cols-3 gap-4`}>
         <div><label className="text-xs text-[var(--color-muted)] block mb-1">Minimum cash buffer (₹)</label><input type="number" value={policy.minBuffer} onChange={e => upd("minBuffer", e.target.value)} className={INP} /></div>
         <div><label className="text-xs text-[var(--color-muted)] block mb-1">Max % of surplus to sweep</label><input type="number" value={policy.maxSweep} onChange={e => upd("maxSweep", e.target.value)} className={INP} /></div>
@@ -829,7 +829,7 @@ function MachineToMachine() {
   return (
     <div className="space-y-4">
       <PreviewHeader Icon={Zap} title="Machine-to-Machine Payment Concept"
-        blurb="Model an IoT device paying per unit it consumes (e.g. an EV settling per km, a meter per kWh) over programmable money. Conceptual calculator — no device or CBDC rail is connected." />
+        blurb="Model an IoT device paying per unit it consumes (e.g. an EV settling per km, a meter per kWh) over programmable money. Conceptual calculator - no device or CBDC rail is connected." />
       <div className={`${CARD} p-4 grid grid-cols-2 md:grid-cols-4 gap-3`}>
         <div className="col-span-2 md:col-span-1"><label className="text-xs text-[var(--color-muted)] block mb-1">Device</label><input value={device} onChange={e => setDevice(e.target.value)} className={INP} /></div>
         <div><label className="text-xs text-[var(--color-muted)] block mb-1">Price / unit (₹)</label><input type="number" value={perUnit} onChange={e => setPerUnit(e.target.value)} className={INP} /></div>

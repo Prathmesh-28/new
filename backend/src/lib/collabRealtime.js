@@ -1,7 +1,7 @@
-// Collab realtime (Phase 2/3) — in-process, PER-USER SSE fan-out + presence.
+// Collab realtime (Phase 2/3) - in-process, PER-USER SSE fan-out + presence.
 //
 // Unlike lib/realtime.js (per-tenant broadcast), collab events must reach only the
-// MEMBERS of a conversation — a DM or private channel can't leak to every user in the
+// MEMBERS of a conversation - a DM or private channel can't leak to every user in the
 // tenant. Connections are keyed by (tenantId, userId). Presence is derived from "has
 // at least one open SSE connection", with a short grace on disconnect so a reload /
 // navigation doesn't flap online→offline→online. Single Node process on Render →

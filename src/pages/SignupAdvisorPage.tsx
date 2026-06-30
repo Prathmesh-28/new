@@ -6,9 +6,10 @@ import { ArrowLeft, Wifi, WifiOff } from "lucide-react";
 import type { AuthUser } from "@/data/types";
 import Logo from "@/components/Logo";
 import Turnstile, { turnstileEnabled } from "@/components/Turnstile";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function SignupAdvisorPage() {
-  useSeo({ title: "Headroom for CAs & Accountants — run your client book in one console", description: "Link every client, track GST/TDS/ITR filings, chase documents and send white-label reports — the CA practice console inside Headroom. Free to start." });
+  useSeo({ title: "Headroom for CAs & Accountants - run your client book in one console", description: "Link every client, track GST/TDS/ITR filings, chase documents and send white-label reports - the CA practice console inside Headroom. Free to start." });
   const { serverReady } = useAuth();
   const [email,    setEmail]    = useState("");
   const [firm,     setFirm]     = useState("");
@@ -87,7 +88,7 @@ export default function SignupAdvisorPage() {
         </p>
       </div>
 
-      {/* Right panel — form */}
+      {/* Right panel - form */}
       <div className="flex-1 flex flex-col items-center justify-center px-5 py-10">
         <div className="w-full max-w-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 sm:p-8 shadow-xl">
           <Link
@@ -142,8 +143,8 @@ export default function SignupAdvisorPage() {
               <label className="block text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1.5">
                 Password
               </label>
-              <input
-                type="password" value={password} onChange={e => setPassword(e.target.value)}
+              <PasswordInput
+                value={password} onChange={e => setPassword(e.target.value)}
                 required minLength={8} placeholder="At least 8 characters"
                 className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-muted)]/50"
               />
@@ -153,8 +154,8 @@ export default function SignupAdvisorPage() {
               <label className="block text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1.5">
                 Confirm Password
               </label>
-              <input
-                type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+              <PasswordInput
+                value={confirm} onChange={e => setConfirm(e.target.value)}
                 required placeholder="Repeat password"
                 className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-muted)]/50"
               />

@@ -1,5 +1,5 @@
-// §9.4 — E-way bill (EWB). Mirrors einvoice.js: an EWB is generated via the GSP/ASP
-// rail, and without GSP credentials we stay an honest "not configured" stub — we NEVER
+// §9.4 - E-way bill (EWB). Mirrors einvoice.js: an EWB is generated via the GSP/ASP
+// rail, and without GSP credentials we stay an honest "not configured" stub - we NEVER
 // fabricate an EWB number. Logic ported from ERPNext India (erpnext/regional/india,
 // e_invoice/e_waybill) + the NIC EWB API shape, but this is our own code.
 //
@@ -102,7 +102,7 @@ async function buildEwbPayload(tenantId, voucherId, opts = {}) {
   const sgst = sum(taxes.filter((t) => t.tax_kind === "SGST").map((t) => t.tax_amount));
   const igst = sum(taxes.filter((t) => t.tax_kind === "IGST").map((t) => t.tax_amount));
   const cess = sum(taxes.filter((t) => t.tax_kind === "CESS").map((t) => t.tax_amount));
-  // Taxable value: dedupe by line — CGST+SGST repeat the same taxable_value for one line,
+  // Taxable value: dedupe by line - CGST+SGST repeat the same taxable_value for one line,
   // so take it from one limb. Use IGST lines + (CGST lines as the intra-state taxable).
   const taxableLines = taxes.filter((t) => ["IGST", "CGST"].includes(t.tax_kind));
   const taxable = sum(taxableLines.map((t) => t.taxable_value));
@@ -166,7 +166,7 @@ async function buildEwbPayload(tenantId, voucherId, opts = {}) {
   };
 }
 
-// Generate the EWB. Honest "not configured" when GSP/EWB credentials are absent — no fake
+// Generate the EWB. Honest "not configured" when GSP/EWB credentials are absent - no fake
 // number. When configured, POST to the (stubbed) EWB endpoint and persist the returned
 // number + validity onto book_einvoices.eway_bill_no for that voucher.
 async function generateEwayBill(tenantId, actorId, voucherId, opts = {}) {
@@ -181,7 +181,7 @@ async function generateEwayBill(tenantId, actorId, voucherId, opts = {}) {
     return {
       configured: false,
       ok: false,
-      reason: "GSP/EWB rail not configured — set GSP_BASE_URL / GSP_API_KEY to enable e-way bill generation",
+      reason: "GSP/EWB rail not configured - set GSP_BASE_URL / GSP_API_KEY to enable e-way bill generation",
       payload, // surface the assembled payload so the UI can preview what would be sent
     };
   }
@@ -235,7 +235,7 @@ async function ewbStatus(tenantId, voucherId) {
 // ─────────────────────────────────────────────────────────────────────────────
 // EWB lifecycle operations (ported from india-compliance utils/e_waybill.py).
 // Each builds the correctly-shaped NIC payload and routes through gsp.httpCall when
-// configured; with no GSP creds we return an honest { configured:false } — we never
+// configured; with no GSP creds we return an honest { configured:false } - we never
 // fabricate a successful lifecycle action. The /ewaybill/* endpoints below mirror the
 // NIC actions VEHEWB / UPDATETRANSPORTER / EXTENDVALIDITY / CANEWB.
 
@@ -262,7 +262,7 @@ async function _fromPlaceState(tenantId) {
   return { fromPlace: seller.city || null, fromState: stateCodeOf(seller.gstin, seller.state) };
 }
 
-// updateVehicle — NIC action VEHEWB. Change the Part-B vehicle (or transport doc) on a
+// updateVehicle - NIC action VEHEWB. Change the Part-B vehicle (or transport doc) on a
 // live EWB, with a mandatory reason code. Used to fill a Part-A-only bill, or to record
 // a break-down / transhipment vehicle change mid-transit.
 async function updateVehicle(tenantId, actorId, { voucherId, vehicleNo, vehicleType, transMode, transDocNo, transDocDate, reasonCode, reasonRem } = {}) {
@@ -289,7 +289,7 @@ async function updateVehicle(tenantId, actorId, { voucherId, vehicleNo, vehicleT
   };
 
   if (!gsp.isConfigured()) {
-    return { configured: false, ok: false, reason: "GSP/EWB rail not configured — set GSP_BASE_URL / GSP_API_KEY", payload };
+    return { configured: false, ok: false, reason: "GSP/EWB rail not configured - set GSP_BASE_URL / GSP_API_KEY", payload };
   }
   try {
     const res = await gsp.httpCall("/ewaybill/update-vehicle", payload);
@@ -304,7 +304,7 @@ async function updateVehicle(tenantId, actorId, { voucherId, vehicleNo, vehicleT
   }
 }
 
-// updateTransporter — NIC action UPDATETRANSPORTER. Assign/replace the transporter GSTIN
+// updateTransporter - NIC action UPDATETRANSPORTER. Assign/replace the transporter GSTIN
 // on a live EWB so the transporter can take over Part-B updates on the portal.
 async function updateTransporter(tenantId, actorId, { voucherId, transporterId } = {}) {
   const row = await _loadLiveEwb(tenantId, voucherId);
@@ -316,7 +316,7 @@ async function updateTransporter(tenantId, actorId, { voucherId, transporterId }
   const payload = { ewbNo: row.eway_bill_no, transporterId: tid };
 
   if (!gsp.isConfigured()) {
-    return { configured: false, ok: false, reason: "GSP/EWB rail not configured — set GSP_BASE_URL / GSP_API_KEY", payload };
+    return { configured: false, ok: false, reason: "GSP/EWB rail not configured - set GSP_BASE_URL / GSP_API_KEY", payload };
   }
   try {
     const res = await gsp.httpCall("/ewaybill/update-transporter", payload);
@@ -331,7 +331,7 @@ async function updateTransporter(tenantId, actorId, { voucherId, transporterId }
   }
 }
 
-// extendValidity — NIC action EXTENDVALIDITY. Extend a bill nearing/just past expiry. NIC
+// extendValidity - NIC action EXTENDVALIDITY. Extend a bill nearing/just past expiry. NIC
 // only allows this inside the window 8h BEFORE → 8h AFTER the current validUpto. Requires
 // the remaining distance, current consignment status (M in-movement / T in-transit), a
 // reason code, and (for in-movement) the current vehicle + from place/state.
@@ -340,7 +340,7 @@ async function extendValidity(tenantId, actorId, opts = {}) {
   const row = await _loadLiveEwb(tenantId, voucherId);
 
   // 8h-before / 8h-after window, measured against the persisted validUpto.
-  if (!row.eway_valid_upto) throw new PostError("NO_VALIDITY", "stored e-way bill has no validUpto — cannot verify the extension window", 422);
+  if (!row.eway_valid_upto) throw new PostError("NO_VALIDITY", "stored e-way bill has no validUpto - cannot verify the extension window", 422);
   const validUpto = new Date(row.eway_valid_upto);
   if (isNaN(validUpto.getTime())) throw new PostError("NO_VALIDITY", "invalid stored validUpto", 422);
   const EIGHT_H = 8 * 60 * 60 * 1000;
@@ -382,7 +382,7 @@ async function extendValidity(tenantId, actorId, opts = {}) {
   };
 
   if (!gsp.isConfigured()) {
-    return { configured: false, ok: false, reason: "GSP/EWB rail not configured — set GSP_BASE_URL / GSP_API_KEY", payload };
+    return { configured: false, ok: false, reason: "GSP/EWB rail not configured - set GSP_BASE_URL / GSP_API_KEY", payload };
   }
   try {
     const res = await gsp.httpCall("/ewaybill/extend", payload);
@@ -400,7 +400,7 @@ async function extendValidity(tenantId, actorId, opts = {}) {
   }
 }
 
-// cancelEwb — NIC action CANEWB. Cancel a live EWB within 24h of generation, with a reason
+// cancelEwb - NIC action CANEWB. Cancel a live EWB within 24h of generation, with a reason
 // code. Mirrors einvoice.cancelIrn: hard window check, honest config gate, persist state.
 async function cancelEwb(tenantId, actorId, { voucherId, reasonCode, reasonRem } = {}) {
   const row = await _loadLiveEwb(tenantId, voucherId);
@@ -410,13 +410,13 @@ async function cancelEwb(tenantId, actorId, { voucherId, reasonCode, reasonRem }
   // 24h cancellation window, measured from generation (updated_at of the EWB row, as we
   // stamp it at generate time). If we lack a generation timestamp, refuse rather than guess.
   const genAt = row.updated_at ? new Date(row.updated_at) : null;
-  if (!genAt || isNaN(genAt.getTime())) throw new PostError("NO_GEN_DATE", "missing e-way bill generation time — cannot verify the 24h cancel window", 422);
+  if (!genAt || isNaN(genAt.getTime())) throw new PostError("NO_GEN_DATE", "missing e-way bill generation time - cannot verify the 24h cancel window", 422);
   if (Date.now() - genAt.getTime() > EWB_CANCEL_WINDOW_MS) throw new PostError("EWB_CANCEL_WINDOW_PASSED", "the 24-hour e-way bill cancellation window has passed", 409);
 
   const payload = { ewbNo: row.eway_bill_no, cancelRsnCode: code, cancelRmrk: reasonRem || CANCEL_REASONS[code] };
 
   if (!gsp.isConfigured()) {
-    return { configured: false, ok: false, reason: "GSP/EWB rail not configured — set GSP_BASE_URL / GSP_API_KEY", payload };
+    return { configured: false, ok: false, reason: "GSP/EWB rail not configured - set GSP_BASE_URL / GSP_API_KEY", payload };
   }
   try {
     const res = await gsp.httpCall("/ewaybill/cancel", payload);

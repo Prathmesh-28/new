@@ -11,7 +11,7 @@ router.get("/raises", authenticate, async (req, res) => {
   res.json(rows);
 });
 
-// GET /api/capital/raises/public — all active raises across tenants (investor marketplace)
+// GET /api/capital/raises/public - all active raises across tenants (investor marketplace)
 router.get("/raises/public", authenticate, async (req, res) => {
   const { rows } = await pool.query(
     "SELECT id, name, raise_type, target_amount, raised_amount, status, closes_at, created_at FROM capital_raises WHERE status='active' ORDER BY created_at DESC"
@@ -19,7 +19,7 @@ router.get("/raises/public", authenticate, async (req, res) => {
   res.json(rows);
 });
 
-// POST /api/capital/raises/:id/commit — investor commits to a raise
+// POST /api/capital/raises/:id/commit - investor commits to a raise
 router.post("/raises/:id/commit", authenticate, async (req, res) => {
   const { amount } = req.body;
   if (!amount || Number(amount) <= 0) return res.status(400).json({ error: "Positive amount required" });
@@ -112,7 +112,7 @@ router.delete("/raises/:id", authenticate, requireOwnerOrAdmin, async (req, res)
   res.json({ ok: true });
 });
 
-// POST /api/capital/raises/:id/investors — record an investor commitment
+// POST /api/capital/raises/:id/investors - record an investor commitment
 router.post("/raises/:id/investors", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { name, email, amount, status = "committed" } = req.body;
   if (!name || !amount) return res.status(400).json({ error: "name and amount required" });

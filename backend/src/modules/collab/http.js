@@ -1,8 +1,8 @@
-// Headroom Collab — Phase 1 REST router. Mounted at /api/collab.
+// Headroom Collab - Phase 1 REST router. Mounted at /api/collab.
 //
 // authenticate → collabContext stamps req.collab = { tenantId, userId } (tenantId
 // already respects super-admin X-Tenant-Id impersonation via the auth middleware).
-// Collaboration is open to every authenticated member of the tenant — there's no
+// Collaboration is open to every authenticated member of the tenant - there's no
 // role gate (per "build for the SMB owner + small team, not enterprise RBAC");
 // access is gated by CONVERSATION MEMBERSHIP in the data layer, with RLS as the
 // cross-tenant backstop. Keyset pagination only (cursor = sortable message id).
@@ -18,7 +18,7 @@ const collab = require("./index");
 // ── Realtime stream (SSE, Phase 2) ───────────────────────────────────────────
 // Declared BEFORE the header-auth middleware: EventSource can't send Authorization,
 // so the token rides as a query param (same pattern as /api/kv/stream). Per-user
-// fan-out — a connection only receives events for conversations the user is in.
+// fan-out - a connection only receives events for conversations the user is in.
 router.get("/stream", async (req, res) => {
   let user;
   try {

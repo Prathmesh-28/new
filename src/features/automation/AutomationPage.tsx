@@ -80,7 +80,7 @@ export default function AutomationPage() {
             <Workflow size={18} className="text-[var(--color-primary)]" /> Automation &amp; Workflows
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Define IF-THEN rules, approval chains, reminders and notification logic — previewed against your live data. Execution is client-side preview; no backend scheduler runs these yet.
+            Define IF-THEN rules, approval chains, reminders and notification logic - previewed against your live data. Execution is client-side preview; no backend scheduler runs these yet.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -167,7 +167,7 @@ function Overview({ onJump }: { onJump: (t: TabId) => void }) {
       <div className={`${CARD} p-5`}>
         <p className="text-sm font-semibold mb-1">Build your finance ops fabric</p>
         <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-          Wire up rules, reminders and approval routing over your live transactions, invoices and obligations — no code. Each tool stores its definitions on your synced account and lets you preview / evaluate them against current data before you rely on them. There is no server-side cron firing these automatically yet, so treat results as a decision aid, not a guarantee that an action ran.
+          Wire up rules, reminders and approval routing over your live transactions, invoices and obligations - no code. Each tool stores its definitions on your synced account and lets you preview / evaluate them against current data before you rely on them. There is no server-side cron firing these automatically yet, so treat results as a decision aid, not a guarantee that an action ran.
         </p>
       </div>
 
@@ -296,7 +296,7 @@ function RuleBuilder() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Zap size={14} className="text-[var(--color-primary)]" /> No-Code Rule Builder</h3>
-        <p className="text-xs text-[var(--color-muted)]">Compose an IF / THEN rule. Preview shows which live records match right now — actions are illustrative until a backend executor exists.</p>
+        <p className="text-xs text-[var(--color-muted)]">Compose an IF / THEN rule. Preview shows which live records match right now - actions are illustrative until a backend executor exists.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Rule name</label>
@@ -387,7 +387,7 @@ function RuleBuilder() {
           </div>
         );
       })}
-      <p className="text-[10px] text-[var(--color-muted)]">Preview evaluates the condition against your current transactions and invoices. It does not perform the action — there is no scheduled executor yet.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Preview evaluates the condition against your current transactions and invoices. It does not perform the action - there is no scheduled executor yet.</p>
     </div>
   );
 }
@@ -408,9 +408,9 @@ function ReminderScheduler() {
   const [channel, setChannel] = useState<ReminderRow["channel"]>("whatsapp");
 
   const sources = source === "invoice"
-    ? store.invoices.filter(i => i.status !== "paid").map(i => ({ id: i.id, label: `${i.customer} — ${formatCurrency(i.amount)} (due ${i.dueDate})`, date: i.dueDate }))
+    ? store.invoices.filter(i => i.status !== "paid").map(i => ({ id: i.id, label: `${i.customer} - ${formatCurrency(i.amount)} (due ${i.dueDate})`, date: i.dueDate }))
     : source === "obligation"
-      ? store.obligations.map(o => ({ id: o.id, label: `${o.name} — ${formatCurrency(o.amount)} (due ${o.dueDate})`, date: o.dueDate }))
+      ? store.obligations.map(o => ({ id: o.id, label: `${o.name} - ${formatCurrency(o.amount)} (due ${o.dueDate})`, date: o.dueDate }))
       : [];
 
   const add = () => {
@@ -582,7 +582,7 @@ function ApprovalChains() {
       const rows = await api.get<ServerApproval[]>("/api/books/approvals?status=PENDING");
       setPending(Array.isArray(rows) ? rows : []);
     } catch (e) {
-      toast.error(`Couldn't load pending approvals — ${autoErr(e)}`);
+      toast.error(`Couldn't load pending approvals - ${autoErr(e)}`);
     } finally {
       setLoadingApprovals(false);
     }
@@ -601,7 +601,7 @@ function ApprovalChains() {
       pushActivity({ tool: "Approval Chains", kind: "create", message: `Server rule: ${created.entity_type} ≥ ${formatCurrency(Number(created.min_amount))} → ${created.approver_role}` });
       toast.success(`Approval rule created (#${String(created.id).slice(0, 8)})`);
     } catch (e) {
-      toast.error(`Couldn't create rule — ${autoErr(e)}`);
+      toast.error(`Couldn't create rule - ${autoErr(e)}`);
     } finally {
       setSavingRule(false);
     }
@@ -615,7 +615,7 @@ function ApprovalChains() {
       toast.success(`Approval ${res.status.toLowerCase()}`);
       await refreshPending();
     } catch (e) {
-      toast.error(`Couldn't record decision — ${autoErr(e)}`);
+      toast.error(`Couldn't record decision - ${autoErr(e)}`);
     } finally {
       setBusyId(null);
     }
@@ -681,8 +681,8 @@ function ApprovalChains() {
                 <tr key={a.id} className="hover:bg-white/2">
                   <td className="px-4 py-2.5 font-medium">{a.entity_type}<span className="text-[10px] text-[var(--color-muted)] ml-1">#{String(a.id).slice(0, 8)}</span></td>
                   <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Number(a.amount))}</td>
-                  <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs tabular-nums">{a.created_at ? format(parseISO(a.created_at), "d MMM, HH:mm") : "—"}</td>
-                  <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs max-w-[180px] truncate">{a.note || "—"}</td>
+                  <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs tabular-nums">{a.created_at ? format(parseISO(a.created_at), "d MMM, HH:mm") : "-"}</td>
+                  <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs max-w-[180px] truncate">{a.note || "-"}</td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center justify-end gap-2">
                       <button onClick={() => void decide(a, true)} disabled={busyId === a.id} className="flex items-center gap-1 text-[11px] bg-green-900/30 text-green-400 border border-green-800/40 rounded px-2 py-1 disabled:opacity-50"><CheckCircle2 size={11} /> Approve</button>
@@ -839,7 +839,7 @@ function BulkRunner() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Bulk-Action Runner</h3>
-        <p className="text-xs text-[var(--color-muted)]">Select a batch of live records and preview a bulk action across all of them. This is a dry-run — it logs the intended action without sending or mutating anything.</p>
+        <p className="text-xs text-[var(--color-muted)]">Select a batch of live records and preview a bulk action across all of them. This is a dry-run - it logs the intended action without sending or mutating anything.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Selection</label>
@@ -929,7 +929,7 @@ function NotificationRules() {
         </div>
         <label className="flex items-center gap-2 cursor-pointer text-xs">
           <input type="checkbox" checked={quiet} onChange={e => setQuiet(e.target.checked)} className="accent-[var(--color-primary)]" />
-          Respect quiet hours — batch into a daily digest instead of pinging immediately
+          Respect quiet hours - batch into a daily digest instead of pinging immediately
         </label>
       </div>
 
@@ -1000,7 +1000,7 @@ function RecurringTasks() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Clock size={14} className="text-[var(--color-primary)]" /> Recurring-Task Scheduler</h3>
-        <p className="text-xs text-[var(--color-muted)]">Plan repeating finance jobs — month-end close, GSTR prep, salary run. Next-occurrence dates are computed; nothing fires automatically without a backend cron.</p>
+        <p className="text-xs text-[var(--color-muted)]">Plan repeating finance jobs - month-end close, GSTR prep, salary run. Next-occurrence dates are computed; nothing fires automatically without a backend cron.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Task</label>
@@ -1125,14 +1125,14 @@ function WebhookRegistry() {
     setHooks(prev => [...prev, { id: crypto.randomUUID(), name: name.trim(), url: url.trim(), event, active: true }]);
     pushActivity({ tool: "Webhook Registry", kind: "create", message: `Webhook "${name.trim()}" registered` });
     setName(""); setUrl("");
-    toast.success("Webhook registered (config only — not dispatched)");
+    toast.success("Webhook registered (config only - not dispatched)");
   };
 
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Webhook size={14} className="text-[var(--color-primary)]" /> Webhook / Integration Registry</h3>
-        <p className="text-xs text-[var(--color-muted)]">Register outbound endpoints to receive finance events. This stores the configuration only — no events are actually dispatched until a backend dispatcher is wired up.</p>
+        <p className="text-xs text-[var(--color-muted)]">Register outbound endpoints to receive finance events. This stores the configuration only - no events are actually dispatched until a backend dispatcher is wired up.</p>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Name</label>
@@ -1191,7 +1191,7 @@ function WebhookRegistry() {
 // ── #11 Workflow Templates Gallery ─────────────────────────────────────────────
 type Template = { id: string; title: string; persona: string; steps: string[]; rule?: Omit<RuleRow, "id" | "enabled"> };
 const TEMPLATES: Template[] = [
-  { id: "dunning", title: "Dunning sequence", persona: "Finance", steps: ["Invoice 3 days overdue", "WhatsApp reminder", "Day 7 — phone task", "Day 30 — escalate to owner"], rule: { name: "Dunning trigger", subject: "invoice", field: "daysOverdue", op: ">", value: "3", action: "notify" } },
+  { id: "dunning", title: "Dunning sequence", persona: "Finance", steps: ["Invoice 3 days overdue", "WhatsApp reminder", "Day 7 - phone task", "Day 30 - escalate to owner"], rule: { name: "Dunning trigger", subject: "invoice", field: "daysOverdue", op: ">", value: "3", action: "notify" } },
   { id: "monthclose", title: "Month-end close", persona: "CA", steps: ["Reconcile bank lines", "Post recurring journals", "Review flagged transactions", "Prepare GSTR data"] },
   { id: "p2p", title: "Procure-to-pay gate", persona: "Ops", steps: ["PO raised", "Approval above ₹50k", "Goods received note", "Three-way match", "Schedule payment"], rule: { name: "PO approval gate", subject: "transaction", field: "amount", op: ">", value: "50000", action: "escalate" } },
   { id: "onboard", title: "Vendor onboarding", persona: "Ops", steps: ["Collect PAN / GST / bank", "Verify GSTIN", "Risk check", "Activate vendor"] },
@@ -1206,11 +1206,11 @@ function TemplatesGallery({ onUse }: { onUse: () => void }) {
     if (t.rule) {
       setRules(prev => [...prev, { id: crypto.randomUUID(), enabled: true, ...t.rule! }]);
       pushActivity({ tool: "Templates Gallery", kind: "create", message: `Applied template "${t.title}" (rule added)` });
-      toast.success(`"${t.title}" applied — starter rule added to the Rule Builder`);
+      toast.success(`"${t.title}" applied - starter rule added to the Rule Builder`);
       onUse();
     } else {
       pushActivity({ tool: "Templates Gallery", kind: "create", message: `Viewed template "${t.title}"` });
-      toast.success(`"${t.title}" is a manual checklist — no auto rule attached`);
+      toast.success(`"${t.title}" is a manual checklist - no auto rule attached`);
     }
   };
 
@@ -1243,7 +1243,7 @@ function TemplatesGallery({ onUse }: { onUse: () => void }) {
       </div>
       <div className="rounded-lg p-4 border border-yellow-800/40 bg-yellow-950/10 flex items-start gap-2">
         <AlertTriangle size={14} className="text-yellow-400 shrink-0 mt-0.5" />
-        <p className="text-xs text-[var(--color-muted)]">Templates describe the intended flow. Multi-step execution (approvals, sends, postings) needs a backend orchestrator that does not exist yet — today these seed rules and checklists you action manually.</p>
+        <p className="text-xs text-[var(--color-muted)]">Templates describe the intended flow. Multi-step execution (approvals, sends, postings) needs a backend orchestrator that does not exist yet - today these seed rules and checklists you action manually.</p>
       </div>
     </div>
   );
@@ -1284,7 +1284,7 @@ function NumberingRules() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Hash size={14} className="text-[var(--color-primary)]" /> Invoice Auto-Numbering Rules</h3>
-        <p className="text-xs text-[var(--color-muted)]">Define a sequential numbering scheme. The sample below is computed from your current invoice count — actual assignment happens when invoices are issued (preview only).</p>
+        <p className="text-xs text-[var(--color-muted)]">Define a sequential numbering scheme. The sample below is computed from your current invoice count - actual assignment happens when invoices are issued (preview only).</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Prefix</label>
@@ -1356,7 +1356,7 @@ function AutoCategorize() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Tags size={14} className="text-[var(--color-primary)]" /> Auto-Categorization Rule Set</h3>
-        <p className="text-xs text-[var(--color-muted)]">Map a keyword in a transaction's description or counterparty to a category. The preview shows live matches and how many would change category — no data is mutated.</p>
+        <p className="text-xs text-[var(--color-muted)]">Map a keyword in a transaction's description or counterparty to a category. The preview shows live matches and how many would change category - no data is mutated.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">If text contains</label>
@@ -1448,7 +1448,7 @@ function EscalationMatrix() {
       const resp = await api.get<OverdueResp>(`/api/books/overdue?ratePerAnnum=${isNaN(r) ? 0 : r}`);
       setServerOverdue(Array.isArray(resp?.invoices) ? resp.invoices : []);
     } catch (e) {
-      toast.error(`Couldn't load overdue invoices — ${autoErr(e)}`);
+      toast.error(`Couldn't load overdue invoices - ${autoErr(e)}`);
     } finally {
       setLoadingOverdue(false);
     }
@@ -1457,17 +1457,17 @@ function EscalationMatrix() {
 
   const postLateFee = async (inv: OverdueInvoice) => {
     const amount = Number(inv.suggestedLateFee);
-    if (!amount || amount <= 0) { toast.error("Suggested late fee is zero — set a rate and refresh first"); return; }
+    if (!amount || amount <= 0) { toast.error("Suggested late fee is zero - set a rate and refresh first"); return; }
     setPostingId(inv.voucherId);
     try {
       const res = await api.post<{ voucherId: string; voucherNumber?: string }>("/api/books/late-fee", {
         partyLedgerId: inv.partyLedgerId, amount,
       });
       pushActivity({ tool: "Escalation Matrix", kind: "run", message: `Late fee ${formatCurrency(amount)} posted on ${inv.number} (voucher ${res.voucherNumber || String(res.voucherId).slice(0, 8)})` });
-      toast.success(`Late fee posted — voucher ${res.voucherNumber || String(res.voucherId).slice(0, 8)}`);
+      toast.success(`Late fee posted - voucher ${res.voucherNumber || String(res.voucherId).slice(0, 8)}`);
       await loadOverdue();
     } catch (e) {
-      toast.error(`Couldn't post late fee — ${autoErr(e)}`);
+      toast.error(`Couldn't post late fee - ${autoErr(e)}`);
     } finally {
       setPostingId(null);
     }
@@ -1522,7 +1522,7 @@ function EscalationMatrix() {
 
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Network size={14} className="text-[var(--color-primary)]" /> Escalation-Matrix Builder</h3>
-        <p className="text-xs text-[var(--color-muted)]">Define who owns an overdue account as it ages (30 / 60 / 90 days). The preview buckets your live overdue invoices into each tier — assignment is illustrative, no one is paged.</p>
+        <p className="text-xs text-[var(--color-muted)]">Define who owns an overdue account as it ages (30 / 60 / 90 days). The preview buckets your live overdue invoices into each tier - assignment is illustrative, no one is paged.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">After (days overdue)</label>
@@ -1588,7 +1588,7 @@ function SlaTimers() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> SLA-Timer Configuration</h3>
-        <p className="text-xs text-[var(--color-muted)]">Set how long each stage may sit before action triggers. These windows are stored as policy — there is no live clock running them server-side yet.</p>
+        <p className="text-xs text-[var(--color-muted)]">Set how long each stage may sit before action triggers. These windows are stored as policy - there is no live clock running them server-side yet.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Stage</label>
@@ -1672,7 +1672,7 @@ function RecurringJournals() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Repeat2 size={14} className="text-[var(--color-primary)]" /> Recurring-Journal Templates</h3>
-        <p className="text-xs text-[var(--color-muted)]">Define repeating postings — depreciation, accruals, prepaid amortization. Next-post dates are computed; nothing is posted to your ledger without a backend job.</p>
+        <p className="text-xs text-[var(--color-muted)]">Define repeating postings - depreciation, accruals, prepaid amortization. Next-post dates are computed; nothing is posted to your ledger without a backend job.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Template name</label>
@@ -1841,7 +1841,7 @@ function DataValidation() {
   };
   const runAll = () => {
     const total = CHECKS.filter(c => enabled.includes(c.id)).reduce((s, c) => s + c.run().length, 0);
-    pushActivity({ tool: "Data Validation", kind: "run", message: `Ran ${enabled.length} check(s) — ${total} issue(s) found` });
+    pushActivity({ tool: "Data Validation", kind: "run", message: `Ran ${enabled.length} check(s) - ${total} issue(s) found` });
     toast.success(`${total} issue(s) across ${enabled.length} enabled check(s)`);
   };
 
@@ -1850,7 +1850,7 @@ function DataValidation() {
       <div className={`${CARD} p-4 flex items-center justify-between gap-3 flex-wrap`}>
         <div>
           <h3 className="text-sm font-semibold flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Data-Validation Rules</h3>
-          <p className="text-xs text-[var(--color-muted)] mt-1">Toggle integrity checks and run them against your live books. Findings are surfaced for review — nothing is auto-corrected.</p>
+          <p className="text-xs text-[var(--color-muted)] mt-1">Toggle integrity checks and run them against your live books. Findings are surfaced for review - nothing is auto-corrected.</p>
         </div>
         <button onClick={runAll} disabled={enabled.length === 0} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-40">
           <Play size={13} /> Run enabled checks
@@ -2023,7 +2023,7 @@ function DiscountRules() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> Conditional-Discount Rules</h3>
-        <p className="text-xs text-[var(--color-muted)]">Define tiered discounts by invoice value. The preview applies each invoice's best-matching tier across your live AR — these are illustrative figures, not applied to any invoice.</p>
+        <p className="text-xs text-[var(--color-muted)]">Define tiered discounts by invoice value. The preview applies each invoice's best-matching tier across your live AR - these are illustrative figures, not applied to any invoice.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice value ≥ (₹)</label>
@@ -2101,7 +2101,7 @@ function ReminderCadences() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Send size={14} className="text-[var(--color-primary)]" /> Reminder-Cadence Templates</h3>
-        <p className="text-xs text-[var(--color-muted)]">Build a multi-touch dunning cadence (offset measured in days from the due date). Saved cadences would apply to your {openInvoices} open invoice(s) — sending requires a backend scheduler (preview only).</p>
+        <p className="text-xs text-[var(--color-muted)]">Build a multi-touch dunning cadence (offset measured in days from the due date). Saved cadences would apply to your {openInvoices} open invoice(s) - sending requires a backend scheduler (preview only).</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Cadence name</label>
@@ -2134,7 +2134,7 @@ function ReminderCadences() {
             {steps.map((s, i) => (
               <div key={s.id} className="flex items-center gap-1.5">
                 <span className="text-[11px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5">
-                  {s.offsetDays >= 0 ? "+" : ""}{s.offsetDays}d · <span className="capitalize">{s.channel}</span>{s.note && <span className="text-[var(--color-muted)]"> — {s.note}</span>}
+                  {s.offsetDays >= 0 ? "+" : ""}{s.offsetDays}d · <span className="capitalize">{s.channel}</span>{s.note && <span className="text-[var(--color-muted)]"> - {s.note}</span>}
                   <button onClick={() => setSteps(prev => prev.filter(x => x.id !== s.id))} className="ml-1.5 text-[var(--color-muted)] hover:text-red-400">✕</button>
                 </span>
                 {i < steps.length - 1 && <ArrowRight size={11} className="text-[var(--color-muted)]" />}
@@ -2170,7 +2170,7 @@ function ReminderCadences() {
                     const days = differenceInCalendarDays(fd, today);
                     return (
                       <div key={s.id} className="flex items-center justify-between text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
-                        <span className="capitalize">{s.channel}{s.note && <span className="text-[var(--color-muted)]"> — {s.note}</span>}</span>
+                        <span className="capitalize">{s.channel}{s.note && <span className="text-[var(--color-muted)]"> - {s.note}</span>}</span>
                         <span className="text-[var(--color-muted)] tabular-nums shrink-0">{format(fd, "d MMM")} ({days < 0 ? "past" : days === 0 ? "today" : `in ${days}d`})</span>
                       </div>
                     );
@@ -2259,7 +2259,7 @@ function SegmentBuilder() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Filter size={14} className="text-[var(--color-primary)]" /> Saved-Filter / Segment Builder</h3>
-        <p className="text-xs text-[var(--color-muted)]">Compose a reusable multi-condition segment over your live records (AND / OR). Saved segments can later feed bulk actions and reminder policies — preview counts are computed against current data.</p>
+        <p className="text-xs text-[var(--color-muted)]">Compose a reusable multi-condition segment over your live records (AND / OR). Saved segments can later feed bulk actions and reminder policies - preview counts are computed against current data.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Segment name</label>
@@ -2411,7 +2411,7 @@ function KpiWatch() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> KPI-Watch Rules</h3>
-        <p className="text-xs text-[var(--color-muted)]">Define a threshold on a live finance metric and who should be alerted when it breaches. Current values are computed from your data; breaches are flagged below — no alert is actually sent.</p>
+        <p className="text-xs text-[var(--color-muted)]">Define a threshold on a live finance metric and who should be alerted when it breaches. Current values are computed from your data; breaches are flagged below - no alert is actually sent.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">When metric</label>
@@ -2500,7 +2500,7 @@ function TierReminderPolicy() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Crown size={14} className="text-[var(--color-primary)]" /> Customer-Tier Reminder Policy</h3>
-        <p className="text-xs text-[var(--color-muted)]">Set a different first-nudge timing and channel per customer tier (tier derived from total open outstanding). The table classifies your live customers — sending requires a backend scheduler (preview only).</p>
+        <p className="text-xs text-[var(--color-muted)]">Set a different first-nudge timing and channel per customer tier (tier derived from total open outstanding). The table classifies your live customers - sending requires a backend scheduler (preview only).</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Tier</label>
@@ -2562,8 +2562,8 @@ function TierReminderPolicy() {
                     <td className="px-4 py-2.5 font-medium">{c.customer}</td>
                     <td className="px-4 py-2.5 tabular-nums">{formatCurrency(c.outstanding)}</td>
                     <td className="px-4 py-2.5 capitalize">{p ? <span className={TIER_COLOR[p.tier]}>{p.tier}</span> : <span className="text-[var(--color-muted)]">unclassified</span>}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{p ? `+${p.firstOffset}d` : "—"}</td>
-                    <td className="px-4 py-2.5 capitalize text-[var(--color-muted)]">{p?.channel ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{p ? `+${p.firstOffset}d` : "-"}</td>
+                    <td className="px-4 py-2.5 capitalize text-[var(--color-muted)]">{p?.channel ?? "-"}</td>
                   </tr>
                 );
               })}
@@ -2606,7 +2606,7 @@ function StatusUpdateRules() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><RefreshCw size={14} className="text-[var(--color-primary)]" /> Batch Status-Update Rules</h3>
-        <p className="text-xs text-[var(--color-muted)]">Auto-transition pending invoices to overdue once they age past their due date by N days. Preview lists exactly which invoices would flip — this is a dry-run and mutates nothing.</p>
+        <p className="text-xs text-[var(--color-muted)]">Auto-transition pending invoices to overdue once they age past their due date by N days. Preview lists exactly which invoices would flip - this is a dry-run and mutates nothing.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Mark pending → overdue once past due by (days)</label>
@@ -2669,7 +2669,7 @@ function RunHistory() {
     <div className="space-y-4">
       <div className={`${CARD} p-4`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><History size={14} className="text-[var(--color-primary)]" /> Workflow Run-History Log</h3>
-        <p className="text-xs text-[var(--color-muted)] mt-1">A focused view of every preview / dry-run you have executed (bulk runs, validation sweeps, status flips). This is a local execution history — there is no backend executor firing these on a schedule.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-1">A focused view of every preview / dry-run you have executed (bulk runs, validation sweeps, status flips). This is a local execution history - there is no backend executor firing these on a schedule.</p>
       </div>
 
       {byTool.length > 0 && (
@@ -2747,7 +2747,7 @@ function CreditLimitRules() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Customer Credit-Limit Rules</h3>
-        <p className="text-xs text-[var(--color-muted)]">Cap how much open credit a customer may carry. The preview lists customers whose live outstanding already exceeds the limit — nothing is auto-blocked; this surfaces the risk for review.</p>
+        <p className="text-xs text-[var(--color-muted)]">Cap how much open credit a customer may carry. The preview lists customers whose live outstanding already exceeds the limit - nothing is auto-blocked; this surfaces the risk for review.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Applies to</label>
@@ -2855,7 +2855,7 @@ function PaymentMatchingRules() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Link2 size={14} className="text-[var(--color-primary)]" /> Payment-Matching Rules</h3>
-        <p className="text-xs text-[var(--color-muted)]">Auto-reconcile incoming revenue against open invoices when the amount lands within a tolerance band and arrives within a window of the invoice date. Preview lists likely matches — nothing is marked paid (no backend executor).</p>
+        <p className="text-xs text-[var(--color-muted)]">Auto-reconcile incoming revenue against open invoices when the amount lands within a tolerance band and arrives within a window of the invoice date. Preview lists likely matches - nothing is marked paid (no backend executor).</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Amount tolerance (%)</label>
@@ -2930,7 +2930,7 @@ function LowBalanceTrigger() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Low-Balance Trigger</h3>
-        <p className="text-xs text-[var(--color-muted)]">Set a cash floor on a single bank account or the combined balance. The trigger evaluates your live balances right now and shows breach state — it cannot push an alert without a backend watcher.</p>
+        <p className="text-xs text-[var(--color-muted)]">Set a cash floor on a single bank account or the combined balance. The trigger evaluates your live balances right now and shows breach state - it cannot push an alert without a backend watcher.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Watch</label>
@@ -3007,7 +3007,7 @@ function RecurringInvoiceRules() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><FileClock size={14} className="text-[var(--color-primary)]" /> Recurring-Invoice Rules</h3>
-        <p className="text-xs text-[var(--color-muted)]">Define a billing template for a customer and preview the next six raise dates. Invoices are not actually created — there is no scheduler firing these yet.</p>
+        <p className="text-xs text-[var(--color-muted)]">Define a billing template for a customer and preview the next six raise dates. Invoices are not actually created - there is no scheduler firing these yet.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
@@ -3043,7 +3043,7 @@ function RecurringInvoiceRules() {
         <div key={r.id} className={`${CARD} p-4`}>
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <p className="text-sm font-medium">{r.customer} — {formatCurrency(r.amount)} <span className="text-[var(--color-muted)] capitalize">/ {r.cadence}</span></p>
+              <p className="text-sm font-medium">{r.customer} - {formatCurrency(r.amount)} <span className="text-[var(--color-muted)] capitalize">/ {r.cadence}</span></p>
               <p className="text-[11px] text-[var(--color-muted)]">Annualised ≈ {formatCurrency(r.amount * (r.cadence === "weekly" ? 52 : r.cadence === "monthly" ? 12 : 4))}</p>
             </div>
             <button onClick={() => { setRules(prev => prev.filter(x => x.id !== r.id)); pushActivity({ tool: "Recurring Invoices", kind: "delete", message: `Recurring invoice removed` }); }} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
@@ -3098,7 +3098,7 @@ function DuplicatePaymentCheck() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><CopyCheck size={14} className="text-[var(--color-primary)]" /> Duplicate-Payment Check</h3>
-        <p className="text-xs text-[var(--color-muted)]">Surface outflows to the same counterparty for an identical amount within a short window — a common double-pay or re-submitted-invoice error. This is a read-only scan; it does not reverse or block anything.</p>
+        <p className="text-xs text-[var(--color-muted)]">Surface outflows to the same counterparty for an identical amount within a short window - a common double-pay or re-submitted-invoice error. This is a read-only scan; it does not reverse or block anything.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Window (days between payments)</label>
@@ -3129,7 +3129,7 @@ function DuplicatePaymentCheck() {
 
 // ── #31 Inventory Reorder Rules ────────────────────────────────────────────────
 // Per-SKU override of the reorder level; on-demand scan flags stock at/below it
-// and previews the suggested re-order quantity. No live cron — on-demand.
+// and previews the suggested re-order quantity. No live cron - on-demand.
 type ReorderRule = { id: string; sku: string; reorderLevel: number; reorderQty: number };
 function ReorderRules() {
   const { store } = useApp();
@@ -3162,7 +3162,7 @@ function ReorderRules() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><PackageSearch size={14} className="text-[var(--color-primary)]" /> Inventory Reorder Rules</h3>
-        <p className="text-xs text-[var(--color-muted)]">Set a reorder level + quantity per SKU; the scan below flags items at or below it and previews the PO quantity. No live cron — on-demand against your current inventory; no purchase order is raised.</p>
+        <p className="text-xs text-[var(--color-muted)]">Set a reorder level + quantity per SKU; the scan below flags items at or below it and previews the PO quantity. No live cron - on-demand against your current inventory; no purchase order is raised.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Product / SKU</label>
@@ -3228,7 +3228,7 @@ function ReorderRules() {
 
 // ── #32 Expense Policy Engine ──────────────────────────────────────────────────
 // Build per-category spend caps + flag/reject verdicts; evaluate every expense
-// outflow against the policies on demand. No live cron — on-demand.
+// outflow against the policies on demand. No live cron - on-demand.
 type PolicyVerdict = "flag" | "reject";
 type ExpensePolicy = { id: string; category: Transaction["category"]; cap: number; verdict: PolicyVerdict };
 const POLICY_CATEGORIES: Transaction["category"][] = ["expense", "payroll", "tax", "loan", "transfer"];
@@ -3262,7 +3262,7 @@ function ExpensePolicyEngine() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldCheck size={14} className="text-[var(--color-primary)]" /> Expense Policy Engine</h3>
-        <p className="text-xs text-[var(--color-muted)]">Cap spend per category and choose whether a breach is flagged or rejected. The scan lists current outflows that violate a policy. No live cron — on-demand; nothing is actually blocked.</p>
+        <p className="text-xs text-[var(--color-muted)]">Cap spend per category and choose whether a breach is flagged or rejected. The scan lists current outflows that violate a policy. No live cron - on-demand; nothing is actually blocked.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Category</label>
@@ -3331,15 +3331,15 @@ function ExpensePolicyEngine() {
 // ── #33 Fraud-Pattern Scan ─────────────────────────────────────────────────────
 // A library of pre-built fraud heuristics evaluated against live transactions:
 // round-amount payouts, duplicate-named vendors, weekend/odd-hour payouts.
-// No live cron — on-demand.
+// No live cron - on-demand.
 function FraudPatternScan() {
   const { store } = useApp();
   const [, pushActivity] = useActivity();
   const [enabled, setEnabled] = useFeatureState<Record<string, boolean>>("auto-fraudscan", { round: true, dupvendor: true, weekend: true });
 
   const PATTERNS = [
-    { id: "round", title: "Suspiciously round payouts", desc: "Outflows that are an exact multiple of ₹50,000 — often fabricated amounts." },
-    { id: "dupvendor", title: "Near-duplicate vendor names", desc: "Two counterparties whose names normalise to the same string — a split-vendor trick." },
+    { id: "round", title: "Suspiciously round payouts", desc: "Outflows that are an exact multiple of ₹50,000 - often fabricated amounts." },
+    { id: "dupvendor", title: "Near-duplicate vendor names", desc: "Two counterparties whose names normalise to the same string - a split-vendor trick." },
     { id: "weekend", title: "Weekend payouts", desc: "Outflows dated on a Saturday or Sunday, when approvals are usually offline." },
   ] as const;
 
@@ -3372,14 +3372,14 @@ function FraudPatternScan() {
 
   const runScan = () => {
     pushActivity({ tool: "Fraud-Pattern Scan", kind: "run", message: `Scan flagged ${findings.length} suspect transaction(s)` });
-    toast.success(`Scan complete — ${findings.length} finding(s)`);
+    toast.success(`Scan complete - ${findings.length} finding(s)`);
   };
 
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Fingerprint size={14} className="text-[var(--color-primary)]" /> Fraud-Pattern Scan</h3>
-        <p className="text-xs text-[var(--color-muted)]">Toggle pre-built heuristics and scan your live outflows for tell-tale fraud signatures. No live cron — on-demand and read-only; it flags for your review, nothing is blocked.</p>
+        <p className="text-xs text-[var(--color-muted)]">Toggle pre-built heuristics and scan your live outflows for tell-tale fraud signatures. No live cron - on-demand and read-only; it flags for your review, nothing is blocked.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {PATTERNS.map(p => (
             <label key={p.id} className={`${CARD} p-3 flex gap-2 cursor-pointer ${enabled[p.id] ? "border-[var(--color-primary)]/40" : ""}`}>
@@ -3425,7 +3425,7 @@ function FraudPatternScan() {
 
 // ── #34 Cash-Sweep Rules ───────────────────────────────────────────────────────
 // Keep a buffer in an operating account, sweep the surplus to a target account.
-// Evaluated on demand against live bank balances. No live cron — on-demand.
+// Evaluated on demand against live bank balances. No live cron - on-demand.
 type SweepRule = { id: string; fromId: string; toId: string; buffer: number };
 function CashSweepRules() {
   const { store } = useApp();
@@ -3455,7 +3455,7 @@ function CashSweepRules() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /> Cash-Sweep Rules</h3>
-        <p className="text-xs text-[var(--color-muted)]">Keep a buffer in an operating account and sweep any surplus to a target (high-yield / repayment) account. The amount that would move is computed live. No live cron — on-demand; no transfer is made.</p>
+        <p className="text-xs text-[var(--color-muted)]">Keep a buffer in an operating account and sweep any surplus to a target (high-yield / repayment) account. The amount that would move is computed live. No live cron - on-demand; no transfer is made.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Sweep from</label>
@@ -3511,7 +3511,7 @@ function CashSweepRules() {
 // ── #35 Trigger Filters ────────────────────────────────────────────────────────
 // A reusable scope: counterparty contains + amount band + category. Live preview
 // of how many transactions a trigger using this filter would fire on, so you can
-// avoid noisy automations. No live cron — on-demand.
+// avoid noisy automations. No live cron - on-demand.
 type TriggerFilter = { id: string; name: string; contains: string; minAmount: number; maxAmount: number; category: Transaction["category"] | "any" };
 function TriggerFilters() {
   const { store } = useApp();
@@ -3546,7 +3546,7 @@ function TriggerFilters() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><SlidersHorizontal size={14} className="text-[var(--color-primary)]" /> Trigger Filters</h3>
-        <p className="text-xs text-[var(--color-muted)]">Narrow a trigger to a counterparty, amount band and category so automations don't fire too broadly. Each filter previews how many live transactions it would catch. No live cron — on-demand.</p>
+        <p className="text-xs text-[var(--color-muted)]">Narrow a trigger to a counterparty, amount band and category so automations don't fire too broadly. Each filter previews how many live transactions it would catch. No live cron - on-demand.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Filter name</label>
@@ -3589,7 +3589,7 @@ function TriggerFilters() {
               <div>
                 <p className="text-sm font-medium">{f.name}</p>
                 <p className="text-[11px] text-[var(--color-muted)] capitalize">
-                  {f.category} · {formatCurrency(f.minAmount)}–{fmtMax(f.maxAmount)}{f.contains ? ` · contains "${f.contains}"` : ""}
+                  {f.category} · {formatCurrency(f.minAmount)}-{fmtMax(f.maxAmount)}{f.contains ? ` · contains "${f.contains}"` : ""}
                 </p>
               </div>
               <div className="flex items-center gap-3">

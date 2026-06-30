@@ -27,20 +27,20 @@ export const PLAN_RANK: Record<PlanTier, number> = { free: 0, starter: 1, growth
 export const PLAN_LABEL: Record<PlanTier, string> = { free: "Free", starter: "Starter", growth: "Growth", pro: "Pro" };
 
 // Which plan a module needs, keyed by route slug. Aligned to the marketing plans:
-//   Free    — invoicing, GST basics, transactions, dashboard, docs (core daily use)
-//   Starter — get-paid-faster: collections + receivables
-//   Growth  — payroll, cash forecast, working capital, analytics & AI CFO
-//   Pro     — credit/lending, treasury, valuation/cap-table, API/connectors, advanced
+//   Free    - invoicing, GST basics, transactions, dashboard, docs (core daily use)
+//   Starter - get-paid-faster: collections + receivables
+//   Growth  - payroll, cash forecast, working capital, analytics & AI CFO
+//   Pro     - credit/lending, treasury, valuation/cap-table, API/connectors, advanced
 // Tabs not listed stay open on every plan (core surfaces + role-landing pages).
 // super_admin bypasses ALL gates (see RouteGuard).
 export const FEATURE_ENTITLEMENTS: Record<string, PlanTier> = {
-  // Starter — "get paid faster"
+  // Starter - "get paid faster"
   collections:  "starter",
   receivables:  "starter",
-  // Free aha-moment — forecast & cash-health are the core value prop, so they're
-  // ungated (the advanced layers below — scenarios, benchmarks, analytics — gate instead).
+  // Free aha-moment - forecast & cash-health are the core value prop, so they're
+  // ungated (the advanced layers below - scenarios, benchmarks, analytics - gate instead).
   // forecast: free   ·   health: free
-  // Growth — payroll, cash & intelligence
+  // Growth - payroll, cash & intelligence
   payroll:          "growth",
   "working-capital": "growth",
   analytics:        "growth",
@@ -49,7 +49,7 @@ export const FEATURE_ENTITLEMENTS: Record<string, PlanTier> = {
   benchmarks:       "growth",
   scenarios:        "growth",
   spend:            "growth",
-  // Pro — capital, treasury, multi-entity, API
+  // Pro - capital, treasury, multi-entity, API
   credit:       "pro",
   capital:      "pro",
   treasury:     "pro",
@@ -66,27 +66,27 @@ export const FEATURE_ENTITLEMENTS: Record<string, PlanTier> = {
   frontier:     "pro",
 };
 
-// Human-facing pitch for each gated feature — shown on the upsell screen.
+// Human-facing pitch for each gated feature - shown on the upsell screen.
 export const FEATURE_PITCH: Record<string, { title: string; blurb: string; perks: string[] }> = {
-  benchmarks:   { title: "Peer Benchmarks", blurb: "See exactly how your margins, runway, and burn stack up against similar SMBs.", perks: ["Percentiles from your own 12-month history", "Margin, runway, AR-days, payroll & burn", "Spot where you're an outlier — and fix it"] },
+  benchmarks:   { title: "Peer Benchmarks", blurb: "See exactly how your margins, runway, and burn stack up against similar SMBs.", perks: ["Percentiles from your own 12-month history", "Margin, runway, AR-days, payroll & burn", "Spot where you're an outlier - and fix it"] },
   valuation:    { title: "Business Valuation", blurb: "Know what your company is worth before you raise or sell.", perks: ["Revenue & EBITDA multiple models", "Scenario-driven valuation ranges", "Investor-ready summary"] },
   "term-sheet": { title: "Term Sheet Builder", blurb: "Model dilution and build investor-ready term sheets in minutes.", perks: ["Pre/post-money & dilution math", "Multiple round modelling", "Export to PDF for investors"] },
   scenarios:    { title: "Scenario Planning", blurb: "Stress-test hiring, big contracts, and loan draws against your cash.", perks: ["What-if cash forecasting", "Stack multiple scenarios", "See the runway impact instantly"] },
-  capital:      { title: "Capital Raising", blurb: "Raise from the people who believe in your business — built into Headroom.", perks: ["Revenue-based financing, angel & SME-IPO tracks", "Live investor portal & cap table", "Compliance handled for you"] },
-  collections:  { title: "Collections Suite", blurb: "Get paid faster — automated WhatsApp & UPI reminders that chase every overdue invoice for you.", perks: ["WhatsApp / UPI / email reminder ladders", "DSO & promise-to-pay tracking", "Customer statements in one tap"] },
+  capital:      { title: "Capital Raising", blurb: "Raise from the people who believe in your business - built into Headroom.", perks: ["Revenue-based financing, angel & SME-IPO tracks", "Live investor portal & cap table", "Compliance handled for you"] },
+  collections:  { title: "Collections Suite", blurb: "Get paid faster - automated WhatsApp & UPI reminders that chase every overdue invoice for you.", perks: ["WhatsApp / UPI / email reminder ladders", "DSO & promise-to-pay tracking", "Customer statements in one tap"] },
   receivables:  { title: "Receivables Intelligence", blurb: "See exactly who owes you, who's slipping, and where your cash is stuck.", perks: ["Ageing buckets & overdue heatmap", "Customer risk scoring", "Collection forecast"] },
-  payroll:      { title: "Payroll", blurb: "Run compliant Indian payroll — PF, ESI, PT, TDS and payslips — without a separate tool.", perks: ["Full statutory payroll (PF/ESI/PT/TDS)", "Salary slips & Form 16", "Direct salary payouts"] },
+  payroll:      { title: "Payroll", blurb: "Run compliant Indian payroll - PF, ESI, PT, TDS and payslips - without a separate tool.", perks: ["Full statutory payroll (PF/ESI/PT/TDS)", "Salary slips & Form 16", "Direct salary payouts"] },
   "working-capital": { title: "Working Capital", blurb: "Optimise your cash-conversion cycle and unlock the cash trapped in your business.", perks: ["CCC dashboard & drawing power", "Discount-vs-borrow decisions", "Funding-gap sizing"] },
   forecast:     { title: "Cash-Flow Forecast", blurb: "Know your runway and never be surprised by a cash crunch again.", perks: ["13-week & 90-day rolling forecasts", "Best / base / worst scenarios", "Zero-cash early warning"] },
-  analytics:    { title: "Analytics", blurb: "Turn your numbers into decisions — profitability, cohorts and unit economics.", perks: ["Profit by product / customer / region", "Margin & expense trends", "Cohorts & unit economics"] },
-  "cfo-brief":  { title: "AI CFO Brief", blurb: "Your always-on CFO — a daily brief on cash, risk and what to do next.", perks: ["Daily cash & risk snapshot", "Plain-English variance commentary", "Board-ready summaries"] },
+  analytics:    { title: "Analytics", blurb: "Turn your numbers into decisions - profitability, cohorts and unit economics.", perks: ["Profit by product / customer / region", "Margin & expense trends", "Cohorts & unit economics"] },
+  "cfo-brief":  { title: "AI CFO Brief", blurb: "Your always-on CFO - a daily brief on cash, risk and what to do next.", perks: ["Daily cash & risk snapshot", "Plain-English variance commentary", "Board-ready summaries"] },
   predict:      { title: "Predictive Intelligence", blurb: "Forecast cash, payments and churn before they happen.", perks: ["Cash-balance projection", "Invoice pay-date prediction", "Early-warning signals"] },
-  health:       { title: "Financial Health", blurb: "A live fitness score for your business — liquidity, solvency and distress risk.", perks: ["Altman Z-score & ratios", "Liquidity stress test", "Health trend over time"] },
+  health:       { title: "Financial Health", blurb: "A live fitness score for your business - liquidity, solvency and distress risk.", perks: ["Altman Z-score & ratios", "Liquidity stress test", "Health trend over time"] },
   spend:        { title: "Spend Intelligence", blurb: "See where every rupee goes and stop the leaks.", perks: ["Category & vendor concentration", "Duplicate / anomaly detection", "Budget-vs-actual"] },
-  credit:       { title: "Credit & Lending", blurb: "Unlock working-capital loans underwritten on your real cash flows — not collateral.", perks: ["AA-data underwriting & eligibility", "Invoice discounting & BNPL", "Loan management"] },
-  treasury:     { title: "Treasury", blurb: "Put idle cash to work — sweeps, FD ladders and yield, managed in-app.", perks: ["Idle-cash sweep & FD laddering", "Yield & post-tax return", "Liquidity tiering"] },
+  credit:       { title: "Credit & Lending", blurb: "Unlock working-capital loans underwritten on your real cash flows - not collateral.", perks: ["AA-data underwriting & eligibility", "Invoice discounting & BNPL", "Loan management"] },
+  treasury:     { title: "Treasury", blurb: "Put idle cash to work - sweeps, FD ladders and yield, managed in-app.", perks: ["Idle-cash sweep & FD laddering", "Yield & post-tax return", "Liquidity tiering"] },
   lenders:      { title: "Lenders", blurb: "Manage every lender relationship, covenant and drawdown in one place.", perks: ["Covenant dashboard", "Borrowing-base certificate", "Lender MIS pack"] },
-  investor:     { title: "Investor Relations", blurb: "Keep investors updated and your cap table clean — automatically.", perks: ["Auto investor updates", "Board-deck generator", "Cap-table waterfall"] },
+  investor:     { title: "Investor Relations", blurb: "Keep investors updated and your cap table clean - automatically.", perks: ["Auto investor updates", "Board-deck generator", "Cap-table waterfall"] },
   connectors:   { title: "Connectors & API", blurb: "Plug Headroom into your bank, gateway, POS and accounting stack.", perks: ["Bank / UPI / gateway feeds", "Tally & e-commerce sync", "API access"] },
   automation:   { title: "Automation", blurb: "Put your finance ops on autopilot with no-code rules.", perks: ["IF-THEN rule builder", "Approval chains & SLAs", "Scheduled reports"] },
   network:      { title: "B2B Network", blurb: "Reconcile and transact with your buyers and suppliers on a shared graph.", perks: ["Two-sided invoice confirmation", "Counterparty reconciliation", "Mutual-credit netting"] },
@@ -336,7 +336,7 @@ export interface FixedAsset {
   method: "straight_line" | "wdv";
   salvageValue?: number;      // residual value; default 0
   wdvRate?: number;           // optional explicit WDV % (Companies Act Schedule II)
-  disposalDate?: string;      // set when sold/scrapped — depreciation freezes here
+  disposalDate?: string;      // set when sold/scrapped - depreciation freezes here
 }
 
 // ── Receivables ───────────────────────────────────────────────────────────────

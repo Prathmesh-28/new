@@ -29,7 +29,7 @@ type TabId =
 
 const TABS = [
   ["overview", "Overview", Network],
-  ["directory", "Buyer–Supplier Directory", BookUser],
+  ["directory", "Buyer-Supplier Directory", BookUser],
   ["confirm", "Invoice Confirmation", FileCheck2],
   ["recon", "Counterparty Reconciliation", GitCompareArrows],
   ["reference", "Trade-Reference Book", FileSignature],
@@ -102,7 +102,7 @@ export default function NetworkPage() {
             <Network size={18} className="text-[var(--color-primary)]" /> B2B Network & Trade Graph
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Link every buyer and supplier into one trade graph — confirm invoices both ways, reconcile ledgers, score counterparties and discover new GST-verified partners across ONDC.
+            Link every buyer and supplier into one trade graph - confirm invoices both ways, reconcile ledgers, score counterparties and discover new GST-verified partners across ONDC.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -208,7 +208,7 @@ function Overview({ counterparties }: { counterparties: Live[] }) {
           <p className="text-sm font-semibold">Top counterparties (live, from your books)</p>
         </div>
         {counterparties.length === 0 ? (
-          <p className="text-xs text-[var(--color-muted)] p-5">No counterparties yet — import transactions or invoices and your trade partners will appear here automatically.</p>
+          <p className="text-xs text-[var(--color-muted)] p-5">No counterparties yet - import transactions or invoices and your trade partners will appear here automatically.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -221,9 +221,9 @@ function Overview({ counterparties }: { counterparties: Live[] }) {
                 {counterparties.slice(0, 8).map(c => (
                   <tr key={c.name} className="hover:bg-white/2">
                     <td className="px-5 py-2.5 font-medium">{c.name}</td>
-                    <td className="px-5 py-2.5 tabular-nums text-green-400">{c.inflow > 0 ? formatAmount(c.inflow) : "—"}</td>
-                    <td className="px-5 py-2.5 tabular-nums text-red-400">{c.outflow > 0 ? formatAmount(c.outflow) : "—"}</td>
-                    <td className="px-5 py-2.5 tabular-nums">{c.invoiced > 0 ? formatAmount(c.invoiced) : "—"}</td>
+                    <td className="px-5 py-2.5 tabular-nums text-green-400">{c.inflow > 0 ? formatAmount(c.inflow) : "-"}</td>
+                    <td className="px-5 py-2.5 tabular-nums text-red-400">{c.outflow > 0 ? formatAmount(c.outflow) : "-"}</td>
+                    <td className="px-5 py-2.5 tabular-nums">{c.invoiced > 0 ? formatAmount(c.invoiced) : "-"}</td>
                     <td className="px-5 py-2.5 tabular-nums text-[var(--color-muted)]">{c.txns}</td>
                   </tr>
                 ))}
@@ -236,7 +236,7 @@ function Overview({ counterparties }: { counterparties: Live[] }) {
   );
 }
 
-// ── #1 Buyer–Supplier Directory ──────────────────────────────────────────────
+// ── #1 Buyer-Supplier Directory ──────────────────────────────────────────────
 type DirEntry = { id: string; name: string; gstin: string; role: "buyer" | "supplier" | "both"; state: string; linked: boolean };
 function Directory({ live }: { live: Live[] }) {
   const [dir, setDir] = useFeatureState<DirEntry[]>("net-directory", []);
@@ -271,7 +271,7 @@ function Directory({ live }: { live: Live[] }) {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2"><BookUser size={14} className="text-[var(--color-primary)]" /> Buyer–Supplier Directory</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><BookUser size={14} className="text-[var(--color-primary)]" /> Buyer-Supplier Directory</h3>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Name</label>
@@ -299,7 +299,7 @@ function Directory({ live }: { live: Live[] }) {
         </div>
         {unimported.length > 0 && (
           <div className="pt-1">
-            <p className="text-[10px] text-[var(--color-muted)] mb-1.5">From your books — tap to import:</p>
+            <p className="text-[10px] text-[var(--color-muted)] mb-1.5">From your books - tap to import:</p>
             <div className="flex gap-1 flex-wrap">
               {unimported.map(l => (
                 <button key={l.name} onClick={() => importLive(l)}
@@ -336,9 +336,9 @@ function Directory({ live }: { live: Live[] }) {
                 {shown.map(d => (
                   <tr key={d.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 font-medium">{d.name}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{d.gstin || "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{d.gstin || "-"}</td>
                     <td className="px-4 py-2.5 capitalize">{d.role}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{d.state || "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{d.state || "-"}</td>
                     <td className="px-4 py-2.5">
                       <button onClick={() => toggleLink(d.id)}
                         className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium ${d.linked ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
@@ -416,7 +416,7 @@ function InvoiceConfirmation() {
                   return (
                     <tr key={i.id} className="hover:bg-white/2">
                       <td className="px-4 py-2.5 font-medium">{i.customer}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{i.invoiceNumber ?? "—"}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{i.invoiceNumber ?? "-"}</td>
                       <td className="px-4 py-2.5 tabular-nums">{formatCurrency(i.amount)}</td>
                       <td className="px-4 py-2.5 text-[var(--color-muted)]">{i.dueDate}</td>
                       <td className="px-4 py-2.5">
@@ -546,8 +546,8 @@ function CounterpartyReconciliation({ live }: { live: Live[] }) {
                       <tr key={r.their.id} className={`hover:bg-white/2 ${r.mine ? "" : "bg-red-950/20"}`}>
                         <td className="px-4 py-2.5">{r.their.ref}</td>
                         <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.their.amount)}</td>
-                        <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.mine?.ref ?? "—"}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{r.mine ? formatCurrency(r.mine.amount) : "—"}</td>
+                        <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.mine?.ref ?? "-"}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.mine ? formatCurrency(r.mine.amount) : "-"}</td>
                         <td className="px-4 py-2.5">
                           {r.mine
                             ? <span className="inline-flex items-center gap-1 text-[10px] text-green-400 font-semibold"><CheckCircle2 size={11} /> Matched</span>
@@ -557,8 +557,8 @@ function CounterpartyReconciliation({ live }: { live: Live[] }) {
                     ))}
                     {matches.unmatchedMine.map(m => (
                       <tr key={m.id} className="hover:bg-white/2 bg-yellow-950/20">
-                        <td className="px-4 py-2.5 text-[var(--color-muted)]">—</td>
-                        <td className="px-4 py-2.5 text-[var(--color-muted)]">—</td>
+                        <td className="px-4 py-2.5 text-[var(--color-muted)]">-</td>
+                        <td className="px-4 py-2.5 text-[var(--color-muted)]">-</td>
                         <td className="px-4 py-2.5">{m.ref}</td>
                         <td className="px-4 py-2.5 tabular-nums">{formatCurrency(m.amount)}</td>
                         <td className="px-4 py-2.5"><span className="inline-flex items-center gap-1 text-[10px] text-yellow-400 font-semibold"><AlertTriangle size={11} /> Not on their statement</span></td>
@@ -610,7 +610,7 @@ function TradeReferenceBook() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><FileSignature size={14} className="text-[var(--color-primary)]" /> Trade-Reference Book</h3>
-        <p className="text-xs text-[var(--color-muted)]">Build a portable record of counterparties who vouch for your payment history — attach it to a loan or credit-limit application.</p>
+        <p className="text-xs text-[var(--color-muted)]">Build a portable record of counterparties who vouch for your payment history - attach it to a loan or credit-limit application.</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Referring party</label>
@@ -636,14 +636,14 @@ function TradeReferenceBook() {
             <Plus size={13} /> Request
           </button>
         </div>
-        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional) — e.g. always pays within terms" className={INP} />
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional) - e.g. always pays within terms" className={INP} />
       </div>
 
       {refs.length > 0 && (
         <div className="grid grid-cols-3 gap-3">
           {[
             { label: "Confirmed references", value: String(confirmed.length), color: "text-green-400" },
-            { label: "Avg relationship", value: avgRelationship ? `${avgRelationship} mo` : "—", color: "text-[var(--color-text)]" },
+            { label: "Avg relationship", value: avgRelationship ? `${avgRelationship} mo` : "-", color: "text-[var(--color-text)]" },
             { label: "Total credit vouched", value: formatAmount(totalVouchedLimit), color: "text-[var(--color-primary)]" },
           ].map(k => (
             <div key={k.label} className={`${CARD} p-4`}>
@@ -669,10 +669,10 @@ function TradeReferenceBook() {
                 {refs.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 font-medium">{r.party}{r.note && <span className="block text-[10px] text-[var(--color-muted)] font-normal">{r.note}</span>}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{r.gstin || "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{r.gstin || "-"}</td>
                     <td className="px-4 py-2.5 tabular-nums">{r.relMonths} mo</td>
                     <td className="px-4 py-2.5 tabular-nums">{r.avgDays} d</td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.creditLimit > 0 ? formatAmount(r.creditLimit) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.creditLimit > 0 ? formatAmount(r.creditLimit) : "-"}</td>
                     <td className="px-4 py-2.5">
                       {r.status === "confirmed"
                         ? <span className="inline-flex items-center gap-1 text-[10px] text-green-400 font-semibold"><CheckCircle2 size={11} /> Confirmed</span>
@@ -733,7 +733,7 @@ function CreditSignalScorecard({ live }: { live: Live[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Gauge size={14} className="text-[var(--color-primary)]" /> Network Credit-Signal Scorecard</h3>
-        <p className="text-xs text-[var(--color-muted)] mb-4">A cash-flow credit signal derived from your live trade graph — the kind lenders look at under OCEN/cash-flow-based lending. Built only from data already in Headroom.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A cash-flow credit signal derived from your live trade graph - the kind lenders look at under OCEN/cash-flow-based lending. Built only from data already in Headroom.</p>
         <div className="flex items-end gap-4">
           <div>
             <p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider">Composite signal</p>
@@ -801,14 +801,14 @@ function SupplierDiscovery() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Search size={14} className="text-[var(--color-primary)]" /> Supplier Discovery Shortlist</h3>
-        <p className="text-xs text-[var(--color-muted)]">Build and rank a shortlist of verified suppliers by GST compliance rating, ONDC presence and minimum order — sourcing alternatives before you commit.</p>
+        <p className="text-xs text-[var(--color-muted)]">Build and rank a shortlist of verified suppliers by GST compliance rating, ONDC presence and minimum order - sourcing alternatives before you commit.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Supplier name" className={INP} />
           <input value={gstin} onChange={e => setGstin(e.target.value)} placeholder="GSTIN (optional)" className={INP} />
           <input value={category} onChange={e => setCategory(e.target.value)} placeholder="Category / product" className={INP} />
           <input value={state} onChange={e => setState(e.target.value)} placeholder="State" className={INP} />
           <div>
-            <label className="text-[10px] text-[var(--color-muted)] block mb-1">GST rating (0–5)</label>
+            <label className="text-[10px] text-[var(--color-muted)] block mb-1">GST rating (0-5)</label>
             <input type="number" min={0} max={5} step={0.5} value={gstRating} onChange={e => setGstRating(e.target.value)} className={INP} />
           </div>
           <input type="number" value={minOrder} onChange={e => setMinOrder(e.target.value)} placeholder="Min order (₹)" className={INP} />
@@ -995,7 +995,7 @@ function Concentration({ live }: { live: Live[] }) {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h3 className="text-sm font-semibold flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Top-Counterparty Concentration</h3>
-            <p className="text-xs text-[var(--color-muted)] mt-0.5">How much of your {side === "buyers" ? "revenue" : "spend"} depends on a single counterparty — your concentration risk.</p>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">How much of your {side === "buyers" ? "revenue" : "spend"} depends on a single counterparty - your concentration risk.</p>
           </div>
           <div className="flex gap-1">
             {(["buyers", "suppliers"] as const).map(s => (
@@ -1026,7 +1026,7 @@ function Concentration({ live }: { live: Live[] }) {
 
           {concentrated && (
             <div className="rounded-lg p-4 border border-orange-800/40 bg-orange-950/20">
-              <p className="text-sm font-bold text-orange-400 flex items-center gap-2"><AlertTriangle size={14} /> {data.sorted[0]?.name} accounts for {Math.round(data.top1 * 100)}% of your {side === "buyers" ? "revenue" : "spend"}. Losing this relationship would hit hard — diversify before it becomes a single point of failure.</p>
+              <p className="text-sm font-bold text-orange-400 flex items-center gap-2"><AlertTriangle size={14} /> {data.sorted[0]?.name} accounts for {Math.round(data.top1 * 100)}% of your {side === "buyers" ? "revenue" : "spend"}. Losing this relationship would hit hard - diversify before it becomes a single point of failure.</p>
             </div>
           )}
 
@@ -1088,7 +1088,7 @@ function PaymentBehaviourRating({}: { live: Live[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4`}>
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Star size={14} className="text-[var(--color-primary)]" /> Payment-Behaviour Rating</h3>
-        <p className="text-xs text-[var(--color-muted)]">Each buyer gets a days-to-pay grade from your invoice history — so you know who to extend credit to and who to put on advance.</p>
+        <p className="text-xs text-[var(--color-muted)]">Each buyer gets a days-to-pay grade from your invoice history - so you know who to extend credit to and who to put on advance.</p>
       </div>
 
       {ratings.length === 0 ? (
@@ -1110,8 +1110,8 @@ function PaymentBehaviourRating({}: { live: Live[] }) {
                     <td className="px-4 py-2.5 tabular-nums">{r.score}</td>
                     <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.total}</td>
                     <td className="px-4 py-2.5 tabular-nums">{r.overdue} <span className="text-[var(--color-muted)]">({Math.round(r.overdueRate * 100)}%)</span></td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.worstDays > 0 ? `${r.worstDays}d` : "—"}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-red-400">{r.overdueAmt > 0 ? formatAmount(r.overdueAmt) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.worstDays > 0 ? `${r.worstDays}d` : "-"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-red-400">{r.overdueAmt > 0 ? formatAmount(r.overdueAmt) : "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1119,7 +1119,7 @@ function PaymentBehaviourRating({}: { live: Live[] }) {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Grade A = consistently on time; D = chronically overdue. Based on this firm's own invoices only — it is a private rating, not shared with the counterparty.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Grade A = consistently on time; D = chronically overdue. Based on this firm's own invoices only - it is a private rating, not shared with the counterparty.</p>
     </div>
   );
 }
@@ -1260,7 +1260,7 @@ function OnboardingChecklist({ live }: { live: Live[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} className="text-[var(--color-primary)]" /> Partner Onboarding Checklist</h3>
-        <p className="text-xs text-[var(--color-muted)]">Run every new counterparty through the same {ONBOARD_STEPS.length}-step onboarding — verification, KYB, terms and ledger linking — so nothing is skipped before you start trading.</p>
+        <p className="text-xs text-[var(--color-muted)]">Run every new counterparty through the same {ONBOARD_STEPS.length}-step onboarding - verification, KYB, terms and ledger linking - so nothing is skipped before you start trading.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Counterparty</label>
@@ -1353,7 +1353,7 @@ function TradeTermsTracker({ live }: { live: Live[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Handshake size={14} className="text-[var(--color-primary)]" /> Trade-Terms Agreement Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">Record the credit days, limit, early-pay discount and late penalty agreed with each partner — so aging and reminders use the real terms, not guesses, and you know when each is due for review.</p>
+        <p className="text-xs text-[var(--color-muted)]">Record the credit days, limit, early-pay discount and late penalty agreed with each partner - so aging and reminders use the real terms, not guesses, and you know when each is due for review.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <div className="col-span-2 md:col-span-1">
             <label className="text-[10px] text-[var(--color-muted)] block mb-1">Counterparty</label>
@@ -1387,13 +1387,13 @@ function TradeTermsTracker({ live }: { live: Live[] }) {
                   <tr key={t.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 font-medium">{t.party}{t.note && <span className="block text-[10px] text-[var(--color-muted)] font-normal">{t.note}</span>}</td>
                     <td className="px-4 py-2.5 tabular-nums">{t.creditDays}d</td>
-                    <td className="px-4 py-2.5 tabular-nums">{t.creditLimit > 0 ? formatAmount(t.creditLimit) : "—"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{t.earlyPayDiscPct > 0 ? `${t.earlyPayDiscPct}%` : "—"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{t.latePenaltyPct > 0 ? `${t.latePenaltyPct}%/mo` : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{t.creditLimit > 0 ? formatAmount(t.creditLimit) : "-"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{t.earlyPayDiscPct > 0 ? `${t.earlyPayDiscPct}%` : "-"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{t.latePenaltyPct > 0 ? `${t.latePenaltyPct}%/mo` : "-"}</td>
                     <td className="px-4 py-2.5">
                       {t.reviewOn
                         ? <span className={dueForReview(t) ? "text-orange-400 font-medium" : "text-[var(--color-muted)]"}>{t.reviewOn}{dueForReview(t) ? " ⚠" : ""}</span>
-                        : <span className="text-[var(--color-muted)]">—</span>}
+                        : <span className="text-[var(--color-muted)]">-</span>}
                     </td>
                     <td className="px-4 py-2.5">
                       {t.status === "agreed"
@@ -1470,7 +1470,7 @@ function JointReconExport({ live }: { live: Live[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><FileSpreadsheet size={14} className="text-[var(--color-primary)]" /> Joint-Reconciliation Statement Export</h3>
-        <p className="text-xs text-[var(--color-muted)]">Generate a clean statement of account with a running balance for a counterparty and export it as CSV — send it across so both sides reconcile against one shared document.</p>
+        <p className="text-xs text-[var(--color-muted)]">Generate a clean statement of account with a running balance for a counterparty and export it as CSV - send it across so both sides reconcile against one shared document.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Counterparty</label>
@@ -1516,8 +1516,8 @@ function JointReconExport({ live }: { live: Live[] }) {
                     <tr key={idx} className="hover:bg-white/2">
                       <td className="px-4 py-2.5 text-[var(--color-muted)]">{l.date}</td>
                       <td className="px-4 py-2.5">{l.ref}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{l.debit > 0 ? formatCurrency(l.debit) : "—"}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{l.credit > 0 ? formatCurrency(l.credit) : "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{l.debit > 0 ? formatCurrency(l.debit) : "-"}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{l.credit > 0 ? formatCurrency(l.credit) : "-"}</td>
                       <td className="px-4 py-2.5 tabular-nums font-medium">{formatCurrency(run)}</td>
                     </tr>
                   ); }); })()}
@@ -1563,7 +1563,7 @@ function PaymentTimeline({ live }: { live: Live[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><History size={14} className="text-[var(--color-primary)]" /> Counterparty Payment-History Timeline</h3>
-        <p className="text-xs text-[var(--color-muted)]">A chronological feed of every invoice and payment with one counterparty — see the full trade history at a glance instead of scrolling through scattered transactions.</p>
+        <p className="text-xs text-[var(--color-muted)]">A chronological feed of every invoice and payment with one counterparty - see the full trade history at a glance instead of scrolling through scattered transactions.</p>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Counterparty</label>
           <input list="net-pt-parties" value={party} onChange={e => setParty(e.target.value)} placeholder="Select or type" className={`${INP} max-w-md`} />
@@ -1582,7 +1582,7 @@ function PaymentTimeline({ live }: { live: Live[] }) {
               { label: "Money in", value: formatAmount(stats.inflow), color: "text-green-400", sub: "" },
               { label: "Money out", value: formatAmount(stats.outflow), color: "text-red-400", sub: "" },
               { label: "Events", value: String(stats.count), color: "text-[var(--color-text)]", sub: "" },
-              { label: "Relationship", value: stats.monthsActive ? `${stats.monthsActive} mo` : "—", color: "text-[var(--color-text)]", sub: stats.firstSeen ? `since ${stats.firstSeen}` : "" },
+              { label: "Relationship", value: stats.monthsActive ? `${stats.monthsActive} mo` : "-", color: "text-[var(--color-text)]", sub: stats.firstSeen ? `since ${stats.firstSeen}` : "" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>{k.sub && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{k.sub}</p>}</div>
             ))}
@@ -1640,7 +1640,7 @@ function ReferralTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><UserPlus size={14} className="text-[var(--color-primary)]" /> Network Referral Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">Track who in your network introduced which new counterparty, the expected trade value, and any reward owed — so referrals are credited and incentives never get lost.</p>
+        <p className="text-xs text-[var(--color-muted)]">Track who in your network introduced which new counterparty, the expected trade value, and any reward owed - so referrals are credited and incentives never get lost.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Referred by</label><input value={referredBy} onChange={e => setReferredBy(e.target.value)} placeholder="Existing partner" className={INP} /></div>
           <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">New party</label><input value={newParty} onChange={e => setNewParty(e.target.value)} placeholder="New lead" className={INP} /></div>
@@ -1684,8 +1684,8 @@ function ReferralTracker() {
                   <tr key={r.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 font-medium">{r.referredBy}</td>
                     <td className="px-4 py-2.5">{r.newParty}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.expectedValue > 0 ? formatAmount(r.expectedValue) : "—"}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.rewardType === "none" ? "—" : `${r.rewardType}${r.rewardAmount > 0 ? ` · ${formatAmount(r.rewardAmount)}` : ""}`}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.expectedValue > 0 ? formatAmount(r.expectedValue) : "-"}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.rewardType === "none" ? "-" : `${r.rewardType}${r.rewardAmount > 0 ? ` · ${formatAmount(r.rewardAmount)}` : ""}`}</td>
                     <td className="px-4 py-2.5">
                       <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${r.status === "rewarded" ? "bg-green-900/30 text-green-400 border-green-800/40" : r.status === "converted" ? "bg-blue-900/30 text-blue-400 border-blue-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{r.status}</span>
                     </td>
@@ -1721,7 +1721,7 @@ function PriceListManager() {
     setItems([...items, { id: crypto.randomUUID(), sku: sku.trim(), name: name.trim(), unit: unit.trim() || "pcs", price: Math.max(0, parseFloat(price) || 0), gstPct: Math.max(0, parseFloat(gstPct) || 0) }]);
     setSku(""); setName(""); setPrice("");
     setVersion(new Date().toISOString().split("T")[0]);
-    toast.success("Item added — price list re-versioned");
+    toast.success("Item added - price list re-versioned");
   };
   const remove = (id: string) => { setItems(items.filter(i => i.id !== id)); setVersion(new Date().toISOString().split("T")[0]); };
 
@@ -1780,7 +1780,7 @@ function PriceListManager() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {items.map(i => (
                     <tr key={i.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{i.sku || "—"}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{i.sku || "-"}</td>
                       <td className="px-4 py-2.5 font-medium">{i.name}</td>
                       <td className="px-4 py-2.5 text-[var(--color-muted)]">{i.unit}</td>
                       <td className="px-4 py-2.5 tabular-nums">{formatCurrency(i.price)}</td>
@@ -1831,7 +1831,7 @@ function PartnerSLAScorecard({ live }: { live: Live[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> Partner SLA Scorecard</h3>
-        <p className="text-xs text-[var(--color-muted)]">Score suppliers on on-time delivery, quality and responsiveness to build an objective vendor track record — and decide who keeps your business at renewal.</p>
+        <p className="text-xs text-[var(--color-muted)]">Score suppliers on on-time delivery, quality and responsiveness to build an objective vendor track record - and decide who keeps your business at renewal.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-1">Partner</label>
@@ -1914,7 +1914,7 @@ function GroupBuyCalculator() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> Group-Buy / Consortium Calculator</h3>
-        <p className="text-xs text-[var(--color-muted)]">Pool orders with other small buyers to clear a supplier's volume tier and unlock a lower price — see exactly how much each member saves once you cross the threshold.</p>
+        <p className="text-xs text-[var(--color-muted)]">Pool orders with other small buyers to clear a supplier's volume tier and unlock a lower price - see exactly how much each member saves once you cross the threshold.</p>
         <div className="grid grid-cols-3 gap-2">
           <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Solo price / unit (₹)</label><input type="number" value={soloPrice} onChange={e => setSoloPrice(e.target.value)} className={INP} /></div>
           <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Group price / unit (₹)</label><input type="number" value={groupPrice} onChange={e => setGroupPrice(e.target.value)} className={INP} /></div>
@@ -1953,7 +1953,7 @@ function GroupBuyCalculator() {
                   <td className="px-4 py-2.5 tabular-nums">{formatAmount(m.qty)}</td>
                   <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(m.soloCost)}</td>
                   <td className="px-4 py-2.5 tabular-nums">{formatCurrency(m.groupCost)}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-green-400">{m.saving > 0 ? formatCurrency(m.saving) : "—"}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-green-400">{m.saving > 0 ? formatCurrency(m.saving) : "-"}</td>
                   <td className="px-4 py-2.5 text-right">{m.name !== "My firm" && <button onClick={() => remove(m.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>}</td>
                 </tr>
               ))}
@@ -1986,7 +1986,7 @@ function WarmIntroRequester({ live }: { live: Live[] }) {
     const why = reason.trim() ? ` ${reason.trim()}` : ` We're keen to explore a trade relationship with them.`;
     const close = tone === "formal"
       ? `If you are comfortable making this connection, I would be grateful. Happy to share more context for you to forward.`
-      : `If you're up for connecting us, that'd be great — happy to send a blurb you can just forward on.`;
+      : `If you're up for connecting us, that'd be great - happy to send a blurb you can just forward on.`;
     return [greeting, "", `${ask}${why}`, "", close, "", `Thanks a lot,`, me].join("\n");
   }, [connector, target, reason, tone, me]);
 
@@ -1996,7 +1996,7 @@ function WarmIntroRequester({ live }: { live: Live[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Send size={14} className="text-[var(--color-primary)]" /> Warm-Intro / Connection Requester</h3>
-        <p className="text-xs text-[var(--color-muted)]">Compose a ready-to-send message asking a partner in your network to introduce you to a new counterparty — warm intros convert far better than cold outreach.</p>
+        <p className="text-xs text-[var(--color-muted)]">Compose a ready-to-send message asking a partner in your network to introduce you to a new counterparty - warm intros convert far better than cold outreach.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Ask (existing partner)</label>
@@ -2064,7 +2064,7 @@ function RiskWatchlist({ live }: { live: Live[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Partner Risk Watchlist</h3>
-        <p className="text-xs text-[var(--color-muted)]">Flag counterparties showing distress signals — slow pay, filing gaps, bank-detail changes — with your exposure and the action to take. Your early-warning list before bad debt hits.</p>
+        <p className="text-xs text-[var(--color-muted)]">Flag counterparties showing distress signals - slow pay, filing gaps, bank-detail changes - with your exposure and the action to take. Your early-warning list before bad debt hits.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-1">Counterparty</label>
@@ -2108,7 +2108,7 @@ function RiskWatchlist({ live }: { live: Live[] }) {
                   <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{i.reason} · flagged {i.addedAt}{i.action ? ` · Action: ${i.action}` : ""}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-bold tabular-nums text-red-400">{i.exposure > 0 ? formatCurrency(i.exposure) : "—"}</p>
+                  <p className="text-sm font-bold tabular-nums text-red-400">{i.exposure > 0 ? formatCurrency(i.exposure) : "-"}</p>
                   <p className="text-[10px] text-[var(--color-muted)]">open exposure</p>
                 </div>
               </div>
@@ -2153,7 +2153,7 @@ function MeetingLog({ live }: { live: Live[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Networking Event / Meeting Log</h3>
-        <p className="text-xs text-[var(--color-muted)]">Keep a running CRM-style log of every meeting and call with partners — what was discussed and the follow-up due — so relationships never go cold and nothing slips.</p>
+        <p className="text-xs text-[var(--color-muted)]">Keep a running CRM-style log of every meeting and call with partners - what was discussed and the follow-up due - so relationships never go cold and nothing slips.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-1">Counterparty</label>
@@ -2238,7 +2238,7 @@ function MutualNetting() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Mutual-Credit Netting Calculator</h3>
-        <p className="text-xs text-[var(--color-muted)]">When you both buy from and sell to the same partner, net the two positions so only the difference moves — fewer payments, less working capital tied up, lower transfer cost.</p>
+        <p className="text-xs text-[var(--color-muted)]">When you both buy from and sell to the same partner, net the two positions so only the difference moves - fewer payments, less working capital tied up, lower transfer cost.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Counterparty</label><input value={party} onChange={e => setParty(e.target.value)} placeholder="Party name" className={INP} /></div>
           <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">They owe me (₹)</label><input type="number" value={theyOweMe} onChange={e => setTheyOweMe(e.target.value)} placeholder="80000" className={INP} /></div>
@@ -2335,7 +2335,7 @@ function PartnerTierScheme({ live }: { live: Live[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Award size={14} className="text-[var(--color-primary)]" /> Partner-Tier Scheme</h3>
-        <p className="text-xs text-[var(--color-muted)]">Set volume bands and the perk each tier earns. Headroom places every counterparty from your books into a tier by their total trade value — use it to reward your best partners with better terms.</p>
+        <p className="text-xs text-[var(--color-muted)]">Set volume bands and the perk each tier earns. Headroom places every counterparty from your books into a tier by their total trade value - use it to reward your best partners with better terms.</p>
         <div className="space-y-2">
           {sorted.map(t => (
             <div key={t.id} className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center">
@@ -2355,7 +2355,7 @@ function PartnerTierScheme({ live }: { live: Live[] }) {
       </div>
 
       {ranked.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No counterparties yet — import transactions or invoices and partners will be tiered automatically.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">No counterparties yet - import transactions or invoices and partners will be tiered automatically.</p>
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Partners by tier</p></div>
@@ -2509,7 +2509,7 @@ function CoMarketingPlanner({ live }: { live: Live[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Megaphone size={14} className="text-[var(--color-primary)]" /> Co-Marketing / Joint-Campaign Planner</h3>
-        <p className="text-xs text-[var(--color-muted)]">Plan joint promotions with a trade partner — split the spend, pick a channel and date, and track each campaign from planned to live to done. Shared budgets let small firms market like big ones.</p>
+        <p className="text-xs text-[var(--color-muted)]">Plan joint promotions with a trade partner - split the spend, pick a channel and date, and track each campaign from planned to live to done. Shared budgets let small firms market like big ones.</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-1">Partner</label>
@@ -2573,7 +2573,7 @@ function CoMarketingPlanner({ live }: { live: Live[] }) {
 }
 
 // ── #27 Introductions Given / Received Ledger ────────────────────────────────
-// Track warm introductions you make and receive across the network — reciprocity at a
+// Track warm introductions you make and receive across the network - reciprocity at a
 // glance, so relationships stay balanced (feature #52, distinct from referral incentives).
 type Intro = { id: string; date: string; direction: "given" | "received"; partner: string; toWhom: string; outcome: "pending" | "deal" | "dropped"; note: string };
 function IntroductionsLedger() {
@@ -2601,7 +2601,7 @@ function IntroductionsLedger() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /> Introductions Ledger</h3>
-        <p className="text-xs text-[var(--color-muted)]">Track the warm introductions you give and receive across your network. Keeping the give/receive balance visible keeps relationships reciprocal — the quiet engine of a referral network.</p>
+        <p className="text-xs text-[var(--color-muted)]">Track the warm introductions you give and receive across your network. Keeping the give/receive balance visible keeps relationships reciprocal - the quiet engine of a referral network.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-1">Direction</label>
@@ -2670,7 +2670,7 @@ function IntroductionsLedger() {
 }
 
 // ── #28 Collaborative-Forecast Sharing ───────────────────────────────────────
-// Share a forward demand forecast with a supplier so they can plan production — reduces
+// Share a forward demand forecast with a supplier so they can plan production - reduces
 // the bullwhip effect (feature #78). Tracks forecast vs the last actual you commit.
 type ForecastRow = { id: string; partner: string; month: string; forecastQty: number; lastActual: number };
 function CollaborativeForecast({ live }: { live: Live[] }) {
@@ -2741,8 +2741,8 @@ function CollaborativeForecast({ live }: { live: Live[] }) {
                         <td className="px-4 py-2.5 font-medium">{r.partner}</td>
                         <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.month}</td>
                         <td className="px-4 py-2.5 tabular-nums">{formatAmount(r.forecastQty)}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.lastActual > 0 ? formatAmount(r.lastActual) : "—"}</td>
-                        <td className={`px-4 py-2.5 tabular-nums font-medium ${pct > 0 ? "text-green-400" : pct < 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.lastActual > 0 ? `${pct >= 0 ? "+" : ""}${pct}%` : "—"}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.lastActual > 0 ? formatAmount(r.lastActual) : "-"}</td>
+                        <td className={`px-4 py-2.5 tabular-nums font-medium ${pct > 0 ? "text-green-400" : pct < 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.lastActual > 0 ? `${pct >= 0 ? "+" : ""}${pct}%` : "-"}</td>
                         <td className="px-4 py-2.5 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                       </tr>
                     );
@@ -2758,7 +2758,7 @@ function CollaborativeForecast({ live }: { live: Live[] }) {
 }
 
 // ── #29 Partner NPS ──────────────────────────────────────────────────────────
-// Capture a 0–10 "how likely to recommend" score per partner, compute Net Promoter Score
+// Capture a 0-10 "how likely to recommend" score per partner, compute Net Promoter Score
 // (promoters − detractors), and flag detractors that need attention.
 type NPSEntry = { id: string; partner: string; score: number; comment: string };
 function PartnerNPS({ live }: { live: Live[] }) {
@@ -2793,14 +2793,14 @@ function PartnerNPS({ live }: { live: Live[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Smile size={14} className="text-[var(--color-primary)]" /> Partner NPS</h3>
-        <p className="text-xs text-[var(--color-muted)]">Record how likely each partner is to recommend working with you (0–10) and Headroom computes a Net Promoter Score. Detractors are the relationships to repair before they churn.</p>
+        <p className="text-xs text-[var(--color-muted)]">Record how likely each partner is to recommend working with you (0-10) and Headroom computes a Net Promoter Score. Detractors are the relationships to repair before they churn.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-1">Partner</label>
             <input list="net-nps-parties" value={partner} onChange={e => setPartner(e.target.value)} placeholder="Buyer / supplier" className={INP} />
             <datalist id="net-nps-parties">{partyOptions.map(p => <option key={p} value={p} />)}</datalist>
           </div>
-          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Score (0–10)</label><input type="number" min={0} max={10} value={score} onChange={e => setScore(e.target.value)} className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Score (0-10)</label><input type="number" min={0} max={10} value={score} onChange={e => setScore(e.target.value)} className={INP} /></div>
           <div className="md:col-span-2"><label className="text-[10px] text-[var(--color-muted)] block mb-1">Comment</label><input value={comment} onChange={e => setComment(e.target.value)} placeholder="What they said (optional)" className={INP} /></div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Record</button>
         </div>
@@ -2809,9 +2809,9 @@ function PartnerNPS({ live }: { live: Live[] }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "Net Promoter Score", value: String(nps.value), color: nps.value >= 50 ? "text-green-400" : nps.value >= 0 ? "text-yellow-400" : "text-red-400" },
-          { label: "Promoters (9–10)", value: String(nps.promoters), color: "text-green-400" },
-          { label: "Passives (7–8)", value: String(nps.passives), color: "text-yellow-400" },
-          { label: "Detractors (0–6)", value: String(nps.detractors), color: "text-red-400" },
+          { label: "Promoters (9-10)", value: String(nps.promoters), color: "text-green-400" },
+          { label: "Passives (7-8)", value: String(nps.passives), color: "text-yellow-400" },
+          { label: "Detractors (0-6)", value: String(nps.detractors), color: "text-red-400" },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-xl font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
         ))}
@@ -2834,7 +2834,7 @@ function PartnerNPS({ live }: { live: Live[] }) {
                     <td className="px-4 py-2.5 font-medium">{e.partner}</td>
                     <td className="px-4 py-2.5 tabular-nums font-semibold">{e.score}/10</td>
                     <td className={`px-4 py-2.5 font-medium ${catColor(e.score)}`}>{cat(e.score)}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{e.comment || "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{e.comment || "-"}</td>
                     <td className="px-4 py-2.5 text-right"><button onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                   </tr>
                 ))}
@@ -2849,7 +2849,7 @@ function PartnerNPS({ live }: { live: Live[] }) {
 
 // ── #30 Partner Spend-Share Trend ────────────────────────────────────────────
 // Tracks how each supplier's share of total monthly spend moves over time, so you
-// can spot a partner you're leaning on more (or less) every month — built purely
+// can spot a partner you're leaning on more (or less) every month - built purely
 // from outflow transactions already in the books.
 function SpendShareTrend() {
   const { store } = useApp();
@@ -2893,7 +2893,7 @@ function SpendShareTrend() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><LineChart size={14} className="text-[var(--color-primary)]" /> Partner Spend-Share Trend</h3>
-        <p className="text-xs text-[var(--color-muted)]">See what share of your monthly spend goes to one supplier and how that share is trending — a rising line means growing dependence on a single partner.</p>
+        <p className="text-xs text-[var(--color-muted)]">See what share of your monthly spend goes to one supplier and how that share is trending - a rising line means growing dependence on a single partner.</p>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Supplier</label>
           <input list="net-sst-parties" value={party} onChange={e => setParty(e.target.value)} placeholder="Select or type" className={`${INP} max-w-md`} />
@@ -2909,9 +2909,9 @@ function SpendShareTrend() {
         <>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Latest share", value: latest ? `${latest.share.toFixed(1)}%` : "—", color: latest && latest.share > 30 ? "text-red-400" : "text-[var(--color-text)]" },
+              { label: "Latest share", value: latest ? `${latest.share.toFixed(1)}%` : "-", color: latest && latest.share > 30 ? "text-red-400" : "text-[var(--color-text)]" },
               { label: "Month-on-month", value: `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} pp`, color: delta > 0 ? "text-red-400" : delta < 0 ? "text-green-400" : "text-[var(--color-muted)]" },
-              { label: "Latest spend", value: latest ? formatAmount(latest.spend) : "—", color: "text-[var(--color-text)]" },
+              { label: "Latest spend", value: latest ? formatAmount(latest.spend) : "-", color: "text-[var(--color-text)]" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p><p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p></div>
             ))}
@@ -2974,7 +2974,7 @@ function JointVentureSplit({ live }: { live: Live[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Split size={14} className="text-[var(--color-primary)]" /> Joint-Venture P&L Split</h3>
-        <p className="text-xs text-[var(--color-muted)]">For a shared deal or co-owned venture, enter the revenue, cost and your ownership share — Headroom splits the profit between you and the partner so settlement is unambiguous.</p>
+        <p className="text-xs text-[var(--color-muted)]">For a shared deal or co-owned venture, enter the revenue, cost and your ownership share - Headroom splits the profit between you and the partner so settlement is unambiguous.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-[10px] text-[var(--color-muted)] block mb-1">JV partner</label>
@@ -3060,7 +3060,7 @@ function PaymentReliability() {
     <div className="space-y-4">
       <div className={`${CARD} p-4`}>
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><CheckCheck size={14} className="text-[var(--color-primary)]" /> Partner Payment-Reliability</h3>
-        <p className="text-xs text-[var(--color-muted)]">Ranks each buyer by the share of settled invoices they cleared on time and their average lateness — a quick read on who you can trust on open credit.</p>
+        <p className="text-xs text-[var(--color-muted)]">Ranks each buyer by the share of settled invoices they cleared on time and their average lateness - a quick read on who you can trust on open credit.</p>
       </div>
 
       {rows.length === 0 ? (
@@ -3091,7 +3091,7 @@ function PaymentReliability() {
                         {r.reliable ? <CheckCheck size={10} /> : <AlertTriangle size={10} />} {r.reliable ? "Reliable" : "Watch"}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.avgLate > 0 ? `${r.avgLate}d` : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.avgLate > 0 ? `${r.avgLate}d` : "-"}</td>
                     <td className="px-4 py-2.5 tabular-nums text-green-400">{r.paid}</td>
                     <td className="px-4 py-2.5 tabular-nums text-red-400">{r.overdue}</td>
                     <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.pending}</td>

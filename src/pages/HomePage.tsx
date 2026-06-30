@@ -68,7 +68,7 @@ function DashMockup({ inr }: { inr: boolean }) {
     <div style={{ background: C.deep, border: `1px solid rgba(169,217,188,0.15)`, borderRadius: 14, overflow: "hidden", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
       <div style={{ background: "rgba(0,0,0,0.35)", padding: "10px 16px", display: "flex", alignItems: "center", gap: 6 }}>
         {["#E24B4A","#EF9F27","#3D9A60"].map(c => <span key={c} style={{ width: 9, height: 9, borderRadius: "50%", background: c, opacity: 0.8 }} />)}
-        <span style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.45)", marginLeft: 6 }}>Headroom — 90-day forecast</span>
+        <span style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.45)", marginLeft: 6 }}>Headroom - 90-day forecast</span>
       </div>
       <div style={{ padding: 18 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
@@ -85,7 +85,7 @@ function DashMockup({ inr }: { inr: boolean }) {
           ))}
         </div>
         <div style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(169,217,188,0.08)", borderRadius: 8, padding: "12px 14px", marginBottom: 12 }}>
-          <div style={{ fontFamily: sans, fontSize: 9, color: "rgba(169,217,188,0.38)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>Cash position — next 90 days</div>
+          <div style={{ fontFamily: sans, fontSize: 9, color: "rgba(169,217,188,0.38)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>Cash position - next 90 days</div>
           <div data-h3d="cashbars" style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 58 }}>
             {BARS.map((h, i) => (
               <div key={i} style={{ flex: 1, borderRadius: "2px 2px 0 0", minWidth: 7, height: `${Math.round(h * 0.72)}%`, background: h < 50 ? "#E24B4A" : h < 65 ? C.gold : C.bright, opacity: i < 10 ? 0.5 : 0.85 }} />
@@ -121,7 +121,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 /* ─── Section label ─── */
 function Label({ text, dark = false }: { text: string; dark?: boolean }) {
-  // Mono "terminal" eyebrow with a bracket accent — the futuristic HUD signature.
+  // Mono "terminal" eyebrow with a bracket accent - the futuristic HUD signature.
   return (
     <div style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase", color: dark ? C.pale : C.bright, marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{ color: C.gold }}>▚</span>{text}
@@ -129,7 +129,7 @@ function Label({ text, dark = false }: { text: string; dark?: boolean }) {
   );
 }
 
-/* Crafted icon tile — a soft olive→gold gradient chip with an inset top highlight,
+/* Crafted icon tile - a soft olive→gold gradient chip with an inset top highlight,
    a hairline ring and a low drop shadow (premium "app-tile" depth). A tiny gold
    corner dot echoes the Headroom logo mark. One system, used across every section. */
 function IconTile({ icon: Icon, size = 44, dark = false }: { icon: LucideIcon; size?: number; dark?: boolean }) {
@@ -155,7 +155,7 @@ function IconTile({ icon: Icon, size = 44, dark = false }: { icon: LucideIcon; s
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 export default function HomePage() {
-  useSeo({ title: "Headroom — GST Billing, Accounting & Cash-Flow Software for Indian SMBs", description: "All-in-one finance platform for Indian SMBs — GST billing & e-invoicing, double-entry accounting, GST/TDS filing, invoicing, collections, payroll and 90-day cash-flow forecasts. Your CA works in it too. Free to start." });
+  useSeo({ title: "Headroom - GST Billing, Accounting & Cash-Flow Software for Indian SMBs", description: "All-in-one finance platform for Indian SMBs - GST billing & e-invoicing, double-entry accounting, GST/TDS filing, invoicing, collections, payroll and 90-day cash-flow forecasts. Your CA works in it too. Free to start." });
   const navigate = useNavigate();
   const platform = usePlatformSettings(); // super-admin-controlled footer links, banner, contact
   const [scrolled, setScrolled] = useState(false);
@@ -319,7 +319,7 @@ export default function HomePage() {
         ))}
       </div>
 
-      {/* ═══ FEATURES — 10 LAYERS ════════════════════════════════════════════ */}
+      {/* ═══ FEATURES - 10 LAYERS ════════════════════════════════════════════ */}
       <section id="features" data-h3d-deco="shapes-light" style={{ background: C.creamW, padding: "88px 48px" }}>
         <Reveal>
           <div style={{ maxWidth: 1100, margin: "0 auto 52px" }}>
@@ -328,7 +328,7 @@ export default function HomePage() {
               Built as one operating system,<br />not a stack of disconnected tools.
             </h2>
             <p style={{ fontFamily: sans, fontSize: 15, color: C.txtMut, maxWidth: 560, lineHeight: 1.7 }}>
-              Designed for SMB operators who need a truthful picture of cash — not another dashboard full of vanity signals. Instead of pretending every projection is exact, Headroom uses confidence bands and scenarios to show where outcomes may land.
+              Designed for SMB operators who need a truthful picture of cash - not another dashboard full of vanity signals. Instead of pretending every projection is exact, Headroom uses confidence bands and scenarios to show where outcomes may land.
             </p>
           </div>
         </Reveal>
@@ -338,7 +338,7 @@ export default function HomePage() {
             { n:"01", t:"Live data ingestion",      d:"Bank feeds and accounting connectors sync continuously. No manual uploads." },
             { n:"02", t:"Normalisation",            d:"Transactions categorised and merchant-normalised automatically on every sync." },
             { n:"03", t:"90-day forecast engine",   d:"Daily P10/P50/P90 cash position. Recurring and variable spend modelled separately." },
-            { n:"04", t:"Confidence bands",         d:"Every forecast shows best, expected, and worst case — never a single deceptive line." },
+            { n:"04", t:"Confidence bands",         d:"Every forecast shows best, expected, and worst case - never a single deceptive line." },
             { n:"05", t:"Alert & insight engine",   d:"Alerts fire 45 days before pressure hits. Specific, actionable, and early." },
             { n:"06", t:"Operator-first dashboard", d:"One screen shows balance, runway, alerts, and forecast. No setup needed." },
             { n:"07", t:"Scenario planner",         d:"Model a hire, slow month, or contract win and see the cash impact instantly." },
@@ -387,7 +387,7 @@ export default function HomePage() {
               Credit support that appears inside<br />the cash flow workflow.
             </h2>
             <p style={{ fontFamily: sans, fontSize: 15, color: C.txtMut, maxWidth: 540, lineHeight: 1.7, marginBottom: 52 }}>
-              When a forecast shows real pressure, the platform surfaces rescue options in context — evaluates fit with silent underwriting, and models repayment impact before a business commits.
+              When a forecast shows real pressure, the platform surfaces rescue options in context - evaluates fit with silent underwriting, and models repayment impact before a business commits.
             </p>
           </Reveal>
 
@@ -414,7 +414,7 @@ export default function HomePage() {
               <div>
                 <h3 style={{ fontFamily: serif, fontSize: 26, color: C.txt, marginBottom: 10 }}>Repayment simulation changes the decision quality.</h3>
                 <p style={{ fontFamily: sans, fontSize: 14, color: C.txtMut, lineHeight: 1.7, marginBottom: 24 }}>
-                  Traditional credit is a separate conversation. Headroom embeds it directly — so you see what borrowing costs in the context of your own forecast, not a generic APR table.
+                  Traditional credit is a separate conversation. Headroom embeds it directly - so you see what borrowing costs in the context of your own forecast, not a generic APR table.
                 </p>
                 <div style={{ display: "flex", gap: 24, marginBottom: 28 }}>
                   {[{ n:"48 hrs", d:"Avg to first offer"}, { n:"0", d:"Bureau pulls"}, { n:"3 types", d:"Capital available"}].map(({ n, d }, i) => (
@@ -456,7 +456,7 @@ export default function HomePage() {
               Raise from the people who already<br />believe in your business.
             </h2>
             <p style={{ fontFamily: sans, fontSize: 15, color: "rgba(169,217,188,0.55)", maxWidth: 520, lineHeight: 1.7 }}>
-              Headroom extends cash flow intelligence into capital formation — with live operating data, repayment progress, and raise readiness built in from day one.
+              Headroom extends cash flow intelligence into capital formation - with live operating data, repayment progress, and raise readiness built in from day one.
             </p>
           </div>
         </Reveal>
@@ -465,21 +465,21 @@ export default function HomePage() {
           {(inr ? [
             {
               track:"Track A", badge:"Revenue-based", title:"Revenue-based financing",
-              range:"₹5L – ₹2Cr",
+              range:"₹5L - ₹2Cr",
               best:"Restaurants, retail, D2C, and service businesses with steady revenue.",
               features:["Repay as % of monthly revenue","No equity dilution","No collateral, no EMI lock-in","Live investor portal"],
               featured: false,
             },
             {
               track:"Track B", badge:"Angel / AIF", title:"Angel & AIF round",
-              range:"₹50L – ₹5Cr",
+              range:"₹50L - ₹5Cr",
               best:"Businesses ready for institutional angels and AIF participation.",
               features:["Private-placement framework","Companies Act 2013 compliant","Investor & cap-table dashboard","SEBI-registered AIF network"],
               featured: true,
             },
             {
               track:"Track C", badge:"SME IPO", title:"SME IPO listing",
-              range:"₹5Cr – ₹50Cr+",
+              range:"₹5Cr - ₹50Cr+",
               best:"Growth-stage SMBs ready to list on NSE Emerge / BSE SME.",
               features:["NSE Emerge / BSE SME platform","Merchant-banker support included","Shares tradeable after listing","Full SEBI compliance layer"],
               featured: false,
@@ -487,7 +487,7 @@ export default function HomePage() {
           ] : [
             {
               track:"Track A", badge:"Revenue-share", title:"Crowdfunding raise",
-              range:"$10K – $500K",
+              range:"$10K - $500K",
               best:"Restaurants, retail, and service businesses with loyal communities.",
               features:["Revenue-share repayment","No equity dilution","Live investor portal","Campaign page included"],
               featured: false,
@@ -535,7 +535,7 @@ export default function HomePage() {
           <div style={{ maxWidth: 1100, margin: "40px auto 0", background: C.deep, border: "1px solid rgba(169,217,188,0.1)", borderRadius: 12, padding: "24px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 20 }}>
             <div>
               <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.pale, marginBottom: 4 }}>Compliance first.</div>
-              <p style={{ fontFamily: sans, fontSize: 13, color: "rgba(169,217,188,0.45)", lineHeight: 1.6, maxWidth: 480 }}>All capital tracks are built with compliance infrastructure included. {inr ? "Revenue-based financing, private placement, and SME IPO frameworks (SEBI / Companies Act)" : "Revenue-share, Reg CF, and Reg A+ frameworks"} are handled by Headroom — you focus on the raise.</p>
+              <p style={{ fontFamily: sans, fontSize: 13, color: "rgba(169,217,188,0.45)", lineHeight: 1.6, maxWidth: 480 }}>All capital tracks are built with compliance infrastructure included. {inr ? "Revenue-based financing, private placement, and SME IPO frameworks (SEBI / Companies Act)" : "Revenue-share, Reg CF, and Reg A+ frameworks"} are handled by Headroom - you focus on the raise.</p>
             </div>
             <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 13, fontWeight: 700, padding: "12px 24px", borderRadius: 8, border: "none", cursor: "pointer", whiteSpace: "nowrap" }}>See launch requirements →</button>
           </div>
@@ -551,7 +551,7 @@ export default function HomePage() {
               Your clients' cash flow,<br />always in view.
             </h2>
             <p style={{ fontFamily: sans, fontSize: 15, color: C.txtMut, maxWidth: 500, lineHeight: 1.7 }}>
-              Replace quarterly check-ins with a live cash dashboard. Spot tax obligations, vendor payments, and low-balance risks weeks in advance — for every client, in one portfolio view.
+              Replace quarterly check-ins with a live cash dashboard. Spot tax obligations, vendor payments, and low-balance risks weeks in advance - for every client, in one portfolio view.
             </p>
           </div>
         </Reveal>
@@ -587,7 +587,7 @@ export default function HomePage() {
             {[
               { icon:Users,      t:"Client portfolio view",     d:"All clients in one list with current balance, runway, and latest alert." },
               { icon:LineChart,  t:"Live 90-day forecasts",     d:"Every client's forecast refreshed automatically. No manual data pulls." },
-              { icon:Bell,       t:"Alert feed",                d:"One feed across all clients, sorted by severity — act on the right thing first." },
+              { icon:Bell,       t:"Alert feed",                d:"One feed across all clients, sorted by severity - act on the right thing first." },
               { icon:CreditCard, t:"Credit rescue context",     d:"See which clients are pre-qualified and for how much before they ask." },
               { icon:Award,      t:"Capital readiness scoring", d:"Know which clients are raise-ready and which track suits them best." },
               { icon:Palette,    t:"White-label ready",         d:"Your brand, your portal. Headroom powers it behind the scenes." },
@@ -665,7 +665,7 @@ export default function HomePage() {
               id:"free" as const,
               name:"Free", price:inr ? "₹0" : "$0", period:"forever", featured: false,
               note:inr ? "Free for SMBs under ₹25L turnover · no card ever" : "For early-stage businesses · no card ever",
-              desc:"See your cash truth — free for life.",
+              desc:"See your cash truth - free for life.",
               features:["30-day cash forecast","Confidence bands","Plain-language alerts","WhatsApp morning brief","1 connected account"],
               disabled:["90-day forecast","Scenario planner","Credit rescue","Advisor access"],
               cta:"Start free",
@@ -742,12 +742,12 @@ export default function HomePage() {
             <h2 style={{ fontFamily: serif, fontSize: 34, color: C.txt, letterSpacing: -1, marginBottom: 40 }}>Common questions</h2>
             <div style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 14, padding: "0 24px" }}>
               {[
-                { q:"Do I need an accountant to use Headroom?",            a:"No. Headroom is built for founders. It translates raw transactions into plain language — runway, burn, risk. Your CA can also get their own login with accountant-level access." },
+                { q:"Do I need an accountant to use Headroom?",            a:"No. Headroom is built for founders. It translates raw transactions into plain language - runway, burn, risk. Your CA can also get their own login with accountant-level access." },
                 { q:"Which accounting software does Headroom connect to?",  a:"Tally ERP, Zoho Books, QuickBooks, Xero, and 50+ others. Bank feeds work with most Indian and international banks through secure open-banking APIs." },
                 { q:"What does 'confidence bands' mean?",                   a:"Instead of one forecast line, Headroom shows P10 (worst case), P50 (expected), and P90 (best case) for every day. This is more honest than a single-point projection." },
-                { q:"How does silent underwriting work?",                   a:"Headroom computes a live credit score from your monthly revenue, burn, runway, and business age — using your own data. No bureau pull. The higher your score, the better the offers." },
-                { q:"Can investors see my full financial data?",            a:"No. Investors get a dedicated portal showing only the raise they're part of — their investment, equity %, and progress. All other financials are invisible." },
-                { q:"Is there a free trial?",                               a:"Yes — all plans include a free 90-day trial with no credit card required. You keep your data if you downgrade after the trial." },
+                { q:"How does silent underwriting work?",                   a:"Headroom computes a live credit score from your monthly revenue, burn, runway, and business age - using your own data. No bureau pull. The higher your score, the better the offers." },
+                { q:"Can investors see my full financial data?",            a:"No. Investors get a dedicated portal showing only the raise they're part of - their investment, equity %, and progress. All other financials are invisible." },
+                { q:"Is there a free trial?",                               a:"Yes - all plans include a free 90-day trial with no credit card required. You keep your data if you downgrade after the trial." },
               ].map(f => <FaqItem key={f.q} q={f.q} a={f.a} />)}
             </div>
           </div>

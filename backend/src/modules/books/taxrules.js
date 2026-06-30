@@ -1,4 +1,4 @@
-// §TAXRULES — RULES-AS-DATA core for Indian direct + indirect tax.
+// §TAXRULES - RULES-AS-DATA core for Indian direct + indirect tax.
 //
 // Pattern borrowed from OpenFisca and the PSLmodels Tax-Calculator: the tax
 // LEGISLATION lives here as inspectable DATED PARAMETERS, not as code buried in
@@ -10,17 +10,17 @@
 //
 // Income-tax slabs are inherently keyed by Assessment Year (a Finance Act sets the
 // rates for an AY, not a calendar date). We map an AY to a synthetic effective date
-// — the 1-Apr that opens the relevant FY — so the same dated-resolver mechanism
+// - the 1-Apr that opens the relevant FY - so the same dated-resolver mechanism
 // serves both: ayToDate('2025-26') → '2024-04-01'. The values are statutory facts
 // (Income-Tax Act + the annual Finance Acts).
 //
 // A VALIDATION LAYER (validateParams) runs at module load and asserts every table
-// is well-formed — brackets strictly increasing, rates within 0–100, dated entries
-// sorted, no negative thresholds — and THROWS on malformed data. That assertion is
+// is well-formed - brackets strictly increasing, rates within 0-100, dated entries
+// sorted, no negative thresholds - and THROWS on malformed data. That assertion is
 // what makes this core trustworthy: a typo in a rate table fails loudly at boot,
 // not silently in someone's tax bill.
 //
-// No money math here — these are plain numbers (the parameter VALUES). The engines
+// No money math here - these are plain numbers (the parameter VALUES). The engines
 // run them through ./money. Pure helpers (slabTax, applyRebate87A, surcharge,
 // addCess) are exported so the engines never re-implement the slab walk.
 const { money, ZERO } = require("./money");
@@ -69,7 +69,7 @@ const IT_SLABS_NEW = [
 
 const IT_SLABS_OLD = [
   {
-    from: "2023-04-01", // AY 2024-25 onward — old-regime slabs unchanged across both AYs
+    from: "2023-04-01", // AY 2024-25 onward - old-regime slabs unchanged across both AYs
     brackets: [
       { upTo: 250000, rate: 0 },
       { upTo: 500000, rate: 5 },
@@ -83,7 +83,7 @@ const IT_SLABS_OLD = [
 const REBATE_87A_NEW = [{ from: "2023-04-01", incomeLimit: 700000, maxRebate: 25000 }];
 const REBATE_87A_OLD = [{ from: "2018-04-01", incomeLimit: 500000, maxRebate: 12500 }];
 
-// Surcharge bands [{ over, rate }] — highest crossed band applies. Under the new
+// Surcharge bands [{ over, rate }] - highest crossed band applies. Under the new
 // regime the 37% top band was abolished (capped 25%); old regime retains 37%.
 const SURCHARGE_INDIVIDUAL_NEW = [
   {
@@ -224,7 +224,7 @@ const TCS = {
   ],
 };
 
-// ── GST standard rate slabs (indirect tax) — reference data ──────────────────
+// ── GST standard rate slabs (indirect tax) - reference data ──────────────────
 // The standard ad-valorem slabs. Per-supply rates are captured at posting time;
 // this table is the inspectable list of the legal standard slabs.
 const GST = {
@@ -255,7 +255,7 @@ const PARAMS = {
 
 // ── Dated resolver ───────────────────────────────────────────────────────────
 // Map an Assessment Year string ("2025-26") to the synthetic effective date used
-// to key the income-tax parameters — the 1-Apr that opens the relevant FY.
+// to key the income-tax parameters - the 1-Apr that opens the relevant FY.
 // AY 2025-26 ⇒ FY 2024-25 ⇒ '2024-04-01'.
 function ayToDate(ay) {
   const startYear = Number(String(ay).slice(0, 4)) - 1;
@@ -445,7 +445,7 @@ function validateParams() {
   return true;
 }
 
-// Run the validation at module load — malformed legislation fails loudly at boot.
+// Run the validation at module load - malformed legislation fails loudly at boot.
 validateParams();
 
 module.exports = {

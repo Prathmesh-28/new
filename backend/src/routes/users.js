@@ -34,7 +34,7 @@ async function countSuperAdmins(client) {
   return rows[0].n;
 }
 
-// GET /api/users — super_admin sees all; owner sees own tenant. Lower roles blocked.
+// GET /api/users - super_admin sees all; owner sees own tenant. Lower roles blocked.
 router.get("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const isSuperAdmin = req.user.role === "super_admin";
   const cols = "id,email,role,tenant_id,first_login,created_at,display_name,status,last_login_at,last_active_at,COALESCE(login_count,0) AS login_count,COALESCE(subscription_plan,'free') AS subscription_plan";
@@ -44,7 +44,7 @@ router.get("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
   res.json(rows);
 });
 
-// POST /api/users — owner (own tenant, non-super roles) or super_admin (any tenant/role)
+// POST /api/users - owner (own tenant, non-super roles) or super_admin (any tenant/role)
 router.post("/", authenticate, async (req, res) => {
   const actor = req.user;
   if (!["super_admin", "owner"].includes(actor.role)) return res.status(403).json({ error: "Forbidden" });
@@ -85,7 +85,7 @@ router.post("/", authenticate, async (req, res) => {
   res.status(201).json(rows[0]);
 });
 
-// PATCH /api/users/:id — change role (scoped + privilege-guarded + lockout-safe)
+// PATCH /api/users/:id - change role (scoped + privilege-guarded + lockout-safe)
 router.patch("/:id", authenticate, async (req, res) => {
   const actor = req.user;
   if (!["super_admin", "owner"].includes(actor.role)) return res.status(403).json({ error: "Forbidden" });
@@ -105,7 +105,7 @@ router.patch("/:id", authenticate, async (req, res) => {
     return res.status(400).json({ error: "Invalid role" });
   }
 
-  // Demoting a super_admin must not drop the count to zero — do it atomically.
+  // Demoting a super_admin must not drop the count to zero - do it atomically.
   if (target.role === "super_admin" && role !== "super_admin") {
     const out = await withSuperAdminGuard(async (client) => {
       if ((await countSuperAdmins(client)) <= 1) return null;
@@ -121,7 +121,7 @@ router.patch("/:id", authenticate, async (req, res) => {
   res.json(rows[0]);
 });
 
-// POST /api/users/:id/status — activate / deactivate a single user. A suspended
+// POST /api/users/:id/status - activate / deactivate a single user. A suspended
 // user is blocked at login (auth.js checks user.status). Per-user (not tenant-wide).
 router.post("/:id/status", authenticate, async (req, res) => {
   const actor = req.user;
@@ -140,7 +140,7 @@ router.post("/:id/status", authenticate, async (req, res) => {
   res.json({ ok: true, status });
 });
 
-// POST /api/users/:id/make-owner — promote a teammate to owner (continuity / backup admin).
+// POST /api/users/:id/make-owner - promote a teammate to owner (continuity / backup admin).
 // Owner can promote anyone in their own tenant; super_admin anywhere. Co-owners are allowed.
 router.post("/:id/make-owner", authenticate, async (req, res) => {
   const actor = req.user;
@@ -155,7 +155,7 @@ router.post("/:id/make-owner", authenticate, async (req, res) => {
   res.json({ ok: true, id: target.id, role: "owner" });
 });
 
-// POST /api/users/leave — a member leaves their current tenant and gets a fresh
+// POST /api/users/leave - a member leaves their current tenant and gets a fresh
 // solo workspace. Blocked if they're the last owner (would orphan the company).
 router.post("/leave", authenticate, async (req, res) => {
   const me = req.user;
@@ -164,7 +164,7 @@ router.post("/leave", authenticate, async (req, res) => {
     const { rows } = await pool.query(
       "SELECT COUNT(*)::int AS n FROM users WHERE tenant_id=$1 AND role='owner' AND id<>$2", [me.tenant_id, me.id]
     );
-    if (rows[0].n === 0) return res.status(409).json({ error: "You're the last owner — transfer ownership before leaving." });
+    if (rows[0].n === 0) return res.status(409).json({ error: "You're the last owner - transfer ownership before leaving." });
   }
   const { rows: u } = await pool.query("SELECT email FROM users WHERE id=$1", [me.id]);
   const slug = (u[0]?.email || "user").split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
@@ -174,7 +174,7 @@ router.post("/leave", authenticate, async (req, res) => {
   res.json({ ok: true, tenant_id: newTid });
 });
 
-// PATCH /api/users/:id/profile — super-admin edits a user's email / display name.
+// PATCH /api/users/:id/profile - super-admin edits a user's email / display name.
 // Parameterised (no hardcoded values); email uniqueness enforced.
 router.patch("/:id/profile", authenticate, async (req, res) => {
   if (req.user.role !== "super_admin") return res.status(403).json({ error: "Forbidden" });
@@ -198,7 +198,7 @@ router.patch("/:id/profile", authenticate, async (req, res) => {
   res.json(rows[0]);
 });
 
-// DELETE /api/users/:id — owner (own tenant, non-super) or super_admin (any but self / last admin)
+// DELETE /api/users/:id - owner (own tenant, non-super) or super_admin (any but self / last admin)
 router.delete("/:id", authenticate, async (req, res) => {
   const actor = req.user;
   if (!["super_admin", "owner"].includes(actor.role)) return res.status(403).json({ error: "Forbidden" });
@@ -213,7 +213,7 @@ router.delete("/:id", authenticate, async (req, res) => {
     if (target.role === "super_admin")        return res.status(403).json({ error: "Forbidden" });
   }
 
-  // Deleting a super_admin must not drop the count to zero — do it atomically.
+  // Deleting a super_admin must not drop the count to zero - do it atomically.
   if (target.role === "super_admin") {
     const ok = await withSuperAdminGuard(async (client) => {
       if ((await countSuperAdmins(client)) <= 1) return false;

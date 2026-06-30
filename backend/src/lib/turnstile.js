@@ -31,7 +31,7 @@ async function verifyTurnstile(token, remoteip) {
 // Express guard usable at the top of a handler.
 async function requireHuman(req, res) {
   const ts = await verifyTurnstile(req.headers["cf-turnstile-response"], req.ip);
-  if (!ts.ok) { res.status(403).json({ error: "Verification failed — please complete the challenge and try again." }); return false; }
+  if (!ts.ok) { res.status(403).json({ error: "Verification failed - please complete the challenge and try again." }); return false; }
   return true;
 }
 

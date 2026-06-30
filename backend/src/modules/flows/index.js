@@ -1,4 +1,4 @@
-// Headroom Flows — data layer. Tenant-scoped (app-layer, like books/crm/studio).
+// Headroom Flows - data layer. Tenant-scoped (app-layer, like books/crm/studio).
 const { pool } = require("../../db");
 const crypto = require("crypto");
 
@@ -132,7 +132,7 @@ async function listEventFlows(tenantId, event) {
   return rows;
 }
 
-// Distinct tenants that have an enabled flow subscribed to a given event — so the
+// Distinct tenants that have an enabled flow subscribed to a given event - so the
 // daily emitter only computes snapshots for tenants that actually use the event.
 async function tenantsSubscribedTo(event) {
   const { rows } = await pool.query(

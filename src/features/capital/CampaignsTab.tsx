@@ -4,7 +4,7 @@ import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import { Megaphone, Plus, Loader2, Link2, Send, Check, ChevronDown, ChevronRight, Trash2, Package } from "lucide-react";
 
-// Rewards (pre-order) crowdfunding — creator surface over /api/campaigns. A backer is
+// Rewards (pre-order) crowdfunding - creator surface over /api/campaigns. A backer is
 // a customer; a pledge is a liability until fulfilment (booked server-side).
 interface Perk { id: string; name: string; unit_price: number; quantity_limit: number | null; quantity_sold: number }
 interface Campaign {
@@ -189,7 +189,7 @@ function CampaignCard({ c, open, onToggle, busy, onAct, onCopy, onReload }: {
           {/* Backers */}
           <div>
             <p className="text-[11px] uppercase tracking-wide text-[var(--color-muted)] mb-2">Backers ({backers.length})</p>
-            {backers.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No pledges yet — share the public link.</p> : (
+            {backers.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No pledges yet - share the public link.</p> : (
               <div className="space-y-1.5">
                 {backers.map(b => (
                   <div key={b.id} className="flex items-center justify-between text-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2">

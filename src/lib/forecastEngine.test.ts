@@ -11,7 +11,7 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 const allFinite = (xs: number[]) => xs.every(Number.isFinite);
 
 describe("forecastEngine", () => {
-  it("is deterministic — same store+today → identical output", () => {
+  it("is deterministic - same store+today → identical output", () => {
     const a = runForecast(store, {}, TODAY);
     const b = runForecast(store, {}, TODAY);
     expect(JSON.stringify(a.points)).toBe(JSON.stringify(b.points));

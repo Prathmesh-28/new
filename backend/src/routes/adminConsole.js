@@ -161,7 +161,7 @@ router.get("/subscription/invoices", async (req, res) => {
 });
 
 router.get("/subscription/payment-method", async (_req, res) => {
-  // No card vaulting without a live gateway customer — honest "none on file".
+  // No card vaulting without a live gateway customer - honest "none on file".
   res.json({ method: null });
 });
 

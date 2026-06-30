@@ -1,14 +1,14 @@
 // Provider-agnostic LLM gateway. Talks to any OpenAI-compatible /chat/completions
 // endpoint (default OpenRouter). Per-tenant config lives in tenant_llm_config; the
 // API key is encrypted at rest (AES-256-GCM) and only decrypted server-side for the
-// outbound call — getTenantLlm NEVER returns the key, only hasKey.
+// outbound call - getTenantLlm NEVER returns the key, only hasKey.
 const crypto = require("node:crypto");
 const { pool } = require("../../db");
 const { PostError } = require("./posting-engine");
 
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 // Free by default so the app works on a zero-credit OpenRouter account. owl-alpha is
-// a free, ~1M-context text model — used for ALL chat (insights, assistant, CFO brief,
+// a free, ~1M-context text model - used for ALL chat (insights, assistant, CFO brief,
 // WhatsApp, categorizer). Override per-tenant in Books → AI Agents, or globally via
 // the AGENT_MODEL env var (e.g. a paid Claude model once credits are added).
 const DEFAULT_MODEL = () => process.env.AGENT_MODEL || "openrouter/owl-alpha";
@@ -45,12 +45,12 @@ function decryptKey(blob) {
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(ct), decipher.final()]).toString("utf8");
   } catch {
-    return null; // tampered / wrong secret — treat as no key
+    return null; // tampered / wrong secret - treat as no key
   }
 }
 
 // --- tenant config ------------------------------------------------------------
-// Returns the public view of a tenant's LLM config. Never includes the key —
+// Returns the public view of a tenant's LLM config. Never includes the key -
 // only hasKey, which is true if either a tenant key is stored or the env
 // fallback (OPENROUTER_API_KEY) is present.
 async function getTenantLlm(tenantId) {
@@ -140,7 +140,7 @@ function geminiProvider() {
 // returns the assistant message { content, tool_calls, usage }. Throws PostError on
 // any non-2xx so callers get a consistent, surfaceable error. If the configured model
 // is out of credits (402), retries ONCE on the free default model so the app keeps
-// working without a paid balance — unless the configured model already IS the default.
+// working without a paid balance - unless the configured model already IS the default.
 async function chat(tenantId, { system, messages = [], tools, model: modelOverride } = {}) {
   const { baseUrl, model: tenantModel, key } = await _resolveSecret(tenantId);
   const requestedModel = modelOverride || tenantModel;   // per-agent / tenant model wins
@@ -198,12 +198,12 @@ async function chat(tenantId, { system, messages = [], tools, model: modelOverri
   } catch (e) {
     const freeModel = DEFAULT_MODEL();
     if (_isPaymentError(e) && requestedModel !== freeModel) {
-      try { console.warn(`[llm] model "${requestedModel}" out of credits — falling back to free "${freeModel}"`); } catch {}
+      try { console.warn(`[llm] model "${requestedModel}" out of credits - falling back to free "${freeModel}"`); } catch {}
       try { return await attempt(freeModel); } catch (e2) { e = e2; }
     }
     // Last resort: Gemini fallback when the primary provider is failing.
     if (gem) {
-      try { console.warn(`[llm] primary failed (${e.providerStatus || e.code || ""}) — falling back to Gemini`); } catch {}
+      try { console.warn(`[llm] primary failed (${e.providerStatus || e.code || ""}) - falling back to Gemini`); } catch {}
       try { return await attempt(null, gem); } catch { /* Gemini also failed → surface the original error */ }
     }
     throw e;
@@ -305,7 +305,7 @@ async function chatStream(tenantId, { system, messages = [], tools, model: model
 
   // A fallback is only safe BEFORE any token is emitted (a pre-stream error:
   // a non-2xx response sets providerStatus, a fetch failure carries LLM_NETWORK).
-  // A mid-stream break must not retry — that would replay already-shown tokens.
+  // A mid-stream break must not retry - that would replay already-shown tokens.
   const preStream = (e) => e && (e.providerStatus || e.code === "LLM_NETWORK");
 
   try {
@@ -317,7 +317,7 @@ async function chatStream(tenantId, { system, messages = [], tools, model: model
       try { return await attempt(freeModel); } catch (e2) { if (e2.name === "AbortError") throw e2; e = e2; }
     }
     if (gem && preStream(e)) {
-      try { console.warn(`[llm] stream primary failed (${e.providerStatus || e.code || ""}) — falling back to Gemini`); } catch {}
+      try { console.warn(`[llm] stream primary failed (${e.providerStatus || e.code || ""}) - falling back to Gemini`); } catch {}
       try { return await attempt(null, gem); } catch { /* Gemini also failed → surface the original error */ }
     }
     throw e;
@@ -371,7 +371,7 @@ async function embed(tenantId, texts) {
 // --- vision (image → text/JSON) ----------------------------------------------
 // OpenAI-compatible multimodal call: an image (data URL) + prompt to the tenant's
 // model (must be vision-capable, e.g. Claude Sonnet via OpenRouter). Same engine as
-// chat() — used for receipt/document capture. Returns the assistant text.
+// chat() - used for receipt/document capture. Returns the assistant text.
 async function vision(tenantId, { system, prompt, imageDataUrl, model: modelOverride, maxTokens = 600 } = {}) {
   const { baseUrl, key } = await _resolveSecret(tenantId);
   // The tenant's chat model may be text-only, so default to the free image-capable
@@ -410,7 +410,7 @@ async function vision(tenantId, { system, prompt, imageDataUrl, model: modelOver
   } catch (e) {
     const freeVision = DEFAULT_VISION_MODEL();
     if (_isPaymentError(e) && model !== freeVision) {
-      try { console.warn(`[llm] vision model "${model}" out of credits — falling back to free "${freeVision}"`); } catch {}
+      try { console.warn(`[llm] vision model "${model}" out of credits - falling back to free "${freeVision}"`); } catch {}
       return await attempt(freeVision);
     }
     throw e;

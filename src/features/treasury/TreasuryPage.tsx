@@ -122,7 +122,7 @@ export default function TreasuryPage() {
             <Wallet size={18} className="text-[var(--color-primary)]" /> Wealth &amp; Treasury
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Turn idle current-account cash into risk-graded, tax-efficient yield — sweeps, FD ladders, T-bills and goal buckets.
+            Turn idle current-account cash into risk-graded, tax-efficient yield - sweeps, FD ladders, T-bills and goal buckets.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -177,7 +177,7 @@ export default function TreasuryPage() {
 
       <AiInsight
         collapsed
-        title="✨ AI insight — treasury"
+        title="✨ AI insight - treasury"
         question="Given my cash and treasury position, how should I optimise idle balances and what risks (concentration, idle yield, maturities) should I watch?"
         context={{
           totalCash: totalBalance,
@@ -243,7 +243,7 @@ function Overview({ totalBalance }: { totalBalance: number }) {
   const annualForgone = Math.round(idle * (0.07 - 0.03));
   const investedPct = totalBalance > 0 ? Math.min(100, Math.round((invested / totalBalance) * 100)) : 0;
 
-  // Holdings maturing within ~30 days — surface as a reminder so cash gets redeployed.
+  // Holdings maturing within ~30 days - surface as a reminder so cash gets redeployed.
   const maturingSoon = useMemo(() =>
     holdings
       .filter(h => {
@@ -260,10 +260,10 @@ function Overview({ totalBalance }: { totalBalance: number }) {
       {maturingSoon.length > 0 && (
         <div className="rounded-lg p-4 border border-yellow-800/50 bg-yellow-950/20">
           <p className="text-sm font-bold text-yellow-400 flex items-center gap-2">
-            <AlertTriangle size={14} /> {maturingSoon.length} holding{maturingSoon.length > 1 ? "s" : ""} maturing within 30 days — {formatCurrency(Math.round(maturingSoonAmt))} freeing up
+            <AlertTriangle size={14} /> {maturingSoon.length} holding{maturingSoon.length > 1 ? "s" : ""} maturing within 30 days - {formatCurrency(Math.round(maturingSoonAmt))} freeing up
           </p>
           <p className="text-xs text-[var(--color-muted)] mt-1">
-            {maturingSoon.map(h => `${h.label} (${format(new Date(h.maturity_date as string), "d MMM")})`).join(" · ")}. Decide now whether to renew, ladder, or sweep — don't let it auto-renew at a poor rate.
+            {maturingSoon.map(h => `${h.label} (${format(new Date(h.maturity_date as string), "d MMM")})`).join(" · ")}. Decide now whether to renew, ladder, or sweep - don't let it auto-renew at a poor rate.
           </p>
         </div>
       )}
@@ -295,7 +295,7 @@ function Overview({ totalBalance }: { totalBalance: number }) {
         </div>
         {holdings.length === 0 && (
           <p className="text-[11px] text-[var(--color-muted)] mt-3">
-            No positions recorded yet. Use the <strong className="text-[var(--color-text)]">Maturity Calendar</strong> tab to record your first FD, liquid fund or T-bill — the split and maturity reminders read straight from it.
+            No positions recorded yet. Use the <strong className="text-[var(--color-text)]">Maturity Calendar</strong> tab to record your first FD, liquid fund or T-bill - the split and maturity reminders read straight from it.
           </p>
         )}
       </div>
@@ -303,13 +303,13 @@ function Overview({ totalBalance }: { totalBalance: number }) {
       <div className={`${CARD} p-5`}>
         <p className="text-sm font-semibold mb-2 flex items-center gap-2"><TrendingUp size={14} className="text-[var(--color-primary)]" /> Where to put surplus cash</p>
         <p className="text-xs text-[var(--color-muted)] mb-4">
-          A working treasury keeps a few weeks of runway liquid, then ladders the rest across instruments by how soon you'll need the money. India-aware defaults below — use the tools to model your own numbers.
+          A working treasury keeps a few weeks of runway liquid, then ladders the rest across instruments by how soon you'll need the money. India-aware defaults below - use the tools to model your own numbers.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {[
-            { horizon: "0–7 days", instrument: "Overnight / Liquid funds", yield: "~6.5–7%", note: "T+1 redemption, near-zero risk. Best for buffer overflow." },
-            { horizon: "1–6 months", instrument: "Short-duration debt / FDs", yield: "~7–7.5%", note: "Ladder maturities to match GST, advance-tax, payroll." },
-            { horizon: "6m–3 yrs", instrument: "Corporate FD / G-Secs / T-Bills", yield: "~7.5–8%", note: "Sovereign or AAA only. Lock-in for known future outflows." },
+            { horizon: "0-7 days", instrument: "Overnight / Liquid funds", yield: "~6.5-7%", note: "T+1 redemption, near-zero risk. Best for buffer overflow." },
+            { horizon: "1-6 months", instrument: "Short-duration debt / FDs", yield: "~7-7.5%", note: "Ladder maturities to match GST, advance-tax, payroll." },
+            { horizon: "6m-3 yrs", instrument: "Corporate FD / G-Secs / T-Bills", yield: "~7.5-8%", note: "Sovereign or AAA only. Lock-in for known future outflows." },
           ].map(r => (
             <div key={r.horizon} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
               <p className="text-[10px] uppercase tracking-wider text-[var(--color-muted)] mb-1">{r.horizon}</p>
@@ -444,7 +444,7 @@ function LadderBuilder() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-4`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> FD / RD Ladder Builder</h3>
-        <p className="text-xs text-[var(--color-muted)]">Split a lump sum across staggered maturities so cash frees up at intervals — beats locking everything in one long FD and losing flexibility.</p>
+        <p className="text-xs text-[var(--color-muted)]">Split a lump sum across staggered maturities so cash frees up at intervals - beats locking everything in one long FD and losing flexibility.</p>
         <div className="flex gap-2">
           {(["fd", "rd"] as const).map(m => (
             <button key={m} onClick={() => setMode(m)}
@@ -550,7 +550,7 @@ function LiquidVsFdComparator() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-4 space-y-3`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2"><GitCompareArrows size={14} className="text-[var(--color-primary)]" /> Liquid Fund vs FD — after-tax yield</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><GitCompareArrows size={14} className="text-[var(--color-primary)]" /> Liquid Fund vs FD - after-tax yield</h3>
         <p className="text-xs text-[var(--color-muted)]">Both are taxed at your slab post-Budget 2023, so the winner comes down to rate and timing. FD interest is taxed yearly (with TDS); fund gains only on redemption.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
@@ -640,7 +640,7 @@ function SurplusAllocator({ totalBalance }: { totalBalance: number }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Surplus-Cash Allocator</h3>
-        <p className="text-xs text-[var(--color-muted)]">Pick a risk tier and the surplus splits across instruments. Growth adds equity exposure — only for cash you won't need for 3+ years.</p>
+        <p className="text-xs text-[var(--color-muted)]">Pick a risk tier and the surplus splits across instruments. Growth adds equity exposure - only for cash you won't need for 3+ years.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Surplus to allocate (₹)</label>
@@ -687,7 +687,7 @@ function SurplusAllocator({ totalBalance }: { totalBalance: number }) {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Illustrative allocations, not investment advice. Yields are indicative and not guaranteed — hybrid/equity values fluctuate and can fall. Match instrument to when you'll actually need the cash.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Illustrative allocations, not investment advice. Yields are indicative and not guaranteed - hybrid/equity values fluctuate and can fall. Match instrument to when you'll actually need the cash.</p>
     </div>
   );
 }
@@ -812,7 +812,7 @@ function TBillEstimator() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Sovereign-backed (lowest credit risk). Buy through RBI Retail Direct (no brokerage). The discount gain is taxed as interest income at your slab. Cut-off yields are set at weekly RBI auctions — enter the latest auction yield.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Sovereign-backed (lowest credit risk). Buy through RBI Retail Direct (no brokerage). The discount gain is taxed as interest income at your slab. Cut-off yields are set at weekly RBI auctions - enter the latest auction yield.</p>
     </div>
   );
 }
@@ -980,7 +980,7 @@ function OwnerSplit() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Drawings from a company may be salary or dividend with different tax treatment — consult your CA on the optimal mix. Figures are simple annual estimates on fresh monthly savings.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Drawings from a company may be salary or dividend with different tax treatment - consult your CA on the optimal mix. Figures are simple annual estimates on fresh monthly savings.</p>
     </div>
   );
 }
@@ -1009,7 +1009,7 @@ function PostTaxCalculator() {
     <div className="space-y-4 max-w-xl">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> Post-Tax Return Calculator</h3>
-        <p className="text-xs text-[var(--color-muted)]">Headline rates are pre-tax. See what you actually keep after slab tax — and whether the bank deducts TDS on the way.</p>
+        <p className="text-xs text-[var(--color-muted)]">Headline rates are pre-tax. See what you actually keep after slab tax - and whether the bank deducts TDS on the way.</p>
         <div className="flex gap-2">
           {([["fd", "Bank FD"], ["debt", "Debt fund"], ["tbill", "T-Bill / G-Sec"]] as const).map(([id, label]) => (
             <button key={id} onClick={() => setType(id)}
@@ -1058,8 +1058,8 @@ function PostTaxCalculator() {
           <div className={`rounded-lg p-4 border ${tds > 0 ? "border-yellow-800/40 bg-yellow-950/20" : "border-[var(--color-border)] bg-[var(--color-bg)]"}`}>
             <p className="text-sm flex items-start gap-2">
               {tds > 0
-                ? <><AlertTriangle size={14} className="text-yellow-400 shrink-0 mt-0.5" /><span className="text-yellow-300">The bank will deduct ~{formatCurrency(tds)} TDS (10% under Sec 194A) since interest crosses ₹{(tdsThreshold / 1000)}k. Credited against your final tax — file Form 15G/15H if your total income is below the taxable limit to avoid it.</span></>
-                : <><CheckCircle2 size={14} className="text-green-400 shrink-0 mt-0.5" /><span className="text-[var(--color-muted)]">{type === "fd" ? "No TDS — interest is within the ₹" + (tdsThreshold / 1000) + "k threshold." : "No TDS on accrual for this instrument; you self-report the income at filing."}</span></>}
+                ? <><AlertTriangle size={14} className="text-yellow-400 shrink-0 mt-0.5" /><span className="text-yellow-300">The bank will deduct ~{formatCurrency(tds)} TDS (10% under Sec 194A) since interest crosses ₹{(tdsThreshold / 1000)}k. Credited against your final tax - file Form 15G/15H if your total income is below the taxable limit to avoid it.</span></>
+                : <><CheckCircle2 size={14} className="text-green-400 shrink-0 mt-0.5" /><span className="text-[var(--color-muted)]">{type === "fd" ? "No TDS - interest is within the ₹" + (tdsThreshold / 1000) + "k threshold." : "No TDS on accrual for this instrument; you self-report the income at filing."}</span></>}
             </p>
           </div>
         </>
@@ -1113,7 +1113,7 @@ function MaturityCalendar() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Maturity Calendar</h3>
-        <p className="text-xs text-[var(--color-muted)]">Record every real FD, T-bill and fund position once. It's saved to your account and powers the Overview invested-vs-idle split and the 30-day maturity reminder — so cash availability is never a surprise.</p>
+        <p className="text-xs text-[var(--color-muted)]">Record every real FD, T-bill and fund position once. It's saved to your account and powers the Overview invested-vs-idle split and the 30-day maturity reminder - so cash availability is never a surprise.</p>
         <div className="grid grid-cols-2 md:grid-cols-7 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Label</label>
@@ -1154,7 +1154,7 @@ function MaturityCalendar() {
       {maturing30 > 0 && (
         <div className="rounded-lg p-3 border border-yellow-800/50 bg-yellow-950/20">
           <p className="text-sm font-semibold text-yellow-400 flex items-center gap-2">
-            <AlertTriangle size={13} /> {formatCurrency(Math.round(maturing30))} matures within 30 days — plan its redeployment now.
+            <AlertTriangle size={13} /> {formatCurrency(Math.round(maturing30))} matures within 30 days - plan its redeployment now.
           </p>
         </div>
       )}
@@ -1196,12 +1196,12 @@ function MaturityCalendar() {
                     <tr key={h.id} className={`hover:bg-white/2 ${past ? "opacity-50" : ""}`}>
                       <td className="px-4 py-2.5 font-medium">{h.label}</td>
                       <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{h.kind}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{h.bank || "—"}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{h.bank || "-"}</td>
                       <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(Math.round(numOf(h.amount)))}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-xs">{r > 0 ? `${r}%` : "—"}</td>
-                      <td className="px-4 py-2.5">{h.maturity_date ? format(new Date(h.maturity_date), "d MMM yyyy") : "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-xs">{r > 0 ? `${r}%` : "-"}</td>
+                      <td className="px-4 py-2.5">{h.maturity_date ? format(new Date(h.maturity_date), "d MMM yyyy") : "-"}</td>
                       <td className="px-4 py-2.5">
-                        {days === null ? <span className="text-[10px] text-[var(--color-muted)]">—</span> : (
+                        {days === null ? <span className="text-[10px] text-[var(--color-muted)]">-</span> : (
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${past ? "bg-[var(--color-accent)] text-[var(--color-muted)]" : days <= 30 ? "bg-yellow-950/30 text-yellow-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>
                             {past ? "Matured" : days === 0 ? "Today" : `${days}d`}
                           </span>
@@ -1316,7 +1316,7 @@ function DebtEquityAllocator() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Debt-Fund vs Equity-Fund Allocator</h3>
-        <p className="text-xs text-[var(--color-muted)]">Splits a surplus between debt and equity funds. The horizon caps equity exposure — short-horizon money stays in debt no matter your risk appetite.</p>
+        <p className="text-xs text-[var(--color-muted)]">Splits a surplus between debt and equity funds. The horizon caps equity exposure - short-horizon money stays in debt no matter your risk appetite.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
@@ -1345,8 +1345,8 @@ function DebtEquityAllocator() {
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: "Debt funds", value: formatCurrency(debtAmt), color: "text-blue-400", sub: `${debtPct}% — stability` },
-              { label: "Equity funds", value: formatCurrency(equityAmt), color: "text-green-400", sub: `${equityPct}% — growth` },
+              { label: "Debt funds", value: formatCurrency(debtAmt), color: "text-blue-400", sub: `${debtPct}% - stability` },
+              { label: "Equity funds", value: formatCurrency(equityAmt), color: "text-green-400", sub: `${equityPct}% - growth` },
               { label: "Blended return", value: `${blended.toFixed(2)}%`, color: "text-[var(--color-primary)]", sub: "weighted p.a." },
               { label: `Value in ${yrs}y`, value: formatCurrency(projected), color: "text-green-400", sub: "est. pre-tax" },
             ].map(k => (
@@ -1364,7 +1364,7 @@ function DebtEquityAllocator() {
           )}
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Equity-oriented fund gains held over 12 months are LTCG (12.5% above ₹1.25L/yr); under 12 months STCG at 20%. Debt-fund gains are taxed at slab. Equity values can fall — only allocate money you won't need for the full horizon.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Equity-oriented fund gains held over 12 months are LTCG (12.5% above ₹1.25L/yr); under 12 months STCG at 20%. Debt-fund gains are taxed at slab. Equity values can fall - only allocate money you won't need for the full horizon.</p>
     </div>
   );
 }
@@ -1388,7 +1388,7 @@ function EmergencyFundCalculator() {
     <div className="space-y-4 max-w-xl">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldCheck size={14} className="text-[var(--color-primary)]" /> Emergency-Fund Target Calculator</h3>
-        <p className="text-xs text-[var(--color-muted)]">Size a contingency reserve for the business — enough months of fixed outgoings (rent, payroll, EMIs) to survive a revenue shock without breaking long-term investments.</p>
+        <p className="text-xs text-[var(--color-muted)]">Size a contingency reserve for the business - enough months of fixed outgoings (rent, payroll, EMIs) to survive a revenue shock without breaking long-term investments.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Monthly fixed opex (₹)</label>
@@ -1430,7 +1430,7 @@ function EmergencyFundCalculator() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Hold the emergency fund in instant-access instruments (liquid fund or sweep FD), not equity or locked deposits. Services firms often target 6 months; inventory-heavy or seasonal businesses lean toward 9–12.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Hold the emergency fund in instant-access instruments (liquid fund or sweep FD), not equity or locked deposits. Services firms often target 6 months; inventory-heavy or seasonal businesses lean toward 9-12.</p>
     </div>
   );
 }
@@ -1457,7 +1457,7 @@ function SweepFdConfig({ totalBalance }: { totalBalance: number }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Waves size={14} className="text-[var(--color-primary)]" /> Sweep-In FD Auto-Threshold Config</h3>
-        <p className="text-xs text-[var(--color-muted)]">A sweep-in (flexi) FD auto-converts balance above a trigger into a linked FD, and breaks back in slices only when the account dips below a floor — so you keep liquidity without losing interest on the whole deposit.</p>
+        <p className="text-xs text-[var(--color-muted)]">A sweep-in (flexi) FD auto-converts balance above a trigger into a linked FD, and breaks back in slices only when the account dips below a floor - so you keep liquidity without losing interest on the whole deposit.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Account</label>
@@ -1540,7 +1540,7 @@ function CorporateFdComparator() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Building2 size={14} className="text-[var(--color-primary)]" /> Corporate-FD Comparator</h3>
-        <p className="text-xs text-[var(--color-muted)]">AAA corporate deposits (Bajaj, Shriram, etc.) often beat bank FD rates — but carry credit risk. Compare maturity value on the same amount, then weigh yield against rating.</p>
+        <p className="text-xs text-[var(--color-muted)]">AAA corporate deposits (Bajaj, Shriram, etc.) often beat bank FD rates - but carry credit risk. Compare maturity value on the same amount, then weigh yield against rating.</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
@@ -1678,7 +1678,7 @@ function SmallSavingsCalculator() {
           )}
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">{cfg.note} Rates are revised quarterly by the government — confirm the current quarter's rate before investing. Gold price is volatile; the assumed appreciation is illustrative, not a forecast.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">{cfg.note} Rates are revised quarterly by the government - confirm the current quarter's rate before investing. Gold price is volatile; the assumed appreciation is illustrative, not a forecast.</p>
     </div>
   );
 }
@@ -1696,7 +1696,7 @@ function SweepVsOverdraft() {
 
   // Option A: use overdraft / cash-credit for the shortfall.
   const odCost = S * (parseFloat(odRate) || 0) / 100 * d / 365;
-  // Option B: break a sweep/flexi FD — lose FD interest on the broken slice for the
+  // Option B: break a sweep/flexi FD - lose FD interest on the broken slice for the
   // remaining period (proxied by `days`) plus a premature-break rate penalty.
   const fdInterestForgone = S * (parseFloat(fdRate) || 0) / 100 * d / 365;
   const penalty = S * (parseFloat(breakPenalty) || 0) / 100 * d / 365;
@@ -1708,7 +1708,7 @@ function SweepVsOverdraft() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-4 space-y-3`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2"><CreditCard size={14} className="text-[var(--color-primary)]" /> Sweep-FD vs Overdraft — cost of a short cash gap</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><CreditCard size={14} className="text-[var(--color-primary)]" /> Sweep-FD vs Overdraft - cost of a short cash gap</h3>
         <p className="text-xs text-[var(--color-muted)]">When you're short for a few days, is it cheaper to draw on the OD/CC line or break a sweep FD? Compare the real cost of each for the gap period.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
@@ -1753,7 +1753,7 @@ function SweepVsOverdraft() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">OD/CC interest is charged only on the amount and days used. Sweep FDs break in slices, limiting interest loss. Some banks waive the premature penalty on sweep-linked FDs — set the penalty to 0 if so.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">OD/CC interest is charged only on the amount and days used. Sweep FDs break in slices, limiting interest loss. Some banks waive the premature penalty on sweep-linked FDs - set the penalty to 0 if so.</p>
     </div>
   );
 }
@@ -1865,7 +1865,7 @@ function IncomeTracker() {
                     <td className="px-4 py-2.5 font-medium">{e.source}</td>
                     <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{e.type}</td>
                     <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(Math.round(e.amount))}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-yellow-400">{e.tds > 0 ? formatCurrency(Math.round(e.tds)) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-yellow-400">{e.tds > 0 ? formatCurrency(Math.round(e.tds)) : "-"}</td>
                     <td className="px-4 py-2.5 text-right"><button onClick={() => setEntries(entries.filter(x => x.id !== e.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
@@ -1969,7 +1969,7 @@ function CapitalGainsEstimator() {
           )}
           {assetType === "equity" && months < 12 && gain > 0 && (
             <div className="rounded-lg p-4 border border-yellow-800/40 bg-yellow-950/20">
-              <p className="text-sm flex items-start gap-2 text-yellow-300"><AlertTriangle size={14} className="shrink-0 mt-0.5" /> Held only {months} months — STCG at 20%. Waiting until 12 months would qualify it as LTCG at 12.5% with a ₹1.25L exemption.</p>
+              <p className="text-sm flex items-start gap-2 text-yellow-300"><AlertTriangle size={14} className="shrink-0 mt-0.5" /> Held only {months} months - STCG at 20%. Waiting until 12 months would qualify it as LTCG at 12.5% with a ₹1.25L exemption.</p>
             </div>
           )}
         </>
@@ -2031,7 +2031,7 @@ function PortfolioRebalancer() {
           </button>
         </div>
         {Math.round(totalTarget) !== 100 && rows.length > 0 && (
-          <p className="text-[11px] text-yellow-400 flex items-center gap-1.5"><AlertTriangle size={11} /> Targets sum to {totalTarget.toFixed(0)}% — adjust so they total 100%.</p>
+          <p className="text-[11px] text-yellow-400 flex items-center gap-1.5"><AlertTriangle size={11} /> Targets sum to {totalTarget.toFixed(0)}% - adjust so they total 100%.</p>
         )}
       </div>
 
@@ -2074,7 +2074,7 @@ function PortfolioRebalancer() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Selling to rebalance can trigger STCG/LTCG — prefer rebalancing with fresh inflows or within a year-end window. A 5% drift band avoids over-trading. Use the Cap-Gains tab to estimate tax before any sell.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Selling to rebalance can trigger STCG/LTCG - prefer rebalancing with fresh inflows or within a year-end window. A 5% drift band avoids over-trading. Use the Cap-Gains tab to estimate tax before any sell.</p>
     </div>
   );
 }
@@ -2125,7 +2125,7 @@ function XirrCalculator() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><TrendingUp size={14} className="text-[var(--color-primary)]" /> Portfolio XIRR Calculator</h3>
-        <p className="text-xs text-[var(--color-muted)]">XIRR is the true annualised return on irregular cashflows. Log each investment (outflow) and redemption or current value (inflow) by date — the dates matter, not just the totals.</p>
+        <p className="text-xs text-[var(--color-muted)]">XIRR is the true annualised return on irregular cashflows. Log each investment (outflow) and redemption or current value (inflow) by date - the dates matter, not just the totals.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
@@ -2154,7 +2154,7 @@ function XirrCalculator() {
           {[
             { label: "Total invested", value: formatCurrency(Math.round(invested)), color: "text-[var(--color-text)]" },
             { label: "Total inflows / value", value: formatCurrency(Math.round(returned)), color: "text-green-400" },
-            { label: "XIRR", value: xirr === null ? "—" : `${xirr.toFixed(2)}%`, color: xirr === null ? "text-[var(--color-muted)]" : xirr >= 0 ? "text-[var(--color-primary)]" : "text-red-400" },
+            { label: "XIRR", value: xirr === null ? "-" : `${xirr.toFixed(2)}%`, color: xirr === null ? "text-[var(--color-muted)]" : xirr >= 0 ? "text-[var(--color-primary)]" : "text-red-400" },
           ].map(k => (
             <div key={k.label} className={`${CARD} p-4`}>
               <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -2219,7 +2219,7 @@ function SurplusWaterfall({ totalBalance }: { totalBalance: number }) {
     const debt = take(parseFloat(highCostDebt) || 0);
     const invest = Math.max(0, rem);
     return [
-      { name: "1. Operating buffer", desc: `${weeks} wk × weekly opex — keep liquid`, amount: buffer, color: "text-yellow-400", bg: "#eab308" },
+      { name: "1. Operating buffer", desc: `${weeks} wk × weekly opex - keep liquid`, amount: buffer, color: "text-yellow-400", bg: "#eab308" },
       { name: "2. GST liability vault", desc: "Park in liquid fund until the 20th", amount: gst, color: "text-blue-400", bg: "#3b82f6" },
       { name: "3. Advance-tax reserve", desc: "Set aside before the next due date", amount: tax, color: "text-purple-400", bg: "#a855f7" },
       { name: "4. Emergency fund top-up", desc: "Instant-access contingency reserve", amount: emergency, color: "text-cyan-400", bg: "#06b6d4" },
@@ -2232,7 +2232,7 @@ function SurplusWaterfall({ totalBalance }: { totalBalance: number }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Gift size={14} className="text-[var(--color-primary)]" /> Surplus-Deployment Waterfall</h3>
-        <p className="text-xs text-[var(--color-muted)]">One surplus, many claims. This pours cash through a priority waterfall — buffer, then committed liabilities, then debt, then yield — so you never invest money that's already spoken for.</p>
+        <p className="text-xs text-[var(--color-muted)]">One surplus, many claims. This pours cash through a priority waterfall - buffer, then committed liabilities, then debt, then yield - so you never invest money that's already spoken for.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Surplus to deploy (₹)</label>
@@ -2286,7 +2286,7 @@ function SurplusWaterfall({ totalBalance }: { totalBalance: number }) {
           })}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Tiers fill top-down: each claim is fully met before the next gets a rupee. If surplus runs out before the yield tier, nothing is invested — exactly the point. Set high-cost debt to 0 if you have none. Estimates, not advice.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Tiers fill top-down: each claim is fully met before the next gets a rupee. If surplus runs out before the yield tier, nothing is invested - exactly the point. Set high-cost debt to 0 if you have none. Estimates, not advice.</p>
     </div>
   );
 }
@@ -2315,7 +2315,7 @@ function GoldSgbPlanner() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Gem size={14} className="text-[var(--color-primary)]" /> Gold / SGB Allocation Planner</h3>
-        <p className="text-xs text-[var(--color-muted)]">Park a sliver of long-horizon reserve in Sovereign Gold Bonds — you earn a 2.5% p.a. coupon on top of gold price moves, and capital gains are tax-free if held to the 8-year maturity. Keep gold a small inflation hedge, not a core holding.</p>
+        <p className="text-xs text-[var(--color-muted)]">Park a sliver of long-horizon reserve in Sovereign Gold Bonds - you earn a 2.5% p.a. coupon on top of gold price moves, and capital gains are tax-free if held to the 8-year maturity. Keep gold a small inflation hedge, not a core holding.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Investable portfolio (₹)</label>
@@ -2361,7 +2361,7 @@ function GoldSgbPlanner() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Gold CAGR is an assumption, not a guarantee — gold can fall for years. SGB coupon is taxed at your slab; capital gains are exempt only if held to the 8-year maturity (gains on exchange exit before that are taxable). Fresh SGB tranches depend on RBI issuance.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Gold CAGR is an assumption, not a guarantee - gold can fall for years. SGB coupon is taxed at your slab; capital gains are exempt only if held to the 8-year maturity (gains on exchange exit before that are taxable). Fresh SGB tranches depend on RBI issuance.</p>
     </div>
   );
 }
@@ -2391,7 +2391,7 @@ function ReitInvitEstimator() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Building size={14} className="text-[var(--color-primary)]" /> REIT / InvIT Income Estimator</h3>
-        <p className="text-xs text-[var(--color-muted)]">Listed REITs (Embassy, Mindspace, Brookfield) and InvITs distribute rent/toll income quarterly. The payout is a mix of interest, dividend and return-of-capital, each taxed differently — so the headline distribution yield overstates what you keep.</p>
+        <p className="text-xs text-[var(--color-muted)]">Listed REITs (Embassy, Mindspace, Brookfield) and InvITs distribute rent/toll income quarterly. The payout is a mix of interest, dividend and return-of-capital, each taxed differently - so the headline distribution yield overstates what you keep.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Amount invested (₹)</label>
@@ -2435,11 +2435,11 @@ function ReitInvitEstimator() {
             ))}
           </div>
           <div className="rounded-lg p-4 border border-[var(--color-border)] bg-[var(--color-bg)] text-sm">
-            <p className="text-[var(--color-muted)]">The return-of-capital slice isn't taxed now but reduces your cost base, so it surfaces as capital gains when you sell. REITs/InvITs are market-traded — unit prices move with interest rates and occupancy, so treat this as long-horizon income, not a parking spot for buffer cash.</p>
+            <p className="text-[var(--color-muted)]">The return-of-capital slice isn't taxed now but reduces your cost base, so it surfaces as capital gains when you sell. REITs/InvITs are market-traded - unit prices move with interest rates and occupancy, so treat this as long-horizon income, not a parking spot for buffer cash.</p>
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Payout components vary every quarter and per trust — check the actual distribution breakup in the trust's filing. Dividend taxability depends on whether the SPV opted for the concessional tax regime. Unit prices fluctuate; capital is at risk. Not advice.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Payout components vary every quarter and per trust - check the actual distribution breakup in the trust's filing. Dividend taxability depends on whether the SPV opted for the concessional tax regime. Unit prices fluctuate; capital is at risk. Not advice.</p>
     </div>
   );
 }
@@ -2477,7 +2477,7 @@ function MarkToMarketTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Activity size={14} className="text-[var(--color-primary)]" /> Mark-to-Market Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">Enter current NAV/price for each treasury holding to see live unrealised gain/loss across the book — the number your CA marks at year-end and lenders look at for net worth.</p>
+        <p className="text-xs text-[var(--color-muted)]">Enter current NAV/price for each treasury holding to see live unrealised gain/loss across the book - the number your CA marks at year-end and lenders look at for net worth.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Holding</label>
@@ -2662,7 +2662,7 @@ function TreasuryPolicyConfig() {
     <div className="space-y-4 max-w-3xl">
       <div className={`${CARD} p-4 space-y-4`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> Treasury Policy &amp; Limits</h3>
-        <p className="text-xs text-[var(--color-muted)]">A board-ready written policy is what separates disciplined treasury from cash kept on vibes. Set the rules once — buffer, credit floor, concentration caps, approval threshold — and use it as the mandate any sweep or investment must obey.</p>
+        <p className="text-xs text-[var(--color-muted)]">A board-ready written policy is what separates disciplined treasury from cash kept on vibes. Set the rules once - buffer, credit floor, concentration caps, approval threshold - and use it as the mandate any sweep or investment must obey.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Min runway buffer (weeks)</label>
@@ -2732,7 +2732,7 @@ function TreasuryPolicyConfig() {
           <FileText size={12} /> Copy policy text
         </button>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A template, not legal/financial advice — adapt limits to your size and risk appetite, and have your CA or board ratify it. Settings are saved on this device.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A template, not legal/financial advice - adapt limits to your size and risk appetite, and have your CA or board ratify it. Settings are saved on this device.</p>
     </div>
   );
 }
@@ -2758,7 +2758,7 @@ function AccruedInterestCalculator() {
     <div className="space-y-4 max-w-xl">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Clock size={14} className="text-[var(--color-primary)]" /> Accrued-Interest Calculator</h3>
-        <p className="text-xs text-[var(--color-muted)]">Interest earned but not yet credited — needed to value an FD/bond mid-tenure, book a month-end accrual entry, or settle a deposit transfer between dates.</p>
+        <p className="text-xs text-[var(--color-muted)]">Interest earned but not yet credited - needed to value an FD/bond mid-tenure, book a month-end accrual entry, or settle a deposit transfer between dates.</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Principal / face (₹)</label>
@@ -2801,7 +2801,7 @@ function AccruedInterestCalculator() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Simple (non-compounded) accrual on a day-count basis — fine for FD/bond mid-period valuation and accounting accruals. Banks typically use Actual/365; money-market conventions use Actual/360. Actual credited interest may compound and differ slightly.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Simple (non-compounded) accrual on a day-count basis - fine for FD/bond mid-period valuation and accounting accruals. Banks typically use Actual/365; money-market conventions use Actual/360. Actual credited interest may compound and differ slightly.</p>
     </div>
   );
 }
@@ -2826,9 +2826,9 @@ function AssetLiabilityMatcher() {
   const today = new Date();
   const buckets = useMemo(() => {
     const ranges = [
-      { label: "0–30 days", lo: 0, hi: 30 },
-      { label: "31–90 days", lo: 31, hi: 90 },
-      { label: "91–180 days", lo: 91, hi: 180 },
+      { label: "0-30 days", lo: 0, hi: 30 },
+      { label: "31-90 days", lo: 31, hi: 90 },
+      { label: "91-180 days", lo: 91, hi: 180 },
       { label: "180+ days", lo: 181, hi: Infinity },
     ];
     return ranges.map(rg => {
@@ -2848,7 +2848,7 @@ function AssetLiabilityMatcher() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /> Asset-Liability (Cash-Flow) Matcher</h3>
-        <p className="text-xs text-[var(--color-muted)]">Line up maturing investments (inflows) against known outflows — GST, advance-tax, payroll, vendor dues — by time bucket. A negative gap means you'll have to break a deposit or borrow; match maturities to dues so cash lands just in time.</p>
+        <p className="text-xs text-[var(--color-muted)]">Line up maturing investments (inflows) against known outflows - GST, advance-tax, payroll, vendor dues - by time bucket. A negative gap means you'll have to break a deposit or borrow; match maturities to dues so cash lands just in time.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Type</label>
@@ -2914,7 +2914,7 @@ function AssetLiabilityMatcher() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Gaps are within-bucket only and don't carry surplus forward between buckets — read them as timing warnings, not a full liquidity forecast. A negative near-term gap means plan a maturity or credit line before that bucket.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Gaps are within-bucket only and don't carry surplus forward between buckets - read them as timing warnings, not a full liquidity forecast. A negative near-term gap means plan a maturity or credit line before that bucket.</p>
     </div>
   );
 }
@@ -2954,7 +2954,7 @@ function InterestIncomeForecast({ totalBalance }: { totalBalance: number }) {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> Interest-Income Forecast</h3>
-        <p className="text-xs text-[var(--color-muted)]">Project the recurring interest your treasury throws off over the next few years — net income is reinvested and the deployed corpus grows as the business retains more cash.</p>
+        <p className="text-xs text-[var(--color-muted)]">Project the recurring interest your treasury throws off over the next few years - net income is reinvested and the deployed corpus grows as the business retains more cash.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Deployed corpus (₹)</label>
@@ -3037,9 +3037,9 @@ function LiquidityTierAllocator({ totalBalance }: { totalBalance: number }) {
   const p3 = Math.max(0, 100 - p1 - p2);
 
   const TIERS = [
-    { name: "Tier 1 — Operating", horizon: "0–7 days", pct: p1, yield: 6.8, instr: "Overnight / liquid funds, sweep account", color: "#22c55e" },
-    { name: "Tier 2 — Reserve", horizon: "1–6 months", pct: p2, yield: 7.4, instr: "Short-duration debt, sweep FD, T-bills", color: "#3b82f6" },
-    { name: "Tier 3 — Strategic", horizon: "6m+", pct: p3, yield: 7.9, instr: "Corporate FD (AAA), G-Secs, longer ladder", color: "#a855f7" },
+    { name: "Tier 1 - Operating", horizon: "0-7 days", pct: p1, yield: 6.8, instr: "Overnight / liquid funds, sweep account", color: "#22c55e" },
+    { name: "Tier 2 - Reserve", horizon: "1-6 months", pct: p2, yield: 7.4, instr: "Short-duration debt, sweep FD, T-bills", color: "#3b82f6" },
+    { name: "Tier 3 - Strategic", horizon: "6m+", pct: p3, yield: 7.9, instr: "Corporate FD (AAA), G-Secs, longer ladder", color: "#a855f7" },
   ];
   const blended = TIERS.reduce((s, t) => s + t.pct * t.yield, 0) / 100;
   const annual = Math.round(C * blended / 100);
@@ -3055,11 +3055,11 @@ function LiquidityTierAllocator({ totalBalance }: { totalBalance: number }) {
             <input type="number" value={cash} onChange={e => setCash(e.target.value)} placeholder="3000000" className={INP} />
           </div>
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Tier 1 (0–7d): <strong className="text-[var(--color-text)]">{p1}%</strong></label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tier 1 (0-7d): <strong className="text-[var(--color-text)]">{p1}%</strong></label>
             <input type="range" min={0} max={100} step={5} value={t1} onChange={e => setT1(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
           </div>
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Tier 2 (1–6m): <strong className="text-[var(--color-text)]">{p2}%</strong></label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tier 2 (1-6m): <strong className="text-[var(--color-text)]">{p2}%</strong></label>
             <input type="range" min={0} max={100} step={5} value={t2} onChange={e => setT2(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
           </div>
         </div>
@@ -3136,7 +3136,7 @@ function YieldLiquidityTradeoff() {
       </div>
 
       <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-        <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> Best fit: {best.name} — ~{best.yield}% yield, {best.liquidity}/100 liquidity</p>
+        <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> Best fit: {best.name} - ~{best.yield}% yield, {best.liquidity}/100 liquidity</p>
       </div>
 
       <div className={`${CARD} p-4 space-y-3`}>
@@ -3152,7 +3152,7 @@ function YieldLiquidityTradeoff() {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Liquidity scores are illustrative (100 = same-day access). Yields are indicative and not guaranteed. The score is a blended ranking aid — match the actual instrument to a real cash-need date.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Liquidity scores are illustrative (100 = same-day access). Yields are indicative and not guaranteed. The score is a blended ranking aid - match the actual instrument to a real cash-need date.</p>
     </div>
   );
 }
@@ -3179,7 +3179,7 @@ function IdleCashOpportunityCost({ totalBalance }: { totalBalance: number }) {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> Idle-Cash Opportunity Cost</h3>
-        <p className="text-xs text-[var(--color-muted)]">Cash sitting in a current/savings account quietly costs you the better yield you could be earning. See what the gap adds up to — and what each idle day costs.</p>
+        <p className="text-xs text-[var(--color-muted)]">Cash sitting in a current/savings account quietly costs you the better yield you could be earning. See what the gap adds up to - and what each idle day costs.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Idle cash (₹)</label>
@@ -3218,12 +3218,12 @@ function IdleCashOpportunityCost({ totalBalance }: { totalBalance: number }) {
           </div>
           <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
             <p className="text-sm font-bold text-red-400 flex items-center gap-2">
-              <AlertTriangle size={14} /> Leaving {formatCurrency(A)} idle for {months} months forgoes about {formatCurrency(Math.round(forgone))} — roughly {formatCurrency(Math.round(perDay))} every day it stays put.
+              <AlertTriangle size={14} /> Leaving {formatCurrency(A)} idle for {months} months forgoes about {formatCurrency(Math.round(forgone))} - roughly {formatCurrency(Math.round(perDay))} every day it stays put.
             </p>
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Both rates compound annually here and are pre-tax. Achievable yields are market-linked and not guaranteed. Always keep committed payables and a runway buffer liquid before deploying — opportunity cost is only real on truly idle cash.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Both rates compound annually here and are pre-tax. Achievable yields are market-linked and not guaranteed. Always keep committed payables and a runway buffer liquid before deploying - opportunity cost is only real on truly idle cash.</p>
     </div>
   );
 }
@@ -3305,7 +3305,7 @@ function FdBreakCostCalculator() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Most banks apply a 0.5–1% penalty and re-rate to the slab for the run period; exact rules vary by bank and deposit. This is an estimate — confirm the applicable penalty and re-rated slab with your bank before breaking.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Most banks apply a 0.5-1% penalty and re-rate to the slab for the run period; exact rules vary by bank and deposit. This is an estimate - confirm the applicable penalty and re-rated slab with your bank before breaking.</p>
     </div>
   );
 }
@@ -3385,7 +3385,7 @@ function PrepayVsInvestOptimizer() {
           </div>
           <div className={`rounded-lg p-4 border ${prepayWins ? "border-green-800/40 bg-green-950/20" : "border-[var(--color-border)] bg-[var(--color-bg)]"}`}>
             <p className={`text-sm font-bold flex items-center gap-2 ${prepayWins ? "text-green-400" : "text-[var(--color-text)]"}`}>
-              <CheckCircle2 size={14} /> {prepayWins ? "Prepay" : "Invest"} — it's ahead by about {formatCurrency(Math.round(Math.abs(interestSaved - investGain)))} over {years} years. Prepaying is a guaranteed, risk-free return; investment yields are not.
+              <CheckCircle2 size={14} /> {prepayWins ? "Prepay" : "Invest"} - it's ahead by about {formatCurrency(Math.round(Math.abs(interestSaved - investGain)))} over {years} years. Prepaying is a guaranteed, risk-free return; investment yields are not.
             </p>
           </div>
         </>
@@ -3476,7 +3476,7 @@ function PpfNpsTopUpPlanner() {
 
       {topUp <= 0 ? (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> Limit fully used for this year — nothing more to top up.</p>
+          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> Limit fully used for this year - nothing more to top up.</p>
         </div>
       ) : (
         <div className="rounded-lg p-4 border border-[var(--color-border)] bg-[var(--color-bg)]">
@@ -3560,13 +3560,13 @@ function RealYieldCalculator() {
             <p className={`text-sm font-bold flex items-center gap-2 ${realRate >= 0 ? "text-green-400" : "text-red-400"}`}>
               {realRate >= 0 ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
               {realRate >= 0
-                ? `Real return is positive at ${(realRate * 100).toFixed(2)}% — purchasing power grows after tax and inflation.`
-                : `Real return is negative at ${(realRate * 100).toFixed(2)}% — this parking loses purchasing power. Consider higher-yield or tax-deferred instruments.`}
+                ? `Real return is positive at ${(realRate * 100).toFixed(2)}% - purchasing power grows after tax and inflation.`
+                : `Real return is negative at ${(realRate * 100).toFixed(2)}% - this parking loses purchasing power. Consider higher-yield or tax-deferred instruments.`}
             </p>
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Uses the Fisher relation on a post-tax nominal rate. Inflation is your assumption — actual CPI varies. FD interest is taxed yearly; debt-fund gains defer tax to redemption, improving real yield. Illustrative, not advice.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Uses the Fisher relation on a post-tax nominal rate. Inflation is your assumption - actual CPI varies. FD interest is taxed yearly; debt-fund gains defer tax to redemption, improving real yield. Illustrative, not advice.</p>
     </div>
   );
 }
@@ -3636,8 +3636,8 @@ function FdRenewalOptimizer() {
             <p className={`text-sm font-bold flex items-center gap-2 ${worthMoving ? "text-green-400" : "text-[var(--color-text)]"}`}>
               {worthMoving ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
               {worthMoving
-                ? `Reinvesting at the market rate earns ${formatCurrency(Math.round(extraInterest))} more — give standing instructions to pay out at maturity, then redeposit at the higher rate.`
-                : `The auto-renewal rate already matches or beats the market — letting it roll is fine this cycle.`}
+                ? `Reinvesting at the market rate earns ${formatCurrency(Math.round(extraInterest))} more - give standing instructions to pay out at maturity, then redeposit at the higher rate.`
+                : `The auto-renewal rate already matches or beats the market - letting it roll is fine this cycle.`}
             </p>
           </div>
         </>

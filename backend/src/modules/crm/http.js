@@ -1,4 +1,4 @@
-// CRM API — /api/crm. Tenant-scoped; reuses Headroom auth. Writes allowed to
+// CRM API - /api/crm. Tenant-scoped; reuses Headroom auth. Writes allowed to
 // owner/super_admin/finance_manager/accountant/sales (CRM is a sales surface).
 const router = require("express").Router();
 const { authenticate } = require("../../middleware/auth");

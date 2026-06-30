@@ -7,7 +7,7 @@ import { Keyboard } from "@capacitor/keyboard";
 /**
  * One-time native initialisation for the iOS / Android shells.
  *
- * Safe to call on the web — it no-ops off-device, so the same bundle runs in
+ * Safe to call on the web - it no-ops off-device, so the same bundle runs in
  * the browser, on Vercel, and inside the Capacitor WebView.
  */
 export function initNative(): void {

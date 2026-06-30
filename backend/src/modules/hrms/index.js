@@ -1,9 +1,9 @@
-// HRMS — domain logic ported from Frappe HR (payroll / leave / attendance).
+// HRMS - domain logic ported from Frappe HR (payroll / leave / attendance).
 //
 // What is faithful to Frappe here:
 //  • Salary COMPONENT model: type (earning|deduction), amount | formula | condition,
 //    amount_based_on_formula, depends_on_payment_days, statutory, abbr, round_to_integer.
-//  • SAFE formula/condition evaluator — Frappe uses a Python AST-denylist _safe_eval;
+//  • SAFE formula/condition evaluator - Frappe uses a Python AST-denylist _safe_eval;
 //    we use a hand-written tokenizer + shunting-yard arithmetic evaluator over a scoped
 //    variable map (base, payment_days, working_days, lop_days, and component abbrs).
 //    NO eval()/new Function() ever touches user input.  (Frappe: salary_slip.eval_condition_and_formula
@@ -33,7 +33,7 @@ class HrError extends Error { constructor(msg, http) { super(msg); this.http = h
 // comparison/logical operators used by component CONDITIONS (> >= < <= == != and or).
 // Variables resolve from a scope object {base, payment_days, ...abbrs}; an unknown
 // name resolves to 0 (Frappe seeds every component abbr to 0 in the eval context).
-// There is NO function-call, NO attribute access, NO eval — only the grammar below.
+// There is NO function-call, NO attribute access, NO eval - only the grammar below.
 // ─────────────────────────────────────────────────────────────────────────────
 const _OPS = {
   "or": { prec: 1, fn: (a, b) => (a || b ? 1 : 0) },
@@ -153,7 +153,7 @@ function evalCondition(cond, scope) {
 
 // Round to N decimals using half-up money math (mirrors Frappe flt(x, precision)).
 const flt = (x, p = 2) => Number(money(Number(x) || 0).toFixed(p));
-// Round to nearest rupee — Frappe rounded() for net/rounded_total.
+// Round to nearest rupee - Frappe rounded() for net/rounded_total.
 const roundRupee = (x) => Number(money(Number(x) || 0).toFixed(0));
 
 // Default abbreviation for a component name (Frappe auto-abbr: first letter of each word).
@@ -197,7 +197,7 @@ function evaluateComponents(components, ctx) {
       if (type !== phase) continue;
       const abbr = c.abbr || abbrOf(c.name);
 
-      // 1. CONDITION gate — falsy condition skips the row entirely.
+      // 1. CONDITION gate - falsy condition skips the row entirely.
       if (!evalCondition(c.condition, scope)) { scope[abbr] = 0; continue; }
 
       // 2. AMOUNT: formula (amount_based_on_formula) else static amount.
@@ -233,7 +233,7 @@ function evaluateComponents(components, ctx) {
 // Frappe's evaluateComponents above runs a fixed earning→deduction order and seeds
 // every abbr to 0. That works when a formula references an abbr defined EARLIER in
 // the list. The richer "formula-driven component" model lets a component's formula
-// reference ANY other component's abbr regardless of list order — so we must compute
+// reference ANY other component's abbr regardless of list order - so we must compute
 // a topological order from the formula/condition dependencies and evaluate in that
 // order (Frappe does this implicitly by repeated passes; we make it explicit).
 //
@@ -371,7 +371,7 @@ async function createSalaryComponent(tenantId, c) {
 }
 const listSalaryComponents = async (t) => (await pool.query("SELECT * FROM hrms_salary_components WHERE tenant_id=$1 ORDER BY type,component_name", [t])).rows;
 
-// Validate (and topo-order) a set of component rows without persisting — surfaces
+// Validate (and topo-order) a set of component rows without persisting - surfaces
 // circular dependencies / formula errors to the UI before a structure is saved.
 function validateComponentSet(components) {
   const norm = (Array.isArray(components) ? components : []).map(normalizeComponentMaster);
@@ -494,7 +494,7 @@ async function createEmployee(tenantId, e) {
   );
   return rows[0];
 }
-// Bulk create — each row in its own try/catch so one bad row can't abort the rest.
+// Bulk create - each row in its own try/catch so one bad row can't abort the rest.
 // createEmployee is a single INSERT (no transaction), so per-row is correct here.
 async function bulkCreateEmployees(tenantId, actorId, rows) {
   if (!Array.isArray(rows)) throw new HrError("rows[] required");
@@ -811,12 +811,12 @@ async function runPayroll(tenantId, actorId, month, opts = {}) {
   const [salaries, pfPayable, tdsPayable, deductionsLed, salPayable] = await Promise.all([
     L("Salaries"), L("PF Payable"), L("TDS Payable"), L("Staff Deductions"), L("Salaries Payable"),
   ]);
-  if (!salaries || !salPayable) throw new HrError("Payroll GL ledgers missing — run the books setup (seed) first", 422);
+  if (!salaries || !salPayable) throw new HrError("Payroll GL ledgers missing - run the books setup (seed) first", 422);
 
   // ESI + Professional Tax (no dedicated seeded ledger) fold into Staff Deductions.
   const staffDeductions = esi.plus(pt).plus(otherDed);
 
-  // (4a) ACCRUAL journal — Dr expense heads, Cr payables. Cost-centre tags the
+  // (4a) ACCRUAL journal - Dr expense heads, Cr payables. Cost-centre tags the
   // expense (Salaries) line so cost-centre-wise P&L attributes the payroll cost.
   const entries = [{ ledgerId: salaries, debit: toRupees(gross), credit: "0", costCentreId }];
   if (pf.greaterThan(0)) entries.push({ ledgerId: pfPayable, debit: "0", credit: toRupees(pf) });
@@ -875,7 +875,7 @@ async function payslipsForRun(tenantId, runId) {
 // projected ANNUAL liability: project each employee's full-year taxable salary,
 // subtract exemptions (standard deduction + HRA) and Chapter VI-A declarations,
 // run the slab+surcharge+cess engine (../books/incometax) for the regime, then
-// SPREAD the remaining tax across the months left in the payroll year — a mid-year
+// SPREAD the remaining tax across the months left in the payroll year - a mid-year
 // TRUE-UP: (annual_tax − tds_already_deducted) / remaining_months. The result is
 // stored so monthly payroll deducts the stored per-month figure.
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1141,7 +1141,7 @@ async function saveDeclaration(tenantId, d) {
 async function advanceDeclaration(tenantId, d) {
   if (!d.employeeId || !d.fy || !d.action) throw new HrError("employeeId, fy, action required");
   const { rows: cur } = await pool.query("SELECT * FROM hrms_investment_declarations WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, d.employeeId, d.fy]);
-  if (!cur[0]) throw new HrError("Declaration not found — save it first", 404);
+  if (!cur[0]) throw new HrError("Declaration not found - save it first", 404);
   const action = d.action;
   let sql, params;
   if (action === "SUBMIT") {
@@ -1189,7 +1189,7 @@ async function payPayrollRun(tenantId, actorId, runId, opts = {}) {
   const net = money(run.net);
   const bank = await resolveLedger(tenantId, [opts.bankLedger, "Bank Accounts", "Bank", "Cash"].filter(Boolean));
   const salPayable = await resolveLedger(tenantId, ["Salaries Payable"]);
-  if (!bank || !salPayable) throw new HrError("Bank / Salaries Payable ledger missing — seed books first", 422);
+  if (!bank || !salPayable) throw new HrError("Bank / Salaries Payable ledger missing - seed books first", 422);
 
   const payDate = opts.date && /^\d{4}-\d{2}-\d{2}$/.test(opts.date) ? opts.date : `${run.run_month}-28`;
   const entries = [
@@ -1356,7 +1356,7 @@ async function fullAndFinal(tenantId, actorId, d) {
   const salaries = await resolveLedger(tenantId, ["Salaries"]);
   const salPayable = await resolveLedger(tenantId, ["Salaries Payable"]);
   const staffDed = await resolveLedger(tenantId, ["Staff Deductions"]);
-  if (!salaries || !salPayable) throw new HrError("Payroll GL ledgers missing — seed books first", 422);
+  if (!salaries || !salPayable) throw new HrError("Payroll GL ledgers missing - seed books first", 422);
 
   const entries = [{ ledgerId: salaries, debit: toRupees(earningsTotal), credit: "0", costCentreId: d.costCentreId || null }];
   if (deductionsTotal.greaterThan(0)) entries.push({ ledgerId: staffDed || salPayable, debit: "0", credit: toRupees(deductionsTotal) });
@@ -1366,7 +1366,7 @@ async function fullAndFinal(tenantId, actorId, d) {
   let voucher = null;
   if (earningsTotal.greaterThan(0)) {
     voucher = await books.postVoucher(tenantId, actorId,
-      { voucherType: "JOURNAL", voucherDate: d.relievingDate, narration: `Full & Final — ${emp.name}`, source: "payroll" },
+      { voucherType: "JOURNAL", voucherDate: d.relievingDate, narration: `Full & Final - ${emp.name}`, source: "payroll" },
       entries, { idempotencyKey: `fnf:${tenantId}:${d.employeeId}:${d.relievingDate}` });
   }
 

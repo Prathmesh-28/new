@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES (response shapes — Books inventory + ERP endpoints)
+// TYPES (response shapes - Books inventory + ERP endpoints)
 // ─────────────────────────────────────────────────────────────────────────────
 type ValuationMethod = "WAvg" | "FIFO";
 
@@ -143,12 +143,12 @@ function Pill({ label, cls }: { label: string; cls: string }) {
 function WoStatusPill({ status }: { status: string }) {
   const key = (status || "").toUpperCase() as WoStatus;
   const cls = WO_STYLE[key] ?? "bg-[var(--color-bg)] text-[var(--color-muted)] border border-[var(--color-border)]";
-  return <Pill label={(key || "—").replace(/_/g, " ")} cls={cls} />;
+  return <Pill label={(key || "-").replace(/_/g, " ")} cls={cls} />;
 }
 function MrStatusPill({ status }: { status: string }) {
   const key = (status || "").toUpperCase();
   const cls = MR_STYLE[key] ?? "bg-[var(--color-bg)] text-[var(--color-muted)] border border-[var(--color-border)]";
-  return <Pill label={(key || "—").replace(/_/g, " ")} cls={cls} />;
+  return <Pill label={(key || "-").replace(/_/g, " ")} cls={cls} />;
 }
 
 function SkeletonRows({ cols, rows = 6 }: { cols: number; rows?: number }) {
@@ -242,7 +242,7 @@ export default function ErpPage() {
       <div className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 sm:px-6 py-4">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <Factory size={20} className="text-[var(--color-primary)]" />
-          ERP — manufacturing
+          ERP - manufacturing
         </h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
           Multi-level BOMs · routing &amp; cost rollup · work-order lifecycle · material requests · built on Books inventory
@@ -419,7 +419,7 @@ function ItemsTab({
             {loading ? (
               <SkeletonRows cols={5} />
             ) : items.length === 0 ? (
-              <tr><td colSpan={5} className="px-3 py-10 text-center text-[var(--color-muted)]">No items yet — add raw materials first, then build a BOM.</td></tr>
+              <tr><td colSpan={5} className="px-3 py-10 text-center text-[var(--color-muted)]">No items yet - add raw materials first, then build a BOM.</td></tr>
             ) : (
               items.map((it) => {
                 const low = num(it.reorder_level) > 0 && num(it.current_qty) <= num(it.reorder_level);
@@ -428,10 +428,10 @@ function ItemsTab({
                     <td className="px-3 py-2.5 font-medium">{it.name}</td>
                     <td className="px-3 py-2.5 text-[var(--color-muted)]">{it.unit}</td>
                     <td className={`px-3 py-2.5 text-right tabular-nums ${low ? "text-amber-400 font-semibold" : ""}`}>{qtyStr(it.current_qty)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{num(it.reorder_level) > 0 ? qtyStr(it.reorder_level) : "—"}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{num(it.reorder_level) > 0 ? qtyStr(it.reorder_level) : "-"}</td>
                     <td className="px-3 py-2.5">
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)]">
-                        {it.valuation_method || "—"}
+                        {it.valuation_method || "-"}
                       </span>
                     </td>
                   </tr>
@@ -446,7 +446,7 @@ function ItemsTab({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BOMs TAB — builder with components + operations + live cost rollup
+// BOMs TAB - builder with components + operations + live cost rollup
 // ─────────────────────────────────────────────────────────────────────────────
 interface DraftComponent { componentItemId: string; qty: string; subBomId: string; }
 interface DraftOperation { operation: string; workstation: string; timeMins: string; hourlyRate: string; }
@@ -591,7 +591,7 @@ function BomsTab({
                   </select>
                   <input value={row.qty} onChange={(e) => setComp(i, { qty: e.target.value })} inputMode="decimal" placeholder="qty" className={`${inputCls} w-24 font-mono tabular-nums`} />
                   <select value={row.subBomId} onChange={(e) => setComp(i, { subBomId: e.target.value })} className={`${inputCls} w-44`} title="Treat this component as a sub-assembly built by another BOM (multi-level)">
-                    <option value="">— raw material —</option>
+                    <option value="">- raw material -</option>
                     {subBomOptions.map((b) => <option key={b.id} value={b.id}>sub: {b.name}</option>)}
                   </select>
                   <button type="button" onClick={() => removeComp(i)} disabled={comps.length === 1} className="p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed" title="Remove">
@@ -605,11 +605,11 @@ function BomsTab({
           {/* OPERATIONS / ROUTING */}
           <div className="mt-5">
             <div className="flex items-center justify-between mb-2">
-              <label className={`${labelCls} mb-0 flex items-center gap-1.5`}><Wrench size={13} /> Operations (routing — optional)</label>
+              <label className={`${labelCls} mb-0 flex items-center gap-1.5`}><Wrench size={13} /> Operations (routing - optional)</label>
               <button type="button" onClick={addOp} className="text-xs inline-flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80"><Plus size={13} /> Add operation</button>
             </div>
             {ops.length === 0 ? (
-              <p className="text-xs text-[var(--color-muted)]">No operations — add cutting / welding / assembly etc. with time &amp; hourly rate to roll labour into cost.</p>
+              <p className="text-xs text-[var(--color-muted)]">No operations - add cutting / welding / assembly etc. with time &amp; hourly rate to roll labour into cost.</p>
             ) : (
               <div className="space-y-2">
                 {ops.map((row, i) => (
@@ -648,7 +648,7 @@ function BomsTab({
           <table className="w-full text-sm"><tbody><SkeletonRows cols={4} /></tbody></table>
         </div>
       ) : boms.length === 0 ? (
-        <EmptyHint>{items.length === 0 ? "No BOMs yet — add raw materials in the Items tab first, then build a BOM." : "No BOMs yet — create one to define what a finished good is made of."}</EmptyHint>
+        <EmptyHint>{items.length === 0 ? "No BOMs yet - add raw materials in the Items tab first, then build a BOM." : "No BOMs yet - create one to define what a finished good is made of."}</EmptyHint>
       ) : (
         <div className="space-y-2">
           {boms.map((b) => {
@@ -708,7 +708,7 @@ function BomsTab({
                                 {opRows.map((o, idx) => (
                                   <tr key={o.id ?? idx} className="border-b border-[var(--color-border)] last:border-b-0">
                                     <td className="px-3 py-2">{o.operation}</td>
-                                    <td className="px-3 py-2 text-[var(--color-muted)]">{o.workstation || "—"}</td>
+                                    <td className="px-3 py-2 text-[var(--color-muted)]">{o.workstation || "-"}</td>
                                     <td className="px-3 py-2 text-right tabular-nums">{qtyStr(o.time_mins)}</td>
                                     <td className="px-3 py-2 text-right tabular-nums">{rupee(o.hourly_rate)}</td>
                                     <td className="px-3 py-2 text-right tabular-nums">{rupee(num(o.hourly_rate) * (num(o.time_mins) / 60))}</td>
@@ -753,7 +753,7 @@ function BomsTab({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WORK ORDERS TAB — lifecycle board (transfer → manufacture) + job cards
+// WORK ORDERS TAB - lifecycle board (transfer → manufacture) + job cards
 // ─────────────────────────────────────────────────────────────────────────────
 function WorkOrdersTab({
   loading, wos, boms, items, canWrite, onReload,
@@ -770,7 +770,7 @@ function WorkOrdersTab({
   const [detailBusy, setDetailBusy] = useState<string | null>(null);
 
   const bomName = useCallback((id: string) => boms.find((b) => b.id === id)?.name ?? "Unknown BOM", [boms]);
-  const itemName = useCallback((id: string | null | undefined) => (id ? items.find((it) => it.id === id)?.name ?? "—" : "—"), [items]);
+  const itemName = useCallback((id: string | null | undefined) => (id ? items.find((it) => it.id === id)?.name ?? "-" : "-"), [items]);
 
   const refreshDetail = useCallback(async (id: string) => {
     try { const full = await api.get<WorkOrderDetail>(`/api/erp/work-orders/${id}`); setDetail((d) => ({ ...d, [id]: full })); }
@@ -799,7 +799,7 @@ function WorkOrdersTab({
     setBusyId(wo.id);
     try {
       const res = await api.post<{ producedRate?: number; operatingCost?: number }>(`/api/erp/work-orders/${wo.id}/manufacture`, {});
-      toast.success(res?.producedRate != null ? `Manufactured — FG received @ ${rupee(res.producedRate)}/unit` : "Work order manufactured");
+      toast.success(res?.producedRate != null ? `Manufactured - FG received @ ${rupee(res.producedRate)}/unit` : "Work order manufactured");
       await onReload(); if (expanded === wo.id) await refreshDetail(wo.id);
     } catch (e) { toast.error(errMsg(e)); } finally { setBusyId(null); }
   };
@@ -860,7 +860,7 @@ function WorkOrdersTab({
       {loading ? (
         <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-surface)]"><table className="w-full text-sm"><tbody><SkeletonRows cols={5} rows={5} /></tbody></table></div>
       ) : wos.length === 0 ? (
-        <EmptyHint>{boms.length === 0 ? "No work orders yet — create a BOM first, then raise a work order to build it." : "No work orders yet — create one to start manufacturing."}</EmptyHint>
+        <EmptyHint>{boms.length === 0 ? "No work orders yet - create a BOM first, then raise a work order to build it." : "No work orders yet - create one to start manufacturing."}</EmptyHint>
       ) : (
         <div className="space-y-2">
           {wos.map((wo) => {
@@ -973,7 +973,7 @@ function OperationRow({
   const complete = async () => {
     if (!openCard) return;
     setBusy(true);
-    try { const res = await api.post<{ operatingCost?: number; timeMins?: number }>(`/api/erp/job-cards/${openCard.id}/complete`, {}); toast.success(`Completed — ${qtyStr(res?.timeMins)} min · ${rupee(res?.operatingCost)}`); onChanged(); }
+    try { const res = await api.post<{ operatingCost?: number; timeMins?: number }>(`/api/erp/job-cards/${openCard.id}/complete`, {}); toast.success(`Completed - ${qtyStr(res?.timeMins)} min · ${rupee(res?.operatingCost)}`); onChanged(); }
     catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
   };
 
@@ -1001,7 +1001,7 @@ function OperationRow({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MATERIAL REQUESTS TAB — reorder report + requests
+// MATERIAL REQUESTS TAB - reorder report + requests
 // ─────────────────────────────────────────────────────────────────────────────
 function RequestsTab({
   loading, requests, reorder, items, canWrite, onReload,
@@ -1136,7 +1136,7 @@ function RequestsTab({
         {loading ? (
           <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-surface)]"><table className="w-full text-sm"><tbody><SkeletonRows cols={4} /></tbody></table></div>
         ) : requests.length === 0 ? (
-          <EmptyHint>No material requests yet — raise one from the reorder report, or create a manual request above.</EmptyHint>
+          <EmptyHint>No material requests yet - raise one from the reorder report, or create a manual request above.</EmptyHint>
         ) : (
           <div className="space-y-2">
             {requests.map((mr) => (

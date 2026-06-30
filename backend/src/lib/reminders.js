@@ -1,8 +1,8 @@
-// Overdue-invoice reminder job — the scheduled side of the automation engine.
+// Overdue-invoice reminder job - the scheduled side of the automation engine.
 // Runs daily: finds invoices that are past due and still unpaid, and raises an
 // in-app alert (which the dashboard/Alerts page + WhatsApp digest surface) so the
 // owner is actually nudged to collect. Idempotent: re-raises at most once / 7 days
-// per invoice, so it never spams. Deliberately creates only NOTIFICATIONS — it does
+// per invoice, so it never spams. Deliberately creates only NOTIFICATIONS - it does
 // not post any financial entry (late fees stay a manual, reviewed action).
 const { pool } = require("../db");
 
@@ -36,7 +36,7 @@ async function runOverdueReminders() {
           inv.tenant_id,
           severity,
           `Invoice ${inv.invoice_number} is overdue`,
-          `${inv.customer_name} — ₹${amount} is ${days} day${days === 1 ? "" : "s"} overdue. Send a reminder or chase the payment.`,
+          `${inv.customer_name} - ₹${amount} is ${days} day${days === 1 ? "" : "s"} overdue. Send a reminder or chase the payment.`,
           JSON.stringify({ invoice_id: inv.id, days_overdue: days, amount: Number(inv.total_amount || 0) }),
         ]
       );

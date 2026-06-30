@@ -1,4 +1,4 @@
-// §8 — Inventory. Quantity + valuation subsidiary (WEIGHTED_AVG default, FIFO
+// §8 - Inventory. Quantity + valuation subsidiary (WEIGHTED_AVG default, FIFO
 // optional). Valuation math is pure/testable. COGS posting is caller-driven so
 // we never double-count against a periodic Purchases expense.
 const { pool } = require("../../db");
@@ -9,7 +9,7 @@ const { ledgerIdByName } = require("./seed");
 // Lazy require to break the inventory ↔ reposting cycle (reposting.js requires
 // this module for valuation primitives). Auto-trigger when a back-dated movement
 // was inserted: recompute every downstream SLE and post the GL correction. Best
-// effort — a repost failure is logged but never fails the original movement (the
+// effort - a repost failure is logged but never fails the original movement (the
 // movement is already committed; repost is a follow-up correction that can be
 // re-run via POST /inventory/repost).
 async function _maybeRepost(tenantId, itemId, warehouseId, fromDate, actorId) {
@@ -79,7 +79,7 @@ async function priceFor(tenantId, itemId, priceListId) {
 }
 
 // ── Movements (valuation + balances) ─────────────────────────────────────────
-// Stock-Ledger-Entry (SLE) persistence — ported in spirit from ERPNext's
+// Stock-Ledger-Entry (SLE) persistence - ported in spirit from ERPNext's
 // stock_ledger_entry: every movement stores a method-derived `rate` plus a DUAL
 // running balance (qty_after / value_after) AND a snapshot of the FIFO cost
 // queue ([{qty,rate}], oldest-first) as it stood right after this movement. This
@@ -151,7 +151,7 @@ async function receive(tenantId, itemId, qty, rate, opts = {}) {
     const mvId = await _movement(client, tenantId, itemId, { qtyIn: qty, rate, value: money(qty).mul(rate), voucherId: opts.voucherId, warehouseId: opts.warehouseId, postingDate: date, qtyAfter: next.qty, valueAfter: next.value, fifoQueue });
     backdated = await _isBackdated(client, tenantId, itemId, date, mvId);
     await client.query("COMMIT");
-    // A back-dated inward shifts the WAvg/FIFO basis of every later movement — repost.
+    // A back-dated inward shifts the WAvg/FIFO basis of every later movement - repost.
     if (backdated && !opts.skipRepost) await _maybeRepost(tenantId, itemId, opts.warehouseId || null, date, opts.actorId);
     return { qty: toDb(next.qty), value: toDb(next.value), avg: toDb(next.avg) };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
@@ -227,7 +227,7 @@ async function transfer(tenantId, itemId, fromWh, toWh, qty, opts = {}) {
 async function postStockValueJournal(tenantId, actorId, date) {
   const stockLedger = await ledgerIdByName(tenantId, "Stock-in-hand");
   const adjLedger = await ledgerIdByName(tenantId, "Stock Adjustment");
-  if (!stockLedger || !adjLedger) throw new PostError("NOT_SEEDED", "Stock-in-hand / Stock Adjustment ledgers missing — seed first", 422);
+  if (!stockLedger || !adjLedger) throw new PostError("NOT_SEEDED", "Stock-in-hand / Stock Adjustment ledgers missing - seed first", 422);
   const { rows } = await pool.query("SELECT COALESCE(SUM(current_value),0) AS v FROM book_stock_items WHERE tenant_id=$1", [tenantId]);
   const value = rows[0].v;
   if (!gt(value, 0)) return { posted: false, value: toDb(0) };
@@ -247,7 +247,7 @@ async function itemLedger(tenantId, itemId) {
 
 // ── Batch / expiry ───────────────────────────────────────────────────────────
 // Lots (FIFO items) whose expiry_date falls within `days` from today and still
-// have stock — the "use these now or write them off" list.
+// have stock - the "use these now or write them off" list.
 async function nearExpiry(tenantId, days = 90) {
   const { rows } = await pool.query(
     `SELECT i.name AS item_name, l.item_id, l.batch_no, l.expiry_date, l.qty_remaining AS qty
@@ -352,7 +352,7 @@ async function physicalAdjust(tenantId, actorId, { itemId, countedQty, warehouse
   if (!valueDelta.isZero()) {
     const stockLedger = await ledgerIdByName(tenantId, "Stock-in-hand");
     const adjLedger = await ledgerIdByName(tenantId, "Stock Adjustment");
-    if (!stockLedger || !adjLedger) throw new PostError("NOT_SEEDED", "Stock-in-hand / Stock Adjustment ledgers missing — seed first", 422);
+    if (!stockLedger || !adjLedger) throw new PostError("NOT_SEEDED", "Stock-in-hand / Stock Adjustment ledgers missing - seed first", 422);
     const amt = valueDelta.abs();
     const surplus = gt(valueDelta, 0);
     // Surplus → Dr Stock-in-hand / Cr Stock Adjustment; shortage → reverse.
@@ -446,7 +446,7 @@ async function buildKit(tenantId, actorId, { kitItemId, qty, date } = {}) {
     "SELECT component_item_id, qty FROM book_item_components WHERE tenant_id=$1 AND parent_item_id=$2",
     [tenantId, kitItemId]
   );
-  if (comps.length === 0) throw new PostError("NO_COMPONENTS", "Kit has no components — define book_item_components first", 422);
+  if (comps.length === 0) throw new PostError("NO_COMPONENTS", "Kit has no components - define book_item_components first", 422);
   const consumes = comps.map((c) => ({ itemId: c.component_item_id, qty: toDb(money(c.qty).mul(qty)) }));
   const produces = [{ itemId: kitItemId, qty: toDb(qty) }];
   return stockEntry(tenantId, actorId, { consumes, produces, date });

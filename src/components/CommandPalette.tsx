@@ -51,7 +51,7 @@ const NAV_ITEMS: { label: string; path: string; icon: LucideIcon; desc?: string 
 ];
 
 // Complete page index: the curated NAV_ITEMS (rich icons/descriptions) plus every
-// page in the canonical TAB_CATALOG that isn't already listed — so search reaches
+// page in the canonical TAB_CATALOG that isn't already listed - so search reaches
 // all ~60 pages, not just the popular ones.
 const PAGE_INDEX: { label: string; path: string; icon: LucideIcon; desc?: string }[] = (() => {
   const byPath = new Map<string, { label: string; path: string; icon: LucideIcon; desc?: string }>();
@@ -64,7 +64,7 @@ const PAGE_INDEX: { label: string; path: string; icon: LucideIcon; desc?: string
 })();
 const pageByPath = (p: string) => PAGE_INDEX.find(n => n.path === p);
 
-// Favorites & recents — small, fast personalisation in localStorage (C13).
+// Favorites & recents - small, fast personalisation in localStorage (C13).
 const FAV_KEY = "hr_fav_pages", REC_KEY = "hr_recent_pages", FREQ_KEY = "hr_page_freq";
 function readList(k: string): string[] { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch { return []; } }
 function writeList(k: string, v: string[]) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } }
@@ -77,7 +77,7 @@ export function recordRecentPage(path: string) {
     localStorage.setItem(FREQ_KEY, JSON.stringify(freq));
   } catch { /* ignore */ }
 }
-// Top pages by visit count — powers the sidebar's personalised "Frequent" group.
+// Top pages by visit count - powers the sidebar's personalised "Frequent" group.
 export function getFrequentPages(limit = 5): string[] {
   try {
     const freq: Record<string, number> = JSON.parse(localStorage.getItem(FREQ_KEY) || "{}");

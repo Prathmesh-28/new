@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES — shapes mirror backend/src/modules/books/{rules,recurrence,dunning,importconfig}.js
+// TYPES - shapes mirror backend/src/modules/books/{rules,recurrence,dunning,importconfig}.js
 // ─────────────────────────────────────────────────────────────────────────────
 interface RuleGroup {
   id: string;
@@ -223,7 +223,7 @@ export default function BooksAutomationTab() {
           <Workflow size={18} className="text-[var(--color-primary)]" /> Automation
         </h2>
         <p className="text-sm text-[var(--color-muted)] mt-1">
-          Auto-categorise transactions, schedule recurring vouchers, chase overdue receivables, and replay bank statement imports — all hands-off.
+          Auto-categorise transactions, schedule recurring vouchers, chase overdue receivables, and replay bank statement imports - all hands-off.
         </p>
       </div>
 
@@ -258,7 +258,7 @@ export default function BooksAutomationTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// (1) RULES ENGINE — groups + rules CRUD + triggers/actions editor + test apply
+// (1) RULES ENGINE - groups + rules CRUD + triggers/actions editor + test apply
 // ─────────────────────────────────────────────────────────────────────────────
 function RulesSection() {
   const [groups, setGroups] = useState<RuleGroup[]>([]);
@@ -288,7 +288,7 @@ function RulesSection() {
       <Hint>
         Rules auto-tag and route transactions before you confirm them. A <b>group</b> is an ordered bucket of <b>rules</b>; each rule has
         one or more <b>triggers</b> (all must match in AND mode, any in OR mode) and one or more <b>actions</b> that set a category, GL ledger,
-        tag or flag. Use <b>Test apply</b> to dry-run your rules over sample rows — it never touches the ledger.
+        tag or flag. Use <b>Test apply</b> to dry-run your rules over sample rows - it never touches the ledger.
       </Hint>
 
       <div className="flex justify-end">
@@ -356,7 +356,7 @@ function RuleGroupsCard({ groups, onReload }: { groups: RuleGroup[]; onReload: (
         </button>
         <div className="border-t border-[var(--color-border)] pt-3 space-y-1.5">
           {groups.length === 0 ? (
-            <p className="text-sm text-[var(--color-muted)]">No groups yet — create one (lower order runs first).</p>
+            <p className="text-sm text-[var(--color-muted)]">No groups yet - create one (lower order runs first).</p>
           ) : (
             groups.map((g) => (
               <div key={g.id} className="flex items-center gap-2 text-sm">
@@ -559,7 +559,7 @@ function RulesListCard({ rules, busy, onReload }: { rules: Rule[]; busy: boolean
             {busy ? (
               <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--color-muted)]">Loading…</td></tr>
             ) : rules.length === 0 ? (
-              <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--color-muted)]">No rules yet — create one above.</td></tr>
+              <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--color-muted)]">No rules yet - create one above.</td></tr>
             ) : (
               rules.map((r) => (
                 <tr key={r.id} className="border-b border-[var(--color-border)] last:border-b-0 align-top">
@@ -567,7 +567,7 @@ function RulesListCard({ rules, busy, onReload }: { rules: Rule[]; busy: boolean
                     {r.name}
                     {r.stop_processing && <span className="ml-2 text-[10px] text-amber-400">stop</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.group_name ?? "—"}</td>
+                  <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.group_name ?? "-"}</td>
                   <td className="px-3 py-2.5"><Pill>{r.strict_mode ?? "AND"}</Pill></td>
                   <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[360px]">
                     <div className="flex flex-wrap gap-1 mb-1">
@@ -661,7 +661,7 @@ function TestApplyCard() {
                         <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{i}</td>
                         <td className="px-3 py-2.5 font-mono text-xs break-all">{JSON.stringify(row)}</td>
                         <td className="px-3 py-2.5">
-                          {fired.length === 0 ? <span className="text-[var(--color-muted)] text-xs">—</span> : (
+                          {fired.length === 0 ? <span className="text-[var(--color-muted)] text-xs">-</span> : (
                             <div className="flex flex-wrap gap-1">{fired.map((f, j) => <Pill key={j} tone="green">{f.ruleName}</Pill>)}</div>
                           )}
                         </td>
@@ -679,7 +679,7 @@ function TestApplyCard() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// (2) RECURRENCES — list, create, preview, run due
+// (2) RECURRENCES - list, create, preview, run due
 // ─────────────────────────────────────────────────────────────────────────────
 function RecurrencesSection() {
   const [list, setList] = useState<Recurrence[]>([]);
@@ -737,7 +737,7 @@ function RecurrencesSection() {
   return (
     <div className="space-y-5">
       <Hint>
-        A recurrence posts a templated voucher (sales invoice, bill or journal) on a schedule — daily / weekly / monthly / yearly or an
+        A recurrence posts a templated voucher (sales invoice, bill or journal) on a schedule - daily / weekly / monthly / yearly or an
         nth-weekday-of-month rhythm, with skip-N, a weekend strategy and an end condition (by date or after N runs). <b>Preview</b> shows the
         next dates without posting; <b>Run due</b> catches up every missed occurrence up to the as-of date and posts to the ledger.
       </Hint>
@@ -786,7 +786,7 @@ function RecurrencesSection() {
                     <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">
                       {r.repetition?.type}{r.repetition?.skip ? ` ·skip ${r.repetition.skip}` : ""}{r.repetition?.weekend && r.repetition.weekend !== "do-nothing" ? ` ·${r.repetition.weekend}` : ""}
                     </td>
-                    <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{r.next_run ?? "—"}</td>
+                    <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{r.next_run ?? "-"}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{r.occurrences_done}</td>
                     <td className="px-3 py-2.5">{r.active ? <Pill tone="green">active</Pill> : <Pill tone="amber">done</Pill>}</td>
                     <td className="px-3 py-2.5 text-right whitespace-nowrap">
@@ -803,7 +803,7 @@ function RecurrencesSection() {
         {preview && (
           <div className="mt-4 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-semibold">Next occurrences — {preview.name}</h4>
+              <h4 className="text-sm font-semibold">Next occurrences - {preview.name}</h4>
               <button type="button" onClick={() => setPreview(null)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={15} /></button>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -927,7 +927,7 @@ function RecurrenceCreateCard({ onReload }: { onReload: () => Promise<void> }) {
           {repType === "monthly" && (
             <div>
               <label className={labelCls}>Day of month (blank = start's day)</label>
-              <input value={moment} onChange={(e) => setMoment(e.target.value)} inputMode="numeric" placeholder="1–31" className={`${inputCls} font-mono tabular-nums`} />
+              <input value={moment} onChange={(e) => setMoment(e.target.value)} inputMode="numeric" placeholder="1-31" className={`${inputCls} font-mono tabular-nums`} />
             </div>
           )}
           {repType === "ndom" && (
@@ -983,7 +983,7 @@ function RecurrenceCreateCard({ onReload }: { onReload: () => Promise<void> }) {
 
         <div>
           <label className={labelCls}>
-            Template JSON — {templateKind === "SALES_INVOICE" ? "{ customerLedgerId, lines:[…] }" : templateKind === "BILL" ? "{ vendorLedgerId, lines:[…] }" : "{ narration, entries:[{ ledgerId, debit, credit }] }"}
+            Template JSON - {templateKind === "SALES_INVOICE" ? "{ customerLedgerId, lines:[…] }" : templateKind === "BILL" ? "{ vendorLedgerId, lines:[…] }" : "{ narration, entries:[{ ledgerId, debit, credit }] }"}
           </label>
           <textarea value={templateJson} onChange={(e) => setTemplateJson(e.target.value)} rows={4} className={`${inputCls} font-mono text-xs resize-y`} />
         </div>
@@ -997,7 +997,7 @@ function RecurrenceCreateCard({ onReload }: { onReload: () => Promise<void> }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// (3) DUNNING LADDER — procedure editor, due list, run
+// (3) DUNNING LADDER - procedure editor, due list, run
 // ─────────────────────────────────────────────────────────────────────────────
 function emptyLevel(level: number): DunLevel {
   return { level, name: `Level ${level}`, minOverdueDays: level === 1 ? 1 : level * 15, interestPct: "0", fee: "0", tone: "firm", subject: "Overdue invoice {{invoiceNumber}}", body: "Dear {{party}}, invoice {{invoiceNumber}} for {{outstanding}} is {{daysOverdue}} day(s) overdue. Total due {{totalDue}}." };
@@ -1097,7 +1097,7 @@ function DunningSection() {
         The dunning ladder is an escalating set of <b>levels</b>, each owning a band of days-overdue with its own interest rate (% p.a.),
         flat fee and letter (tone runs gentle → firm → final → legal). Thresholds must strictly increase. Letters support placeholders like{" "}
         <code>{"{{party}}"}</code>, <code>{"{{outstanding}}"}</code>, <code>{"{{interest}}"}</code>, <code>{"{{totalDue}}"}</code>.{" "}
-        {!configured && <b>You are seeing the built-in default ladder — save it to make it yours.</b>}
+        {!configured && <b>You are seeing the built-in default ladder - save it to make it yours.</b>}
       </Hint>
 
       <Card
@@ -1119,7 +1119,7 @@ function DunningSection() {
       >
         <div className="space-y-3">
           {levels.length === 0 ? (
-            <p className="text-sm text-[var(--color-muted)]">No levels — add one.</p>
+            <p className="text-sm text-[var(--color-muted)]">No levels - add one.</p>
           ) : (
             levels.map((l, i) => (
               <div key={i} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
@@ -1236,7 +1236,7 @@ function DunningSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// (4) IMPORT CONFIGS — CRUD + run
+// (4) IMPORT CONFIGS - CRUD + run
 // ─────────────────────────────────────────────────────────────────────────────
 function ImportConfigsSection() {
   const [configs, setConfigs] = useState<ImportConfig[]>([]);
@@ -1270,7 +1270,7 @@ function ImportConfigsSection() {
       <Hint>
         An import config is a reusable, per-bank statement profile: which parser (OFX / QIF / CAMT / MT940 / CSV), the bank ledger it posts
         against, an optional date-format hint and CSV column / value <b>mappings</b>. Running a config parses pasted statement content,
-        dedupes already-seen lines by hash (re-uploading the same file imports nothing new), and drops new lines into the reconciliation inbox —
+        dedupes already-seen lines by hash (re-uploading the same file imports nothing new), and drops new lines into the reconciliation inbox -
         the ledger is only touched when you confirm each line.
       </Hint>
 
@@ -1284,7 +1284,7 @@ function ImportConfigsSection() {
         {busy ? (
           <p className="text-sm text-[var(--color-muted)] py-6 text-center">Loading…</p>
         ) : configs.length === 0 ? (
-          <p className="text-sm text-[var(--color-muted)] py-6 text-center">No import configs yet — create one above.</p>
+          <p className="text-sm text-[var(--color-muted)] py-6 text-center">No import configs yet - create one above.</p>
         ) : (
           <div className="space-y-3">
             {configs.map((c) => <ImportConfigRow key={c.id} cfg={c} onReload={load} />)}

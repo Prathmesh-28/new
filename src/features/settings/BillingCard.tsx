@@ -88,7 +88,7 @@ export default function BillingCard() {
         })}
       </div>
 
-      <p className="text-[11px] text-[var(--color-muted)] mt-4 text-center">🔒 UPI · cards · netbanking · wallets — secure checkout by Razorpay</p>
+      <p className="text-[11px] text-[var(--color-muted)] mt-4 text-center">🔒 UPI · cards · netbanking · wallets - secure checkout by Razorpay</p>
     </div>
   );
 }

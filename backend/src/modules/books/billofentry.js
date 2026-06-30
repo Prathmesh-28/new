@@ -1,4 +1,4 @@
-// §IMPORTS — Bill of Entry (BoE) for imports + ITC-04 job-work.
+// §IMPORTS - Bill of Entry (BoE) for imports + ITC-04 job-work.
 //
 // Logic ported (not copied) from resilient-tech/india-compliance + frappe/erpnext
 // (regional/india: Bill of Entry, GST on imports, ITC-04 job-work). We write our
@@ -8,11 +8,11 @@
 //
 // (1) BILL OF ENTRY (imports). When goods are imported, the foreign supplier's
 //     invoice carries no GST. Instead, at the customs port a Bill of Entry assesses:
-//       • Assessable value (CIF) — the customs valuation of the goods.
-//       • BCD (Basic Customs Duty) — a customs duty, NON-creditable → becomes cost.
-//       • Social Welfare Surcharge (SWS) — 10% of BCD (typically), also NON-creditable
+//       • Assessable value (CIF) - the customs valuation of the goods.
+//       • BCD (Basic Customs Duty) - a customs duty, NON-creditable → becomes cost.
+//       • Social Welfare Surcharge (SWS) - 10% of BCD (typically), also NON-creditable
 //         → cost.
-//       • IGST on imports — levied on (assessable value + BCD + SWS), and (unlike the
+//       • IGST on imports - levied on (assessable value + BCD + SWS), and (unlike the
 //         customs duties) it is CREDITABLE input tax → it flows to GSTR-3B table
 //         4(A)(1) "Import of goods" ITC. We post it as Dr IGST Input with an IGST tax
 //         side-record (is_input=true, supplyType 'IMPORT') so gstr3b() picks it up.
@@ -27,7 +27,7 @@
 // (2) ITC-04 (job-work). A principal manufacturer who sends inputs/capital goods to
 //     a job-worker for processing must file Form ITC-04 declaring goods SENT to and
 //     RECEIVED from job-workers (challan no/date, qty, taxable value). This is a
-//     RETURN/declaration only — sending goods on a delivery challan for job-work is
+//     RETURN/declaration only - sending goods on a delivery challan for job-work is
 //     NOT a supply, so it carries NO GST and posts NO voucher. We only track the
 //     challans for the ITC-04 return (Table 4 = sent, Table 5A = received back).
 const { pool } = require("../../db");
@@ -40,7 +40,7 @@ const { ledgerIdByName } = require("./seed");
 // "IGST Input"; the import-specific cost/liability ledgers are resolved by their
 // usual names with sensible fall-backs so a tenant that hasn't created a dedicated
 // "Customs Duty Payable" still posts (falling back to a generic creditor head only
-// when present). We NEVER invent a ledger id — a missing one throws NOT_SEEDED.
+// when present). We NEVER invent a ledger id - a missing one throws NOT_SEEDED.
 async function boeCtx(tenantId, vendorLedgerId, opts = {}) {
   if (!vendorLedgerId) throw new PostError("BAD_INPUT", "vendorLedgerId (the import supplier) is required", 422);
   const purchaseLedgerId =
@@ -52,9 +52,9 @@ async function boeCtx(tenantId, vendorLedgerId, opts = {}) {
     (opts.customsLedgerName && (await ledgerIdByName(tenantId, opts.customsLedgerName))) ||
     (await ledgerIdByName(tenantId, "Customs Duty Payable")) ||
     (await ledgerIdByName(tenantId, "Customs Payable"));
-  if (!purchaseLedgerId) throw new PostError("NOT_SEEDED", "Purchases ledger missing — seed the books first", 422);
-  if (!igstInputLedgerId) throw new PostError("NOT_SEEDED", "IGST Input ledger missing — seed the books first", 422);
-  if (!customsLedgerId) throw new PostError("NOT_SEEDED", "Customs Duty Payable ledger missing — create a 'Customs Duty Payable' ledger (Current Liabilities) first", 422);
+  if (!purchaseLedgerId) throw new PostError("NOT_SEEDED", "Purchases ledger missing - seed the books first", 422);
+  if (!igstInputLedgerId) throw new PostError("NOT_SEEDED", "IGST Input ledger missing - seed the books first", 422);
+  if (!customsLedgerId) throw new PostError("NOT_SEEDED", "Customs Duty Payable ledger missing - create a 'Customs Duty Payable' ledger (Current Liabilities) first", 422);
   return { vendorLedgerId, purchaseLedgerId, igstInputLedgerId, customsLedgerId };
 }
 
@@ -78,7 +78,7 @@ function buildBillOfEntryVoucher(input, ctx) {
   if (!landedCost.plus(importIgst).greaterThan(0)) {
     throw new PostError("BAD_INPUT", "Bill of Entry total is zero", 422);
   }
-  // IGST on imports is assessed on (assessable + BCD + SWS) — that's the taxable
+  // IGST on imports is assessed on (assessable + BCD + SWS) - that's the taxable
   // value we stamp on the side-record so the rate and ITC reconcile.
   const igstTaxable = landedCost;
 
@@ -99,7 +99,7 @@ function buildBillOfEntryVoucher(input, ctx) {
       isInput: true,                 // → GSTR-3B 4(A)(1) import ITC
       placeOfSupply: input.placeOfSupply || null,
       supplyType: "IMPORT",          // tags it as import-of-goods ITC
-      counterpartyGstin: null,       // foreign supplier — no GSTIN
+      counterpartyGstin: null,       // foreign supplier - no GSTIN
     });
   }
   if (customsPayable.greaterThan(0)) entries.push({ ledgerId: ctx.customsLedgerId, debit: "0", credit: toDb(customsPayable) });
@@ -111,7 +111,7 @@ function buildBillOfEntryVoucher(input, ctx) {
       voucherDate: input.date || input.boeDate,
       reference: input.reference || (input.boeNo ? `BoE ${input.boeNo}` : null),
       partyLedgerId: ctx.vendorLedgerId,
-      narration: input.narration || `Import — Bill of Entry ${input.boeNo || ""}`.trim(),
+      narration: input.narration || `Import - Bill of Entry ${input.boeNo || ""}`.trim(),
       source: "boe",
     },
     entries,
@@ -158,7 +158,7 @@ async function listBoe(tenantId, filter = {}) {
 }
 
 // Import ITC for GSTR-3B table 4(A)(1) over a period [from,to]. This is the import
-// IGST we've claimed via Bills of Entry — the authoritative source is the IMPORT
+// IGST we've claimed via Bills of Entry - the authoritative source is the IMPORT
 // tax side-records (is_input, supplyType 'IMPORT') so it reconciles to gstr3b().
 async function importItc(tenantId, from, to) {
   const { rows } = await pool.query(
@@ -176,7 +176,7 @@ async function importItc(tenantId, from, to) {
 // ── ITC-04: job-work challans (sent / received) ───────────────────────────────
 // direction 'SENT'     → goods sent to a job-worker (ITC-04 Table 4).
 // direction 'RECEIVED' → goods received back from a job-worker (ITC-04 Table 5A).
-// No GST, no voucher — this is a declaration row for the ITC-04 return only.
+// No GST, no voucher - this is a declaration row for the ITC-04 return only.
 const ITC04_DIRECTIONS = new Set(["SENT", "RECEIVED"]);
 
 async function createItc04Challan(tenantId, actorId, input = {}) {
@@ -225,7 +225,7 @@ async function listItc04Challans(tenantId, filter = {}) {
 // ── Bulk create helpers ───────────────────────────────────────────────────────
 // Process each row in its own try/catch so one bad row never aborts the rest.
 // Each single-create is already self-contained (createBoe posts via postVoucher,
-// which is internally transactional; createItc04Challan is a single INSERT) — so a
+// which is internally transactional; createItc04Challan is a single INSERT) - so a
 // per-row loop is the correct granularity (no outer batch transaction needed).
 async function bulkCreateBoe(tenantId, actorId, rows) {
   const list = Array.isArray(rows) ? rows : [];

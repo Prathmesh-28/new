@@ -1,4 +1,4 @@
-/* Headroom logo — a rising line that lifts to a green dot ("headroom" above the line).
+/* Headroom logo - a rising line that lifts to a green dot ("headroom" above the line).
    The navy strokes use currentColor so the mark adapts to any surface (dark app,
    olive landing, light auth pages); the dot stays brand green. */
 
@@ -11,7 +11,7 @@ export function LogoMark({ size = 28, className }: { size?: number; className?: 
       <path d="M14 74 H112" stroke="currentColor" strokeWidth="11" strokeLinecap="round" />
       {/* rising stroke */}
       <path d="M68 74 L99 34" stroke="currentColor" strokeWidth="11" strokeLinecap="round" strokeLinejoin="round" />
-      {/* the lift — green dot */}
+      {/* the lift - green dot */}
       <circle cx="112" cy="24" r="11" fill={GREEN} />
     </svg>
   );

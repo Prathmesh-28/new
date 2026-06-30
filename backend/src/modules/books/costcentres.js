@@ -1,4 +1,4 @@
-// Cost centres (Tally-style) — master + cost-centre-wise P&L. The posting engine
+// Cost centres (Tally-style) - master + cost-centre-wise P&L. The posting engine
 // already accepts e.costCentreId per line and stores it on book_voucher_entries;
 // this module is the master CRUD + the report that makes the dimension usable.
 const { pool } = require("../../db");

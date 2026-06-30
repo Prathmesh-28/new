@@ -1,9 +1,9 @@
-// Razorpay Standard Checkout — Orders API + payment-signature verification.
+// Razorpay Standard Checkout - Orders API + payment-signature verification.
 // Graceful + env-driven; reuses the same fetch + crypto pattern already used for
 // Razorpay payment links in routes/collections.js, so the codebase has ONE way to
 // talk to Razorpay (no extra SDK dependency).
 //   - No keys set            → isConfigured()=false; routes return a clean 503.
-//   - KEY_SECRET stays server-side only — never returned to the client.
+//   - KEY_SECRET stays server-side only - never returned to the client.
 const crypto = require("crypto");
 
 const keyId     = () => (process.env.RAZORPAY_KEY_ID || "").trim();
@@ -12,8 +12,8 @@ const isConfigured = () => !!(keyId() && keySecret());
 
 // Actionable reason billing-via-Razorpay can't run, or null if it's fine.
 function configProblem() {
-  if (!keyId() || !keySecret()) return "Razorpay isn't configured — set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET on the server.";
-  if (!keyId().startsWith("rzp_")) return "RAZORPAY_KEY_ID looks wrong — it must start with rzp_.";
+  if (!keyId() || !keySecret()) return "Razorpay isn't configured - set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET on the server.";
+  if (!keyId().startsWith("rzp_")) return "RAZORPAY_KEY_ID looks wrong - it must start with rzp_.";
   return null;
 }
 
@@ -28,7 +28,7 @@ async function createOrder({ amount, currency = "INR", receipt, notes }) {
   }
   const auth = Buffer.from(`${keyId()}:${keySecret()}`).toString("base64");
   // Hard timeout so a stalled outbound connection fails fast (clean 500) instead
-  // of leaving the request — and the client's button spinner — hanging forever.
+  // of leaving the request - and the client's button spinner - hanging forever.
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 15000);
   let resp;
@@ -40,7 +40,7 @@ async function createOrder({ amount, currency = "INR", receipt, notes }) {
       signal: ctrl.signal,
     });
   } catch (err) {
-    if (err.name === "AbortError") throw new Error("Timed out reaching Razorpay — please try again.");
+    if (err.name === "AbortError") throw new Error("Timed out reaching Razorpay - please try again.");
     throw new Error(`Couldn't reach Razorpay: ${err.message}`);
   } finally {
     clearTimeout(timer);
@@ -80,7 +80,7 @@ async function createPaymentLink({ amount, description, customer, notes, referen
       signal: ctrl.signal,
     });
   } catch (err) {
-    if (err.name === "AbortError") throw new Error("Timed out reaching Razorpay — please try again.");
+    if (err.name === "AbortError") throw new Error("Timed out reaching Razorpay - please try again.");
     throw new Error(`Couldn't reach Razorpay: ${err.message}`);
   } finally { clearTimeout(timer); }
   const data = await resp.json().catch(() => ({}));
@@ -89,7 +89,7 @@ async function createPaymentLink({ amount, description, customer, notes, referen
 }
 
 // Authoritatively fetch a payment link's state (the webhook confirms "paid" via
-// this before posting a receipt — never trusts an unverified payload).
+// this before posting a receipt - never trusts an unverified payload).
 async function getPaymentLink(id) {
   if (!isConfigured()) throw new Error("Razorpay not configured");
   const auth = Buffer.from(`${keyId()}:${keySecret()}`).toString("base64");

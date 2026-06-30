@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * India-identifier validators — pure functions, no DB, CommonJS.
+ * India-identifier validators - pure functions, no DB, CommonJS.
  *
  * Validation logic ported (re-implemented in our own code) from:
- *   - mastermunj/format-utils (MIT) — Verhoeff algorithm tables + VPA format
- *   - srikanthlogic/gstin-validator (MIT) — GSTN modulus-36 checksum
+ *   - mastermunj/format-utils (MIT) - Verhoeff algorithm tables + VPA format
+ *   - srikanthlogic/gstin-validator (MIT) - GSTN modulus-36 checksum
  * We do not copy their distributable; only the underlying algorithms.
  */
 
@@ -53,7 +53,7 @@ function isValidVpa(s) {
 }
 
 // ---------------------------------------------------------------------------
-// Aadhaar — 12 digits + Verhoeff checksum
+// Aadhaar - 12 digits + Verhoeff checksum
 // (Verhoeff tables ported from mastermunj/format-utils, MIT)
 // ---------------------------------------------------------------------------
 
@@ -105,7 +105,7 @@ function isValidAadhaar(s) {
 }
 
 // ---------------------------------------------------------------------------
-// GSTIN — 15 chars + GSTN modulus-36 checksum
+// GSTIN - 15 chars + GSTN modulus-36 checksum
 // (algorithm ported from srikanthlogic/gstin-validator, MIT)
 // ---------------------------------------------------------------------------
 

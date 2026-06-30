@@ -1,11 +1,11 @@
-// Headroom Flows — a NATIVE, n8n-independent workflow automation engine.
+// Headroom Flows - a NATIVE, n8n-independent workflow automation engine.
 //
 // A flow = a trigger (manual / schedule / event / webhook) + a graph of nodes
 // (actions + logic) connected by edges. The runner walks the graph, passing each
 // node the accumulated output of upstream nodes, and logs every node's result to
 // flow_run (the execution log is what makes automations debuggable).
 //
-// Owned end-to-end by Headroom — no n8n code, no n8n license. Action nodes reuse
+// Owned end-to-end by Headroom - no n8n code, no n8n license. Action nodes reuse
 // the agent tool registry; AI nodes reuse the per-tenant LLM gateway.
 //
 // Applied by db.js initDb() after the collab schema (reuses collab_uuidv7()).

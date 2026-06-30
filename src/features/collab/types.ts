@@ -1,8 +1,8 @@
-// Headroom Collab — shared contract (Phase 0), client (TypeScript) side.
+// Headroom Collab - shared contract (Phase 0), client (TypeScript) side.
 //
 // Canonical TypeScript types for the collaboration layer (Teams-style chat). The
 // backend mirrors the enum string values and socket event names in
-// backend/src/modules/collab/contract.js — keep the two in lockstep.
+// backend/src/modules/collab/contract.js - keep the two in lockstep.
 //
 // Wire shapes are tenant-agnostic on purpose: the server resolves the tenant from
 // the JWT and enforces it (org membership + RLS), so no tenant/org id travels on
@@ -88,7 +88,7 @@ export interface Mention {
 }
 
 export interface Message {
-  id: string; // UUIDv7 (sortable) — defines ordering
+  id: string; // UUIDv7 (sortable) - defines ordering
   conversationId: string;
   senderId: string;
   parentMessageId: string | null; // set => thread reply
@@ -135,7 +135,7 @@ export interface Unreads {
 
 // ── Socket event contract (spec §3) ───────────────────────────────────────────
 // Optimistic-send reconciliation is keyed on clientMsgId; the socket carries only
-// live deltas — history & gap-recovery go through REST.
+// live deltas - history & gap-recovery go through REST.
 export interface ClientToServerEvents {
   "message:send": (
     p: {

@@ -37,7 +37,7 @@ type PublicRaise = {
 
 // Portfolio company monitoring record.
 // `aa_verified` is true ONLY when a founder has linked their Headroom tenant and
-// granted Account Aggregator consent — then runway/burn/revenue are bank-pulled.
+// granted Account Aggregator consent - then runway/burn/revenue are bank-pulled.
 // Self-added companies (no linked tenant) are self-reported and badged as such.
 // `sample` marks the illustrative preview rows (never persisted to the real list).
 type PortfolioCompany = {
@@ -70,7 +70,7 @@ type Syndicate = {
   closes_at: string;
 };
 
-// Illustrative preview only — surfaced behind the "Sample data" toggle so an
+// Illustrative preview only - surfaced behind the "Sample data" toggle so an
 // investor can see how monitoring looks once founders link & grant AA consent.
 // These are never written to the persisted portfolio list.
 const SAMPLE_PORTFOLIO: PortfolioCompany[] = [
@@ -84,7 +84,7 @@ const SAMPLE_PORTFOLIO: PortfolioCompany[] = [
     id: "p2", name: "Priya Tech Services", sector: "SaaS", invested: 1000000,
     equity_pct: 1.2, runway_days: 38, monthly_burn: 610000, monthly_revenue: 480000,
     burn_trend: "up", revenue_trend: "flat", aa_verified: true, sample: true,
-    last_alert: { severity: "high", msg: "Cash runway below 45 days — fundraising urgency" },
+    last_alert: { severity: "high", msg: "Cash runway below 45 days - fundraising urgency" },
     last_updated: "2026-06-11T08:30:00Z",
   },
   {
@@ -97,7 +97,7 @@ const SAMPLE_PORTFOLIO: PortfolioCompany[] = [
     id: "p4", name: "Urban Logistics Co", sector: "Logistics", invested: 750000,
     equity_pct: 0.8, runway_days: 22, monthly_burn: 920000, monthly_revenue: 760000,
     burn_trend: "up", revenue_trend: "down", aa_verified: false, sample: true,
-    last_alert: { severity: "critical", msg: "Runway critical — 22 days. Revenue declining MoM." },
+    last_alert: { severity: "critical", msg: "Runway critical - 22 days. Revenue declining MoM." },
     last_updated: "2026-06-11T09:15:00Z",
   },
 ];
@@ -106,12 +106,12 @@ const SECTOR_OPTIONS = ["SaaS", "D2C", "AgriTech", "Logistics", "Manufacturing",
 
 const MOCK_SYNDICATES: Syndicate[] = [
   {
-    id: "s1", name: "D2C Growth Fund I", lead: "Ramesh K.", raise_name: "Raj Traders — Reg CF",
+    id: "s1", name: "D2C Growth Fund I", lead: "Ramesh K.", raise_name: "Raj Traders - Reg CF",
     target: 5000000, committed: 3200000, members: 12, min_check: 100000,
     closes_at: "2026-07-15",
   },
   {
-    id: "s2", name: "AgriTech Angels", lead: "Sunita M.", raise_name: "Greenfield Agro — Rev Share",
+    id: "s2", name: "AgriTech Angels", lead: "Sunita M.", raise_name: "Greenfield Agro - Rev Share",
     target: 10000000, committed: 6700000, members: 28, min_check: 250000,
     closes_at: "2026-08-01",
   },
@@ -122,13 +122,13 @@ const MOCK_SYNDICATES: Syndicate[] = [
 const PORTFOLIO_KEY = "investor-portfolio";
 
 function PortfolioTab() {
-  // Real, user-owned portfolio — persisted via the synced featureData bag.
+  // Real, user-owned portfolio - persisted via the synced featureData bag.
   const [portfolio, setPortfolio] = useFeatureState<PortfolioCompany[]>(PORTFOLIO_KEY, []);
   const [showSample, setShowSample] = useState(false);
   const [editing, setEditing]       = useState<PortfolioCompany | null>(null);
   const [showForm, setShowForm]     = useState(false);
 
-  // Never write sample rows to the persisted list — they're preview-only.
+  // Never write sample rows to the persisted list - they're preview-only.
   const view = showSample ? SAMPLE_PORTFOLIO : portfolio;
 
   const atRisk  = view.filter(c => c.runway_days < 60 || c.last_alert?.severity === "critical" || c.last_alert?.severity === "high");
@@ -153,7 +153,7 @@ function PortfolioTab() {
   const openAdd  = () => { setEditing(null); setShowForm(true); };
   const openEdit = (c: PortfolioCompany) => { setEditing(c); setShowForm(true); };
 
-  // Honest empty state — no fabricated rows when the investor has added nothing.
+  // Honest empty state - no fabricated rows when the investor has added nothing.
   const isEmpty = !showSample && portfolio.length === 0;
 
   return (
@@ -181,18 +181,18 @@ function PortfolioTab() {
         )}
       </div>
 
-      {/* Trust banner — honest about what's verified vs self-reported */}
+      {/* Trust banner - honest about what's verified vs self-reported */}
       <div className="bg-[var(--color-primary)]/8 border border-[var(--color-primary)]/25 rounded-lg px-4 py-3">
         <div className="flex items-start gap-3">
           <ShieldCheck size={15} className="text-[var(--color-primary)] mt-0.5 shrink-0" />
           <div>
             <p className="text-sm font-semibold">
-              {showSample ? "Sample preview — illustrative data only" : "Bank-verified vs self-reported"}
+              {showSample ? "Sample preview - illustrative data only" : "Bank-verified vs self-reported"}
             </p>
             <p className="text-xs text-[var(--color-muted)] mt-0.5">
               {showSample
-                ? <>These rows are <span className="text-[var(--color-text)]">illustrative sample data</span>, not your portfolio. They show how monitoring looks once a founder links their Headroom account and grants Account Aggregator consent — revenue, burn and runway then come straight from their bank.</>
-                : <>Companies you add are <span className="text-yellow-400">self-reported</span> until the founder links their Headroom tenant and grants AA consent. Once linked, their cash, runway and burn become <span className="text-[var(--color-primary)] font-semibold">bank-verified — not deck-typed</span>, so you see distress the same moment they do.</>}
+                ? <>These rows are <span className="text-[var(--color-text)]">illustrative sample data</span>, not your portfolio. They show how monitoring looks once a founder links their Headroom account and grants Account Aggregator consent - revenue, burn and runway then come straight from their bank.</>
+                : <>Companies you add are <span className="text-yellow-400">self-reported</span> until the founder links their Headroom tenant and grants AA consent. Once linked, their cash, runway and burn become <span className="text-[var(--color-primary)] font-semibold">bank-verified - not deck-typed</span>, so you see distress the same moment they do.</>}
             </p>
           </div>
         </div>
@@ -202,7 +202,7 @@ function PortfolioTab() {
         <EmptyState
           icon={Briefcase}
           title="Add your portfolio companies"
-          description="Once a founder links their Headroom account & grants AA consent, their cash/runway/burn here are bank-verified, not deck-typed. Add a company to start tracking — or flip to Sample preview to see how monitoring looks."
+          description="Once a founder links their Headroom account & grants AA consent, their cash/runway/burn here are bank-verified, not deck-typed. Add a company to start tracking - or flip to Sample preview to see how monitoring looks."
           ctaText="Add portfolio company"
           onCta={openAdd}
         />
@@ -227,7 +227,7 @@ function PortfolioTab() {
           {atRisk.length > 0 && (
             <div>
               <h2 className="text-xs font-semibold text-red-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                <AlertTriangle size={11} /> Early Warning — Needs Attention ({atRisk.length})
+                <AlertTriangle size={11} /> Early Warning - Needs Attention ({atRisk.length})
               </h2>
               <div className="space-y-2">
                 {atRisk.map(c => <CompanyCard key={c.id} company={c} onEdit={showSample ? undefined : openEdit} onDelete={showSample ? undefined : remove} />)}
@@ -249,7 +249,7 @@ function PortfolioTab() {
 
           <p className="text-[10px] text-[var(--color-muted)] text-center">
             {showSample
-              ? "Sample data — flip to “My companies” to manage your real portfolio."
+              ? "Sample data - flip to “My companies” to manage your real portfolio."
               : `Avg runway ${avgRunway}d · metrics for unlinked companies are self-reported until AA consent is granted.`}
           </p>
         </>
@@ -345,7 +345,7 @@ function CompanyFormModal({ existing, onClose, onSave }: {
           </label>
           <input value={tenant} onChange={e => setTenant(e.target.value)} placeholder="founder's tenant ID or email" className={inp} />
           <p className="text-[10px] text-[var(--color-muted)] mt-1 leading-relaxed">
-            When the founder grants Account Aggregator consent on this account, their cash, runway and burn become bank-verified here — until then this company shows as self-reported.
+            When the founder grants Account Aggregator consent on this account, their cash, runway and burn become bank-verified here - until then this company shows as self-reported.
           </p>
         </div>
 
@@ -374,8 +374,8 @@ function CompanyCard({ company: c, onEdit, onDelete }: {
   };
 
   // Only sample rows and AA-linked tenants have trustworthy live metrics. A real,
-  // unlinked company is self-reported — we have no bank feed, so we DON'T render
-  // fabricated runway/revenue/burn; we show "—" with an explicit notice instead.
+  // unlinked company is self-reported - we have no bank feed, so we DON'T render
+  // fabricated runway/revenue/burn; we show "-" with an explicit notice instead.
   const hasLiveMetrics = c.aa_verified;
 
   return (
@@ -440,15 +440,15 @@ function CompanyCard({ company: c, onEdit, onDelete }: {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="opacity-50">
                   <p className="text-[10px] text-[var(--color-muted)]">Runway</p>
-                  <p className="text-sm font-bold tabular-nums text-[var(--color-muted)]">—</p>
+                  <p className="text-sm font-bold tabular-nums text-[var(--color-muted)]">-</p>
                 </div>
                 <div className="opacity-50">
                   <p className="text-[10px] text-[var(--color-muted)]">Monthly Revenue</p>
-                  <p className="text-sm font-bold tabular-nums text-[var(--color-muted)]">—</p>
+                  <p className="text-sm font-bold tabular-nums text-[var(--color-muted)]">-</p>
                 </div>
                 <div className="opacity-50">
                   <p className="text-[10px] text-[var(--color-muted)]">Monthly Burn</p>
-                  <p className="text-sm font-bold tabular-nums text-[var(--color-muted)]">—</p>
+                  <p className="text-sm font-bold tabular-nums text-[var(--color-muted)]">-</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-[var(--color-muted)]">My Investment</p>
@@ -672,7 +672,7 @@ function SyndicatesTab({ user }: { user: { email: string } }) {
     if (!newName) { toast.error("Enter a syndicate name"); return; }
     const s: Syndicate = {
       id: crypto.randomUUID(), name: newName, lead: user.email.split("@")[0],
-      raise_name: "Pending — will be linked to a raise",
+      raise_name: "Pending - will be linked to a raise",
       target: 5000000, committed: 0, members: 1, min_check: parseFloat(newMin),
       closes_at: new Date(Date.now() + 45 * 86400000).toISOString().split("T")[0],
     };
@@ -687,10 +687,10 @@ function SyndicatesTab({ user }: { user: { email: string } }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold">Syndicates — the AngelList play for Indian SMBs</p>
+          <p className="text-sm font-semibold">Syndicates - the AngelList play for Indian SMBs</p>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
             A lead investor creates a syndicate on a verified raise. Smaller checks ride along on one term sheet.
-            Headroom handles the cap table entry. ₹25L–₹2Cr deals, accessible to angel-sized investors.
+            Headroom handles the cap table entry. ₹25L-₹2Cr deals, accessible to angel-sized investors.
           </p>
         </div>
         <button onClick={() => setShowCreate(v => !v)}
@@ -780,7 +780,7 @@ export default function InvestorPage() {
   const [tab,           setTab]           = useState<"portfolio" | "dealflow" | "syndicates" | "update-composer" | "data-room" | "tearsheet" | "exit-waterfall" | "mrr-movement" | "burn-efficiency" | "cohort-retention" | "fundraise-pipeline" | "board-agenda" | "runway-timing" | "esop-pool">("portfolio");
 
   // Read the real, persisted portfolio so the tab label/badge reflect live data
-  // (the same featureData key PortfolioTab writes to — cheap, always in sync).
+  // (the same featureData key PortfolioTab writes to - cheap, always in sync).
   const [portfolio] = useFeatureState<PortfolioCompany[]>(PORTFOLIO_KEY, []);
 
   if (!user || !["investor", "super_admin"].includes(user.role)) return <Navigate to="/dashboard" replace />;
@@ -961,7 +961,7 @@ function InvestorUpdateComposer({ user }: { user: { email: string } }) {
 
   const draft = useMemo(() => {
     const lines = [
-      `Subject: ${firmName} — Investor Update, ${monthLabel}`,
+      `Subject: ${firmName} - Investor Update, ${monthLabel}`,
       ``,
       `Hi all,`,
       ``,
@@ -993,7 +993,7 @@ function InvestorUpdateComposer({ user }: { user: { email: string } }) {
     );
   };
   const mailto = () => {
-    const subject = encodeURIComponent(`${firmName} — Investor Update, ${monthLabel}`);
+    const subject = encodeURIComponent(`${firmName} - Investor Update, ${monthLabel}`);
     const body = encodeURIComponent(draft);
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
   };
@@ -1188,7 +1188,7 @@ function KpiTearsheet() {
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-        <h2 className="text-sm font-semibold flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> KPI Tearsheet — {firmName}</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> KPI Tearsheet - {firmName}</h2>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">A one-pager of headline metrics, computed live from your transactions. Updated {format(new Date(), "d MMM yyyy")}.</p>
       </div>
 
@@ -1230,7 +1230,7 @@ function ExitWaterfall() {
     const totalLiqPref = prefs.reduce((s, c) => s + c.invested * c.multiple, 0);
 
     if (exitValue <= 0 || totalShares <= 0) {
-      return classes.map(c => ({ ...c, payout: 0, treatment: "—" }));
+      return classes.map(c => ({ ...c, payout: 0, treatment: "-" }));
     }
 
     // If exit can't cover all preferences, prefs share pro-rata to their preference amount
@@ -1347,7 +1347,7 @@ function ExitWaterfall() {
       </button>
 
       <p className="text-[10px] text-[var(--color-muted)]">
-        Simplified model: non-participating preferred, single liquidation preference per class, no participation cap or accrued dividends. For indicative planning only — confirm with your cap-table/legal advisor.
+        Simplified model: non-participating preferred, single liquidation preference per class, no participation cap or accrued dividends. For indicative planning only - confirm with your cap-table/legal advisor.
       </p>
     </div>
   );
@@ -1398,7 +1398,7 @@ function MrrMovement() {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <h2 className="text-sm font-semibold flex items-center gap-2"><TrendingUp size={14} className="text-[var(--color-primary)]" /> MRR Movement Pack</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Recurring-revenue breakdown computed live from revenue transactions — new/expansion vs contraction, ARR and net retention against last month.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Recurring-revenue breakdown computed live from revenue transactions - new/expansion vs contraction, ARR and net retention against last month.</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1473,9 +1473,9 @@ function BurnEfficiency() {
   const rating = (() => {
     if (burnMultiple === null) return { label: "Profitable / no net burn", color: "text-green-400" };
     if (burnMultiple < 1) return { label: "Elite (<1×)", color: "text-green-400" };
-    if (burnMultiple < 1.5) return { label: "Great (1–1.5×)", color: "text-green-400" };
-    if (burnMultiple < 2) return { label: "Good (1.5–2×)", color: "text-yellow-400" };
-    if (burnMultiple < 3) return { label: "Suspect (2–3×)", color: "text-orange-400" };
+    if (burnMultiple < 1.5) return { label: "Great (1-1.5×)", color: "text-green-400" };
+    if (burnMultiple < 2) return { label: "Good (1.5-2×)", color: "text-yellow-400" };
+    if (burnMultiple < 3) return { label: "Suspect (2-3×)", color: "text-orange-400" };
     return { label: "Concerning (>3×)", color: "text-red-400" };
   })();
 
@@ -1489,7 +1489,7 @@ function BurnEfficiency() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-lg p-4 md:col-span-1">
           <p className="text-xs text-[var(--color-muted)] mb-1">Burn Multiple</p>
-          <p className={`text-3xl font-bold tabular-nums ${rating.color}`}>{burnMultiple === null ? "—" : `${burnMultiple.toFixed(2)}×`}</p>
+          <p className={`text-3xl font-bold tabular-nums ${rating.color}`}>{burnMultiple === null ? "-" : `${burnMultiple.toFixed(2)}×`}</p>
           <p className={`text-xs font-medium mt-1 ${rating.color}`}>{rating.label}</p>
         </div>
         <div className="grid grid-cols-2 gap-3 md:col-span-2">
@@ -1512,9 +1512,9 @@ function BurnEfficiency() {
         <div className="space-y-1.5 text-xs">
           {[
             { band: "Amazing", range: "< 1×", color: "bg-green-500" },
-            { band: "Great", range: "1× – 1.5×", color: "bg-green-400" },
-            { band: "Good", range: "1.5× – 2×", color: "bg-yellow-400" },
-            { band: "Suspect", range: "2× – 3×", color: "bg-orange-400" },
+            { band: "Great", range: "1× - 1.5×", color: "bg-green-400" },
+            { band: "Good", range: "1.5× - 2×", color: "bg-yellow-400" },
+            { band: "Suspect", range: "2× - 3×", color: "bg-orange-400" },
             { band: "Bad", range: "> 3×", color: "bg-red-500" },
           ].map(b => (
             <div key={b.band} className="flex items-center gap-2">
@@ -1633,7 +1633,7 @@ function FundraisePipeline() {
   const [rows, setRows] = useFeatureState<Investor[]>("ir-fundraise-pipeline", [
     { id: "fp-1", name: "Anita Desai", firm: "Sequoia SE Asia", stage: "diligence", check: 30000000, nextStep: "Send data-room access" },
     { id: "fp-2", name: "Vikram Rao", firm: "Blume Ventures", stage: "pitched", check: 15000000, nextStep: "Follow up on deck" },
-    { id: "fp-3", name: "Meera Iyer", firm: "Angel — ex-CFO", stage: "term_sheet", check: 5000000, nextStep: "Review terms with counsel" },
+    { id: "fp-3", name: "Meera Iyer", firm: "Angel - ex-CFO", stage: "term_sheet", check: 5000000, nextStep: "Review terms with counsel" },
   ]);
   const [name, setName] = useState("");
   const [firm, setFirm] = useState("");
@@ -1641,7 +1641,7 @@ function FundraisePipeline() {
 
   const add = () => {
     if (!name.trim()) { toast.error("Enter an investor name"); return; }
-    setRows(prev => [{ id: crypto.randomUUID(), name: name.trim(), firm: firm.trim() || "—", stage: "sourced", check: parseFloat(check) || 0, nextStep: "" }, ...prev]);
+    setRows(prev => [{ id: crypto.randomUUID(), name: name.trim(), firm: firm.trim() || "-", stage: "sourced", check: parseFloat(check) || 0, nextStep: "" }, ...prev]);
     setName(""); setFirm(""); setCheck("");
     toast.success("Investor added to pipeline");
   };
@@ -1714,7 +1714,7 @@ function FundraisePipeline() {
         {rows.length === 0 && (
           <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
             <Target size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-            <p className="text-sm text-[var(--color-muted)]">No investors in the pipeline yet — add your first above.</p>
+            <p className="text-sm text-[var(--color-muted)]">No investors in the pipeline yet - add your first above.</p>
           </div>
         )}
       </div>
@@ -1749,7 +1749,7 @@ function BoardAgenda({ user }: { user: { email: string } }) {
 
   const addAgenda = () => {
     if (!topic.trim()) { toast.error("Enter an agenda topic"); return; }
-    setAgenda(prev => [...prev, { id: crypto.randomUUID(), topic: topic.trim(), minutes: parseInt(topicMin) || 10, owner: "—", done: false }]);
+    setAgenda(prev => [...prev, { id: crypto.randomUUID(), topic: topic.trim(), minutes: parseInt(topicMin) || 10, owner: "-", done: false }]);
     setTopic(""); setTopicMin("10");
   };
   const toggleAgenda = (id: string) => setAgenda(prev => prev.map(a => a.id === id ? { ...a, done: !a.done } : a));
@@ -1757,7 +1757,7 @@ function BoardAgenda({ user }: { user: { email: string } }) {
 
   const addAction = () => {
     if (!task.trim()) { toast.error("Enter an action item"); return; }
-    setActions(prev => [...prev, { id: crypto.randomUUID(), task: task.trim(), owner: "—", due: format(new Date(Date.now() + 14 * 86400000), "yyyy-MM-dd"), done: false }]);
+    setActions(prev => [...prev, { id: crypto.randomUUID(), task: task.trim(), owner: "-", due: format(new Date(Date.now() + 14 * 86400000), "yyyy-MM-dd"), done: false }]);
     setTask("");
     toast.success("Action item logged");
   };
@@ -1771,7 +1771,7 @@ function BoardAgenda({ user }: { user: { email: string } }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} className="text-[var(--color-primary)]" /> Board Meeting — Agenda, Minutes & Actions</h2>
+          <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} className="text-[var(--color-primary)]" /> Board Meeting - Agenda, Minutes & Actions</h2>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">Plan the agenda, capture minutes, and track decisions across meetings. Saved across devices.</p>
         </div>
         <div>
@@ -1910,14 +1910,14 @@ function RunwayTiming() {
         <div className={`rounded-lg p-4 border ${urgent ? "bg-red-950/20 border-red-800/40" : "bg-[var(--color-surface)] border-[var(--color-border)]"}`}>
           <p className="text-xs text-[var(--color-muted)] mb-1">Start raising in</p>
           <p className={`text-2xl font-bold tabular-nums ${urgent ? "text-red-400" : "text-[var(--color-primary)]"}`}>
-            {startRaiseInMonths === null ? "—" : startRaiseInMonths === 0 ? "Now" : `${startRaiseInMonths} mo`}
+            {startRaiseInMonths === null ? "-" : startRaiseInMonths === 0 ? "Now" : `${startRaiseInMonths} mo`}
           </p>
           {startRaiseDate && <p className="text-[10px] text-[var(--color-muted)] mt-1">≈ {format(startRaiseDate, "MMM yyyy")}</p>}
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Lead-time buffer</p>
           <p className="text-2xl font-bold tabular-nums text-[var(--color-text)]">{lead} mo</p>
-          <p className="text-[10px] text-[var(--color-muted)] mt-1">Typical seed→A close: 4–6 months</p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">Typical seed→A close: 4-6 months</p>
         </div>
       </div>
 
@@ -2059,7 +2059,7 @@ function EsopPool() {
       </div>
 
       <p className="text-[10px] text-[var(--color-muted)] text-center">
-        Vesting is linear over the vest period after the cliff (default 48mo / 12mo). For planning only — your grant agreements govern actual vesting.
+        Vesting is linear over the vest period after the cliff (default 48mo / 12mo). For planning only - your grant agreements govern actual vesting.
       </p>
     </div>
   );

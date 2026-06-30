@@ -5,7 +5,7 @@ import { BASE } from "@/context/AuthContext";
 import { ArrowLeft, CheckCircle } from "lucide-react";
 
 export default function ForgotPasswordPage() {
-  useSeo({ title: "Reset your password — Headroom", noindex: true });
+  useSeo({ title: "Reset your password - Headroom", noindex: true });
   const [email,   setEmail]   = useState("");
   const [sent,    setSent]    = useState(false);
   const [loading, setLoading] = useState(false);

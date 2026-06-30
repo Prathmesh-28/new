@@ -22,24 +22,24 @@ function subscribe(tenantId, res) {
 }
 
 // Broadcast a small event ({ ns, key, clientId, updatedAt }) to every open
-// connection for a tenant. Clients use it as a "this namespace changed — refetch"
+// connection for a tenant. Clients use it as a "this namespace changed - refetch"
 // signal; the originating client ignores its own echo via clientId.
 function publish(tenantId, payload) {
   const set = channels.get(tenantId);
   if (!set || set.size === 0) return;
   const line = `data: ${JSON.stringify(payload)}\n\n`;
   for (const res of set) {
-    try { res.write(line); } catch { /* dead socket — cleaned up on its own close */ }
+    try { res.write(line); } catch { /* dead socket - cleaned up on its own close */ }
   }
 }
 
-// Broadcast to EVERY open connection across all tenants — used for platform-wide
+// Broadcast to EVERY open connection across all tenants - used for platform-wide
 // events (e.g. a super-admin changed platform settings) so every user refetches live.
 function publishAll(payload) {
   const line = `data: ${JSON.stringify(payload)}\n\n`;
   for (const set of channels.values()) {
     for (const res of set) {
-      try { res.write(line); } catch { /* dead socket — cleaned up on its own close */ }
+      try { res.write(line); } catch { /* dead socket - cleaned up on its own close */ }
     }
   }
 }

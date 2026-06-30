@@ -1,10 +1,10 @@
-// §M7 — Multi-currency. The ledger always stores base currency (INR); a foreign
+// §M7 - Multi-currency. The ledger always stores base currency (INR); a foreign
 // voucher carries its original currency + fx_rate. On settlement at a different
 // rate we post the realised gain/loss to "Forex Gain/Loss".
 //
 // Wave-7 (ERPNext exchange_rate_revaluation): the ledger alone can't tell us how
 // much *foreign currency* a party still owes nor at what rate each open item was
-// booked — base-currency balances lose that. So we maintain a per-party foreign
+// booked - base-currency balances lose that. So we maintain a per-party foreign
 // outstanding SUBLEDGER (book_fx_open_position): one row per open FC item with its
 // booked FC amount + booked rate. FC invoices/bills ADD a positive position;
 // FC receipts/payments CONSUME it FIFO (oldest booked rate first), which is also
@@ -24,7 +24,7 @@ const realizedFx = (foreignAmount, fromRate, toRate) => money(foreignAmount).mul
 // Post a realised forex gain/loss against a party (gain>0 ⇒ party owed more base).
 async function postFxSettlement(tenantId, actorId, { partyLedgerId, gainLoss, date }) {
   const fxLedger = await ledgerIdByName(tenantId, "Forex Gain/Loss");
-  if (!fxLedger) throw new PostError("NOT_SEEDED", "Forex Gain/Loss ledger missing — seed first", 422);
+  if (!fxLedger) throw new PostError("NOT_SEEDED", "Forex Gain/Loss ledger missing - seed first", 422);
   if (!partyLedgerId) throw new PostError("BAD_INPUT", "partyLedgerId required", 400);
   const g = money(gainLoss);
   if (g.isZero()) return { posted: false };
@@ -251,11 +251,11 @@ async function openPosition(tenantId, { partyLedgerId, currency } = {}) {
   }));
 }
 
-// (d) revalueAll — ERPNext Exchange Rate Revaluation. Query the open FC position
+// (d) revalueAll - ERPNext Exchange Rate Revaluation. Query the open FC position
 // itself, mark each party/currency group to the as-of rate, and post the
 // UNREALISED gain/loss per party/currency. Returns one line per group with the
 // posted voucher (or skipped:true when the swing is zero). Does NOT mutate the
-// subledger — revaluation is a reporting/period entry; the position stays booked
+// subledger - revaluation is a reporting/period entry; the position stays booked
 // at its original rate until actually settled.
 async function revalueAll(tenantId, actorId, asOf) {
   if (!asOf) throw new PostError("BAD_INPUT", "asOfDate required", 400);

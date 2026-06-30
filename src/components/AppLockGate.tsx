@@ -6,7 +6,7 @@ import { onAppResume } from "@/lib/mobile";
 import { LogoMark } from "@/components/Logo";
 
 /* Wraps the authenticated app. When a PIN is set, the app is locked on launch and
-   again whenever it returns to the foreground — until the correct PIN is entered. */
+   again whenever it returns to the foreground - until the correct PIN is entered. */
 export default function AppLockGate({ children }: { children: React.ReactNode }) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [locked, setLocked] = useState(true);

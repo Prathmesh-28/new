@@ -39,7 +39,7 @@ export default function InsurancePage() {
             <ShieldCheck size={18} className="text-[var(--color-primary)]" /> Insurance & Protection
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Track every policy, size your cover, find protection gaps and price premiums — IRDAI-aware, GST-on-premium included.
+            Track every policy, size your cover, find protection gaps and price premiums - IRDAI-aware, GST-on-premium included.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -182,14 +182,14 @@ function Overview({ onPick }: { onPick: (t: Tab) => void }) {
 
   const cards = [
     { label: "Active Policies", value: `${policies.length}`, color: "text-[var(--color-text)]", sub: `${renewingSoon} renewing in 30 days` },
-    { label: "Total Sum Insured", value: policies.length ? formatAmount(totalSum) : "—", color: "text-blue-400", sub: "Aggregate cover across policies" },
-    { label: "Annual Premium", value: policies.length ? formatAmount(totalPremium) : "—", color: "text-orange-400", sub: "Incl. 18% GST on premium" },
-    { label: "Premium / Revenue", value: annualRevenue > 0 && policies.length ? `${premiumPctRevenue.toFixed(2)}%` : "—", color: premiumPctRevenue > 3 ? "text-yellow-400" : "text-green-400", sub: "SMB benchmark 1–3% of turnover" },
+    { label: "Total Sum Insured", value: policies.length ? formatAmount(totalSum) : "-", color: "text-blue-400", sub: "Aggregate cover across policies" },
+    { label: "Annual Premium", value: policies.length ? formatAmount(totalPremium) : "-", color: "text-orange-400", sub: "Incl. 18% GST on premium" },
+    { label: "Premium / Revenue", value: annualRevenue > 0 && policies.length ? `${premiumPctRevenue.toFixed(2)}%` : "-", color: premiumPctRevenue > 3 ? "text-yellow-400" : "text-green-400", sub: "SMB benchmark 1-3% of turnover" },
   ];
 
   const tools: { id: Tab; title: string; desc: string }[] = [
     { id: "register", title: "Policy Register & Renewals", desc: "One vault for every policy with renewal countdowns and lapse alerts." },
-    { id: "gaps", title: "Coverage-Gap Analyzer", desc: "Find risks on your books — assets, staff, debtors — with no matching cover." },
+    { id: "gaps", title: "Coverage-Gap Analyzer", desc: "Find risks on your books - assets, staff, debtors - with no matching cover." },
     { id: "suminsured", title: "Sum-Insured Calculator", desc: "Size cover from turnover, assets and inventory so you aren't under-insured." },
     { id: "grouphealth", title: "Group-Health Estimator", desc: "Indicative mediclaim premium for your team, priced by age band and cover." },
     { id: "assetcover", title: "Business-Asset Cover", desc: "Build a fire/burglary schedule from your asset register at reinstatement value." },
@@ -197,7 +197,7 @@ function Overview({ onPick }: { onPick: (t: Tab) => void }) {
     { id: "claims", title: "Claims Tracker", desc: "Log every claim from intimation to settlement and watch your claims ratio." },
     { id: "premvscover", title: "Premium vs Cover", desc: "Compare quotes on rate-on-line and model how deductibles move premium." },
     { id: "keyman", title: "Key-Man Insurance", desc: "Size cover on a founder/key employee from their contribution to profit." },
-    { id: "riskscore", title: "Risk-Exposure Scorecard", desc: "A 0–100 protection score from cover breadth, concentration and renewals." },
+    { id: "riskscore", title: "Risk-Exposure Scorecard", desc: "A 0-100 protection score from cover breadth, concentration and renewals." },
   ];
 
   return (
@@ -215,7 +215,7 @@ function Overview({ onPick }: { onPick: (t: Tab) => void }) {
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1">Protect the business, not just the books</h2>
         <p className="text-xs text-[var(--color-muted)] mb-4">
-          Most Indian SMBs are silently under-insured — a single fire, a defaulting buyer or a key person leaving can wipe out years of profit.
+          Most Indian SMBs are silently under-insured - a single fire, a defaulting buyer or a key person leaving can wipe out years of profit.
           These tools help you size the right cover, track every policy and avoid overpaying. Figures are indicative; bind cover only through an IRDAI-licensed insurer or broker.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -330,10 +330,10 @@ function PolicyRegister() {
                     <tr key={p.id} className="hover:bg-white/2">
                       <td className="px-3 py-2.5 font-medium">{p.insurer}</td>
                       <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{p.type}</td>
-                      <td className="px-3 py-2.5 text-xs">{p.policyNo || "—"}</td>
+                      <td className="px-3 py-2.5 text-xs">{p.policyNo || "-"}</td>
                       <td className="px-3 py-2.5 tabular-nums">{formatAmount(p.sumInsured)}</td>
-                      <td className="px-3 py-2.5 tabular-nums text-orange-400">{p.premium > 0 ? formatAmount(p.premium) : "—"}</td>
-                      <td className="px-3 py-2.5 text-xs">{p.renewalDate ? format(parseISO(p.renewalDate), "d MMM yyyy") : "—"}</td>
+                      <td className="px-3 py-2.5 tabular-nums text-orange-400">{p.premium > 0 ? formatAmount(p.premium) : "-"}</td>
+                      <td className="px-3 py-2.5 text-xs">{p.renewalDate ? format(parseISO(p.renewalDate), "d MMM yyyy") : "-"}</td>
                       <td className="px-3 py-2.5">
                         {d === null ? <span className="text-xs text-[var(--color-muted)]">No date</span>
                           : lapsed ? <span className="inline-flex items-center gap-1 text-xs text-red-400 font-semibold"><AlertTriangle size={11} /> Lapsed {Math.abs(d)}d</span>
@@ -351,7 +351,7 @@ function PolicyRegister() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A lapsed policy means no cover — most insurers allow a 15–30 day grace window for renewal but a fresh policy may need re-underwriting. Premiums on business covers usually attract 18% GST, which is ITC-eligible if used for business.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A lapsed policy means no cover - most insurers allow a 15-30 day grace window for renewal but a fresh policy may need re-underwriting. Premiums on business covers usually attract 18% GST, which is ITC-eligible if used for business.</p>
     </div>
   );
 }
@@ -372,7 +372,7 @@ function CoverageGapAnalyzer() {
     { type: "Fire & Allied Perils", label: "Fire & property cover", reason: "Premises, plant and stock exposed to fire/flood", applies: true, severity: "high" },
     { type: "Burglary / Theft", label: "Burglary / theft cover", reason: "Cash and inventory on premises", applies: true, severity: "med" },
     { type: "Public Liability", label: "Public liability", reason: "Third-party injury/damage at your premises", applies: true, severity: "med" },
-    { type: "Group Health (Mediclaim)", label: "Group health", reason: "Payroll detected — staff without medical cover", applies: hasPayroll, severity: "high" },
+    { type: "Group Health (Mediclaim)", label: "Group health", reason: "Payroll detected - staff without medical cover", applies: hasPayroll, severity: "high" },
     { type: "Personal Accident", label: "Personal accident", reason: "No PA cover for staff / workers", applies: hasPayroll, severity: "med" },
     { type: "Trade-Credit", label: "Trade-credit cover", reason: `${formatAmount(receivables)} in open receivables at default risk`, applies: receivables > 0, severity: receivables > annualRevenue * 0.25 ? "high" : "med" },
     { type: "Business Interruption", label: "Business interruption", reason: "Lost profit during a forced shutdown", applies: annualRevenue > 0, severity: "med" },
@@ -401,7 +401,7 @@ function CoverageGapAnalyzer() {
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileWarning size={14} className="text-[var(--color-primary)]" /> Coverage Gaps</h3>
         <p className="text-xs text-[var(--color-muted)] mb-3">Matched against the policies in your register, your payroll roster and open receivables.</p>
         {gaps.length === 0 ? (
-          <p className="text-sm text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> No obvious gaps against the standard SMB cover set — review limits annually.</p>
+          <p className="text-sm text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> No obvious gaps against the standard SMB cover set - review limits annually.</p>
         ) : (
           <div className="space-y-2">
             {gaps.map(g => (
@@ -429,7 +429,7 @@ function CoverageGapAnalyzer() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Heuristic gap scan based on common SMB exposures — not a substitute for a broker's risk survey. Add policies in the register to clear gaps.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Heuristic gap scan based on common SMB exposures - not a substitute for a broker's risk survey. Add policies in the register to clear gaps.</p>
     </div>
   );
 }
@@ -475,7 +475,7 @@ function SumInsuredCalculator() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5`}>
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> Sum-Insured Calculator</h3>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Insure assets at reinstatement (replacement) value, not book value — under-insurance triggers the average clause and slashes any claim payout.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Insure assets at reinstatement (replacement) value, not book value - under-insurance triggers the average clause and slashes any claim payout.</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Building (₹)</label>
@@ -523,7 +523,7 @@ function SumInsuredCalculator() {
           <span className="text-lg font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(recommended))}</span>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Assets shown at the value you enter — use replacement cost. Business-interruption cover is set as gross profit for the indemnity period you can realistically take to recover. Stock floaters can be declaration-based if levels swing seasonally.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Assets shown at the value you enter - use replacement cost. Business-interruption cover is set as gross profit for the indemnity period you can realistically take to recover. Stock floaters can be declaration-based if levels swing seasonally.</p>
     </div>
   );
 }
@@ -533,7 +533,7 @@ function SumInsuredCalculator() {
 // ─────────────────────────────────────────────────────────────────────────────
 type AgeBand = "u30" | "30to45" | "45to60" | "o60";
 const AGE_FACTOR: Record<AgeBand, number> = { u30: 0.7, "30to45": 1.0, "45to60": 1.6, o60: 2.6 };
-const AGE_LABEL: Record<AgeBand, string> = { u30: "Under 30", "30to45": "30–45", "45to60": "45–60", o60: "Over 60" };
+const AGE_LABEL: Record<AgeBand, string> = { u30: "Under 30", "30to45": "30-45", "45to60": "45-60", o60: "Over 60" };
 
 function GroupHealthEstimator() {
   const [heads, setHeads] = useState<Record<AgeBand, string>>({ u30: "", "30to45": "", "45to60": "", o60: "" });
@@ -543,7 +543,7 @@ function GroupHealthEstimator() {
 
   const cover = parseFloat(coverPerHead) || 0;
   // Base rate-on-line ~ 3% of sum insured per ₹1L of cover band, scaled. Indicative only.
-  const baseRatePer1L = 1100; // ₹ base annual premium per ₹1L SI for a 30–45 life
+  const baseRatePer1L = 1100; // ₹ base annual premium per ₹1L SI for a 30-45 life
   const counts = (Object.keys(AGE_FACTOR) as AgeBand[]).map(band => ({ band, n: parseInt(heads[band]) || 0 }));
   const totalHeads = counts.reduce((sum, c) => sum + c.n, 0);
 
@@ -615,7 +615,7 @@ function GroupHealthEstimator() {
           <p className="text-sm mt-3">Roughly <strong className="text-[var(--color-primary)]">{formatCurrency(Math.round(result.perHead))}</strong> per life per year, all-in.</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative model only — actual group-mediclaim pricing depends on claims experience, room-rent caps, co-pay, network and insurer. GST on health insurance premium is 18%. Bind through an IRDAI-licensed insurer/broker.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative model only - actual group-mediclaim pricing depends on claims experience, room-rent caps, co-pay, network and insurer. GST on health insurance premium is 18%. Bind through an IRDAI-licensed insurer/broker.</p>
     </div>
   );
 }
@@ -648,7 +648,7 @@ function AssetCoverCalculator() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Building2 size={14} className="text-[var(--color-primary)]" /> Business-Asset Cover Schedule</h3>
-        <p className="text-xs text-[var(--color-muted)]">Build a fire/burglary schedule line by line. Enter a rate (% of sum insured per year) — typical fire rates are 0.05–0.75% depending on occupancy.</p>
+        <p className="text-xs text-[var(--color-muted)]">Build a fire/burglary schedule line by line. Enter a rate (% of sum insured per year) - typical fire rates are 0.05-0.75% depending on occupancy.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Asset / category</label>
@@ -711,7 +711,7 @@ function AssetCoverCalculator() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Rates are illustrative — actual fire/burglary rates are set by the insurer on occupancy, fire-fighting arrangements and claims history. Insure at reinstatement value to avoid the average (under-insurance) clause.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Rates are illustrative - actual fire/burglary rates are set by the insurer on occupancy, fire-fighting arrangements and claims history. Insure at reinstatement value to avoid the average (under-insurance) clause.</p>
     </div>
   );
 }
@@ -787,13 +787,13 @@ function TradeCreditEstimator() {
               <p className={`text-sm font-medium flex items-center gap-2 ${concentrationPct > 25 ? "text-red-400" : "text-[var(--color-text)]"}`}>
                 {concentrationPct > 25 ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} className="text-green-400" />}
                 Your largest buyer is {concentrationPct.toFixed(1)}% of insured turnover.
-                {concentrationPct > 25 ? " High concentration — a single default could be severe; consider a per-buyer credit limit." : " Concentration looks manageable."}
+                {concentrationPct > 25 ? " High concentration - a single default could be severe; consider a per-buyer credit limit." : " Concentration looks manageable."}
               </p>
             </div>
           )}
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Trade-credit pricing depends on your buyer ledger quality, sector and historic bad-debt rate; insurers set per-buyer credit limits after assessing each debtor. Figures here are indicative — get a formal quote from an IRDAI-licensed credit insurer.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Trade-credit pricing depends on your buyer ledger quality, sector and historic bad-debt rate; insurers set per-buyer credit limits after assessing each debtor. Figures here are indicative - get a formal quote from an IRDAI-licensed credit insurer.</p>
     </div>
   );
 }
@@ -870,7 +870,7 @@ function ClaimsTracker() {
             { label: "Claims logged", value: `${claims.length}`, color: "text-[var(--color-text)]" },
             { label: "Total claimed", value: formatAmount(Math.round(totalClaimed)), color: "text-[var(--color-text)]" },
             { label: "Total settled", value: formatAmount(Math.round(totalSettled)), color: "text-green-400" },
-            { label: "Claims-to-premium", value: totalPremium > 0 ? `${claimsRatio.toFixed(0)}%` : "—", color: claimsRatio > 100 ? "text-red-400" : "text-green-400" },
+            { label: "Claims-to-premium", value: totalPremium > 0 ? `${claimsRatio.toFixed(0)}%` : "-", color: claimsRatio > 100 ? "text-red-400" : "text-green-400" },
           ].map(k => (
             <div key={k.label} className={`${CARD} p-4`}>
               <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -999,7 +999,7 @@ function PremiumVsCover() {
                       <td className="px-3 py-2.5 font-medium">{q.insurer}{best && q.id === best.id && <span className="ml-1.5 text-[9px] text-green-400 font-semibold">BEST</span>}</td>
                       <td className="px-3 py-2.5 tabular-nums">{formatAmount(q.sumInsured)}</td>
                       <td className="px-3 py-2.5 tabular-nums text-orange-400">{formatAmount(q.premium)}</td>
-                      <td className="px-3 py-2.5 tabular-nums">{q.deductible > 0 ? formatAmount(q.deductible) : "—"}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{q.deductible > 0 ? formatAmount(q.deductible) : "-"}</td>
                       <td className="px-3 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{q.rol.toFixed(3)}%</td>
                       <td className="px-3 py-2.5 tabular-nums">{formatAmount(Math.round(q.netExposureCost))}</td>
                       <td className="px-3 py-2.5 text-right">
@@ -1014,13 +1014,13 @@ function PremiumVsCover() {
           {best && (
             <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
               <p className="text-sm font-bold text-green-400 flex items-center gap-2">
-                <TrendingDown size={14} /> {best.insurer} has the lowest rate-on-line ({best.rol.toFixed(3)}% of sum insured) — the cheapest cover per rupee of protection. Check sub-limits, exclusions and claim-settlement ratio before binding.
+                <TrendingDown size={14} /> {best.insurer} has the lowest rate-on-line ({best.rol.toFixed(3)}% of sum insured) - the cheapest cover per rupee of protection. Check sub-limits, exclusions and claim-settlement ratio before binding.
               </p>
             </div>
           )}
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Rate-on-line is the cleanest like-for-like comparison, but the cheapest premium is not always best value — weigh sub-limits, exclusions, room-rent/co-pay (health) and the insurer's claim-settlement ratio.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Rate-on-line is the cleanest like-for-like comparison, but the cheapest premium is not always best value - weigh sub-limits, exclusions, room-rent/co-pay (health) and the insurer's claim-settlement ratio.</p>
     </div>
   );
 }
@@ -1128,7 +1128,7 @@ function KeyManEstimator() {
           <p className="text-sm mt-3">Cover on <strong>{name || "the key person"}</strong> of about <strong className="text-[var(--color-primary)]">{formatCurrency(Math.round(recommended))}</strong>.</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Premium shown is illustrative; actual term-life pricing depends on age, health and sum assured. Key-man premium is generally a deductible business expense and the payout is taxable as business income — confirm treatment with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Premium shown is illustrative; actual term-life pricing depends on age, health and sum assured. Key-man premium is generally a deductible business expense and the payout is taxable as business income - confirm treatment with your CA.</p>
     </div>
   );
 }
@@ -1154,7 +1154,7 @@ function RiskScorecard() {
   const renewingSoon = policies.filter(p => { const d = daysToRenewal(p, today); return d !== null && d >= 0 && d <= 30; }).length;
   const openClaims = claims.filter(c => c.status !== "settled" && c.status !== "rejected").length;
 
-  // Score components (0–100, higher = better protected)
+  // Score components (0-100, higher = better protected)
   const coverScore = (coreHeld / coreCovers.length) * 40; // up to 40
   const healthScore = !hasPayroll ? 15 : held.has("Group Health (Mediclaim)") ? 15 : 0; // up to 15
   const creditScore = receivables === 0 ? 15 : held.has("Trade-Credit") ? 15 : receivables > annualRevenue * 0.25 ? 0 : 7; // up to 15
@@ -1219,7 +1219,7 @@ function RiskScorecard() {
       {openClaims > 0 && (
         <div className="rounded-lg p-4 border border-blue-800/40 bg-blue-950/20">
           <p className="text-sm font-medium text-blue-300 flex items-center gap-2">
-            <ShieldAlert size={14} /> {openClaims} open claim(s) in progress — keep documents current and follow up before the surveyor deadline.
+            <ShieldAlert size={14} /> {openClaims} open claim(s) in progress - keep documents current and follow up before the surveyor deadline.
           </p>
         </div>
       )}
@@ -1257,8 +1257,8 @@ function PremiumDueCalendar() {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
           { label: "Renewals scheduled", value: `${withDates.length}`, color: "text-[var(--color-text)]", sub: undated > 0 ? `${undated} with no date` : "All dated" },
-          { label: "Premium due (12 mo)", value: policies.length ? formatAmount(Math.round(next12Total)) : "—", color: "text-orange-400", sub: "Incl. GST already on policies" },
-          { label: "Avg / month", value: policies.length ? formatAmount(Math.round(next12Total / 12)) : "—", color: "text-blue-400", sub: "Set aside to avoid lapse" },
+          { label: "Premium due (12 mo)", value: policies.length ? formatAmount(Math.round(next12Total)) : "-", color: "text-orange-400", sub: "Incl. GST already on policies" },
+          { label: "Avg / month", value: policies.length ? formatAmount(Math.round(next12Total / 12)) : "-", color: "text-blue-400", sub: "Set aside to avoid lapse" },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -1284,13 +1284,13 @@ function PremiumDueCalendar() {
                     <span className="absolute inset-y-0 left-2 flex items-center text-[10px] font-medium">{b.due.length} renewal{b.due.length > 1 ? "s" : ""}</span>
                   )}
                 </div>
-                <span className="text-xs tabular-nums w-24 text-right text-orange-400">{b.total > 0 ? formatAmount(Math.round(b.total)) : "—"}</span>
+                <span className="text-xs tabular-nums w-24 text-right text-orange-400">{b.total > 0 ? formatAmount(Math.round(b.total)) : "-"}</span>
               </div>
             ))}
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Block the cash a fortnight before each renewal — a lapsed policy means re-underwriting and possible loss of no-claim bonus. Most insurers allow a 15–30 day grace window but cover is suspended until paid.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Block the cash a fortnight before each renewal - a lapsed policy means re-underwriting and possible loss of no-claim bonus. Most insurers allow a 15-30 day grace window but cover is suspended until paid.</p>
     </div>
   );
 }
@@ -1366,7 +1366,7 @@ function CSRComparator() {
                     <td className="px-3 py-2.5 tabular-nums">{formatAmount(r.claimsReceived)}</td>
                     <td className="px-3 py-2.5 tabular-nums">{formatAmount(r.claimsPaid)}</td>
                     <td className={`px-3 py-2.5 tabular-nums font-semibold ${r.csr >= 95 ? "text-green-400" : r.csr >= 85 ? "text-yellow-400" : "text-red-400"}`}>{r.csr.toFixed(2)}%</td>
-                    <td className="px-3 py-2.5 tabular-nums">{r.avgDays > 0 ? `${r.avgDays}d` : "—"}</td>
+                    <td className="px-3 py-2.5 tabular-nums">{r.avgDays > 0 ? `${r.avgDays}d` : "-"}</td>
                     <td className="px-3 py-2.5 text-right">
                       <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
                     </td>
@@ -1377,7 +1377,7 @@ function CSRComparator() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A CSR above 95% is strong; below 85% is a red flag. Pair it with the average settlement time and claim-amount-paid ratio — a high count ratio can still hide low-value payouts. Figures come from IRDAI's annual report and insurer public disclosures.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A CSR above 95% is strong; below 85% is a red flag. Pair it with the average settlement time and claim-amount-paid ratio - a high count ratio can still hide low-value payouts. Figures come from IRDAI's annual report and insurer public disclosures.</p>
     </div>
   );
 }
@@ -1414,7 +1414,7 @@ function NoClaimBonusTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Award size={14} className="text-[var(--color-primary)]" /> No-Claim-Bonus Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">NCB rewards claim-free years with a renewal discount (motor caps at 50%; many health/asset policies offer a cumulative-bonus equivalent). It is portable — carry it when you switch insurers so you never reset to zero.</p>
+        <p className="text-xs text-[var(--color-muted)]">NCB rewards claim-free years with a renewal discount (motor caps at 50%; many health/asset policies offer a cumulative-bonus equivalent). It is portable - carry it when you switch insurers so you never reset to zero.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Policy</label>
@@ -1470,7 +1470,7 @@ function NoClaimBonusTracker() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Slabs shown are the common motor pattern (20/25/35/45/50%); health cumulative-bonus and asset no-claim-discount structures vary by insurer. One claim resets the bonus — weigh a small claim against the NCB you'd forfeit. Always carry the renewal/NCB-retention letter when porting.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Slabs shown are the common motor pattern (20/25/35/45/50%); health cumulative-bonus and asset no-claim-discount structures vary by insurer. One claim resets the bonus - weigh a small claim against the NCB you'd forfeit. Always carry the renewal/NCB-retention letter when porting.</p>
     </div>
   );
 }
@@ -1508,7 +1508,7 @@ function DeductibleOptimizer() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5`}>
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><SlidersHorizontal size={14} className="text-[var(--color-primary)]" /> Deductible vs Premium Optimizer</h3>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Raising the deductible (the first-loss you self-carry) cuts your premium — but you pay more out of pocket per claim. This finds the deductible with the lowest expected total annual cost.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Raising the deductible (the first-loss you self-carry) cuts your premium - but you pay more out of pocket per claim. This finds the deductible with the lowest expected total annual cost.</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Base annual premium (₹)</label>
@@ -1550,7 +1550,7 @@ function DeductibleOptimizer() {
           </table>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A planning model only — real premium-to-deductible curves are set by the insurer. The optimum minimises premium plus expected self-carried loss; only raise the deductible to a level your cash position can absorb in a bad year.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A planning model only - real premium-to-deductible curves are set by the insurer. The optimum minimises premium plus expected self-carried loss; only raise the deductible to a level your cash position can absorb in a bad year.</p>
     </div>
   );
 }
@@ -1624,7 +1624,7 @@ function BusinessInterruptionEstimator() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Pick an indemnity period long enough to fully rebuild and regain market share — 12 months is a common minimum; manufacturers often need 18–24. "Increased cost of working" pays for temporary premises/overtime to keep trading. Indicative only; rates are insurer-set.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Pick an indemnity period long enough to fully rebuild and regain market share - 12 months is a common minimum; manufacturers often need 18-24. "Increased cost of working" pays for temporary premises/overtime to keep trading. Indicative only; rates are insurer-set.</p>
     </div>
   );
 }
@@ -1782,7 +1782,7 @@ function ProfessionalIndemnityEstimator() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">PI is a claims-made cover — only claims first made during the policy period are paid, so keep it running continuously and buy run-off if you wind down. Retroactive cover protects against work done before inception. Rates are illustrative and vary widely by claim history.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">PI is a claims-made cover - only claims first made during the policy period are paid, so keep it running continuously and buy run-off if you wind down. Retroactive cover protects against work done before inception. Rates are illustrative and vary widely by claim history.</p>
     </div>
   );
 }
@@ -1809,15 +1809,15 @@ function CyberInsuranceScorer() {
   // suggested cover: DPDP penalties can reach ₹250 cr; scale a practical SMB limit off records + risk
   const suggestedLimit = Math.round(Math.max(2500000, recs * 150) * (1 + score / 100));
 
-  const band = score >= 60 ? { label: "High exposure — cover strongly advised", color: "text-red-400", bar: "#ef4444" }
-    : score >= 35 ? { label: "Moderate exposure — consider cover", color: "text-yellow-400", bar: "#eab308" }
-    : { label: "Lower exposure — basic hygiene may suffice", color: "text-green-400", bar: "#22c55e" };
+  const band = score >= 60 ? { label: "High exposure - cover strongly advised", color: "text-red-400", bar: "#ef4444" }
+    : score >= 35 ? { label: "Moderate exposure - consider cover", color: "text-yellow-400", bar: "#eab308" }
+    : { label: "Lower exposure - basic hygiene may suffice", color: "text-green-400", bar: "#22c55e" };
 
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5`}>
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Bug size={14} className="text-[var(--color-primary)]" /> Cyber-Insurance Need Scorer</h3>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Score your digital exposure to decide whether cyber cover (breach response, ransomware, DPDP liability) is worth buying — and roughly how much limit to ask for.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Score your digital exposure to decide whether cyber cover (breach response, ransomware, DPDP liability) is worth buying - and roughly how much limit to ask for.</p>
         <div className="space-y-2 mb-4">
           {CYBER_FACTORS.map(f => (
             <label key={f.key} className="flex items-center gap-2.5 text-sm cursor-pointer bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
@@ -1848,7 +1848,7 @@ function CyberInsuranceScorer() {
           <p className="text-sm mt-4">Indicative cover to consider: <strong className="text-[var(--color-primary)]">{formatCurrency(suggestedLimit)}</strong> first-party + liability limit.</p>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A heuristic prioritisation tool, not an underwriting decision. Under the DPDP Act, the Data Protection Board can levy penalties up to ₹250 crore for serious breaches — cyber cover typically funds breach response, forensics, notification and legal costs. Calibrate the limit with a broker.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A heuristic prioritisation tool, not an underwriting decision. Under the DPDP Act, the Data Protection Board can levy penalties up to ₹250 crore for serious breaches - cyber cover typically funds breach response, forensics, notification and legal costs. Calibrate the limit with a broker.</p>
     </div>
   );
 }
@@ -1886,7 +1886,7 @@ function FleetInsuranceTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Truck size={14} className="text-[var(--color-primary)]" /> Vehicle / Fleet Insurance Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">Track every commercial vehicle's IDV, premium and expiry in one place. Motor cover is mandatory under the Motor Vehicles Act — driving an uninsured vehicle is an offence and voids any accident claim.</p>
+        <p className="text-xs text-[var(--color-muted)]">Track every commercial vehicle's IDV, premium and expiry in one place. Motor cover is mandatory under the Motor Vehicles Act - driving an uninsured vehicle is an offence and voids any accident claim.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Registration no.</label>
@@ -1952,8 +1952,8 @@ function FleetInsuranceTracker() {
                         <td className="px-3 py-2.5 font-medium">{v.regNo}</td>
                         <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{v.type}</td>
                         <td className="px-3 py-2.5 tabular-nums">{formatAmount(v.idv)}</td>
-                        <td className="px-3 py-2.5 tabular-nums text-orange-400">{v.premium > 0 ? formatAmount(v.premium) : "—"}</td>
-                        <td className="px-3 py-2.5 text-xs">{v.expiry ? format(parseISO(v.expiry), "d MMM yyyy") : "—"}</td>
+                        <td className="px-3 py-2.5 tabular-nums text-orange-400">{v.premium > 0 ? formatAmount(v.premium) : "-"}</td>
+                        <td className="px-3 py-2.5 text-xs">{v.expiry ? format(parseISO(v.expiry), "d MMM yyyy") : "-"}</td>
                         <td className="px-3 py-2.5">
                           {d === null ? <span className="text-xs text-[var(--color-muted)]">No date</span>
                             : lapsed ? <span className="inline-flex items-center gap-1 text-xs text-red-400 font-semibold"><AlertTriangle size={11} /> Lapsed</span>
@@ -1972,7 +1972,7 @@ function FleetInsuranceTracker() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">IDV (Insured Declared Value) is the agreed market value and the maximum a total-loss claim will pay — don't under-declare to save premium. Third-party cover is mandatory; own-damage is optional but wise for newer vehicles. Renew before expiry to avoid a fresh inspection.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">IDV (Insured Declared Value) is the agreed market value and the maximum a total-loss claim will pay - don't under-declare to save premium. Third-party cover is mandatory; own-damage is optional but wise for newer vehicles. Renew before expiry to avoid a fresh inspection.</p>
     </div>
   );
 }
@@ -2041,7 +2041,7 @@ function WorkmenCompEstimator() {
               { label: "Net premium", value: formatAmount(Math.round(netPremium)), color: "text-[var(--color-text)]" },
               { label: "GST (18%)", value: formatAmount(Math.round(gst)), color: "text-yellow-400" },
               { label: "Gross premium", value: formatAmount(Math.round(gross)), color: "text-orange-400" },
-              { label: "Per worker", value: heads > 0 ? formatAmount(Math.round(perHead)) : "—", color: "text-blue-400" },
+              { label: "Per worker", value: heads > 0 ? formatAmount(Math.round(perHead)) : "-", color: "text-blue-400" },
             ].map(k => (
               <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
                 <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -2051,7 +2051,7 @@ function WorkmenCompEstimator() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Where the ESI Act applies (covered establishments), ESIC generally substitutes for WC; WC cover suits employees outside ESI wage limits or non-ESI areas. Rates here are illustrative occupation bands — actual pricing depends on the nature of work and claims history. Confirm statutory applicability with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Where the ESI Act applies (covered establishments), ESIC generally substitutes for WC; WC cover suits employees outside ESI wage limits or non-ESI areas. Rates here are illustrative occupation bands - actual pricing depends on the nature of work and claims history. Confirm statutory applicability with your CA.</p>
     </div>
   );
 }
@@ -2120,7 +2120,7 @@ function PremiumEMICalculator() {
           <p className="text-sm mt-3">Financing this premium costs an extra <strong className="text-orange-400">{formatCurrency(Math.round(interest))}</strong> ({p > 0 ? ((interest / p) * 100).toFixed(1) : "0"}% of premium) in interest.</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">EMI uses the standard reducing-balance formula. Compare the interest cost against the cash-flow benefit — if you can fund the lump sum, paying upfront is cheaper. GST on the premium is already included in the financed amount; financing interest is a separate finance charge.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">EMI uses the standard reducing-balance formula. Compare the interest cost against the cash-flow benefit - if you can fund the lump sum, paying upfront is cheaper. GST on the premium is already included in the financed amount; financing interest is a separate finance charge.</p>
     </div>
   );
 }
@@ -2129,16 +2129,16 @@ function PremiumEMICalculator() {
 // 22. GST-on-Premium ITC Checker
 // ─────────────────────────────────────────────────────────────────────────────
 const ITC_RULES: { key: string; label: string; eligible: "yes" | "no" | "cond"; note: string }[] = [
-  { key: "fire", label: "Fire / property cover on business premises", eligible: "yes", note: "Used for business — ITC available" },
-  { key: "liability", label: "Public / product liability", eligible: "yes", note: "Business liability — ITC available" },
-  { key: "pi", label: "Professional indemnity / D&O", eligible: "yes", note: "Business cover — ITC available" },
-  { key: "marine", label: "Marine / transit on goods", eligible: "yes", note: "Inward/outward goods — ITC available" },
-  { key: "tradecredit", label: "Trade-credit / receivables", eligible: "yes", note: "Business cover — ITC available" },
-  { key: "keyman", label: "Key-man term insurance", eligible: "yes", note: "Company-paid business cover — ITC generally available" },
-  { key: "wc", label: "Workmen compensation", eligible: "yes", note: "Statutory employer cover — ITC available" },
-  { key: "grouphealth", label: "Group health / mediclaim for staff", eligible: "cond", note: "Blocked under s.17(5) unless obligatory under a law (e.g. statutory) — generally not eligible for voluntary cover" },
+  { key: "fire", label: "Fire / property cover on business premises", eligible: "yes", note: "Used for business - ITC available" },
+  { key: "liability", label: "Public / product liability", eligible: "yes", note: "Business liability - ITC available" },
+  { key: "pi", label: "Professional indemnity / D&O", eligible: "yes", note: "Business cover - ITC available" },
+  { key: "marine", label: "Marine / transit on goods", eligible: "yes", note: "Inward/outward goods - ITC available" },
+  { key: "tradecredit", label: "Trade-credit / receivables", eligible: "yes", note: "Business cover - ITC available" },
+  { key: "keyman", label: "Key-man term insurance", eligible: "yes", note: "Company-paid business cover - ITC generally available" },
+  { key: "wc", label: "Workmen compensation", eligible: "yes", note: "Statutory employer cover - ITC available" },
+  { key: "grouphealth", label: "Group health / mediclaim for staff", eligible: "cond", note: "Blocked under s.17(5) unless obligatory under a law (e.g. statutory) - generally not eligible for voluntary cover" },
   { key: "motor", label: "Motor cover on commercial vehicles", eligible: "cond", note: "Eligible if the vehicle itself is eligible (goods transport / >13-seater / business use); blocked for most passenger cars" },
-  { key: "personal", label: "Owner's personal life / health", eligible: "no", note: "Personal, not business — no ITC" },
+  { key: "personal", label: "Owner's personal life / health", eligible: "no", note: "Personal, not business - no ITC" },
 ];
 function GSTITCChecker() {
   const [coverKey, setCoverKey] = useState(ITC_RULES[0].key);
@@ -2294,7 +2294,7 @@ function TopUpOptimizer() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative only — real top-up pricing depends on insurer, waiting periods, room-rent limits and pre-existing conditions. A regular top-up resets its deductible per claim; a super-top-up applies it once for the policy year, so a person with several smaller bills is usually better off with super-top-up. GST on health premium is 18%.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative only - real top-up pricing depends on insurer, waiting periods, room-rent limits and pre-existing conditions. A regular top-up resets its deductible per claim; a super-top-up applies it once for the policy year, so a person with several smaller bills is usually better off with super-top-up. GST on health premium is 18%.</p>
     </div>
   );
 }
@@ -2332,7 +2332,7 @@ function OPDWellnessTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Stethoscope size={14} className="text-[var(--color-primary)]" /> OPD & Wellness Benefit Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">OPD and wellness riders reimburse outpatient bills — consultations, diagnostics, pharmacy, dental — up to an annual sub-limit. Log spend so you actually exhaust the benefit you paid for.</p>
+        <p className="text-xs text-[var(--color-muted)]">OPD and wellness riders reimburse outpatient bills - consultations, diagnostics, pharmacy, dental - up to an annual sub-limit. Log spend so you actually exhaust the benefit you paid for.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Annual OPD limit (₹)</label>
@@ -2415,7 +2415,7 @@ function OPDWellnessTracker() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">OPD/wellness sub-limits, eligible heads and reimbursement rules vary by insurer — keep bills and prescriptions for every entry. Unused benefit typically does not carry forward, so plan check-ups before the policy year ends.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">OPD/wellness sub-limits, eligible heads and reimbursement rules vary by insurer - keep bills and prescriptions for every entry. Unused benefit typically does not carry forward, so plan check-ups before the policy year ends.</p>
     </div>
   );
 }
@@ -2500,7 +2500,7 @@ function LifeStageAdequacy() {
       ) : (
         <>
           <div className={`${CARD} p-4`}>
-            <p className="text-sm">Life-stage: <strong className="text-[var(--color-primary)]">{result.stage}</strong> — term cover sized at <strong>{result.multiple}×</strong> income (income-replacement years fall as you age).</p>
+            <p className="text-sm">Life-stage: <strong className="text-[var(--color-primary)]">{result.stage}</strong> - term cover sized at <strong>{result.multiple}×</strong> income (income-replacement years fall as you age).</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className={`${CARD} p-4`}>
@@ -2604,8 +2604,8 @@ function RidersComparator() {
                       <tr key={r.id} className={`hover:bg-white/2 ${!r.useful ? "opacity-50" : ""}`}>
                         <td className="px-3 py-2.5 font-medium">{r.name}</td>
                         <td className="px-3 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.premium)}</td>
-                        <td className="px-3 py-2.5 tabular-nums">{r.benefit > 0 ? formatAmount(r.benefit) : "—"}</td>
-                        <td className="px-3 py-2.5 tabular-nums">{costPer1L > 0 ? formatCurrency(Math.round(costPer1L)) : "—"}</td>
+                        <td className="px-3 py-2.5 tabular-nums">{r.benefit > 0 ? formatAmount(r.benefit) : "-"}</td>
+                        <td className="px-3 py-2.5 tabular-nums">{costPer1L > 0 ? formatCurrency(Math.round(costPer1L)) : "-"}</td>
                         <td className="px-3 py-2.5">
                           <label className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
                             <input type="checkbox" checked={r.useful} onChange={() => toggle(r.id)} className="accent-[var(--color-primary)]" />
@@ -2710,7 +2710,7 @@ function InsuranceTCO() {
           <div className="flex justify-between pt-1 font-semibold"><span>Expected total per year</span><span className="tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(annualTCO))}</span></div>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A higher deductible cuts premium but raises what you pay on a claim — use this to find the trade-off that minimises expected total cost at your real claim frequency. Co-insurance/co-pay applies to the amount above the deductible. This is an expected-value model, not a guarantee of any single year's cost.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A higher deductible cuts premium but raises what you pay on a claim - use this to find the trade-off that minimises expected total cost at your real claim frequency. Co-insurance/co-pay applies to the amount above the deductible. This is an expected-value model, not a guarantee of any single year's cost.</p>
     </div>
   );
 }
@@ -2802,13 +2802,13 @@ function SurrenderValueEstimator() {
         <div className="rounded-lg p-4 border border-yellow-800/40 bg-yellow-950/20">
           <p className="text-sm text-yellow-400 flex items-center gap-2"><AlertTriangle size={14} />
             {planType === "ulip"
-              ? "Within the 5-year ULIP lock-in — surrendering now moves the fund to a discontinuance account (charges apply) and you can't withdraw until lock-in ends."
-              : "No guaranteed surrender value yet — most traditional plans pay nothing if you exit before two full years of premium. Consider making it paid-up instead."}
+              ? "Within the 5-year ULIP lock-in - surrendering now moves the fund to a discontinuance account (charges apply) and you can't withdraw until lock-in ends."
+              : "No guaranteed surrender value yet - most traditional plans pay nothing if you exit before two full years of premium. Consider making it paid-up instead."}
           </p>
         </div>
       )}
       {planType === "endowment" && !result.locked && (
-        <p className="text-xs text-[var(--color-muted)] px-1">Guaranteed Surrender Value factor applied: <strong className="text-[var(--color-text)]">{result.factorPct}%</strong> of eligible premiums. Special (insurer-declared) surrender value may be higher — ask for a surrender quote before deciding.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">Guaranteed Surrender Value factor applied: <strong className="text-[var(--color-text)]">{result.factorPct}%</strong> of eligible premiums. Special (insurer-declared) surrender value may be higher - ask for a surrender quote before deciding.</p>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Rough estimate only. Endowment surrender uses indicative IRDAI GSV factors (rising with elapsed term, first year's premium excluded, nil before two years). ULIPs carry a 5-year lock-in and discontinuance charges. Always get the exact surrender/paid-up figures from your insurer before acting.</p>
     </div>
@@ -2890,18 +2890,18 @@ function GroupVsIndividual() {
           </div>
           {result.saving > 0 && (
             <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-              <p className="text-sm text-green-400 flex items-center gap-2"><TrendingDown size={14} /> Group cover is about <strong>{formatCurrency(Math.round(result.saving))}</strong> cheaper a year ({result.savingPct.toFixed(0)}% less) than everyone buying individual retail policies — plus it skips per-person medical tests.</p>
+              <p className="text-sm text-green-400 flex items-center gap-2"><TrendingDown size={14} /> Group cover is about <strong>{formatCurrency(Math.round(result.saving))}</strong> cheaper a year ({result.savingPct.toFixed(0)}% less) than everyone buying individual retail policies - plus it skips per-person medical tests.</p>
             </div>
           )}
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative comparison. Group rates depend on group size, age mix, claims experience and chosen benefits; individual retail premiums vary by underwriting. Group cover ends when employment ends and may lack portability — many teams pair a small individual base with group cover. GST on health premium is 18%.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative comparison. Group rates depend on group size, age mix, claims experience and chosen benefits; individual retail premiums vary by underwriting. Group cover ends when employment ends and may lack portability - many teams pair a small individual base with group cover. GST on health premium is 18%.</p>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Multi-Policy Renewal Planner — month-by-month renewal cashflow across register
+// Multi-Policy Renewal Planner - month-by-month renewal cashflow across register
 // ─────────────────────────────────────────────────────────────────────────────
 function RenewalPlanner() {
   const [policies] = useFeatureState<Policy[]>("ins-policies", []);
@@ -2947,7 +2947,7 @@ function RenewalPlanner() {
             {[
               { label: "Renewals (next 12 mo)", value: `${months.reduce((s, m) => s + m.items.length, 0)}`, color: "text-[var(--color-text)]" },
               { label: "Premium due (12 mo)", value: formatAmount(Math.round(total)), color: "text-orange-400" },
-              { label: "Peak month", value: peak && peak.total > 0 ? `${peak.label}` : "—", color: "text-yellow-400" },
+              { label: "Peak month", value: peak && peak.total > 0 ? `${peak.label}` : "-", color: "text-yellow-400" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -2962,20 +2962,20 @@ function RenewalPlanner() {
                 <div className="flex-1 h-5 bg-[var(--color-bg)] rounded overflow-hidden">
                   <div className="h-full bg-[var(--color-primary)] rounded" style={{ width: `${(m.total / maxBar) * 100}%` }} />
                 </div>
-                <span className="text-xs tabular-nums w-24 text-right">{m.total > 0 ? formatAmount(Math.round(m.total)) : "—"}</span>
+                <span className="text-xs tabular-nums w-24 text-right">{m.total > 0 ? formatAmount(Math.round(m.total)) : "-"}</span>
                 <span className="text-[10px] text-[var(--color-muted)] w-10 text-right">{m.items.length || ""}</span>
               </div>
             ))}
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A clustered renewal month strains cashflow — consider asking insurers to align or stagger renewal dates, or move some covers to monthly premium EMI. Lapsing to save cash in a peak month risks fresh underwriting and loss of continuity benefits.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A clustered renewal month strains cashflow - consider asking insurers to align or stagger renewal dates, or move some covers to monthly premium EMI. Lapsing to save cash in a peak month risks fresh underwriting and loss of continuity benefits.</p>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sum-Insured Inflation Indexer — project cover forward to beat under-insurance
+// Sum-Insured Inflation Indexer - project cover forward to beat under-insurance
 // ─────────────────────────────────────────────────────────────────────────────
 function SumInsuredInflationIndexer() {
   const [currentSI, setCurrentSI] = useState("5000000");
@@ -3004,7 +3004,7 @@ function SumInsuredInflationIndexer() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5`}>
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><TrendingDown size={14} className="text-[var(--color-primary)]" /> Sum-Insured Inflation Indexer</h3>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Replacement costs rise every year but a flat sum insured does not — so a policy set years ago quietly becomes under-insurance, triggering the average clause at claim time. Index your cover forward.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Replacement costs rise every year but a flat sum insured does not - so a policy set years ago quietly becomes under-insurance, triggering the average clause at claim time. Index your cover forward.</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Current sum insured (₹)</label>
@@ -3027,7 +3027,7 @@ function SumInsuredInflationIndexer() {
 
       {elapsed > 0 && shortfall > 0 && (
         <div className="rounded-lg p-4 border border-yellow-800/40 bg-yellow-950/20">
-          <p className="text-sm text-yellow-400 flex items-center gap-2"><AlertTriangle size={14} /> Set {elapsed} year{elapsed === 1 ? "" : "s"} ago, the real replacement value today is about <strong>{formatCurrency(Math.round(trueValueNow))}</strong> — you may be <strong>{shortfallPct.toFixed(0)}%</strong> under-insured ({formatCurrency(Math.round(shortfall))} gap). A claim could be proportionately reduced.</p>
+          <p className="text-sm text-yellow-400 flex items-center gap-2"><AlertTriangle size={14} /> Set {elapsed} year{elapsed === 1 ? "" : "s"} ago, the real replacement value today is about <strong>{formatCurrency(Math.round(trueValueNow))}</strong> - you may be <strong>{shortfallPct.toFixed(0)}%</strong> under-insured ({formatCurrency(Math.round(shortfall))} gap). A claim could be proportionately reduced.</p>
         </div>
       )}
 
@@ -3045,13 +3045,13 @@ function SumInsuredInflationIndexer() {
           ))}
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Use a cost-inflation rate that reflects your assets (construction, plant, imported machinery can run well above headline CPI). Some insurers offer an inflation/escalation clause that auto-indexes the sum insured during the policy year — ask at renewal.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Use a cost-inflation rate that reflects your assets (construction, plant, imported machinery can run well above headline CPI). Some insurers offer an inflation/escalation clause that auto-indexes the sum insured during the policy year - ask at renewal.</p>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Insurance Spend Budget — premium outflow vs a target % of revenue
+// Insurance Spend Budget - premium outflow vs a target % of revenue
 // ─────────────────────────────────────────────────────────────────────────────
 function InsuranceSpendBudget() {
   const { store } = useApp();
@@ -3074,7 +3074,7 @@ function InsuranceSpendBudget() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5`}>
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Coins size={14} className="text-[var(--color-primary)]" /> Insurance Spend Budget</h3>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Sets a sensible insurance budget as a share of turnover and checks your actual premium outflow against it. SMBs typically spend 1–3% of revenue on protection — far too low risks ruin, far too high erodes margin.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Sets a sensible insurance budget as a share of turnover and checks your actual premium outflow against it. SMBs typically spend 1-3% of revenue on protection - far too low risks ruin, far too high erodes margin.</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Annual revenue (₹){autoRevenue > 0 ? " · auto" : ""}</label>
@@ -3110,22 +3110,22 @@ function InsuranceSpendBudget() {
             <p className={`text-sm font-medium flex items-center gap-2 ${variance >= 0 ? "text-green-400" : "text-red-400"}`}>
               {variance >= 0 ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
               {variance >= 0
-                ? `You are within budget with ${formatCurrency(Math.round(variance))} of headroom — room to close coverage gaps before cost becomes a concern.`
-                : `You are ${formatCurrency(Math.round(-variance))} over your target budget — review for overlapping cover, high deductibles or over-insured assets before cutting essential protection.`}
+                ? `You are within budget with ${formatCurrency(Math.round(variance))} of headroom - room to close coverage gaps before cost becomes a concern.`
+                : `You are ${formatCurrency(Math.round(-variance))} over your target budget - review for overlapping cover, high deductibles or over-insured assets before cutting essential protection.`}
             </p>
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">The right ratio varies by sector — asset-heavy manufacturing runs higher than a services firm. Spending under budget is only good if you are not carrying open coverage gaps; check the Coverage-Gap Analyzer alongside this.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">The right ratio varies by sector - asset-heavy manufacturing runs higher than a services firm. Spending under budget is only good if you are not carrying open coverage gaps; check the Coverage-Gap Analyzer alongside this.</p>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Claim Document Readiness — checklist to avoid claim repudiation
+// Claim Document Readiness - checklist to avoid claim repudiation
 // ─────────────────────────────────────────────────────────────────────────────
 const CLAIM_DOCS = [
-  { id: "intimation", label: "Written claim intimation to insurer", note: "Usually within 24–48 hrs of the event" },
+  { id: "intimation", label: "Written claim intimation to insurer", note: "Usually within 24-48 hrs of the event" },
   { id: "fir", label: "FIR / police complaint (theft, burglary, fatal accident)", note: "Mandatory for theft and third-party motor" },
   { id: "policy", label: "Policy copy & latest premium receipt", note: "Proves cover was in force on the loss date" },
   { id: "estimate", label: "Repair / replacement estimate or invoices", note: "Quantifies the loss for the surveyor" },
@@ -3172,10 +3172,10 @@ function ClaimReadinessChecklist() {
 
       {pct === 100 && (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-          <p className="text-sm text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> All core documents are in hand — submit the file to your insurer/broker and keep copies of every acknowledgement.</p>
+          <p className="text-sm text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> All core documents are in hand - submit the file to your insurer/broker and keep copies of every acknowledgement.</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Exact documents vary by claim type and insurer — always check your policy wording and the insurer's claim form. The single biggest avoidable cause of repudiation is delayed intimation; notify first, gather documents next.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Exact documents vary by claim type and insurer - always check your policy wording and the insurer's claim form. The single biggest avoidable cause of repudiation is delayed intimation; notify first, gather documents next.</p>
     </div>
   );
 }
@@ -3209,7 +3209,7 @@ function UnderInsuranceChecker() {
       <div className={`${CARD} p-5`}>
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Under-Insurance / Average-Clause Checker</h3>
         <p className="text-xs text-[var(--color-muted)] mb-4">
-          If your sum insured is below the asset's true (reinstatement) value, the average clause reduces every claim in the same proportion — even a partial loss is underpaid. Check your exposure before a loss happens.
+          If your sum insured is below the asset's true (reinstatement) value, the average clause reduces every claim in the same proportion - even a partial loss is underpaid. Check your exposure before a loss happens.
         </p>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -3233,8 +3233,8 @@ function UnderInsuranceChecker() {
             {[
               { label: "Adequacy ratio", value: `${(result.ratio * 100).toFixed(0)}%`, color: result.underinsured ? "text-red-400" : "text-green-400" },
               { label: "Cover gap", value: formatAmount(Math.round(result.coverGap)), color: result.coverGap > 0 ? "text-yellow-400" : "text-green-400" },
-              { label: "Claim payout", value: loss > 0 ? formatAmount(Math.round(result.payout)) : "—", color: "text-[var(--color-text)]" },
-              { label: "You bear (shortfall)", value: loss > 0 ? formatAmount(Math.round(result.shortfall)) : "—", color: result.shortfall > 0 ? "text-red-400" : "text-green-400" },
+              { label: "Claim payout", value: loss > 0 ? formatAmount(Math.round(result.payout)) : "-", color: "text-[var(--color-text)]" },
+              { label: "You bear (shortfall)", value: loss > 0 ? formatAmount(Math.round(result.shortfall)) : "-", color: result.shortfall > 0 ? "text-red-400" : "text-green-400" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -3246,8 +3246,8 @@ function UnderInsuranceChecker() {
             <p className={`text-sm font-medium flex items-center gap-2 ${result.underinsured ? "text-red-400" : "text-green-400"}`}>
               {result.underinsured ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
               {result.underinsured
-                ? `Under-insured by ${(100 - result.ratio * 100).toFixed(0)}% — the average clause will scale down every claim to ${(result.ratio * 100).toFixed(0)}% of the loss.`
-                : "Cover is at or above value — the average clause does not bite. Re-index the sum insured each year for inflation."}
+                ? `Under-insured by ${(100 - result.ratio * 100).toFixed(0)}% - the average clause will scale down every claim to ${(result.ratio * 100).toFixed(0)}% of the loss.`
+                : "Cover is at or above value - the average clause does not bite. Re-index the sum insured each year for inflation."}
             </p>
           </div>
         </>
@@ -3261,11 +3261,11 @@ function UnderInsuranceChecker() {
 // Policy-Overlap Finder
 // ─────────────────────────────────────────────────────────────────────────────
 const OVERLAP_GROUPS: { key: string; label: string; types: PolicyType[]; note: string }[] = [
-  { key: "property", label: "Property / fire & theft", types: ["Fire & Allied Perils", "Burglary / Theft", "Equipment Breakdown"], note: "Premises, plant and stock may be covered under more than one section — check for double-insurance on the same asset." },
+  { key: "property", label: "Property / fire & theft", types: ["Fire & Allied Perils", "Burglary / Theft", "Equipment Breakdown"], note: "Premises, plant and stock may be covered under more than one section - check for double-insurance on the same asset." },
   { key: "liability", label: "Liability", types: ["Public Liability", "Product Liability", "Professional Indemnity", "Directors & Officers"], note: "Overlapping liability wordings can leave you paying twice for the same third-party exposure." },
   { key: "people", label: "Employee benefits", types: ["Group Health (Mediclaim)", "Group Term Life", "Personal Accident"], note: "PA and life sections sometimes duplicate accidental-death benefit." },
   { key: "transit", label: "Goods movement", types: ["Marine / Transit", "Motor (Commercial)"], note: "Goods-in-transit may be insured under both marine and motor carrier sections." },
-  { key: "income", label: "Income protection", types: ["Business Interruption", "Trade-Credit"], note: "Both protect cash flow — confirm the perils don't overlap." },
+  { key: "income", label: "Income protection", types: ["Business Interruption", "Trade-Credit"], note: "Both protect cash flow - confirm the perils don't overlap." },
 ];
 
 function PolicyOverlapFinder() {
@@ -3285,7 +3285,7 @@ function PolicyOverlapFinder() {
     <div className="space-y-4">
       <div className={`${CARD} p-4`}>
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Combine size={14} className="text-[var(--color-primary)]" /> Policy-Overlap Finder</h3>
-        <p className="text-xs text-[var(--color-muted)]">Scans your register for policies whose cover may overlap. Double-insurance means you pay two premiums but most policies have a contribution clause, so you can never recover more than the loss — overlap is wasted spend, not extra protection.</p>
+        <p className="text-xs text-[var(--color-muted)]">Scans your register for policies whose cover may overlap. Double-insurance means you pay two premiums but most policies have a contribution clause, so you can never recover more than the loss - overlap is wasted spend, not extra protection.</p>
       </div>
 
       {policies.length === 0 ? (
@@ -3296,7 +3296,7 @@ function PolicyOverlapFinder() {
         </div>
       ) : findings.length === 0 ? (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-          <p className="text-sm text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> No obvious overlaps — each risk area is held by at most one policy in your register.</p>
+          <p className="text-sm text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> No obvious overlaps - each risk area is held by at most one policy in your register.</p>
         </div>
       ) : (
         <>
@@ -3329,7 +3329,7 @@ function PolicyOverlapFinder() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">An overlap flag does not always mean waste — sections can genuinely complement each other (e.g. PA top-up over group life). Review the wordings with your broker and consolidate where the cover is truly duplicated.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">An overlap flag does not always mean waste - sections can genuinely complement each other (e.g. PA top-up over group life). Review the wordings with your broker and consolidate where the cover is truly duplicated.</p>
     </div>
   );
 }
@@ -3361,7 +3361,7 @@ function BusinessPackageRecommender() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5`}>
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Business-Package Recommender</h3>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Pick your sector to see the standard cover package — core lines every business in that trade should carry, plus recommended add-ons. We mark what you already hold from your register.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Pick your sector to see the standard cover package - core lines every business in that trade should carry, plus recommended add-ons. We mark what you already hold from your register.</p>
         <label className="text-xs text-[var(--color-muted)] block mb-1">Sector</label>
         <select value={sector} onChange={e => setSector(e.target.value)} className={INP}>
           {SECTOR_PACKS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
@@ -3396,7 +3396,7 @@ function BusinessPackageRecommender() {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative sector templates only — your actual needs depend on premises, staff, exposure and contracts. Many insurers offer a single "business package / shopkeeper" policy bundling several of these sections at a discount. Bind through an IRDAI-licensed insurer/broker.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative sector templates only - your actual needs depend on premises, staff, exposure and contracts. Many insurers offer a single "business package / shopkeeper" policy bundling several of these sections at a discount. Bind through an IRDAI-licensed insurer/broker.</p>
     </div>
   );
 }
@@ -3415,7 +3415,7 @@ function EmployeeCoverageGap() {
 
   const total = parseInt(headcount) || 0;
   const benefits = [
-    { key: "health", label: "Group health (mediclaim)", covered: parseInt(health) || 0, why: "Hospitalisation cover — top retention driver for small teams." },
+    { key: "health", label: "Group health (mediclaim)", covered: parseInt(health) || 0, why: "Hospitalisation cover - top retention driver for small teams." },
     { key: "pa", label: "Personal accident", covered: parseInt(pa) || 0, why: "Mandatory-grade cover for blue-collar / field staff." },
     { key: "life", label: "Group term life", covered: parseInt(life) || 0, why: "Pays the family if an employee dies in service." },
   ];
@@ -3436,7 +3436,7 @@ function EmployeeCoverageGap() {
       <div className={`${CARD} p-5`}>
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><UserPlus size={14} className="text-[var(--color-primary)]" /> Employee-Coverage Gap</h3>
         <p className="text-xs text-[var(--color-muted)] mb-4">
-          Enter your headcount and how many people each benefit actually covers — this surfaces staff with no protection. {hasPayroll ? "Payroll activity detected on your books, so you likely have employees to cover." : "No payroll detected yet, but you can still model coverage here."}
+          Enter your headcount and how many people each benefit actually covers - this surfaces staff with no protection. {hasPayroll ? "Payroll activity detected on your books, so you likely have employees to cover." : "No payroll detected yet, but you can still model coverage here."}
         </p>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -3463,7 +3463,7 @@ function EmployeeCoverageGap() {
           <div className={`rounded-lg p-4 border ${totalGap > 0 ? "border-yellow-800/40 bg-yellow-950/20" : "border-green-800/40 bg-green-950/20"}`}>
             <p className={`text-sm font-medium flex items-center gap-2 ${totalGap > 0 ? "text-yellow-400" : "text-green-400"}`}>
               {totalGap > 0 ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
-              {totalGap > 0 ? `${totalGap} uncovered benefit-slots across your team — close these to protect staff and aid retention.` : "Every employee is covered on all three core benefits."}
+              {totalGap > 0 ? `${totalGap} uncovered benefit-slots across your team - close these to protect staff and aid retention.` : "Every employee is covered on all three core benefits."}
             </p>
           </div>
           <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
@@ -3519,7 +3519,7 @@ function LiabilityLimitAdequacy() {
       <div className={`${CARD} p-5`}>
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scale3d size={14} className="text-[var(--color-primary)]" /> Liability-Limit Adequacy</h3>
         <p className="text-xs text-[var(--color-muted)] mb-4">
-          Public/product liability limits are quoted as AOA (any one accident) and AOY (aggregate per year). A single serious third-party injury can exceed a thin limit — size it against your turnover and footfall.
+          Public/product liability limits are quoted as AOA (any one accident) and AOY (aggregate per year). A single serious third-party injury can exceed a thin limit - size it against your turnover and footfall.
         </p>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -3529,14 +3529,14 @@ function LiabilityLimitAdequacy() {
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Public exposure / footfall</label>
             <select value={footfall} onChange={e => setFootfall(e.target.value)} className={INP}>
-              <option value="low">Low — back-office, B2B, no visitors</option>
-              <option value="medium">Medium — office/shop with visitors</option>
-              <option value="high">High — heavy footfall, factory, public-facing</option>
+              <option value="low">Low - back-office, B2B, no visitors</option>
+              <option value="medium">Medium - office/shop with visitors</option>
+              <option value="high">High - heavy footfall, factory, public-facing</option>
             </select>
           </div>
           <div className="col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Current liability limit / AOY (₹)</label>
-            <input type="number" value={currentLimit} onChange={e => setCurrentLimit(e.target.value)} placeholder="optional — leave blank if none" className={INP} />
+            <input type="number" value={currentLimit} onChange={e => setCurrentLimit(e.target.value)} placeholder="optional - leave blank if none" className={INP} />
           </div>
         </div>
       </div>
@@ -3547,7 +3547,7 @@ function LiabilityLimitAdequacy() {
             {[
               { label: "Suggested AOY (aggregate)", value: formatAmount(result.suggestedAOY), color: "text-[var(--color-primary)]" },
               { label: "Suggested AOA (per event)", value: formatAmount(result.suggestedAOA), color: "text-blue-400" },
-              { label: "Shortfall vs current", value: result.shortfall > 0 ? formatAmount(result.shortfall) : "—", color: result.shortfall > 0 ? "text-red-400" : "text-green-400" },
+              { label: "Shortfall vs current", value: result.shortfall > 0 ? formatAmount(result.shortfall) : "-", color: result.shortfall > 0 ? "text-red-400" : "text-green-400" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -3559,15 +3559,15 @@ function LiabilityLimitAdequacy() {
             <p className={`text-sm font-medium flex items-center gap-2 ${result.adequate ? "text-green-400" : "text-red-400"}`}>
               {result.adequate ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
               {limit <= 0
-                ? `No limit entered — you appear to carry no liability cover. A ${formatCurrency(result.suggestedAOY)} aggregate limit is a sensible starting point for your profile.`
+                ? `No limit entered - you appear to carry no liability cover. A ${formatCurrency(result.suggestedAOY)} aggregate limit is a sensible starting point for your profile.`
                 : result.adequate
                   ? "Your limit meets the suggested aggregate for your turnover and footfall."
-                  : `Your limit looks thin — consider raising the aggregate to about ${formatCurrency(result.suggestedAOY)}.`}
+                  : `Your limit looks thin - consider raising the aggregate to about ${formatCurrency(result.suggestedAOY)}.`}
             </p>
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Rule-of-thumb sizing only — real liability limits depend on contracts (landlords/clients often mandate a minimum), industry hazard and legal-cost exposure. Liability claims include defence costs; confirm whether those erode your limit. Bind through an IRDAI-licensed insurer/broker.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Rule-of-thumb sizing only - real liability limits depend on contracts (landlords/clients often mandate a minimum), industry hazard and legal-cost exposure. Liability claims include defence costs; confirm whether those erode your limit. Bind through an IRDAI-licensed insurer/broker.</p>
     </div>
   );
 }

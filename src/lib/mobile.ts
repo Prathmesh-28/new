@@ -18,7 +18,7 @@ export async function haptic(kind: Haptic = "light"): Promise<void> {
     if (kind === "select")  { await Haptics.selectionStart(); await Haptics.selectionEnd(); return; }
     const style = kind === "heavy" ? ImpactStyle.Heavy : kind === "medium" ? ImpactStyle.Medium : ImpactStyle.Light;
     await Haptics.impact({ style });
-  } catch { /* haptics unavailable — ignore */ }
+  } catch { /* haptics unavailable - ignore */ }
 }
 
 // ── Connectivity ────────────────────────────────────────────────────────────

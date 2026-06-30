@@ -1,5 +1,5 @@
-// §M — Settlement-grade PSP payout reconciliation. Hyperswitch-style: a payment
-// processor (Razorpay/Stripe/Cashfree/PayU) periodically dumps a *payout file* —
+// §M - Settlement-grade PSP payout reconciliation. Hyperswitch-style: a payment
+// processor (Razorpay/Stripe/Cashfree/PayU) periodically dumps a *payout file* -
 // one row per captured transaction carrying the customer's GROSS charge, the PSP
 // FEE, the GST/TAX on that fee, the NET amount actually deposited to our bank, and
 // the bank UTR of the batch deposit. Settlement reconciliation answers three
@@ -11,7 +11,7 @@
 //
 // Design ported (not copied) from juspay/hyperswitch's reconciliation engine: a
 // payout row moves through an EXPECTED → POSTED lifecycle, and matching is driven
-// by *rules* with three clauses — a filter (When this rule applies), an identifier
+// by *rules* with three clauses - a filter (When this rule applies), an identifier
 // (How we find the counterpart) and a validation (What must hold for a match to be
 // accepted). Rules carry a priority; the highest-priority rule that both applies
 // and validates wins. firefly-iii contributes the filter/validate split; beancount
@@ -28,7 +28,7 @@ const { financialYearFor } = require("./fy");
 const { daysBetween } = require("./recon"); // reuse the existing date-tolerance helper
 
 // ── Provider fee profiles ──────────────────────────────────────────────────────
-// Each PSP advertises a fee % + a GST rate on that fee. We don't hardcode money —
+// Each PSP advertises a fee % + a GST rate on that fee. We don't hardcode money -
 // only the negotiated *rate* used to sanity-check the fee column in the file. A
 // tenant can override per provider later; these are conservative Indian defaults.
 const PROVIDER_PROFILES = {
@@ -40,7 +40,7 @@ const PROVIDER_PROFILES = {
 };
 const profileFor = (provider) => PROVIDER_PROFILES[String(provider || "manual").toLowerCase()] || PROVIDER_PROFILES.manual;
 
-// ── §M.1 — the rule vocabulary (pure, testable) ─────────────────────────────────
+// ── §M.1 - the rule vocabulary (pure, testable) ─────────────────────────────────
 // A settlement line is a plain object:
 //   { gross, fee, tax, net, utr, txn_ref, order_id, settled_on, provider }
 // A candidate is a thing we might match it to:
@@ -53,7 +53,7 @@ const FILTERS = {
   has_txn_ref: (line) => !!(line.txn_ref && String(line.txn_ref).trim()),
   net_positive: (line) => gt(line.net, 0),
   // A UTR-bearing line MUST find its deposit by its own UTR (exact or band). If none
-  // carries that UTR the line is genuinely MISSING_DEPOSIT — it must NOT fall through
+  // carries that UTR the line is genuinely MISSING_DEPOSIT - it must NOT fall through
   // to a UTR-agnostic amount-only rule and steal an unrelated line's same-amount
   // deposit. So the amount-only bank rules apply only to lines that lost their UTR.
   no_utr: (line) => gt(line.net, 0) && !(line.utr && String(line.utr).trim()),
@@ -80,7 +80,7 @@ const IDENTIFIERS = {
 
 // VALIDATIONS (What): does a candidate actually settle this line? Money-exact on the
 // relevant column, with a date tolerance. `target` selects which line column the
-// candidate amount must equal — NET for bank deposits, GROSS for booked receipts.
+// candidate amount must equal - NET for bank deposits, GROSS for booked receipts.
 function validateExact(line, cand, target, toleranceDays) {
   const want = target === "GROSS" ? money(line.gross) : money(line.net);
   const sideOk = eq(cand.amount, want);
@@ -112,7 +112,7 @@ const DEFAULT_RULES = [
   { name: "bank-by-amount-band", priority: 20,  filter: "no_utr",      identify: "by_amount",  target: "NET",   validate: "band",  scope: "BANK" },
 ];
 
-// §M.2 — run the rule set for ONE line against ONE pool of candidates of a given
+// §M.2 - run the rule set for ONE line against ONE pool of candidates of a given
 // scope. Returns { cand, rule } for the winning (highest-priority applying+validating)
 // rule, or null. Pure: no DB. This is the heart Hyperswitch calls the "matcher".
 function selectMatch(line, candidates, scope, opts = {}) {
@@ -137,7 +137,7 @@ function selectMatch(line, candidates, scope, opts = {}) {
   return null;
 }
 
-// §M.3 — fee arithmetic (pure). The file claims fee+tax; we verify it equals
+// §M.3 - fee arithmetic (pure). The file claims fee+tax; we verify it equals
 // gross−net to the paisa, and that the implied fee % is within the provider's
 // negotiated band (we don't fail a tiny rounding drift, but anything material is
 // a FEE exception). Returns { expectedFee, gap, ratePct, rateOk }.
@@ -154,11 +154,11 @@ function classifyFee(line, profile, tolerance = "1.00") {
   return { expectedFee: toDb(impliedGap), gap: toDb(gap), ratePct: ratePct.toFixed(4), rateOk, consistent: gap.lessThanOrEqualTo(money(tolerance)) };
 }
 
-// ── §M.4 — ingest: load EXPECTED settlement lines from a parsed payout file ──────
+// ── §M.4 - ingest: load EXPECTED settlement lines from a parsed payout file ──────
 // rows: [{ gross, fee, tax, net, utr, txn_ref, order_id, settled_on }]. We compute
 // nothing the file already states except defaults (net = gross−fee−tax if absent).
 // A line is keyed by (provider, utr, txn_ref) so re-uploading the same file is a
-// no-op (ON CONFLICT DO NOTHING) — settlement files get re-sent constantly.
+// no-op (ON CONFLICT DO NOTHING) - settlement files get re-sent constantly.
 async function ingestPayout(tenantId, { provider, rows } = {}) {
   if (!provider) throw new PostError("BAD_INPUT", "provider required", 400);
   if (!Array.isArray(rows) || rows.length === 0) throw new PostError("BAD_INPUT", "rows[] required", 400);
@@ -201,7 +201,7 @@ async function ingestPayout(tenantId, { provider, rows } = {}) {
   return { ok: true, provider: prof.label.toLowerCase(), inserted, skipped, total: rows.length };
 }
 
-// ── §M.5 — reconcile: drive every EXPECTED line through the matcher ──────────────
+// ── §M.5 - reconcile: drive every EXPECTED line through the matcher ──────────────
 // For each EXPECTED line we look for (a) a bank deposit of NET and (b) a booked
 // receipt of GROSS, then check the fee decomposition. Outcome per line:
 //   • bank ✓ + receipt ✓ + fee ✓        → POSTED (fully reconciled), no exception.
@@ -219,7 +219,7 @@ async function reconcile(tenantId, opts = {}) {
   );
   if (lines.length === 0) return { scanned: 0, posted: 0, exceptions: 0 };
 
-  // Candidate pool 1 — bank deposits: unposted-against-settlement bank lines, +inflow.
+  // Candidate pool 1 - bank deposits: unposted-against-settlement bank lines, +inflow.
   // We exclude lines already consumed by another settlement line (settlement_line_id).
   const { rows: bankRows } = await pool.query(
     `SELECT id, txn_date AS date, amount, COALESCE(reference,'') || ' ' || COALESCE(description,'') AS reference, settlement_line_id
@@ -227,7 +227,7 @@ async function reconcile(tenantId, opts = {}) {
       WHERE tenant_id=$1 AND amount > 0`,
     [tenantId]
   );
-  // Candidate pool 2 — booked receipts: RECEIPT vouchers (gross customer payment).
+  // Candidate pool 2 - booked receipts: RECEIPT vouchers (gross customer payment).
   // Amount = net bank/undeposited movement on the voucher (debit-positive).
   const { rows: rcptRows } = await pool.query(
     `SELECT v.id, v.voucher_date AS date,
@@ -247,7 +247,7 @@ async function reconcile(tenantId, opts = {}) {
   const bankPool = bankRows.map((r) => ({ ...r, amount: money(r.amount).toFixed(4) }));
   const rcptPool = rcptRows.map((r) => ({ ...r, amount: money(r.amount).toFixed(4) }));
   // Idempotency: a bank line already stamped (settlement_line_id) is owned by THAT
-  // line. We must NOT blanket-exclude it — on a re-run the very line being matched has
+  // line. We must NOT blanket-exclude it - on a re-run the very line being matched has
   // to re-admit its own deposit as a candidate, or it loses its match and corrupts.
   // So remember the owner per bank line; the per-line candidate filter (below) admits a
   // stamped line iff it is owned by the line currently being matched, excludes it
@@ -350,7 +350,7 @@ async function reconcile(tenantId, opts = {}) {
   return { scanned: lines.length, posted, exceptions };
 }
 
-// ── §M.6 — exceptions for the UI ─────────────────────────────────────────────────
+// ── §M.6 - exceptions for the UI ─────────────────────────────────────────────────
 async function listExceptions(tenantId, { status = "OPEN", kind, limit = 500 } = {}) {
   const params = [tenantId];
   let where = "x.tenant_id=$1";
@@ -381,7 +381,7 @@ async function listExceptions(tenantId, { status = "OPEN", kind, limit = 500 } =
 }
 
 module.exports = {
-  // pure (matcher + fee arithmetic) — selftest-able without a DB
+  // pure (matcher + fee arithmetic) - selftest-able without a DB
   PROVIDER_PROFILES, profileFor, FILTERS, IDENTIFIERS,
   validateExact, validateBand, selectMatch, classifyFee, DEFAULT_RULES,
   // DB lifecycle

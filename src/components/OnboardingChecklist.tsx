@@ -24,39 +24,39 @@ interface Step {
 }
 
 // Per-role first-run flow. Every step's `done` is data-detected so it ticks itself
-// off as the user works — no manual marking. Each role gets steps it can actually
+// off as the user works - no manual marking. Each role gets steps it can actually
 // complete (signals we can read), so the progress bar reaches 100%.
 const ROLE_FLOWS: Partial<Record<UserRole, { intro: string; steps: Step[] }>> = {
   owner: {
-    intro: "A few steps to make Headroom yours — you don't need the demo data.",
+    intro: "A few steps to make Headroom yours - you don't need the demo data.",
     steps: [
       { id: "biz", label: "Set up your business", hint: "Name, GSTIN & financial year", cta: "Open settings", to: "/settings", done: s => s.businessSet },
-      { id: "books", label: "Set up your books", hint: "Create your chart of accounts — one click", cta: "Create chart of accounts", action: "seedBooks", done: s => s.booksSet },
+      { id: "books", label: "Set up your books", hint: "Create your chart of accounts - one click", cta: "Create chart of accounts", action: "seedBooks", done: s => s.booksSet },
       { id: "bank", label: "Add your bank balance", hint: "So cash position & runway are real", cta: "Add bank", to: "/banking", done: s => s.bankSet },
-      { id: "party", label: "Add customers & products", hint: "Type a few — or bulk-upload a CSV", cta: "Open books", to: "/books", done: s => s.partyOrItem },
+      { id: "party", label: "Add customers & products", hint: "Type a few - or bulk-upload a CSV", cta: "Open books", to: "/books", done: s => s.partyOrItem },
       { id: "inv", label: "Raise your first invoice", hint: "Start tracking receivables & GST", cta: "New invoice", to: "/invoices", done: s => s.hasInvoice },
     ],
   },
   finance_manager: {
     intro: "Get the books live so cash, AR/AP and GST are accurate.",
     steps: [
-      { id: "books", label: "Set up the books", hint: "Create the chart of accounts — one click", cta: "Create chart of accounts", action: "seedBooks", done: s => s.booksSet },
+      { id: "books", label: "Set up the books", hint: "Create the chart of accounts - one click", cta: "Create chart of accounts", action: "seedBooks", done: s => s.booksSet },
       { id: "bank", label: "Add bank balances", hint: "So cash & runway are real", cta: "Add bank", to: "/banking", done: s => s.bankSet },
       { id: "party", label: "Import customers, vendors & items", hint: "Bulk-upload a CSV in Books", cta: "Open books", to: "/books", done: s => s.partyOrItem },
       { id: "inv", label: "Record the first invoice", hint: "Start AR & GST tracking", cta: "New invoice", to: "/invoices", done: s => s.hasInvoice },
     ],
   },
   accountant: {
-    intro: "Set up the workspace and bring your clients in — your practice, one console.",
+    intro: "Set up the workspace and bring your clients in - your practice, one console.",
     steps: [
-      { id: "books", label: "Set up the books", hint: "Chart of accounts for this workspace — one click", cta: "Create chart of accounts", action: "seedBooks", done: s => s.booksSet },
+      { id: "books", label: "Set up the books", hint: "Chart of accounts for this workspace - one click", cta: "Create chart of accounts", action: "seedBooks", done: s => s.booksSet },
       { id: "client", label: "Add your first client", hint: "Link a client tenant to your CA portal", cta: "Open CA portal", to: "/advisor", done: s => s.hasClients },
       { id: "data", label: "Import the trial balance / ledgers", hint: "Bulk-upload opening ledgers in Books", cta: "Open books", to: "/books", done: s => s.partyOrItem },
       { id: "gst", label: "Review GST for filing", hint: "GSTR-1 / 2B / 3B from the ledger", cta: "Open GST", to: "/gst", done: s => s.hasInvoice },
     ],
   },
   sales: {
-    intro: "Get from lead to paid — set up your pipeline and billing.",
+    intro: "Get from lead to paid - set up your pipeline and billing.",
     steps: [
       { id: "leads", label: "Add customers / leads", hint: "Build your pipeline (or bulk-upload)", cta: "Open CRM", to: "/crm", done: s => s.partyOrItem },
       { id: "inv", label: "Raise your first invoice", hint: "Bill a customer & start AR", cta: "New invoice", to: "/invoices", done: s => s.hasInvoice },
@@ -66,7 +66,7 @@ const ROLE_FLOWS: Partial<Record<UserRole, { intro: string; steps: Step[] }>> = 
   operations_manager: {
     intro: "Stand up your products, stock and suppliers.",
     steps: [
-      { id: "items", label: "Add your products", hint: "Item master — type a few or bulk-upload", cta: "Open books", to: "/books", done: s => s.itemCount > 0 },
+      { id: "items", label: "Add your products", hint: "Item master - type a few or bulk-upload", cta: "Open books", to: "/books", done: s => s.itemCount > 0 },
       { id: "wh", label: "Set up warehouses & BOMs", hint: "Locations, putaway and manufacturing", cta: "Open ERP", to: "/erp", done: s => s.itemCount > 0 },
       { id: "vendors", label: "Add vendors & a purchase order", hint: "Procurement and supplier terms", cta: "Open vendors", to: "/vendors", done: s => s.partyOrItem },
     ],
@@ -117,7 +117,7 @@ export default function OnboardingChecklist() {
 
   const seedBooks = async () => {
     setSeeding(true);
-    try { await api.post("/api/books/seed", {}); toast.success("Chart of accounts created — your books are ready"); await refresh(); }
+    try { await api.post("/api/books/seed", {}); toast.success("Chart of accounts created - your books are ready"); await refresh(); }
     catch (e: any) { toast.error(e?.message || "Could not set up books"); }
     finally { setSeeding(false); }
   };
@@ -173,7 +173,7 @@ export default function OnboardingChecklist() {
       </div>
 
       {doneCount >= 1 && doneCount < total && (
-        <p className="mt-3 flex items-center gap-1 text-[11px] text-[var(--color-muted)]"><Sparkles size={11} className="text-[var(--color-primary)]" /> {pct}% there — finish setup to unlock accurate cash, GST and forecasts.</p>
+        <p className="mt-3 flex items-center gap-1 text-[11px] text-[var(--color-muted)]"><Sparkles size={11} className="text-[var(--color-primary)]" /> {pct}% there - finish setup to unlock accurate cash, GST and forecasts.</p>
       )}
     </div>
   );

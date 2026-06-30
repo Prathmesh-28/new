@@ -23,7 +23,7 @@ export interface Capabilities {
 export type CapabilityKey = keyof Capabilities;
 
 // All-false default: until the map loads we treat everything as "not yet
-// confirmed live", and PreviewBadge only renders once `loaded` is true — so a
+// confirmed live", and PreviewBadge only renders once `loaded` is true - so a
 // live feature never flashes a Preview badge on first paint.
 const DEFAULTS: Capabilities = {
   payments: false, ai: false, aiFallback: false, whatsapp: false, push: false, email: false,

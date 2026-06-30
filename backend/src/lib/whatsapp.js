@@ -31,7 +31,7 @@ async function sendWhatsApp(to, body) {
 
 // Returns true when signature is valid. Skips check in dev mode (no auth token).
 // Behind a proxy (Render/Vercel) the original scheme/host arrive in x-forwarded-*
-// headers — Twilio signed the PUBLIC https URL, so we must rebuild that exact URL
+// headers - Twilio signed the PUBLIC https URL, so we must rebuild that exact URL
 // (TWILIO_PUBLIC_URL overrides if set) or validation wrongly 403s every webhook.
 function validateSignature(req) {
   if (!authToken) return true;

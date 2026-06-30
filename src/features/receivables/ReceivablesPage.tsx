@@ -21,8 +21,8 @@ function agingBucket(daysOverdue: number): "current" | "30d" | "60d" | "90d" {
 
 const BUCKET_LABELS: Record<string, string> = {
   current: "Current",
-  "30d":   "1–30 days overdue",
-  "60d":   "31–60 days overdue",
+  "30d":   "1-30 days overdue",
+  "60d":   "31-60 days overdue",
   "90d":   "60+ days overdue",
 };
 const BUCKET_COLOR: Record<string, string> = {
@@ -131,8 +131,8 @@ function KanbanPipeline({ withDays, isReadOnly, onMarkPaid, onChase }: {
 }) {
   const cols = [
     { key: "current", label: "Current",     color: "border-green-700/40",  headerColor: "text-green-400",  dot: "bg-green-500" },
-    { key: "30d",     label: "1–30 d overdue", color: "border-yellow-700/40", headerColor: "text-yellow-400", dot: "bg-yellow-500" },
-    { key: "60d",     label: "31–60 d overdue", color: "border-orange-700/40", headerColor: "text-orange-400", dot: "bg-orange-500" },
+    { key: "30d",     label: "1-30 d overdue", color: "border-yellow-700/40", headerColor: "text-yellow-400", dot: "bg-yellow-500" },
+    { key: "60d",     label: "31-60 d overdue", color: "border-orange-700/40", headerColor: "text-orange-400", dot: "bg-orange-500" },
     { key: "90d",     label: "60d+ overdue", color: "border-red-700/40",   headerColor: "text-red-400",    dot: "bg-red-500" },
   ] as const;
 
@@ -531,7 +531,7 @@ export default function ReceivablesPage() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #55 — CUSTOMER RISK SCORING (pay-behaviour + exposure score per customer)
+// #55 - CUSTOMER RISK SCORING (pay-behaviour + exposure score per customer)
 // ════════════════════════════════════════════════════════════════════════════
 interface CustomerRisk {
   name: string;
@@ -542,7 +542,7 @@ interface CustomerRisk {
   payRate: number;         // % invoices paid
   avgDaysLate: number;
   worstOverdue: number;    // current open max days overdue
-  score: number;           // 0–100, higher = safer
+  score: number;           // 0-100, higher = safer
   band: "Low" | "Medium" | "High" | "Severe";
 }
 
@@ -651,7 +651,7 @@ function CustomerRiskScoring() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #56 — FACTORING / DISCOUNTING ESTIMATOR (net proceeds if you sell invoices)
+// #56 - FACTORING / DISCOUNTING ESTIMATOR (net proceeds if you sell invoices)
 // ════════════════════════════════════════════════════════════════════════════
 function FactoringEstimator() {
   const { store } = useApp();
@@ -777,7 +777,7 @@ function FactoringEstimator() {
           </div>
           <p className="text-[10px] text-[var(--color-muted)]">
             Effective cost {effectiveCostPct.toFixed(2)}% of face · annualised ≈ {annualisedPct.toFixed(1)}% on the advance.
-            Compare against your cost of capital before factoring. Estimate only — actual KredX/TReDS terms vary.
+            Compare against your cost of capital before factoring. Estimate only - actual KredX/TReDS terms vary.
           </p>
         </>
       )}
@@ -786,7 +786,7 @@ function FactoringEstimator() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #57 — CASH APPLICATION / AUTO-MATCH RECEIPTS (bank credits → open invoices)
+// #57 - CASH APPLICATION / AUTO-MATCH RECEIPTS (bank credits → open invoices)
 // ════════════════════════════════════════════════════════════════════════════
 interface CashMatch {
   txnId: string;
@@ -879,7 +879,7 @@ function CashApplication() {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center gap-2">
         <Link2 size={14} className="text-[var(--color-primary)]" />
-        <h3 className="text-sm font-semibold">Cash Application — auto-match receipts to invoices</h3>
+        <h3 className="text-sm font-semibold">Cash Application - auto-match receipts to invoices</h3>
         <span className="text-xs text-[var(--color-muted)] ml-auto">{matched.length} suggested · {appliedRows.length} applied</span>
       </div>
 
@@ -955,7 +955,7 @@ function CashApplication() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #58 — CONCENTRATION RISK ALERT (flags when >X% of AR is one customer)
+// #58 - CONCENTRATION RISK ALERT (flags when >X% of AR is one customer)
 // ════════════════════════════════════════════════════════════════════════════
 function ConcentrationRisk() {
   const { store } = useApp();
@@ -972,7 +972,7 @@ function ConcentrationRisk() {
       .sort((a, b) => b.amount - a.amount);
     const top1 = rows[0]?.pct ?? 0;
     const top3 = rows.slice(0, 3).reduce((s, r) => s + r.pct, 0);
-    // Herfindahl–Hirschman Index on shares (0–10000); >2500 = highly concentrated
+    // Herfindahl-Hirschman Index on shares (0-10000); >2500 = highly concentrated
     const hhi = Math.round(rows.reduce((s, r) => s + (r.pct) ** 2, 0));
     return { rows, total, top1, top3, hhi };
   }, [invoices]);
@@ -1007,7 +1007,7 @@ function ConcentrationRisk() {
         {[
           { label: "Top customer share", value: `${top1.toFixed(1)}%`, color: top1 > limit ? "text-red-400" : "text-[var(--color-text)]" },
           { label: "Top 3 share", value: `${top3.toFixed(1)}%`, color: top3 > 60 ? "text-orange-400" : "text-[var(--color-text)]" },
-          { label: "HHI (0–10,000)", value: String(hhi), color: hhi > 2500 ? "text-red-400" : hhi > 1500 ? "text-yellow-400" : "text-green-400" },
+          { label: "HHI (0-10,000)", value: String(hhi), color: hhi > 2500 ? "text-red-400" : hhi > 1500 ? "text-yellow-400" : "text-green-400" },
           { label: "Breaches", value: `${breaches.length}`, color: breaches.length ? "text-red-400" : "text-green-400" },
         ].map(c => (
           <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -1023,7 +1023,7 @@ function ConcentrationRisk() {
           <div>
             <p className="text-sm font-bold text-red-400">Concentration alert</p>
             <p className="text-xs text-[var(--color-muted)] mt-0.5">
-              {breaches.map(b => `${b.name} (${b.pct.toFixed(1)}%)`).join(", ")} each exceed your {limit}% threshold. A default by any of these would materially hit cash flow — diversify or tighten credit.
+              {breaches.map(b => `${b.name} (${b.pct.toFixed(1)}%)`).join(", ")} each exceed your {limit}% threshold. A default by any of these would materially hit cash flow - diversify or tighten credit.
             </p>
           </div>
         </div>
@@ -1060,7 +1060,7 @@ function ConcentrationRisk() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #59 — AR CONFIRMATION / BALANCE STATEMENT MAILER (audit-time confirmations)
+// #59 - AR CONFIRMATION / BALANCE STATEMENT MAILER (audit-time confirmations)
 // ════════════════════════════════════════════════════════════════════════════
 function ARConfirmationMailer() {
   const { store } = useApp();
@@ -1080,7 +1080,7 @@ function ARConfirmationMailer() {
 
   const buildMessage = (name: string, total: number, items: Invoice[]): string => {
     const lines = items
-      .map(i => `  • ${i.invoiceNumber ?? i.id} dated ${format(parseISO(i.invoiceDate), "d MMM yyyy")} — ${formatCurrency(i.amount)}`)
+      .map(i => `  • ${i.invoiceNumber ?? i.id} dated ${format(parseISO(i.invoiceDate), "d MMM yyyy")} - ${formatCurrency(i.amount)}`)
       .join("\n");
     return `Dear ${name},
 
@@ -1100,7 +1100,7 @@ ${firmName}`;
 
   const sendEmail = (name: string, total: number, items: Invoice[]) => {
     const c = contacts[name] || {};
-    const subject = `Balance confirmation request as on ${format(parseISO(asOf), "d MMM yyyy")} — ${firmName}`;
+    const subject = `Balance confirmation request as on ${format(parseISO(asOf), "d MMM yyyy")} - ${firmName}`;
     const body = buildMessage(name, total, items);
     const to = c.email ? encodeURIComponent(c.email) : "";
     window.open(`mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, "_blank");
@@ -1174,7 +1174,7 @@ ${firmName}`;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #60 — DSO TREND (Days Sales Outstanding trend over the last 6 months)
+// #60 - DSO TREND (Days Sales Outstanding trend over the last 6 months)
 // ════════════════════════════════════════════════════════════════════════════
 function DSOTrend() {
   const { store } = useApp();
@@ -1241,13 +1241,13 @@ function DSOTrend() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp size={14} className="text-[var(--color-primary)]" />
-          <h3 className="text-sm font-semibold">Days Sales Outstanding — last 6 months</h3>
+          <h3 className="text-sm font-semibold">Days Sales Outstanding - last 6 months</h3>
           <span className="text-xs text-[var(--color-muted)] ml-auto">Lower = cash converts faster</span>
         </div>
         <div className="flex items-end gap-2 h-40">
           {months.map(m => (
             <div key={m.key} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
-              <span className="text-[10px] font-semibold tabular-nums text-[var(--color-text)]">{m.billed > 0 ? m.dso : "—"}</span>
+              <span className="text-[10px] font-semibold tabular-nums text-[var(--color-text)]">{m.billed > 0 ? m.dso : "-"}</span>
               <div className="w-full rounded-t transition-all" style={{ height: `${(m.dso / maxDso) * 100}%`, minHeight: m.dso > 0 ? "4px" : "0", background: m.dso > avg && avg > 0 ? "#f97316" : "#1A6B55" }} />
               <span className="text-[10px] text-[var(--color-muted)]">{m.label}</span>
             </div>
@@ -1260,7 +1260,7 @@ function DSOTrend() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #61 — AR TURNOVER RATIO (how many times receivables convert per year)
+// #61 - AR TURNOVER RATIO (how many times receivables convert per year)
 // ════════════════════════════════════════════════════════════════════════════
 function ARTurnover() {
   const { store } = useApp();
@@ -1325,24 +1325,24 @@ function ARTurnover() {
       <div className="rounded-lg p-4 border border-[var(--color-border)] bg-[var(--color-surface)] flex items-start gap-2">
         <Repeat size={15} className={`${grade.color} shrink-0 mt-0.5`} />
         <div>
-          <p className={`text-sm font-bold ${grade.color}`}>{grade.label} turnover — {stats.annualised.toFixed(1)}× per year</p>
+          <p className={`text-sm font-bold ${grade.color}`}>{grade.label} turnover - {stats.annualised.toFixed(1)}× per year</p>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
             You collect and re-lend your receivables roughly {stats.annualised.toFixed(1)} times a year ({stats.count} invoices in the window). Higher turnover frees cash; under 4× usually signals lax credit terms or slow collections.
           </p>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Turnover = net credit sales ÷ average receivables; DSO = 365 ÷ turnover. Average AR is estimated from current open balance — a true average needs opening + closing balances from your ledger.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Turnover = net credit sales ÷ average receivables; DSO = 365 ÷ turnover. Average AR is estimated from current open balance - a true average needs opening + closing balances from your ledger.</p>
     </div>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #62 — ECL PROVISIONING MATRIX (Ind-AS 109 expected-credit-loss by aging)
+// #62 - ECL PROVISIONING MATRIX (Ind-AS 109 expected-credit-loss by aging)
 // ════════════════════════════════════════════════════════════════════════════
 function ECLProvisioning() {
   const { store } = useApp();
   const invoices = store.invoices ?? [];
-  // default loss rates (%) per bucket — durable so the user's policy persists
+  // default loss rates (%) per bucket - durable so the user's policy persists
   const [rates, setRates] = useFeatureState<Record<string, string>>("rec-ecl-rates", { current: "0.5", "30d": "3", "60d": "12", "90d": "40" });
 
   const buckets = ["current", "30d", "60d", "90d"] as const;
@@ -1435,7 +1435,7 @@ function ECLProvisioning() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #63 — CREDIT-LIMIT UTILIZATION (per-customer exposure vs set credit ceiling)
+// #63 - CREDIT-LIMIT UTILIZATION (per-customer exposure vs set credit ceiling)
 // ════════════════════════════════════════════════════════════════════════════
 function CreditUtilization() {
   const { store } = useApp();
@@ -1523,7 +1523,7 @@ function CreditUtilization() {
                 </div>
                 <div className="shrink-0">
                   <label className="text-[10px] text-[var(--color-muted)] block mb-0.5 text-right">Limit (₹)</label>
-                  <input type="number" value={r.limit || ""} onChange={e => setLimit(r.name, e.target.value)} placeholder="—"
+                  <input type="number" value={r.limit || ""} onChange={e => setLimit(r.name, e.target.value)} placeholder="-"
                     className="w-28 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-sm text-right tabular-nums outline-none focus:border-[var(--color-primary)]" />
                 </div>
               </div>
@@ -1537,7 +1537,7 @@ function CreditUtilization() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #64 — COLLECTION FORECAST (invoice-to-cash timeline by expected pay date)
+// #64 - COLLECTION FORECAST (invoice-to-cash timeline by expected pay date)
 // ════════════════════════════════════════════════════════════════════════════
 function CollectionForecast() {
   const { store } = useApp();
@@ -1602,7 +1602,7 @@ function CollectionForecast() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <div className="flex items-center gap-2 mb-4">
           <CalendarClock size={14} className="text-[var(--color-primary)]" />
-          <h3 className="text-sm font-semibold">Collection Forecast — next 8 weeks</h3>
+          <h3 className="text-sm font-semibold">Collection Forecast - next 8 weeks</h3>
           <span className="text-xs text-[var(--color-muted)] ml-auto">Adjusted for each customer's pay lag</span>
         </div>
         {weeks.overdueAmt > 0 && (
@@ -1621,7 +1621,7 @@ function CollectionForecast() {
               <div className="flex-1 h-5 bg-[var(--color-bg)] rounded overflow-hidden">
                 <div className="h-full rounded transition-all" style={{ width: `${(w.amount / maxAmt) * 100}%`, background: "#1A6B55" }} />
               </div>
-              <span className="text-xs tabular-nums font-semibold w-24 text-right shrink-0">{w.amount > 0 ? formatCurrency(Math.round(w.amount)) : "—"}</span>
+              <span className="text-xs tabular-nums font-semibold w-24 text-right shrink-0">{w.amount > 0 ? formatCurrency(Math.round(w.amount)) : "-"}</span>
             </div>
           ))}
         </div>
@@ -1632,7 +1632,7 @@ function CollectionForecast() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #65 — OVERDUE HEATMAP (top customers × aging bucket, intensity by amount)
+// #65 - OVERDUE HEATMAP (top customers × aging bucket, intensity by amount)
 // ════════════════════════════════════════════════════════════════════════════
 function OverdueHeatmap() {
   const { store } = useApp();
@@ -1685,7 +1685,7 @@ function OverdueHeatmap() {
             <thead>
               <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
                 <th className="px-4 py-2.5 text-left font-medium">Customer</th>
-                {buckets.map(b => <th key={b} className={`px-3 py-2.5 text-right font-medium ${BUCKET_COLOR[b]}`}>{b === "current" ? "Current" : b === "30d" ? "1–30d" : b === "60d" ? "31–60d" : "60d+"}</th>)}
+                {buckets.map(b => <th key={b} className={`px-3 py-2.5 text-right font-medium ${BUCKET_COLOR[b]}`}>{b === "current" ? "Current" : b === "30d" ? "1-30d" : b === "60d" ? "31-60d" : "60d+"}</th>)}
                 <th className="px-4 py-2.5 text-right font-medium">Total</th>
               </tr>
             </thead>
@@ -1705,19 +1705,19 @@ function OverdueHeatmap() {
           </table>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Darker cells = larger amounts; colour shifts green → red as invoices age. Scan the right-hand columns to spot customers parking big balances in the 60d+ band — chase those first.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Darker cells = larger amounts; colour shifts green → red as invoices age. Scan the right-hand columns to spot customers parking big balances in the 60d+ band - chase those first.</p>
     </div>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #66 — DUNNING FUNNEL (open AR distributed across reminder/escalation stages)
+// #66 - DUNNING FUNNEL (open AR distributed across reminder/escalation stages)
 // ════════════════════════════════════════════════════════════════════════════
 const DUNNING_STAGES: { key: string; label: string; desc: string; min: number; max: number; color: string }[] = [
-  { key: "not-due",    label: "Not yet due",            desc: "Monitor — no action",  min: -9999, max: 0,     color: "#1A6B55" },
-  { key: "reminder",   label: "Stage 1 · Reminder",     desc: "Gentle nudge 1–15d",   min: 1,     max: 15,    color: "#22c55e" },
-  { key: "followup",   label: "Stage 2 · Follow-up",    desc: "Firm chase 16–30d",    min: 16,    max: 30,    color: "#eab308" },
-  { key: "escalation", label: "Stage 3 · Escalation",   desc: "Demand 31–60d",        min: 31,    max: 60,    color: "#f97316" },
+  { key: "not-due",    label: "Not yet due",            desc: "Monitor - no action",  min: -9999, max: 0,     color: "#1A6B55" },
+  { key: "reminder",   label: "Stage 1 · Reminder",     desc: "Gentle nudge 1-15d",   min: 1,     max: 15,    color: "#22c55e" },
+  { key: "followup",   label: "Stage 2 · Follow-up",    desc: "Firm chase 16-30d",    min: 16,    max: 30,    color: "#eab308" },
+  { key: "escalation", label: "Stage 3 · Escalation",   desc: "Demand 31-60d",        min: 31,    max: 60,    color: "#f97316" },
   { key: "demand",     label: "Stage 4 · Final demand", desc: "Legal/recovery 60d+",  min: 61,    max: 99999, color: "#ef4444" },
 ];
 
@@ -1739,7 +1739,7 @@ function DunningFunnel() {
 
   const handleChaseStage = (label: string, count: number) => {
     if (count === 0) { toast.error("No invoices in this stage"); return; }
-    toast.success(`${count} invoice${count !== 1 ? "s" : ""} queued for "${label}" — open each customer to send the reminder`);
+    toast.success(`${count} invoice${count !== 1 ? "s" : ""} queued for "${label}" - open each customer to send the reminder`);
   };
 
   if (totalCnt === 0) {
@@ -1794,13 +1794,13 @@ function DunningFunnel() {
           );
         })}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Each open invoice falls into a stage by days past due: not-due → reminder (1–15) → follow-up (16–30) → escalation (31–60) → final demand (60d+). Use it to decide who gets which message today.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Each open invoice falls into a stage by days past due: not-due → reminder (1-15) → follow-up (16-30) → escalation (31-60) → final demand (60d+). Use it to decide who gets which message today.</p>
     </div>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #67 — PROMISE-TO-PAY CAPTURE (log debtor commitments, flag broken promises)
+// #67 - PROMISE-TO-PAY CAPTURE (log debtor commitments, flag broken promises)
 // ════════════════════════════════════════════════════════════════════════════
 interface Promise { invoiceId: string; date: string; amount: string; note: string; loggedAt: string; }
 
@@ -1894,13 +1894,13 @@ function PromiseToPay() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A promise turns green once its invoice is marked paid, red once the promised date passes unpaid. Chase broken promises first — they predict default better than aging alone.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A promise turns green once its invoice is marked paid, red once the promised date passes unpaid. Chase broken promises first - they predict default better than aging alone.</p>
     </div>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #68 — DISPUTE / DEDUCTION TRACKER (quarantine contested amounts, keep chasing rest)
+// #68 - DISPUTE / DEDUCTION TRACKER (quarantine contested amounts, keep chasing rest)
 // ════════════════════════════════════════════════════════════════════════════
 const DISPUTE_REASONS = ["Pricing", "Quality / damage", "Short delivery", "Freight", "Duplicate", "Other"] as const;
 interface Dispute { invoiceId: string; amount: string; reason: string; status: "open" | "resolved"; loggedAt: string; }
@@ -1919,7 +1919,7 @@ function DisputeTracker() {
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) { toast.error("Enter a disputed amount"); return; }
     setDisputes(prev => ({ ...prev, [invoiceId]: { invoiceId, amount, reason, status: "open", loggedAt: new Date().toISOString() } }));
-    toast.success("Dispute logged — undisputed balance keeps chasing");
+    toast.success("Dispute logged - undisputed balance keeps chasing");
     setInvoiceId(""); setAmount("");
   };
   const toggle = (id: string) => setDisputes(prev => ({ ...prev, [id]: { ...prev[id], status: prev[id].status === "open" ? "resolved" : "open" } }));
@@ -1942,7 +1942,7 @@ function DisputeTracker() {
         {[
           { label: "Disputed (quarantined)", value: formatCurrency(Math.round(openDisputed)), color: "text-orange-400" },
           { label: "Open disputes", value: String(quarantined), color: quarantined ? "text-red-400" : "text-green-400" },
-          { label: "Undisputed — still chase", value: formatCurrency(Math.round(stillChaseable)), color: "text-[var(--color-primary)]" },
+          { label: "Undisputed - still chase", value: formatCurrency(Math.round(stillChaseable)), color: "text-[var(--color-primary)]" },
         ].map(c => (
           <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
@@ -1995,13 +1995,13 @@ function DisputeTracker() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Logging a dispute ring-fences only the contested rupees — the undisputed balance stays in your collection pipeline instead of the whole invoice stalling. Resolve to release the hold.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Logging a dispute ring-fences only the contested rupees - the undisputed balance stays in your collection pipeline instead of the whole invoice stalling. Resolve to release the hold.</p>
     </div>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #69 — EARLY-PAYMENT DISCOUNT ENGINE (2/10-net-30 style offers + uptake/cost)
+// #69 - EARLY-PAYMENT DISCOUNT ENGINE (2/10-net-30 style offers + uptake/cost)
 // ════════════════════════════════════════════════════════════════════════════
 function EarlyPaymentDiscount() {
   const { store } = useApp();
@@ -2079,13 +2079,13 @@ function EarlyPaymentDiscount() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A {discountPct}/{windowDays} net {netDays} offer costs you ≈{apr.toFixed(0)}% annualised — only worth it if it beats your cost of borrowing or factoring. Eligible = still within the discount window from invoice date.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A {discountPct}/{windowDays} net {netDays} offer costs you ≈{apr.toFixed(0)}% annualised - only worth it if it beats your cost of borrowing or factoring. Eligible = still within the discount window from invoice date.</p>
     </div>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #70 — CREDIT-HOLD CANDIDATE LIST (who to stop shipping to: overdue / over-limit)
+// #70 - CREDIT-HOLD CANDIDATE LIST (who to stop shipping to: overdue / over-limit)
 // ════════════════════════════════════════════════════════════════════════════
 function CreditHoldList() {
   const { store } = useApp();
@@ -2181,7 +2181,7 @@ function CreditHoldList() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #71 — WRITE-OFF / BAD-DEBT PROVISIONING POLICY (auto-flag uncollectible by age)
+// #71 - WRITE-OFF / BAD-DEBT PROVISIONING POLICY (auto-flag uncollectible by age)
 // ════════════════════════════════════════════════════════════════════════════
 function WriteOffPolicy() {
   const { store } = useApp();
@@ -2257,13 +2257,13 @@ function WriteOffPolicy() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Invoices overdue beyond your policy threshold are flagged as doubtful debt. Approving records an intent-to-write-off locally (audit trail) — book the actual write-off and reverse any GST in your accounting software.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Invoices overdue beyond your policy threshold are flagged as doubtful debt. Approving records an intent-to-write-off locally (audit trail) - book the actual write-off and reverse any GST in your accounting software.</p>
     </div>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// #72 — CUSTOMER PAYMENT BEHAVIOR TIMELINE (days-to-pay history per customer)
+// #72 - CUSTOMER PAYMENT BEHAVIOR TIMELINE (days-to-pay history per customer)
 // ════════════════════════════════════════════════════════════════════════════
 function PaymentTimeline() {
   const { store } = useApp();
@@ -2332,7 +2332,7 @@ function PaymentTimeline() {
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-[var(--color-border)]"><h3 className="text-sm font-semibold truncate">{active} — invoice history</h3></div>
+        <div className="px-4 py-3 border-b border-[var(--color-border)]"><h3 className="text-sm font-semibold truncate">{active} - invoice history</h3></div>
         <div className="divide-y divide-[var(--color-border)] max-h-96 overflow-y-auto">
           {data.list.map(i => (
             <div key={i.id} className="px-4 py-3 flex items-center gap-3">
@@ -2385,7 +2385,7 @@ function DaysBeyondTerms() {
     return (
       <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
         <Hourglass size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
-        <p className="text-sm text-[var(--color-muted)]">No open invoices — Days Beyond Terms appears once there are unpaid receivables.</p>
+        <p className="text-sm text-[var(--color-muted)]">No open invoices - Days Beyond Terms appears once there are unpaid receivables.</p>
       </div>
     );
   }
@@ -2765,8 +2765,8 @@ function RecoveryROICalculator() {
           </div>
           <div className={`rounded-lg p-4 text-sm font-medium ${data.netRecovery >= 0 ? "bg-green-950/20 text-green-400" : "bg-red-950/20 text-red-400"}`}>
             {data.netRecovery >= 0
-              ? `Worth pursuing — ROI ≈ ${data.roi.toFixed(0)}% on ${formatCurrency(Math.round(data.totalCost))} spent.`
-              : `Pursuit likely loses money — costs exceed expected net recovery by ${formatCurrency(Math.round(-data.netRecovery))}. Consider settlement or write-off.`}
+              ? `Worth pursuing - ROI ≈ ${data.roi.toFixed(0)}% on ${formatCurrency(Math.round(data.totalCost))} spent.`
+              : `Pursuit likely loses money - costs exceed expected net recovery by ${formatCurrency(Math.round(-data.netRecovery))}. Consider settlement or write-off.`}
           </div>
         </>
       )}
@@ -2962,11 +2962,11 @@ function ConcentrationStressTest() {
             </div>
           </div>
           <div className={`rounded-lg p-4 text-sm font-medium ${data.concPct >= 40 ? "bg-red-950/20 text-red-400" : "bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)]"}`}>
-            If your top {data.n} customer{data.n !== 1 ? "s" : ""} delay {data.delay} days at {lossPct}% severity, {formatCurrency(Math.round(data.impact))} of collections is exposed — {data.concPct >= 40 ? "dangerously concentrated. Diversify the book or tighten their terms." : "within a comfortable range."}
+            If your top {data.n} customer{data.n !== 1 ? "s" : ""} delay {data.delay} days at {lossPct}% severity, {formatCurrency(Math.round(data.impact))} of collections is exposed - {data.concPct >= 40 ? "dangerously concentrated. Diversify the book or tighten their terms." : "within a comfortable range."}
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Simulates the cash hit if your largest debtors default or delay together. High concentration means one buyer's slip can sink your month — use it to justify diversifying sales or insuring top accounts.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Simulates the cash hit if your largest debtors default or delay together. High concentration means one buyer's slip can sink your month - use it to justify diversifying sales or insuring top accounts.</p>
     </div>
   );
 }
@@ -2998,7 +2998,7 @@ function CustomerStatementGenerator() {
 
   const copyStatement = () => {
     if (!statement || !sel) return;
-    const header = `Statement of account — ${sel} (as of ${format(new Date(), "d MMM yyyy")})`;
+    const header = `Statement of account - ${sel} (as of ${format(new Date(), "d MMM yyyy")})`;
     const body = statement.lines.map(l =>
       `${format(parseISO(l.inv.invoiceDate), "d MMM yyyy")} · ${l.inv.invoiceNumber ?? l.inv.id} · ${l.inv.status === "paid" ? "PAID" : "DUE"} · ${formatCurrency(l.inv.amount)} · bal ${formatCurrency(l.balance)}`
     ).join("\n");
@@ -3049,7 +3049,7 @@ function CustomerStatementGenerator() {
           </div>
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
             <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Statement — {sel}</h3>
+              <h3 className="text-sm font-semibold">Statement - {sel}</h3>
               <button onClick={copyStatement} className="text-xs text-[var(--color-primary)] font-medium hover:underline">Copy statement</button>
             </div>
             <div className="overflow-x-auto">
@@ -3072,7 +3072,7 @@ function CustomerStatementGenerator() {
                         <span className={`ml-2 text-[10px] font-semibold ${l.inv.status === "paid" ? "text-green-400" : l.inv.status === "overdue" ? "text-red-400" : "text-yellow-400"}`}>{l.inv.status === "paid" ? "PAID" : l.inv.status === "overdue" ? "OVERDUE" : "DUE"}</span>
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(l.charge)}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{l.credit > 0 ? formatCurrency(l.credit) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{l.credit > 0 ? formatCurrency(l.credit) : "-"}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{formatCurrency(l.balance)}</td>
                     </tr>
                   ))}
@@ -3149,7 +3149,7 @@ function CollectionTargetTracker() {
             </div>
           </div>
           <button
-            onClick={() => toast.success(data.gap <= 0 ? "Target hit — nice work!" : `${formatCurrency(Math.round(data.gap))} to go; ${formatCurrency(data.dueThisMonth)} due this month covers it`)}
+            onClick={() => toast.success(data.gap <= 0 ? "Target hit - nice work!" : `${formatCurrency(Math.round(data.gap))} to go; ${formatCurrency(data.dueThisMonth)} due this month covers it`)}
             className="px-4 py-2 text-xs rounded bg-[var(--color-primary)] text-[var(--color-bg)] font-medium">
             Check progress
           </button>

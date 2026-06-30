@@ -75,7 +75,7 @@ const equityPctOf = (amount: number, preMoney: number): number =>
 
 export default function CapitalPage() {
   // Raise-management writes (create / publish / add-investor) POST/PATCH to
-  // owner/super_admin-only endpoints — an `investor` role 403s. Gate the write
+  // owner/super_admin-only endpoints - an `investor` role 403s. Gate the write
   // controls on the effective role; everyone keeps the read-only raises view.
   const { effectiveRole } = useApp();
   const canManageRaises = effectiveRole === "owner" || effectiveRole === "super_admin";
@@ -101,7 +101,7 @@ export default function CapitalPage() {
     let alive = true;
     api.get<ApiRaise[]>("/api/capital/raises")
       .then(rows => { if (alive) setRaises(Array.isArray(rows) ? rows : []); })
-      .catch(() => { if (alive) toast.error("Couldn't load capital raises — working offline"); });
+      .catch(() => { if (alive) toast.error("Couldn't load capital raises - working offline"); });
     return () => { alive = false; };
   }, []);
 
@@ -133,7 +133,7 @@ export default function CapitalPage() {
       toast.success("Capital raise created");
       setShowRaiseForm(false); setRaiseName(""); setTarget(""); setPreMoney("");
     } catch {
-      toast.error("Couldn't save the raise — check your connection");
+      toast.error("Couldn't save the raise - check your connection");
     } finally {
       setBusy(false);
     }
@@ -145,7 +145,7 @@ export default function CapitalPage() {
     try {
       const updated = await api.patch<ApiRaise>(`/api/capital/raises/${r.id}`, { status: "active" });
       setRaises(rs => rs.map(x => x.id === r.id ? updated : x));
-      toast.success("Raise published — now accepting investors");
+      toast.success("Raise published - now accepting investors");
     } catch {
       setRaises(prev); // rollback
       toast.error("Couldn't publish the raise");
@@ -168,7 +168,7 @@ export default function CapitalPage() {
       toast.success(`Commitment of ${formatCurrency(amt)} recorded`);
       setShowInvestForm(null); setInvestorName(""); setInvestorEmail(""); setInvestAmount("");
     } catch {
-      toast.error("Couldn't record the investor — check your connection");
+      toast.error("Couldn't record the investor - check your connection");
     } finally {
       setBusy(false);
     }
@@ -202,7 +202,7 @@ export default function CapitalPage() {
 
       <AiInsight
         collapsed
-        title="✨ AI insight — capital"
+        title="✨ AI insight - capital"
         question="Based on my capital structure and funding progress, what should I prioritise and what are the key risks or opportunities?"
         context={{
           totalRaised,
@@ -232,7 +232,7 @@ export default function CapitalPage() {
           <h2 className="text-base font-semibold mb-1">No capital raises yet</h2>
           <p className="text-sm text-[var(--color-muted)] mb-5 max-w-sm mx-auto">
             {canManageRaises
-              ? "Pick an instrument — Equity, CCPS, SAFE, Convertible Note or Revenue-Based Financing — set a target in ₹, and start tracking investor commitments."
+              ? "Pick an instrument - Equity, CCPS, SAFE, Convertible Note or Revenue-Based Financing - set a target in ₹, and start tracking investor commitments."
               : "No capital raises have been set up yet. They'll appear here once the owner creates one."}
           </p>
           {canManageRaises && (
@@ -244,7 +244,7 @@ export default function CapitalPage() {
         </div>
       )}
 
-      {/* Stats — only when data exists */}
+      {/* Stats - only when data exists */}
       {raises.length > 0 && (
         <div className="grid grid-cols-3 gap-3 md:gap-4">
           {[
@@ -284,7 +284,7 @@ export default function CapitalPage() {
             </div>
           )}
           {!showPreMoney && (
-            <p className="text-[11px] text-[var(--color-muted)]">{raiseTypeLabel(raiseType)} — no equity issued upfront, so no pre-money needed here.</p>
+            <p className="text-[11px] text-[var(--color-muted)]">{raiseTypeLabel(raiseType)} - no equity issued upfront, so no pre-money needed here.</p>
           )}
           <div className="flex gap-2">
             <button onClick={handleCreateRaise} disabled={busy} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">{busy ? "Saving…" : "Create Raise"}</button>
@@ -412,7 +412,7 @@ function RunwayExtensionPlanner() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
         <div>
           <h2 className="text-sm font-semibold flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Runway-Extension Planner</h2>
-          <p className="text-xs text-[var(--color-muted)] mt-1">Pull the cut-cost and raise-capital levers to hit your target runway. Cash &amp; burn pre-filled from your last 90 days — override anytime.</p>
+          <p className="text-xs text-[var(--color-muted)] mt-1">Pull the cut-cost and raise-capital levers to hit your target runway. Cash &amp; burn pre-filled from your last 90 days - override anytime.</p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Cash on hand (₹)</label><input type="number" min={0} value={cash} onChange={e => setCash(e.target.value)} placeholder="e.g. 5000000" className={inp} /></div>
@@ -442,7 +442,7 @@ function RunwayExtensionPlanner() {
       {b > 0 && tgt > 0 && (
         <div className={`rounded-lg p-4 border ${hitsTarget ? "border-green-800/40 bg-green-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
           <p className={`text-sm font-bold mb-2 ${hitsTarget ? "text-green-400" : "text-orange-400"}`}>
-            {hitsTarget ? `✓ Plan reaches ${tgt} months of runway` : `⚠ Plan falls short of ${tgt} months — close the gap with either lever:`}
+            {hitsTarget ? `✓ Plan reaches ${tgt} months of runway` : `⚠ Plan falls short of ${tgt} months - close the gap with either lever:`}
           </p>
           {!hitsTarget && (
             <ul className="space-y-1 text-xs text-[var(--color-muted)]">
@@ -452,7 +452,7 @@ function RunwayExtensionPlanner() {
           )}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Runway = cash ÷ monthly burn. Cost-cut reduces burn proportionally; a raise is a one-time cash injection. Excludes revenue growth and timing — treat as a planning estimate.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Runway = cash ÷ monthly burn. Cost-cut reduces burn proportionally; a raise is a one-time cash injection. Excludes revenue growth and timing - treat as a planning estimate.</p>
     </section>
   );
 }
@@ -526,7 +526,7 @@ function SafeNoteModeller() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             { label: "Amount converting", value: fc(Math.round(principalPlusInterest)), color: "text-[var(--color-primary)]" },
-            { label: "Conversion price/sh", value: conversionPPS > 0 ? `₹${conversionPPS.toFixed(3)}` : "—", color: "text-blue-400" },
+            { label: "Conversion price/sh", value: conversionPPS > 0 ? `₹${conversionPPS.toFixed(3)}` : "-", color: "text-blue-400" },
             { label: "Shares issued", value: Math.round(sharesIssued).toLocaleString("en-IN"), color: "text-[var(--color-text)]" },
             { label: "Ownership", value: `${ownershipPct.toFixed(2)}%`, color: "text-orange-400" },
           ].map(c => (
@@ -566,12 +566,12 @@ type GrantProfile = {
 };
 const GRANT_SCHEMES: Scheme[] = [
   { name: "CGTMSE Collateral-Free Credit Guarantee", level: "Central", benefit: "Up to ₹5 cr collateral-free term/working-capital loan", why: "Udyam-registered micro/small enterprise", test: p => p.udyam && p.category !== "medium" },
-  { name: "PMEGP (Margin-Money Subsidy)", level: "Central", benefit: "15–35% capital subsidy on new manufacturing/service units", why: "New manufacturing unit, Udyam-eligible", test: p => p.manufacturing && p.ageYears <= 1 },
+  { name: "PMEGP (Margin-Money Subsidy)", level: "Central", benefit: "15-35% capital subsidy on new manufacturing/service units", why: "New manufacturing unit, Udyam-eligible", test: p => p.manufacturing && p.ageYears <= 1 },
   { name: "Credit-Linked Capital Subsidy (CLCSS)", level: "Central", benefit: "15% subsidy (cap ₹15 lakh) on plant & machinery upgrade", why: "Manufacturing MSME upgrading technology", test: p => p.manufacturing && p.tech },
   { name: "Startup India Seed Fund (DPIIT)", level: "Central", benefit: "Up to ₹50 lakh seed funding / grant", why: "DPIIT-recognised startup, under 2 years old", test: p => p.dpiit && p.ageYears <= 2 },
-  { name: "Stand-Up India", level: "Central", benefit: "₹10 lakh–₹1 cr loan for greenfield enterprise", why: "Women / SC-ST entrepreneur, manufacturing or services", test: p => (p.women || p.sc_st) && p.ageYears <= 1 },
+  { name: "Stand-Up India", level: "Central", benefit: "₹10 lakh-₹1 cr loan for greenfield enterprise", why: "Women / SC-ST entrepreneur, manufacturing or services", test: p => (p.women || p.sc_st) && p.ageYears <= 1 },
   { name: "MSE-CDP / Export Promotion (MEIS-successor)", level: "Central", benefit: "Market-access & export-incentive support", why: "Exporting MSME", test: p => p.exporter && p.udyam },
-  { name: "State Capital-Investment Subsidy", level: "State", benefit: "10–25% subsidy on fixed-capital investment (state-specific)", why: "Manufacturing unit registered in a state MSME policy", test: p => p.manufacturing && p.udyam },
+  { name: "State Capital-Investment Subsidy", level: "State", benefit: "10-25% subsidy on fixed-capital investment (state-specific)", why: "Manufacturing unit registered in a state MSME policy", test: p => p.manufacturing && p.udyam },
   { name: "State Power-Tariff / SGST Reimbursement", level: "State", benefit: "Electricity-duty exemption & SGST reimbursement for early years", why: "New manufacturing unit in eligible district", test: p => p.manufacturing && p.ageYears <= 3 },
 ];
 function GrantSubsidyFinder() {
@@ -620,7 +620,7 @@ function GrantSubsidyFinder() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <p className="text-xs font-semibold mb-3">{eligible.length} scheme{eligible.length === 1 ? "" : "s"} matched</p>
         {eligible.length === 0 ? (
-          <p className="text-xs text-[var(--color-muted)]">No schemes matched — get Udyam-registered and revisit; most central subsidies require it.</p>
+          <p className="text-xs text-[var(--color-muted)]">No schemes matched - get Udyam-registered and revisit; most central subsidies require it.</p>
         ) : (
           <div className="space-y-2">
             {eligible.map(s => (
@@ -636,7 +636,7 @@ function GrantSubsidyFinder() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative eligibility only — final approval depends on scheme guidelines, district notifications &amp; documentation. State subsidies vary by state policy. Verify on the relevant portal before applying.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative eligibility only - final approval depends on scheme guidelines, district notifications &amp; documentation. State subsidies vary by state policy. Verify on the relevant portal before applying.</p>
     </section>
   );
 }
@@ -706,7 +706,7 @@ function UseOfFundsTracker() {
 
       {totalRaised > 0 && uncommitted < 0 && (
         <div className="rounded-lg p-3 border border-red-800/40 bg-red-950/20 text-xs text-red-400 font-medium">
-          ⚠ Over-committed by {fc(Math.abs(uncommitted))} — allocations exceed total capital raised.
+          ⚠ Over-committed by {fc(Math.abs(uncommitted))} - allocations exceed total capital raised.
         </div>
       )}
 
@@ -747,7 +747,7 @@ function UseOfFundsTracker() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Committed = earmarked for a purpose; deployed = actually spent. Uncommitted = raised minus committed — capital still free to allocate.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Committed = earmarked for a purpose; deployed = actually spent. Uncommitted = raised minus committed - capital still free to allocate.</p>
     </section>
   );
 }

@@ -1,7 +1,7 @@
 import { useApp } from "@/context/AppContext";
 import { Check, RefreshCw, CloudOff } from "lucide-react";
 
-// C8 — make cross-device sync visible. Reads the live syncStatus from AppContext
+// C8 - make cross-device sync visible. Reads the live syncStatus from AppContext
 // (saved / saving / error) so users trust their data carried over.
 export default function SyncIndicator() {
   const { syncStatus } = useApp();
@@ -14,7 +14,7 @@ export default function SyncIndicator() {
   return (
     <span
       className={`inline-flex items-center gap-1 text-[10px] font-medium ${s.cls}`}
-      title={syncStatus === "error" ? "Saved on this device — will sync when back online" : "Your changes sync automatically across your devices"}
+      title={syncStatus === "error" ? "Saved on this device - will sync when back online" : "Your changes sync automatically across your devices"}
     >
       <s.Icon size={11} className={s.spin ? "animate-spin" : ""} /> {s.text}
     </span>

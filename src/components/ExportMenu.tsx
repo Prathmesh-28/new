@@ -9,7 +9,7 @@ interface Props {
   filename: string;                       // base name (no extension)
   title?: string;                         // heading for PDF/print
   columns: ExportColumn[];
-  // Accept any row-object array — typed feature interfaces lack an index signature
+  // Accept any row-object array - typed feature interfaces lack an index signature
   // so we widen here rather than force every caller to cast.
   rows: any[];
   subtitle?: string;
@@ -17,7 +17,7 @@ interface Props {
 }
 
 /**
- * Drop-in "Export ▾" menu — CSV / Excel / PDF / Print — for any table. Pass the
+ * Drop-in "Export ▾" menu - CSV / Excel / PDF / Print - for any table. Pass the
  * column defs ({key,label}) and the row objects already on screen; everything is
  * client-side (no backend round-trip). Built on src/lib/csv + src/lib/exporters.
  */

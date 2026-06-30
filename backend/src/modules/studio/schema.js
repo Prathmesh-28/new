@@ -1,4 +1,4 @@
-// Headroom Studio — App Builder, Phase 0 data model.
+// Headroom Studio - App Builder, Phase 0 data model.
 //
 // A "project" is a generated app: a file tree captured as ordered versions, plus
 // deployment records. The codegen orchestrator (Phase 1) writes versions; the
@@ -59,7 +59,7 @@ const STUDIO_SCHEMA = `
   CREATE INDEX IF NOT EXISTS studio_deployments_project ON studio_deployments(project_id, created_at DESC);
   CREATE UNIQUE INDEX IF NOT EXISTS studio_deployments_token ON studio_deployments(token) WHERE token IS NOT NULL;
 
-  -- ── Agent bridge (the wedge) — which Agent Studio agents an app may embed ─────
+  -- ── Agent bridge (the wedge) - which Agent Studio agents an app may embed ─────
   -- A grant lets the project's published app call that agent through the public,
   -- metered bridge (/api/agent-bridge/:appToken/chat). Tenant-scoped both ways.
   CREATE TABLE IF NOT EXISTS studio_app_agents (

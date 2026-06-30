@@ -125,7 +125,7 @@ export default function TransactionImportModal({ bankAccountId, onClose, onImpor
               className="border-2 border-dashed border-[var(--color-border)] hover:border-[var(--color-primary)]/50 rounded-lg p-10 text-center cursor-pointer transition-colors">
               <Upload size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-50" />
               <p className="text-sm font-medium mb-1">Click to upload a CSV file</p>
-              <p className="text-xs text-[var(--color-muted)]">Required columns: date, amount — optional: description / narration</p>
+              <p className="text-xs text-[var(--color-muted)]">Required columns: date, amount - optional: description / narration</p>
             </div>
             <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFile} />
             <div className="mt-4 p-3 bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)]">
@@ -167,7 +167,7 @@ export default function TransactionImportModal({ bankAccountId, onClose, onImpor
                   {rows.slice(0, 50).map(r => (
                     <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0">
                       <td className="px-3 py-2 text-[var(--color-muted)]">{r.date}</td>
-                      <td className="px-3 py-2 max-w-[200px] truncate">{r.description || "—"}</td>
+                      <td className="px-3 py-2 max-w-[200px] truncate">{r.description || "-"}</td>
                       <td className={`px-3 py-2 font-medium ${r.amount > 0 ? "text-green-400" : "text-red-400"}`}>
                         {r.amount > 0 ? "+" : ""}₹{Math.abs(r.amount).toLocaleString()}
                       </td>

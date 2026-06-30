@@ -16,7 +16,7 @@ const INDUSTRY_MULTIPLES: Record<string, number> = {
 };
 
 // Backend-shaped capital raise (rows from GET /api/capital/raises). Capital raises
-// now persist to Postgres — CapitalPage no longer writes the local store — so the
+// now persist to Postgres - CapitalPage no longer writes the local store - so the
 // dilution simulator / cap-table read here from the API and only fall back to the
 // store when the API returns nothing (e.g. offline).
 interface ApiRaise {
@@ -54,7 +54,7 @@ export default function ValuationPage() {
       .catch(() => {
         if (!alive) return;
         setApiRaises([]); // fall through to store-based figures
-        toast.error("Couldn't load capital raises — showing local data");
+        toast.error("Couldn't load capital raises - showing local data");
       });
     return () => { alive = false; };
   }, []);
@@ -155,8 +155,8 @@ export default function ValuationPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "Annual Revenue (run-rate)", value: formatAmount(annualRevenue), sub: "3-month average × 12", color: "text-[var(--color-text)]" },
-          { label: "Indicative Valuation", value: formatAmount(range.mid), sub: `Range ${formatAmount(range.low)} – ${formatAmount(range.high)}`, color: "text-[var(--color-primary)]" },
-          { label: "Implied Multiple", value: annualRevenue > 0 ? `${(range.mid / annualRevenue).toFixed(1)}x` : "—", sub: `Industry median ${defaultMultiple}x (${store.firm.industry || "general"})`, color: "text-blue-400" },
+          { label: "Indicative Valuation", value: formatAmount(range.mid), sub: `Range ${formatAmount(range.low)} - ${formatAmount(range.high)}`, color: "text-[var(--color-primary)]" },
+          { label: "Implied Multiple", value: annualRevenue > 0 ? `${(range.mid / annualRevenue).toFixed(1)}x` : "-", sub: `Industry median ${defaultMultiple}x (${store.firm.industry || "general"})`, color: "text-blue-400" },
           { label: "Raised So Far", value: formatAmount(raisedSoFar), sub: raisesCountLabel, color: "text-green-400" },
         ].map(k => (
           <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -211,11 +211,11 @@ export default function ValuationPage() {
               <strong>{discount}%</strong>
             </div>
             <input type="range" min={10} max={40} step={1} value={discount} onChange={e => setDiscount(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
-            <p className="text-[10px] text-[var(--color-muted)] mt-1">Indian SMB equity typically 18–30%. Higher risk → lower valuation.</p>
+            <p className="text-[10px] text-[var(--color-muted)] mt-1">Indian SMB equity typically 18-30%. Higher risk → lower valuation.</p>
           </div>
           {baseFcf <= 0 && (
             <p className="text-[10px] text-yellow-400 bg-yellow-950/30 border border-yellow-800/30 rounded-lg p-2">
-              Not yet free-cash-flow positive — DCF uses 10% of revenue as a normalised FCF proxy.
+              Not yet free-cash-flow positive - DCF uses 10% of revenue as a normalised FCF proxy.
             </p>
           )}
         </div>
@@ -251,7 +251,7 @@ export default function ValuationPage() {
       {/* DCF table */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
         <div className="px-5 py-3 border-b border-[var(--color-border)]">
-          <p className="text-sm font-semibold">5-Year DCF — projected free cash flow discounted at {discount}%</p>
+          <p className="text-sm font-semibold">5-Year DCF - projected free cash flow discounted at {discount}%</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -315,7 +315,7 @@ export default function ValuationPage() {
         </div>
         <p className="text-[10px] text-[var(--color-muted)] mt-3">
           You retain {dil.founderRetainedPct.toFixed(1)}% after the round.
-          {dil.investorPct > 25 && " Giving up over 25% in one round is aggressive — consider a smaller raise or revenue-based financing via Credit."}
+          {dil.investorPct > 25 && " Giving up over 25% in one round is aggressive - consider a smaller raise or revenue-based financing via Credit."}
         </p>
         <div className="flex gap-2 mt-3">
           <button onClick={() => navigate("/capital")} className="text-xs bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-1.5 rounded-lg hover:bg-[var(--color-primary)]/25 flex items-center gap-1.5">
@@ -347,7 +347,7 @@ export default function ValuationPage() {
         <Esop409aFmv enterpriseValue={range.mid} />
       </section>
 
-      {/* VC method — exit value ÷ target return */}
+      {/* VC method - exit value ÷ target return */}
       <section id="vc-method" className="scroll-mt-4">
         <VcMethod annualRevenue={annualRevenue} raiseAmount={raiseAmount} />
       </section>
@@ -464,8 +464,8 @@ function ComparableMultiples({ annualRevenue, annualEbitda, industry }: { annual
   const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
   const bars = [
-    { name: `${m.revLow}–${m.revHigh}x Revenue`, value: Math.round((m.revLow + m.revHigh) / 2 * rev), fill: "#3b82f6" },
-    { name: `${m.ebitdaLow}–${m.ebitdaHigh}x EBITDA`, value: Math.round((m.ebitdaLow + m.ebitdaHigh) / 2 * ebitda), fill: "#22c55e" },
+    { name: `${m.revLow}-${m.revHigh}x Revenue`, value: Math.round((m.revLow + m.revHigh) / 2 * rev), fill: "#3b82f6" },
+    { name: `${m.ebitdaLow}-${m.ebitdaHigh}x EBITDA`, value: Math.round((m.ebitdaLow + m.ebitdaHigh) / 2 * ebitda), fill: "#22c55e" },
   ];
 
   return (
@@ -496,7 +496,7 @@ function ComparableMultiples({ annualRevenue, annualEbitda, industry }: { annual
         {(["revenue", "ebitda"] as const).map(b => (
           <button key={b} onClick={() => setBasis(b)}
             className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all capitalize ${basis === b ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
-            {b === "revenue" ? `Revenue basis (${m.revLow}–${m.revHigh}x)` : `EBITDA basis (${m.ebitdaLow}–${m.ebitdaHigh}x)`}
+            {b === "revenue" ? `Revenue basis (${m.revLow}-${m.revHigh}x)` : `EBITDA basis (${m.ebitdaLow}-${m.ebitdaHigh}x)`}
           </button>
         ))}
       </div>
@@ -525,7 +525,7 @@ function ComparableMultiples({ annualRevenue, annualEbitda, industry }: { annual
           </ResponsiveContainer>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Private-company multiples carry a 20–35% liquidity/control discount vs listed comparables. Use as a sanity-check, not a quote.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Private-company multiples carry a 20-35% liquidity/control discount vs listed comparables. Use as a sanity-check, not a quote.</p>
     </div>
   );
 }
@@ -551,7 +551,7 @@ const SCORECARD_FACTORS = [
 
 function BerkusScorecard() {
   const [method, setMethod] = useState<"berkus" | "scorecard">("berkus");
-  // Berkus: per-factor value 0–max
+  // Berkus: per-factor value 0-max
   const [berkus, setBerkus] = useState<Record<string, number>>(() => Object.fromEntries(BERKUS_FACTORS.map(f => [f.key, f.max * 0.5])));
   // Scorecard: per-factor comparison vs median (50% = at par, 150% = strongly above)
   const [scoreInput, setScoreInput] = useState("4000000"); // regional median pre-money
@@ -690,7 +690,7 @@ function DcfTornado({ baseAnnualFcf, growthPct, discountPct }: { baseAnnualFcf: 
             <div key={t.name}>
               <div className="flex justify-between text-[11px] mb-1">
                 <span className="font-medium">{t.name}</span>
-                <span className="text-[var(--color-muted)] tabular-nums">{formatCurrency(Math.round(t.low))} – {formatCurrency(Math.round(t.high))}</span>
+                <span className="text-[var(--color-muted)] tabular-nums">{formatCurrency(Math.round(t.low))} - {formatCurrency(Math.round(t.high))}</span>
               </div>
               <div className="relative h-5 bg-[var(--color-bg)] rounded">
                 <div className="absolute top-0 bottom-0 left-1/2 w-px bg-[var(--color-border)]" />
@@ -704,7 +704,7 @@ function DcfTornado({ baseAnnualFcf, growthPct, discountPct }: { baseAnnualFcf: 
       <div className="flex gap-4 text-[10px] text-[var(--color-muted)]">
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-500/60 inline-block" /> Downside</span>
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-500/60 inline-block" /> Upside</span>
-        <span className="ml-auto">Sorted by impact — top driver matters most.</span>
+        <span className="ml-auto">Sorted by impact - top driver matters most.</span>
       </div>
     </div>
   );
@@ -734,7 +734,7 @@ function Esop409aFmv({ enterpriseValue }: { enterpriseValue: number }) {
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
       <div>
         <h2 className="text-sm font-semibold flex items-center gap-2"><FileSpreadsheet size={14} className="text-purple-400" /> 409A-style FMV for ESOP</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Defensible fair-market value per share for option grants — equity value less the preference stack, marked down for illiquidity (DLOM).</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Defensible fair-market value per share for option grants - equity value less the preference stack, marked down for illiquidity (DLOM).</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -758,7 +758,7 @@ function Esop409aFmv({ enterpriseValue }: { enterpriseValue: number }) {
           <strong>{dlomPct}%</strong>
         </div>
         <input type="range" min={0} max={50} step={1} value={dlomPct} onChange={e => setDlomPct(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
-        <p className="text-[10px] text-[var(--color-muted)] mt-1">Private companies typically apply 20–40% DLOM. Higher for early-stage / illiquid stock.</p>
+        <p className="text-[10px] text-[var(--color-muted)] mt-1">Private companies typically apply 20-40% DLOM. Higher for early-stage / illiquid stock.</p>
       </div>
 
       {shares > 0 && (
@@ -806,7 +806,7 @@ function VcMethod({ annualRevenue, raiseAmount }: { annualRevenue: number; raise
   return (
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
       <div>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> VC Method — Exit-Value Backsolve</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> VC Method - Exit-Value Backsolve</h2>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">Works backward from a projected exit value and the investor's required return multiple to today's post-money and the stake they need.</p>
       </div>
 
@@ -880,7 +880,7 @@ function FirstChicago({ baseValuation }: { baseValuation: number }) {
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
       <div>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Dice5 size={14} className="text-blue-400" /> First-Chicago Method</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Blends best / base / worst-case valuations by probability into one expected figure — honest about uncertainty instead of a single false-precision number.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Blends best / base / worst-case valuations by probability into one expected figure - honest about uncertainty instead of a single false-precision number.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -989,9 +989,9 @@ function RunwayPlanner({ cash, monthlyNet }: { cash: number; monthlyNet: number 
       </div>
 
       <div className={`rounded-lg border p-3 text-xs font-medium ${statusStyle}`}>
-        {status === "ok" && (isFinite(startInMonths) ? "On track — you have comfortable headroom before you must start raising." : "Cash-flow positive — raise opportunistically, not out of necessity.")}
-        {status === "soon" && "Start preparing the raise now — you cross the buffer line within two months."}
-        {status === "urgent" && "Begin raising immediately — current runway is already inside the time it takes to close plus your buffer."}
+        {status === "ok" && (isFinite(startInMonths) ? "On track - you have comfortable headroom before you must start raising." : "Cash-flow positive - raise opportunistically, not out of necessity.")}
+        {status === "soon" && "Start preparing the raise now - you cross the buffer line within two months."}
+        {status === "urgent" && "Begin raising immediately - current runway is already inside the time it takes to close plus your buffer."}
       </div>
     </div>
   );
@@ -1071,7 +1071,7 @@ function DilutionWaterfall({ startValuation }: { startValuation: number }) {
         <p className="text-sm font-semibold text-purple-300">Founder ownership after {walk.length} round{walk.length === 1 ? "" : "s"}</p>
         <p className={`text-xl font-bold tabular-nums ${finalFounder < 50 ? "text-red-400" : "text-purple-300"}`}>{finalFounder.toFixed(1)}%</p>
       </div>
-      {finalFounder < 50 && <p className="text-[10px] text-red-400">You drop below 50% — plan board control and protective provisions before the round that crosses this line.</p>}
+      {finalFounder < 50 && <p className="text-[10px] text-red-400">You drop below 50% - plan board control and protective provisions before the round that crosses this line.</p>}
     </div>
   );
 }
@@ -1140,7 +1140,7 @@ function PoolShuffle({ preMoney, raiseAmount }: { preMoney: number; raiseAmount:
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">
         Founders give up <strong className="tabular-nums">{poolFromFounders.toFixed(1)}%</strong> to the pool in the {timing}-money structure.
-        {timing === "pre" && " Investors usually push for a pre-money pool because it dilutes you, not them — negotiate the pool size down."}
+        {timing === "pre" && " Investors usually push for a pre-money pool because it dilutes you, not them - negotiate the pool size down."}
       </p>
     </div>
   );
@@ -1183,7 +1183,7 @@ function NoteConverter({ nextRoundPreMoney }: { nextRoundPreMoney: number }) {
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
       <div>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Repeat size={14} className="text-[var(--color-primary)]" /> Convertible-Note Cap / Discount Converter</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Works out where a note converts at the next priced round — the noteholder takes the lower of the valuation-cap price and the discount price.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Works out where a note converts at the next priced round - the noteholder takes the lower of the valuation-cap price and the discount price.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1261,7 +1261,7 @@ function EsopGrantValue({ equityValue }: { equityValue: number }) {
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
       <div>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Gift size={14} className="text-green-400" /> ESOP Grant Value Calculator</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">What a grant is worth today and at exit — the number to put in an offer letter so candidates understand the equity, net of exercise cost.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">What a grant is worth today and at exit - the number to put in an offer letter so candidates understand the equity, net of exercise cost.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -1396,7 +1396,7 @@ function VestingSchedule() {
           </tbody>
         </table>
       </div>
-      {elapsed < cliffMonths && <p className="text-[10px] text-yellow-400">Before the cliff nothing is vested — leaving now forfeits the entire grant.</p>}
+      {elapsed < cliffMonths && <p className="text-[10px] text-yellow-400">Before the cliff nothing is vested - leaving now forfeits the entire grant.</p>}
     </div>
   );
 }
@@ -1447,8 +1447,8 @@ function RuleOf40({ annualRevenue, growthPct, monthlyNet, monthlyRevenue }: { an
 
       <div className="grid grid-cols-2 gap-3">
         {[
-          { label: "Implied EV/Revenue", value: annualRevenue > 0 ? `${impliedMultiple.toFixed(1)}x` : "—", color: "text-[var(--color-primary)]" },
-          { label: "Implied valuation", value: annualRevenue > 0 ? formatCurrency(Math.round(impliedVal)) : "—", color: "text-[var(--color-text)]" },
+          { label: "Implied EV/Revenue", value: annualRevenue > 0 ? `${impliedMultiple.toFixed(1)}x` : "-", color: "text-[var(--color-primary)]" },
+          { label: "Implied valuation", value: annualRevenue > 0 ? formatCurrency(Math.round(impliedVal)) : "-", color: "text-[var(--color-text)]" },
         ].map(c => (
           <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
             <p className="text-[10px] text-[var(--color-muted)] mb-1">{c.label}</p>
@@ -1545,9 +1545,9 @@ function LiqPrefStack({ exitValue }: { exitValue: number }) {
 
       <p className="text-[10px] text-[var(--color-muted)]">
         {participating
-          ? "Participating preferred double-dips: the preference comes off the top, then they share the rest pro-rata — heavily founder-unfriendly at low exits."
+          ? "Participating preferred double-dips: the preference comes off the top, then they share the rest pro-rata - heavily founder-unfriendly at low exits."
           : tookPref
-            ? `Below an exit of ~${formatCurrency(Math.round(breakeven))} the investor takes the preference, not their equity share — push for 1x non-participating.`
+            ? `Below an exit of ~${formatCurrency(Math.round(breakeven))} the investor takes the preference, not their equity share - push for 1x non-participating.`
             : `At this exit the investor converts to common (their equity share beats the ${prefMultiple}x preference).`}
       </p>
     </div>
@@ -1664,7 +1664,7 @@ function DownRoundImpact({ lastPreMoney }: { lastPreMoney: number }) {
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
       <div>
         <h2 className="text-sm font-semibold flex items-center gap-2"><TrendingDown size={14} className="text-red-400" /> Down-Round &amp; Anti-Dilution Impact</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">If the next round prices below the last, anti-dilution clauses re-issue shares to earlier investors — at the founders' expense. Compare full-ratchet vs broad weighted-average.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">If the next round prices below the last, anti-dilution clauses re-issue shares to earlier investors - at the founders' expense. Compare full-ratchet vs broad weighted-average.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1696,7 +1696,7 @@ function DownRoundImpact({ lastPreMoney }: { lastPreMoney: number }) {
       </div>
 
       <div className={`rounded-lg border p-3 text-xs font-medium ${isDown ? "bg-red-950/20 border-red-800/40 text-red-400" : "bg-green-950/20 border-green-800/40 text-green-400"}`}>
-        {isDown ? `Down round — pricing ${drop.toFixed(0)}% below the last post-money. Anti-dilution kicks in.` : "Up round — anti-dilution protection does not trigger."}
+        {isDown ? `Down round - pricing ${drop.toFixed(0)}% below the last post-money. Anti-dilution kicks in.` : "Up round - anti-dilution protection does not trigger."}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1714,7 +1714,7 @@ function DownRoundImpact({ lastPreMoney }: { lastPreMoney: number }) {
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">
         {isDown
-          ? `Anti-dilution claws back ~${extraToOldInvestor.toFixed(1)} extra points to the old investor, taken from founders. Full-ratchet is punitive — broad weighted-average is the founder-friendly market norm.`
+          ? `Anti-dilution claws back ~${extraToOldInvestor.toFixed(1)} extra points to the old investor, taken from founders. Full-ratchet is punitive - broad weighted-average is the founder-friendly market norm.`
           : "Negotiate broad weighted-average (not full-ratchet) up-front so a future down round doesn't wipe you out."}
       </p>
     </div>
@@ -1746,7 +1746,7 @@ function InvestorMoic({ preMoney, raiseAmount }: { preMoney: number; raiseAmount
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
       <div>
         <h2 className="text-sm font-semibold flex items-center gap-2"><TrendingUp size={14} className="text-[var(--color-primary)]" /> Investor MOIC / IRR</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">What this round returns the investor — multiple-on-invested-capital and annualised IRR at exit, after future-round dilution erodes their stake. The lens your investor uses.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">What this round returns the investor - multiple-on-invested-capital and annualised IRR at exit, after future-round dilution erodes their stake. The lens your investor uses.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1789,7 +1789,7 @@ function InvestorMoic({ preMoney, raiseAmount }: { preMoney: number; raiseAmount
         ))}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">
-        Exit proceeds to the investor: <strong className="tabular-nums">{formatCurrency(Math.round(exitProceeds))}</strong> (~{paybackYears > 0 && isFinite(paybackYears) ? `${paybackYears.toFixed(1)}y` : "—"} to recover cost at this growth rate). VCs typically want a fund-returning 3x+ at ~25%+ IRR; show them how this entry price gets there.
+        Exit proceeds to the investor: <strong className="tabular-nums">{formatCurrency(Math.round(exitProceeds))}</strong> (~{paybackYears > 0 && isFinite(paybackYears) ? `${paybackYears.toFixed(1)}y` : "-"} to recover cost at this growth rate). VCs typically want a fund-returning 3x+ at ~25%+ IRR; show them how this entry price gets there.
       </p>
     </div>
   );
@@ -1891,7 +1891,7 @@ function ArrMultiple({ annualRevenue, growthPct }: { annualRevenue: number; grow
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
       <div>
         <h2 className="text-sm font-semibold flex items-center gap-2"><InfinityIcon size={14} className="text-purple-400" /> ARR-Multiple Valuation</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Forward ARR × a quality-adjusted multiple — the dominant lens for recurring-revenue SaaS. Growth, net retention and gross margin pull the multiple up or down from a 6x anchor.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Forward ARR × a quality-adjusted multiple - the dominant lens for recurring-revenue SaaS. Growth, net retention and gross margin pull the multiple up or down from a 6x anchor.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -1932,7 +1932,7 @@ function ArrMultiple({ annualRevenue, growthPct }: { annualRevenue: number; grow
           </ResponsiveContainer>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Public SaaS multiples compressed sharply post-2022 — private rounds now skew toward profitable-growth (Rule-of-40) names. Treat above 10x as exceptional.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Public SaaS multiples compressed sharply post-2022 - private rounds now skew toward profitable-growth (Rule-of-40) names. Treat above 10x as exceptional.</p>
     </div>
   );
 }
@@ -1983,7 +1983,7 @@ function DiscountedPayback({ baseAnnualFcf, growthPct, discountPct }: { baseAnnu
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
       <div>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> Discounted-Payback Period</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">How many years of discounted cash flow it takes to recover an investment — a risk lens DCF's single NPV hides. Uses your live FCF base, growth and discount rate.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">How many years of discounted cash flow it takes to recover an investment - a risk lens DCF's single NPV hides. Uses your live FCF base, growth and discount rate.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

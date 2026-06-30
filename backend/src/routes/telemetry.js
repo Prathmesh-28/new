@@ -1,7 +1,7 @@
 const router = require("express").Router();
 const logger = require("../lib/logger");
 
-// POST /api/telemetry/error — best-effort sink for frontend errors so client-side
+// POST /api/telemetry/error - best-effort sink for frontend errors so client-side
 // failures are visible in backend logs instead of vanishing in the browser.
 // No auth (errors can happen pre-login); fields are length-capped and the route
 // sits under the general /api rate limiter.

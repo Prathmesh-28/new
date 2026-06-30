@@ -166,7 +166,7 @@ export default function PredictPage() {
             <Sparkles size={18} className="text-[var(--color-primary)]" /> Predict &amp; Simulate
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            A model-based digital twin of your business — war-game decisions, stress-test cash and surface risk before it bites. All figures are estimates from your own data, not guarantees.
+            A model-based digital twin of your business - war-game decisions, stress-test cash and surface risk before it bites. All figures are estimates from your own data, not guarantees.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -237,7 +237,7 @@ function OverviewTab({ onJump }: { onJump: (t: TabId) => void }) {
 
       {m.revSeries.some(d => d.revenue > 0 || d.expense > 0) ? (
         <div className={`${CARD} p-5`}>
-          <p className="text-sm font-semibold mb-1">Last 12 months — the twin's training window</p>
+          <p className="text-sm font-semibold mb-1">Last 12 months - the twin's training window</p>
           <p className="text-xs text-[var(--color-muted)] mb-4">Every simulation below is fitted on this history. The cleaner your transaction data, the sharper the estimate.</p>
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={m.revSeries}>
@@ -253,7 +253,7 @@ function OverviewTab({ onJump }: { onJump: (t: TabId) => void }) {
         <div className={`${CARD} border-dashed p-10 text-center`}>
           <Boxes size={24} className="mx-auto text-[var(--color-muted)] mb-3" />
           <p className="text-sm font-medium mb-1">Not enough history yet</p>
-          <p className="text-xs text-[var(--color-muted)]">Import or add transactions and invoices — the simulations populate automatically as data arrives.</p>
+          <p className="text-xs text-[var(--color-muted)]">Import or add transactions and invoices - the simulations populate automatically as data arrives.</p>
         </div>
       )}
 
@@ -282,7 +282,7 @@ const TOOL_BLURB: Record<Exclude<TabId, "overview">, string> = {
   sensitivity: "Tornado view of which driver moves profit the most.",
   goal: "Probability you hit a cash target by a chosen date.",
   runrate: "Annualise your recent run-rate into projected ARR with a growth dial.",
-  expensecreep: "Per-category spend growth — catch costs quietly drifting up.",
+  expensecreep: "Per-category spend growth - catch costs quietly drifting up.",
   ltv: "Estimated lifetime value per customer from spend and tenure.",
   paydelay: "How many days late each customer typically pays, from history.",
   cohort: "Retention of each month's new customers, projected forward.",
@@ -390,7 +390,7 @@ function WhatIfSliders() {
       </div>
 
       <div className={`${CARD} p-5`}>
-        <p className="text-sm font-semibold mb-3">Projected cumulative profit — base vs scenario</p>
+        <p className="text-sm font-semibold mb-3">Projected cumulative profit - base vs scenario</p>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={result.series}>
             <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
@@ -430,7 +430,7 @@ function MonteCarloCash() {
       let cash = opening;
       let bust = false;
       for (let mth = 0; mth < horizon; mth++) {
-        // Box-Muller normal draw (Math.random only inside this handler — allowed).
+        // Box-Muller normal draw (Math.random only inside this handler - allowed).
         const u1 = Math.random() || 1e-9;
         const u2 = Math.random();
         const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
@@ -465,7 +465,7 @@ function MonteCarloCash() {
 
   return (
     <div className="space-y-4">
-      <ModelNote text="Each run perturbs your monthly net cash with a random normal shock scaled to historical volatility, then compounds it over the horizon. Percentiles bound the range of plausible outcomes — they are not predictions of a single future." />
+      <ModelNote text="Each run perturbs your monthly net cash with a random normal shock scaled to historical volatility, then compounds it over the horizon. Percentiles bound the range of plausible outcomes - they are not predictions of a single future." />
       <div className={`${CARD} p-5 space-y-4`}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
@@ -498,7 +498,7 @@ function MonteCarloCash() {
             ))}
           </div>
           <div className={`${CARD} p-5`}>
-            <p className="text-sm font-semibold mb-3">Cash fan chart — P10 / P50 / P90</p>
+            <p className="text-sm font-semibold mb-3">Cash fan chart - P10 / P50 / P90</p>
             <ResponsiveContainer width="100%" height={240}>
               <AreaChart data={output.fan}>
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
@@ -618,18 +618,18 @@ function EarlyWarningBoard() {
     const out: { title: string; detail: string; sev: Sev }[] = [];
 
     out.push(m.runwayMonths === null
-      ? { title: "Cash runway", detail: "Net cash positive — no near-term liquidity threat from current burn.", sev: "ok" }
+      ? { title: "Cash runway", detail: "Net cash positive - no near-term liquidity threat from current burn.", sev: "ok" }
       : { title: "Cash runway", detail: `Estimated ${m.runwayMonths.toFixed(1)} months of runway at the current burn rate.`, sev: m.runwayMonths < 3 ? "critical" : m.runwayMonths < 6 ? "high" : "medium" });
 
     out.push({ title: "Monthly profitability", detail: m.monthlyNet >= 0 ? `Generating ${formatCurrency(Math.round(m.monthlyNet))}/mo on average.` : `Losing ${formatCurrency(Math.round(-m.monthlyNet))}/mo on average.`, sev: m.monthlyNet >= 0 ? "ok" : "high" });
 
     out.push({ title: "Revenue volatility", detail: `Month-to-month revenue swings ~${Math.round(m.revVolatility * 100)}%.`, sev: m.revVolatility > 0.5 ? "high" : m.revVolatility > 0.3 ? "medium" : "ok" });
 
-    out.push({ title: "Overdue receivables", detail: overdueAmt > 0 ? `${formatCurrency(Math.round(overdueAmt))} past due — collection risk to cash.` : "No overdue invoices.", sev: overdueAmt > m.monthlyRevenue ? "high" : overdueAmt > 0 ? "medium" : "ok" });
+    out.push({ title: "Overdue receivables", detail: overdueAmt > 0 ? `${formatCurrency(Math.round(overdueAmt))} past due - collection risk to cash.` : "No overdue invoices.", sev: overdueAmt > m.monthlyRevenue ? "high" : overdueAmt > 0 ? "medium" : "ok" });
 
     out.push({ title: "Customer concentration", detail: `Top customer is ${Math.round(concentration)}% of invoiced value.`, sev: concentration > 60 ? "high" : concentration > 40 ? "medium" : "ok" });
 
-    out.push({ title: "Data freshness", detail: staleDays < 900 ? `Last transaction ${staleDays} day(s) ago.` : "No transactions recorded — predictions are limited.", sev: staleDays > 30 ? "medium" : "ok" });
+    out.push({ title: "Data freshness", detail: staleDays < 900 ? `Last transaction ${staleDays} day(s) ago.` : "No transactions recorded - predictions are limited.", sev: staleDays > 30 ? "medium" : "ok" });
 
     return out;
   }, [m, store]);
@@ -643,7 +643,7 @@ function EarlyWarningBoard() {
 
   return (
     <div className="space-y-4">
-      <ModelNote text="A rules-based traffic-light board over your live data. It flags conditions that historically precede cash trouble — directional signals, not certainties." />
+      <ModelNote text="A rules-based traffic-light board over your live data. It flags conditions that historically precede cash trouble - directional signals, not certainties." />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {signals.map(s => {
           const cfg = SEV[s.sev];
@@ -789,10 +789,10 @@ function ChurnRisk() {
                 {rows.map(r => (
                   <tr key={r.customer} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 font-medium">{r.customer}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.days >= 999 ? "—" : `${r.days}d ago`}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.days >= 999 ? "-" : `${r.days}d ago`}</td>
                     <td className="px-4 py-2.5 tabular-nums">{r.count}</td>
                     <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.total))}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-red-400">{r.overdue > 0 ? formatCurrency(Math.round(r.overdue)) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-red-400">{r.overdue > 0 ? formatCurrency(Math.round(r.overdue)) : "-"}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <div className="w-16 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
@@ -835,7 +835,7 @@ function BreakEvenSimulator() {
 
   return (
     <div className="space-y-4">
-      <ModelNote text="Classic break-even: fixed costs ÷ per-unit contribution margin. Fixed cost is pre-filled from ~60% of your average monthly expense — override with your real numbers." />
+      <ModelNote text="Classic break-even: fixed costs ÷ per-unit contribution margin. Fixed cost is pre-filled from ~60% of your average monthly expense - override with your real numbers." />
       <div className={`${CARD} p-5`}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
@@ -873,7 +873,7 @@ function BreakEvenSimulator() {
           <div className={`rounded-lg p-4 border ${result.covered ? "border-green-800/40 bg-green-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
             <p className={`text-sm font-bold flex items-center gap-2 ${result.covered ? "text-green-400" : "text-orange-400"}`}>
               {result.covered ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-              At your current run-rate you're selling ~{Math.round(result.curUnits).toLocaleString()} units/mo vs a break-even of {Math.ceil(result.units).toLocaleString()} — {result.covered ? "you clear break-even." : "you're below break-even at these inputs."}
+              At your current run-rate you're selling ~{Math.round(result.curUnits).toLocaleString()} units/mo vs a break-even of {Math.ceil(result.units).toLocaleString()} - {result.covered ? "you clear break-even." : "you're below break-even at these inputs."}
             </p>
           </div>
         </>
@@ -1059,7 +1059,7 @@ function RunRateProjector() {
 
   return (
     <div className="space-y-4">
-      <ModelNote text="Annualises your recent monthly revenue into a run-rate (ARR), then compounds an assumed monthly growth across the next 12 months. A planning estimate — actual revenue rarely grows on a smooth curve." />
+      <ModelNote text="Annualises your recent monthly revenue into a run-rate (ARR), then compounds an assumed monthly growth across the next 12 months. A planning estimate - actual revenue rarely grows on a smooth curve." />
       <div className={`${CARD} p-5 grid grid-cols-1 md:grid-cols-2 gap-5`}>
         <Slider label="Base on last" value={windowMonths} min={1} max={12} step={1} suffix=" mo" onChange={setWindowMonths} />
         <Slider label="Assumed monthly growth" value={growth} min={-10} max={20} step={1} suffix="%" onChange={setGrowth} />
@@ -1115,7 +1115,7 @@ function ExpenseCreepDetector() {
 
   return (
     <div className="space-y-4">
-      <ModelNote text="Compares each spend category's average over the last 3 months against the 3 months before. A persistent rise (>15%) is flagged as 'creep' worth a look — seasonal swings can trip it, so read the trend not the single number." />
+      <ModelNote text="Compares each spend category's average over the last 3 months against the 3 months before. A persistent rise (>15%) is flagged as 'creep' worth a look - seasonal swings can trip it, so read the trend not the single number." />
       {rows.length === 0 ? (
         <EmptyState Icon={Flame} title="No expense history yet" body="Record some expense transactions and category-level creep will appear here." />
       ) : (
@@ -1187,7 +1187,7 @@ function CustomerLtv() {
 
   return (
     <div className="space-y-4">
-      <ModelNote text="Estimates each customer's lifetime value: average monthly billing × expected relationship length × gross margin. Customers with little history get noisy estimates — treat the ranking, not the rupee figure, as the signal." />
+      <ModelNote text="Estimates each customer's lifetime value: average monthly billing × expected relationship length × gross margin. Customers with little history get noisy estimates - treat the ranking, not the rupee figure, as the signal." />
       <div className={`${CARD} p-5 grid grid-cols-1 md:grid-cols-2 gap-5`}>
         <Slider label="Expected relationship" value={lifespan} min={6} max={120} step={6} suffix=" mo" onChange={setLifespan} />
         <Slider label="Gross margin" value={margin} min={5} max={80} step={5} suffix="%" onChange={setMargin} />
@@ -1289,8 +1289,8 @@ function PaymentDelayPredictor() {
                     <td className="px-4 py-2.5 font-medium">{r.customer}</td>
                     <td className="px-4 py-2.5 tabular-nums font-semibold">{r.avgDays.toFixed(0)} days</td>
                     <td className="px-4 py-2.5 tabular-nums">{r.samples}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.openOverdue || "—"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.openAmt > 0 ? formatCurrency(Math.round(r.openAmt)) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.openOverdue || "-"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.openAmt > 0 ? formatCurrency(Math.round(r.openAmt)) : "-"}</td>
                     <td className="px-4 py-2.5"><span className={`text-[9px] px-2 py-0.5 rounded-full border font-semibold ${LEVEL[r.level]}`}>{r.level}</span></td>
                   </tr>
                 ))}
@@ -1345,7 +1345,7 @@ function CohortRetention() {
 
   return (
     <div className="space-y-4">
-      <ModelNote text="Groups customers by the month of their first invoice, then tracks the % still billing in each following month. A heuristic retention curve — sparse invoicing makes early cohorts look lumpy." />
+      <ModelNote text="Groups customers by the month of their first invoice, then tracks the % still billing in each following month. A heuristic retention curve - sparse invoicing makes early cohorts look lumpy." />
       {data.cohorts.length === 0 ? (
         <EmptyState Icon={LayoutGrid} title="Not enough cohort history" body="Once customers have a few months of invoices, their retention curves appear here." />
       ) : (
@@ -1367,7 +1367,7 @@ function CohortRetention() {
                     <td key={i} className="px-2">
                       <div className="h-8 w-12 rounded flex items-center justify-center font-semibold tabular-nums"
                         style={{ background: v === null ? "transparent" : `${cellColor(v)}30`, color: v === null ? "var(--color-muted)" : cellColor(v) }}>
-                        {v === null ? "—" : `${v}%`}
+                        {v === null ? "-" : `${v}%`}
                       </div>
                     </td>
                   ))}
@@ -1404,7 +1404,7 @@ function WorkingCapitalForecast() {
 
   return (
     <div className="space-y-4">
-      <ModelNote text="Models working-capital need from your revenue and expense run-rate against the collection (DSO) and payment (DPO) days you set. Tightening DSO or extending DPO frees trapped cash — these are directional estimates." />
+      <ModelNote text="Models working-capital need from your revenue and expense run-rate against the collection (DSO) and payment (DPO) days you set. Tightening DSO or extending DPO frees trapped cash - these are directional estimates." />
       <div className={`${CARD} p-5 grid grid-cols-1 md:grid-cols-2 gap-5`}>
         <Slider label="Days sales outstanding (DSO)" value={dso} min={0} max={120} step={5} suffix=" d" onChange={setDso} />
         <Slider label="Days payable outstanding (DPO)" value={dpo} min={0} max={120} step={5} suffix=" d" onChange={setDpo} />
@@ -1499,14 +1499,14 @@ function SeasonalityForecast() {
       revenue: d.revenue,
       index: mean > 0 ? Math.round((d.revenue / mean) * 100) : 100,
     }));
-    const peak = rows.reduce((a, b) => (b.index > a.index ? b : a), rows[0] ?? { month: "—", index: 0, revenue: 0 });
-    const trough = rows.reduce((a, b) => (b.index < a.index ? b : a), rows[0] ?? { month: "—", index: 0, revenue: 0 });
+    const peak = rows.reduce((a, b) => (b.index > a.index ? b : a), rows[0] ?? { month: "-", index: 0, revenue: 0 });
+    const trough = rows.reduce((a, b) => (b.index < a.index ? b : a), rows[0] ?? { month: "-", index: 0, revenue: 0 });
     return { rows, mean, peak, trough };
   }, [m]);
 
   return (
     <div className="space-y-4">
-      <ModelNote text="Divides each month's revenue by your 12-month average to expose a seasonal index (100 = an average month). Useful to plan stock and staffing around peaks and troughs — only as reliable as a single year of history allows." />
+      <ModelNote text="Divides each month's revenue by your 12-month average to expose a seasonal index (100 = an average month). Useful to plan stock and staffing around peaks and troughs - only as reliable as a single year of history allows." />
       {data.rows.every(r => r.revenue === 0) ? (
         <EmptyState Icon={CalendarRange} title="No revenue history yet" body="Add transactions and the seasonal pattern across months will surface here." />
       ) : (
@@ -1547,7 +1547,7 @@ function ConcentrationRisk() {
     for (const i of invoices) byCust.set(i.customer, (byCust.get(i.customer) ?? 0) + i.amount);
     const total = [...byCust.values()].reduce((s, v) => s + v, 0);
     const sorted = [...byCust.entries()].map(([customer, amount]) => ({ customer, amount, pct: total > 0 ? (amount / total) * 100 : 0 })).sort((a, b) => b.amount - a.amount);
-    // Herfindahl-Hirschman Index of revenue concentration (0–10000).
+    // Herfindahl-Hirschman Index of revenue concentration (0-10000).
     const hhi = sorted.reduce((s, r) => s + r.pct ** 2, 0);
     const top1 = sorted[0]?.pct ?? 0;
     const top3 = sorted.slice(0, 3).reduce((s, r) => s + r.pct, 0);
@@ -1571,7 +1571,7 @@ function ConcentrationRisk() {
             { label: "Risk verdict", value: riskLevel, color: riskColor },
           ]} />
           <div className={`${CARD} p-5`}>
-            <p className="text-sm font-semibold mb-3">Revenue share — top 8 customers</p>
+            <p className="text-sm font-semibold mb-3">Revenue share - top 8 customers</p>
             <ResponsiveContainer width="100%" height={Math.max(140, Math.min(8, data.sorted.length) * 34)}>
               <BarChart data={data.sorted.slice(0, 8)} layout="vertical">
                 <XAxis type="number" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => `${Math.round(Number(v))}%`} domain={[0, 100]} />
@@ -1615,7 +1615,7 @@ function RecurringSpendForecast() {
 
   return (
     <div className="space-y-4">
-      <ModelNote text="Treats expenses that are flagged recurring or repeat to the same counterparty 3+ times as subscriptions, then annualises their average. A rough projection of recurring outflow — review before cancelling anything." />
+      <ModelNote text="Treats expenses that are flagged recurring or repeat to the same counterparty 3+ times as subscriptions, then annualises their average. A rough projection of recurring outflow - review before cancelling anything." />
       {data.rows.length === 0 ? (
         <EmptyState Icon={Repeat} title="No recurring spend detected" body="Mark transactions as recurring, or let repeat vendor charges accumulate, and they will be projected here." />
       ) : (
@@ -1698,13 +1698,13 @@ function CashBalanceProjection() {
       rows.push({ month: label, balance: Math.round(bal) });
       if (bal < 0 && !cashOut) cashOut = label;
     }
-    const lowest = rows.reduce((a, b) => (b.balance < a.balance ? b : a), rows[0] ?? { month: "—", balance: start });
+    const lowest = rows.reduce((a, b) => (b.balance < a.balance ? b : a), rows[0] ?? { month: "-", balance: start });
     return { rows, cashOut, lowest, net, start };
   }, [opening, months, m]);
 
   return (
     <div className="space-y-4">
-      <ModelNote text="Projects your cash balance forward by adding your average monthly net to an opening balance, and names the first month it would turn negative. Linear projection of the current run-rate — not a daily-accurate forecast." />
+      <ModelNote text="Projects your cash balance forward by adding your average monthly net to an opening balance, and names the first month it would turn negative. Linear projection of the current run-rate - not a daily-accurate forecast." />
       <div className={`${CARD} p-5 grid grid-cols-1 md:grid-cols-2 gap-5`}>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Opening cash (₹)</label>
@@ -1847,11 +1847,11 @@ function GstLiabilityForecast() {
 
   return (
     <div className="space-y-4">
-      <ModelNote text="Estimates your net GST outflow by applying the output rate to your revenue run-rate, then deducting an assumed input-tax-credit share. A planning reserve estimate — your filed GSTR-3B liability depends on actual taxable supply and eligible ITC." />
+      <ModelNote text="Estimates your net GST outflow by applying the output rate to your revenue run-rate, then deducting an assumed input-tax-credit share. A planning reserve estimate - your filed GSTR-3B liability depends on actual taxable supply and eligible ITC." />
       {!registered && (
         <div className="flex items-start gap-2 rounded-lg border border-yellow-800/40 bg-yellow-950/20 px-3 py-2 text-[11px] text-yellow-400">
           <Info size={12} className="shrink-0 mt-px" />
-          <span>Your firm isn't marked GST-registered. Figures below are illustrative — set your GST details in Settings for a relevant estimate.</span>
+          <span>Your firm isn't marked GST-registered. Figures below are illustrative - set your GST details in Settings for a relevant estimate.</span>
         </div>
       )}
       <div className={`${CARD} p-5 grid grid-cols-1 md:grid-cols-2 gap-5`}>
@@ -1925,7 +1925,7 @@ function PayrollStressPredictor() {
 
   return (
     <div className="space-y-4">
-      <ModelNote text="Projects cash after each monthly salary run and warns when the balance would breach your minimum safe buffer. Payroll is pre-filled from your recent 'payroll' transactions — override with your real wage bill. Estimates, not a payroll guarantee." />
+      <ModelNote text="Projects cash after each monthly salary run and warns when the balance would breach your minimum safe buffer. Payroll is pre-filled from your recent 'payroll' transactions - override with your real wage bill. Estimates, not a payroll guarantee." />
       <div className={`${CARD} p-5 grid grid-cols-1 md:grid-cols-3 gap-4`}>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Opening cash (₹)</label>
@@ -1942,7 +1942,7 @@ function PayrollStressPredictor() {
       </div>
       <KpiGrid items={[
         { label: "Monthly payroll", value: formatCurrency(Math.round(out.pay)), color: "text-[var(--color-text)]" },
-        { label: "Payroll runs covered", value: out.coverMonths === Infinity ? "—" : `${out.coverMonths.toFixed(1)}`, color: out.coverMonths < 3 ? "text-red-400" : out.coverMonths < 6 ? "text-yellow-400" : "text-green-400", sub: "by opening cash alone" },
+        { label: "Payroll runs covered", value: out.coverMonths === Infinity ? "-" : `${out.coverMonths.toFixed(1)}`, color: out.coverMonths < 3 ? "text-red-400" : out.coverMonths < 6 ? "text-yellow-400" : "text-green-400", sub: "by opening cash alone" },
         { label: "Safe buffer", value: formatCurrency(Math.round(out.buf)), color: "text-[var(--color-muted)]" },
         { label: "First breach month", value: out.firstBreach ?? "None in 12 mo", color: out.firstBreach ? "text-red-400" : "text-green-400" },
       ]} />
@@ -1998,7 +1998,7 @@ function DebtServiceProjection() {
 
   return (
     <div className="space-y-4">
-      <ModelNote text="Amortises your combined loan balance at the outstanding-weighted average rate, projecting the payoff month and total interest. Add extra principal to see the payoff pull forward. A model of your current EMIs — actual schedules vary per loan." />
+      <ModelNote text="Amortises your combined loan balance at the outstanding-weighted average rate, projecting the payoff month and total interest. Add extra principal to see the payoff pull forward. A model of your current EMIs - actual schedules vary per loan." />
       {data.loans.length === 0 ? (
         <EmptyState Icon={CreditCard} title="No active loans" body="Once you record active loans, their combined repayment trajectory will project here." />
       ) : (

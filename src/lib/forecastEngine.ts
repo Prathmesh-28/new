@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Headroom Forecast Engine — pure, dependency-free, DETERMINISTIC.
+// Headroom Forecast Engine - pure, dependency-free, DETERMINISTIC.
 //
 // A probabilistic 90-day daily cash-flow model that competitors don't ship:
 //   • Recurring vs variable split (auto-detected periodic flows scheduled exactly)
@@ -26,7 +26,7 @@ export interface ForecastConfig {
   historyDays?: number;
   scenarios?: Scenario[];
   revenueFactor?: number; // slow-month multiplier on variable + invoice inflows
-  burnFactor?: number;   // outflow multiplier — e.g. 1.2 means 20% higher costs
+  burnFactor?: number;   // outflow multiplier - e.g. 1.2 means 20% higher costs
 }
 
 export interface RecurringSeries {
@@ -174,7 +174,7 @@ export function hashStore(store: AppStore, cfg?: ForecastConfig): number {
   return h >>> 0;
 }
 
-// ── STEP 2 — Recurring detection ─────────────────────────────────────────────
+// ── STEP 2 - Recurring detection ─────────────────────────────────────────────
 export function detectRecurring(txns: Transaction[], today: Date, historyDays: number): RecurringSeries[] {
   const start = addDays(today, -historyDays);
   const hist = txns.filter(t => t.category !== "transfer" && new Date(t.date) >= start && new Date(t.date) <= today);
@@ -221,7 +221,7 @@ export function detectRecurring(txns: Transaction[], today: Date, historyDays: n
   return out;
 }
 
-// ── STEP 3 — Residual / seasonality model ────────────────────────────────────
+// ── STEP 3 - Residual / seasonality model ────────────────────────────────────
 export function fitResidualModel(txns: Transaction[], recurring: RecurringSeries[], today: Date, historyDays: number): ResidualModel {
   const start = addDays(today, -historyDays);
   const hist = txns.filter(t => t.category !== "transfer" && new Date(t.date) >= start && new Date(t.date) <= today);
@@ -285,7 +285,7 @@ export function fitResidualModel(txns: Transaction[], recurring: RecurringSeries
   };
 }
 
-// ── STEP 4 — Deterministic ledger (recurring + obligations + EMI) ────────────
+// ── STEP 4 - Deterministic ledger (recurring + obligations + EMI) ────────────
 export function buildLedger(store: AppStore, recurring: RecurringSeries[], today: Date, horizon: number): DayLedger[] {
   const ledger: DayLedger[] = [];
   for (let t = 0; t < horizon; t++) ledger.push({ dayIndex: t, date: iso(addDays(today, t + 1)), deterministicNet: 0, scheduledOutflow: 0 });
@@ -331,7 +331,7 @@ export function buildLedger(store: AppStore, recurring: RecurringSeries[], today
   return ledger;
 }
 
-// ── STEP 5 — Receivables collection model ────────────────────────────────────
+// ── STEP 5 - Receivables collection model ────────────────────────────────────
 export function customerPaymentProfiles(store: AppStore, today: Date): CustomerPaymentProfile[] {
   const invoices = store.invoices ?? [];
   const open = invoices.filter(i => i.status !== "paid");
@@ -381,7 +381,7 @@ export function projectCollections(store: AppStore, profiles: CustomerPaymentPro
   return draws;
 }
 
-// ── STEP 6 — Scenario overlay (additive ₹/day) ───────────────────────────────
+// ── STEP 6 - Scenario overlay (additive ₹/day) ───────────────────────────────
 export function scenarioToDailyDelta(scenarios: Scenario[], horizon: number, today: Date): number[] {
   const delta = new Array(horizon).fill(0);
   const num = (v: unknown, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
@@ -417,7 +417,7 @@ export function scenarioToDailyDelta(scenarios: Scenario[], horizon: number, tod
   return delta;
 }
 
-// ── STEP 7 — Monte-Carlo simulation ──────────────────────────────────────────
+// ── STEP 7 - Monte-Carlo simulation ──────────────────────────────────────────
 export function simulatePaths(
   startBal: number, ledger: DayLedger[], model: ResidualModel, draws: CollectionDraw[],
   scenarioDelta: number[], revenueFactor: number, rng: () => number, n: number, horizon: number, today: Date,
@@ -458,7 +458,7 @@ export function simulatePaths(
   return balances;
 }
 
-// ── STEP 8 + 9 — Bands & risk metrics from the N×H matrix ────────────────────
+// ── STEP 8 + 9 - Bands & risk metrics from the N×H matrix ────────────────────
 function bandsFromMatrix(balances: Float64Array, n: number, horizon: number, today: Date): ForecastPoint[] {
   const points: ForecastPoint[] = [];
   const col = new Float64Array(n);
@@ -509,7 +509,7 @@ export function computeRisk(balances: Float64Array, points: ForecastPoint[], sta
   };
 }
 
-// ── STEP 10 — Stress tests (deterministic, off the median path) ──────────────
+// ── STEP 10 - Stress tests (deterministic, off the median path) ──────────────
 export function runStressTests(basePoints: ForecastPoint[], store: AppStore, draws: CollectionDraw[], thresholdCash: number, today: Date): StressResult[] {
   const snap = computeFinancialSnapshot(store, today);
   const H = basePoints.length;
@@ -554,7 +554,7 @@ export function runStressTests(basePoints: ForecastPoint[], store: AppStore, dra
   ];
 }
 
-// ── STEP 11 — Capital readiness ──────────────────────────────────────────────
+// ── STEP 11 - Capital readiness ──────────────────────────────────────────────
 function gradeOf(score: number): string {
   if (score >= 90) return "A+"; if (score >= 80) return "A"; if (score >= 70) return "B";
   if (score >= 60) return "C"; if (score >= 45) return "D"; return "E";
@@ -585,12 +585,12 @@ export function capitalReadiness(store: AppStore, risk: CashFlowRisk, receivable
   const arDraw = Math.round(snap.accountsReceivable * 0.8);
 
   let track: CapitalTrack = "not_fundable_yet"; let rationale = "";
-  if (score < 35 || (snap.runwayDays < 30 && snap.accountsReceivable === 0)) { track = "not_fundable_yet"; rationale = "Stabilise cash and collections before raising — runway and score are too thin to service new capital."; }
+  if (score < 35 || (snap.runwayDays < 30 && snap.accountsReceivable === 0)) { track = "not_fundable_yet"; rationale = "Stabilise cash and collections before raising - runway and score are too thin to service new capital."; }
   else if (snap.accountsReceivable > 0 && overdueShare < 0.4) { track = "invoice_discounting"; rationale = `Strong, mostly-current receivables (₹${Math.round(snap.accountsReceivable / 1e5)}L) make invoice discounting the cheapest, fastest unlock.`; }
   else if (dscr >= 1.25 && score >= 60) { track = "working_capital_loan"; rationale = `DSCR ${dscr.toFixed(2)}× comfortably covers a term facility; use it for planned working-capital needs.`; }
-  else if ((snap.revenueGrowthPct ?? 0) > 0 && dscr >= 1.0) { track = "overdraft_line"; rationale = "A revolving overdraft fits — draw only against the forecast dips, pay interest on usage."; }
+  else if ((snap.revenueGrowthPct ?? 0) > 0 && dscr >= 1.0) { track = "overdraft_line"; rationale = "A revolving overdraft fits - draw only against the forecast dips, pay interest on usage."; }
   else if (dscr < 1.0 && (snap.revenueGrowthPct ?? 0) > 3) { track = "revenue_based_financing"; rationale = "Tight coverage but strong growth → revenue-based financing flexes repayment with your sales."; }
-  else if (score >= 70) { track = "equity_raise"; rationale = "Healthy fundamentals and low leverage — an equity raise can fund a step-change without debt strain."; }
+  else if (score >= 70) { track = "equity_raise"; rationale = "Healthy fundamentals and low leverage - an equity raise can fund a step-change without debt strain."; }
   else { track = "overdraft_line"; rationale = "A modest overdraft line is the safest incremental option at this profile."; }
 
   const fitConfidence = clamp01(1 - (receivables.profiles.length === 0 ? 0.4 : 0) - meanDefault * 0.3);

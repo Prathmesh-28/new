@@ -1,9 +1,9 @@
-// §M-PAY — PAYMENT TERMS & SCHEDULES + AUTO-RECONCILIATION.
+// §M-PAY - PAYMENT TERMS & SCHEDULES + AUTO-RECONCILIATION.
 //
 // Three layers, all sitting on top of the already-posted ledger:
 //
 //   1. Payment-term TEMPLATES (book_payment_terms): a reusable named split such
-//      as "50/50" or "Net 30" — installments[] = [{pct, dueDays, basis}], where
+//      as "50/50" or "Net 30" - installments[] = [{pct, dueDays, basis}], where
 //      basis ∈ {days | month_end | months_after_month_end}. Modelled on ERPNext's
 //      Payment Terms Template (frappe/erpnext accounts/doctype/payment_terms_template):
 //      each term carries a portion (pct) and a due-date rule relative to the
@@ -16,8 +16,8 @@
 //   3. AUTO-RECONCILIATION: FIFO-allocate a party's unapplied credit
 //      (advances / over-payments / credit-notes that have unconsumed party-side
 //      movement) against its oldest open invoices, by writing book_allocations
-//      rows. We reuse billwise.allocateBill's exact validation shape — same party,
-//      never over a bill's outstanding, never over a source's available — but
+//      rows. We reuse billwise.allocateBill's exact validation shape - same party,
+//      never over a bill's outstanding, never over a source's available - but
 //      drive the matching FIFO instead of one explicit pair at a time.
 //
 // CommonJS. Money strictly through ./money (decimal.js); never JS-number math.

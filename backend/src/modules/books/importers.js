@@ -1,10 +1,10 @@
-// §12 — Bank-statement file parsers. Pure parsing, NO DB. Every parser returns
+// §12 - Bank-statement file parsers. Pure parsing, NO DB. Every parser returns
 // normalized rows of the shape recon.importLines consumes:
 //   { date: 'YYYY-MM-DD', amount: signed-string (debit negative), description, reference }
 // Amounts are emitted as strings via ./money so we never touch JS floats.
 //
-// OFX/QFX logic adapted from jseutter/ofxparse (MIT License) —
-//   https://github.com/jseutter/ofxparse — SGML tag scan + DTPOSTED/TRNAMT mapping.
+// OFX/QFX logic adapted from jseutter/ofxparse (MIT License) -
+//   https://github.com/jseutter/ofxparse - SGML tag scan + DTPOSTED/TRNAMT mapping.
 // QIF, MT940 (SWIFT) and camt.053 (ISO-20022) follow the published format specs;
 // the XML walk is a deliberate light regex scan so we add no XML dependency.
 const crypto = require("crypto");
@@ -255,7 +255,7 @@ function parseCsv(content) {
   if (!lines.length) return [];
   const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
   // Prefer an EXACT header match before a substring match. Without this, short
-  // needles collide with longer headers — e.g. "description" CONTAINS "cr"/"dr",
+  // needles collide with longer headers - e.g. "description" CONTAINS "cr"/"dr",
   // so a debit/credit bank export with a Description column would mis-map the
   // amount onto the narration. Exact-first lets the importconfig column map (which
   // rewrites headers to the canonical tokens) bind unambiguously.
@@ -291,7 +291,7 @@ function parseCsv(content) {
       const dr = iDebit >= 0 ? cleanNum(cols[iDebit]) : "";
       const cr = iCredit >= 0 ? cleanNum(cols[iCredit]) : "";
       // Banks fill the unused side with "0" (not blank), so test the NUMERIC value,
-      // not string-truthiness — otherwise a {debit:5000, credit:0} row would read as
+      // not string-truthiness - otherwise a {debit:5000, credit:0} row would read as
       // a zero credit and lose the withdrawal. Non-zero wins; credit takes priority
       // only when both are non-zero (rare; a contra line).
       const crv = cr ? money(cr).abs() : ZERO;
@@ -329,8 +329,8 @@ function parseStatement(format, content) {
 
 // ── stable per-line hash (idempotent re-import) ──────────────────────────────
 // Firefly-III's data-importer dedups by a content hash so re-uploading the same
-// statement skips lines already imported. We hash the *normalized* line — the
-// fields recon stores — so two parses of the same file (or the same line in an
+// statement skips lines already imported. We hash the *normalized* line - the
+// fields recon stores - so two parses of the same file (or the same line in an
 // overlapping export) collapse to one hash. A bank's own unique id (FITID, NtryRef,
 // MT940 ref) is the strongest signal, so when present we fold it in; otherwise we
 // fall back to date|amount|description which is stable across re-parses.

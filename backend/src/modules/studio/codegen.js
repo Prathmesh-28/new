@@ -1,10 +1,10 @@
-// Headroom Studio — codegen orchestrator (App Builder, Phase 1).
+// Headroom Studio - codegen orchestrator (App Builder, Phase 1).
 //
 // Turns a natural-language prompt into a real, runnable app and persists it as a
 // project version. Runs on the tenant's own LLM engine (books/llm.js → OpenRouter),
 // NOT the Anthropic SDK. v1 emits a SELF-CONTAINED single HTML document (inline
 // CSS/JS, CDN libs allowed) so the preview runs instantly in a sandboxed iframe on
-// web AND in the native app — no WebContainers/build step (see project_studio
+// web AND in the native app - no WebContainers/build step (see project_studio
 // decision; multi-file React→WebContainers is a later upgrade).
 //
 // Grounding: a best-effort business snapshot (the same kv-store data the agents,
@@ -25,12 +25,12 @@ const BUILD_SYSTEM = `You are Headroom's app-builder. You generate a COMPLETE, S
 Hard rules:
 - Output ONLY the HTML document, starting with <!doctype html>. No markdown, no code fences, no commentary before or after.
 - Put everything inline in that one file: CSS in <style>, JS in <script>. You MAY load libraries (React, Tailwind, Chart.js, etc.) from a public https CDN, but the app must work as a single self-contained file.
-- The app runs inside a sandboxed iframe with no access to the host page, cookies, or our backend. Do NOT call our APIs or any private endpoint — inline the data provided below as JS constants.
-- Build a polished, responsive, genuinely usable UI (cards, tables, charts, filters) — not a wireframe. A clean modern dark theme works well.
+- The app runs inside a sandboxed iframe with no access to the host page, cookies, or our backend. Do NOT call our APIs or any private endpoint - inline the data provided below as JS constants.
+- Build a polished, responsive, genuinely usable UI (cards, tables, charts, filters) - not a wireframe. A clean modern dark theme works well.
 - Use the REAL business data provided. Never fabricate specific financial figures beyond what is given; show a sensible empty state when data is missing.
 - Format Indian currency as ₹ with lakh/crore grouping where natural.`;
 
-const PLAN_SYSTEM = `You are Headroom's app-builder, planning step. Given the user's request, return a SHORT plan (3 to 6 concise bullet points) describing the app you will build: its purpose, the key sections/screens, and which business data it will use. Plain text bullets only — no code, no HTML.`;
+const PLAN_SYSTEM = `You are Headroom's app-builder, planning step. Given the user's request, return a SHORT plan (3 to 6 concise bullet points) describing the app you will build: its purpose, the key sections/screens, and which business data it will use. Plain text bullets only - no code, no HTML.`;
 
 // Pull a best-effort business snapshot to ground the generated app. Never throws.
 async function businessContext(tenantId, actorId) {
@@ -55,7 +55,7 @@ function extractHtml(text) {
     const end = lower.lastIndexOf("</html>");
     return end >= 0 ? body.slice(htmlStart, end + 7) : body.slice(htmlStart);
   }
-  // Fallback: the model returned prose/markup without a full doc — wrap it so it still renders.
+  // Fallback: the model returned prose/markup without a full doc - wrap it so it still renders.
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:system-ui,sans-serif;background:#101830;color:#E8EDF6;margin:0;padding:24px;line-height:1.6}</style></head><body>${body}</body></html>`;
 }
 
@@ -133,7 +133,7 @@ async function generate(tenantId, actorId, projectId, { prompt, mode = "build", 
   await _meter(tenantId, res?.usage?.total_tokens);
 
   const html = extractHtml(res?.content);
-  if (!html || html.length < 40) throw new CodegenError("EMPTY_OUTPUT", "The engine returned no usable app — try rephrasing.", 502);
+  if (!html || html.length < 40) throw new CodegenError("EMPTY_OUTPUT", "The engine returned no usable app - try rephrasing.", 502);
 
   const summary = ask.length > 90 ? ask.slice(0, 90) + "…" : ask;
   const version = await studio.createVersion(tenantId, projectId, actorId, {

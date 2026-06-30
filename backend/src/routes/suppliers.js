@@ -48,7 +48,7 @@ router.get("/marketplace", authenticate, async (req, res) => {
       const invoiceAmount = Math.round(Number(r.avg_bill) || 0);
       const termsDays = Number(r.terms_days) || 30;
       // Early-pay discount: MSME suppliers (must be paid fast anyway under 43B(h)) and
-      // longer-term vendors offer a bit more for taking cash today. Bounded 1.0%–2.5%.
+      // longer-term vendors offer a bit more for taking cash today. Bounded 1.0%-2.5%.
       let discount = 1.0 + Math.min(termsDays, 60) / 60; // 30d->1.5%, 60d->2.0%
       if (r.is_msme) discount += 0.5;
       discount = Math.round(Math.min(2.5, Math.max(1.0, discount)) * 10) / 10;
@@ -125,7 +125,7 @@ router.post("/pay-early", authenticate, canWrite, async (req, res) => {
         amount_paid: payable,
         saving: savedAmt,
         supplier_name: vendor,
-        message: `Early payment to ${vendor} for this period was already recorded — not booked again.`,
+        message: `Early payment to ${vendor} for this period was already recorded - not booked again.`,
       });
     }
 

@@ -38,14 +38,14 @@ function computeTaxCalendar(today: Date): TaxDeadline[] {
   ];
   advanceTax.forEach(({ month, day, pct, installment, year: y }) => {
     const d = new Date(y ?? year, month, day);
-    deadlines.push({ label: "Advance Tax", desc: `${installment} instalment — ${pct}% of annual liability`, date: d, type: "advance_tax", installment, pct });
+    deadlines.push({ label: "Advance Tax", desc: `${installment} instalment - ${pct}% of annual liability`, date: d, type: "advance_tax", installment, pct });
   });
 
   // GSTR-3B: 20th of each month for next 4 months
   for (let i = 0; i < 4; i++) {
     const base = new Date(today.getFullYear(), today.getMonth() + i, 20);
     if (base > today) {
-      deadlines.push({ label: "GSTR-3B", desc: `Monthly GST return — ${format(base, "MMMM yyyy")}`, date: base, type: "gstr3b" });
+      deadlines.push({ label: "GSTR-3B", desc: `Monthly GST return - ${format(base, "MMMM yyyy")}`, date: base, type: "gstr3b" });
     }
   }
 
@@ -53,13 +53,13 @@ function computeTaxCalendar(today: Date): TaxDeadline[] {
   for (let i = 0; i < 3; i++) {
     const base = new Date(today.getFullYear(), today.getMonth() + i, 7);
     if (base > today) {
-      deadlines.push({ label: "TDS Deposit", desc: `Tax deducted at source — ${format(base, "MMMM yyyy")}`, date: base, type: "tds" });
+      deadlines.push({ label: "TDS Deposit", desc: `Tax deducted at source - ${format(base, "MMMM yyyy")}`, date: base, type: "tds" });
     }
   }
 
   // ITR filing: Jul 31 (current year's FY filing)
   const itr = new Date(year, 6, 31);
-  if (itr >= today) deadlines.push({ label: "ITR Filing", desc: `Income Tax Return — FY ${year - 1}-${String(year).slice(2)}`, date: itr, type: "itr" });
+  if (itr >= today) deadlines.push({ label: "ITR Filing", desc: `Income Tax Return - FY ${year - 1}-${String(year).slice(2)}`, date: itr, type: "itr" });
 
   return deadlines.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 10);
 }
@@ -130,8 +130,8 @@ export default function TaxPage() {
   };
 
   const pushToForecast = (d: TaxDeadline, amount: number) => {
-    if (amount <= 0) { toast.error("No liability estimated yet — add transactions first"); return; }
-    addObligation({ id: crypto.randomUUID(), name: `${d.label} — ${d.installment ?? format(d.date, "MMM")}`, amount, dueDate: d.date.toISOString().split("T")[0], type: "tax" });
+    if (amount <= 0) { toast.error("No liability estimated yet - add transactions first"); return; }
+    addObligation({ id: crypto.randomUUID(), name: `${d.label} - ${d.installment ?? format(d.date, "MMM")}`, amount, dueDate: d.date.toISOString().split("T")[0], type: "tax" });
     setPushed(s => new Set([...s, d.label + d.date.toISOString()]));
     toast.success(`${d.label} added to Forecast as a cash obligation`);
     navigate("/forecast");
@@ -147,7 +147,7 @@ export default function TaxPage() {
           <h1 className="text-xl font-bold flex items-center gap-2">
             <ShieldCheck size={18} className="text-[var(--color-primary)]" /> Tax Autopilot
           </h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Advance tax · GST · TDS · ITR — computed from your live P&L</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Advance tax · GST · TDS · ITR - computed from your live P&L</p>
         </div>
         <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
           {([["overview", "Overview", ShieldCheck], ["regime", "Regime Optimizer", Scale], ["advtax", "Advance Tax", Clock], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle], ["tcs", "TCS Tracker", FileText], ["mat", "MAT Check", AlertTriangle], ["angel", "Angel Tax", AlertTriangle],
@@ -190,14 +190,14 @@ export default function TaxPage() {
           <div className="space-y-4 max-w-xl">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
               <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> Presumptive Tax Estimator</h2>
-              <p className="text-xs text-[var(--color-muted)] mb-4">Section 44AD (businesses) and 44ADA (professionals) let eligible assessees declare income as a % of turnover — no books required.</p>
+              <p className="text-xs text-[var(--color-muted)] mb-4">Section 44AD (businesses) and 44ADA (professionals) let eligible assessees declare income as a % of turnover - no books required.</p>
 
               <div className="space-y-3">
                 <div className="flex gap-2">
                   {(["44ad", "44ada"] as const).map(s => (
                     <button key={s} onClick={() => setAaScheme(s)}
                       className={`flex-1 py-2 text-sm font-semibold rounded-lg border transition-all ${aaScheme === s ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
-                      {s === "44ad" ? "Sec 44AD — Business" : "Sec 44ADA — Profession"}
+                      {s === "44ad" ? "Sec 44AD - Business" : "Sec 44ADA - Profession"}
                     </button>
                   ))}
                 </div>
@@ -228,7 +228,7 @@ export default function TaxPage() {
                 {!eligible && (
                   <div className="flex items-center gap-2 mb-3 p-2.5 bg-red-950/20 border border-red-800/30 rounded-lg">
                     <AlertTriangle size={12} className="text-red-400 shrink-0" />
-                    <p className="text-xs text-red-300">Turnover exceeds the {aaScheme === "44ad" ? "₹3 crore" : "₹75 lakh"} limit — presumptive scheme not available. Tax audit (44AB) mandatory.</p>
+                    <p className="text-xs text-red-300">Turnover exceeds the {aaScheme === "44ad" ? "₹3 crore" : "₹75 lakh"} limit - presumptive scheme not available. Tax audit (44AB) mandatory.</p>
                   </div>
                 )}
                 <h3 className="text-sm font-semibold mb-3">Tax Computation</h3>
@@ -361,7 +361,7 @@ export default function TaxPage() {
               <div className={`bg-[var(--color-surface)] border rounded-lg p-5 ${gain < 0 ? "border-green-700/40" : "border-orange-700/40"}`}>
                 <div className="flex items-center gap-2 mb-3">
                   <span className={`text-xs font-bold px-2 py-0.5 rounded border ${isLtcg ? "bg-blue-950/30 text-blue-400 border-blue-800/30" : "bg-orange-950/30 text-orange-400 border-orange-800/30"}`}>
-                    {isLtcg ? "LTCG" : "STCG"} — {months}mo holding
+                    {isLtcg ? "LTCG" : "STCG"} - {months}mo holding
                   </span>
                   <span className="text-xs text-[var(--color-muted)]">{rate}% rate applies</span>
                 </div>
@@ -381,7 +381,7 @@ export default function TaxPage() {
                   ))}
                 </div>
                 {gain < 0 && (
-                  <p className="text-xs text-green-400 mt-3 pt-2 border-t border-[var(--color-border)]">Capital loss of {formatCurrency(Math.abs(gain))} — can be set off against capital gains of the same year (STCL vs LTCL rules apply). Carry forward for 8 years.</p>
+                  <p className="text-xs text-green-400 mt-3 pt-2 border-t border-[var(--color-border)]">Capital loss of {formatCurrency(Math.abs(gain))} - can be set off against capital gains of the same year (STCL vs LTCL rules apply). Carry forward for 8 years.</p>
                 )}
               </div>
             )}
@@ -402,7 +402,7 @@ export default function TaxPage() {
             label: "YTD Net Profit",
             value: formatCurrency(ytdProfit),
             color: ytdProfit >= 0 ? "text-green-400" : "text-red-400",
-            sub: `${format(startOfYear(today), "d MMM")} – today`,
+            sub: `${format(startOfYear(today), "d MMM")} - today`,
           },
           {
             label: "Annual Tax Estimate",
@@ -418,7 +418,7 @@ export default function TaxPage() {
           },
           {
             label: "Next Deadline",
-            value: nextDeadline ? `${nextDays}d` : "—",
+            value: nextDeadline ? `${nextDays}d` : "-",
             color: nextDays !== null && nextDays <= 10 ? "text-red-400" : nextDays !== null && nextDays <= 30 ? "text-yellow-400" : "text-green-400",
             sub: nextDeadline?.label ?? "All clear",
           },
@@ -600,7 +600,7 @@ export default function TaxPage() {
         return (
           <div className="space-y-5 max-w-xl">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-              <h2 className="text-sm font-semibold mb-1">Tax Audit Threshold — Sec 44AB</h2>
+              <h2 className="text-sm font-semibold mb-1">Tax Audit Threshold - Sec 44AB</h2>
               <p className="text-xs text-[var(--color-muted)] mb-4">Audit by a CA is mandatory if turnover/receipts cross the threshold. Penalty for non-compliance: 0.5% of turnover (max ₹1.5L).</p>
 
               <div className="flex gap-2 mb-4">
@@ -614,7 +614,7 @@ export default function TaxPage() {
 
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs text-[var(--color-muted)] mb-1">Annual turnover / gross receipts (₹) — auto-filled from transactions</label>
+                  <label className="block text-xs text-[var(--color-muted)] mb-1">Annual turnover / gross receipts (₹) - auto-filled from transactions</label>
                   <input type="number" value={manualTurnover} onChange={e => setManualTurnover(e.target.value)}
                     placeholder={`${Math.round(annualRevenue)} (from transactions)`}
                     className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
@@ -657,7 +657,7 @@ export default function TaxPage() {
             </div>
 
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-              <h3 className="text-sm font-semibold mb-3">Quick Reference — 44AB Thresholds</h3>
+              <h3 className="text-sm font-semibold mb-3">Quick Reference - 44AB Thresholds</h3>
               <div className="space-y-2.5 text-xs">
                 {[
                   { who: "Business (default)",                 limit: "₹1 crore",  note: "Standard threshold for all business entities" },
@@ -713,7 +713,7 @@ export default function TaxPage() {
         return (
           <div className="space-y-4 max-w-2xl">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-              <h2 className="text-sm font-semibold mb-1">TCS Tracker — Tax Collected at Source</h2>
+              <h2 className="text-sm font-semibold mb-1">TCS Tracker - Tax Collected at Source</h2>
               <p className="text-xs text-[var(--color-muted)] mb-4">Under Sec 206C, sellers of specified goods must collect TCS at source. Deposit by the 7th of the following month. File Form 27EQ quarterly.</p>
               <div className="grid grid-cols-2 gap-3 mb-3">
                 <input value={buyer} onChange={e=>setBuyer(e.target.value)} placeholder="Buyer / party name *"
@@ -922,8 +922,8 @@ function MatChecker() {
       <div className={`rounded-lg p-4 border ${matApplies ? "border-orange-800/40 bg-orange-950/20" : "border-green-800/40 bg-green-950/20"}`}>
         <p className={`text-sm font-bold ${matApplies ? "text-orange-400" : "text-green-400"}`}>
           {matApplies
-            ? `⚠ MAT applies — pay ${entityType === "company" ? "MAT" : "AMT"} of ${fc(matLiability)} (higher than normal tax ${fc(normalTax)}). MAT credit ${fc(matCredit)} can be carried forward 15 years.`
-            : `✓ Normal tax applies — ${entityType === "company" ? "MAT" : "AMT"} of ${fc(matLiability)} is lower than normal tax ${fc(normalTax)}. No MAT credit arises.`}
+            ? `⚠ MAT applies - pay ${entityType === "company" ? "MAT" : "AMT"} of ${fc(matLiability)} (higher than normal tax ${fc(normalTax)}). MAT credit ${fc(matCredit)} can be carried forward 15 years.`
+            : `✓ Normal tax applies - ${entityType === "company" ? "MAT" : "AMT"} of ${fc(matLiability)} is lower than normal tax ${fc(normalTax)}. No MAT credit arises.`}
         </p>
       </div>
 
@@ -937,7 +937,7 @@ function MatChecker() {
           <ul className="space-y-1">{DEDUCTIONS_LIST.map(i => <li key={i} className="text-xs text-[var(--color-muted)] flex gap-2"><span className="text-green-400">−</span>{i}</li>)}</ul>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">MAT: Sec 115JB — companies pay higher of normal tax or 15% of adjusted book profit. AMT: Sec 115JC — LLPs/individuals claiming profit-linked deductions. MAT credit under Sec 115JAA. Consult CA for full computation.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">MAT: Sec 115JB - companies pay higher of normal tax or 15% of adjusted book profit. AMT: Sec 115JC - LLPs/individuals claiming profit-linked deductions. MAT credit under Sec 115JAA. Consult CA for full computation.</p>
     </div>
   );
 }
@@ -1028,10 +1028,10 @@ function AngelTaxChecker() {
       <div className={`rounded-lg p-4 border ${exempt ? "border-green-800/40 bg-green-950/20" : excessPremium > 0 ? "border-red-800/40 bg-red-950/20" : "border-green-800/40 bg-green-950/20"}`}>
         <p className={`text-sm font-bold ${exempt ? "text-green-400" : excessPremium > 0 ? "text-red-400" : "text-green-400"}`}>
           {exempt
-            ? `✓ Exempt from Angel Tax — ${dpiitReg ? "DPIIT recognition" : aifCat1 ? "Cat-I/II AIF exemption" : "Foreign investor (FEMA route)"}`
+            ? `✓ Exempt from Angel Tax - ${dpiitReg ? "DPIIT recognition" : aifCat1 ? "Cat-I/II AIF exemption" : "Foreign investor (FEMA route)"}`
             : excessPremium > 0
-              ? `⚠ Angel Tax applies — ${fc(excessPremium)} excess premium is taxable as 'Income from Other Sources' in the company's hands`
-              : "✓ No excess premium — issue price ≤ FMV. No angel tax liability."}
+              ? `⚠ Angel Tax applies - ${fc(excessPremium)} excess premium is taxable as 'Income from Other Sources' in the company's hands`
+              : "✓ No excess premium - issue price ≤ FMV. No angel tax liability."}
         </p>
       </div>
 
@@ -1166,8 +1166,8 @@ function RegimeOptimizer() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Tax — New Regime", value: fc(newTotal), color: cheaper === "New" ? "text-green-400" : "text-[var(--color-text)]" },
-          { label: "Tax — Old Regime", value: fc(oldTotal), color: cheaper === "Old" ? "text-green-400" : "text-[var(--color-text)]" },
+          { label: "Tax - New Regime", value: fc(newTotal), color: cheaper === "New" ? "text-green-400" : "text-[var(--color-text)]" },
+          { label: "Tax - Old Regime", value: fc(oldTotal), color: cheaper === "Old" ? "text-green-400" : "text-[var(--color-text)]" },
           { label: "You Save",         value: fc(savings),  color: "text-[var(--color-primary)]" },
           { label: "Recommended",      value: `${cheaper} Regime`, color: "text-green-400" },
         ].map(c => (
@@ -1224,10 +1224,10 @@ function AdvanceTaxEstimator() {
   const [paid, setPaid] = useState<number[]>([0, 0, 0, 0]);
 
   const SCHEDULE = [
-    { label: "1st — 15 Jun", pct: 15, months: 3 },
-    { label: "2nd — 15 Sep", pct: 45, months: 3 },
-    { label: "3rd — 15 Dec", pct: 75, months: 3 },
-    { label: "4th — 15 Mar", pct: 100, months: 1 },
+    { label: "1st - 15 Jun", pct: 15, months: 3 },
+    { label: "2nd - 15 Sep", pct: 45, months: 3 },
+    { label: "3rd - 15 Dec", pct: 75, months: 3 },
+    { label: "4th - 15 Mar", pct: 100, months: 1 },
   ];
 
   const rows = SCHEDULE.map((s, i) => {
@@ -1256,7 +1256,7 @@ function AdvanceTaxEstimator() {
             placeholder={`Auto: ${fc(defaultLiability)}`}
             className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
         </div>
-        {!applicable && <p className="text-xs text-green-400">Liability ≤ ₹10,000 — advance tax is not mandatory (Sec 208).</p>}
+        {!applicable && <p className="text-xs text-green-400">Liability ≤ ₹10,000 - advance tax is not mandatory (Sec 208).</p>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1296,8 +1296,8 @@ function AdvanceTaxEstimator() {
                   <input type="number" value={paid[i] || ""} onChange={e => { const next = [...paid]; next[i] = parseFloat(e.target.value) || 0; setPaid(next); }}
                     placeholder="0" className="w-28 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none tabular-nums" />
                 </td>
-                <td className="px-4 py-2.5 tabular-nums text-red-400">{r.shortfall > 0 ? fc(r.shortfall) : "—"}</td>
-                <td className="px-4 py-2.5 tabular-nums text-orange-400">{r.interest234C > 0 ? fc(r.interest234C) : "—"}</td>
+                <td className="px-4 py-2.5 tabular-nums text-red-400">{r.shortfall > 0 ? fc(r.shortfall) : "-"}</td>
+                <td className="px-4 py-2.5 tabular-nums text-orange-400">{r.interest234C > 0 ? fc(r.interest234C) : "-"}</td>
               </tr>
             ))}
           </tbody>
@@ -1306,10 +1306,10 @@ function AdvanceTaxEstimator() {
 
       {below90 && applicable && (
         <div className="rounded-lg p-4 border border-orange-800/40 bg-orange-950/20">
-          <p className="text-sm font-bold text-orange-400">⚠ Less than 90% paid — Sec 234B interest of ~{fc(interest234B)} applies (1%/month on shortfall from 1 April, indicative).</p>
+          <p className="text-sm font-bold text-orange-400">⚠ Less than 90% paid - Sec 234B interest of ~{fc(interest234B)} applies (1%/month on shortfall from 1 April, indicative).</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Sec 234C: 1% per month on installment shortfall (×3 months for Jun/Sep/Dec, ×1 for Mar). Sec 234B: 1% per month if &lt; 90% paid by year-end. Presumptive 44AD/44ADA taxpayers may pay 100% by 15 Mar. Indicative — consult a CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Sec 234C: 1% per month on installment shortfall (×3 months for Jun/Sep/Dec, ×1 for Mar). Sec 234B: 1% per month if &lt; 90% paid by year-end. Presumptive 44AD/44ADA taxpayers may pay 100% by 15 Mar. Indicative - consult a CA.</p>
     </div>
   );
 }
@@ -1317,24 +1317,24 @@ function AdvanceTaxEstimator() {
 // Shared input class (matches existing `inp` pattern across this file)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
-// TDS section master — section / rate / threshold / payee logic (FY 2024-25)
+// TDS section master - section / rate / threshold / payee logic (FY 2024-25)
 type TdsSection = {
   section: string; nature: string; rate: number; rateNonPan: number;
   threshold: number; form: "24Q" | "26Q" | "27Q"; note?: string;
 };
 const TDS_SECTIONS: TdsSection[] = [
-  { section: "192",   nature: "Salary",                              rate: 0,   rateNonPan: 0,  threshold: 0,        form: "24Q", note: "As per slab — projected via payroll 192" },
+  { section: "192",   nature: "Salary",                              rate: 0,   rateNonPan: 0,  threshold: 0,        form: "24Q", note: "As per slab - projected via payroll 192" },
   { section: "194A",  nature: "Interest (other than securities)",    rate: 10,  rateNonPan: 20, threshold: 40000,    form: "26Q" },
-  { section: "194C",  nature: "Contractor — individual/HUF",         rate: 1,   rateNonPan: 20, threshold: 30000,    form: "26Q", note: "₹1L aggregate p.a. limit also applies" },
-  { section: "194C2", nature: "Contractor — company/firm",           rate: 2,   rateNonPan: 20, threshold: 30000,    form: "26Q" },
+  { section: "194C",  nature: "Contractor - individual/HUF",         rate: 1,   rateNonPan: 20, threshold: 30000,    form: "26Q", note: "₹1L aggregate p.a. limit also applies" },
+  { section: "194C2", nature: "Contractor - company/firm",           rate: 2,   rateNonPan: 20, threshold: 30000,    form: "26Q" },
   { section: "194H",  nature: "Commission / brokerage",              rate: 5,   rateNonPan: 20, threshold: 15000,    form: "26Q" },
-  { section: "194I-L",nature: "Rent — land/building/furniture",      rate: 10,  rateNonPan: 20, threshold: 240000,   form: "26Q" },
-  { section: "194I-P",nature: "Rent — plant/machinery/equipment",    rate: 2,   rateNonPan: 20, threshold: 240000,   form: "26Q" },
+  { section: "194I-L",nature: "Rent - land/building/furniture",      rate: 10,  rateNonPan: 20, threshold: 240000,   form: "26Q" },
+  { section: "194I-P",nature: "Rent - plant/machinery/equipment",    rate: 2,   rateNonPan: 20, threshold: 240000,   form: "26Q" },
   { section: "194J-P",nature: "Professional fees / royalty",         rate: 10,  rateNonPan: 20, threshold: 30000,    form: "26Q" },
   { section: "194J-T",nature: "Technical services / call-centre",    rate: 2,   rateNonPan: 20, threshold: 30000,    form: "26Q" },
   { section: "194Q",  nature: "Purchase of goods > ₹50L",            rate: 0.1, rateNonPan: 5,  threshold: 5000000,  form: "26Q", note: "Buyer turnover > ₹10 Cr; on value above ₹50L" },
   { section: "194O",  nature: "E-commerce participant payments",     rate: 1,   rateNonPan: 5,  threshold: 500000,   form: "26Q", note: "Operator deducts on gross sales (₹5L limit for individuals)" },
-  { section: "206C1H",nature: "TCS — sale of goods > ₹50L",          rate: 0.1, rateNonPan: 1,  threshold: 5000000,  form: "27Q", note: "Collected by seller (turnover > ₹10 Cr)" },
+  { section: "206C1H",nature: "TCS - sale of goods > ₹50L",          rate: 0.1, rateNonPan: 1,  threshold: 5000000,  form: "27Q", note: "Collected by seller (turnover > ₹10 Cr)" },
 ];
 
 // ── #14 TDS Return (24Q/26Q) Generator ──────────────────────────────────────────
@@ -1395,7 +1395,7 @@ function TdsReturnGenerator() {
           <input value={deductee} onChange={e => setDeductee(e.target.value)} placeholder="Deductee name *" className={INP} />
           <input value={pan} onChange={e => setPan(e.target.value)} placeholder="PAN (blank → 20%)" maxLength={10} className={INP} />
           <select value={section} onChange={e => setSection(e.target.value)} className={INP}>
-            {TDS_SECTIONS.filter(s => s.section !== "192").map(s => <option key={s.section} value={s.section}>{s.section} — {s.nature}</option>)}
+            {TDS_SECTIONS.filter(s => s.section !== "192").map(s => <option key={s.section} value={s.section}>{s.section} - {s.nature}</option>)}
           </select>
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Payment amount (₹) *" className={INP} />
           <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
@@ -1483,8 +1483,8 @@ function Form26ASRecon() {
   const verdict = (r: RecRow): { label: string; cls: string } => {
     const diff = r.as26Tds - r.booksTds;
     if (Math.abs(diff) < 1) return { label: "Matched", cls: "bg-green-900/30 text-green-400 border-green-800/40" };
-    if (diff < 0) return { label: "Short in 26AS — chase deductor", cls: "bg-red-900/30 text-red-400 border-red-800/40" };
-    return { label: "Extra in 26AS — claim it", cls: "bg-blue-900/30 text-blue-400 border-blue-800/40" };
+    if (diff < 0) return { label: "Short in 26AS - chase deductor", cls: "bg-red-900/30 text-red-400 border-red-800/40" };
+    return { label: "Extra in 26AS - claim it", cls: "bg-blue-900/30 text-blue-400 border-blue-800/40" };
   };
 
   const totalBooks = rows.reduce((s, r) => s + r.booksTds, 0);
@@ -1496,7 +1496,7 @@ function Form26ASRecon() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileSearch size={14} className="text-[var(--color-primary)]" /> Form 26AS / AIS Reconciliation</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Match TDS credit per your books against what the deductor reported in 26AS / AIS. Only TDS appearing in 26AS can be claimed in the ITR — chase mismatches before filing.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Match TDS credit per your books against what the deductor reported in 26AS / AIS. Only TDS appearing in 26AS can be claimed in the ITR - chase mismatches before filing.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <input value={party} onChange={e => setParty(e.target.value)} placeholder="Deductor / party *" className={INP} />
           <select value={section} onChange={e => setSection(e.target.value)} className={INP}>
@@ -1533,7 +1533,7 @@ function Form26ASRecon() {
                     <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.section}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.booksTds)}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.as26Tds)}</td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums ${diff < 0 ? "text-red-400" : diff > 0 ? "text-blue-400" : "text-green-400"}`}>{diff === 0 ? "—" : fc(diff)}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums ${diff < 0 ? "text-red-400" : diff > 0 ? "text-blue-400" : "text-green-400"}`}>{diff === 0 ? "-" : fc(diff)}</td>
                     <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${v.cls}`}>{v.label}</span></td>
                     <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                   </tr>
@@ -1543,7 +1543,7 @@ function Form26ASRecon() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Download 26AS from TRACES and AIS from the e-filing portal. A short credit in 26AS usually means the deductor hasn't filed/deposited — file a grievance or get a revised TDS return from them. Reconcile before the 31 Jul / 31 Oct ITR due date.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Download 26AS from TRACES and AIS from the e-filing portal. A short credit in 26AS usually means the deductor hasn't filed/deposited - file a grievance or get a revised TDS return from them. Reconcile before the 31 Jul / 31 Oct ITR due date.</p>
     </div>
   );
 }
@@ -1565,12 +1565,12 @@ function TdsSectionFinder() {
     <div className="space-y-4 max-w-2xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Search size={14} className="text-[var(--color-primary)]" /> TDS Section &amp; Rate Finder</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Pick the nature of payment to get the correct section, rate and threshold — including 194Q (0.1%), 194C (1/2%), 194J (10/2%), 194I (10/2%) and 206C.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Pick the nature of payment to get the correct section, rate and threshold - including 194Q (0.1%), 194C (1/2%), 194J (10/2%), 194I (10/2%) and 206C.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Nature of payment</label>
             <select value={secId} onChange={e => setSecId(e.target.value)} className={INP}>
-              {TDS_SECTIONS.map(s => <option key={s.section} value={s.section}>{s.section} — {s.nature}</option>)}
+              {TDS_SECTIONS.map(s => <option key={s.section} value={s.section}>{s.section} - {s.nature}</option>)}
             </select>
           </div>
           <div>
@@ -1588,7 +1588,7 @@ function TdsSectionFinder() {
         {[
           { label: "Section", value: sec.section, color: "text-[var(--color-primary)]" },
           { label: "Applicable rate", value: `${rate}%`, color: "text-orange-400" },
-          { label: "Threshold", value: sec.threshold === 0 ? "—" : fc(sec.threshold), color: "text-blue-400" },
+          { label: "Threshold", value: sec.threshold === 0 ? "-" : fc(sec.threshold), color: "text-blue-400" },
           { label: "TDS to deduct", value: fc(tds), color: tds > 0 ? "text-red-400" : "text-green-400" },
         ].map(c => (
           <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -1603,7 +1603,7 @@ function TdsSectionFinder() {
           <p className={`text-sm font-bold ${applies ? "text-orange-400" : "text-green-400"}`}>
             {applies
               ? `Deduct ${fc(tds)} (${rate}% u/s ${sec.section}) and pay ${fc(net)} net. File in Form ${sec.form}.`
-              : `No TDS — amount ${amt < sec.threshold ? `below the ${fc(sec.threshold)} threshold` : "rate not applicable"} for section ${sec.section}.`}
+              : `No TDS - amount ${amt < sec.threshold ? `below the ${fc(sec.threshold)} threshold` : "rate not applicable"} for section ${sec.section}.`}
           </p>
           {sec.note && <p className="text-[11px] text-[var(--color-muted)] mt-1">{sec.note}</p>}
         </div>
@@ -1621,7 +1621,7 @@ function TdsSectionFinder() {
                   <td className="px-2 py-1.5 text-[var(--color-muted)]">{s.nature}</td>
                   <td className="px-2 py-1.5 tabular-nums">{s.rate}%</td>
                   <td className="px-2 py-1.5 tabular-nums">{s.rateNonPan}%</td>
-                  <td className="px-2 py-1.5 tabular-nums">{s.threshold === 0 ? "—" : fc(s.threshold)}</td>
+                  <td className="px-2 py-1.5 tabular-nums">{s.threshold === 0 ? "-" : fc(s.threshold)}</td>
                   <td className="px-2 py-1.5">{s.form}</td>
                 </tr>
               ))}
@@ -1664,7 +1664,7 @@ function LowerDeductionTracker() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileCheck size={14} className="text-[var(--color-primary)]" /> Lower-Deduction Certificate (Sec 197) Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Vendors with a Sec 197 certificate get TDS at a reduced rate. Apply the certificate rate only while it is valid — deduct at the normal rate once it expires.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Vendors with a Sec 197 certificate get TDS at a reduced rate. Apply the certificate rate only while it is valid - deduct at the normal rate once it expires.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor name *" className={INP} />
           <input value={certNo} onChange={e => setCertNo(e.target.value)} placeholder="Certificate no. *" className={INP} />
@@ -1697,9 +1697,9 @@ function LowerDeductionTracker() {
                     <td className="px-3 py-2.5 text-xs">{r.certNo}</td>
                     <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.section}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums">{r.certRate}%</td>
-                    <td className="px-3 py-2.5 text-xs">{r.validTill || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs">{r.validTill || "-"}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums font-semibold text-blue-400">{fc(appliedTds)} @ {eff}%</td>
-                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${expired ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>{expired ? "Expired — normal rate" : "Valid"}</span></td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${expired ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>{expired ? "Expired - normal rate" : "Valid"}</span></td>
                     <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                   </tr>
                 );
@@ -1756,8 +1756,8 @@ function DepreciationSchedule() {
   return (
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Depreciation Schedule (IT Act — Block of Assets, WDV)</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Written-down-value method by block. Assets put to use for &lt; 180 days in the year get half the normal rate. Companies Act SLM/WDV differs — maintain dual books.</p>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Depreciation Schedule (IT Act - Block of Assets, WDV)</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Written-down-value method by block. Assets put to use for &lt; 180 days in the year get half the normal rate. Companies Act SLM/WDV differs - maintain dual books.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Asset name *" className={INP} />
           <select value={block} onChange={e => setBlock(e.target.value)} className={INP}>
@@ -1838,7 +1838,7 @@ function LossSetoffPlanner() {
 
   const expiryAy = (cfYears: number, fromAy: string) => {
     const m = fromAy.match(/(\d{4})/);
-    if (!m) return "—";
+    if (!m) return "-";
     const start = parseInt(m[1]);
     return `AY ${start + cfYears}-${String(start + cfYears + 1).slice(2)}`;
   };
@@ -1896,7 +1896,7 @@ function LossSetoffPlanner() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Intra-head set-off first, then inter-head (subject to restrictions — e.g. business loss can't set off salary; LTCL only vs LTCG). Unabsorbed depreciation carries forward indefinitely. House-property loss inter-head set-off capped at ₹2L/year.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Intra-head set-off first, then inter-head (subject to restrictions - e.g. business loss can't set off salary; LTCL only vs LTCG). Unabsorbed depreciation carries forward indefinitely. House-property loss inter-head set-off capped at ₹2L/year.</p>
     </div>
   );
 }
@@ -1914,16 +1914,16 @@ function ItrPrefillPack() {
   const FORM_FOR: Record<string, string> = { individual: "ITR-3 / ITR-4", huf: "ITR-3 / ITR-4", firm: "ITR-5", company: "ITR-6" };
 
   const lines = [
-    { section: "Sch BP — Business & Profession", items: [
+    { section: "Sch BP - Business & Profession", items: [
       { label: "Gross revenue / turnover", value: revenue },
       { label: "Total expenses debited to P&L", value: -expenses },
       { label: "Net profit before adjustments", value: netProfit },
     ]},
-    { section: "Part B-TI — Total Income", items: [
+    { section: "Part B-TI - Total Income", items: [
       { label: "Income from business / profession", value: Math.max(0, netProfit) },
       { label: "Gross total income (PGBP only)", value: Math.max(0, netProfit) },
     ]},
-    { section: "Sch BS — Balance Sheet (cross-check)", items: [
+    { section: "Sch BS - Balance Sheet (cross-check)", items: [
       { label: "Use Balance Sheet module for assets/liabilities", value: 0 },
     ]},
   ];
@@ -1964,13 +1964,13 @@ function ItrPrefillPack() {
             {grp.items.map(it => (
               <div key={it.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
                 <span className="text-xs text-[var(--color-muted)]">{it.label}</span>
-                <span className="tabular-nums text-xs">{it.value === 0 ? "—" : it.value < 0 ? `(${fc(Math.abs(it.value))})` : fc(it.value)}</span>
+                <span className="tabular-nums text-xs">{it.value === 0 ? "-" : it.value < 0 ? `(${fc(Math.abs(it.value))})` : fc(it.value)}</span>
               </div>
             ))}
           </div>
         </div>
       ))}
-      <p className="text-[10px] text-[var(--color-muted)]">Pre-fill is indicative — book-to-tax adjustments (disallowances u/s 40/43B, depreciation per IT Act, MAT) must be applied before filing. Reconcile with 26AS/AIS and the Balance Sheet module. Your CA finalises the return.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Pre-fill is indicative - book-to-tax adjustments (disallowances u/s 40/43B, depreciation per IT Act, MAT) must be applied before filing. Reconcile with 26AS/AIS and the Balance Sheet module. Your CA finalises the return.</p>
     </div>
   );
 }
@@ -1988,11 +1988,11 @@ function Form15CAHelper() {
   // Part determination per Rule 37BB
   let part: string; let needs15CB: boolean; let detail: string;
   if (!taxable) {
-    part = "Part D"; needs15CB = false; detail = "Remittance not chargeable to tax (e.g. certain imports) — no 15CB; Part D only.";
+    part = "Part D"; needs15CB = false; detail = "Remittance not chargeable to tax (e.g. certain imports) - no 15CB; Part D only.";
   } else if (amt <= annualThreshold) {
-    part = "Part A"; needs15CB = false; detail = "Taxable but aggregate ≤ ₹5L in the FY — Part A, no CA certificate needed.";
+    part = "Part A"; needs15CB = false; detail = "Taxable but aggregate ≤ ₹5L in the FY - Part A, no CA certificate needed.";
   } else {
-    part = "Part C"; needs15CB = true; detail = "Taxable and > ₹5L — Part C requires a CA's Form 15CB certificate.";
+    part = "Part C"; needs15CB = true; detail = "Taxable and > ₹5L - Part C requires a CA's Form 15CB certificate.";
   }
 
   const rate = parseFloat(dtaaRate) || 0;
@@ -2039,17 +2039,17 @@ function Form15CAHelper() {
       </div>
 
       <div className={`rounded-lg p-4 border ${needs15CB ? "border-orange-800/40 bg-orange-950/20" : "border-green-800/40 bg-green-950/20"}`}>
-        <p className={`text-sm font-bold ${needs15CB ? "text-orange-400" : "text-green-400"}`}>{part} — {detail}</p>
+        <p className={`text-sm font-bold ${needs15CB ? "text-orange-400" : "text-green-400"}`}>{part} - {detail}</p>
         <p className="text-[11px] text-[var(--color-muted)] mt-1">Purpose: {purpose}. File 15CA online before remitting; the bank requires the acknowledgement.</p>
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <p className="text-xs font-semibold mb-2">Form 15CA Parts (Rule 37BB)</p>
         <ul className="space-y-1.5 text-xs text-[var(--color-muted)]">
-          <li><span className="text-[var(--color-text)] font-medium">Part A</span> — taxable remittance, aggregate ≤ ₹5L in FY. No 15CB.</li>
-          <li><span className="text-[var(--color-text)] font-medium">Part B</span> — &gt; ₹5L where AO order/certificate u/s 195(2)/197 obtained.</li>
-          <li><span className="text-[var(--color-text)] font-medium">Part C</span> — &gt; ₹5L taxable; CA's Form 15CB mandatory.</li>
-          <li><span className="text-[var(--color-text)] font-medium">Part D</span> — not chargeable to tax (per the specified list of 33 items).</li>
+          <li><span className="text-[var(--color-text)] font-medium">Part A</span> - taxable remittance, aggregate ≤ ₹5L in FY. No 15CB.</li>
+          <li><span className="text-[var(--color-text)] font-medium">Part B</span> - &gt; ₹5L where AO order/certificate u/s 195(2)/197 obtained.</li>
+          <li><span className="text-[var(--color-text)] font-medium">Part C</span> - &gt; ₹5L taxable; CA's Form 15CB mandatory.</li>
+          <li><span className="text-[var(--color-text)] font-medium">Part D</span> - not chargeable to tax (per the specified list of 33 items).</li>
         </ul>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Sec 195 governs TDS on payments to non-residents. Grossing-up may apply if tax is borne by the remitter. Keep the Tax Residency Certificate (TRC) and Form 10F for DTAA benefit. CA to certify 15CB.</p>
@@ -2067,25 +2067,25 @@ function Sec80Maximiser() {
 
   const donation = parseFloat(d80g) || 0;
   const ded80g = Math.round(donation * d80gPct / 100);
-  // 80JJAA — 30% of additional employee cost, for 3 years
+  // 80JJAA - 30% of additional employee cost, for 3 years
   const addlWages = parseFloat(newEmpWages) || 0;
   const ded80jjaa = Math.round(addlWages * 0.30);
-  // 35AD — 100% capital expenditure deduction for specified businesses
+  // 35AD - 100% capital expenditure deduction for specified businesses
   const ded35ad = parseFloat(d35ad) || 0;
   const totalDed = ded80g + ded80jjaa + ded35ad;
   const taxSaved = Math.round(totalDed * 0.25); // assumed 25% corporate rate
 
   const ITEMS = [
-    { key: "80G", title: "80G — Donations", detail: "50% or 100% of eligible donations to notified funds/institutions (subject to 10% of GTI limit for some)." },
-    { key: "80JJAA", title: "80JJAA — New Employment", detail: "30% of additional employee cost (wages ≤ ₹25k/month) deductible for 3 assessment years." },
-    { key: "35AD", title: "35AD — Capital Expenditure", detail: "100% deduction of capex for specified businesses (cold chain, warehousing, hospitals, etc.)." },
+    { key: "80G", title: "80G - Donations", detail: "50% or 100% of eligible donations to notified funds/institutions (subject to 10% of GTI limit for some)." },
+    { key: "80JJAA", title: "80JJAA - New Employment", detail: "30% of additional employee cost (wages ≤ ₹25k/month) deductible for 3 assessment years." },
+    { key: "35AD", title: "35AD - Capital Expenditure", detail: "100% deduction of capex for specified businesses (cold chain, warehousing, hospitals, etc.)." },
   ];
 
   return (
     <div className="space-y-4 max-w-2xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><PiggyBank size={14} className="text-[var(--color-primary)]" /> Section 80 Deduction Maximiser (Entity)</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Beyond personal 80C — entity-level deductions: 80G donations, 80JJAA new-employment incentive (30% of additional wages × 3 yrs) and 35AD capex. Note: not available under the new concessional regimes 115BAA/115BAB.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Beyond personal 80C - entity-level deductions: 80G donations, 80JJAA new-employment incentive (30% of additional wages × 3 yrs) and 35AD capex. Note: not available under the new concessional regimes 115BAA/115BAB.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">80G donations (₹)</label>
@@ -2103,11 +2103,11 @@ function Sec80Maximiser() {
             </div>
           </div>
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">80JJAA — additional employee wages (₹/yr)</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">80JJAA - additional employee wages (₹/yr)</label>
             <input type="number" value={newEmpWages} onChange={e => setNewEmpWages(e.target.value)} placeholder="e.g. 1200000" className={INP} />
           </div>
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">35AD — specified-business capex (₹)</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">35AD - specified-business capex (₹)</label>
             <input type="number" value={d35ad} onChange={e => setD35ad(e.target.value)} placeholder="e.g. 5000000" className={INP} />
           </div>
         </div>
@@ -2157,9 +2157,9 @@ function EqualisationLevyTracker() {
   const fc = formatCurrency;
 
   const RATES: Record<ElRow["type"], { label: string; rate: number; desc: string }> = {
-    "el-ads":  { label: "Equalisation Levy — online ads (6%)", rate: 6, desc: "On payments > ₹1L/yr to a non-resident for online advertising (Sec 165)." },
-    "el-ecom": { label: "EL — e-commerce supply (2%)",         rate: 2, desc: "On consideration to non-resident e-commerce operators (Sec 165A) — withdrawn w.e.f. 1 Aug 2024." },
-    "194o":    { label: "TDS 194O — e-commerce participant (1%)", rate: 1, desc: "Operator deducts 1% on gross sales of resident participants." },
+    "el-ads":  { label: "Equalisation Levy - online ads (6%)", rate: 6, desc: "On payments > ₹1L/yr to a non-resident for online advertising (Sec 165)." },
+    "el-ecom": { label: "EL - e-commerce supply (2%)",         rate: 2, desc: "On consideration to non-resident e-commerce operators (Sec 165A) - withdrawn w.e.f. 1 Aug 2024." },
+    "194o":    { label: "TDS 194O - e-commerce participant (1%)", rate: 1, desc: "Operator deducts 1% on gross sales of resident participants." },
   };
 
   const add = () => {
@@ -2176,7 +2176,7 @@ function EqualisationLevyTracker() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ShoppingCart size={14} className="text-[var(--color-primary)]" /> Equalisation Levy / TDS-194O Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Track the 6% EL on online advertising to non-residents and the 1% TDS u/s 194O for e-commerce operators. (The 2% e-commerce EL stands withdrawn from 1 Aug 2024 — retained here for prior-period entries.)</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track the 6% EL on online advertising to non-residents and the 1% TDS u/s 194O for e-commerce operators. (The 2% e-commerce EL stands withdrawn from 1 Aug 2024 - retained here for prior-period entries.)</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <input value={party} onChange={e => setParty(e.target.value)} placeholder="Payee / participant *" className={INP} />
           <select value={type} onChange={e => setType(e.target.value as ElRow["type"])} className={INP}>
@@ -2252,7 +2252,7 @@ function AdvTaxCashCalendar() {
     <div className="space-y-4 max-w-2xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Advance Tax vs TDS Cash-Flow Calendar</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Nets TDS already deducted on your receipts against the advance-tax liability and lays out the cash outgo by due date — so you can plan runway around 15 Jun / Sep / Dec / Mar.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Nets TDS already deducted on your receipts against the advance-tax liability and lays out the cash outgo by due date - so you can plan runway around 15 Jun / Sep / Dec / Mar.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Estimated annual tax liability (₹)</label>
@@ -2324,7 +2324,7 @@ function TaxNoticeResponder() {
     if (!refNo) { toast.error("Enter notice reference number"); return; }
     setRows(prev => [...prev, { id: crypto.randomUUID(), refNo, ay: ay || "AY 2024-25", type, demand: parseFloat(demand) || 0, dueDate, status: "open" }]);
     setRefNo(""); setAy(""); setDemand(""); setDueDate("");
-    toast.success("Notice logged — track the response deadline");
+    toast.success("Notice logged - track the response deadline");
   };
 
   const cycle = (s: NoticeRow["status"]): NoticeRow["status"] => s === "open" ? "responded" : s === "responded" ? "closed" : "open";
@@ -2373,8 +2373,8 @@ function TaxNoticeResponder() {
                     <td className="px-3 py-2.5 text-xs font-medium">{r.refNo}</td>
                     <td className="px-3 py-2.5 text-xs">{r.ay}</td>
                     <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[150px] truncate">{r.type}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-red-400">{r.demand > 0 ? fc(r.demand) : "—"}</td>
-                    <td className={`px-3 py-2.5 text-xs ${isOverdue ? "text-red-400 font-semibold" : ""}`}>{r.dueDate || "—"}{isOverdue ? " ⚠" : ""}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-red-400">{r.demand > 0 ? fc(r.demand) : "-"}</td>
+                    <td className={`px-3 py-2.5 text-xs ${isOverdue ? "text-red-400 font-semibold" : ""}`}>{r.dueDate || "-"}{isOverdue ? " ⚠" : ""}</td>
                     <td className="px-3 py-2.5">
                       <button onClick={() => setRows(prev => prev.map(x => x.id === r.id ? { ...x, status: cycle(x.status) } : x))}
                         className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${r.status === "closed" ? "bg-green-900/30 text-green-400 border-green-800/40" : r.status === "responded" ? "bg-blue-900/30 text-blue-400 border-blue-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
@@ -2389,7 +2389,7 @@ function TaxNoticeResponder() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Most notices carry a 15–30 day response window from the date of the notice. Rectification u/s 154 corrects mistakes apparent from record; appeal to CIT(A) within 30 days of a demand. Always respond via the e-filing portal e-Proceedings and keep the DIN. Consult your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Most notices carry a 15-30 day response window from the date of the notice. Rectification u/s 154 corrects mistakes apparent from record; appeal to CIT(A) within 30 days of a demand. Always respond via the e-filing portal e-Proceedings and keep the DIN. Consult your CA.</p>
     </div>
   );
 }
@@ -2406,7 +2406,7 @@ function HraExemptionCalc() {
   const hraReceived = parseFloat(hra) || 0;  // annual
   const rentPaid = parseFloat(rent) || 0;    // annual
 
-  // Three limbs of Rule 2A — least is exempt
+  // Three limbs of Rule 2A - least is exempt
   const limbActual  = hraReceived;
   const limbPct     = (metro ? 0.50 : 0.40) * b;
   const limbRent    = Math.max(0, rentPaid - 0.10 * b);
@@ -2555,7 +2555,7 @@ function HousePropertyCalc() {
   );
 }
 
-// ── Presumptive 44AE — Goods Carriages ──────────────────────────────────────────
+// ── Presumptive 44AE - Goods Carriages ──────────────────────────────────────────
 function Presumptive44AE() {
   const [heavy, setHeavy]   = useState("");   // GVW > 12,000 kg
   const [light, setLight]   = useState("");   // other vehicles
@@ -2578,7 +2578,7 @@ function Presumptive44AE() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Truck size={14} className="text-[var(--color-primary)]" /> Presumptive Income — Goods Transport (Sec 44AE)</h2>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Truck size={14} className="text-[var(--color-primary)]" /> Presumptive Income - Goods Transport (Sec 44AE)</h2>
         <p className="text-xs text-[var(--color-muted)] mb-4">For transporters owning ≤10 goods carriages. Heavy vehicle (GVW &gt; 12 t): ₹1,000 per ton of gross vehicle weight per month. Other vehicles: ₹7,500 per month each.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
@@ -2605,7 +2605,7 @@ function Presumptive44AE() {
           {!eligible && (
             <div className="flex items-center gap-2 mb-3 p-2.5 bg-red-950/20 border border-red-800/30 rounded-lg">
               <AlertTriangle size={12} className="text-red-400 shrink-0" />
-              <p className="text-xs text-red-300">{totalVehicles} vehicles exceed the 10-vehicle limit — 44AE not available. Maintain books and get a tax audit (44AB).</p>
+              <p className="text-xs text-red-300">{totalVehicles} vehicles exceed the 10-vehicle limit - 44AE not available. Maintain books and get a tax audit (44AB).</p>
             </div>
           )}
           <div className="space-y-2">
@@ -2795,8 +2795,8 @@ function Relief89Calc() {
           <h3 className="text-sm font-semibold mb-3">Relief Computation (Form 10E)</h3>
           <div className="space-y-2">
             {[
-              { label: "Extra tax on arrears — current year", value: fc(incrCurrent), color: "text-orange-400" },
-              { label: "Extra tax on arrears — earlier year", value: fc(incrPrior), color: "text-blue-400" },
+              { label: "Extra tax on arrears - current year", value: fc(incrCurrent), color: "text-orange-400" },
+              { label: "Extra tax on arrears - earlier year", value: fc(incrPrior), color: "text-blue-400" },
               { label: "Relief u/s 89(1)", value: fc(relief), color: "text-green-400 font-bold" },
             ].map(r => (
               <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0">
@@ -2806,7 +2806,7 @@ function Relief89Calc() {
             ))}
           </div>
           <div className="mt-4 rounded-lg p-3 border border-green-800/40 bg-green-950/20">
-            <p className="text-sm font-bold text-green-400">{relief > 0 ? `✓ You can claim ${fc(relief)} relief — reduce your tax payable after filing Form 10E.` : "No relief — the arrears do not push you into a higher effective rate than the earlier year."}</p>
+            <p className="text-sm font-bold text-green-400">{relief > 0 ? `✓ You can claim ${fc(relief)} relief - reduce your tax payable after filing Form 10E.` : "No relief - the arrears do not push you into a higher effective rate than the earlier year."}</p>
           </div>
         </div>
       )}
@@ -2818,10 +2818,10 @@ function Relief89Calc() {
 // ── Donations 80G Deduction Calculator ──────────────────────────────────────────
 type DonationRow = { id: string; donee: string; amount: number; category: "100nl" | "50nl" | "100ql" | "50ql"; mode: "digital" | "cash" };
 const DONATION_CATS: Record<DonationRow["category"], { label: string; pct: number; qualifying: boolean }> = {
-  "100nl": { label: "100% — no limit (PM CARES, National Defence Fund)", pct: 100, qualifying: false },
-  "50nl":  { label: "50% — no limit (PM Drought Relief, Jawaharlal Nehru Fund)", pct: 50, qualifying: false },
-  "100ql": { label: "100% — subject to 10% of AGTI (Govt for family planning)", pct: 100, qualifying: true },
-  "50ql":  { label: "50% — subject to 10% of AGTI (most charitable trusts)", pct: 50, qualifying: true },
+  "100nl": { label: "100% - no limit (PM CARES, National Defence Fund)", pct: 100, qualifying: false },
+  "50nl":  { label: "50% - no limit (PM Drought Relief, Jawaharlal Nehru Fund)", pct: 50, qualifying: false },
+  "100ql": { label: "100% - subject to 10% of AGTI (Govt for family planning)", pct: 100, qualifying: true },
+  "50ql":  { label: "50% - subject to 10% of AGTI (most charitable trusts)", pct: 50, qualifying: true },
 };
 function Donation80GCalc() {
   const [rows, setRows] = useFeatureState<DonationRow[]>("tax-80g-donations", []);
@@ -2873,7 +2873,7 @@ function Donation80GCalc() {
         </div>
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Adjusted Gross Total Income (₹) — for 10% cap</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Adjusted Gross Total Income (₹) - for 10% cap</label>
             <input type="number" value={agti} onChange={e => setAgti(e.target.value)} placeholder="e.g. 1500000" className={INP} />
           </div>
           <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add donation</button>
@@ -2884,7 +2884,7 @@ function Donation80GCalc() {
         <div className="grid grid-cols-3 gap-3">
           {[
             { label: "Total donated", value: fc(rows.reduce((s, r) => s + r.amount, 0)), color: "text-[var(--color-text)]" },
-            { label: "Qualifying-limit cap (10% AGTI)", value: agtiVal > 0 ? fc(Math.round(qualifyingCap)) : "—", color: "text-blue-400" },
+            { label: "Qualifying-limit cap (10% AGTI)", value: agtiVal > 0 ? fc(Math.round(qualifyingCap)) : "-", color: "text-blue-400" },
             { label: "Eligible 80G deduction", value: fc(totalDeduction), color: "text-green-400" },
           ].map(c => (
             <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -2919,8 +2919,8 @@ function Donation80GCalc() {
 // ── Capital-Gains Exemption Planner (Sec 54 / 54EC / 54F) ───────────────────────
 function CapitalGainExemptionPlanner() {
   const [section, setSection] = useState<"54" | "54EC" | "54F">("54");
-  const [gain, setGain]       = useState("");      // LTCG (54/54EC) — capital gain
-  const [netConsideration, setNetConsideration] = useState(""); // for 54F — full sale value
+  const [gain, setGain]       = useState("");      // LTCG (54/54EC) - capital gain
+  const [netConsideration, setNetConsideration] = useState(""); // for 54F - full sale value
   const [reinvest, setReinvest] = useState("");    // amount reinvested
   const fc = formatCurrency;
 
@@ -2943,7 +2943,7 @@ function CapitalGainExemptionPlanner() {
     cap = Math.min(cg, bondCap);
     note = "Invest LTCG from land/building into 54EC bonds (NHAI/REC/PFC/IRFC) within 6 months. Max ₹50 lakh, 5-year lock-in.";
   } else {
-    // 54F — exemption proportionate to net consideration reinvested; full only if entire NC invested
+    // 54F - exemption proportionate to net consideration reinvested; full only if entire NC invested
     exemption = nc > 0 ? Math.round(cg * Math.min(inv, nc) / nc) : 0;
     cap = cg;
     note = "Reinvest the entire net sale consideration of any LTCA (other than a house) into one residential house. Proportionate exemption if part-invested.";
@@ -2958,7 +2958,7 @@ function CapitalGainExemptionPlanner() {
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Coins size={14} className="text-[var(--color-primary)]" /> Capital-Gains Exemption Planner (54 / 54EC / 54F)</h2>
         <p className="text-xs text-[var(--color-muted)] mb-4">Defer or eliminate LTCG by reinvesting in a house (54/54F) or specified bonds (54EC). Model how much to reinvest to wipe out the tax.</p>
         <div className="flex gap-2 mb-4">
-          {([["54", "Sec 54 — House → House"], ["54EC", "Sec 54EC — Bonds"], ["54F", "Sec 54F — Any asset → House"]] as const).map(([k, lbl]) => (
+          {([["54", "Sec 54 - House → House"], ["54EC", "Sec 54EC - Bonds"], ["54F", "Sec 54F - Any asset → House"]] as const).map(([k, lbl]) => (
             <button key={k} onClick={() => setSection(k)}
               className={`flex-1 py-2 text-[11px] font-semibold rounded-lg border transition-colors ${section === k ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{lbl}</button>
           ))}
@@ -3033,7 +3033,7 @@ function Interest234Calc() {
     { label: "By 15 Dec (75%)", duePct: 0.75, months: 3 },
     { label: "By 15 Mar (100%)", duePct: 1.00, months: 1 },
   ];
-  // Assume advance paid evenly is unknown; use cumulative paid vs cumulative due with single 'paid' as final — indicative
+  // Assume advance paid evenly is unknown; use cumulative paid vs cumulative due with single 'paid' as final - indicative
   const int234C = cuts.reduce((s, c) => {
     const due = tax * c.duePct;
     const expectedPaidByThen = paid * c.duePct; // proportional assumption
@@ -3047,7 +3047,7 @@ function Interest234Calc() {
     <div className="space-y-4 max-w-2xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> Interest u/s 234A / 234B / 234C</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Estimate penal interest at 1% per month — 234A (late ITR), 234B (under-paid advance tax), 234C (installment shortfall). Enter tax net of TDS/TCS.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Estimate penal interest at 1% per month - 234A (late ITR), 234B (under-paid advance tax), 234C (installment shortfall). Enter tax net of TDS/TCS.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Assessed tax (net of TDS) (₹)</label>
@@ -3069,9 +3069,9 @@ function Interest234Calc() {
           <h3 className="text-sm font-semibold mb-3">Interest Breakup (indicative)</h3>
           <div className="space-y-2">
             {[
-              { label: `234A — late filing (${lateM} mo × 1%)`, value: fc(int234A), color: int234A > 0 ? "text-orange-400" : "text-green-400" },
-              { label: "234B — advance tax < 90% (≈4 mo × 1%)", value: fc(int234B), color: int234B > 0 ? "text-orange-400" : "text-green-400" },
-              { label: "234C — installment shortfall", value: fc(int234C), color: int234C > 0 ? "text-orange-400" : "text-green-400" },
+              { label: `234A - late filing (${lateM} mo × 1%)`, value: fc(int234A), color: int234A > 0 ? "text-orange-400" : "text-green-400" },
+              { label: "234B - advance tax < 90% (≈4 mo × 1%)", value: fc(int234B), color: int234B > 0 ? "text-orange-400" : "text-green-400" },
+              { label: "234C - installment shortfall", value: fc(int234C), color: int234C > 0 ? "text-orange-400" : "text-green-400" },
               { label: "Total interest", value: fc(totalInterest), color: "text-red-400 font-bold" },
             ].map(r => (
               <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0">
@@ -3087,12 +3087,12 @@ function Interest234Calc() {
             </div>
             <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
               <p className="text-[10px] text-[var(--color-muted)]">Effective interest cost</p>
-              <p className="text-lg font-bold tabular-nums text-orange-400">{tax > 0 ? `${((totalInterest / tax) * 100).toFixed(1)}%` : "—"}</p>
+              <p className="text-lg font-bold tabular-nums text-orange-400">{tax > 0 ? `${((totalInterest / tax) * 100).toFixed(1)}%` : "-"}</p>
             </div>
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">All sections charge 1% per month (simple). 234A runs from the ITR due date to the date of filing; 234B from 1 April of the AY; 234C is on each installment shortfall. 234C months are 3/3/3/1 for the four instalments. A part of a month counts as a full month. Indicative only — consult your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">All sections charge 1% per month (simple). 234A runs from the ITR due date to the date of filing; 234B from 1 April of the AY; 234C is on each installment shortfall. 234C months are 3/3/3/1 for the four instalments. A part of a month counts as a full month. Indicative only - consult your CA.</p>
     </div>
   );
 }
@@ -3133,7 +3133,7 @@ function CorporateRate115BA() {
   const options: { key: string; label: string; rate: string; tax: number; note: string }[] = [
     { key: "reg", label: "Regular Regime", rate: "25% + sur + 4% cess", tax: regularTax, note: "All deductions/incentives retained; MAT @15% applies." },
     { key: "baa", label: "Sec 115BAA", rate: "22% + 10% sur + 4% cess (eff. 25.17%)", tax: baaTax, note: "No MAT. Foregoes specified deductions (80-IA/IB, add'l depreciation, etc.)." },
-    ...(babTax !== null ? [{ key: "bab", label: "Sec 115BAB", rate: "15% + 10% sur + 4% cess (eff. 17.16%)", tax: babTax, note: "New manufacturing cos only — production before the notified cut-off." }] : []),
+    ...(babTax !== null ? [{ key: "bab", label: "Sec 115BAB", rate: "15% + 10% sur + 4% cess (eff. 17.16%)", tax: babTax, note: "New manufacturing cos only - production before the notified cut-off." }] : []),
   ];
   const best = pbt > 0 ? options.reduce((a, b) => (b.tax < a.tax ? b : a)) : null;
 
@@ -3176,12 +3176,12 @@ function CorporateRate115BA() {
           </div>
           {best && (
             <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-              <p className="text-sm font-bold text-green-400">✓ Lowest liability: {best.label} at {fc(best.tax)} — saves {fc(Math.max(...options.map(o => o.tax)) - best.tax)} vs the costliest option this year.</p>
+              <p className="text-sm font-bold text-green-400">✓ Lowest liability: {best.label} at {fc(best.tax)} - saves {fc(Math.max(...options.map(o => o.tax)) - best.tax)} vs the costliest option this year.</p>
             </div>
           )}
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Once exercised, the 115BAA/115BAB option is irrevocable for all future years. Surcharge is a flat 10% (no slabs) under both. MAT (115JB) does not apply to companies that opt in. Indicative — confirm eligibility with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Once exercised, the 115BAA/115BAB option is irrevocable for all future years. Surcharge is a flat 10% (no slabs) under both. MAT (115JB) does not apply to companies that opt in. Indicative - confirm eligibility with your CA.</p>
     </div>
   );
 }
@@ -3240,12 +3240,12 @@ function PartnerRemuneration40b() {
         <div className={`rounded-lg p-4 border ${within ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
           <p className={`text-sm font-bold ${within ? "text-green-400" : "text-red-400"}`}>
             {within
-              ? `✓ Remuneration of ${fc(paidV)} is within the ₹${(allowable/100000).toFixed(1)}L limit — fully deductible. Headroom: ${fc(allowable - paidV)}.`
-              : `⚠ ${fc(disallowed)} exceeds the 40(b) limit and is disallowed — add it back to the firm's income (the partner is still taxed on the full amount received).`}
+              ? `✓ Remuneration of ${fc(paidV)} is within the ₹${(allowable/100000).toFixed(1)}L limit - fully deductible. Headroom: ${fc(allowable - paidV)}.`
+              : `⚠ ${fc(disallowed)} exceeds the 40(b) limit and is disallowed - add it back to the firm's income (the partner is still taxed on the full amount received).`}
           </p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Applies only to working partners with remuneration authorised by the partnership deed. Interest to partners is separately capped at 12% p.a. Remuneration is taxable as business income in the partner's hands under Sec 28(v). Indicative — verify with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Applies only to working partners with remuneration authorised by the partnership deed. Interest to partners is separately capped at 12% p.a. Remuneration is taxable as business income in the partner's hands under Sec 28(v). Indicative - verify with your CA.</p>
     </div>
   );
 }
@@ -3290,8 +3290,8 @@ function NewEmployee80JJAA() {
           </div>
         </div>
         <div className="space-y-1">
-          <p className={`text-[11px] flex items-center gap-1.5 ${wageCapOk ? "text-green-400" : "text-red-400"}`}>{wageCapOk ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />} Emoluments ≤ ₹25,000/month {wageCapOk ? "" : "— wage exceeds cap, employee ineligible"}</p>
-          <p className={`text-[11px] flex items-center gap-1.5 ${daysOk ? "text-green-400" : "text-red-400"}`}>{daysOk ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />} Employed ≥ 240 days {daysOk ? "" : "— short tenure; carry to next year if 240 days met"}</p>
+          <p className={`text-[11px] flex items-center gap-1.5 ${wageCapOk ? "text-green-400" : "text-red-400"}`}>{wageCapOk ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />} Emoluments ≤ ₹25,000/month {wageCapOk ? "" : "- wage exceeds cap, employee ineligible"}</p>
+          <p className={`text-[11px] flex items-center gap-1.5 ${daysOk ? "text-green-400" : "text-red-400"}`}>{daysOk ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />} Employed ≥ 240 days {daysOk ? "" : "- short tenure; carry to next year if 240 days met"}</p>
         </div>
       </div>
 
@@ -3312,10 +3312,10 @@ function NewEmployee80JJAA() {
 
       {n > 0 && !eligible && (
         <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
-          <p className="text-sm font-bold text-red-400">⚠ Not eligible this year — emoluments must be ≤ ₹25,000/month and the employee must work ≥ 240 days (≥ 150 for apparel/footwear/leather). Payments must be via non-cash mode.</p>
+          <p className="text-sm font-bold text-red-400">⚠ Not eligible this year - emoluments must be ≤ ₹25,000/month and the employee must work ≥ 240 days (≥ 150 for apparel/footwear/leather). Payments must be via non-cash mode.</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Requires Form 10DA from a CA. Employees who join after PF-registration and remain ≥ 240 days count as "additional". Casual employees and those whose full PF is paid by government are excluded. Indicative — confirm with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Requires Form 10DA from a CA. Employees who join after PF-registration and remain ≥ 240 days count as "additional". Casual employees and those whose full PF is paid by government are excluded. Indicative - confirm with your CA.</p>
     </div>
   );
 }
@@ -3339,12 +3339,12 @@ function EsopTaxPlanner() {
   const mo   = parseInt(holdMonths)  || 0;
   const rate = parseFloat(slabRate)  || 0;
 
-  // Stage 1 — perquisite at exercise = (FMV - exercise) × shares, taxed at slab + 4% cess.
+  // Stage 1 - perquisite at exercise = (FMV - exercise) × shares, taxed at slab + 4% cess.
   const perqPerShare = Math.max(0, fmvE - ex);
   const perquisite   = perqPerShare * qty;
   const perqTax      = Math.round(perquisite * rate / 100 * 1.04);
 
-  // Stage 2 — capital gain at sale = (Sale - FMV-at-exercise) × shares.
+  // Stage 2 - capital gain at sale = (Sale - FMV-at-exercise) × shares.
   const cgPerShare = sale > 0 ? sale - fmvE : 0;
   const capGain    = cgPerShare * qty;
   const ltThreshold = listed ? 12 : 24;
@@ -3364,7 +3364,7 @@ function EsopTaxPlanner() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Gift size={14} className="text-[var(--color-primary)]" /> ESOP Tax — Perquisite + Capital Gains</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Gift size={14} className="text-[var(--color-primary)]" /> ESOP Tax - Perquisite + Capital Gains</h2>
         <p className="text-xs text-[var(--color-muted)]">ESOPs are taxed twice: a salary perquisite at exercise (FMV − strike), then capital gains at sale (sale − FMV-at-exercise).</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
@@ -3394,7 +3394,7 @@ function EsopTaxPlanner() {
         </div>
         <label className="flex items-center gap-2 text-xs cursor-pointer">
           <input type="checkbox" checked={listed} onChange={e => setListed(e.target.checked)} className="accent-[var(--color-primary)]" />
-          <span>Listed shares (STT paid) — uncheck for unlisted/startup shares</span>
+          <span>Listed shares (STT paid) - uncheck for unlisted/startup shares</span>
         </label>
       </div>
 
@@ -3414,11 +3414,11 @@ function EsopTaxPlanner() {
             ))}
           </div>
           <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
-            <p className="text-sm font-bold text-red-400">Total ESOP tax: {fc(totalTax)}{sale === 0 && " (perquisite only — enter a sale price to add capital gains)"}.</p>
+            <p className="text-sm font-bold text-red-400">Total ESOP tax: {fc(totalTax)}{sale === 0 && " (perquisite only - enter a sale price to add capital gains)"}.</p>
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Eligible-startup (Sec 80-IAC / DPIIT) employees may defer the perquisite TDS up to the earliest of 5 years, sale, or leaving. FMV of unlisted shares needs a merchant-banker valuation. Listed LTCG enjoys the ₹1.25L exemption shared across all equity. Indicative — confirm with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Eligible-startup (Sec 80-IAC / DPIIT) employees may defer the perquisite TDS up to the earliest of 5 years, sale, or leaving. FMV of unlisted shares needs a merchant-banker valuation. Listed LTCG enjoys the ₹1.25L exemption shared across all equity. Indicative - confirm with your CA.</p>
     </div>
   );
 }
@@ -3505,7 +3505,7 @@ function BuybackTax115QA() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">New regime: the company has no 115QA tax but must withhold TDS u/s 194 (10% for residents) on the consideration; the cost of acquisition is treated as a capital loss the shareholder can carry forward 8 years. Indicative — confirm with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">New regime: the company has no 115QA tax but must withhold TDS u/s 194 (10% for residents) on the consideration; the cost of acquisition is treated as a capital loss the shareholder can carry forward 8 years. Indicative - confirm with your CA.</p>
     </div>
   );
 }
@@ -3518,7 +3518,7 @@ function CashWithdrawal194N() {
   const [coopOrPost, setCoopOrPost] = useState(false);    // co-operative society payer (₹3cr threshold)
 
   const amt = parseFloat(withdrawal) || 0;
-  // Filer: threshold ₹1 cr (₹3 cr for co-op society). Non-filer (3 yrs): ₹20L–₹1cr @2%, above ₹1cr @5%.
+  // Filer: threshold ₹1 cr (₹3 cr for co-op society). Non-filer (3 yrs): ₹20L-₹1cr @2%, above ₹1cr @5%.
   const baseThreshold = coopOrPost ? 30000000 : 10000000;
   let tds = 0;
   const breakup: { label: string; value: number }[] = [];
@@ -3530,12 +3530,12 @@ function CashWithdrawal194N() {
     }
   } else {
     const t1Lo = 2000000, t1Hi = baseThreshold;
-    const band2 = Math.max(0, Math.min(amt, t1Hi) - t1Lo); // 20L–1cr @2%
+    const band2 = Math.max(0, Math.min(amt, t1Hi) - t1Lo); // 20L-1cr @2%
     const band5 = Math.max(0, amt - t1Hi);                 // above 1cr @5%
     const tds2 = Math.round(band2 * 0.02);
     const tds5 = Math.round(band5 * 0.05);
     tds = tds2 + tds5;
-    if (band2 > 0) breakup.push({ label: `2% on ${fc(t1Lo)}–${fc(t1Hi)} band`, value: tds2 });
+    if (band2 > 0) breakup.push({ label: `2% on ${fc(t1Lo)}-${fc(t1Hi)} band`, value: tds2 });
     if (band5 > 0) breakup.push({ label: `5% on amount above ${fc(t1Hi)}`, value: tds5 });
   }
   const netReceived = amt - tds;
@@ -3580,13 +3580,13 @@ function CashWithdrawal194N() {
               </div>
             ))}
           </div>
-          <p className="text-[11px] text-[var(--color-muted)] mt-3 pt-2 border-t border-[var(--color-border)]">194N TDS is not an expense — it is creditable against your final tax liability and shows in Form 26AS. Claim it while filing your ITR.</p>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3 pt-2 border-t border-[var(--color-border)]">194N TDS is not an expense - it is creditable against your final tax liability and shows in Form 26AS. Claim it while filing your ITR.</p>
         </div>
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        Filer: 2% above ₹1 cr. Non-filer (no ITR for 3 years): 2% between ₹20 lakh and ₹1 cr, 5% above ₹1 cr. Co-operative society payers get a ₹3 cr threshold (Finance Act 2023). Indicative — confirm with your bank/CA.
+        Filer: 2% above ₹1 cr. Non-filer (no ITR for 3 years): 2% between ₹20 lakh and ₹1 cr, 5% above ₹1 cr. Co-operative society payers get a ₹3 cr threshold (Finance Act 2023). Indicative - confirm with your bank/CA.
       </div>
     </div>
   );
@@ -3685,7 +3685,7 @@ function Msme43BhChecker() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        43B(h) applies only to Micro and Small enterprises (not Medium) holding MSME registration. Clearing the dues before 31 March restores the deduction. Verify each vendor's Udyam status — confirm with your CA.
+        43B(h) applies only to Micro and Small enterprises (not Medium) holding MSME registration. Clearing the dues before 31 March restores the deduction. Verify each vendor's Udyam status - confirm with your CA.
       </div>
     </div>
   );
@@ -3725,7 +3725,7 @@ function PresumptiveVsBooks() {
         <h2 className="text-sm font-semibold flex items-center gap-2"><GitCompare size={14} className="text-[var(--color-primary)]" /> Presumptive vs Regular Books</h2>
         <p className="text-xs text-[var(--color-muted)]">If your actual profit margin is lower than the presumptive 6%/8% (or 50%), maintaining books and getting audited may save tax. Compare both paths side-by-side.</p>
         <div className="flex gap-2">
-          {([["44ad", "44AD — Business"], ["44ada", "44ADA — Profession"]] as const).map(([k, lbl]) => (
+          {([["44ad", "44AD - Business"], ["44ada", "44ADA - Profession"]] as const).map(([k, lbl]) => (
             <button key={k} onClick={() => setScheme(k)}
               className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all ${scheme === k ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
               {lbl}
@@ -3778,7 +3778,7 @@ function PresumptiveVsBooks() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        Declaring below the presumptive rate while above the basic exemption requires books and audit u/s 44AB. Opting out of 44AD locks you out for 5 years. Indicative slabs (new regime) — confirm with your CA.
+        Declaring below the presumptive rate while above the basic exemption requires books and audit u/s 44AB. Opting out of 44AD locks you out for 5 years. Indicative slabs (new regime) - confirm with your CA.
       </div>
     </div>
   );
@@ -3882,7 +3882,7 @@ function SurchargeMarginalRelief() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        Surcharge: 10% &gt;₹50L, 15% &gt;₹1cr, 25% &gt;₹2cr, 37% &gt;₹5cr (old regime only; new regime caps at 25%). Surcharge on capital gains/dividends is capped at 15%. Indicative individual rates — confirm with your CA.
+        Surcharge: 10% &gt;₹50L, 15% &gt;₹1cr, 25% &gt;₹2cr, 37% &gt;₹5cr (old regime only; new regime caps at 25%). Surcharge on capital gains/dividends is capped at 15%. Indicative individual rates - confirm with your CA.
       </div>
     </div>
   );

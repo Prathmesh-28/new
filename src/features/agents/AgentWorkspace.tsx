@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 /**
- * Agent Workspace — a Kogo-OS-style chat surface over our agent engine. Left: agents
+ * Agent Workspace - a Kogo-OS-style chat surface over our agent engine. Left: agents
  * as "workspaces" + search + history. Right: a conversation with task-progress
  * accordions, approval cards for writes, a usage/credits meter, a Tools slide-over,
  * a model selector, a "/" command menu, and a Task-mode toggle that runs a sub-agent
@@ -40,9 +40,9 @@ const MODELS = [
   { id: "deepseek/deepseek-chat", label: "DeepSeek V3" },
 ];
 
-// "/" task-mode commands — insert a ready-made prompt (Kogo's "/ to use task mode").
+// "/" task-mode commands - insert a ready-made prompt (Kogo's "/ to use task mode").
 const SLASH = [
-  { cmd: "/briefing", prompt: "Give me today's business briefing — cash, runway, what needs attention.", swarm: false },
+  { cmd: "/briefing", prompt: "Give me today's business briefing - cash, runway, what needs attention.", swarm: false },
   { cmd: "/pay", prompt: "Who should I pay first this week, and in what order?", swarm: false },
   { cmd: "/afford", prompt: "Can I afford a ₹2,00,000 purchase this month? Check my runway.", swarm: false },
   { cmd: "/itc", prompt: "What's my ITC at risk this cycle and what should I action?", swarm: false },
@@ -119,7 +119,7 @@ export default function AgentWorkspace() {
       const created = await api.post<Agent>("/api/books/agents", { name: "New workspace", instructions: "You are a helpful business assistant.", tools: ["get_business_snapshot"] });
       await load();
       if (created?.id) setActiveId(created.id);
-      toast.success("Workspace created — add tools and start chatting");
+      toast.success("Workspace created - add tools and start chatting");
     } catch (e) { toast.error(humanizeAiError(e)); }
   };
 
@@ -133,9 +133,9 @@ export default function AgentWorkspace() {
     });
 
   // Stream a run via SSE so the agent's reasoning + tool steps appear live. Returns
-  // false (without consuming anything) when streaming isn't viable — native shell
+  // false (without consuming anything) when streaming isn't viable - native shell
   // (CapacitorHttp buffers), no ReadableStream, or the request didn't start (e.g. 401)
-  // — so the caller can fall back to the plain /run request.
+  // - so the caller can fall back to the plain /run request.
   const streamRun = async (agentId: string, message: string, onEvent: (e: StreamEvent) => void): Promise<boolean> => {
     if (Capacitor.isNativePlatform() || typeof ReadableStream === "undefined") return false;
     let res: Response;
@@ -169,7 +169,7 @@ export default function AgentWorkspace() {
       }
       if (buf.trim()) consume(buf); // flush a final frame not terminated by \n\n
     } catch {
-      onEvent({ type: "error", message: "Connection lost — the answer may be incomplete." });
+      onEvent({ type: "error", message: "Connection lost - the answer may be incomplete." });
     }
     return true; // started streaming → handled (don't double-run via fallback)
   };
@@ -182,7 +182,7 @@ export default function AgentWorkspace() {
     setConvos(c => ({ ...c, [agentId]: [...(c[agentId] ?? []), { role: "user", text }] }));
     setRunning(true);
 
-    // Task mode (swarm) stays request/response — it has its own multi-stage UI.
+    // Task mode (swarm) stays request/response - it has its own multi-stage UI.
     if (taskMode) {
       try {
         const res = await api.post<RunResponse>(`/api/books/agents/${agentId}/swarm`, { message: text });
@@ -270,7 +270,7 @@ export default function AgentWorkspace() {
           {loading ? (
             <p className="px-2 py-2 text-xs text-[var(--color-muted)]">Loading…</p>
           ) : filtered.length === 0 ? (
-            <p className="px-2 py-2 text-xs text-[var(--color-muted)]">No agents yet — create a workspace.</p>
+            <p className="px-2 py-2 text-xs text-[var(--color-muted)]">No agents yet - create a workspace.</p>
           ) : filtered.map(a => (
             <button key={a.id} onClick={() => setActiveId(a.id)}
               className={`w-full text-left flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${a.id === activeId ? "bg-[var(--color-primary)]/15 text-[var(--color-text)]" : "text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-text)]"}`}>
@@ -299,7 +299,7 @@ export default function AgentWorkspace() {
           <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
             <Bot size={32} className="text-[var(--color-primary)] mb-3" />
             <p className="text-sm font-semibold">Create a workspace to start</p>
-            <p className="text-xs text-[var(--color-muted)] mt-1 max-w-sm">Each workspace is an agent with its own tools and engine. Build one, give it tools, and chat — it plans, runs read tools, and asks approval for any write.</p>
+            <p className="text-xs text-[var(--color-muted)] mt-1 max-w-sm">Each workspace is an agent with its own tools and engine. Build one, give it tools, and chat - it plans, runs read tools, and asks approval for any write.</p>
           </div>
         ) : (
           <>
@@ -317,7 +317,7 @@ export default function AgentWorkspace() {
             <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
               {turns.length === 0 ? (
                 <div className="text-center text-[var(--color-muted)] py-10 text-sm">
-                  Ask <span className="font-medium text-[var(--color-text)]">{active.name || "this agent"}</span> anything — or type <span className="font-mono text-[var(--color-primary)]">/</span> for tasks. Toggle <span className="text-[var(--color-text)]">Task mode</span> to run a sub-agent swarm.
+                  Ask <span className="font-medium text-[var(--color-text)]">{active.name || "this agent"}</span> anything - or type <span className="font-mono text-[var(--color-primary)]">/</span> for tasks. Toggle <span className="text-[var(--color-text)]">Task mode</span> to run a sub-agent swarm.
                 </div>
               ) : turns.map((t, i) => t.role === "user" ? (
                 <div key={i} className="flex justify-end">
@@ -376,7 +376,7 @@ export default function AgentWorkspace() {
               <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
                 <textarea value={input} onChange={e => setInput(e.target.value)} rows={1}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
-                  placeholder='Ask anything — "@" to reference, "/" for tasks'
+                  placeholder='Ask anything - "@" to reference, "/" for tasks'
                   className="w-full bg-transparent px-2 py-1.5 text-sm outline-none resize-none" />
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <button onClick={() => setToolsOpen(true)} className="flex items-center gap-1.5 text-xs rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]">
@@ -409,7 +409,7 @@ export default function AgentWorkspace() {
           <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setToolsOpen(false)} />
           <div className="fixed right-0 top-0 z-50 h-full w-[22rem] max-w-[92vw] bg-[var(--color-surface)] border-l border-[var(--color-border)] shadow-2xl flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
-              <h3 className="text-sm font-semibold flex items-center gap-2"><Wrench size={15} className="text-[var(--color-primary)]" /> Tools — {active.name}</h3>
+              <h3 className="text-sm font-semibold flex items-center gap-2"><Wrench size={15} className="text-[var(--color-primary)]" /> Tools - {active.name}</h3>
               <button onClick={() => setToolsOpen(false)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
             </div>
             <p className="px-4 pt-2 text-xs text-[var(--color-muted)]">Toggle what this agent can use. Read tools run instantly; write tools need your approval.</p>
@@ -438,7 +438,7 @@ export default function AgentWorkspace() {
   );
 }
 
-// Sub-agent swarm result — the specialists + their inter-agent discussion + the
+// Sub-agent swarm result - the specialists + their inter-agent discussion + the
 // lead's self-review rounds. Surfaces the full collaboration, not just the answer.
 function SwarmAccordion({ plan, subResults, messages, critiques }: { plan: string[]; subResults: SubResult[]; messages: SwarmMsg[]; critiques: Critique[] }) {
   const [open, setOpen] = useState(false);
@@ -481,7 +481,7 @@ function SwarmAccordion({ plan, subResults, messages, critiques }: { plan: strin
               {critiques.map((c, j) => (
                 <p key={j} className="text-[11px] pl-1 flex items-start gap-1.5">
                   {c.approved ? <Check size={11} className="text-green-400 mt-0.5 shrink-0" /> : <RefreshCw size={11} className="text-amber-400 mt-0.5 shrink-0" />}
-                  <span className={c.approved ? "text-green-400" : "text-[var(--color-muted)]"}>Round {c.round}: {c.approved ? "approved" : `revised — ${c.issues}`}</span>
+                  <span className={c.approved ? "text-green-400" : "text-[var(--color-muted)]"}>Round {c.round}: {c.approved ? "approved" : `revised - ${c.issues}`}</span>
                 </p>
               ))}
             </div>
@@ -516,7 +516,7 @@ function TaskAccordion({ steps }: { steps: RunStep[] }) {
   );
 }
 
-// Write the agent proposed — gated on the user's approval (role-checked server-side).
+// Write the agent proposed - gated on the user's approval (role-checked server-side).
 function ApprovalCard({ action, agentId }: { action: PendingAction; agentId: string }) {
   const [state, setState] = useState<"pending" | "approving" | "done" | "rejected">("pending");
   const [result, setResult] = useState<unknown>(null);

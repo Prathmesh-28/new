@@ -1,4 +1,4 @@
-// §M7 — Fixed-asset register + depreciation. A depreciation run posts a JOURNAL
+// §M7 - Fixed-asset register + depreciation. A depreciation run posts a JOURNAL
 // (Dr Depreciation / Cr Accumulated Depreciation) per asset per month, SLM or WDV.
 const { pool } = require("../../db");
 const { money, toDb, gt } = require("./money");
@@ -38,7 +38,7 @@ async function createAsset(tenantId, a) {
 async function runDepreciation(tenantId, actorId, asOf) {
   const depLedger = await ledgerIdByName(tenantId, "Depreciation");
   const accLedger = await ledgerIdByName(tenantId, "Accumulated Depreciation");
-  if (!depLedger || !accLedger) throw new PostError("NOT_SEEDED", "Depreciation / Accumulated Depreciation ledgers missing — seed first", 422);
+  if (!depLedger || !accLedger) throw new PostError("NOT_SEEDED", "Depreciation / Accumulated Depreciation ledgers missing - seed first", 422);
   const month = asOf.slice(0, 7);
   const { rows: assets } = await pool.query("SELECT * FROM book_fixed_assets WHERE tenant_id=$1 AND is_active=true", [tenantId]);
   const posted = [];
@@ -61,9 +61,9 @@ async function runDepreciation(tenantId, actorId, asOf) {
       let dep = depreciationMonthly(a.method, a.cost, accumulated, a.rate);
       const maxDep = money(a.cost).minus(a.salvage).minus(accumulated);
       if (gt(dep, maxDep)) dep = maxDep;
-      if (!gt(dep, 0)) break; // fully depreciated — stop
+      if (!gt(dep, 0)) break; // fully depreciated - stop
       const periodEnd = monthEnd(cursor);
-      const r = await postVoucher(tenantId, actorId, { voucherType: "JOURNAL", voucherDate: periodEnd, narration: `Depreciation — ${a.name} (${cursor})`, source: "api" },
+      const r = await postVoucher(tenantId, actorId, { voucherType: "JOURNAL", voucherDate: periodEnd, narration: `Depreciation - ${a.name} (${cursor})`, source: "api" },
         [{ ledgerId: depLedger, debit: toDb(dep), credit: "0" }, { ledgerId: accLedger, debit: "0", credit: toDb(dep) }]);
       accumulated = accumulated.plus(dep);
       await pool.query("UPDATE book_fixed_assets SET accumulated_dep = accumulated_dep + $2, last_dep_on = $3 WHERE id=$1", [a.id, toDb(dep), periodEnd]);
@@ -75,7 +75,7 @@ async function runDepreciation(tenantId, actorId, asOf) {
 }
 
 // Resolve the gain/loss ledger: prefer a dedicated 'Profit/Loss on Asset Sale', then
-// fall back to 'Stock Adjustment', then 'Indirect Expenses' — never invent a ledger.
+// fall back to 'Stock Adjustment', then 'Indirect Expenses' - never invent a ledger.
 async function pnlLedger(tenantId) {
   for (const name of ["Profit/Loss on Asset Sale", "Stock Adjustment", "Indirect Expenses"]) {
     const id = await ledgerIdByName(tenantId, name);
@@ -106,9 +106,9 @@ async function disposeAsset(tenantId, actorId, { assetId, disposalValue, date, b
   const gainLoss = proceeds.minus(wdv); // +ve = gain (credit P/L), −ve = loss (debit P/L)
 
   const assetLedger = await ledgerIdByName(tenantId, "Fixed Assets");
-  if (!assetLedger) throw new PostError("NOT_SEEDED", "A posting ledger named 'Fixed Assets' is required to credit the asset cost — create one first", 422);
+  if (!assetLedger) throw new PostError("NOT_SEEDED", "A posting ledger named 'Fixed Assets' is required to credit the asset cost - create one first", 422);
   const accLedger = await ledgerIdByName(tenantId, "Accumulated Depreciation");
-  if (gt(accumulated, 0) && !accLedger) throw new PostError("NOT_SEEDED", "Accumulated Depreciation ledger missing — seed first", 422);
+  if (gt(accumulated, 0) && !accLedger) throw new PostError("NOT_SEEDED", "Accumulated Depreciation ledger missing - seed first", 422);
 
   let bankLedger = bankLedgerId || null;
   if (gt(proceeds, 0)) {
@@ -124,14 +124,14 @@ async function disposeAsset(tenantId, actorId, { assetId, disposalValue, date, b
   legs.push({ ledgerId: assetLedger, debit: "0", credit: toDb(cost) });
   if (!gainLoss.isZero()) {
     const pnl = await pnlLedger(tenantId);
-    if (!pnl) throw new PostError("NOT_SEEDED", "No gain/loss ledger ('Profit/Loss on Asset Sale' / 'Stock Adjustment' / 'Indirect Expenses') found — seed first", 422);
+    if (!pnl) throw new PostError("NOT_SEEDED", "No gain/loss ledger ('Profit/Loss on Asset Sale' / 'Stock Adjustment' / 'Indirect Expenses') found - seed first", 422);
     // gain → credit P/L (income), loss → debit P/L (expense).
     if (gt(gainLoss, 0)) legs.push({ ledgerId: pnl, debit: "0", credit: toDb(gainLoss) });
     else legs.push({ ledgerId: pnl, debit: toDb(gainLoss.abs()), credit: "0" });
   }
 
   const voucher = await postVoucher(tenantId, actorId,
-    { voucherType: "JOURNAL", voucherDate: date, narration: `Disposal — ${a.name} (WDV ${toDb(wdv)}, ${gt(gainLoss, 0) ? "gain" : gainLoss.isZero() ? "no gain/loss" : "loss"} ${toDb(gainLoss.abs())})`, source: "api" },
+    { voucherType: "JOURNAL", voucherDate: date, narration: `Disposal - ${a.name} (WDV ${toDb(wdv)}, ${gt(gainLoss, 0) ? "gain" : gainLoss.isZero() ? "no gain/loss" : "loss"} ${toDb(gainLoss.abs())})`, source: "api" },
     legs);
 
   await pool.query("UPDATE book_fixed_assets SET disposed_on=$2, disposal_value=$3, is_active=false WHERE id=$1 AND tenant_id=$4", [assetId, date, toDb(proceeds), tenantId]);

@@ -1,7 +1,7 @@
 import type { FixedAsset } from "@/data/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Depreciation engine — supports Straight-Line (SLM) and Written-Down-Value (WDV,
+// Depreciation engine - supports Straight-Line (SLM) and Written-Down-Value (WDV,
 // the reducing-balance method India's Companies Act Schedule II uses).
 //
 // Everything is expressed through a single primitive: bookValue(asset, date).
@@ -25,7 +25,7 @@ function salvageOf(a: FixedAsset): number {
   return a.salvageValue && a.salvageValue > 0 ? a.salvageValue : 0;
 }
 
-/** Annual WDV depreciation rate (fraction 0–1) derived from useful life + residual. */
+/** Annual WDV depreciation rate (fraction 0-1) derived from useful life + residual. */
 export function wdvAnnualRate(a: FixedAsset): number {
   if (a.wdvRate && a.wdvRate > 0) return Math.min(0.99, a.wdvRate / 100);
   const life = Math.max(1, a.usefulLifeYears || 1);

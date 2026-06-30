@@ -1,5 +1,5 @@
 "use strict";
-// Rewards crowdfunding — data layer (Keep-it-All core). Tenant-scoped throughout.
+// Rewards crowdfunding - data layer (Keep-it-All core). Tenant-scoped throughout.
 // Money model: a paid pledge is an ADVANCE (LIABILITY), recognised as INCOME only on
 // fulfilment. GL postings are best-effort + idempotent: if the tenant's chart of
 // accounts isn't seeded they degrade (gl_voucher_id stays null) without breaking the
@@ -207,7 +207,7 @@ async function recordPledge(tenantId, campaignId, body = {}) {
   return rows[0];
 }
 
-// Mark a pledge paid — idempotent (the WHERE status<>'paid' guard + unique payment_ref
+// Mark a pledge paid - idempotent (the WHERE status<>'paid' guard + unique payment_ref
 // index make webhook retries safe). Increments raised_amount + perk sold, posts the
 // liability RECEIPT to the GL (best-effort).
 async function markPledgePaid(tenantId, { backerId, paymentRef, actorId } = {}) {

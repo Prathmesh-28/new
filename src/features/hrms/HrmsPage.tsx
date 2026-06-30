@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES — response shapes mirror the HRMS backend (Frappe-HR port)
+// TYPES - response shapes mirror the HRMS backend (Frappe-HR port)
 // ─────────────────────────────────────────────────────────────────────────────
 type EmpStatus = "ACTIVE" | "INACTIVE";
 type AttStatus = "PRESENT" | "ABSENT" | "LEAVE" | "HALF_DAY" | "WFH" | "HOLIDAY";
@@ -188,7 +188,7 @@ const ATT_STATUS_STYLE: Record<AttStatus, string> = {
 // SMALL REUSABLE PIECES
 // ─────────────────────────────────────────────────────────────────────────────
 function Pill({ text, cls }: { text: string; cls: string }) {
-  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>{text || "—"}</span>;
+  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>{text || "-"}</span>;
 }
 function EmpStatusPill({ status }: { status: string }) {
   const key = (status || "").toUpperCase() as EmpStatus;
@@ -261,7 +261,7 @@ export default function HrmsPage() {
       <div className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 sm:px-6 py-4">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <Users size={20} className="text-[var(--color-primary)]" />
-          HRMS — people &amp; payroll
+          HRMS - people &amp; payroll
         </h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
           Component-based salary structures · attendance-driven LOP · PF/ESI/PT statutory · payroll posted to your books
@@ -368,7 +368,7 @@ function EmployeesTab({ loading, employees, canWrite, onReload }: {
         <EmptyState
           icon={Users}
           title="No employees yet"
-          description="Add your first employee to start tracking attendance, leave and payroll — or bulk-upload your whole team at once via /api/hrms/employees/bulk."
+          description="Add your first employee to start tracking attendance, leave and payroll - or bulk-upload your whole team at once via /api/hrms/employees/bulk."
           ctaText={canWrite ? "Add an employee" : undefined}
           onCta={canWrite ? () => setOpen(true) : undefined}
         />
@@ -385,8 +385,8 @@ function EmployeesTab({ loading, employees, canWrite, onReload }: {
                 : employees.map((emp) => (
                   <tr key={emp.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-bg)]/40">
                     <td className="px-3 py-2.5 font-medium">{emp.name}</td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{emp.department || "—"}</td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{emp.designation || "—"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{emp.department || "-"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{emp.designation || "-"}</td>
                     <td className="px-3 py-2.5"><EmpStatusPill status={emp.status} /></td>
                     {canWrite && (
                       <td className="px-3 py-2.5 text-right">
@@ -407,7 +407,7 @@ function EmployeesTab({ loading, employees, canWrite, onReload }: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ATTENDANCE TAB — grid + summary feeding the slip
+// ATTENDANCE TAB - grid + summary feeding the slip
 // ─────────────────────────────────────────────────────────────────────────────
 function AttendanceTab({ employees, canWrite }: { employees: Employee[]; canWrite: boolean }) {
   const [empId, setEmpId] = useState("");
@@ -485,7 +485,7 @@ function AttendanceTab({ employees, canWrite }: { employees: Employee[]; canWrit
                   {canWrite && (
                     <select value={st} onChange={(e) => e.target.value && mark(day, e.target.value as AttStatus)}
                       className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-1 py-1 text-[11px] outline-none">
-                      <option value="">— mark —</option>
+                      <option value="">- mark -</option>
                       {ATT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                   )}
@@ -509,7 +509,7 @@ function Stat({ label, value, accent }: { label: string; value: number | string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LEAVE TAB — types, allocation, balances (Σ ledger), applications
+// LEAVE TAB - types, allocation, balances (Σ ledger), applications
 // ─────────────────────────────────────────────────────────────────────────────
 function LeaveTab({ employees, canWrite }: { employees: Employee[]; canWrite: boolean }) {
   const [types, setTypes] = useState<LeaveType[]>([]);
@@ -672,7 +672,7 @@ function LeaveTab({ employees, canWrite }: { employees: Employee[]; canWrite: bo
                             <button type="button" onClick={() => decide(r.id, true)} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-green-700/40 text-green-300 hover:bg-green-900/20"><CheckCircle2 size={13} /> Approve</button>
                             <button type="button" onClick={() => decide(r.id, false)} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-red-700/40 text-red-300 hover:bg-red-900/20"><XCircle size={13} /> Reject</button>
                           </div>
-                        ) : <span className="text-xs text-[var(--color-muted)]">—</span>}
+                        ) : <span className="text-xs text-[var(--color-muted)]">-</span>}
                       </td>
                     )}
                   </tr>
@@ -686,7 +686,7 @@ function LeaveTab({ employees, canWrite }: { employees: Employee[]; canWrite: bo
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STRUCTURES TAB — component-row builder + assignment + slip preview
+// STRUCTURES TAB - component-row builder + assignment + slip preview
 // ─────────────────────────────────────────────────────────────────────────────
 interface DraftComponent {
   name: string; type: CompType; amount: string; formula: string; condition: string;
@@ -779,7 +779,7 @@ function StructuresTab({ employees, canWrite }: { employees: Employee[]; canWrit
             </div>
           </div>
           <input value={sName} onChange={(e) => setSName(e.target.value)} placeholder="Structure name e.g. Standard 2026" className={inputCls} />
-          <p className="text-[11px] text-[var(--color-muted)]">Formulas may use <code className="text-[var(--color-text)]">base</code>, <code className="text-[var(--color-text)]">payment_days</code>, <code className="text-[var(--color-text)]">working_days</code> and other component abbreviations. Arithmetic only — no functions. e.g. <code className="text-[var(--color-text)]">base * 0.5</code></p>
+          <p className="text-[11px] text-[var(--color-muted)]">Formulas may use <code className="text-[var(--color-text)]">base</code>, <code className="text-[var(--color-text)]">payment_days</code>, <code className="text-[var(--color-text)]">working_days</code> and other component abbreviations. Arithmetic only - no functions. e.g. <code className="text-[var(--color-text)]">base * 0.5</code></p>
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
@@ -908,7 +908,7 @@ function SlipBreakdown({ slip }: { slip: SlipPreview }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PAYROLL TAB — run a month + see consolidated journal + per-employee payslips
+// PAYROLL TAB - run a month + see consolidated journal + per-employee payslips
 // ─────────────────────────────────────────────────────────────────────────────
 function PayrollTab({ canWrite }: { employees: Employee[]; canWrite: boolean }) {
   const [runs, setRuns] = useState<PayrollRun[]>([]);
@@ -956,7 +956,7 @@ function PayrollTab({ canWrite }: { employees: Employee[]; canWrite: boolean }) 
 
       {last && (
         <div className={`${cardCls} p-4`}>
-          <h3 className="text-sm font-semibold mb-2">Last run — {last.run.run_month}</h3>
+          <h3 className="text-sm font-semibold mb-2">Last run - {last.run.run_month}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
             <Stat label="Employees" value={last.employees} />
             <Stat label="Gross" value={rupee(last.gross)} />
@@ -984,7 +984,7 @@ function PayrollTab({ canWrite }: { employees: Employee[]; canWrite: boolean }) 
                       <td className="px-3 py-2.5 text-right tabular-nums">{rupee(r.gross)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-red-300">{rupee(r.total_deduction)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-primary)]">{rupee(r.net)}</td>
-                      <td className="px-3 py-2.5">{r.voucher_id ? <Pill text="POSTED" cls="bg-green-900/30 text-green-300 border border-green-700/40" /> : "—"}</td>
+                      <td className="px-3 py-2.5">{r.voucher_id ? <Pill text="POSTED" cls="bg-green-900/30 text-green-300 border border-green-700/40" /> : "-"}</td>
                       <td className="px-3 py-2.5 text-right"><button type="button" onClick={() => viewSlips(r.id)} className={btnGhost}><FileText size={13} /> {openRun === r.id ? "Hide" : "Payslips"}</button></td>
                     </tr>
                     {openRun === r.id && (

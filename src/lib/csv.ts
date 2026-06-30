@@ -1,5 +1,5 @@
 // Lightweight CSV in/out helpers shared by BulkUpload (import) and ExportMenu
-// (download). Client-side only — no deps. Handles quoted fields, embedded commas,
+// (download). Client-side only - no deps. Handles quoted fields, embedded commas,
 // escaped quotes ("") and CRLF/CR/LF line endings.
 
 export function parseCsv(text: string): string[][] {

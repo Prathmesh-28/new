@@ -9,7 +9,7 @@ import BulkUpload from "@/components/BulkUpload";
 import ExportMenu from "@/components/ExportMenu";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES — shapes mirror backend/src/modules/books/{costcentres,reports,ops}.js
+// TYPES - shapes mirror backend/src/modules/books/{costcentres,reports,ops}.js
 // (loose: snake_case from raw SQL rows, camelCase from report builders)
 // ─────────────────────────────────────────────────────────────────────────────
 interface CostCentre {
@@ -222,7 +222,7 @@ export default function BooksDimensionsTab({ canWrite = true }: { canWrite?: boo
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COST CENTRES — list / create / patch (rename + activate) + cost-centre P&L
+// COST CENTRES - list / create / patch (rename + activate) + cost-centre P&L
 // ─────────────────────────────────────────────────────────────────────────────
 function CostCentresSection({ canWrite }: { canWrite: boolean }) {
   const [list, setList] = useState<CostCentre[]>([]);
@@ -332,7 +332,7 @@ function CostCentresSection({ canWrite }: { canWrite: boolean }) {
             <div>
               <label className={labelCls}>Parent (optional)</label>
               <select value={parentId} onChange={(e) => setParentId(e.target.value)} className={inputCls}>
-                <option value="">— none —</option>
+                <option value="">- none -</option>
                 {list.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
@@ -412,7 +412,7 @@ function CostCentresSection({ canWrite }: { canWrite: boolean }) {
                           <input value={editName} onChange={(e) => setEditName(e.target.value)} className={`${inputCls} py-1`} autoFocus />
                         ) : c.name}
                       </td>
-                      <td className="px-3 py-2.5 text-[var(--color-muted)]">{c.category || "—"}</td>
+                      <td className="px-3 py-2.5 text-[var(--color-muted)]">{c.category || "-"}</td>
                       <td className="px-3 py-2.5">
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
                           active
@@ -494,7 +494,7 @@ function CostCentresSection({ canWrite }: { canWrite: boolean }) {
                 report.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--color-border)] last:border-b-0">
                     <td className="px-3 py-2.5 font-medium">{r.name}</td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.category || "—"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.category || "-"}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-green-400">{rupee(r.income)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-red-400">{rupee(r.expense)}</td>
                     <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${num(r.net) >= 0 ? "text-green-400" : "text-red-400"}`}>{rupee(r.net)}</td>
@@ -520,7 +520,7 @@ function CostCentresSection({ canWrite }: { canWrite: boolean }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROJECTS — list / create / per-project billable + project P&L (FY)
+// PROJECTS - list / create / per-project billable + project P&L (FY)
 // ─────────────────────────────────────────────────────────────────────────────
 function ProjectsSection({ canWrite }: { canWrite: boolean }) {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -794,7 +794,7 @@ function ProjectsSection({ canWrite }: { canWrite: boolean }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BRANCHES — list / create + branch P&L + branch trial balance
+// BRANCHES - list / create + branch P&L + branch trial balance
 // ─────────────────────────────────────────────────────────────────────────────
 function BranchesSection({ canWrite }: { canWrite: boolean }) {
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -917,8 +917,8 @@ function BranchesSection({ canWrite }: { canWrite: boolean }) {
                 branches.map((b) => (
                   <tr key={b.id} className="border-b border-[var(--color-border)] last:border-b-0">
                     <td className="px-3 py-2.5 font-medium">{b.name}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-[var(--color-muted)]">{b.gstin || "—"}</td>
-                    <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{b.state_code || "—"}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-[var(--color-muted)]">{b.gstin || "-"}</td>
+                    <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{b.state_code || "-"}</td>
                   </tr>
                 ))
               )}
@@ -998,9 +998,9 @@ function BranchesSection({ canWrite }: { canWrite: boolean }) {
                     tb.ledgers.map((l) => (
                       <tr key={l.ledgerId} className="border-b border-[var(--color-border)] last:border-b-0">
                         <td className="px-3 py-2.5 font-medium">{l.name}</td>
-                        <td className="px-3 py-2.5 text-[var(--color-muted)] capitalize">{(l.nature || "—").toString().toLowerCase()}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{num(l.debit) ? rupee(l.debit) : "—"}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{num(l.credit) ? rupee(l.credit) : "—"}</td>
+                        <td className="px-3 py-2.5 text-[var(--color-muted)] capitalize">{(l.nature || "-").toString().toLowerCase()}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{num(l.debit) ? rupee(l.debit) : "-"}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{num(l.credit) ? rupee(l.credit) : "-"}</td>
                       </tr>
                     ))
                   )}
@@ -1043,7 +1043,7 @@ function BranchPlLines({ rows }: { rows: BranchPlRow[] }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TAGS — net profit by free-form dimension + register a tag value
+// TAGS - net profit by free-form dimension + register a tag value
 // ─────────────────────────────────────────────────────────────────────────────
 function TagsSection({ canWrite }: { canWrite: boolean }) {
   const [dimension, setDimension] = useState<string>(TAG_DIMENSIONS[0]);

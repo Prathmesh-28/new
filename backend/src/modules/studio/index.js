@@ -1,7 +1,7 @@
-// Headroom Studio — App Builder, Phase 0 data layer.
+// Headroom Studio - App Builder, Phase 0 data layer.
 //
 // Every function takes tenantId first and filters by it (app-layer tenant
-// isolation — the books/crm norm; a cross-tenant test guards it). Lists use
+// isolation - the books/crm norm; a cross-tenant test guards it). Lists use
 // keyset pagination on the time-sortable collab_uuidv7() id: pass `before` (a
 // cursor id) to page backwards through `ORDER BY id DESC`.
 
@@ -213,7 +213,7 @@ async function publish(tenantId, projectId) {
   return { token, path, deployment };
 }
 
-// Public (no tenant scope — addressed by an unguessable token). Returns the published
+// Public (no tenant scope - addressed by an unguessable token). Returns the published
 // app's HTML + name + the agents it may embed (for the bridge bootstrap), or null.
 async function getPublished(token) {
   if (!token) return null;
@@ -273,7 +273,7 @@ async function revokeAgent(tenantId, projectId, agentId) {
 }
 
 // Public bridge resolver: returns { tenantId } iff the app token is live AND that
-// agent is granted to its project — else null. The token is the capability.
+// agent is granted to its project - else null. The token is the capability.
 async function resolveBridgeGrant(token, agentId) {
   if (!token || !agentId) return null;
   const { rows } = await pool.query(

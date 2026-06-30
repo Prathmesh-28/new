@@ -1,4 +1,4 @@
-// §8b — Item master depth: variants (parent → child stock items with attribute
+// §8b - Item master depth: variants (parent → child stock items with attribute
 // JSONB), kits/bundles (book_item_components), and barcodes. All masters reuse
 // book_stock_items; movements/valuation continue to flow through inventory.js.
 // New columns/tables (book_stock_items.barcode/attributes/is_kit,
@@ -168,7 +168,7 @@ async function setBarcode(tenantId, itemId, barcode) {
 // each row, then applies an optional barcode via this module's setBarcode (which
 // surfaces a clean BARCODE_TAKEN on clash). Each row runs in its own try/catch so
 // one bad row never aborts the rest. createItem is a single INSERT (no
-// transaction), so per-row processing is correct here — no batch transaction.
+// transaction), so per-row processing is correct here - no batch transaction.
 // Rows use the snake_case external shape; we map to createItem's camelCase keys.
 async function bulkCreateItems(tenantId, actorId, rows) {
   if (!Array.isArray(rows)) throw new PostError("BAD_INPUT", "rows must be an array", 400);

@@ -1,11 +1,11 @@
-// Headroom Collab — shared contract (Phase 0), backend (JS) side.
+// Headroom Collab - shared contract (Phase 0), backend (JS) side.
 //
 // The build spec asks for a shared TypeScript types package imported by both
 // server and client. Headroom's backend is CommonJS JS (not TS), so the contract
 // lives in two mirrored files that MUST be kept in lockstep:
-//   • this file — runtime constants (enum values, socket event names) the JS
+//   • this file - runtime constants (enum values, socket event names) the JS
 //     server validates against, plus JSDoc typedefs for editor help.
-//   • src/features/collab/types.ts — the canonical TypeScript types the React
+//   • src/features/collab/types.ts - the canonical TypeScript types the React
 //     client imports (Message, Conversation, ClientToServer/ServerToClient, …).
 // When you change one, change the other. The enum string values and event names
 // below are the single source of truth both sides agree on.
@@ -73,7 +73,7 @@ const rooms = {
  * @property {string[]} userIds
  *
  * @typedef {Object} Message
- * @property {string} id                       UUIDv7 — sortable, defines order
+ * @property {string} id                       UUIDv7 - sortable, defines order
  * @property {string} conversationId
  * @property {string} senderId
  * @property {string|null} parentMessageId

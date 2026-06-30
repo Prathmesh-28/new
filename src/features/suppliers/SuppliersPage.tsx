@@ -170,7 +170,7 @@ function EarlyPaySection() {
       <AiInsight
         collapsed
         className="w-full"
-        title="AI insight — suppliers"
+        title="AI insight - suppliers"
         question="Looking at my suppliers and their open early-pay offers, where are the concentration risks and which relationships should I act on? Call out the highest-saving offers worth paying early and any MSME suppliers that need priority."
         context={{
           openOffers: offers.filter(o => !paid[o.id]).length,
@@ -244,7 +244,7 @@ function EarlyPaySection() {
         <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-2">How it works</p>
         <div className="space-y-2 text-xs text-[var(--color-muted)]">
           <p>1. Supplier offers a discount for immediate payment instead of waiting until due date.</p>
-          <p>2. You pay today at the discounted amount — saving 1–2% on each invoice.</p>
+          <p>2. You pay today at the discounted amount - saving 1-2% on each invoice.</p>
           <p>3. Supplier gets paid same-day via NEFT. You earn ~18% annualized on idle cash deployed here.</p>
           <p>4. Every early payment strengthens your supplier relationships automatically.</p>
         </div>
@@ -277,7 +277,7 @@ function SupplierScorecard() {
     const respScore = (r.responsiveness / 5) * 100;
     return Math.round(r.qualityPct * 0.35 + r.otifPct * 0.35 + priceScore * 0.20 + respScore * 0.10);
   };
-  const grade = (s: number) => s >= 85 ? { g: "A — Preferred", c: "text-green-400" } : s >= 70 ? { g: "B — Approved", c: "text-blue-400" } : s >= 55 ? { g: "C — Conditional", c: "text-yellow-400" } : { g: "D — Review", c: "text-red-400" };
+  const grade = (s: number) => s >= 85 ? { g: "A - Preferred", c: "text-green-400" } : s >= 70 ? { g: "B - Approved", c: "text-blue-400" } : s >= 55 ? { g: "C - Conditional", c: "text-yellow-400" } : { g: "D - Review", c: "text-red-400" };
 
   const ranked = useMemo(() => [...rows].map(r => ({ ...r, composite: compositeOf(r) })).sort((a, b) => b.composite - a.composite), [rows]);
 
@@ -356,7 +356,7 @@ function SupplierScorecard() {
         <EmptyState
           icon={Award}
           title="No suppliers rated yet"
-          description="Add your first supplier above to score it on quality, OTIF, price and responsiveness — then consolidate spend on your A-grade vendors."
+          description="Add your first supplier above to score it on quality, OTIF, price and responsiveness - then consolidate spend on your A-grade vendors."
           ctaText="Rate a supplier"
           onCta={() => nameRef.current?.focus()}
         />
@@ -448,11 +448,11 @@ function ReorderPointTracker() {
                     <td className="px-3 py-2.5 text-xs tabular-nums">{r.leadTimeDays}d</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums">{r.onHand}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums">{rop}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{cover === Infinity ? "—" : `${cover}d`}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{cover === Infinity ? "-" : `${cover}d`}</td>
                     <td className="px-3 py-2.5">
                       <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${due ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>{due ? "Reorder" : "OK"}</span>
                     </td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold">{due ? suggestedQtyOf(r) : "—"}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold">{due ? suggestedQtyOf(r) : "-"}</td>
                     <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                   </tr>
                 );
@@ -563,8 +563,8 @@ function RateContractManager() {
                     <td className="px-3 py-2.5 text-xs font-medium">{r.supplier}</td>
                     <td className="px-3 py-2.5 text-xs">{r.item}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.rate)}<span className="text-[var(--color-muted)]">/{r.uom}</span></td>
-                    <td className="px-3 py-2.5 text-xs">{r.validFrom || "—"}</td>
-                    <td className="px-3 py-2.5 text-xs">{r.validTo || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs">{r.validFrom || "-"}</td>
+                    <td className="px-3 py-2.5 text-xs">{r.validTo || "-"}</td>
                     <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${st.c}`}>{st.label}</span></td>
                     <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                   </tr>
@@ -574,7 +574,7 @@ function RateContractManager() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Lock annual rate contracts to insulate purchases from spot-price swings. Renew before the validity window closes — expired contracts default to last-quoted or market rate.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Lock annual rate contracts to insulate purchases from spot-price swings. Renew before the validity window closes - expired contracts default to last-quoted or market rate.</p>
     </div>
   );
 }
@@ -685,9 +685,9 @@ function MsmeVerificationBatch() {
                 return (
                   <tr key={r.id} className="hover:bg-white/2">
                     <td className="px-3 py-2.5 text-xs font-medium">{r.supplier}</td>
-                    <td className="px-3 py-2.5 text-xs font-mono text-[var(--color-muted)]">{r.udyam || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs font-mono text-[var(--color-muted)]">{r.udyam || "-"}</td>
                     <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${CATS[r.category].c}`}>{CATS[r.category].label}</span></td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{r.outstanding > 0 ? fc(r.outstanding) : "—"}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{r.outstanding > 0 ? fc(r.outstanding) : "-"}</td>
                     <td className={`px-3 py-2.5 text-xs tabular-nums ${risk ? "text-red-400 font-semibold" : ""}`}>{dos}d</td>
                     <td className="px-3 py-2.5 text-xs">{risk ? <span className="text-red-400 font-semibold">Disallowed ⚠</span> : isMsmeProtected(r) ? <span className="text-green-400">Within limit</span> : <span className="text-[var(--color-muted)]">N/A</span>}</td>
                     <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
@@ -698,7 +698,7 @@ function MsmeVerificationBatch() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Format check only — confirm live status on the Udyam portal. The 45-day limit applies where there is a written agreement (15 days otherwise). Sums unpaid to micro/small suppliers at FY-end are disallowed u/s 43B(h) and added back to income. Verify with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Format check only - confirm live status on the Udyam portal. The 45-day limit applies where there is a written agreement (15 days otherwise). Sums unpaid to micro/small suppliers at FY-end are disallowed u/s 43B(h) and added back to income. Verify with your CA.</p>
     </div>
   );
 }
@@ -800,7 +800,7 @@ function PaymentTermsOptimizer() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">A 2/10-net-45 term yields ~21% annualised — far above most borrowing costs, so take it. Only skip the discount when your cash is genuinely tighter than the implied yield.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A 2/10-net-45 term yields ~21% annualised - far above most borrowing costs, so take it. Only skip the discount when your cash is genuinely tighter than the implied yield.</p>
     </div>
   );
 }
@@ -945,7 +945,7 @@ function LeadTimeVarianceAnalyzer() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> Lead-Time Variance Analyzer</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Log promised vs actual delivery days per PO. The analyzer shows each supplier's average slip and variability (σ) — high variance means unreliable lead times and bigger safety stock.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Log promised vs actual delivery days per PO. The analyzer shows each supplier's average slip and variability (σ) - high variance means unreliable lead times and bigger safety stock.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
           <input value={po} onChange={e => setPo(e.target.value)} placeholder="PO ref (optional)" className={INP} />
@@ -1030,7 +1030,7 @@ function AltSupplierShortlist() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><GitCompare size={14} className="text-[var(--color-primary)]" /> Alternate-Supplier Shortlist</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Maintain a backup bench per item so a single supplier never holds you hostage. Cheapest and fastest options are flagged automatically — qualify a second source for every critical SKU.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Maintain a backup bench per item so a single supplier never holds you hostage. Cheapest and fastest options are flagged automatically - qualify a second source for every critical SKU.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={item} onChange={e => setItem(e.target.value)} placeholder="Item / SKU *" className={INP} />
           <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
@@ -1070,9 +1070,9 @@ function AltSupplierShortlist() {
                     return (
                       <tr key={r.id} className="hover:bg-white/2">
                         <td className="px-3 py-2 text-xs font-medium">{r.supplier}</td>
-                        <td className="px-3 py-2 text-xs tabular-nums">{r.price > 0 ? formatCurrency(r.price) : "—"}</td>
+                        <td className="px-3 py-2 text-xs tabular-nums">{r.price > 0 ? formatCurrency(r.price) : "-"}</td>
                         <td className="px-3 py-2 text-xs tabular-nums">{r.leadDays}d</td>
-                        <td className="px-3 py-2 text-xs tabular-nums text-[var(--color-muted)]">{r.minOrderQty || "—"}</td>
+                        <td className="px-3 py-2 text-xs tabular-nums text-[var(--color-muted)]">{r.minOrderQty || "-"}</td>
                         <td className="px-3 py-2 text-xs">
                           <span className="flex gap-1">
                             {best && <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-green-900/30 text-green-400 border-green-800/40">Best ₹</span>}
@@ -1089,7 +1089,7 @@ function AltSupplierShortlist() {
           </div>
         ))}
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Single-sourced items are a supply risk — one disruption stops your line. Qualify and periodically trial-order from a backup so you can switch fast when price, quality, or availability slips.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Single-sourced items are a supply risk - one disruption stops your line. Qualify and periodically trial-order from a backup so you can switch fast when price, quality, or availability slips.</p>
     </div>
   );
 }
@@ -1129,7 +1129,7 @@ function ConcentrationRisk() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Supplier Concentration Risk</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Enter annual spend per supplier to see a Pareto view and HHI. If one vendor takes too big a share, a price hike or disruption hits hard — diversify before it bites.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Enter annual spend per supplier to see a Pareto view and HHI. If one vendor takes too big a share, a price hike or disruption hits hard - diversify before it bites.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
           <input type="number" value={annualSpend} onChange={e => setAnnualSpend(e.target.value)} placeholder="Annual spend (₹)" className={INP} />
@@ -1152,7 +1152,7 @@ function ConcentrationRisk() {
         </div>
         {concentrated && (
           <div className="bg-red-900/15 border border-red-800/40 rounded-lg p-3 text-xs text-red-400">
-            High concentration — your top supplier carries {topShare.toFixed(0)}% of spend. Qualify alternates (see Alt Suppliers) and split orders to cut dependency.
+            High concentration - your top supplier carries {topShare.toFixed(0)}% of spend. Qualify alternates (see Alt Suppliers) and split orders to cut dependency.
           </div>
         )}
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
@@ -1178,7 +1178,7 @@ function ConcentrationRisk() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">HHI sums squared shares: under 1500 is diversified, 1500–2500 moderate, above 2500 highly concentrated. The Pareto cumulative column shows how few vendors make up the bulk of spend.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">HHI sums squared shares: under 1500 is diversified, 1500-2500 moderate, above 2500 highly concentrated. The Pareto cumulative column shows how few vendors make up the bulk of spend.</p>
     </div>
   );
 }
@@ -1284,7 +1284,7 @@ function GrnThreeWayMatch() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Only release "Pass" invoices for payment. "Hold" rows have invoice qty above what was received or a rate outside tolerance — raise a debit note or query the supplier before paying.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Only release "Pass" invoices for payment. "Hold" rows have invoice qty above what was received or a rate outside tolerance - raise a debit note or query the supplier before paying.</p>
     </div>
   );
 }
@@ -1336,7 +1336,7 @@ function NegotiationPrepSheet() {
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Target discount", value: cur > 0 && tgt > 0 ? `${(((cur - tgt) / cur) * 100).toFixed(1)}%` : "—", color: "text-[var(--color-primary)]" },
+          { label: "Target discount", value: cur > 0 && tgt > 0 ? `${(((cur - tgt) / cur) * 100).toFixed(1)}%` : "-", color: "text-[var(--color-primary)]" },
           { label: "Annual saving at target", value: formatCurrency(annualSaving), color: "text-green-400" },
           { label: "Prep complete", value: `${doneCount}/${items.length}`, color: ready ? "text-green-400" : "text-yellow-400" },
         ].map(c => (
@@ -1365,7 +1365,7 @@ function NegotiationPrepSheet() {
           <button onClick={addItem} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-text)] font-semibold px-3 py-2 rounded-lg hover:bg-[var(--color-bg)] shrink-0"><Plus size={13} /> Add</button>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Anchor on benchmarked alternate quotes, lead with your volume and payment reliability, and never reveal your walk-away. The annual-saving figure is your real prize — keep it front of mind.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Anchor on benchmarked alternate quotes, lead with your volume and payment reliability, and never reveal your walk-away. The annual-saving figure is your real prize - keep it front of mind.</p>
     </div>
   );
 }
@@ -1531,7 +1531,7 @@ function Gst2bMatchStatus() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileCheck size={14} className="text-[var(--color-primary)]" /> Supplier-wise GST-2B Match Status</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Reconcile ITC per your books against each supplier's GSTR-2B. Where books exceed 2B, the vendor hasn't filed — that ITC is blocked, so withhold payment until they upload.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Reconcile ITC per your books against each supplier's GSTR-2B. Where books exceed 2B, the vendor hasn't filed - that ITC is blocked, so withhold payment until they upload.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
           <input value={gstin} onChange={e => setGstin(e.target.value)} placeholder="GSTIN (optional)" className={INP} />
@@ -1567,7 +1567,7 @@ function Gst2bMatchStatus() {
                 return (
                   <tr key={r.id} className="hover:bg-white/2">
                     <td className="px-3 py-2.5 text-xs font-medium">{r.supplier}</td>
-                    <td className="px-3 py-2.5 text-xs font-mono text-[var(--color-muted)]">{r.gstin || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs font-mono text-[var(--color-muted)]">{r.gstin || "-"}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums">{formatCurrency(r.bookItc)}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums">{formatCurrency(r.gstr2bItc)}</td>
                     <td className={`px-3 py-2.5 text-xs tabular-nums ${Math.abs(diff) > tol ? "text-red-400 font-semibold" : "text-[var(--color-muted)]"}`}>{diff > 0 ? "+" : ""}{formatCurrency(diff)}</td>
@@ -1580,7 +1580,7 @@ function Gst2bMatchStatus() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Since the 2021 ITC rules, you can only claim credit that appears in GSTR-2B. "Not in 2B" means the supplier hasn't filed GSTR-1 — chase them or hold the tax portion. Confirm live figures on the GST portal.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Since the 2021 ITC rules, you can only claim credit that appears in GSTR-2B. "Not in 2B" means the supplier hasn't filed GSTR-1 - chase them or hold the tax portion. Confirm live figures on the GST portal.</p>
     </div>
   );
 }
@@ -1653,7 +1653,7 @@ function QualityPpmTracker() {
           {[
             { label: "Suppliers tracked", value: String(stats.length), color: "text-[var(--color-primary)]" },
             { label: "Above target PPM", value: String(failing), color: failing > 0 ? "text-red-400" : "text-green-400" },
-            { label: "Worst PPM", value: worst ? `${worst.ppm.toLocaleString("en-IN")}` : "—", color: worst && worst.ppm > targetPpm ? "text-red-400" : "text-green-400" },
+            { label: "Worst PPM", value: worst ? `${worst.ppm.toLocaleString("en-IN")}` : "-", color: worst && worst.ppm > targetPpm ? "text-red-400" : "text-green-400" },
           ].map(c => (
             <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
@@ -1779,7 +1779,7 @@ function CreditPeriodUtilization() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Free supplier credit is the cheapest working capital you have — use the full granted window unless an early-pay discount beats your cost of capital. Don't run past terms with MSME vendors (43B(h)).</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Free supplier credit is the cheapest working capital you have - use the full granted window unless an early-pay discount beats your cost of capital. Don't run past terms with MSME vendors (43B(h)).</p>
     </div>
   );
 }
@@ -1850,7 +1850,7 @@ function LandedCostCompare() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Truck size={14} className="text-[var(--color-primary)]" /> Landed-Cost Compare across Suppliers</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Compare suppliers on true delivered cost, not sticker price. Add freight, duty, and insurance to find the real cheapest — the lowest quote often loses once logistics are loaded in.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Compare suppliers on true delivered cost, not sticker price. Add freight, duty, and insurance to find the real cheapest - the lowest quote often loses once logistics are loaded in.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier *" className={INP} />
           <input value={item} onChange={e => setItem(e.target.value)} placeholder="Item / SKU *" className={INP} />
@@ -1908,7 +1908,7 @@ function LandedCostCompare() {
           </div>
         ))}
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Landed unit cost = (goods + duty + freight + insurance) ÷ qty. A distant low-price supplier can lose to a nearby one once freight and duty load in — always decide on landed, not sticker, cost.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Landed unit cost = (goods + duty + freight + insurance) ÷ qty. A distant low-price supplier can lose to a nearby one once freight and duty load in - always decide on landed, not sticker, cost.</p>
     </div>
   );
 }
@@ -2000,7 +2000,7 @@ function ContractExpiryCalendar() {
                   <tr key={r.id} className="hover:bg-white/2">
                     <td className="px-3 py-2.5 text-xs font-medium">{r.supplier}</td>
                     <td className="px-3 py-2.5 text-xs">{r.title}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{r.annualValue > 0 ? formatCurrency(r.annualValue) : "—"}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{r.annualValue > 0 ? formatCurrency(r.annualValue) : "-"}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.noticeDays}d</td>
                     <td className="px-3 py-2.5 text-xs">{r.expiry}</td>
                     <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${st.c}`}>{st.label}</span></td>
@@ -2012,7 +2012,7 @@ function ContractExpiryCalendar() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Most supply contracts auto-renew unless you serve notice. Diarise the notice date, not the expiry date — miss it and you are locked in for another term at the incumbent rate.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Most supply contracts auto-renew unless you serve notice. Diarise the notice date, not the expiry date - miss it and you are locked in for another term at the incumbent rate.</p>
     </div>
   );
 }
@@ -2112,7 +2112,7 @@ function PaymentTermsBenchmark() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Each extra day of credit on a category frees roughly spend÷365 of working capital. Use a peer's better terms as leverage — "Supplier B in the same category gives me 60 days" is a clean ask.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Each extra day of credit on a category frees roughly spend÷365 of working capital. Use a peer's better terms as leverage - "Supplier B in the same category gives me 60 days" is a clean ask.</p>
     </div>
   );
 }
@@ -2187,7 +2187,7 @@ function RiskDiversification() {
             </div>
           ))}
         </div>
-        {concentrated && <div className="bg-red-900/20 border border-red-800/40 rounded-lg p-3 text-xs text-red-300">Supply is concentrated. A single region or sole supplier disruption could stall production — qualify a second source for critical inputs.</div>}
+        {concentrated && <div className="bg-red-900/20 border border-red-800/40 rounded-lg p-3 text-xs text-red-300">Supply is concentrated. A single region or sole supplier disruption could stall production - qualify a second source for critical inputs.</div>}
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-2">
           <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Spend by region</p>
           {regionShare.map(rs => (
@@ -2214,7 +2214,7 @@ function RiskDiversification() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">HHI = Σ(region share²): below 0.25 is diversified, above 0.5 is concentrated. Single-source criticals deserve a qualified backup even at a small cost premium — resilience is cheaper than a stockout.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">HHI = Σ(region share²): below 0.25 is diversified, above 0.5 is concentrated. Single-source criticals deserve a qualified backup even at a small cost premium - resilience is cheaper than a stockout.</p>
     </div>
   );
 }
@@ -2312,7 +2312,7 @@ function EoqCheck() {
                     <td className="px-3 py-2.5 text-xs font-medium">{r.item}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.annualDemand}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums font-semibold">{eoq}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.moq || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.moq || "-"}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums font-bold">{orderQtyOf(r)}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums">{ordersPerYearOf(r)}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums">{formatCurrency(annualCostOf(r))}</td>
@@ -2325,7 +2325,7 @@ function EoqCheck() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">EOQ balances ordering cost against carrying cost. Where the supplier MOQ exceeds EOQ you carry excess stock — negotiate a lower MOQ, split lots, or factor the extra holding cost into the price comparison.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">EOQ balances ordering cost against carrying cost. Where the supplier MOQ exceeds EOQ you carry excess stock - negotiate a lower MOQ, split lots, or factor the extra holding cost into the price comparison.</p>
     </div>
   );
 }
@@ -2382,7 +2382,7 @@ function VendorAdvanceTracker() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Vendor Advance / Prepayment Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Track advances paid to vendors and adjust them against later invoices. Unadjusted balances are cash sitting with suppliers — chase or net them off before they go stale.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track advances paid to vendors and adjust them against later invoices. Unadjusted balances are cash sitting with suppliers - chase or net them off before they go stale.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={INP} />
           <input value={reference} onChange={e => setReference(e.target.value)} placeholder="PO / reference" className={INP} />
@@ -2420,7 +2420,7 @@ function VendorAdvanceTracker() {
                 return (
                   <tr key={r.id} className="hover:bg-white/2">
                     <td className="px-3 py-2.5 text-xs font-medium">{r.vendor}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.reference || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.reference || "-"}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.advancePaid)}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(r.adjusted)}</td>
                     <td className={`px-3 py-2.5 text-xs tabular-nums font-bold ${bal > 0 ? "text-yellow-400" : "text-green-400"}`}>{fc(bal)}</td>
@@ -2438,7 +2438,7 @@ function VendorAdvanceTracker() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Advances paid sit as an asset until invoiced against. Net them off promptly — long-open advances tie up cash and signal disputed deliveries or a vendor at risk. GST on advances for goods is not payable post-Nov 2017; advances for services still attract GST.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Advances paid sit as an asset until invoiced against. Net them off promptly - long-open advances tie up cash and signal disputed deliveries or a vendor at risk. GST on advances for goods is not payable post-Nov 2017; advances for services still attract GST.</p>
     </div>
   );
 }
@@ -2492,7 +2492,7 @@ function RecurringBillCalendar() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarRange size={14} className="text-[var(--color-primary)]" /> Recurring Bill Calendar</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Schedule fixed dues — rent, utilities, SaaS — by cadence and due day. See what is due this week and your true monthly run-rate so nothing slips into a late fee.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Schedule fixed dues - rent, utilities, SaaS - by cadence and due day. See what is due this week and your true monthly run-rate so nothing slips into a late fee.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Bill name *" className={INP} />
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹)" className={INP} />
@@ -2585,12 +2585,12 @@ function DuplicateInvoiceGuard() {
     const prior = rows.find(r => keyOf(r.vendor, r.invoiceNo) === k);
     if (prior) {
       toast.error(prior.amount === amt
-        ? `Exact duplicate of ${prior.vendor} ${prior.invoiceNo} (${fc(prior.amount)}) — added but flagged`
-        : `Same invoice no. already logged for ${prior.vendor} — added but flagged`);
+        ? `Exact duplicate of ${prior.vendor} ${prior.invoiceNo} (${fc(prior.amount)}) - added but flagged`
+        : `Same invoice no. already logged for ${prior.vendor} - added but flagged`);
     }
     setRows(prev => [...prev, { id: crypto.randomUUID(), vendor: vendor.trim(), invoiceNo: invoiceNo.trim(), amount: amt, date }]);
     setVendor(""); setInvoiceNo(""); setAmount("");
-    if (!prior) toast.success("Invoice logged — no duplicate");
+    if (!prior) toast.success("Invoice logged - no duplicate");
   };
 
   const dupCount = flagged.filter(r => r.dup).length;
@@ -2600,7 +2600,7 @@ function DuplicateInvoiceGuard() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Copy size={14} className="text-[var(--color-primary)]" /> Duplicate Invoice Guard</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Log every bill before payment. The guard flags any repeat of the same vendor + invoice number, and highlights exact amount matches — stopping double payments before the cash leaves.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Log every bill before payment. The guard flags any repeat of the same vendor + invoice number, and highlights exact amount matches - stopping double payments before the cash leaves.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={INP} />
           <input value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} placeholder="Invoice no. *" className={INP} />
@@ -2650,7 +2650,7 @@ function DuplicateInvoiceGuard() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Duplicate payments are one of the most common AP leaks — often a re-sent PDF or a credit note re-keyed as a fresh bill. Match on vendor + invoice number first, then amount; investigate flagged rows before releasing payment.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Duplicate payments are one of the most common AP leaks - often a re-sent PDF or a credit note re-keyed as a fresh bill. Match on vendor + invoice number first, then amount; investigate flagged rows before releasing payment.</p>
     </div>
   );
 }
@@ -2700,7 +2700,7 @@ function CarryingCostCalculator() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Warehouse size={14} className="text-[var(--color-primary)]" /> Carrying-Cost Calculator</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Quantify the true cost of holding each SKU: capital tied up + storage/handling + obsolescence & insurance. The hidden 20–30% p.a. drag that makes slow stock far costlier than it looks.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Quantify the true cost of holding each SKU: capital tied up + storage/handling + obsolescence & insurance. The hidden 20-30% p.a. drag that makes slow stock far costlier than it looks.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={item} onChange={e => setItem(e.target.value)} placeholder="Item / SKU *" className={INP} />
           <input type="number" value={avgInventoryValue} onChange={e => setAvgInventoryValue(e.target.value)} placeholder="Avg stock value (₹)" className={INP} />
@@ -2744,7 +2744,7 @@ function CarryingCostCalculator() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Carrying cost typically runs 20–30% of stock value per year. A SKU that turns slowly bleeds this rate continuously — weigh it against EOQ savings, bulk discounts, and the margin the stock actually earns before over-ordering.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Carrying cost typically runs 20-30% of stock value per year. A SKU that turns slowly bleeds this rate continuously - weigh it against EOQ savings, bulk discounts, and the margin the stock actually earns before over-ordering.</p>
     </div>
   );
 }
@@ -2760,13 +2760,13 @@ type TdsBillRow = {
   hasPan: boolean;
 };
 const TDS_RULES: Record<TdsSection, { label: string; rate: number; threshold: number }> = {
-  "194C":      { label: "194C — Contractor (indiv/HUF)", rate: 1,  threshold: 30000 },
-  "194C-co":   { label: "194C — Contractor (others)",    rate: 2,  threshold: 30000 },
-  "194J":      { label: "194J — Professional fees",      rate: 10, threshold: 30000 },
-  "194J-tech": { label: "194J — Technical services",     rate: 2,  threshold: 30000 },
-  "194Q":      { label: "194Q — Purchase of goods",      rate: 0.1, threshold: 5000000 },
-  "194I-rent": { label: "194I — Rent (plant/building)",  rate: 10, threshold: 240000 },
-  "194H":      { label: "194H — Commission/brokerage",   rate: 2,  threshold: 20000 },
+  "194C":      { label: "194C - Contractor (indiv/HUF)", rate: 1,  threshold: 30000 },
+  "194C-co":   { label: "194C - Contractor (others)",    rate: 2,  threshold: 30000 },
+  "194J":      { label: "194J - Professional fees",      rate: 10, threshold: 30000 },
+  "194J-tech": { label: "194J - Technical services",     rate: 2,  threshold: 30000 },
+  "194Q":      { label: "194Q - Purchase of goods",      rate: 0.1, threshold: 5000000 },
+  "194I-rent": { label: "194I - Rent (plant/building)",  rate: 10, threshold: 240000 },
+  "194H":      { label: "194H - Commission/brokerage",   rate: 2,  threshold: 20000 },
 };
 function TdsOnBillsCalculator() {
   const [rows, setRows] = useFeatureState<TdsBillRow[]>("sup-tds-bills", []);
@@ -2848,9 +2848,9 @@ function TdsOnBillsCalculator() {
                     <td className="px-3 py-2.5 text-xs font-medium">{r.vendor}{!r.hasPan && <span className="ml-1 text-[9px] text-red-400 font-semibold">no-PAN</span>}</td>
                     <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.section}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.amount)}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{c.applies ? `${c.rate}%` : "—"}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums">{c.applies ? `${c.rate}%` : "-"}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{c.applies ? fc(c.base) : "below thr."}</td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums font-bold ${c.applies ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]"}`}>{c.applies ? fc(c.tds) : "—"}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums font-bold ${c.applies ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]"}`}>{c.applies ? fc(c.tds) : "-"}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.amount - c.tds)}</td>
                     <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                   </tr>
@@ -2860,7 +2860,7 @@ function TdsOnBillsCalculator() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative rates for resident vendors — deduct on the ex-GST value. 194Q applies only above the ₹50L per-vendor annual threshold (and not where the seller charges 206C(1H) TCS). No PAN triggers a flat 20% under Sec 206AA. Confirm current rates and your 194C single-bill vs ₹1L annual limits with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative rates for resident vendors - deduct on the ex-GST value. 194Q applies only above the ₹50L per-vendor annual threshold (and not where the seller charges 206C(1H) TCS). No PAN triggers a flat 20% under Sec 206AA. Confirm current rates and your 194C single-bill vs ₹1L annual limits with your CA.</p>
     </div>
   );
 }

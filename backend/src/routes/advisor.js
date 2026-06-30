@@ -74,7 +74,7 @@ router.post("/clients", authenticate, requireAdvisor, async (req, res) => {
   res.status(201).json(rows[0]);
 });
 
-// GET /api/advisor/alerts — combined alert feed
+// GET /api/advisor/alerts - combined alert feed
 router.get("/alerts", authenticate, requireAdvisor, async (req, res) => {
   const { rows: links } = await pool.query(
     "SELECT client_tenant_id, client_label FROM advisor_client_links WHERE advisor_id=$1", [req.user.id]
@@ -200,7 +200,7 @@ router.get("/clients/:tenantId/report-preview", authenticate, requireAdvisor, as
   }
 });
 
-// GET /api/advisor/workspace/:key — load a stored practice-management tracker
+// GET /api/advisor/workspace/:key - load a stored practice-management tracker
 router.get("/workspace/:key", authenticate, requireAdvisor, async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -213,7 +213,7 @@ router.get("/workspace/:key", authenticate, requireAdvisor, async (req, res) => 
   }
 });
 
-// PUT /api/advisor/workspace/:key — upsert a practice-management tracker
+// PUT /api/advisor/workspace/:key - upsert a practice-management tracker
 router.put("/workspace/:key", authenticate, requireAdvisor, async (req, res) => {
   try {
     const value = req.body ?? {};

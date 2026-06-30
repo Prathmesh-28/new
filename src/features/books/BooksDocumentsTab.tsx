@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES — shapes mirror backend/src/modules/books/{documents,payments,portal}.js
+// TYPES - shapes mirror backend/src/modules/books/{documents,payments,portal}.js
 // ─────────────────────────────────────────────────────────────────────────────
 interface DocRow {
   id: string;
@@ -81,14 +81,14 @@ function asArray<T>(v: unknown): T[] {
   return [];
 }
 function prettyKind(k: string | null | undefined): string {
-  return (k ?? "—").toString().replace(/_/g, " ");
+  return (k ?? "-").toString().replace(/_/g, " ");
 }
 async function copyText(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
     toast.success("Copied to clipboard");
   } catch {
-    toast.error("Couldn't copy — copy manually");
+    toast.error("Couldn't copy - copy manually");
   }
 }
 
@@ -149,7 +149,7 @@ export default function BooksDocumentsTab({ canWrite = true }: { canWrite?: bool
   const [ledgers, setLedgers] = useState<Ledger[]>([]);
 
   const partyName = useCallback(
-    (id: string | null | undefined) => ledgers.find((l) => l.id === id)?.name || "—",
+    (id: string | null | undefined) => ledgers.find((l) => l.id === id)?.name || "-",
     [ledgers],
   );
 
@@ -176,7 +176,7 @@ export default function BooksDocumentsTab({ canWrite = true }: { canWrite?: bool
         const l = await api.get<Ledger[]>("/api/books/ledgers");
         setLedgers(Array.isArray(l) ? l : []);
       } catch {
-        /* ledger list optional — used only for friendly party names */
+        /* ledger list optional - used only for friendly party names */
       }
     })();
   }, []);
@@ -209,7 +209,7 @@ export default function BooksDocumentsTab({ canWrite = true }: { canWrite?: bool
       <Card
         title="Document register"
         icon={<ScrollText size={15} />}
-        hint="Click a row to select it — lifecycle actions act on the selected document."
+        hint="Click a row to select it - lifecycle actions act on the selected document."
       >
         <div className="flex flex-wrap items-end gap-3 mb-4">
           <div>
@@ -264,8 +264,8 @@ export default function BooksDocumentsTab({ canWrite = true }: { canWrite?: bool
                       }`}
                     >
                       <td className="px-3 py-2.5 font-medium">{prettyKind(d.doc_kind)}</td>
-                      <td className="px-3 py-2.5 font-mono text-xs">{d.doc_number || "—"}</td>
-                      <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{d.doc_date || "—"}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs">{d.doc_number || "-"}</td>
+                      <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{d.doc_date || "-"}</td>
                       <td className="px-3 py-2.5">{partyName(d.party_ledger_id)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{rupee(d.subtotal)}</td>
                       <td className="px-3 py-2.5"><StatusBadge status={d.status} /></td>
@@ -304,7 +304,7 @@ export default function BooksDocumentsTab({ canWrite = true }: { canWrite?: bool
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LIFECYCLE ACTIONS — convert / cancel / send / schedule / print / post-stock
+// LIFECYCLE ACTIONS - convert / cancel / send / schedule / print / post-stock
 // ─────────────────────────────────────────────────────────────────────────────
 function DocumentActions({
   doc, canWrite, onChanged,
@@ -407,7 +407,7 @@ function DocumentActions({
     <Card
       title="Lifecycle actions"
       icon={<GitBranch size={15} />}
-      hint={`Selected: ${prettyKind(doc.doc_kind)} #${doc.doc_number || "—"} · ${doc.status}`}
+      hint={`Selected: ${prettyKind(doc.doc_kind)} #${doc.doc_number || "-"} · ${doc.status}`}
     >
       <div className="space-y-4">
         {/* quick actions row */}
@@ -438,7 +438,7 @@ function DocumentActions({
             {terminal ? (
               <p className="text-[12px] text-[var(--color-muted)]">This document is {doc.status.toLowerCase()} and can no longer be converted.</p>
             ) : nextKinds.length === 0 ? (
-              <p className="text-[12px] text-[var(--color-muted)]">{prettyKind(doc.doc_kind)} is terminal — nothing to convert it into.</p>
+              <p className="text-[12px] text-[var(--color-muted)]">{prettyKind(doc.doc_kind)} is terminal - nothing to convert it into.</p>
             ) : (
               <div className="flex flex-wrap items-end gap-2">
                 <div className="flex-1 min-w-[180px]">
@@ -537,7 +537,7 @@ function NoWrite({ what }: { what: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ADVANCE RECEIPT — GST-compliant customer advance
+// ADVANCE RECEIPT - GST-compliant customer advance
 // ─────────────────────────────────────────────────────────────────────────────
 function AdvanceReceiptForm({ parties, banks, canWrite }: { parties: Ledger[]; banks: Ledger[]; canWrite: boolean }) {
   const [partyLedgerId, setParty] = useState("");
@@ -597,7 +597,7 @@ function AdvanceReceiptForm({ parties, banks, canWrite }: { parties: Ledger[]; b
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VENDOR ADVANCE — advance paid to a supplier
+// VENDOR ADVANCE - advance paid to a supplier
 // ─────────────────────────────────────────────────────────────────────────────
 function VendorAdvanceForm({ parties, banks, canWrite }: { parties: Ledger[]; banks: Ledger[]; canWrite: boolean }) {
   const [partyLedgerId, setParty] = useState("");
@@ -625,7 +625,7 @@ function VendorAdvanceForm({ parties, banks, canWrite }: { parties: Ledger[]; ba
   };
 
   return (
-    <Card title="Vendor advance" icon={<Wallet size={15} />} hint="Dr vendor (advance) / Cr bank — applied against a future bill.">
+    <Card title="Vendor advance" icon={<Wallet size={15} />} hint="Dr vendor (advance) / Cr bank - applied against a future bill.">
       {!canWrite ? <NoWrite what="post vendor advances" /> : (
         <div className="space-y-3">
           <LedgerSelect label="Vendor" value={partyLedgerId} onChange={setParty} options={parties} placeholder="Select vendor…" />
@@ -650,7 +650,7 @@ function VendorAdvanceForm({ parties, banks, canWrite }: { parties: Ledger[]; ba
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CREDIT NOTE — sales return / customer credit
+// CREDIT NOTE - sales return / customer credit
 // ─────────────────────────────────────────────────────────────────────────────
 function CreditNoteForm({ parties, canWrite }: { parties: Ledger[]; canWrite: boolean }) {
   const [customerLedgerId, setCustomer] = useState("");
@@ -719,7 +719,7 @@ function CreditNoteForm({ parties, canWrite }: { parties: Ledger[]; canWrite: bo
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WRITE-OFF — bad-debt write-off against a customer
+// WRITE-OFF - bad-debt write-off against a customer
 // ─────────────────────────────────────────────────────────────────────────────
 function WriteOffForm({ parties, canWrite }: { parties: Ledger[]; canWrite: boolean }) {
   const [partyLedgerId, setParty] = useState("");
@@ -746,7 +746,7 @@ function WriteOffForm({ parties, canWrite }: { parties: Ledger[]; canWrite: bool
   };
 
   return (
-    <Card title="Bad-debt write-off" icon={<FileX2 size={15} />} hint="Dr Bad Debts / Cr customer — clears an uncollectible balance.">
+    <Card title="Bad-debt write-off" icon={<FileX2 size={15} />} hint="Dr Bad Debts / Cr customer - clears an uncollectible balance.">
       {!canWrite ? <NoWrite what="write off bad debts" /> : (
         <div className="space-y-3">
           <LedgerSelect label="Customer" value={partyLedgerId} onChange={setParty} options={parties} placeholder="Select customer…" />
@@ -770,7 +770,7 @@ function WriteOffForm({ parties, canWrite }: { parties: Ledger[]; canWrite: bool
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PAYMENT LINKS — create + list (Razorpay/manual)
+// PAYMENT LINKS - create + list (Razorpay/manual)
 // ─────────────────────────────────────────────────────────────────────────────
 function PaymentLinksCard({ parties, canWrite, partyName }: {
   parties: Ledger[]; canWrite: boolean; partyName: (id: string | null | undefined) => string;
@@ -809,7 +809,7 @@ function PaymentLinksCard({ parties, canWrite, partyName }: {
       if (res?.link_url && !res.link_url.startsWith("pending-gateway://")) {
         toast.success("Payment link created");
       } else {
-        toast.success(res?.note || "Link recorded — no live gateway, mark paid manually");
+        toast.success(res?.note || "Link recorded - no live gateway, mark paid manually");
       }
       setAmount(""); setVoucher("");
       await load();
@@ -901,7 +901,7 @@ function PaymentLinksCard({ parties, canWrite, partyName }: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PORTAL LINKS — self-service customer-invoice + vendor-bill links
+// PORTAL LINKS - self-service customer-invoice + vendor-bill links
 // ─────────────────────────────────────────────────────────────────────────────
 function PortalLinksCard({ parties, canWrite }: { parties: Ledger[]; canWrite: boolean }) {
   const [voucherId, setVoucherId] = useState("");

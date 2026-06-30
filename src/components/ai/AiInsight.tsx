@@ -5,7 +5,7 @@ import { Sparkles, RefreshCw, Loader2, ChevronDown, ChevronRight } from "lucide-
 import Markdown from "./Markdown";
 
 /**
- * Drop-in "✨ AI insight" panel — give it a question + the on-screen data and it
+ * Drop-in "✨ AI insight" panel - give it a question + the on-screen data and it
  * narrates/analyses it via /api/ai/ask. Reusable across any page (dashboard, reports,
  * analytics, …) so AI shows up everywhere without bespoke wiring. Grounded: the model
  * is told to use ONLY the data passed in (no invented numbers). Degrades gracefully
@@ -13,7 +13,7 @@ import Markdown from "./Markdown";
  */
 interface Props {
   question: string;            // what to ask about the data
-  context: unknown;            // the on-screen data (object or string) — the ONLY source of truth
+  context: unknown;            // the on-screen data (object or string) - the ONLY source of truth
   title?: string;
   system?: string;             // override the default CFO-assistant persona
   collapsed?: boolean;         // start collapsed (default true on dense pages)
@@ -21,14 +21,14 @@ interface Props {
 }
 
 const DEFAULT_SYSTEM =
-  "You are the CFO assistant for an Indian SMB. Answer in 3-5 crisp sentences or tight bullets — specific and actionable. Use ₹ with Indian grouping. Use ONLY the numbers in the data provided; never invent figures. If the data is empty, say so plainly.";
+  "You are the CFO assistant for an Indian SMB. Answer in 3-5 crisp sentences or tight bullets - specific and actionable. Use ₹ with Indian grouping. Use ONLY the numbers in the data provided; never invent figures. If the data is empty, say so plainly.";
 
 const NO_ENGINE_CTA =
   "Connect your AI engine in Agent Studio to turn this into a live insight.";
 
 // Shared, one-time capability check across ALL AiInsight panels: a single GET
 // to /llm-config tells us whether an engine is configured. Memoized in module
-// scope so 26 panels expanding don't fire 26 requests — they await one promise.
+// scope so 26 panels expanding don't fire 26 requests - they await one promise.
 interface LlmStatus { hasKey: boolean }
 let llmStatus: Promise<LlmStatus> | null = null;
 function checkLlm(): Promise<LlmStatus> {
@@ -47,7 +47,7 @@ export default function AiInsight({ question, context, title = "AI insight", sys
   const run = async () => {
     setBusy(true);
     try {
-      // Fast, shared capability check first — skip /ask entirely when no engine
+      // Fast, shared capability check first - skip /ask entirely when no engine
       // is configured so panels show a friendly CTA instead of erroring.
       const { hasKey } = await checkLlm();
       if (!hasKey) {

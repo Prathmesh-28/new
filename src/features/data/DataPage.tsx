@@ -44,7 +44,7 @@ export default function DataPage() {
   };
 
   const loadDemo = async () => {
-    if (!window.confirm("Load the full demo dataset? This fills EVERY module — transactions, invoices, accounts, loans, GST, payroll, inventory, sales pipeline, treasury, compliance and more — with realistic sample data so you can walk through the whole platform.")) return;
+    if (!window.confirm("Load the full demo dataset? This fills EVERY module - transactions, invoices, accounts, loans, GST, payroll, inventory, sales pipeline, treasury, compliance and more - with realistic sample data so you can walk through the whole platform.")) return;
     const demo = generateDemoData();
     // Spread the entire generated store: every top-level array (orders, inventory,
     // credit, capital, connectors, budgets, alerts…) plus the full featureData bag
@@ -93,7 +93,7 @@ export default function DataPage() {
         </div>
         <div>
           <h1 className="text-xl font-bold">Data &amp; Import</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Bring your numbers in fast — upload a CSV, load sample data, or edit in bulk.</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Bring your numbers in fast - upload a CSV, load sample data, or edit in bulk.</p>
         </div>
       </div>
 
@@ -140,7 +140,7 @@ export default function DataPage() {
 
       {!editable && (
         <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg px-4 py-3 text-sm">
-          Your role has read-only access — importing and editing are disabled.
+          Your role has read-only access - importing and editing are disabled.
         </div>
       )}
 
@@ -168,9 +168,9 @@ export default function DataPage() {
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles size={15} className="text-[var(--color-primary)]" />
-            <p className="text-sm font-semibold">Load sample data · FY23–FY28</p>
+            <p className="text-sm font-semibold">Load sample data · FY23-FY28</p>
           </div>
-          <p className="text-xs text-[var(--color-muted)] mb-4">Populate the whole app with six years of realistic financials — revenue, payroll, GST, a loan and live invoices — so every statement, chart and forecast comes to life.</p>
+          <p className="text-xs text-[var(--color-muted)] mb-4">Populate the whole app with six years of realistic financials - revenue, payroll, GST, a loan and live invoices - so every statement, chart and forecast comes to life.</p>
           <div className="flex flex-wrap gap-2">
             <button disabled={!editable} onClick={loadDemo}
               className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold hover:opacity-90 disabled:opacity-40">
@@ -189,7 +189,7 @@ export default function DataPage() {
             <ArrowLeftRight size={15} className="text-[var(--color-primary)]" />
             <p className="text-sm font-semibold">Switch from Tally / bring your data</p>
           </div>
-          <p className="text-xs text-[var(--color-muted)] mb-4">Already on Tally or a spreadsheet? Import your Masters export (one XML file → ledgers + stock items) or upload CSVs for ledgers, items and opening invoices — validated row-by-row.</p>
+          <p className="text-xs text-[var(--color-muted)] mb-4">Already on Tally or a spreadsheet? Import your Masters export (one XML file → ledgers + stock items) or upload CSVs for ledgers, items and opening invoices - validated row-by-row.</p>
           <div className="flex flex-wrap gap-2">
             <button disabled={!editable} onClick={() => setShowMigrate(true)}
               className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold hover:opacity-90 disabled:opacity-40">
@@ -373,7 +373,7 @@ ${vouchers}
         let amount: number;
         if (vtype.includes("payment") || vtype.includes("purchase")) amount = -Math.abs(rawAmt);
         else if (vtype.includes("receipt") || vtype.includes("sales")) amount = Math.abs(rawAmt);
-        else amount = rawAmt; // unknown voucher type — trust the sign as exported
+        else amount = rawAmt; // unknown voucher type - trust the sign as exported
         const category: Transaction["category"] = amount >= 0 ? "revenue" : "expense";
         return {
           id: `tally-${Date.now()}-${i}`,
@@ -450,7 +450,7 @@ ${vouchers}
           {parsed.length > 50 && <p className="text-[10px] text-[var(--color-muted)] px-4 py-2">Showing first 50 of {parsed.length}.</p>}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">XML is generated and parsed entirely in your browser — nothing is uploaded. Verify ledger mapping in Tally after import.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">XML is generated and parsed entirely in your browser - nothing is uploaded. Verify ledger mapping in Tally after import.</p>
     </div>
   );
 }
@@ -508,7 +508,7 @@ function CsvMapper({ editable, onImport, importAccountId }: { editable: boolean;
           <Columns3 size={15} className="text-[var(--color-primary)]" />
           <p className="text-sm font-semibold">Excel / CSV Mapping Importer</p>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Paste any sheet (copy cells from Excel/Sheets — tabs or commas both work after a quick paste-as-CSV). Then tell us which column is which. No fixed template required.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste any sheet (copy cells from Excel/Sheets - tabs or commas both work after a quick paste-as-CSV). Then tell us which column is which. No fixed template required.</p>
         <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
           placeholder={"Date,Particulars,Party,Amount\n01/06/2026,Client payment,Mehta Corp,250000\n03/06/2026,Office rent,Landlord,120000"}
           className={taCls} />
@@ -558,7 +558,7 @@ function CsvMapper({ editable, onImport, importAccountId }: { editable: boolean;
                 {built.slice(0, 50).map(t => (
                   <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0">
                     <td className="px-4 py-2 tabular-nums">{t.date}</td>
-                    <td className="px-4 py-2">{t.counterparty || "—"}</td>
+                    <td className="px-4 py-2">{t.counterparty || "-"}</td>
                     <td className="px-4 py-2 text-[var(--color-muted)]">{t.description}</td>
                     <td className={`px-4 py-2 tabular-nums ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(t.amount)}</td>
                   </tr>
@@ -578,7 +578,7 @@ function CsvMapper({ editable, onImport, importAccountId }: { editable: boolean;
 
 // ── #164 Multi-Entity Consolidation ────────────────────────────────────────────
 // Maintain a list of group entities (their FY revenue/expense/cash + ownership %),
-// then produce a consolidated group P&L — including minority-interest elimination.
+// then produce a consolidated group P&L - including minority-interest elimination.
 interface Entity { id: string; name: string; ownership: number; revenue: number; expense: number; cash: number; }
 function MultiEntityConsolidation() {
   const { store } = useApp();
@@ -613,10 +613,10 @@ function MultiEntityConsolidation() {
 
   // Intra-group turnover: one entity's sale is another's purchase at the SAME value,
   // so eliminating it from both turnover (revenue) and cost (expense) is PBT-neutral by
-  // design — this only removes double-counting from the topline, never from profit.
+  // design - this only removes double-counting from the topline, never from profit.
   const elim = Math.max(0, parseFloat(intercoElim) || 0);
   // Unrealised profit on intra-group stock: margin on goods sold within the group that
-  // remain unsold in closing inventory. This is the genuine PBT-reducing elimination —
+  // remain unsold in closing inventory. This is the genuine PBT-reducing elimination -
   // we remove it from revenue (and NOT from expense) so group PBT actually falls.
   const urp = Math.max(0, parseFloat(unrealisedProfit) || 0);
   const gross = entities.reduce((a, e) => ({ revenue: a.revenue + e.revenue, expense: a.expense + e.expense, cash: a.cash + e.cash }), { revenue: 0, expense: 0, cash: 0 });
@@ -681,12 +681,12 @@ function MultiEntityConsolidation() {
               <div>
                 <label className="text-xs text-[var(--color-muted)] block mb-1">Intra-group turnover ₹ (sales between group entities)</label>
                 <input type="number" value={intercoElim} onChange={e => setIntercoElim(e.target.value)} className={inpCls} placeholder="0" />
-                <p className="text-[10px] text-[var(--color-muted)] mt-1">Removed from both revenue &amp; cost — PBT-neutral (no double-counting).</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-1">Removed from both revenue &amp; cost - PBT-neutral (no double-counting).</p>
               </div>
               <div>
                 <label className="text-xs text-[var(--color-muted)] block mb-1">Unrealised profit on intra-group stock ₹</label>
                 <input type="number" value={unrealisedProfit} onChange={e => setUnrealisedProfit(e.target.value)} className={inpCls} placeholder="0" />
-                <p className="text-[10px] text-[var(--color-muted)] mt-1">Margin on intra-group goods still in closing inventory — reduces Group PBT.</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-1">Margin on intra-group goods still in closing inventory - reduces Group PBT.</p>
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -726,10 +726,10 @@ function ScheduledBackup() {
   const due = useMemo(() => {
     if (cadence === "off") return null;
     const last = log[0]?.at;
-    if (!last) return "Never backed up — run one now.";
+    if (!last) return "Never backed up - run one now.";
     const days = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
     const limit = cadence === "daily" ? 1 : cadence === "weekly" ? 7 : 30;
-    return days >= limit ? `Backup overdue — last run ${days}d ago (${cadence}).` : `Up to date — next ${cadence} backup in ${limit - days}d.`;
+    return days >= limit ? `Backup overdue - last run ${days}d ago (${cadence}).` : `Up to date - next ${cadence} backup in ${limit - days}d.`;
   }, [cadence, log]);
 
   const exportJson = () => {
@@ -787,7 +787,7 @@ function ScheduledBackup() {
             <Clock size={13} /> {due}
           </div>
         )}
-        <p className="text-[10px] text-[var(--color-muted)] mt-2">Cadence is a reminder — the actual export is a one-click manual run (browser-only, no server uploads).</p>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Cadence is a reminder - the actual export is a one-click manual run (browser-only, no server uploads).</p>
       </div>
 
       {log.length > 0 && (
@@ -971,8 +971,8 @@ function TransactionDedupe({ editable }: { editable: boolean }) {
               {groups.slice(0, 50).map(g => (
                 <tr key={g[0].id} className="border-b border-[var(--color-border)] last:border-0">
                   <td className="px-4 py-2 tabular-nums">{g[0].date}</td>
-                  <td className="px-4 py-2">{g[0].counterparty || "—"}</td>
-                  <td className="px-4 py-2 text-[var(--color-muted)]">{g[0].description || "—"}</td>
+                  <td className="px-4 py-2">{g[0].counterparty || "-"}</td>
+                  <td className="px-4 py-2 text-[var(--color-muted)]">{g[0].description || "-"}</td>
                   <td className={`px-4 py-2 tabular-nums ${g[0].amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(g[0].amount)}</td>
                   <td className="px-4 py-2 tabular-nums text-orange-400">×{g.length}</td>
                 </tr>
@@ -1034,7 +1034,7 @@ function BulkFindReplace({ editable }: { editable: boolean }) {
           <Replace size={15} className="text-[var(--color-primary)]" />
           <p className="text-sm font-semibold">Bulk Find &amp; Replace</p>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Standardise messy bank narrations — e.g. rename every "MEHTA CORP LTD" to "Mehta Corp" across all transactions at once. Match is case-insensitive.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Standardise messy bank narrations - e.g. rename every "MEHTA CORP LTD" to "Mehta Corp" across all transactions at once. Match is case-insensitive.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Field</label>
@@ -1078,7 +1078,7 @@ function BulkFindReplace({ editable }: { editable: boolean }) {
               {matches.slice(0, 50).map(t => (
                 <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0">
                   <td className="px-4 py-2 tabular-nums">{t.date}</td>
-                  <td className="px-4 py-2">{t[field] || "—"}</td>
+                  <td className="px-4 py-2">{t[field] || "-"}</td>
                   <td className={`px-4 py-2 tabular-nums ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(t.amount)}</td>
                 </tr>
               ))}
@@ -1172,25 +1172,25 @@ function FilingTemplates() {
   const TEMPLATES: { id: string; name: string; desc: string; file: string; content: string }[] = [
     {
       id: "gstr1", name: "GSTR-1 (B2B outward supplies)",
-      desc: "Outward B2B invoices for monthly GST return — GSTIN, invoice no, taxable value and rate.",
+      desc: "Outward B2B invoices for monthly GST return - GSTIN, invoice no, taxable value and rate.",
       file: "gstr1-b2b-template.csv",
       content: "gstin,invoice_no,invoice_date,invoice_value,taxable_value,rate,igst,cgst,sgst\n27ABCDE1234F1Z5,INV-001,01/06/2026,295000,250000,18,0,22500,22500\n",
     },
     {
       id: "opening", name: "Opening balances",
-      desc: "Ledger opening balances to seed a new financial year — account, debit and credit.",
+      desc: "Ledger opening balances to seed a new financial year - account, debit and credit.",
       file: "opening-balances-template.csv",
       content: "ledger,opening_debit,opening_credit\nCash,50000,0\nBank,1200000,0\nSundry Creditors,0,340000\n",
     },
     {
       id: "fixed-assets", name: "Fixed-asset register",
-      desc: "Asset master for depreciation — name, category, purchase date, cost and rate.",
+      desc: "Asset master for depreciation - name, category, purchase date, cost and rate.",
       file: "fixed-asset-register-template.csv",
       content: "asset,category,purchase_date,cost,depreciation_rate\nLaptops,Computers,01/04/2026,450000,40\nOffice furniture,Furniture,01/04/2026,180000,10\n",
     },
     {
       id: "vendor-master", name: "Vendor / counterparty master",
-      desc: "Bulk-load suppliers and customers — name, GSTIN, PAN and payment terms.",
+      desc: "Bulk-load suppliers and customers - name, GSTIN, PAN and payment terms.",
       file: "vendor-master-template.csv",
       content: "name,gstin,pan,payment_terms_days,category\nMehta Corp,27ABCDE1234F1Z5,ABCDE1234F,30,Customer\nLandlord,,XYZAB6789K,0,Vendor\n",
     },
@@ -1217,7 +1217,7 @@ function FilingTemplates() {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Templates are indicative formats — confirm exact column requirements with the GST portal or your accounting software before filing.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Templates are indicative formats - confirm exact column requirements with the GST portal or your accounting software before filing.</p>
     </div>
   );
 }
@@ -1249,7 +1249,7 @@ function ArchivePurge({ editable }: { editable: boolean }) {
 
   const purge = () => {
     if (older.length === 0) { toast.error("Nothing older than the cut-off"); return; }
-    if (!window.confirm(`Permanently remove ${older.length} transaction(s) dated before ${cutoff}? Download the archive first — this cannot be undone.`)) return;
+    if (!window.confirm(`Permanently remove ${older.length} transaction(s) dated before ${cutoff}? Download the archive first - this cannot be undone.`)) return;
     const t = new Date(cutoff).getTime();
     setStore(s => ({ ...s, transactions: (s.transactions ?? []).filter(x => new Date(x.date).getTime() >= t) }));
     toast.success(`Purged ${older.length} old transaction(s)`);
@@ -1262,7 +1262,7 @@ function ArchivePurge({ editable }: { editable: boolean }) {
           <Archive size={15} className="text-[var(--color-primary)]" />
           <p className="text-sm font-semibold">Archive &amp; Purge Old Data</p>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Years of stale transactions slow down charts and reports. Pick a cut-off, download everything older as a CSV archive, then purge it from the working set. Statutory records should be kept 8 years — store the archive safely.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Years of stale transactions slow down charts and reports. Pick a cut-off, download everything older as a CSV archive, then purge it from the working set. Statutory records should be kept 8 years - store the archive safely.</p>
         <div className="max-w-xs mb-4">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Cut-off date (remove transactions before)</label>
           <input type="date" value={cutoff} onChange={e => setCutoff(e.target.value)} className={inpCls} />
@@ -1345,7 +1345,7 @@ function ColumnProfiler() {
           <BarChart3 size={15} className="text-[var(--color-primary)]" />
           <p className="text-sm font-semibold">Column Statistics Profiler</p>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Paste any sheet to instantly understand it — see how complete each column is, how many distinct values it holds, and full stats (sum, mean, median, range) for numeric columns. Nothing is uploaded.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste any sheet to instantly understand it - see how complete each column is, how many distinct values it holds, and full stats (sum, mean, median, range) for numeric columns. Nothing is uploaded.</p>
         <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
           placeholder={"date,party,amount\n01/06/2026,Mehta Corp,250000\n03/06/2026,Landlord,120000"}
           className={taCls} />
@@ -1375,11 +1375,11 @@ function ColumnProfiler() {
                     <td className={`px-4 py-2.5 tabular-nums ${pct < 100 ? "text-orange-400" : "text-green-400"}`}>{pct}%</td>
                     <td className="px-4 py-2.5 tabular-nums">{p.distinct}</td>
                     <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{p.numeric ? "Numeric" : "Text"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.sum) : "—"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.mean) : "—"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.median) : "—"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.min) : "—"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.max) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.sum) : "-"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.mean) : "-"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.median) : "-"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.min) : "-"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.max) : "-"}</td>
                   </tr>
                 );
               })}
@@ -1431,7 +1431,7 @@ function CsvJsonConverter() {
         setOut(`${keys.map(esc).join(",")}\n${body}`);
       }
     } catch {
-      setErr(mode === "csv2json" ? "Could not parse the CSV." : "Invalid JSON — check the syntax.");
+      setErr(mode === "csv2json" ? "Could not parse the CSV." : "Invalid JSON - check the syntax.");
     }
   };
 
@@ -1449,7 +1449,7 @@ function CsvJsonConverter() {
           <Braces size={15} className="text-[var(--color-primary)]" />
           <p className="text-sm font-semibold">CSV ↔ JSON Converter</p>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Move data between spreadsheets and APIs. Convert a pasted CSV into a clean JSON array of objects, or a JSON array back into a flat CSV — everything happens in your browser.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Move data between spreadsheets and APIs. Convert a pasted CSV into a clean JSON array of objects, or a JSON array back into a flat CSV - everything happens in your browser.</p>
         <div className="flex flex-wrap gap-2 mb-3">
           {(["csv2json", "json2csv"] as const).map(m => (
             <button key={m} onClick={() => { setMode(m); setOut(""); setErr(""); }}
@@ -1526,7 +1526,7 @@ function NumberCleanup() {
           <Coins size={15} className="text-[var(--color-primary)]" />
           <p className="text-sm font-semibold">Number &amp; Currency Cleanup</p>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Paste a column of messy amounts — "₹2,50,000", "1.5 lakh", "(12,000)", "45000 Cr" — and get clean signed numbers plus a running total. Handles ₹/$ symbols, separators, brackets, CR/DR and lakh/crore suffixes.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste a column of messy amounts - "₹2,50,000", "1.5 lakh", "(12,000)", "45000 Cr" - and get clean signed numbers plus a running total. Handles ₹/$ symbols, separators, brackets, CR/DR and lakh/crore suffixes.</p>
         <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
           placeholder={"₹2,50,000\n1.5 lakh\n(12,000)\n45000 Cr\n3.2 cr"}
           className={taCls} />
@@ -1561,7 +1561,7 @@ function NumberCleanup() {
                 {result.rows.slice(0, 100).map((r, i) => (
                   <tr key={i} className="border-b border-[var(--color-border)] last:border-0">
                     <td className="px-4 py-2 font-mono text-xs">{r.input.trim()}</td>
-                    <td className={`px-4 py-2 tabular-nums ${r.value !== null && r.value < 0 ? "text-red-400" : ""}`}>{r.value !== null ? r.value.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—"}</td>
+                    <td className={`px-4 py-2 tabular-nums ${r.value !== null && r.value < 0 ? "text-red-400" : ""}`}>{r.value !== null ? r.value.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "-"}</td>
                     <td className="px-4 py-2">{r.value !== null ? <span className="text-green-400 text-xs">OK</span> : <span className="text-red-400 text-xs">Skipped</span>}</td>
                   </tr>
                 ))}
@@ -1635,7 +1635,7 @@ function GstinValidator() {
           <BadgeCheck size={15} className="text-[var(--color-primary)]" />
           <p className="text-sm font-semibold">GSTIN Bulk Validator</p>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Paste a list of GSTINs (one per line) to validate before you file. We check the 15-character structure, the state code, the embedded PAN and the official checksum digit — offline, no portal call.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste a list of GSTINs (one per line) to validate before you file. We check the 15-character structure, the state code, the embedded PAN and the official checksum digit - offline, no portal call.</p>
         <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
           placeholder={"27ABCDE1234F1Z5\n29AABCU9603R1ZM\n07AAAC...."}
           className={taCls} />
@@ -1670,7 +1670,7 @@ function GstinValidator() {
                   <tr key={i} className="border-b border-[var(--color-border)] last:border-0">
                     <td className="px-4 py-2 font-mono text-xs">{r.gstin}</td>
                     <td className="px-4 py-2">{r.valid ? <span className="text-green-400 text-xs">Valid</span> : <span className="text-red-400 text-xs">Invalid</span>}</td>
-                    <td className="px-4 py-2 text-[var(--color-muted)]">{r.state || "—"}</td>
+                    <td className="px-4 py-2 text-[var(--color-muted)]">{r.state || "-"}</td>
                     <td className="px-4 py-2 text-xs text-[var(--color-muted)]">{r.reason}</td>
                   </tr>
                 ))}
@@ -1681,7 +1681,7 @@ function GstinValidator() {
           <button onClick={downloadReport} className={primaryBtn}><Download size={13} /> Download report CSV</button>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Structural + checksum validation only — it does not confirm the GSTIN is active/registered on the GST portal.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Structural + checksum validation only - it does not confirm the GSTIN is active/registered on the GST portal.</p>
     </div>
   );
 }
@@ -1733,7 +1733,7 @@ function PivotBuilder() {
           <Table2 size={15} className="text-[var(--color-primary)]" />
           <p className="text-sm font-semibold">Pivot / Summary Builder</p>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Paste a CSV with a header row, pick a column to group by and a numeric column to total, and get an instant pivot — sum, count and average per group — ready to download. Great for spend-by-vendor or revenue-by-month.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste a CSV with a header row, pick a column to group by and a numeric column to total, and get an instant pivot - sum, count and average per group - ready to download. Great for spend-by-vendor or revenue-by-month.</p>
         <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
           placeholder={"date,party,category,amount\n01/06/2026,Mehta Corp,Sales,250000\n03/06/2026,Landlord,Rent,120000"}
           className={taCls} />
@@ -1748,7 +1748,7 @@ function PivotBuilder() {
             <div>
               <label className="text-xs text-[var(--color-muted)] block mb-1">Sum / average column (numeric)</label>
               <select value={valueCol} onChange={e => setValueCol(Number(e.target.value))} className={inpCls}>
-                <option value={-1}>— select —</option>
+                <option value={-1}>- select -</option>
                 {headerRow.map((h, i) => <option key={i} value={i}>{h || `Col ${i + 1}`}</option>)}
               </select>
             </div>
@@ -1834,7 +1834,7 @@ function StatementParser({ editable, onImport, importAccountId }: { editable: bo
   const debits = parsed.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
 
   const commit = () => {
-    if (parsed.length === 0) { toast.error("Nothing parsed — paste statement lines with a leading date"); return; }
+    if (parsed.length === 0) { toast.error("Nothing parsed - paste statement lines with a leading date"); return; }
     onImport(parsed);
     toast.success(`Imported ${parsed.length} statement row(s)`);
     setRaw("");
@@ -1847,7 +1847,7 @@ function StatementParser({ editable, onImport, importAccountId }: { editable: bo
           <ReceiptText size={15} className="text-[var(--color-primary)]" />
           <p className="text-sm font-semibold">Bank Statement Parser</p>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Paste raw statement text — one transaction per line starting with a date. We detect Dr/Cr keywords, pick the transaction amount (ignoring a trailing running balance) and build importable rows. No fixed format needed.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste raw statement text - one transaction per line starting with a date. We detect Dr/Cr keywords, pick the transaction amount (ignoring a trailing running balance) and build importable rows. No fixed format needed.</p>
         <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
           placeholder={"01/06/2026  NEFT Mehta Corp  250,000 Cr  1,250,000\n03/06/2026  Office rent Landlord  120,000 Dr  1,130,000"}
           className={taCls} />
@@ -1880,7 +1880,7 @@ function StatementParser({ editable, onImport, importAccountId }: { editable: bo
                 {parsed.slice(0, 50).map(t => (
                   <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0">
                     <td className="px-4 py-2 tabular-nums">{t.date}</td>
-                    <td className="px-4 py-2">{t.counterparty || "—"}</td>
+                    <td className="px-4 py-2">{t.counterparty || "-"}</td>
                     <td className="px-4 py-2 text-[var(--color-muted)]">{t.description}</td>
                     <td className={`px-4 py-2 tabular-nums ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(t.amount)}</td>
                   </tr>
@@ -1894,7 +1894,7 @@ function StatementParser({ editable, onImport, importAccountId }: { editable: bo
           </button>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Heuristic parser — verify amounts and Dr/Cr direction before importing. Lines without a leading date are skipped.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Heuristic parser - verify amounts and Dr/Cr direction before importing. Lines without a leading date are skipped.</p>
     </div>
   );
 }
@@ -1935,7 +1935,7 @@ function DateRangeExport() {
           <CalendarRange size={15} className="text-[var(--color-primary)]" />
           <p className="text-sm font-semibold">Date-Range Export</p>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Pull a clean CSV of just the transactions in a chosen window — handy for a quarter, a financial year, or an audit request. Leave "from" blank to start at the earliest record.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Pull a clean CSV of just the transactions in a chosen window - handy for a quarter, a financial year, or an audit request. Leave "from" blank to start at the earliest record.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md">
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">From</label><input type="date" value={from} onChange={e => setFrom(e.target.value)} className={inpCls} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">To</label><input type="date" value={to} onChange={e => setTo(e.target.value)} className={inpCls} /></div>
@@ -1999,7 +1999,7 @@ function PasteDuplicateFinder() {
           <ScanSearch size={15} className="text-[var(--color-primary)]" />
           <p className="text-sm font-semibold">Paste Duplicate Finder</p>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Paste any list — invoice numbers, GSTINs, emails, vendor names (one per line). We count repeats so you can spot double entries before they reach your books, then export the de-duplicated list.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste any list - invoice numbers, GSTINs, emails, vendor names (one per line). We count repeats so you can spot double entries before they reach your books, then export the de-duplicated list.</p>
         <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
           placeholder={"INV-001\nINV-002\nINV-001\nmehta@corp.in"}
           className={taCls} />
@@ -2090,7 +2090,7 @@ function JsonFormatter() {
           <FileJson size={15} className="text-[var(--color-primary)]" />
           <p className="text-sm font-semibold">JSON Formatter</p>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Paste JSON from an API response, a webhook payload or an export. Validate it, pretty-print for reading, or minify for sending — entirely in your browser.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Paste JSON from an API response, a webhook payload or an export. Validate it, pretty-print for reading, or minify for sending - entirely in your browser.</p>
         <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false}
           placeholder={'{"invoice":"INV-001","amount":250000}'}
           className={taCls} />

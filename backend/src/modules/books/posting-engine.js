@@ -1,6 +1,6 @@
-// §6 — THE POSTING ENGINE. The only path through which anything reaches the
+// §6 - THE POSTING ENGINE. The only path through which anything reaches the
 // ledger. If postVoucher is correct, the books are correct. It knows nothing
-// about invoices or GST — only ledgers, debits and credits.
+// about invoices or GST - only ledgers, debits and credits.
 const { pool } = require("../../db");
 const { money, sum, toDb, eq } = require("./money");
 const { financialYearFor, periodMonthFor } = require("./fy");
@@ -15,7 +15,7 @@ class PostError extends Error {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// §6.2 step 2 — the balance invariant, validated before we ever open a txn.
+// §6.2 step 2 - the balance invariant, validated before we ever open a txn.
 function validateEntries(entries) {
   if (!Array.isArray(entries) || entries.length === 0) {
     throw new PostError("EMPTY_VOUCHER", "A voucher needs at least one entry", 422);
@@ -40,7 +40,7 @@ async function _post(client, tenantId, actorId, voucher, entries, opts = {}) {
   const fy = financialYearFor(voucher.voucherDate);
   const month = periodMonthFor(voucher.voucherDate);
 
-  // 1. Idempotency — a retried request must not double-post.
+  // 1. Idempotency - a retried request must not double-post.
   if (opts.idempotencyKey) {
     const { rows } = await client.query(
       "SELECT id, voucher_number, financial_year FROM book_vouchers WHERE tenant_id=$1 AND idempotency_key=$2",
@@ -64,7 +64,7 @@ async function _post(client, tenantId, actorId, voucher, entries, opts = {}) {
   );
   if (led.length !== ids.length) throw new PostError("UNKNOWN_LEDGER", "A ledger is missing, inactive or from another tenant", 422);
 
-  // 5. Gap-free voucher number — atomic counter row, rolls back with the txn (§6.4).
+  // 5. Gap-free voucher number - atomic counter row, rolls back with the txn (§6.4).
   const { rows: cnt } = await client.query(
     `INSERT INTO book_voucher_counters(tenant_id, voucher_type, financial_year, next_number)
        VALUES($1,$2,$3,2)
@@ -138,7 +138,7 @@ async function _post(client, tenantId, actorId, voucher, entries, opts = {}) {
   return { voucherId, voucherNumber: number, financialYear: fy };
 }
 
-// §6.1 — the public function. Wraps _post in a REPEATABLE READ txn with
+// §6.1 - the public function. Wraps _post in a REPEATABLE READ txn with
 // serialization-failure retry and idempotency-race handling.
 async function postVoucher(tenantId, actorId, voucher, entries, opts = {}) {
   validateEntries(entries);
@@ -165,7 +165,7 @@ async function postVoucher(tenantId, actorId, voucher, entries, opts = {}) {
   }
 }
 
-// §6.5 — the ONLY way to "edit" or "delete": post a mirror voucher and flag the
+// §6.5 - the ONLY way to "edit" or "delete": post a mirror voucher and flag the
 // original cancelled, atomically.
 async function reverseVoucher(tenantId, actorId, voucherId, opts = {}) {
   const client = await pool.connect();

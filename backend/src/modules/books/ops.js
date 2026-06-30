@@ -1,4 +1,4 @@
-// §M8 — expense capture, projects + time tracking, attachments.
+// §M8 - expense capture, projects + time tracking, attachments.
 const { pool } = require("../../db");
 const { toDb, toRupees } = require("./money");
 const { PostError, postVoucher } = require("./posting-engine");

@@ -99,7 +99,7 @@ const TABS = [
 type TabId = (typeof TABS)[number][0];
 
 const HONEST_NOTE =
-  "Design and simulate today; settlement activates as CBDC / tokenization rails go live. Everything here computes real specs, splits and balances locally — there are no live blockchain or e-rupee network calls.";
+  "Design and simulate today; settlement activates as CBDC / tokenization rails go live. Everything here computes real specs, splits and balances locally - there are no live blockchain or e-rupee network calls.";
 
 export default function TokensPage() {
   const [tab, setTab] = useState<TabId>("overview");
@@ -112,7 +112,7 @@ export default function TokensPage() {
             <Coins size={18} className="text-[var(--color-primary)]" /> Tokens & Programmable Money
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Design programmable-payment rules, escrows and tokenized assets for RBI e-rupee & GIFT-City rails — before they go live.
+            Design programmable-payment rules, escrows and tokenized assets for RBI e-rupee & GIFT-City rails - before they go live.
           </p>
         </div>
         <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
@@ -166,7 +166,7 @@ function Overview({ onPick }: { onPick: (t: TabId) => void }) {
         <p className="text-xs text-[var(--color-muted)]">
           Programmable money lets a rupee carry rules: it can be locked to a purpose, released only when a condition
           is met, or settled atomically against a delivery. India's e-rupee (RBI CBDC) and GIFT-City tokenization rails
-          are still maturing — so here you design and simulate the specs now, and they become deployable as the rails open.
+          are still maturing - so here you design and simulate the specs now, and they become deployable as the rails open.
         </p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -233,7 +233,7 @@ function ERupeeLedger() {
         <p className="text-xs text-[var(--color-muted)]">Manually mirror your e-rupee wallet balance and movements. A running balance is computed from your opening figure.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
           <div className="md:col-span-2">
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Opening balance (₹) — current set: {formatCurrency(opening)}</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Opening balance (₹) - current set: {formatCurrency(opening)}</label>
             <input type="number" value={openingInput} onChange={e => setOpeningInput(e.target.value)} placeholder="e.g. 50000" className={INP} />
           </div>
           <button onClick={setOpeningBal} className="bg-[var(--color-accent)] border border-[var(--color-border)] text-[var(--color-text)] rounded-lg px-3 py-2 text-sm font-medium hover:border-[var(--color-primary)]/40">Set opening</button>
@@ -295,9 +295,9 @@ function ERupeeLedger() {
                 {withRunning.map(e => (
                   <tr key={e.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 text-xs">{format(new Date(e.date), "d MMM yyyy")}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{e.note || "—"}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-xs text-green-400">{e.direction === "in" ? <span className="inline-flex items-center gap-1"><ArrowDownRight size={11} />{formatCurrency(e.amount)}</span> : "—"}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-xs text-red-400">{e.direction === "out" ? <span className="inline-flex items-center gap-1"><ArrowUpRight size={11} />{formatCurrency(e.amount)}</span> : "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{e.note || "-"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs text-green-400">{e.direction === "in" ? <span className="inline-flex items-center gap-1"><ArrowDownRight size={11} />{formatCurrency(e.amount)}</span> : "-"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs text-red-400">{e.direction === "out" ? <span className="inline-flex items-center gap-1"><ArrowUpRight size={11} />{formatCurrency(e.amount)}</span> : "-"}</td>
                     <td className="px-4 py-2.5 tabular-nums text-xs font-semibold">{formatCurrency(e.running)}</td>
                     <td className="px-4 py-2.5 text-right"><button onClick={() => setEntries(entries.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                   </tr>
@@ -381,7 +381,7 @@ function RuleDesigner() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><GitBranch size={14} className="text-[var(--color-primary)]" /> Programmable-Payment Rule Designer</h3>
-        <p className="text-xs text-[var(--color-muted)]">Compose a conditional-payment rule. Pick a real outstanding invoice to pre-fill it, or a real counterparty — it outputs a plain-English statement plus a copyable JSON spec you can hand to a rail once it's live.</p>
+        <p className="text-xs text-[var(--color-muted)]">Compose a conditional-payment rule. Pick a real outstanding invoice to pre-fill it, or a real counterparty - it outputs a plain-English statement plus a copyable JSON spec you can hand to a rail once it's live.</p>
         {outstanding.length > 0 && (
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Pre-fill from a real outstanding invoice</label>
@@ -542,7 +542,7 @@ function EscrowDesigner() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">No funds move — this models the escrow lifecycle so the spec is ready when on-chain escrow rails support it.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">No funds move - this models the escrow lifecycle so the spec is ready when on-chain escrow rails support it.</p>
     </div>
   );
 }
@@ -598,7 +598,7 @@ function InvoiceTokenizer() {
         <p className="text-xs text-[var(--color-muted)]">Pick a real outstanding invoice to fractionalize, or enter a face value by hand. Split it into N tokens across investors who fund it early at a discount.</p>
         {outstanding.length > 0 && (
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Tokenize a real outstanding invoice{sourceLabel ? ` — loaded: ${sourceLabel}` : ""}</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Tokenize a real outstanding invoice{sourceLabel ? ` - loaded: ${sourceLabel}` : ""}</label>
             <select defaultValue="" onChange={e => { prefillFromInvoice(e.target.value); }} className={INP}>
               <option value="">Select an invoice…</option>
               {outstanding.map(i => (
@@ -640,7 +640,7 @@ function InvoiceTokenizer() {
           </div>
 
           <div className={`${CARD} p-4 space-y-3`}>
-            <p className="text-sm font-semibold">Investor split — {remaining} of {tokens} tokens unallocated</p>
+            <p className="text-sm font-semibold">Investor split - {remaining} of {tokens} tokens unallocated</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 items-end">
               <div className="col-span-2 md:col-span-1">
                 <label className="text-xs text-[var(--color-muted)] block mb-1">Investor</label>
@@ -807,13 +807,13 @@ function AtomicSettlement() {
         <p className="text-xs text-[var(--color-muted)]">A two-leg swap (e.g. payment vs delivery) settles all-or-nothing: both legs clear together, or neither does.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <p className="text-xs font-semibold">Leg A — pays / delivers</p>
+            <p className="text-xs font-semibold">Leg A - pays / delivers</p>
             <input value={partyA} onChange={e => setPartyA(e.target.value)} placeholder="Party A (e.g. Buyer)" className={INP} />
             <input value={legAItem} onChange={e => setLegAItem(e.target.value)} placeholder="What A gives (e.g. ₹ e-rupee)" className={INP} />
             <input type="number" value={legAValue} onChange={e => setLegAValue(e.target.value)} placeholder="Value (₹)" className={INP} />
           </div>
           <div className="space-y-2">
-            <p className="text-xs font-semibold">Leg B — pays / delivers</p>
+            <p className="text-xs font-semibold">Leg B - pays / delivers</p>
             <input value={partyB} onChange={e => setPartyB(e.target.value)} placeholder="Party B (e.g. Seller)" className={INP} />
             <input value={legBItem} onChange={e => setLegBItem(e.target.value)} placeholder="What B gives (e.g. goods)" className={INP} />
             <input type="number" value={legBValue} onChange={e => setLegBValue(e.target.value)} placeholder="Value (₹)" className={INP} />
@@ -836,18 +836,18 @@ function AtomicSettlement() {
 
           {!valueMatch && (
             <div className="rounded-lg p-3 border border-yellow-800/40 bg-yellow-950/20 text-xs text-yellow-400 flex items-center gap-2">
-              <AlertTriangle size={12} /> Legs have unequal value ({formatCurrency(aV)} vs {formatCurrency(bV)}) — confirm this swap is intentional.
+              <AlertTriangle size={12} /> Legs have unequal value ({formatCurrency(aV)} vs {formatCurrency(bV)}) - confirm this swap is intentional.
             </div>
           )}
 
           <div className={`rounded-lg p-5 border ${wouldSettle ? "border-green-800/40 bg-green-950/20" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
             {wouldSettle ? (
               <p className="text-sm font-bold text-green-400 flex items-center gap-2">
-                <CheckCircle2 size={14} /> Both legs committed — settlement would execute atomically: {partyA} → {legAItem} and {partyB} → {legBItem} clear in one indivisible step.
+                <CheckCircle2 size={14} /> Both legs committed - settlement would execute atomically: {partyA} → {legAItem} and {partyB} → {legBItem} clear in one indivisible step.
               </p>
             ) : (
               <p className="text-sm text-[var(--color-muted)] flex items-center gap-2">
-                <Lock size={14} /> Pending — {!aReady && !bReady ? "neither leg" : !aReady ? `${partyA}'s leg` : `${partyB}'s leg`} not yet committed. Nothing moves until both are ready.
+                <Lock size={14} /> Pending - {!aReady && !bReady ? "neither leg" : !aReady ? `${partyA}'s leg` : `${partyB}'s leg`} not yet committed. Nothing moves until both are ready.
               </p>
             )}
           </div>
@@ -921,7 +921,7 @@ function ConditionalDisbursal() {
                     <td className="px-4 py-2.5 tabular-nums text-xs">{idx + 1}</td>
                     <td className="px-4 py-2.5 font-medium text-xs">{m.name}</td>
                     <td className="px-4 py-2.5 tabular-nums text-xs">{m.pct}%</td>
-                    <td className="px-4 py-2.5 tabular-nums text-xs text-green-400">{totalV > 0 ? formatCurrency(totalV * m.pct / 100) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs text-green-400">{totalV > 0 ? formatCurrency(totalV * m.pct / 100) : "-"}</td>
                     <td className="px-4 py-2.5 text-right"><button onClick={() => setMilestones(milestones.filter(x => x.id !== m.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                   </tr>
                 ))}
@@ -969,7 +969,7 @@ function TokenCapTable() {
         <p className="text-xs text-[var(--color-muted)]">Set total tokens issued, then assign holdings. Ownership % is computed against issued supply.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
           <div className="md:col-span-2">
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Total tokens issued — current: {issued}</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Total tokens issued - current: {issued}</label>
             <input type="number" value={issuedInput} onChange={e => setIssuedInput(e.target.value)} placeholder="10000" className={INP} />
           </div>
           <button onClick={setIssuedTotal} className="bg-[var(--color-accent)] border border-[var(--color-border)] text-[var(--color-text)] rounded-lg px-3 py-2 text-sm font-medium hover:border-[var(--color-primary)]/40">Set issued</button>
@@ -1018,7 +1018,7 @@ function TokenCapTable() {
                   <tr key={h.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 font-medium text-xs">{h.name}</td>
                     <td className="px-4 py-2.5 tabular-nums text-xs">{h.tokens}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{issued > 0 ? `${((h.tokens / issued) * 100).toFixed(2)}%` : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{issued > 0 ? `${((h.tokens / issued) * 100).toFixed(2)}%` : "-"}</td>
                     <td className="px-4 py-2.5 text-right"><button onClick={() => setHolders(holders.filter(x => x.id !== h.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                   </tr>
                 ))}
@@ -1051,7 +1051,7 @@ function ReadinessChecklist() {
   const [escrows] = useFeatureState<Escrow[]>("tok-escrows", []);
   const [assets] = useFeatureState<TokenAsset[]>("tok-assets", []);
   const { store } = useApp();
-  // doneList instead of `new Set()` — avoids any lucide global shadowing and keeps it simple.
+  // doneList instead of `new Set()` - avoids any lucide global shadowing and keeps it simple.
   const doneList = Array.isArray(done) ? done : [];
   const isDoneId = (id: string) => doneList.includes(id);
   const toggle = (id: string) => setDone(isDoneId(id) ? doneList.filter(x => x !== id) : [...doneList, id]);
@@ -1090,8 +1090,8 @@ function ReadinessChecklist() {
       const esc = (s: unknown) => String(s ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] || c));
       const row = (cells: string[]) => `<tr>${cells.map(c => `<td>${c}</td>`).join("")}</tr>`;
       const rulesRows = b.paymentRules.length
-        ? b.paymentRules.map(r => row([esc(formatCurrency(r.amount)), esc(r.vendor), esc(r.condition), esc(r.purpose || "—")])).join("")
-        : row(["—", "No payment rules saved", "", ""]);
+        ? b.paymentRules.map(r => row([esc(formatCurrency(r.amount)), esc(r.vendor), esc(r.condition), esc(r.purpose || "-")])).join("")
+        : row(["-", "No payment rules saved", "", ""]);
       const escrowRows = b.escrows.length
         ? b.escrows.map(e => row([esc(`${e.payer} → ${e.payee}`), esc(formatCurrency(e.amount)), esc(e.conditions), esc(e.status)])).join("")
         : row(["No escrows drafted", "", "", ""]);
@@ -1165,7 +1165,7 @@ function ReadinessChecklist() {
       </div>
       {pct === 100 && (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20 text-sm font-bold text-green-400 flex items-center gap-2">
-          <CheckCircle2 size={14} /> All readiness items checked — your designs can move to live rails as they become available.
+          <CheckCircle2 size={14} /> All readiness items checked - your designs can move to live rails as they become available.
         </div>
       )}
     </div>
@@ -1175,15 +1175,15 @@ function ReadinessChecklist() {
 // ── Programmable-Money Glossary ───────────────────────────────────────────────────────
 function Glossary() {
   const terms: { term: string; body: string }[] = [
-    { term: "e-Rupee (CBDC)", body: "RBI's central-bank digital currency — a digital form of the rupee that's a direct liability of the central bank, unlike bank-account balances." },
-    { term: "Programmable money", body: "Money that carries rules: it can be locked to a purpose, released only on a condition, or expire — enforced by code rather than trust." },
+    { term: "e-Rupee (CBDC)", body: "RBI's central-bank digital currency - a digital form of the rupee that's a direct liability of the central bank, unlike bank-account balances." },
+    { term: "Programmable money", body: "Money that carries rules: it can be locked to a purpose, released only on a condition, or expire - enforced by code rather than trust." },
     { term: "Purpose-bound payment", body: "An e-rupee transfer restricted to a specific use (e.g. payroll, GST, a vendor category) and rejected for anything else." },
     { term: "Smart-contract escrow", body: "Funds held by code that release automatically when an agreed condition (delivery, milestone, arbiter decision) is met." },
-    { term: "Atomic settlement (DvP)", body: "Delivery-versus-payment: two legs of a trade clear in one indivisible step — both succeed or neither does, removing counterparty risk." },
+    { term: "Atomic settlement (DvP)", body: "Delivery-versus-payment: two legs of a trade clear in one indivisible step - both succeed or neither does, removing counterparty risk." },
     { term: "Tokenization", body: "Representing a real-world asset (invoice, inventory, equity, property) as digital tokens that can be split, transferred and tracked." },
     { term: "Fractionalization", body: "Splitting one asset's value into many tokens so multiple investors can each own a fraction of it." },
     { term: "GIFT-City / IFSC", body: "India's International Financial Services Centre, the likely venue for regulated tokenized cross-border and stablecoin settlement." },
-    { term: "On-chain provenance", body: "An immutable record of every mint, transfer and burn — a tamper-evident audit trail for CAs and lenders." },
+    { term: "On-chain provenance", body: "An immutable record of every mint, transfer and burn - a tamper-evident audit trail for CAs and lenders." },
     { term: "Settlement rail", body: "The underlying network (bank/PSP/CBDC infrastructure) that actually moves value when a programmed condition fires." },
   ];
   return (

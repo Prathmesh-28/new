@@ -111,15 +111,15 @@ export default function CreditPage() {
         status: "pending",
       }));
       if (approved) {
-        toast.success(`Score ${score}/100 — ${offers.length} offer${offers.length > 1 ? "s" : ""} up to ₹${(approvedAmount / 100000).toFixed(1)}L`);
+        toast.success(`Score ${score}/100 - ${offers.length} offer${offers.length > 1 ? "s" : ""} up to ₹${(approvedAmount / 100000).toFixed(1)}L`);
         setTab("overview");
       } else {
-        toast.error(`Score ${score}/100 — no offers yet. See the "Not yet" tab.`);
+        toast.error(`Score ${score}/100 - no offers yet. See the "Not yet" tab.`);
         setTab("notyet");
       }
       setAmount(""); setPurpose("");
     } catch (err) {
-      // Honest failure — never fabricate an approval.
+      // Honest failure - never fabricate an approval.
       const status = Number(String((err as Error)?.message || "").match(/^(\d{3})/)?.[1] || 0);
       if (status === 429)      toast.error("You can submit only one credit application every 90 days.");
       else if (status === 409) toast.error("You already have an application in progress.");
@@ -147,7 +147,7 @@ export default function CreditPage() {
       };
       addActiveLoan(newLoan);
       updateCreditApplication({ ...bestApp, status: "funded", updatedAt: new Date().toISOString() });
-      toast.success(`${offer.lender} — ₹${(principal / 100000).toFixed(1)}L disbursed`);
+      toast.success(`${offer.lender} - ₹${(principal / 100000).toFixed(1)}L disbursed`);
       setTab("loans");
     } catch (err) {
       const status = Number(String((err as Error)?.message || "").match(/^(\d{3})/)?.[1] || 0);
@@ -163,7 +163,7 @@ export default function CreditPage() {
           <div className="flex items-start gap-3">
             <AlertTriangle size={18} className="text-amber-400 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-semibold mb-0.5">Plan ahead — {runway} days of cash remaining</p>
+              <p className="text-sm font-semibold mb-0.5">Plan ahead - {runway} days of cash remaining</p>
               <p className="text-sm text-[var(--color-muted)]">
                 You have time to act. Businesses that secure credit 30+ days early get better rates and no-panic decisions. See your pre-qualified options below.
               </p>
@@ -227,14 +227,14 @@ export default function CreditPage() {
       {/* ── OVERVIEW ── */}
       {tab === "overview" && (
         <div className="space-y-5">
-          {/* Proactive financing readiness — live underwriting score before applying */}
+          {/* Proactive financing readiness - live underwriting score before applying */}
           <FinancingReadiness onApply={() => setTab("apply")} />
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "UW Score",      value: bestScore > 0 ? `${bestScore}/100` : "—", color: bestScore >= 70 ? "text-green-400" : bestScore >= 50 ? "text-yellow-400" : "text-[var(--color-muted)]" },
-              { label: "Max Approved",  value: bestApp ? formatCurrency(bestApp.approvedAmount) : "—", color: "text-[var(--color-primary)]" },
+              { label: "UW Score",      value: bestScore > 0 ? `${bestScore}/100` : "-", color: bestScore >= 70 ? "text-green-400" : bestScore >= 50 ? "text-yellow-400" : "text-[var(--color-muted)]" },
+              { label: "Max Approved",  value: bestApp ? formatCurrency(bestApp.approvedAmount) : "-", color: "text-[var(--color-primary)]" },
               { label: "Active Loans",  value: activeLoans.length.toString(), color: "text-[var(--color-text)]" },
             ].map(({ label, value, color }) => (
               <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -281,7 +281,7 @@ export default function CreditPage() {
                     </div>
                     <button onClick={() => setShowKfs(o.id)}
                       className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 rounded-lg text-sm hover:opacity-90">
-                      Accept — View KFS
+                      Accept - View KFS
                     </button>
                   </div>
                 ))}
@@ -327,7 +327,7 @@ export default function CreditPage() {
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 p-2.5 bg-green-950/20 border border-green-800/30 rounded-lg">
                         <CheckCircle2 size={13} className="text-green-400 shrink-0" />
-                        <p className="text-xs text-green-300 font-medium">Now is a good time — score {bestScore}/100</p>
+                        <p className="text-xs text-green-300 font-medium">Now is a good time - score {bestScore}/100</p>
                       </div>
                       <p className="text-xs text-[var(--color-muted)]">Your score qualifies for competitive rates. Borrowing now vs waiting 3 months saves on rate drift.</p>
                     </div>
@@ -336,7 +336,7 @@ export default function CreditPage() {
                       <div className="flex items-center gap-2 p-2.5 bg-yellow-950/20 border border-yellow-800/30 rounded-lg">
                         <Clock size={13} className="text-yellow-400 shrink-0" />
                         <p className="text-xs text-yellow-300 font-medium">
-                          {trending ? "Wait 30 days — revenue trending up, score will improve" : `Score ${bestScore}/100 — ${50 - bestScore} pts to approval`}
+                          {trending ? "Wait 30 days - revenue trending up, score will improve" : `Score ${bestScore}/100 - ${50 - bestScore} pts to approval`}
                         </p>
                       </div>
                       <p className="text-xs text-[var(--color-muted)]">
@@ -363,7 +363,7 @@ export default function CreditPage() {
                       <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, emiPct)}%`, background: emiPct > 40 ? "#ef4444" : emiPct > 25 ? "#eab308" : "#22c55e" }} />
                     </div>
                     <div className="flex justify-between text-[9px] text-[var(--color-muted)] mt-1">
-                      <span>Safe (0–25%)</span><span>Caution (25–40%)</span><span>High risk (40%+)</span>
+                      <span>Safe (0-25%)</span><span>Caution (25-40%)</span><span>High risk (40%+)</span>
                     </div>
                   </div>
                   <p className="text-xs text-[var(--color-muted)]">
@@ -386,7 +386,7 @@ export default function CreditPage() {
                 <div key={f.label} className="flex items-center justify-between text-xs">
                   <div>
                     <span className="font-medium">{f.label}</span>
-                    <span className="text-[var(--color-muted)] ml-2">— {f.desc}</span>
+                    <span className="text-[var(--color-muted)] ml-2">- {f.desc}</span>
                   </div>
                   <span className="text-[var(--color-primary)] font-semibold shrink-0 ml-4">{f.weight}%</span>
                 </div>
@@ -549,7 +549,7 @@ export default function CreditPage() {
                         <div>
                           <p className="text-[var(--color-muted)]">Interest saved</p>
                           <p className={`text-base font-bold ${earlySaving > 0 ? "text-green-400" : "text-[var(--color-text)]"}`}>
-                            {earlySaving > 0 ? `Save ${formatCurrency(earlySaving)}` : "—"}
+                            {earlySaving > 0 ? `Save ${formatCurrency(earlySaving)}` : "-"}
                           </p>
                         </div>
                       </div>
@@ -605,7 +605,7 @@ export default function CreditPage() {
             points: cov > 0.25 ? 8 : 0,
             done: cov <= 0.25,
             detail: cov > 0.25
-              ? `Your monthly revenue varies ${(cov*100).toFixed(0)}%. Lenders want <25% variation. This is the fastest lever — consistent invoicing adds ~8 pts.`
+              ? `Your monthly revenue varies ${(cov*100).toFixed(0)}%. Lenders want <25% variation. This is the fastest lever - consistent invoicing adds ~8 pts.`
               : "Revenue consistency is strong.",
           },
           {
@@ -621,7 +621,7 @@ export default function CreditPage() {
           },
           {
             label: "Customer concentration",
-            action: topConc > 0.4 ? `Top customer is ${(topConc*100).toFixed(0)}% of revenue — add 2 more revenue sources` : "",
+            action: topConc > 0.4 ? `Top customer is ${(topConc*100).toFixed(0)}% of revenue - add 2 more revenue sources` : "",
             points: topConc > 0.4 ? 6 : 0,
             done: topConc <= 0.4,
             detail: topConc > 0.4
@@ -630,7 +630,7 @@ export default function CreditPage() {
           },
           {
             label: "Overdraft history",
-            action: overdraftCount > 0 ? `${overdraftCount} negative balance occurrence${overdraftCount>1?"s":""} detected — maintain positive balance` : "",
+            action: overdraftCount > 0 ? `${overdraftCount} negative balance occurrence${overdraftCount>1?"s":""} detected - maintain positive balance` : "",
             points: overdraftCount > 0 ? 5 : 0,
             done: overdraftCount === 0,
             detail: overdraftCount > 0
@@ -639,7 +639,7 @@ export default function CreditPage() {
           },
           {
             label: "Monthly revenue level",
-            action: meanRev < 300000 ? `Current avg ₹${(meanRev/1000).toFixed(0)}K — target ₹3L/mo for ₹15L credit` : "",
+            action: meanRev < 300000 ? `Current avg ₹${(meanRev/1000).toFixed(0)}K - target ₹3L/mo for ₹15L credit` : "",
             points: meanRev < 300000 ? 5 : 0,
             done: meanRev >= 300000,
             detail: meanRev < 300000
@@ -658,11 +658,11 @@ export default function CreditPage() {
                 <Clock size={18} className="text-yellow-400 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <h2 className="text-sm font-semibold mb-0.5">
-                    {bestScore > 0 ? `Score: ${bestScore}/100 — ${50 - bestScore} points to approval` : "Apply to see your score and exact gaps"}
+                    {bestScore > 0 ? `Score: ${bestScore}/100 - ${50 - bestScore} points to approval` : "Apply to see your score and exact gaps"}
                   </h2>
                   {gapTotal > 0 && bestScore > 0 && (
                     <p className="text-xs text-[var(--color-muted)]">
-                      Fix the items below to reach <strong className="text-[var(--color-text)]">{projectedScore}/100</strong> (threshold: 50) — potential credit limit{" "}
+                      Fix the items below to reach <strong className="text-[var(--color-text)]">{projectedScore}/100</strong> (threshold: 50) - potential credit limit{" "}
                       <strong className="text-[var(--color-primary)]">{formatCurrency(meanRev * 3)}</strong>
                     </p>
                   )}
@@ -718,7 +718,7 @@ export default function CreditPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-md">
               <h2 className="text-base font-bold mb-1">Key Facts Statement (KFS)</h2>
-              <p className="text-xs text-[var(--color-muted)] mb-4">RBI Digital Lending Guidelines 2022 — mandatory disclosure</p>
+              <p className="text-xs text-[var(--color-muted)] mb-4">RBI Digital Lending Guidelines 2022 - mandatory disclosure</p>
               <div className="space-y-2 text-sm bg-[var(--color-bg)] rounded-lg p-4 border border-[var(--color-border)] mb-4">
                 {[
                   ["Lender",               o.lender],
@@ -738,7 +738,7 @@ export default function CreditPage() {
               </div>
               <div className="flex gap-2">
                 <button onClick={() => handleAccept(o)} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90">
-                  I acknowledge — Accept Loan
+                  I acknowledge - Accept Loan
                 </button>
                 <button onClick={() => setShowKfs(null)} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
               </div>
@@ -949,7 +949,7 @@ function EquipmentFinanceLease() {
               </div>
             </div>
             <div>
-              <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Residual buyout at lease end</span><span className="font-semibold text-[var(--color-text)]">{residualPct}% = {cost > 0 ? formatCurrency(Math.round(residual)) : "—"}</span></label>
+              <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Residual buyout at lease end</span><span className="font-semibold text-[var(--color-text)]">{residualPct}% = {cost > 0 ? formatCurrency(Math.round(residual)) : "-"}</span></label>
               <input type="range" min={0} max={50} value={residualPct} onChange={e => setResidualPct(e.target.value)} className="w-full accent-[var(--color-primary)]" />
             </div>
           </div>
@@ -1009,7 +1009,7 @@ function EquipmentFinanceLease() {
       {cost > 0 && winner && (
         <div className={`rounded-lg px-4 py-3 border text-sm ${winner === "finance" ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/30" : "bg-purple-900/20 border-purple-800/30"}`}>
           <span className="font-semibold">{winner === "finance" ? "Finance" : "Lease"} is cheaper</span> by {formatCurrency(Math.abs(netFinance - netLease))} on a net-of-tax basis over the term.
-          {winner === "finance" ? " You own the asset outright at end of tenure — consider long-term residual value." : " Lease keeps balance sheet light and preserves working capital, but you don't own the asset until buyout."}
+          {winner === "finance" ? " You own the asset outright at end of tenure - consider long-term residual value." : " Lease keeps balance sheet light and preserves working capital, but you don't own the asset until buyout."}
         </div>
       )}
 
@@ -1169,7 +1169,7 @@ function FdRdTab() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                     <div><p className="text-[var(--color-muted)]">Principal</p><p className="font-semibold tabular-nums mt-0.5">{formatCurrency(d.principal)}</p></div>
                     <div><p className="text-[var(--color-muted)]">Gross interest</p><p className="font-semibold tabular-nums text-green-400 mt-0.5">{formatCurrency(interest)}</p></div>
-                    <div><p className="text-[var(--color-muted)]">TDS {d.tdsApplied ? "(10%)" : "(nil)"}</p><p className="font-semibold tabular-nums text-red-400 mt-0.5">{d.tdsApplied ? `(${formatCurrency(tds)})` : "—"}</p></div>
+                    <div><p className="text-[var(--color-muted)]">TDS {d.tdsApplied ? "(10%)" : "(nil)"}</p><p className="font-semibold tabular-nums text-red-400 mt-0.5">{d.tdsApplied ? `(${formatCurrency(tds)})` : "-"}</p></div>
                     <div><p className="text-[var(--color-muted)]">Maturity value</p><p className="font-bold tabular-nums text-[var(--color-primary)] mt-0.5">{formatCurrency(maturityValue)}</p></div>
                   </div>
                   {!matured && (
@@ -1248,7 +1248,7 @@ function CcUtilizationTab() {
       {totalUtil > 70 && (
         <div className="bg-red-950/30 border border-red-800/40 rounded-lg px-4 py-3 text-sm flex items-center gap-3">
           <AlertTriangle size={14} className="text-red-400 shrink-0" />
-          <span>Overall CC utilization is {totalUtil}% — high utilization lowers your credit score and may signal cash flow stress to lenders. Keep below 30% for optimal credit health.</span>
+          <span>Overall CC utilization is {totalUtil}% - high utilization lowers your credit score and may signal cash flow stress to lenders. Keep below 30% for optimal credit health.</span>
         </div>
       )}
 
@@ -1289,7 +1289,7 @@ function CcUtilizationTab() {
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <p className="font-semibold text-sm">{c.name}</p>
-                    <p className="text-xs text-[var(--color-muted)]">{c.bank || "—"} · Due: <span className={overdue ? "text-red-400 font-semibold" : ""}>{c.dueDate}</span></p>
+                    <p className="text-xs text-[var(--color-muted)]">{c.bank || "-"} · Due: <span className={overdue ? "text-red-400 font-semibold" : ""}>{c.dueDate}</span></p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-sm font-bold tabular-nums ${util > 70 ? "text-red-400" : util > 30 ? "text-orange-400" : "text-green-400"}`}>{util}%</span>
@@ -1316,7 +1316,7 @@ function CcUtilizationTab() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Keep utilization below 30% per card for healthy credit scoring. Always pay the full balance to avoid 36–42% p.a. revolving interest on business credit cards.
+        Keep utilization below 30% per card for healthy credit scoring. Always pay the full balance to avoid 36-42% p.a. revolving interest on business credit cards.
       </div>
     </div>
   );
@@ -1422,7 +1422,7 @@ function WcHealthScore() {
             return (
               <div key={c.label} className="flex items-center gap-4 px-4 py-3">
                 <span className="text-xs font-semibold w-28">{c.label}</span>
-                <span className="tabular-nums text-xs w-16">{c.value > 0 ? `${c.value.toFixed(1)}${c.unit}` : "—"}</span>
+                <span className="tabular-nums text-xs w-16">{c.value > 0 ? `${c.value.toFixed(1)}${c.unit}` : "-"}</span>
                 <div className="flex-1 h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
                   <div className={`h-full rounded-full ${pct >= 70 ? "bg-green-500" : pct >= 40 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
                 </div>
@@ -1436,9 +1436,9 @@ function WcHealthScore() {
 
       <div className="grid grid-cols-3 gap-3 text-xs">
         {[
-          { label: "DSO",  value: `${dso}d`,  note: "Days Sales Outstanding — lower is better",  good: dso <= 30 },
-          { label: "DPO",  value: `${dpo}d`,  note: "Days Payable Outstanding — higher is better (pay later)", good: dpo >= 45 },
-          { label: "DIO",  value: `${dio}d`,  note: "Days Inventory Outstanding — lower is better",  good: dio <= 30 },
+          { label: "DSO",  value: `${dso}d`,  note: "Days Sales Outstanding - lower is better",  good: dso <= 30 },
+          { label: "DPO",  value: `${dpo}d`,  note: "Days Payable Outstanding - higher is better (pay later)", good: dpo >= 45 },
+          { label: "DIO",  value: `${dio}d`,  note: "Days Inventory Outstanding - lower is better",  good: dio <= 30 },
         ].map(m => (
           <div key={m.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3">
             <div className="flex items-center justify-between mb-1">
@@ -1449,7 +1449,7 @@ function WcHealthScore() {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">CCC = DSO + DIO − DPO. Lower CCC = faster cash cycle. Score uses weighted average of 5 ratios. Enter balance sheet figures for accurate scoring — revenue auto-estimated from transactions.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">CCC = DSO + DIO − DPO. Lower CCC = faster cash cycle. Score uses weighted average of 5 ratios. Enter balance sheet figures for accurate scoring - revenue auto-estimated from transactions.</p>
     </div>
   );
 }
@@ -1648,7 +1648,7 @@ function CapTableTab() {
                 <div className="grid grid-cols-4 gap-2 px-3 py-2 text-xs items-center bg-[var(--color-primary)]/5">
                   <span className="truncate font-semibold text-[var(--color-primary)]">New Investor</span>
                   <span className="text-right tabular-nums text-[var(--color-muted)]">{Math.round(newShares).toLocaleString("en-IN")}</span>
-                  <span className="text-right tabular-nums text-[var(--color-muted)]">—</span>
+                  <span className="text-right tabular-nums text-[var(--color-muted)]">-</span>
                   <span className="text-right tabular-nums font-bold text-[var(--color-primary)]">{newInvPct.toFixed(1)}%</span>
                 </div>
               </div>
@@ -1660,7 +1660,7 @@ function CapTableTab() {
       </div>
 
       <p className="text-[10px] text-[var(--color-muted)]">
-        Simplified model — ignores option pool top-ups, liquidation preferences and anti-dilution provisions. Ownership % = shares held ÷ total shares. Post-money = pre-money + investment; new investor % = investment ÷ post-money; price/share = pre-money ÷ existing shares. Consult a CS/lawyer for the definitive cap table.
+        Simplified model - ignores option pool top-ups, liquidation preferences and anti-dilution provisions. Ownership % = shares held ÷ total shares. Post-money = pre-money + investment; new investor % = investment ÷ post-money; price/share = pre-money ÷ existing shares. Consult a CS/lawyer for the definitive cap table.
       </p>
     </div>
   );
@@ -1739,10 +1739,10 @@ function ValuationTab() {
   const blendedEv = methodEvs.length > 0 ? methodEvs.reduce((s, v) => s + v, 0) / methodEvs.length : 0;
 
   const kpis = [
-    { label: "DCF EV",            value: dcfValid ? formatCurrency(dcfEv) : "—", color: "text-blue-400" },
-    { label: "Revenue-multiple EV", value: revEv > 0 ? formatCurrency(revEv) : "—", color: "text-green-400" },
-    { label: "EBITDA-multiple EV",  value: ebitdaEv > 0 ? formatCurrency(ebitdaEv) : "—", color: "text-purple-400" },
-    { label: "Blended EV",          value: blendedEv > 0 ? formatCurrency(blendedEv) : "—", color: "text-[var(--color-primary)]" },
+    { label: "DCF EV",            value: dcfValid ? formatCurrency(dcfEv) : "-", color: "text-blue-400" },
+    { label: "Revenue-multiple EV", value: revEv > 0 ? formatCurrency(revEv) : "-", color: "text-green-400" },
+    { label: "EBITDA-multiple EV",  value: ebitdaEv > 0 ? formatCurrency(ebitdaEv) : "-", color: "text-purple-400" },
+    { label: "Blended EV",          value: blendedEv > 0 ? formatCurrency(blendedEv) : "-", color: "text-[var(--color-primary)]" },
   ];
 
   const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -1840,7 +1840,7 @@ function ValuationTab() {
           </div>
           <div className="flex items-center justify-between bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-3">
             <span className="text-xs text-[var(--color-muted)]">Enterprise Value</span>
-            <span className="text-base font-bold tabular-nums text-green-400">{revEv > 0 ? formatCurrency(revEv) : "—"}</span>
+            <span className="text-base font-bold tabular-nums text-green-400">{revEv > 0 ? formatCurrency(revEv) : "-"}</span>
           </div>
         </div>
 
@@ -1860,7 +1860,7 @@ function ValuationTab() {
           </div>
           <div className="flex items-center justify-between bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-3">
             <span className="text-xs text-[var(--color-muted)]">Enterprise Value</span>
-            <span className="text-base font-bold tabular-nums text-purple-400">{ebitdaEv > 0 ? formatCurrency(ebitdaEv) : "—"}</span>
+            <span className="text-base font-bold tabular-nums text-purple-400">{ebitdaEv > 0 ? formatCurrency(ebitdaEv) : "-"}</span>
           </div>
         </div>
 
@@ -1870,13 +1870,13 @@ function ValuationTab() {
           <p className="text-xs text-[var(--color-muted)] mb-4">Equal-weight average of the methods with a value ({methodEvs.length} of 3).</p>
           <div className="flex items-center justify-between bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 rounded-lg px-4 py-3">
             <span className="text-xs text-[var(--color-muted)]">Indicative Enterprise Value</span>
-            <span className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{blendedEv > 0 ? formatCurrency(blendedEv) : "—"}</span>
+            <span className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{blendedEv > 0 ? formatCurrency(blendedEv) : "-"}</span>
           </div>
         </div>
       </div>
 
       <p className="text-[10px] text-[var(--color-muted)]">
-        Valuation is indicative only. Indian SMEs typically trade at 0.5–3x revenue or 4–8x EBITDA depending on sector and growth. DCF: terminal value = FCFₙ × (1 + terminal growth) ÷ (WACC − terminal growth), discounted to PV; EV = Σ discounted FCF + discounted terminal value. DCF is highly sensitive to WACC and terminal-growth assumptions — WACC must exceed terminal growth.
+        Valuation is indicative only. Indian SMEs typically trade at 0.5-3x revenue or 4-8x EBITDA depending on sector and growth. DCF: terminal value = FCFₙ × (1 + terminal growth) ÷ (WACC − terminal growth), discounted to PV; EV = Σ discounted FCF + discounted terminal value. DCF is highly sensitive to WACC and terminal-growth assumptions - WACC must exceed terminal growth.
       </p>
     </div>
   );
@@ -1911,7 +1911,7 @@ function AaUnderwritingPull() {
   const balance  = parseFloat(avgBalance) || 0;
   const emi      = parseFloat(emiOutflow) || 0;
 
-  // Bank-statement-derived signals → 0–100 sub-scores (lender-style scorecard).
+  // Bank-statement-derived signals → 0-100 sub-scores (lender-style scorecard).
   const factors = [
     {
       label: "Avg monthly inflow",
@@ -1979,7 +1979,7 @@ function AaUnderwritingPull() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> AA-Data Underwriting Pull</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Models the credit profile a lender derives from your Account Aggregator bank-statement feed. Inflow and balance are pre-filled from your live data — adjust the bank-behaviour signals to see how the underwriting score and indicative limit move.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Models the credit profile a lender derives from your Account Aggregator bank-statement feed. Inflow and balance are pre-filled from your live data - adjust the bank-behaviour signals to see how the underwriting score and indicative limit move.</p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -2038,7 +2038,7 @@ function AaUnderwritingPull() {
               {factors.map(f => (
                 <div key={f.label}>
                   <div className="flex items-center justify-between text-xs mb-1">
-                    <span><span className="font-medium">{f.label}</span> <span className="text-[var(--color-muted)]">— {f.detail}</span></span>
+                    <span><span className="font-medium">{f.label}</span> <span className="text-[var(--color-muted)]">- {f.detail}</span></span>
                     <span className="tabular-nums text-[var(--color-muted)]">{Math.round(f.raw * f.weight)} / {f.weight}</span>
                   </div>
                   <div className="w-full h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
@@ -2052,7 +2052,7 @@ function AaUnderwritingPull() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Estimator only — no live Account Aggregator fetch is made. Real underwriting pulls 6–12 months of statements via the AA (Sahamati/RBI) framework with your explicit consent. Indicative limit uses a 50% FOIR cap on surplus inflow, capitalised at ~16% p.a. over 36 months, then risk-adjusted by score band.
+        Estimator only - no live Account Aggregator fetch is made. Real underwriting pulls 6-12 months of statements via the AA (Sahamati/RBI) framework with your explicit consent. Indicative limit uses a 50% FOIR cap on surplus inflow, capitalised at ~16% p.a. over 36 months, then risk-adjusted by score band.
       </div>
     </div>
   );
@@ -2151,7 +2151,7 @@ function LoanEligibilityMatcher() {
               </div>
               <div className="flex items-center justify-between text-xs border-t border-[var(--color-border)] pt-2">
                 <span className="text-[var(--color-muted)]">Indicative ticket (25% of turnover, capped)</span>
-                <span className="font-bold tabular-nums text-[var(--color-primary)]">{p.eligible ? formatCurrency(p.offer) : "—"}</span>
+                <span className="font-bold tabular-nums text-[var(--color-primary)]">{p.eligible ? formatCurrency(p.offer) : "-"}</span>
               </div>
             </div>
           ))}
@@ -2159,7 +2159,7 @@ function LoanEligibilityMatcher() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Match % and tickets are indicative — final eligibility depends on each lender's policy, bureau report and document verification. CGTMSE coverage and rates vary by scheme; verify current terms with the lender.
+        Match % and tickets are indicative - final eligibility depends on each lender's policy, bureau report and document verification. CGTMSE coverage and rates vary by scheme; verify current terms with the lender.
       </div>
     </div>
   );
@@ -2174,7 +2174,7 @@ function CommercialScoreTracker() {
   const [date,   setDate]   = useState(() => new Date().toISOString().split("T")[0]);
   const [note,   setNote]   = useState("");
 
-  // CIBIL MSME Rank (CMR) is 1 (best) – 10 (worst); CRIF/Experian commercial 300–900-style.
+  // CIBIL MSME Rank (CMR) is 1 (best) - 10 (worst); CRIF/Experian commercial 300-900-style.
   const isRank = bureau === "CIBIL Rank";
 
   const add = () => {
@@ -2196,9 +2196,9 @@ function CommercialScoreTracker() {
   const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
   const rankVerdict = (s: number) =>
-    s <= 3 ? { label: "Low risk — best rates", cls: "text-green-400" }
+    s <= 3 ? { label: "Low risk - best rates", cls: "text-green-400" }
     : s <= 6 ? { label: "Moderate risk", cls: "text-yellow-400" }
-    : { label: "High risk — limited access", cls: "text-red-400" };
+    : { label: "High risk - limited access", cls: "text-red-400" };
   const scoreVerdict = (s: number) =>
     s >= 750 ? { label: "Excellent", cls: "text-green-400" }
     : s >= 650 ? { label: "Good", cls: "text-blue-400" }
@@ -2210,7 +2210,7 @@ function CommercialScoreTracker() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Commercial Credit Score Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Log your business bureau scores over time — CIBIL MSME Rank (CMR 1–10, lower is better) or CRIF/Experian commercial scores — and track the trend lenders look at.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Log your business bureau scores over time - CIBIL MSME Rank (CMR 1-10, lower is better) or CRIF/Experian commercial scores - and track the trend lenders look at.</p>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <div>
@@ -2220,7 +2220,7 @@ function CommercialScoreTracker() {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-[var(--color-muted)] mb-1">{isRank ? "Rank (1–10)" : "Score (300–900)"}</label>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">{isRank ? "Rank (1-10)" : "Score (300-900)"}</label>
             <input type="number" value={score} onChange={e => setScore(e.target.value)} placeholder={isRank ? "e.g. 3" : "e.g. 720"} className={inp} />
           </div>
           <div>
@@ -2240,7 +2240,7 @@ function CommercialScoreTracker() {
           {[
             { label: `Latest ${bureau}`, value: isRank ? `CMR ${latest.score}` : String(latest.score), color: verdict.cls },
             { label: "Assessment",       value: verdict.label, color: verdict.cls },
-            { label: "Change vs prior",  value: prev ? `${delta > 0 ? "+" : ""}${delta}` : "—", color: !prev ? "text-[var(--color-muted)]" : improving ? "text-green-400" : "text-red-400" },
+            { label: "Change vs prior",  value: prev ? `${delta > 0 ? "+" : ""}${delta}` : "-", color: !prev ? "text-[var(--color-muted)]" : improving ? "text-green-400" : "text-red-400" },
             { label: "Readings logged",  value: String(byBureau.length), color: "text-[var(--color-text)]" },
           ].map(c => (
             <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -2272,7 +2272,7 @@ function CommercialScoreTracker() {
                   <td className="px-4 py-2.5 tabular-nums">{r.date}</td>
                   <td className="px-4 py-2.5">{r.bureau}</td>
                   <td className="px-4 py-2.5 tabular-nums font-semibold">{r.bureau === "CIBIL Rank" ? `CMR ${r.score}` : r.score}</td>
-                  <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{r.note || "—"}</td>
+                  <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{r.note || "-"}</td>
                   <td className="px-4 py-2.5 text-right">
                     <button onClick={() => setReadings(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button>
                   </td>
@@ -2284,7 +2284,7 @@ function CommercialScoreTracker() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        CIBIL MSME Rank (CMR) runs 1 (lowest risk) to 10 (highest risk). CRIF/Experian commercial scores follow a 300–900-style scale where higher is better. Pull your report at least quarterly — bureaus update with a 30–45 day lag.
+        CIBIL MSME Rank (CMR) runs 1 (lowest risk) to 10 (highest risk). CRIF/Experian commercial scores follow a 300-900-style scale where higher is better. Pull your report at least quarterly - bureaus update with a 30-45 day lag.
       </div>
     </div>
   );
@@ -2319,7 +2319,7 @@ function InvoiceDiscountingConnector() {
     const due = new Date(dueDate);
     const tenureDays = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / 86400000));
     setListings(prev => [...prev, {
-      id: Math.random().toString(36).slice(2), buyer, invoiceNo: invoiceNo || "—",
+      id: Math.random().toString(36).slice(2), buyer, invoiceNo: invoiceNo || "-",
       amount: a, dueDate, discountRate: parseFloat(rate) || 14, tenureDays, status: "listed",
     }]);
     setBuyer(""); setInvoiceNo(""); setAmount("");
@@ -2411,7 +2411,7 @@ function InvoiceDiscountingConnector() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Indicative only — actual bids on TReDS (RXIL/M1xchange/Invoicemart) are set by financiers and depend on buyer credit rating. Advance % and rate vary; bill discounting is typically with-recourse unless factored. Discount charge = face × rate × tenure/365.
+        Indicative only - actual bids on TReDS (RXIL/M1xchange/Invoicemart) are set by financiers and depend on buyer credit rating. Advance % and rate vary; bill discounting is typically with-recourse unless factored. Discount charge = face × rate × tenure/365.
       </div>
     </div>
   );
@@ -2432,7 +2432,7 @@ function LoanDocumentPack() {
     { id: "partner-deed", label: "Partnership deed / LLP agreement",        group: "KYC", applies: (_lt, en) => en === "partnership_llp" },
     { id: "shop-act",     label: "Shop & Establishment / trade licence",    group: "KYC", applies: (_lt, en) => en === "proprietorship" },
     { id: "bank-stmt",    label: "Bank statements (last 12 months)",        group: "Financial", applies: () => true },
-    { id: "itr",          label: "ITR + computation (last 2–3 years)",      group: "Financial", applies: () => true },
+    { id: "itr",          label: "ITR + computation (last 2-3 years)",      group: "Financial", applies: () => true },
     { id: "financials",   label: "Audited financials / P&L + Balance Sheet", group: "Financial", applies: (_lt, en) => en !== "proprietorship" },
     { id: "gst-returns",  label: "GST returns (GSTR-3B, last 12 months)",   group: "Financial", applies: () => true },
     { id: "debt-sheet",   label: "Existing loan sanction letters / repayment track", group: "Financial", applies: () => true },
@@ -2460,7 +2460,7 @@ function LoanDocumentPack() {
     <div className="space-y-4 max-w-2xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> Loan Application Document Pack</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Auto-assembles the lender document checklist for your loan type and entity structure. Tick items off as you collect them — progress is saved.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Auto-assembles the lender document checklist for your loan type and entity structure. Tick items off as you collect them - progress is saved.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Loan type</label>
@@ -2509,7 +2509,7 @@ function LoanDocumentPack() {
       {pct === 100 && (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20 flex items-center gap-2">
           <CheckCircle2 size={14} className="text-green-400 shrink-0" />
-          <p className="text-sm font-semibold text-green-400">Document pack complete — you're ready to submit your application.</p>
+          <p className="text-sm font-semibold text-green-400">Document pack complete - you're ready to submit your application.</p>
         </div>
       )}
 
@@ -2560,7 +2560,7 @@ function FoirCalculator() {
     : newEmiRoom > 0 ? newEmiRoom * n : 0;
 
   const verdict = inc <= 0 ? null
-    : currentFoir >= foirCap ? { label: "No headroom — at/over FOIR cap", cls: "text-red-400" }
+    : currentFoir >= foirCap ? { label: "No headroom - at/over FOIR cap", cls: "text-red-400" }
     : currentFoir >= foirCap * 0.8 ? { label: "Limited headroom", cls: "text-yellow-400" }
     : { label: "Healthy repayment capacity", cls: "text-green-400" };
 
@@ -2570,7 +2570,7 @@ function FoirCalculator() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Repayment Capacity / FOIR Calculator</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">FOIR (Fixed Obligation to Income Ratio) is the test lenders run before sanction. Income and existing EMIs are pre-filled from your data — see how much new EMI and principal you can safely service.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">FOIR (Fixed Obligation to Income Ratio) is the test lenders run before sanction. Income and existing EMIs are pre-filled from your data - see how much new EMI and principal you can safely service.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Net monthly income / surplus (₹)</label>
@@ -2643,7 +2643,7 @@ function FoirCalculator() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        FOIR = (existing EMIs + fixed obligations + proposed EMI) ÷ net income. Banks typically cap FOIR at 40–55% depending on income level (higher income allows higher ratios). Max loan reverses the EMI formula at the proposed rate and tenure. Indicative — lenders also apply DSCR and bureau checks.
+        FOIR = (existing EMIs + fixed obligations + proposed EMI) ÷ net income. Banks typically cap FOIR at 40-55% depending on income level (higher income allows higher ratios). Max loan reverses the EMI formula at the proposed rate and tenure. Indicative - lenders also apply DSCR and bureau checks.
       </div>
     </div>
   );
@@ -2708,7 +2708,7 @@ function EmiAmortizationTab() {
               { label: "Monthly EMI",     value: formatCurrency(monthlyEmi),    color: "text-[var(--color-primary)]" },
               { label: "Total interest",  value: formatCurrency(interestTotal), color: "text-orange-400" },
               { label: "Total repayment", value: formatCurrency(totalPay),      color: "text-[var(--color-text)]" },
-              { label: "Interest / principal", value: principal > 0 ? `${Math.round((interestTotal / principal) * 100)}%` : "—", color: "text-[var(--color-muted)]" },
+              { label: "Interest / principal", value: principal > 0 ? `${Math.round((interestTotal / principal) * 100)}%` : "-", color: "text-[var(--color-muted)]" },
             ].map(c => (
               <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                 <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
@@ -2854,7 +2854,7 @@ function FlatVsReducingTab() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        A flat rate charges interest on the full original principal every year even though you're repaying it down. Rule of thumb: effective reducing rate ≈ 1.8–1.9× the flat rate. Always ask lenders for the reducing-balance / APR equivalent before signing.
+        A flat rate charges interest on the full original principal every year even though you're repaying it down. Rule of thumb: effective reducing rate ≈ 1.8-1.9× the flat rate. Always ask lenders for the reducing-balance / APR equivalent before signing.
       </div>
     </div>
   );
@@ -2897,10 +2897,10 @@ function DscrCalculator() {
   const postDscr    = totalDebtService > 0 ? noi / totalDebtService : 0;
 
   const verdict = (d: number) => d <= 0 ? null
-    : d >= 1.5 ? { label: "Strong — comfortable cover", cls: "text-green-400" }
-    : d >= 1.25 ? { label: "Acceptable — most lenders OK", cls: "text-blue-400" }
-    : d >= 1.0 ? { label: "Tight — barely covers", cls: "text-yellow-400" }
-    : { label: "Below 1.0 — income won't cover debt", cls: "text-red-400" };
+    : d >= 1.5 ? { label: "Strong - comfortable cover", cls: "text-green-400" }
+    : d >= 1.25 ? { label: "Acceptable - most lenders OK", cls: "text-blue-400" }
+    : d >= 1.0 ? { label: "Tight - barely covers", cls: "text-yellow-400" }
+    : { label: "Below 1.0 - income won't cover debt", cls: "text-red-400" };
   const postVerdict = verdict(postDscr);
 
   // Max new annual debt service to keep DSCR ≥ 1.25, and the principal that implies.
@@ -2918,7 +2918,7 @@ function DscrCalculator() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Debt-Service Coverage Ratio (DSCR)</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">DSCR = net operating income ÷ annual debt service. It's the core covenant lenders test. Income and existing debt are pre-filled from your data — model a new loan to see post-DSCR.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">DSCR = net operating income ÷ annual debt service. It's the core covenant lenders test. Income and existing debt are pre-filled from your data - model a new loan to see post-DSCR.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Annual net operating income (₹)</label>
@@ -2950,9 +2950,9 @@ function DscrCalculator() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: "Current DSCR", value: currentDscr > 0 ? `${currentDscr.toFixed(2)}x` : "no debt", color: existDebt > 0 ? (verdict(currentDscr)?.cls ?? "text-[var(--color-text)]") : "text-green-400" },
-              { label: "Post-loan DSCR", value: postDscr > 0 ? `${postDscr.toFixed(2)}x` : "—", color: postVerdict?.cls ?? "text-[var(--color-muted)]" },
-              { label: "Assessment", value: postVerdict?.label ?? "—", color: postVerdict?.cls ?? "text-[var(--color-muted)]" },
-              { label: "Max new loan @ 1.25x", value: maxNewPrincipal > 0 ? formatCurrency(maxNewPrincipal) : "—", color: "text-[var(--color-primary)]" },
+              { label: "Post-loan DSCR", value: postDscr > 0 ? `${postDscr.toFixed(2)}x` : "-", color: postVerdict?.cls ?? "text-[var(--color-muted)]" },
+              { label: "Assessment", value: postVerdict?.label ?? "-", color: postVerdict?.cls ?? "text-[var(--color-muted)]" },
+              { label: "Max new loan @ 1.25x", value: maxNewPrincipal > 0 ? formatCurrency(maxNewPrincipal) : "-", color: "text-[var(--color-primary)]" },
             ].map(c => (
               <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                 <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
@@ -2982,7 +2982,7 @@ function DscrCalculator() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Most term lenders require DSCR ≥ 1.25–1.5; below 1.0 means operating income can't service the debt. NOI here ≈ revenue − operating expenses (before interest), annualised from your transactions. The max-loan figure keeps post-DSCR at the 1.25x floor.
+        Most term lenders require DSCR ≥ 1.25-1.5; below 1.0 means operating income can't service the debt. NOI here ≈ revenue − operating expenses (before interest), annualised from your transactions. The max-loan figure keeps post-DSCR at the 1.25x floor.
       </div>
     </div>
   );
@@ -3061,7 +3061,7 @@ function DrawingPowerTab() {
               { label: "Drawing power", value: formatCurrency(drawingPower), color: "text-[var(--color-primary)]" },
               { label: "Effective limit", value: formatCurrency(effectiveLimit), color: "text-[var(--color-text)]" },
               { label: "Available to draw", value: formatCurrency(available), color: overdrawn ? "text-red-400" : "text-green-400" },
-              { label: "Utilisation", value: sanction > 0 || utilised > 0 ? `${utilPct}%` : "—", color: utilPct > 90 ? "text-red-400" : utilPct > 70 ? "text-orange-400" : "text-green-400" },
+              { label: "Utilisation", value: sanction > 0 || utilised > 0 ? `${utilPct}%` : "-", color: utilPct > 90 ? "text-red-400" : utilPct > 70 ? "text-orange-400" : "text-green-400" },
             ].map(c => (
               <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                 <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
@@ -3073,7 +3073,7 @@ function DrawingPowerTab() {
           {overdrawn && (
             <div className="bg-red-950/30 border border-red-800/40 rounded-lg px-4 py-3 text-sm flex items-center gap-3">
               <AlertTriangle size={14} className="text-red-400 shrink-0" />
-              <span>You've drawn {formatCurrency(utilised)} against an effective limit of {formatCurrency(effectiveLimit)} — the account is over-drawn. Banks charge penal interest and may flag it. Submit a fresh stock statement or reduce the outstanding.</span>
+              <span>You've drawn {formatCurrency(utilised)} against an effective limit of {formatCurrency(effectiveLimit)} - the account is over-drawn. Banks charge penal interest and may flag it. Submit a fresh stock statement or reduce the outstanding.</span>
             </div>
           )}
 
@@ -3097,7 +3097,7 @@ function DrawingPowerTab() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Drawing power = (paid stock × (1 − stock margin)) + (eligible debtors × (1 − debtor margin)). You can draw only up to the LOWER of the sanctioned limit and the drawing power. Typical margins: 25% on stock, 40–50% on debtors; over-90-day debtors are usually excluded.
+        Drawing power = (paid stock × (1 − stock margin)) + (eligible debtors × (1 − debtor margin)). You can draw only up to the LOWER of the sanctioned limit and the drawing power. Typical margins: 25% on stock, 40-50% on debtors; over-90-day debtors are usually excluded.
       </div>
     </div>
   );
@@ -3190,7 +3190,7 @@ function GstEligibilityTab() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Lenders take the LOWER of a turnover multiple (commonly 2–4× monthly GST sales) and a profit-serviceability cap, then haircut for filing consistency — 12+ months of uninterrupted GSTR-1/3B filings is near-essential. Late or nil filings sharply reduce the limit.
+        Lenders take the LOWER of a turnover multiple (commonly 2-4× monthly GST sales) and a profit-serviceability cap, then haircut for filing consistency - 12+ months of uninterrupted GSTR-1/3B filings is near-essential. Late or nil filings sharply reduce the limit.
       </div>
     </div>
   );
@@ -3291,7 +3291,7 @@ function LapLtvTab() {
               {[
                 { label: "Property market value", value: formatCurrency(value) },
                 { label: `Gross eligible @ ${ltvPct}% LTV`, value: formatCurrency(grossEligible), color: "text-blue-400" },
-                { label: "Less: existing loan", value: existing > 0 ? `(${formatCurrency(existing)})` : "—", color: "text-red-400" },
+                { label: "Less: existing loan", value: existing > 0 ? `(${formatCurrency(existing)})` : "-", color: "text-red-400" },
                 { label: "Net loan available", value: formatCurrency(netEligible), bold: true, color: "text-[var(--color-primary)]" },
                 { label: "Total interest over tenure", value: formatCurrency(interestTotal), color: "text-orange-400" },
               ].map(r => (
@@ -3306,7 +3306,7 @@ function LapLtvTab() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Indicative LTV bands: residential ~65–75%, commercial ~55–65%, industrial ~50%. Lenders value the property conservatively (often below market) and net off any existing charge. LAP tenures run up to 15 years — longer tenure lowers EMI but raises total interest.
+        Indicative LTV bands: residential ~65-75%, commercial ~55-65%, industrial ~50%. Lenders value the property conservatively (often below market) and net off any existing charge. LAP tenures run up to 15 years - longer tenure lowers EMI but raises total interest.
       </div>
     </div>
   );
@@ -3349,7 +3349,7 @@ function PrepaymentOptimizer() {
     if (r === 0) return Math.ceil(newPrincipal / baseEmi);
     // n = -ln(1 - P·r/EMI) / ln(1+r)
     const denom = 1 - (newPrincipal * r) / baseEmi;
-    if (denom <= 0) return remTenure; // EMI too small to amortise — should not happen post-prepay
+    if (denom <= 0) return remTenure; // EMI too small to amortise - should not happen post-prepay
     return Math.ceil(-Math.log(denom) / Math.log(1 + r));
   }, [newPrincipal, baseEmi, r, remTenure]);
   const interestKeepEmi = baseEmi * newTenureKeepEmi - newPrincipal;
@@ -3469,7 +3469,7 @@ function PrepaymentOptimizer() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        "Keep EMI, finish sooner" almost always saves the most interest because the principal falls fastest. "Keep tenure, lower EMI" eases monthly cash flow. RBI bars foreclosure charges on floating-rate term loans to individuals/MSMEs — check your sanction; a high fee can wipe out the saving.
+        "Keep EMI, finish sooner" almost always saves the most interest because the principal falls fastest. "Keep tenure, lower EMI" eases monthly cash flow. RBI bars foreclosure charges on floating-rate term loans to individuals/MSMEs - check your sanction; a high fee can wipe out the saving.
       </div>
     </div>
   );
@@ -3592,7 +3592,7 @@ function OdVsTermLoanTab() {
           {winner && (
             <div className={`rounded-lg px-4 py-3 border text-sm ${winner === "od" ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/30" : "bg-purple-900/20 border-purple-800/30"}`}>
               <span className="font-semibold">{winner === "od" ? "Overdraft" : "Term loan"} is cheaper</span> by {formatCurrency(Math.abs(odTotal - tlTotal))} over {months} months.
-              {winner === "od" ? " The OD wins because you only pay interest on the balance you actually use — ideal for fluctuating needs." : " The term loan wins at high, steady utilisation; a structured EMI also enforces repayment discipline."}
+              {winner === "od" ? " The OD wins because you only pay interest on the balance you actually use - ideal for fluctuating needs." : " The term loan wins at high, steady utilisation; a structured EMI also enforces repayment discipline."}
             </div>
           )}
         </>
@@ -3614,7 +3614,7 @@ function ScoreImprovementPlanner() {
   const baseScore = Math.max(0, ...creditApplications.map(a => a.underwritingScore), 0);
 
   const ACTIONS: { id: string; label: string; points: number; effort: "Quick" | "30 days" | "90 days"; detail: string }[] = [
-    { id: "consistency", label: "Smooth monthly revenue (consistent invoicing)", points: 8, effort: "30 days", detail: "Keep monthly inflows within ±25% to cut revenue volatility — the single largest score lever." },
+    { id: "consistency", label: "Smooth monthly revenue (consistent invoicing)", points: 8, effort: "30 days", detail: "Keep monthly inflows within ±25% to cut revenue volatility - the single largest score lever." },
     { id: "buffer",      label: "Maintain a 1-month burn cash buffer (no overdrafts)", points: 5, effort: "Quick", detail: "Even one negative-balance day knocks ~5 pts. Park a buffer to avoid overdraft flags." },
     { id: "diversify",   label: "Add 2+ revenue sources (cut top-customer concentration)", points: 6, effort: "90 days", detail: "Lower single-customer share below 40% of revenue to reduce concentration risk." },
     { id: "gst",         label: "File GSTR-3B on time for 3 consecutive months", points: 7, effort: "90 days", detail: "On-time GST filing is verified turnover proof and a strong positive signal." },
@@ -3635,7 +3635,7 @@ function ScoreImprovementPlanner() {
         <p className="text-xs text-[var(--color-muted)] mb-4">Tick the actions you commit to. We project the score gain instantly and remember your plan. {baseScore === 0 && "Apply once to anchor this to your real score."}</p>
         <div className="grid grid-cols-3 gap-3 mb-4">
           {[
-            { label: "Current score", value: baseScore > 0 ? `${baseScore}/100` : "—", color: "text-[var(--color-text)]" },
+            { label: "Current score", value: baseScore > 0 ? `${baseScore}/100` : "-", color: "text-[var(--color-text)]" },
             { label: "Projected",     value: baseScore > 0 ? `${projected}/100` : `+${gained}`, color: "text-[var(--color-primary)]" },
             { label: "Points left",   value: `+${remaining}`, color: "text-yellow-400" },
           ].map(k => (
@@ -3746,14 +3746,14 @@ function ThreeOfferCompare() {
             </thead>
             <tbody className="tabular-nums">
               {[
-                { label: "Loan amount", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.amount) : "—" },
-                { label: "Headline rate", get: (r: typeof rows[number]) => r.amount > 0 ? `${parseFloat(r.rate) || 0}%` : "—" },
-                { label: "Monthly EMI", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.emiVal) : "—" },
-                { label: "Total interest", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.interest) : "—" },
-                { label: "Processing fee", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.fee) : "—" },
-                { label: "Insurance", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.ins) : "—" },
-                { label: "Effective APR", get: (r: typeof rows[number]) => r.amount > 0 ? `${r.effApr}%` : "—", strong: true },
-                { label: "True total cost", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.totalCost) : "—", strong: true },
+                { label: "Loan amount", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.amount) : "-" },
+                { label: "Headline rate", get: (r: typeof rows[number]) => r.amount > 0 ? `${parseFloat(r.rate) || 0}%` : "-" },
+                { label: "Monthly EMI", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.emiVal) : "-" },
+                { label: "Total interest", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.interest) : "-" },
+                { label: "Processing fee", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.fee) : "-" },
+                { label: "Insurance", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.ins) : "-" },
+                { label: "Effective APR", get: (r: typeof rows[number]) => r.amount > 0 ? `${r.effApr}%` : "-", strong: true },
+                { label: "True total cost", get: (r: typeof rows[number]) => r.amount > 0 ? formatCurrency(r.totalCost) : "-", strong: true },
               ].map(row => (
                 <tr key={row.label} className="border-b border-[var(--color-border)] last:border-0">
                   <td className="py-2 text-xs text-[var(--color-muted)]">{row.label}</td>
@@ -3768,7 +3768,7 @@ function ThreeOfferCompare() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Effective APR here loads upfront fees and insurance onto the cost spread over the tenure — a low headline rate with a 3% fee can cost more than a higher rate with no fee. Always compare the true total cost row.
+        Effective APR here loads upfront fees and insurance onto the cost spread over the tenure - a low headline rate with a 3% fee can cost more than a higher rate with no fee. Always compare the true total cost row.
       </div>
     </div>
   );
@@ -3867,7 +3867,7 @@ function InvoiceAdvanceCalculator() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Effective annual cost annualises the fee + interest over the days the cash is outstanding — a 1% fee on a 30-day invoice is ~12% p.a. Compare it to your overdraft rate before discounting; if the buyer is reliable and your OD is cheaper, the OD may win.
+        Effective annual cost annualises the fee + interest over the days the cash is outstanding - a 1% fee on a 30-day invoice is ~12% p.a. Compare it to your overdraft rate before discounting; if the buyer is reliable and your OD is cheaper, the OD may win.
       </div>
     </div>
   );
@@ -3919,7 +3919,7 @@ function NbfcVsBankCompare() {
           { label: "Monthly EMI", value: `${formatCurrency(c.emiVal)} /mo` },
           { label: `Interest @ ${c.rate}%`, value: formatCurrency(c.interest), color: "text-orange-400" },
           { label: "Processing fee", value: formatCurrency(c.fee), color: "text-red-400" },
-          { label: `Disbursal: ${c.days} days`, value: delayPerDay > 0 ? `cost ${formatCurrency(c.delayCost)}` : "—", color: delayPerDay > 0 ? "text-red-400" : "text-[var(--color-muted)]" },
+          { label: `Disbursal: ${c.days} days`, value: delayPerDay > 0 ? `cost ${formatCurrency(c.delayCost)}` : "-", color: delayPerDay > 0 ? "text-red-400" : "text-[var(--color-muted)]" },
           { label: "True total cost", value: formatCurrency(c.total), bold: true, color: winner === who ? "text-[var(--color-primary)]" : "text-[var(--color-text)]" },
         ].map(r => (
           <div key={r.label} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
@@ -3970,14 +3970,14 @@ function NbfcVsBankCompare() {
           {winner && (
             <div className={`rounded-lg px-4 py-3 border text-sm ${winner === "bank" ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/30" : "bg-purple-900/20 border-purple-800/30"}`}>
               <span className="font-semibold">{winner === "bank" ? "Bank" : "NBFC"} is cheaper</span> by {formatCurrency(Math.abs(bank.total - nbfc.total))} over {months} months{delayPerDay > 0 ? ", after pricing the disbursal delay" : ""}.
-              {winner === "bank" ? " If you can wait for the bank's process and have the documents ready, it saves real money." : " The NBFC wins once the cost of waiting for funds is counted — speed has a price worth paying when cash is urgent."}
+              {winner === "bank" ? " If you can wait for the bank's process and have the documents ready, it saves real money." : " The NBFC wins once the cost of waiting for funds is counted - speed has a price worth paying when cash is urgent."}
             </div>
           )}
         </>
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Set "cost of waiting" to what a funding delay actually costs you — a missed bulk-purchase discount, a stalled order, or penalty interest. With it at ₹0 the bank almost always wins on rate; the comparison only gets interesting when speed has real value.
+        Set "cost of waiting" to what a funding delay actually costs you - a missed bulk-purchase discount, a stalled order, or penalty interest. With it at ₹0 the bank almost always wins on rate; the comparison only gets interesting when speed has real value.
       </div>
     </div>
   );
@@ -3993,12 +3993,12 @@ function SchemeFinder() {
     purposes: string[]; womenFocus: boolean; newToCredit: boolean;
   };
   const SCHEMES: Scheme[] = [
-    { id: "mudra-shishu", name: "PMMY MUDRA — Shishu", max: 50000, collateralFree: true, desc: "Micro-loans for the smallest and newest enterprises.", eligibility: "Non-farm micro units; no collateral; ideal for new businesses.", purposes: ["Working capital", "Inventory", "Equipment purchase"], womenFocus: false, newToCredit: true },
-    { id: "mudra-kishor", name: "PMMY MUDRA — Kishor", max: 500000, collateralFree: true, desc: "Growth-stage micro-enterprise funding up to ₹5L.", eligibility: "Established micro units needing expansion capital; collateral-free.", purposes: ["Working capital", "Equipment purchase", "Expansion", "Inventory"], womenFocus: false, newToCredit: false },
-    { id: "mudra-tarun", name: "PMMY MUDRA — Tarun", max: 1000000, collateralFree: true, desc: "Larger micro/small enterprise loans up to ₹10L.", eligibility: "Growing small businesses with a track record; collateral-free.", purposes: ["Working capital", "Equipment purchase", "Expansion"], womenFocus: false, newToCredit: false },
+    { id: "mudra-shishu", name: "PMMY MUDRA - Shishu", max: 50000, collateralFree: true, desc: "Micro-loans for the smallest and newest enterprises.", eligibility: "Non-farm micro units; no collateral; ideal for new businesses.", purposes: ["Working capital", "Inventory", "Equipment purchase"], womenFocus: false, newToCredit: true },
+    { id: "mudra-kishor", name: "PMMY MUDRA - Kishor", max: 500000, collateralFree: true, desc: "Growth-stage micro-enterprise funding up to ₹5L.", eligibility: "Established micro units needing expansion capital; collateral-free.", purposes: ["Working capital", "Equipment purchase", "Expansion", "Inventory"], womenFocus: false, newToCredit: false },
+    { id: "mudra-tarun", name: "PMMY MUDRA - Tarun", max: 1000000, collateralFree: true, desc: "Larger micro/small enterprise loans up to ₹10L.", eligibility: "Growing small businesses with a track record; collateral-free.", purposes: ["Working capital", "Equipment purchase", "Expansion"], womenFocus: false, newToCredit: false },
     { id: "cgtmse", name: "CGTMSE Collateral-Free", max: 50000000, collateralFree: true, desc: "Govt-backed guarantee enabling collateral-free term/WC loans up to ₹5Cr.", eligibility: "Micro & small enterprises; lender routes the loan through the guarantee fund.", purposes: ["Working capital", "Equipment purchase", "Expansion"], womenFocus: false, newToCredit: false },
-    { id: "standup", name: "Stand-Up India", max: 10000000, collateralFree: false, desc: "₹10L–₹1Cr for greenfield ventures by women & SC/ST entrepreneurs.", eligibility: "Women or SC/ST owner; new (greenfield) manufacturing, services or trading unit.", purposes: ["Expansion", "Equipment purchase", "Working capital"], womenFocus: true, newToCredit: true },
-    { id: "pmegp", name: "PMEGP", max: 5000000, collateralFree: true, desc: "Credit-linked capital subsidy for new micro-enterprise setup.", eligibility: "New units only; subsidy 15–35% of project cost based on category & location.", purposes: ["Equipment purchase", "Expansion"], womenFocus: false, newToCredit: true },
+    { id: "standup", name: "Stand-Up India", max: 10000000, collateralFree: false, desc: "₹10L-₹1Cr for greenfield ventures by women & SC/ST entrepreneurs.", eligibility: "Women or SC/ST owner; new (greenfield) manufacturing, services or trading unit.", purposes: ["Expansion", "Equipment purchase", "Working capital"], womenFocus: true, newToCredit: true },
+    { id: "pmegp", name: "PMEGP", max: 5000000, collateralFree: true, desc: "Credit-linked capital subsidy for new micro-enterprise setup.", eligibility: "New units only; subsidy 15-35% of project cost based on category & location.", purposes: ["Equipment purchase", "Expansion"], womenFocus: false, newToCredit: true },
     { id: "psb59", name: "PSB Loans in 59 Minutes", max: 50000000, collateralFree: false, desc: "In-principle MSME loan approval online in under an hour.", eligibility: "GST-registered, ITR-filing MSMEs with 6+ months banking history.", purposes: ["Working capital", "Equipment purchase", "Expansion", "GST/TDS payment"], womenFocus: false, newToCredit: false },
   ];
 
@@ -4056,7 +4056,7 @@ function SchemeFinder() {
       {matches.length === 0 ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <Landmark size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-          <p className="text-sm text-[var(--color-muted)]">No scheme matches these filters. Try raising the amount limit or relaxing a filter — e.g. a ₹50L need exceeds most MUDRA tiers.</p>
+          <p className="text-sm text-[var(--color-muted)]">No scheme matches these filters. Try raising the amount limit or relaxing a filter - e.g. a ₹50L need exceeds most MUDRA tiers.</p>
         </div>
       ) : (
         <div className="space-y-3">

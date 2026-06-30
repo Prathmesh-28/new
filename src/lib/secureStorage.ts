@@ -1,6 +1,6 @@
 // Secure token storage: Keychain on iOS, EncryptedSharedPreferences (Keystore-backed)
 // on Android, and plain localStorage on web. Drop-in replacement for the three
-// localStorage calls used by AuthContext — the API mirrors the synchronous
+// localStorage calls used by AuthContext - the API mirrors the synchronous
 // localStorage interface but returns Promises.
 import { Capacitor } from "@capacitor/core";
 

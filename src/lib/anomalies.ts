@@ -2,7 +2,7 @@ import type { Transaction } from "@/data/types";
 
 // ── Anomaly radar ─────────────────────────────────────────────────────────────
 // Deterministic, offline detection over the tenant's real transaction stream.
-// No ML black box and no fabricated data — every finding points at specific
+// No ML black box and no fabricated data - every finding points at specific
 // transactions the user can open and verify.
 
 export type AnomalyType = "duplicate" | "spike" | "subscription_creep" | "new_vendor";
@@ -82,7 +82,7 @@ export function detectAnomalies(
           type: "duplicate",
           severity: "high",
           title: `Possible duplicate payment to ${payee}`,
-          detail: `Two payments of ${fmt(Math.abs(a.amount))} ${Math.round(daysBetween(a.date, b.date))} day(s) apart — check for a double-pay.`,
+          detail: `Two payments of ${fmt(Math.abs(a.amount))} ${Math.round(daysBetween(a.date, b.date))} day(s) apart - check for a double-pay.`,
           amount: Math.abs(a.amount),
           date: b.date,
           counterparty: payee,
@@ -92,7 +92,7 @@ export function detectAnomalies(
     }
 
     // ── Spike: a recent outflow far above this payee's own history. Use the
-    //    median (robust — the outlier itself doesn't inflate the baseline the
+    //    median (robust - the outlier itself doesn't inflate the baseline the
     //    way mean+σ would). ──
     if (sorted.length >= 4) {
       const med = median(amts);
@@ -123,7 +123,7 @@ export function detectAnomalies(
       if (monthlyish || recurringFlag) {
         const last = amts[amts.length - 1];
         const priorMed = median(amts.slice(0, -1));
-        // A 15%+ jump that's a non-trivial fraction of the recurring charge — not
+        // A 15%+ jump that's a non-trivial fraction of the recurring charge - not
         // gated by the larger minMaterial floor (a creep on a small subscription
         // still matters).
         if (priorMed > 0 && last > priorMed * 1.15 && last - priorMed >= Math.max(500, priorMed * 0.1) && inRecent(sorted[sorted.length - 1].date)) {
@@ -158,7 +158,7 @@ export function detectAnomalies(
         type: "new_vendor",
         severity: "low",
         title: `New payee: ${name(first)}`,
-        detail: `First payment of ${fmt(v)} — a large outflow to a payee not seen before.`,
+        detail: `First payment of ${fmt(v)} - a large outflow to a payee not seen before.`,
         amount: v,
         date: first.date,
         counterparty: name(first),

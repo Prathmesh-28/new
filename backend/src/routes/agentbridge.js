@@ -1,5 +1,5 @@
-// Agent bridge (Headroom Studio P6 — the wedge): lets a PUBLISHED App Builder app
-// call the Agent Studio agents its project has granted. NO Headroom auth — the app
+// Agent bridge (Headroom Studio P6 - the wedge): lets a PUBLISHED App Builder app
+// call the Agent Studio agents its project has granted. NO Headroom auth - the app
 // token is the capability, scoped to exactly the agents granted to that project.
 // Mounted at /api/agent-bridge.
 //
@@ -12,7 +12,7 @@ const router = require("express").Router();
 const studio = require("../modules/studio");
 const { agents } = require("../modules/books");
 
-// The published app runs sandboxed (Origin: null), so allow any origin — the token,
+// The published app runs sandboxed (Origin: null), so allow any origin - the token,
 // not the origin, is the capability.
 router.use((req, res, next) => {
   res.set({
@@ -43,11 +43,11 @@ router.post("/:appToken/chat", async (req, res) => {
     const message = String(b.message || "").slice(0, 4000);
     const agentId = b.agentId;
     if (!message) return res.status(400).json({ error: "message required" });
-    if (rateLimited(token, 20, 60000)) return res.status(429).json({ error: "Too many requests — please slow down." });
+    if (rateLimited(token, 20, 60000)) return res.status(429).json({ error: "Too many requests - please slow down." });
     const grant = await studio.resolveBridgeGrant(token, agentId);
     if (!grant) return res.status(403).json({ error: "This app isn't allowed to use that agent." });
     const out = await agents.runAgent(grant.tenantId, null, agentId, message); // read-only; metered; cap-guarded
-    return res.json({ reply: out && out.reply ? out.reply : "" }); // reply only — never internal steps
+    return res.json({ reply: out && out.reply ? out.reply : "" }); // reply only - never internal steps
   } catch (e) {
     if (e && e.http) return res.status(e.http).json({ error: e.message, code: e.code });
     console.error("[agent-bridge]", e.message);

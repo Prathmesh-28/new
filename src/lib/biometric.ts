@@ -21,7 +21,7 @@ export async function biometricAvailable(): Promise<boolean> {
 }
 
 /** Prompts the OS biometric dialog. Resolves true on success, false on any
- *  failure or cancel — never throws. */
+ *  failure or cancel - never throws. */
 export async function biometricVerify(reason = "Unlock Headroom"): Promise<boolean> {
   try {
     const { NativeBiometric } = await import("capacitor-native-biometric");

@@ -1,4 +1,4 @@
-// §M-DUN — DUNNING (escalating overdue-receivable reminders).
+// §M-DUN - DUNNING (escalating overdue-receivable reminders).
 //
 // A "dunning procedure" is an ordered ladder of LEVELS, each keyed on a minimum
 // number of overdue days. As a receivable bill ages past each threshold it is
@@ -15,7 +15,7 @@
 //     to the FIRST level whose overdue threshold its days-overdue meets, walking
 //     from the most-severe level down (so the highest matching level wins).
 //
-// This layer sits ON TOP of the already-posted ledger — it never posts a voucher
+// This layer sits ON TOP of the already-posted ledger - it never posts a voucher
 // itself (interest/fee are *proposed* amounts the caller may bill via documents).
 // Reads open AR exactly the way billwise.openBills does: a SALES bill is a party
 // DEBIT (receivable); outstanding = gross − Σ book_allocations against it.
@@ -133,7 +133,7 @@ async function setDunningProcedure(tenantId, { name, levels } = {}) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    // a "procedure" is just the set of levels sharing (tenant, procedure) — rebuild it.
+    // a "procedure" is just the set of levels sharing (tenant, procedure) - rebuild it.
     await client.query("DELETE FROM book_dunning_levels WHERE tenant_id=$1 AND procedure=$2", [tenantId, procName]);
     for (const l of clean) {
       await client.query(
@@ -153,7 +153,7 @@ async function setDunningProcedure(tenantId, { name, levels } = {}) {
 }
 
 // List the configured ladder (ascending). Falls back to DEFAULT_LEVELS, marking
-// `configured:false`, when the tenant has not saved one — so a run always works.
+// `configured:false`, when the tenant has not saved one - so a run always works.
 async function listDunningLevels(tenantId, procName) {
   if (!tenantId) throw new PostError("BAD_INPUT", "tenantId required", 400);
   const procedure = (procName && String(procName).trim()) || "Default";
@@ -186,7 +186,7 @@ async function listDunningLevels(tenantId, procName) {
   };
 }
 
-// Resolve the ascending levels (validated) for a run — DB ladder if present, else
+// Resolve the ascending levels (validated) for a run - DB ladder if present, else
 // the in-code default ladder.
 async function resolveLevels(tenantId, procName) {
   const cfg = await listDunningLevels(tenantId, procName);
@@ -213,7 +213,7 @@ async function openReceivables(tenantId, asOfDate) {
   const out = [];
   for (const r of rows) {
     const outstanding = money(r.gross).minus(money(r.allocated));
-    if (!outstanding.greaterThan(0)) continue; // settled — nothing to dun
+    if (!outstanding.greaterThan(0)) continue; // settled - nothing to dun
     const creditDays = Number(r.credit_period_days) || 0;
     const dueDate = ymd(new Date(parseYmd(r.voucher_date).getTime() + creditDays * 86400000));
     const daysOverdue = Math.max(0, daysBetween(dueDate, asOf));
@@ -232,7 +232,7 @@ async function openReceivables(tenantId, asOfDate) {
 }
 
 // (read-only) the overdue AR that WOULD be dunned at asOf, with its matched level
-// and proposed interest/fee — without recording a run. Powers GET /dunning/due.
+// and proposed interest/fee - without recording a run. Powers GET /dunning/due.
 async function dueDunnings(tenantId, { asOfDate, procedure } = {}) {
   if (!tenantId) throw new PostError("BAD_INPUT", "tenantId required", 400);
   const levels = await resolveLevels(tenantId, procedure);

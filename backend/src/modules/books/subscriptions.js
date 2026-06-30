@@ -1,10 +1,10 @@
-// §M-SUB — SUBSCRIPTION BILLING. A re-implementation of the recurring-billing
-// concepts proven by Lago (lago-org/lago — usage/plans/subscriptions) and KillBill
-// (killbill/killbill — entitlement + invoice generator), written from scratch so we
+// §M-SUB - SUBSCRIPTION BILLING. A re-implementation of the recurring-billing
+// concepts proven by Lago (lago-org/lago - usage/plans/subscriptions) and KillBill
+// (killbill/killbill - entitlement + invoice generator), written from scratch so we
 // carry no third-party code (their MIT/Apache/GPL sources are read for the algorithm
 // only). Two masters sit on top of the existing posting engine:
 //
-//   1. PLANS (book_subscription_plans): a priced, recurring offering — name, price,
+//   1. PLANS (book_subscription_plans): a priced, recurring offering - name, price,
 //      interval (monthly|quarterly|yearly) × interval_count, plus GST rate + HSN/SAC
 //      so each generated invoice is a fully compliant Indian tax invoice.
 //
@@ -12,7 +12,7 @@
 //      a lifecycle status (trial → active → paused → cancelled), an anchored billing
 //      clock (current_period_start, next_invoice_date) and a quantity multiplier.
 //
-// Billing itself never touches the ledger directly — it always routes a SALES
+// Billing itself never touches the ledger directly - it always routes a SALES
 // invoice through mappers.buildSalesVoucher + documents.salesCtx + postVoucher, so a
 // subscription invoice is indistinguishable from a hand-keyed one (same GST split,
 // same GSTR-1 side-records, same idempotency + period locks).
@@ -23,7 +23,7 @@
 // the unused remainder of the current period. We do all of it on decimal.js money.
 //
 // CommonJS. Money strictly through ./money; interval math is pure UTC date arithmetic
-// (date-fns is not a dependency here — we mirror its addMonths/addYears/differenceInDays
+// (date-fns is not a dependency here - we mirror its addMonths/addYears/differenceInDays
 // semantics with our own clamp-safe helpers, same UTC-only style as ./payterms).
 const { pool } = require("../../db");
 const { money, toDb, toRupees } = require("./money");
@@ -35,7 +35,7 @@ const usage = require("./usage");
 
 // ── pure date helpers (UTC, 'YYYY-MM-DD') ────────────────────────────────────
 // All subscription dates are date-only; we parse/format in UTC so a date never
-// drifts a day across timezones — the same discipline ./payterms uses.
+// drifts a day across timezones - the same discipline ./payterms uses.
 function ymd(d) {
   return d.toISOString().slice(0, 10);
 }
@@ -124,7 +124,7 @@ async function getPlan(tenantId, planId, client = pool) {
 }
 
 // ── (2) SUBSCRIPTIONS ───────────────────────────────────────────────────────
-// Trial mechanics (Lago): a trial subscription bills nothing now — its first
+// Trial mechanics (Lago): a trial subscription bills nothing now - its first
 // invoice fires at trial_end. With no trial it is active immediately and the
 // first invoice is due on startDate. In both cases the billing clock is anchored
 // at next_invoice_date and advances one full period each time it bills.
@@ -178,7 +178,7 @@ async function listSubscriptions(tenantId, status) {
   return rows;
 }
 
-// ── (3) CHANGE PLAN — KillBill mid-cycle proration ────────────────────────────
+// ── (3) CHANGE PLAN - KillBill mid-cycle proration ────────────────────────────
 // When a subscription switches plans mid-period, the customer has already been
 // invoiced for the OLD plan for the whole current period. KillBill's rule: credit
 // the unused portion of the old plan and charge the same unused portion of the new
@@ -194,7 +194,7 @@ async function listSubscriptions(tenantId, status) {
 // net < 0 → post a CREDIT-shaped adjustment is out of scope here, so we surface the
 //            credit amount and leave next_invoice_date to settle it on renewal.
 // With prorate=false we simply swap the plan, leaving the clock untouched (the new
-// price takes effect at the next renewal — Lago's "no proration" upgrade path).
+// price takes effect at the next renewal - Lago's "no proration" upgrade path).
 async function changePlan(tenantId, { subscriptionId, newPlanId, prorate } = {}) {
   if (!tenantId) throw new PostError("BAD_INPUT", "tenantId required", 400);
   if (!subscriptionId) throw new PostError("BAD_INPUT", "subscriptionId required", 422);
@@ -246,7 +246,7 @@ async function changePlan(tenantId, { subscriptionId, newPlanId, prorate } = {})
       };
 
       // Upgrade (net > 0): bill the difference immediately as a GST sales invoice on
-      // the new plan's tax profile. Downgrade/even: no charge now — credit shows up
+      // the new plan's tax profile. Downgrade/even: no charge now - credit shows up
       // implicitly via the cheaper renewal. We never post a negative SALES voucher.
       if (net.greaterThan(0)) {
         invoice = await postPlanInvoice(
@@ -276,7 +276,7 @@ async function changePlan(tenantId, { subscriptionId, newPlanId, prorate } = {})
 
 // ── (4) CANCEL ─────────────────────────────────────────────────────────────────
 // atPeriodEnd=true (Lago default): the subscription keeps running until the current
-// period ends — status flips to cancelled but next_invoice_date is left so the final
+// period ends - status flips to cancelled but next_invoice_date is left so the final
 // already-paid period is honoured (and won't bill again, since cancelled subs are
 // skipped by generateDueInvoices). atPeriodEnd=false: cancel now, stop the clock.
 async function cancelSubscription(tenantId, id, atPeriodEnd) {
@@ -317,10 +317,10 @@ async function postPlanInvoice(client, tenantId, partyLedgerId, plan, { amount, 
   return postVoucher(tenantId, null, m.voucher, m.entries, { taxes: m.taxes });
 }
 
-// ── (5) GENERATE DUE INVOICES — the cron entrypoint ──────────────────────────
+// ── (5) GENERATE DUE INVOICES - the cron entrypoint ──────────────────────────
 // For every ACTIVE subscription whose next_invoice_date ≤ asOf, post a sales invoice
 // for plan.price × qty (+GST via the sales builder) against the party, then advance
-// next_invoice_date by one full plan period — looping to catch up EVERY missed cycle
+// next_invoice_date by one full plan period - looping to catch up EVERY missed cycle
 // (e.g. after the cron was down), one invoice per missed period, each dated at that
 // period's date. current_period_start tracks the period each invoice covers. Capped to
 // avoid a runaway. Trial subscriptions are auto-activated the moment their trial_end
@@ -332,7 +332,7 @@ async function generateDueInvoices(tenantId, asOf) {
   const cutoff = asOf ? parseYmd(asOf, "asOf") : parseYmd(today());
   const cutoffStr = ymd(cutoff);
 
-  // Pull both active and trial subs that are due — a due trial means the trial just
+  // Pull both active and trial subs that are due - a due trial means the trial just
   // ended and the first real invoice should fire (flipping it to active).
   const { rows: subs } = await pool.query(
     `SELECT s.*, p.price AS plan_price, p.gst_rate AS plan_gst_rate, p.hsn_sac AS plan_hsn,
@@ -371,7 +371,7 @@ async function generateDueInvoices(tenantId, asOf) {
       const periodEnd = advancePeriod(runDate, plan);
       try {
         // Metered plans (OpenMeter/Lago): on top of the recurring base fee, add a
-        // usage charge for the period that just closed — [runDate, periodEnd) — by
+        // usage charge for the period that just closed - [runDate, periodEnd) - by
         // aggregating this subscription's events and pricing them via usage.js. The
         // non-metered path is unchanged: usageCharge stays null and periodTotal == base.
         let usageCharge = null;

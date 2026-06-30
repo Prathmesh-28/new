@@ -6,7 +6,7 @@ import { MessageSquare, Loader2 } from "lucide-react";
 import { humanizeAiError } from "@/components/ai/aiError";
 
 /**
- * "Discuss" — the Headroom Collab wedge: a conversation that lives next to the work
+ * "Discuss" - the Headroom Collab wedge: a conversation that lives next to the work
  * it's about. Opens the conversation already linked to this financial object (invoice,
  * client, deal, reconciliation, gst filing), or creates one linked to it, then jumps to
  * Messages. Drop it on any financial-object row/detail.

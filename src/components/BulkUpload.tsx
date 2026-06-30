@@ -66,7 +66,7 @@ export default function BulkUpload({
 
   const downloadTemplate = () => {
     download(`${templateName}.csv`, templateCsv(columns));
-    toast.success("Template downloaded — fill it in and upload");
+    toast.success("Template downloaded - fill it in and upload");
   };
 
   const submit = async () => {
@@ -78,7 +78,7 @@ export default function BulkUpload({
       setResult(res || {});
       const created = res?.created ?? 0;
       const failed = res?.failed ?? (res?.errors?.length ?? 0);
-      if (failed > 0) toast.warning(`${created} created, ${failed} failed — see details`);
+      if (failed > 0) toast.warning(`${created} created, ${failed} failed - see details`);
       else toast.success(`${created} row(s) uploaded`);
       onDone?.(res || {});
     } catch (e: any) {
@@ -129,7 +129,7 @@ export default function BulkUpload({
 
             {rows.length > 0 && (
               <div className="mt-3">
-                <p className="mb-1 text-xs font-medium">{rows.length} row(s) parsed — preview:</p>
+                <p className="mb-1 text-xs font-medium">{rows.length} row(s) parsed - preview:</p>
                 <div className="max-h-48 overflow-auto rounded-lg border border-[var(--color-border)]">
                   <table className="w-full text-[11px]">
                     <thead className="sticky top-0 bg-[var(--color-surface-2)]">

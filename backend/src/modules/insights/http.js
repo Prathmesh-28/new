@@ -1,7 +1,7 @@
-// Insights API — /api/insights. Reuses Headroom auth.
+// Insights API - /api/insights. Reuses Headroom auth.
 //   - Live cross-module KPIs + saved dashboards (existing).
 //   - A SAFE query engine: datasets catalogue, saved queries, run (saved or inline),
-//     and saved charts. Compilation/validation lives in index.js — every query is a
+//     and saved charts. Compilation/validation lives in index.js - every query is a
 //     structured model over a whitelisted dataset, never raw SQL.
 const router = require("express").Router();
 const { authenticate } = require("../../middleware/auth");
@@ -16,7 +16,7 @@ const fail = (res, e) => { console.error("[insights]", e.message); res.status(50
 
 // Creator-scoped delete guard: a user may only delete saved objects they created.
 // Verifies the row's created_by matches the caller before the delete proceeds
-// (tables store a created_by column — see modules/insights/index.js). super_admin is
+// (tables store a created_by column - see modules/insights/index.js). super_admin is
 // exempt so platform admins can still clean up. Returns true if the caller may delete.
 const ALLOWED_DELETE_TABLES = new Set(["insights_dashboards", "insights_queries", "insights_charts"]);
 async function ownsObject(req, table, id) {

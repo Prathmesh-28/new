@@ -49,7 +49,7 @@ export function parseTallyMasters(xml: string): TallyParseResult {
   const items: TallyItemRow[] = [];
   if (!xml || typeof xml !== "string") return { ledgers, items };
 
-  // Ledgers — <LEDGER NAME="…"> … </LEDGER>
+  // Ledgers - <LEDGER NAME="…"> … </LEDGER>
   const ledgerRe = /<LEDGER\b([^>]*)>([\s\S]*?)<\/LEDGER>/gi;
   let m: RegExpExecArray | null;
   while ((m = ledgerRe.exec(xml))) {
@@ -71,7 +71,7 @@ export function parseTallyMasters(xml: string): TallyParseResult {
     });
   }
 
-  // Stock items — <STOCKITEM NAME="…"> … </STOCKITEM>
+  // Stock items - <STOCKITEM NAME="…"> … </STOCKITEM>
   const itemRe = /<STOCKITEM\b([^>]*)>([\s\S]*?)<\/STOCKITEM>/gi;
   while ((m = itemRe.exec(xml))) {
     const block = m[2];

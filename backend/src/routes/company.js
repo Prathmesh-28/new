@@ -4,7 +4,7 @@ const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 const { tenantSeatInfo } = require("../lib/plans");
 const { writeAudit } = require("../lib/audit");
 
-// Company / tenant profile — the identity of an SMB beyond its email-derived
+// Company / tenant profile - the identity of an SMB beyond its email-derived
 // tenant id: legal name, GSTIN, industry, address, etc. (gap B5).
 
 const FIELDS = ["company_name", "legal_name", "gstin", "pan", "industry", "company_size",
@@ -24,7 +24,7 @@ async function loadProfile(tid) {
   return { tenant_id: tid, status: "active", ...Object.fromEntries(FIELDS.map(f => [f, null])) };
 }
 
-// GET /api/company — the caller's company profile (+ live seat usage)
+// GET /api/company - the caller's company profile (+ live seat usage)
 router.get("/", authenticate, async (req, res) => {
   const tid = scopeTenant(req);
   const profile = await loadProfile(tid);
@@ -32,7 +32,7 @@ router.get("/", authenticate, async (req, res) => {
   res.json({ ...profile, seats });
 });
 
-// PUT /api/company — owner/admin updates the profile (upsert)
+// PUT /api/company - owner/admin updates the profile (upsert)
 router.put("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const tid = scopeTenant(req);
   const vals = FIELDS.map(f => {

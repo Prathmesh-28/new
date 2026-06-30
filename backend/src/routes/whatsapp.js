@@ -4,7 +4,7 @@ const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
 const { sendWhatsApp, validateSignature, normalizePhone } = require("../lib/whatsapp");
 const { sendPush } = require("../lib/push");
-// Plain-language replies run on the tenant's own engine (OpenRouter / self-host) — no direct Anthropic.
+// Plain-language replies run on the tenant's own engine (OpenRouter / self-host) - no direct Anthropic.
 const llm = require("../modules/books/llm");
 
 const sha256 = (s) => crypto.createHash("sha256").update(String(s)).digest("hex");
@@ -90,7 +90,7 @@ async function dispatch(text, data, tenantId) {
   // Alerts
   if (/^(alert|alerts|warning|warnings)$/.test(cmd)) {
     const unread = (data.alerts ?? []).filter(a => !a.isRead);
-    if (!unread.length) return "✅ *No unread alerts* — your cash flow is looking healthy.";
+    if (!unread.length) return "✅ *No unread alerts* - your cash flow is looking healthy.";
     const lines = unread.slice(0, 5).map(a => `  ${a.severity === "critical" ? "🚨" : a.severity === "high" ? "⚠️" : "📌"} ${a.title}`).join("\n");
     return `🔔 *${unread.length} unread alert${unread.length > 1 ? "s" : ""}*\n\n${lines}`;
   }
@@ -115,7 +115,7 @@ async function dispatch(text, data, tenantId) {
     const last = pts[pts.length - 1];
     const burn = monthlyBurn(data.transactions);
     const total = (data.bankAccounts ?? []).reduce((s, a) => s + (a.balance ?? 0), 0);
-    return `📈 *30-day forecast*\n\nToday: *${fmt(total)}*\nIn 30 days (P50): *${fmt(last.p50)}*\nRange: ${fmt(last.p10)}–${fmt(last.p90)}\nBurn: ${fmt(burn)}/mo`;
+    return `📈 *30-day forecast*\n\nToday: *${fmt(total)}*\nIn 30 days (P50): *${fmt(last.p50)}*\nRange: ${fmt(last.p10)}-${fmt(last.p90)}\nBurn: ${fmt(burn)}/mo`;
   }
 
   // Credit
@@ -134,10 +134,10 @@ async function dispatch(text, data, tenantId) {
 
   // Help
   if (/^(help|hi|hello|helo|commands?|menu|start)$/.test(cmd)) {
-    return `👋 *Headroom CFO Assistant*\n\nReply with:\n  *cash* — current balance\n  *runway* — how many days of cash\n  *burn* — monthly expenses\n  *alerts* — unread alerts\n  *invoices* — outstanding receivables\n  *forecast* — 30-day projection\n  *credit* — loan status\n\nOr ask anything in plain language:\n  "Should I take the credit offer?"\n  "Why is my burn so high?"`;
+    return `👋 *Headroom CFO Assistant*\n\nReply with:\n  *cash* - current balance\n  *runway* - how many days of cash\n  *burn* - monthly expenses\n  *alerts* - unread alerts\n  *invoices* - outstanding receivables\n  *forecast* - 30-day projection\n  *credit* - loan status\n\nOr ask anything in plain language:\n  "Should I take the credit offer?"\n  "Why is my burn so high?"`;
   }
 
-  // AI fallback — anything else. Runs on the tenant's own engine; if no engine is
+  // AI fallback - anything else. Runs on the tenant's own engine; if no engine is
   // configured (gateway throws LLM_NOT_CONFIGURED) we degrade to the command hint.
   if (!tenantId) {
     return `I didn't understand "${text}". Reply *help* for available commands.`;
@@ -156,11 +156,11 @@ async function dispatch(text, data, tenantId) {
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
 
-// POST /api/whatsapp/send-otp — send a real 6-digit code over WhatsApp
+// POST /api/whatsapp/send-otp - send a real 6-digit code over WhatsApp
 router.post("/send-otp", authenticate, async (req, res) => {
   const phone = normalizePhone(req.body.phone ?? "");
   if (!phone.match(/^\+[1-9]\d{6,14}$/)) {
-    return res.status(400).json({ error: "Invalid phone — use a valid mobile number with country code." });
+    return res.status(400).json({ error: "Invalid phone - use a valid mobile number with country code." });
   }
   // 30-second resend cooldown
   const { rows: prev } = await pool.query(
@@ -193,7 +193,7 @@ router.post("/send-otp", authenticate, async (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/whatsapp/verify-otp — verify the code, then link the number
+// POST /api/whatsapp/verify-otp - verify the code, then link the number
 router.post("/verify-otp", authenticate, async (req, res) => {
   const phone = normalizePhone(req.body.phone ?? "");
   const code  = (req.body.code ?? "").trim();
@@ -202,9 +202,9 @@ router.post("/verify-otp", authenticate, async (req, res) => {
     [phone, req.user.tenant_id]
   );
   const rec = rows[0];
-  if (!rec) return res.status(400).json({ error: "No code found — tap Send OTP first." });
-  if (new Date(rec.expires_at) < new Date()) return res.status(400).json({ error: "Code expired — request a new one." });
-  if (rec.attempts >= 5) return res.status(429).json({ error: "Too many wrong attempts — request a new code." });
+  if (!rec) return res.status(400).json({ error: "No code found - tap Send OTP first." });
+  if (new Date(rec.expires_at) < new Date()) return res.status(400).json({ error: "Code expired - request a new one." });
+  if (rec.attempts >= 5) return res.status(429).json({ error: "Too many wrong attempts - request a new code." });
   if (sha256(code) !== rec.code) {
     await pool.query("UPDATE whatsapp_otps SET attempts=attempts+1 WHERE phone=$1", [phone]);
     return res.status(400).json({ error: "Incorrect code." });
@@ -216,17 +216,17 @@ router.post("/verify-otp", authenticate, async (req, res) => {
   );
   await pool.query("DELETE FROM whatsapp_otps WHERE phone=$1", [phone]);
   await sendWhatsApp(phone,
-    `✅ *Headroom connected!*\n\nYou're all set. Reply *help* to see commands, or just ask your numbers in plain language — e.g. "What's my cash balance?"`
+    `✅ *Headroom connected!*\n\nYou're all set. Reply *help* to see commands, or just ask your numbers in plain language - e.g. "What's my cash balance?"`
   ).catch(() => {});
   res.json({ ok: true, phone });
 });
 
-// POST /api/whatsapp/register — link a phone number to the authenticated user's tenant
+// POST /api/whatsapp/register - link a phone number to the authenticated user's tenant
 router.post("/register", authenticate, async (req, res) => {
   const rawPhone = req.body.phone ?? "";
   const phone    = normalizePhone(rawPhone);
   if (!phone.match(/^\+[1-9]\d{6,14}$/)) {
-    return res.status(400).json({ error: "Invalid phone — use E.164 format e.g. +919876543210" });
+    return res.status(400).json({ error: "Invalid phone - use E.164 format e.g. +919876543210" });
   }
   await pool.query(
     "INSERT INTO whatsapp_bindings(phone, tenant_id, user_id) VALUES($1,$2,$3) ON CONFLICT(phone) DO UPDATE SET tenant_id=$2, user_id=$3",
@@ -239,7 +239,7 @@ router.post("/register", authenticate, async (req, res) => {
   res.json({ ok: true, phone });
 });
 
-// DELETE /api/whatsapp/register — unlink
+// DELETE /api/whatsapp/register - unlink
 router.delete("/register", authenticate, async (req, res) => {
   await pool.query(
     "DELETE FROM whatsapp_bindings WHERE tenant_id=$1",
@@ -248,7 +248,7 @@ router.delete("/register", authenticate, async (req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/whatsapp/status — check registration
+// GET /api/whatsapp/status - check registration
 router.get("/status", authenticate, async (req, res) => {
   const { rows } = await pool.query(
     "SELECT phone FROM whatsapp_bindings WHERE tenant_id=$1 LIMIT 1",
@@ -257,11 +257,11 @@ router.get("/status", authenticate, async (req, res) => {
   res.json({ registered: rows.length > 0, phone: rows[0]?.phone ?? null });
 });
 
-// POST /api/whatsapp/send-digest — called by the morning digest cron only.
+// POST /api/whatsapp/send-digest - called by the morning digest cron only.
 // FAIL CLOSED: requires a matching shared secret. server.js guarantees
 // INTERNAL_CRON_SECRET is always set (env in prod, generated at boot otherwise),
 // so the in-process cron self-call always carries it while the public internet
-// cannot — this endpoint fans out WhatsApp + push to every tenant, so it must
+// cannot - this endpoint fans out WhatsApp + push to every tenant, so it must
 // never be world-callable (was previously skipped entirely when the env was unset).
 router.post("/send-digest", async (req, res) => {
   const expected = process.env.INTERNAL_CRON_SECRET || "";
@@ -302,7 +302,7 @@ router.post("/send-digest", async (req, res) => {
 
       const today = new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
       const emoji  = runway < 30 ? "🚨" : runway < 90 ? "⚠️" : "✅";
-      let msg = `☀️ *Headroom Morning Brief — ${today}*\n\n`;
+      let msg = `☀️ *Headroom Morning Brief - ${today}*\n\n`;
       msg += `💰 Cash: *${fmt(total)}*\n`;
       msg += `🔥 Burn: ${fmt(burn)}/month\n`;
       msg += `${emoji} Runway: *${runway} days*\n`;
@@ -341,7 +341,7 @@ router.post("/send-digest", async (req, res) => {
       if (prefs.credit_offer) {
         const offers = (data.creditOffers ?? []).filter(o => o.status === "pending");
         if (offers.length) {
-          msg += `\n💳 *${offers.length} credit offer${offers.length > 1 ? "s" : ""} available* — up to ${fmt(Math.max(...offers.map(o => o.amount || 0)))}\n`;
+          msg += `\n💳 *${offers.length} credit offer${offers.length > 1 ? "s" : ""} available* - up to ${fmt(Math.max(...offers.map(o => o.amount || 0)))}\n`;
         }
       }
 
@@ -374,7 +374,7 @@ router.post("/send-digest", async (req, res) => {
   res.json({ sent, failed, total: bindings.length });
 });
 
-// POST /webhook/whatsapp — Twilio inbound webhook (mounted at root, no /api prefix)
+// POST /webhook/whatsapp - Twilio inbound webhook (mounted at root, no /api prefix)
 router.post("/", async (req, res) => {
   // Twilio signature validation
   if (!validateSignature(req)) {
@@ -392,7 +392,7 @@ router.post("/", async (req, res) => {
   );
 
   if (!rows[0]) {
-    // Unknown sender — tell them how to register
+    // Unknown sender - tell them how to register
     const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>Your number isn't linked to a Headroom account yet. Open headroom-pi.vercel.app/settings and connect your WhatsApp number to get started.</Message></Response>`;
     return res.type("text/xml").send(twiml);
   }

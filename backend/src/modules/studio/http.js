@@ -1,4 +1,4 @@
-// Headroom Studio — App Builder, Phase 0 REST router.
+// Headroom Studio - App Builder, Phase 0 REST router.
 // Mounted at /api/studio. Mirrors the books/crm module conventions: authenticate
 // at the top, tenantOf() for super-admin cross-tenant override, per-domain
 // WRITE_ROLES for write gating, fail() for typed errors. Reads are open to all
@@ -46,7 +46,7 @@ router.get("/versions/:id", async (req, res) => {
   try { res.json(await studio.getVersion(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); }
 });
 
-// ── Codegen (Phase 1) — describe → plan or build a new version ────────────────
+// ── Codegen (Phase 1) - describe → plan or build a new version ────────────────
 router.post("/projects/:id/generate", canWrite, async (req, res) => {
   try {
     const b = req.body || {};
@@ -59,7 +59,7 @@ router.post("/projects/:id/restore/:versionId", canWrite, async (req, res) => {
   try { res.status(201).json(await studio.restoreVersion(tenantOf(req), req.params.id, req.params.versionId)); } catch (e) { fail(res, e); }
 });
 
-// ── Publish (v1) — serve the current version at a public /api/pub/:token link ──
+// ── Publish (v1) - serve the current version at a public /api/pub/:token link ──
 router.post("/projects/:id/publish", canWrite, async (req, res) => {
   try { res.json(await studio.publish(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); }
 });
@@ -67,7 +67,7 @@ router.get("/projects/:id/deployments", async (req, res) => {
   try { res.json(await studio.listDeployments(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); }
 });
 
-// ── Agent bridge grants (P6) — which agents this app may embed ────────────────
+// ── Agent bridge grants (P6) - which agents this app may embed ────────────────
 router.get("/projects/:id/agents", async (req, res) => {
   try { res.json(await studio.listAppAgents(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); }
 });

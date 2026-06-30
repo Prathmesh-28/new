@@ -4,7 +4,7 @@ import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import { Loader2, Zap, FileText, Check, Banknote } from "lucide-react";
 
-// Wired to /api/lending — the real LOS/LMS + invoice-financing wedge (vs. the other
+// Wired to /api/lending - the real LOS/LMS + invoice-financing wedge (vs. the other
 // tabs on this page which are local calculators). Disbursal/e-NACH are gated; the
 // rails badge shows Live vs Preview honestly.
 interface Eligibility { limit: number; grade: string; score: number; decision: string; rails?: { disbursal: boolean } }
@@ -42,7 +42,7 @@ export default function EmbeddedFinancing() {
         ? { kind, invoice_amount: parseFloat(invoiceAmt) || 0, apr: 24, tenure_days: 60 }
         : { kind, principal: parseFloat(principal) || 0, apr: 28, tenure_months: 12 };
       await api.post("/api/lending/offers", body);
-      toast.success("Offer generated — review the Key Fact Statement");
+      toast.success("Offer generated - review the Key Fact Statement");
       setInvoiceAmt(""); setPrincipal(""); await load();
     } catch (e) { toast.error((e as { message?: string })?.message || "Couldn't generate an offer"); }
     finally { setBusy(false); }
@@ -64,7 +64,7 @@ export default function EmbeddedFinancing() {
       {/* Eligibility */}
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs text-[var(--color-muted)] mb-1 flex items-center gap-1.5"><Zap size={13} className="text-[var(--color-primary)]" /> Pre-approved limit · grade {elig?.grade ?? "—"}</p>
+          <p className="text-xs text-[var(--color-muted)] mb-1 flex items-center gap-1.5"><Zap size={13} className="text-[var(--color-primary)]" /> Pre-approved limit · grade {elig?.grade ?? "-"}</p>
           <p className="text-2xl font-bold">{formatCurrency(elig?.limit ?? 0)}</p>
         </div>
         <span className={`text-[10px] px-2 py-1 rounded-full ${railsLive ? "bg-green-900/30 text-green-400" : "bg-amber-900/30 text-amber-400"}`}>
@@ -93,7 +93,7 @@ export default function EmbeddedFinancing() {
       {/* Offers with KFS */}
       {offers.filter(o => o.status === "offered").length > 0 && (
         <div className="space-y-2">
-          <p className="text-[11px] uppercase tracking-wide text-[var(--color-muted)] flex items-center gap-1.5"><FileText size={12} /> Offers — Key Fact Statement</p>
+          <p className="text-[11px] uppercase tracking-wide text-[var(--color-muted)] flex items-center gap-1.5"><FileText size={12} /> Offers - Key Fact Statement</p>
           {offers.filter(o => o.status === "offered").map(o => (
             <div key={o.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
               <div className="flex items-center justify-between mb-2">
@@ -109,7 +109,7 @@ export default function EmbeddedFinancing() {
               {o.kfs.recovery && <p className="text-[11px] text-[var(--color-muted)] mb-3">↩ {o.kfs.recovery}</p>}
               <div className="flex justify-end gap-2">
                 <button onClick={() => act(() => api.post(`/api/lending/offers/${o.id}/decline`, {}), "Declined")} disabled={busy} className="text-xs px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-muted)]">Decline</button>
-                <button onClick={() => act(() => api.post(`/api/lending/offers/${o.id}/accept`, {}), "Accepted — loan created")} disabled={busy} className="text-xs px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold flex items-center gap-1"><Check size={12} /> Accept</button>
+                <button onClick={() => act(() => api.post(`/api/lending/offers/${o.id}/accept`, {}), "Accepted - loan created")} disabled={busy} className="text-xs px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold flex items-center gap-1"><Check size={12} /> Accept</button>
               </div>
             </div>
           ))}
@@ -119,7 +119,7 @@ export default function EmbeddedFinancing() {
       {/* Active loans */}
       <div className="space-y-2">
         <p className="text-[11px] uppercase tracking-wide text-[var(--color-muted)] flex items-center gap-1.5"><Banknote size={12} /> Loans</p>
-        {loans.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No loans yet — accept an offer above.</p> : loans.map(l => (
+        {loans.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No loans yet - accept an offer above.</p> : loans.map(l => (
           <div key={l.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 flex items-center justify-between flex-wrap gap-3">
             <div>
               <p className="text-sm font-semibold">{l.kind === "invoice_finance" ? "Invoice advance" : "Working capital"} · {formatCurrency(l.principal)}</p>

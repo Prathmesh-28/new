@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 /**
- * App Builder — the Lovable/Emergent half of Headroom Studio. Describe an app in
+ * App Builder - the Lovable/Emergent half of Headroom Studio. Describe an app in
  * plain English → the codegen orchestrator (runs on your OpenRouter engine,
  * grounded on your real business data) generates a self-contained app → it renders
  * live in a sandboxed preview → iterate by chat (each prompt = a new version) →
@@ -22,15 +22,15 @@ interface AppAgents { granted: AgentRef[]; available: AgentRef[] }
 interface LogEntry { role: "user" | "system"; text: string; plan?: boolean; error?: boolean; buildPrompt?: string }
 interface GenResult { mode: "plan" | "build"; plan?: string; html?: string; summary?: string; version?: Version }
 
-// Starter apps — one click creates a project and builds it from your real business data.
+// Starter apps - one click creates a project and builds it from your real business data.
 const APP_TEMPLATES: { name: string; tag: string; prompt: string }[] = [
-  { name: "VC Dashboard", tag: "Fundraising", prompt: "Build a VC/board dashboard with my cash on hand, monthly burn, runway in days, and overdue receivables — with charts and a clean executive summary." },
+  { name: "VC Dashboard", tag: "Fundraising", prompt: "Build a VC/board dashboard with my cash on hand, monthly burn, runway in days, and overdue receivables - with charts and a clean executive summary." },
   { name: "Cash Runway Monitor", tag: "Cash", prompt: "Build a cash runway monitor: current cash, daily burn trend, projected zero-cash date, and a traffic-light status." },
   { name: "Invoice Tracker", tag: "Receivables", prompt: "Build an invoice tracker showing outstanding invoices, aging buckets (0-30 / 31-60 / 61-90 / 90+ days), and total receivable, sortable." },
   { name: "Collections Tracker", tag: "Receivables", prompt: "Build a collections tracker: who owes the most, days overdue, and a follow-up checklist." },
   { name: "Expense Report", tag: "Spend", prompt: "Build an expense report grouped by category with a chart and the top 10 expenses, for the current month." },
   { name: "GST Summary", tag: "Compliance", prompt: "Build a GST summary page showing output tax, input tax credit, and net payable for the current period." },
-  { name: "KPI Scorecard", tag: "Overview", prompt: "Build a one-screen KPI scorecard with revenue, profit, cash, and receivables — each with a trend sparkline." },
+  { name: "KPI Scorecard", tag: "Overview", prompt: "Build a one-screen KPI scorecard with revenue, profit, cash, and receivables - each with a trend sparkline." },
   { name: "Sales Pipeline", tag: "Sales", prompt: "Build a sales pipeline board (leads → won) with deal values and a weighted forecast." },
 ];
 
@@ -121,7 +121,7 @@ export default function AppBuilderPage() {
       const created = await api.post<Project>("/api/studio/projects", { name: "Untitled app" });
       await load();
       if (created?.id) setActiveId(created.id);
-      toast.success("Project created — describe the app you want to build.");
+      toast.success("Project created - describe the app you want to build.");
     } catch (e) { toast.error(humanizeAiError(e)); }
     finally { setCreating(false); }
   };
@@ -186,7 +186,7 @@ export default function AppBuilderPage() {
       const r = await api.post<{ token: string; path: string }>(`/api/studio/projects/${activeId}/publish`, {});
       const url = (API_BASE || window.location.origin) + r.path;
       setPubById((m) => ({ ...m, [activeId]: url }));
-      try { await navigator.clipboard?.writeText(url); toast.success("Published — link copied to clipboard"); }
+      try { await navigator.clipboard?.writeText(url); toast.success("Published - link copied to clipboard"); }
       catch { toast.success("Published"); }
     } catch (e) { toast.error(humanizeAiError(e)); }
     finally { setPublishing(false); }
@@ -235,7 +235,7 @@ export default function AppBuilderPage() {
             {loading ? (
               <p className="px-2 py-2 text-xs text-[var(--color-muted)]">Loading…</p>
             ) : filtered.length === 0 ? (
-              <p className="px-2 py-2 text-xs text-[var(--color-muted)]">No projects yet — create one to start.</p>
+              <p className="px-2 py-2 text-xs text-[var(--color-muted)]">No projects yet - create one to start.</p>
             ) : filtered.map((p) => (
               <div key={p.id} onClick={() => setActiveId(p.id)} role="button" tabIndex={0}
                 className={`group w-full text-left flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors cursor-pointer ${p.id === activeId ? "bg-[var(--color-primary)]/15 text-[var(--color-text)]" : "text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-text)]"}`}>
@@ -254,7 +254,7 @@ export default function AppBuilderPage() {
             <div className="flex-1 overflow-y-auto px-6 py-6">
               <div className="text-center mb-5">
                 <Blocks size={30} className="text-[var(--color-primary)] mb-2 mx-auto" />
-                <p className="text-sm font-semibold">Start from a template — or describe your own</p>
+                <p className="text-sm font-semibold">Start from a template - or describe your own</p>
                 <p className="text-xs text-[var(--color-muted)] mt-1 max-w-md mx-auto">One click builds a real app from your live business data, with a preview you can publish. Or hit “New project” to start blank.</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-2xl mx-auto">
@@ -287,7 +287,7 @@ export default function AppBuilderPage() {
                     <div className="absolute right-0 top-8 z-20 w-72 max-h-72 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl p-2">
                       <p className="text-[11px] text-[var(--color-muted)] px-1 pb-1.5">Let this app call your agents via <span className="font-mono">window.HEADROOM.askAgent()</span>. Then ask the builder to "add a chatbot powered by &lt;agent&gt;".</p>
                       {appAgents.available.length === 0 ? (
-                        <p className="text-xs text-[var(--color-muted)] px-1 py-2">No agents yet — build one in Agent Studio.</p>
+                        <p className="text-xs text-[var(--color-muted)] px-1 py-2">No agents yet - build one in Agent Studio.</p>
                       ) : appAgents.available.map((a) => {
                         const on = appAgents.granted.some((g) => g.id === a.id);
                         return (
@@ -351,7 +351,7 @@ export default function AppBuilderPage() {
                 <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
                   <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={1} disabled={building}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void generate("build"); } }}
-                    placeholder={html ? "Describe a change — e.g. “make the header sticky and add a date filter”" : "Describe your app — e.g. “a VC dashboard with my cash, runway and overdue receivables”"}
+                    placeholder={html ? "Describe a change - e.g. “make the header sticky and add a date filter”" : "Describe your app - e.g. “a VC dashboard with my cash, runway and overdue receivables”"}
                     className="w-full bg-transparent px-2 py-1.5 text-sm outline-none resize-none disabled:opacity-60" />
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <button onClick={() => void generate("plan")} disabled={building || !prompt.trim()}

@@ -2,10 +2,10 @@ const router = require("express").Router();
 const { pool } = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 
-// Owner-scoped organisation views — an owner sees everything happening inside
+// Owner-scoped organisation views - an owner sees everything happening inside
 // THEIR OWN tenant (never across tenants; that's the super-admin console).
 
-// GET /api/org/audit — recent actions by this tenant's own members (accountability)
+// GET /api/org/audit - recent actions by this tenant's own members (accountability)
 router.get("/audit", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 100, 500);
   const { rows } = await pool.query(

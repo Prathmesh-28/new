@@ -1,5 +1,5 @@
 "use strict";
-// SMB embedded lending REST — mounted at /api/lending. Same conventions as the other
+// SMB embedded lending REST - mounted at /api/lending. Same conventions as the other
 // modules: authenticate, tenantOf(), per-domain WRITE_ROLES, fail(). Disbursal/e-mandate
 // rails are credential-gated (capabilities) and reported, never faked.
 const router = require("express").Router();

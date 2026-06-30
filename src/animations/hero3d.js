@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────────────────────
- * hero3d.js — decorative 3D / WebGL background layers for the landing hero.
+ * hero3d.js - decorative 3D / WebGL background layers for the landing hero.
  *
  * Non-invasive: every layer is injected as an absolutely-positioned element with
  * z-index 0 and pointer-events:none, sitting BEHIND existing content (which is
@@ -53,7 +53,7 @@ function injectStyles(add) {
   add(() => style.remove());
 }
 
-/* ── #1 Hero fog orbs — large soft blurred blobs drifting on long loops ──────── */
+/* ── #1 Hero fog orbs - large soft blurred blobs drifting on long loops ──────── */
 function initFog(add) {
   const hero = document.querySelector('[data-h3d="hero"]');
   if (!hero) return;
@@ -102,7 +102,7 @@ function initFog(add) {
   add(() => { cancelAnimationFrame(raf); layer.remove(); });
 }
 
-/* ── #4 Cash-position chart — perspective tilt + glow pulse on warning bars ──── */
+/* ── #4 Cash-position chart - perspective tilt + glow pulse on warning bars ──── */
 function initCashTilt(add) {
   const row = document.querySelector('[data-h3d="cashbars"]');
   if (!row) return;
@@ -129,7 +129,7 @@ function initCashTilt(add) {
   });
 }
 
-/* ── #2 Dashboard particle field — 300 lime points drifting slowly upward ────── */
+/* ── #2 Dashboard particle field - 300 lime points drifting slowly upward ────── */
 function initParticles(THREE, add, isDisposed) {
   const anchor = document.querySelector('[data-h3d="dash"]');
   if (!anchor || isDisposed()) return;
@@ -209,7 +209,7 @@ function initParticles(THREE, add, isDisposed) {
   });
 }
 
-/* ── #3 Stats strip — 3D bars rise (cubic ease, staggered) on scroll-in ──────── */
+/* ── #3 Stats strip - 3D bars rise (cubic ease, staggered) on scroll-in ──────── */
 function initStatsBars(THREE, add, isDisposed) {
   const anchor = document.querySelector('[data-h3d="stats"]');
   if (!anchor || isDisposed()) return;
@@ -328,7 +328,7 @@ function mountBehind(anchor, layer) {
   anchor.insertBefore(layer, anchor.firstChild);
 }
 
-/* Drifting blurred glow orbs — for dark sections (screen blend). */
+/* Drifting blurred glow orbs - for dark sections (screen blend). */
 function mountOrbs(anchor, add, count = 3) {
   anchor.querySelectorAll('[data-h3d-layer="deco-orbs"]').forEach(n => n.remove());
   const layer = document.createElement("div");
@@ -364,7 +364,7 @@ function mountOrbs(anchor, add, count = 3) {
   add(() => { cancelAnimationFrame(raf); layer.remove(); });
 }
 
-/* Floating wireframe shapes rotating in 3D perspective — light or dark sections. */
+/* Floating wireframe shapes rotating in 3D perspective - light or dark sections. */
 function mountShapes(anchor, add, tone = "light", count = 7) {
   anchor.querySelectorAll('[data-h3d-layer="deco-shapes"]').forEach(n => n.remove());
   const layer = document.createElement("div");
@@ -404,7 +404,7 @@ function mountShapes(anchor, add, tone = "light", count = 7) {
   add(() => { cancelAnimationFrame(raf); layer.remove(); });
 }
 
-/* Rotating wireframe icosahedron (Three.js) — centrepiece for the final CTA. */
+/* Rotating wireframe icosahedron (Three.js) - centrepiece for the final CTA. */
 function mountWire(THREE, anchor, add, isDisposed) {
   if (!anchor || isDisposed()) return;
   anchor.querySelectorAll('[data-h3d-canvas="wire"]').forEach(n => n.remove());
@@ -440,7 +440,7 @@ function mountWire(THREE, anchor, add, isDisposed) {
   add(() => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); geo.dispose(); renderer.dispose(); canvas.remove(); });
 }
 
-/* Interactive 3D tilt — cards follow the cursor in perspective. Hover devices only. */
+/* Interactive 3D tilt - cards follow the cursor in perspective. Hover devices only. */
 function initTilt(add) {
   if (!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches)) return;
   const cards = Array.from(document.querySelectorAll("[data-h3d-tilt]"));
@@ -514,7 +514,7 @@ export function initHero3D() {
       initStatsBars(THREE, add, isDisposed);
       document.querySelectorAll('[data-h3d-deco="wire"]').forEach(el => mountWire(THREE, el, add, isDisposed));
     })
-    .catch(() => { /* CDN blocked — CSS layers remain active */ });
+    .catch(() => { /* CDN blocked - CSS layers remain active */ });
 
   return () => {
     disposed = true;

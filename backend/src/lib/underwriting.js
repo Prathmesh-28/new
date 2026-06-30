@@ -1,5 +1,5 @@
 /**
- * Underwriting engine — Node.js.
+ * Underwriting engine - Node.js.
  * Scores a credit application 0-100 from 9 signals.
  */
 
@@ -44,23 +44,23 @@ async function score(tenantId, pool, enrichment) {
   const monthlyRevenue90  = sum(inflows90)  / 3;
   const monthlyRevenue180 = sum(inflows180) / 6;
 
-  // S1 — Average monthly revenue (last 3 months)
+  // S1 - Average monthly revenue (last 3 months)
   const s1 = scoreRevenue(monthlyRevenue90);
 
-  // S2 — Revenue consistency (CoV of monthly inflows)
+  // S2 - Revenue consistency (CoV of monthly inflows)
   const s2 = scoreConsistency(inflows180);
 
-  // S3 — Business age in months
+  // S3 - Business age in months
   const ageMonths = (Date.now() - new Date(joinDate)) / (1000 * 60 * 60 * 24 * 30);
   const s3 = scoreAge(ageMonths);
 
-  // S4 — Revenue concentration (top customer %)
+  // S4 - Revenue concentration (top customer %)
   const s4 = scoreConcentration(inflows90);
 
-  // S5 — Overdraft frequency (transactions that cause balance to go <0)
+  // S5 - Overdraft frequency (transactions that cause balance to go <0)
   const s5 = scoreOverdraft(txns);
 
-  // S6 — Debt service ratio
+  // S6 - Debt service ratio
   const monthlyLoanRepayment = loans.reduce((s, l) => {
     // Estimate monthly from outstanding balance
     return s + (Number(l.outstanding_balance) * 0.05);
@@ -68,25 +68,25 @@ async function score(tenantId, pool, enrichment) {
   const dsr = monthlyRevenue90 > 0 ? monthlyLoanRepayment / monthlyRevenue90 : 0;
   const s6 = dsr < 0.15 ? 100 : dsr < 0.30 ? 80 : dsr < 0.45 ? 60 : dsr < 0.60 ? 40 : 20;
 
-  // S7 — Current balance vs monthly burn
+  // S7 - Current balance vs monthly burn
   const monthlyBurn = Math.abs(sum(outflows90)) / 3;
   const runwayMonths = monthlyBurn > 0 ? currentBalance / monthlyBurn : 6;
   const s7 = runwayMonths >= 3 ? 100 : runwayMonths >= 1.5 ? 70 : runwayMonths >= 0.5 ? 40 : 10;
 
-  // S8 — Payment behaviour (outflows vs expected recurring)
+  // S8 - Payment behaviour (outflows vs expected recurring)
   const s8 = scorePaymentBehavior(txns);
 
-  // S9 — Volume / activity signal
+  // S9 - Volume / activity signal
   const activityScore = Math.min(100, txns.length / 2);
 
-  // S10 — GST filing regularity (compliance + verifiable, lender-trusted turnover)
+  // S10 - GST filing regularity (compliance + verifiable, lender-trusted turnover)
   const s10 = scoreGst(gstRows);
 
-  // S11 — Receivables health (overdue as a share of what's outstanding)
+  // S11 - Receivables health (overdue as a share of what's outstanding)
   const recv = receivablesHealth(invRows);
   const s11 = recv.score;
 
-  // Explainable, weighted factors — single source of truth for both the score and the
+  // Explainable, weighted factors - single source of truth for both the score and the
   // per-factor breakdown the owner sees (label · weight · status · how to improve).
   const factorDefs = [
     { key: "revenue",      label: "Monthly revenue",        score: s1,  weight: 0.20, hint: "Higher, steadier sales lift eligibility the most." },
@@ -95,13 +95,13 @@ async function score(tenantId, pool, enrichment) {
     { key: "debt_service", label: "Debt-service ratio",     score: s6,  weight: 0.10, hint: "Carry less existing-loan load vs revenue." },
     { key: "runway",       label: "Cash runway",            score: s7,  weight: 0.10, hint: "Keep a bigger cash buffer vs monthly burn." },
     { key: "gst",          label: "GST filing regularity",  score: s10, weight: 0.08, hint: "File GST returns on time, every period." },
-    { key: "age",          label: "Business vintage",       score: s3,  weight: 0.08, hint: "Track record builds with age — automatic over time." },
+    { key: "age",          label: "Business vintage",       score: s3,  weight: 0.08, hint: "Track record builds with age - automatic over time." },
     { key: "concentration",label: "Customer diversity",     score: s4,  weight: 0.07, hint: "Reduce reliance on one large customer." },
     { key: "receivables",  label: "Receivables health",     score: s11, weight: 0.07, hint: "Collect overdue invoices to cut your overdue %." },
     { key: "payments",     label: "Payment behaviour",      score: s8,  weight: 0.05, hint: "Keep regular, on-time recurring payments." },
     { key: "activity",     label: "Account activity",       score: Math.round(activityScore), weight: 0.02, hint: "More transaction history strengthens the picture." },
   ];
-  // Optional FinBox/bureau enrichment — adds a credit-bureau factor when available, then
+  // Optional FinBox/bureau enrichment - adds a credit-bureau factor when available, then
   // renormalizes weights to 1.0. Absent → scorecard is exactly the internal-data version.
   if (enrichment && enrichment.bureau && enrichment.bureau.score != null) {
     factorDefs.push({ key: "bureau", label: "Credit bureau score", score: bureauToScore(enrichment.bureau.score), weight: 0.25, hint: "Keep your CIBIL / commercial bureau score healthy." });
@@ -155,7 +155,7 @@ async function score(tenantId, pool, enrichment) {
 // Grade bands for a human-readable risk tier.
 function gradeOf(s) { return s >= 80 ? "A" : s >= 65 ? "B" : s >= 50 ? "C" : s >= 35 ? "D" : "E"; }
 
-// Map a 300–900 bureau score (CIBIL / commercial) to our 0–100 factor scale.
+// Map a 300-900 bureau score (CIBIL / commercial) to our 0-100 factor scale.
 function bureauToScore(c) {
   if (c == null || isNaN(Number(c))) return 50;
   const v = Number(c);
@@ -172,10 +172,10 @@ function decide(r) {
   const reasons = [];
   let outcome;
   if (grade === "E" || amt <= 0) { outcome = "declined"; reasons.push({ code: "low_score", text: `Score ${r.score} (grade ${grade}) is below the lending threshold.` }); }
-  else if (grade === "D") { outcome = "refer"; reasons.push({ code: "borderline", text: `Grade ${grade} — borderline; a manual review is recommended.` }); }
-  else { outcome = "pre_qualified"; reasons.push({ code: "qualified", text: `Grade ${grade} — pre-qualified up to ₹${amt.toLocaleString("en-IN")}.` }); }
-  if (overdue > 0.4) reasons.push({ code: "high_overdue", text: `High overdue receivables (${Math.round(overdue * 100)}%) — collections risk.` });
-  if (gstScore <= 5) reasons.push({ code: "no_gst", text: "No recent GST filing track record — verifiable turnover is limited." });
+  else if (grade === "D") { outcome = "refer"; reasons.push({ code: "borderline", text: `Grade ${grade} - borderline; a manual review is recommended.` }); }
+  else { outcome = "pre_qualified"; reasons.push({ code: "qualified", text: `Grade ${grade} - pre-qualified up to ₹${amt.toLocaleString("en-IN")}.` }); }
+  if (overdue > 0.4) reasons.push({ code: "high_overdue", text: `High overdue receivables (${Math.round(overdue * 100)}%) - collections risk.` });
+  if (gstScore <= 5) reasons.push({ code: "no_gst", text: "No recent GST filing track record - verifiable turnover is limited." });
   return {
     outcome,
     label: outcome === "pre_qualified" ? "Pre-qualified" : outcome === "refer" ? "Refer for review" : "Not yet eligible",
@@ -184,10 +184,10 @@ function decide(r) {
   };
 }
 
-// GST filing regularity — distinct GST periods FILED in the last ~7 months. Filing on
+// GST filing regularity - distinct GST periods FILED in the last ~7 months. Filing on
 // time signals compliance and gives a lender verifiable turnover. No returns → no track record.
 // Distinct GST periods actually filed in the trailing ~7-month window (the real
-// COUNT — distinct from the 0-100 score below). GST_WINDOW periods = full marks.
+// COUNT - distinct from the 0-100 score below). GST_WINDOW periods = full marks.
 const GST_WINDOW = 6;
 function gstFiledCount(rows) {
   if (!rows.length) return 0;
@@ -204,7 +204,7 @@ function scoreGst(rows) {
   return n >= 6 ? 100 : n === 5 ? 88 : n === 4 ? 70 : n === 3 ? 50 : n === 2 ? 30 : n === 1 ? 15 : 5;
 }
 
-// Receivables health — overdue as a share of outstanding. No open invoices → neutral.
+// Receivables health - overdue as a share of outstanding. No open invoices → neutral.
 function receivablesHealth(invs) {
   const today = new Date();
   const open = invs.filter((i) => i.status !== "paid");

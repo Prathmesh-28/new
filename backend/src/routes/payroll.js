@@ -23,7 +23,7 @@ function computeTds(grossAnnual) {
   return tax * 1.04;                     // + 4% health & education cess
 }
 
-// GET /api/payroll/employees — salary + PAN is sensitive; restrict reads to
+// GET /api/payroll/employees - salary + PAN is sensitive; restrict reads to
 // owner/admin (matches the create/update/run guards below) so a sales/ops
 // teammate can't read the whole payroll.
 router.get("/employees", authenticate, canWrite, async (req, res) => {
@@ -77,7 +77,7 @@ router.patch("/employees/:id", authenticate, canWrite, async (req, res) => {
   res.json(updated);
 });
 
-// GET /api/payroll/runs — payroll totals expose pay data; owner/admin only.
+// GET /api/payroll/runs - payroll totals expose pay data; owner/admin only.
 router.get("/runs", authenticate, canWrite, async (req, res) => {
   const { rows } = await pool.query(
     "SELECT * FROM payroll_runs WHERE tenant_id=$1 ORDER BY run_year DESC, run_month DESC",
@@ -86,7 +86,7 @@ router.get("/runs", authenticate, canWrite, async (req, res) => {
   res.json(rows);
 });
 
-// POST /api/payroll/run — execute payroll for a month
+// POST /api/payroll/run - execute payroll for a month
 router.post("/run", authenticate, canWrite, async (req, res) => {
   const { run_month, run_year } = req.body;
   const m = run_month ?? new Date().getMonth() + 1;
@@ -127,7 +127,7 @@ router.post("/run", authenticate, canWrite, async (req, res) => {
   res.status(201).json(run);
 });
 
-// POST /api/payroll/runs/:id/disburse — mark as disbursed (production: trigger Setu bulk payout)
+// POST /api/payroll/runs/:id/disburse - mark as disbursed (production: trigger Setu bulk payout)
 router.post("/runs/:id/disburse", authenticate, canWrite, async (req, res) => {
   const { rows: [run] } = await pool.query(
     "UPDATE payroll_runs SET status='disbursed', disbursed_at=now() WHERE id=$1 AND tenant_id=$2 RETURNING *",

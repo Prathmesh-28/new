@@ -23,14 +23,14 @@ interface QueueItem {
   id: string;
   kind: QueueKind;
   label: string;
-  amount: number;      // ₹ — 0 when not money
+  amount: number;      // ₹ - 0 when not money
   at: string;          // ISO timestamp captured
   synced: boolean;
   meta?: string;       // optional extra context (gps, customer, note)
   // ── Real-sync fields (flushed to the ledger on "Sync now") ──────────────────────
   customer?: string;   // resolved customer name (matched to the store master list where possible)
   mode?: "cash" | "upi"; // money mode for a collection
-  syncError?: string;  // last flush error — when present the item is still pending + retryable
+  syncError?: string;  // last flush error - when present the item is still pending + retryable
   syncedAt?: string;   // ISO timestamp the item actually hit the ledger
   ledgerRef?: string;  // short human ref shown in the "synced to ledger" confirmation
 }
@@ -120,7 +120,7 @@ export default function FieldPage() {
             <Smartphone size={18} className="text-[var(--color-primary)]" /> Field &amp; Offline
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Bill, collect and reconcile at the counter, in the van, on a weak signal — then sync when the network returns.
+            Bill, collect and reconcile at the counter, in the van, on a weak signal - then sync when the network returns.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -200,7 +200,7 @@ function Overview({ online, pending, queueLen, onJump }: { online: boolean; pend
         <h2 className="text-sm font-semibold mb-2">Built for Bharat field finance</h2>
         <p className="text-xs text-[var(--color-muted)] leading-relaxed">
           These tools work in the browser and inside a Capacitor wrapper. Connectivity, location, camera and the data-saver
-          hint are all feature-detected — if a device can't do it, the tool degrades gracefully instead of breaking. Money
+          hint are all feature-detected - if a device can't do it, the tool degrades gracefully instead of breaking. Money
           captured while offline lands in the <span className="text-[var(--color-text)]">offline queue</span> and is honestly
           marked pending until you flush it; real backend sync happens automatically when you're back online.
         </p>
@@ -261,7 +261,7 @@ function ConnectivityStatus({ online }: { online: boolean }) {
         <div className="flex justify-between"><span className="text-[var(--color-muted)]">Data-saver on</span><span className="tabular-nums">{conn?.saveData != null ? String(conn.saveData) : "Not reported"}</span></div>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">
-        The Network Information API (effective type / downlink / saveData) is not available in every browser — fields show
+        The Network Information API (effective type / downlink / saveData) is not available in every browser - fields show
         “Not reported” where the device doesn't expose them. Online/offline detection works everywhere via navigator.onLine.
       </p>
     </div>
@@ -298,7 +298,7 @@ function OfflineQueue({ online }: { online: boolean }) {
     };
     setQueue(prev => [item, ...prev]);
     setLabel(""); setAmount("");
-    toast.success("Captured offline — queued for sync");
+    toast.success("Captured offline - queued for sync");
   };
 
   // Flush ONE queued item to the real books. Money entries become a transaction in
@@ -312,16 +312,16 @@ function OfflineQueue({ online }: { online: boolean }) {
       const customer = resolveCustomer(q.customer) ?? "Field collection";
       if (q.amount <= 0) throw new Error("collection has no amount");
       // 1) Cash book: a collection settles an existing receivable, so it is NOT new
-      //    revenue — booking it as revenue would double-count the original sale.
+      //    revenue - booking it as revenue would double-count the original sale.
       //    Post it as a transfer (cash movement) instead.
       addTransaction({
         id: generateId(), date: when, amount: Math.abs(q.amount),
-        description: `Field collection${q.mode ? ` (${q.mode.toUpperCase()})` : ""} — ${customer}`,
+        description: `Field collection${q.mode ? ` (${q.mode.toUpperCase()})` : ""} - ${customer}`,
         category: "transfer", counterparty: customer, isRecurring: false,
         bankAccountId, notes: q.meta,
       });
       // 2) Outstanding: apply against the customer's oldest unpaid invoice.
-      //    Skip any invoice already settled earlier in this same sync run — the store
+      //    Skip any invoice already settled earlier in this same sync run - the store
       //    snapshot doesn't update mid-loop, so without this the same invoice could
       //    be settled by two collections.
       const open = store.invoices
@@ -350,17 +350,17 @@ function OfflineQueue({ online }: { online: boolean }) {
       return { ledgerRef: "Cash book (revenue)" };
     }
 
-    // visits / receipts carry no money — nothing to post to the ledger; mark done.
+    // visits / receipts carry no money - nothing to post to the ledger; mark done.
     return { ledgerRef: "Logged (no ledger impact)" };
   };
 
   const syncNow = async () => {
     if (pending.length === 0) { toast.error("Nothing pending to sync"); return; }
-    if (!online) { toast.error("Still offline — entries stay queued until the network returns"); return; }
+    if (!online) { toast.error("Still offline - entries stay queued until the network returns"); return; }
     setSyncing(true);
     let ok = 0, failed = 0;
     const results: Record<string, Partial<QueueItem>> = {};
-    // Invoice IDs already settled in THIS run — the store snapshot is fixed for the
+    // Invoice IDs already settled in THIS run - the store snapshot is fixed for the
     // whole loop, so this prevents two collections settling the same invoice.
     const settledIds = new Set<string>();
     for (const q of pending) {
@@ -377,20 +377,20 @@ function OfflineQueue({ online }: { online: boolean }) {
     setSyncing(false);
     if (ok > 0 && failed === 0) toast.success(`Synced ${ok} entr${ok === 1 ? "y" : "ies"} to the ledger`);
     else if (ok > 0 && failed > 0) toast.warning(`${ok} synced to ledger · ${failed} kept pending to retry`);
-    else toast.error(`Could not sync ${failed} entr${failed === 1 ? "y" : "ies"} — kept pending to retry`);
+    else toast.error(`Could not sync ${failed} entr${failed === 1 ? "y" : "ies"} - kept pending to retry`);
   };
 
   const retryOne = (id: string) => {
     const item = queue.find(q => q.id === id);
     if (!item) return;
-    if (!online) { toast.error("Still offline — retry once the network returns"); return; }
+    if (!online) { toast.error("Still offline - retry once the network returns"); return; }
     try {
       const { ledgerRef } = flushOne(item);
       setQueue(prev => prev.map(q => q.id === id ? { ...q, synced: true, syncedAt: new Date().toISOString(), ledgerRef, syncError: undefined } : q));
       toast.success("Synced to ledger");
     } catch (e) {
       setQueue(prev => prev.map(q => q.id === id ? { ...q, synced: false, syncError: e instanceof Error ? e.message : "Sync failed" } : q));
-      toast.error("Retry failed — still pending");
+      toast.error("Retry failed - still pending");
     }
   };
 
@@ -449,7 +449,7 @@ function OfflineQueue({ online }: { online: boolean }) {
       </div>
 
       {queue.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No queued entries. Capture sales and collections here while offline — they hold safely until you sync.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">No queued entries. Capture sales and collections here while offline - they hold safely until you sync.</p>
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <table className="w-full text-sm">
@@ -464,7 +464,7 @@ function OfflineQueue({ online }: { online: boolean }) {
                   <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] whitespace-nowrap">{format(new Date(q.at), "d MMM, h:mm a")}</td>
                   <td className="px-4 py-2.5 text-xs capitalize">{q.kind}</td>
                   <td className="px-4 py-2.5 text-xs font-medium">{q.label}{q.meta && <span className="block text-[10px] text-[var(--color-muted)]">{q.meta}</span>}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-xs">{q.amount > 0 ? formatCurrency(q.amount) : "—"}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-xs">{q.amount > 0 ? formatCurrency(q.amount) : "-"}</td>
                   <td className="px-4 py-2.5">
                     {q.synced ? (
                       <span className="inline-flex flex-col gap-0.5">
@@ -472,7 +472,7 @@ function OfflineQueue({ online }: { online: boolean }) {
                         {q.ledgerRef && <span className="text-[10px] text-[var(--color-muted)]">{q.ledgerRef}{q.syncedAt ? ` · ${format(new Date(q.syncedAt), "h:mm a")}` : ""}</span>}
                       </span>
                     ) : q.syncError ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-red-400 font-semibold" title={q.syncError}><AlertTriangle size={11} /> Failed — pending</span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-red-400 font-semibold" title={q.syncError}><AlertTriangle size={11} /> Failed - pending</span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-[10px] text-yellow-400 font-semibold"><CloudUpload size={11} /> Pending</span>
                     )}
@@ -492,7 +492,7 @@ function OfflineQueue({ online }: { online: boolean }) {
       <p className="text-[10px] text-[var(--color-muted)]">
         “Sync now” flushes each pending entry to the real books: a collection posts to the cash book as revenue and settles
         the customer's oldest open invoice (so their outstanding actually drops); a sale / day-sheet posts as revenue. Entries
-        are matched to your customer master list where the name lines up. Anything that fails stays pending with a retry — it is
+        are matched to your customer master list where the name lines up. Anything that fails stays pending with a retry - it is
         never silently marked done. Captures still work fully offline and hold safely until the network returns.
       </p>
     </div>
@@ -545,7 +545,7 @@ function KiranaQuickBill() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> Kirana Quick-Bill</h3>
-        <p className="text-xs text-[var(--color-muted)]">Counter-speed billing — minimal taps. Add items, hand over a UPI link, save to the queue.</p>
+        <p className="text-xs text-[var(--color-muted)]">Counter-speed billing - minimal taps. Add items, hand over a UPI link, save to the queue.</p>
         <div className="grid grid-cols-12 gap-2 items-end">
           <div className="col-span-6">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Item</label>
@@ -659,7 +659,7 @@ function FieldCollection() {
     <div className="space-y-4 max-w-xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><MapPin size={14} className="text-[var(--color-primary)]" /> Field Collection Capture</h3>
-        <p className="text-xs text-[var(--color-muted)]">Record a doorstep collection with a verifiable timestamp and an optional GPS stamp — useful proof against fake-collection disputes.</p>
+        <p className="text-xs text-[var(--color-muted)]">Record a doorstep collection with a verifiable timestamp and an optional GPS stamp - useful proof against fake-collection disputes.</p>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
           <input value={customer} onChange={e => setCustomer(e.target.value)} list="field-customer-master" placeholder="Sharma Stores" className={INP} />
@@ -695,7 +695,7 @@ function FieldCollection() {
           <CheckCircle2 size={14} /> Record collection
         </button>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Location uses the browser Geolocation API and asks for permission. If the device or user declines, the collection still records — just without a GPS stamp.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Location uses the browser Geolocation API and asks for permission. If the device or user declines, the collection still records - just without a GPS stamp.</p>
     </div>
   );
 }
@@ -731,7 +731,7 @@ function VanDaySheet() {
     <div className="space-y-4 max-w-xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Truck size={14} className="text-[var(--color-primary)]" /> Van-Sales Day-Sheet</h3>
-        <p className="text-xs text-[var(--color-muted)]">Reconcile the route: opening stock, sales, returns and cash collected — settle the closing position.</p>
+        <p className="text-xs text-[var(--color-muted)]">Reconcile the route: opening stock, sales, returns and cash collected - settle the closing position.</p>
         <div className="grid grid-cols-2 gap-3">
           {([
             ["Opening stock (₹)", openingStock, setOpeningStock, "20000"],
@@ -780,7 +780,7 @@ function LowDataMode() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h3 className="text-sm font-semibold flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Low-Data Mode</h3>
-            <p className="text-xs text-[var(--color-muted)] mt-1">Respect ₹-per-MB rural plans — sync the essentials, hold the heavy stuff.</p>
+            <p className="text-xs text-[var(--color-muted)] mt-1">Respect ₹-per-MB rural plans - sync the essentials, hold the heavy stuff.</p>
           </div>
           <button onClick={() => { setLowData(!lowData); toast.success(`Low-data mode ${!lowData ? "on" : "off"}`); }}
             className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${lowData ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}>
@@ -788,7 +788,7 @@ function LowDataMode() {
           </button>
         </div>
         {deviceSaveData && (
-          <p className="text-[10px] text-yellow-400 mt-3">Your device's own data-saver is also enabled — the app will be extra conservative.</p>
+          <p className="text-[10px] text-yellow-400 mt-3">Your device's own data-saver is also enabled - the app will be extra conservative.</p>
         )}
       </div>
 
@@ -797,7 +797,7 @@ function LowDataMode() {
         <ul className="space-y-2 text-xs text-[var(--color-muted)]">
           {[
             "Pause uploading receipt photos until you're on Wi-Fi",
-            "Sync ledger entries only — defer charts, logos and avatars",
+            "Sync ledger entries only - defer charts, logos and avatars",
             "Disable background auto-refresh polling",
             "Compress and batch the offline queue instead of syncing each entry live",
           ].map(t => (
@@ -870,9 +870,9 @@ function VisitLog() {
                 <tr key={v.id} className="hover:bg-white/2">
                   <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] whitespace-nowrap">{format(new Date(v.at), "d MMM, h:mm a")}</td>
                   <td className="px-4 py-2.5 text-xs font-medium">{v.customer}</td>
-                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{v.purpose || "—"}</td>
-                  <td className="px-4 py-2.5 text-xs">{v.outcome || "—"}</td>
-                  <td className="px-4 py-2.5 text-xs text-[var(--color-primary)]">{v.followUp || "—"}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{v.purpose || "-"}</td>
+                  <td className="px-4 py-2.5 text-xs">{v.outcome || "-"}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-primary)]">{v.followUp || "-"}</td>
                   <td className="px-4 py-2.5 text-right">
                     <button onClick={() => setVisits(prev => prev.filter(x => x.id !== v.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
                   </td>
@@ -997,7 +997,7 @@ function ReceiptCapture() {
     // Keep a small data-URL preview; oversized images are stored by name only to stay light.
     if (file.size > 1_500_000) {
       setPending({ fileName: file.name, preview: null });
-      toast.success("Large photo captured — stored by name to keep data light");
+      toast.success("Large photo captured - stored by name to keep data light");
       return;
     }
     const reader = new FileReader();
@@ -1080,7 +1080,7 @@ function BeatCheckIn() {
     if (!geoSupported) { commit(null); return; }
     navigator.geolocation.getCurrentPosition(
       pos => commit(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`),
-      () => { commit(null); toast.message("Punched without GPS — location declined"); },
+      () => { commit(null); toast.message("Punched without GPS - location declined"); },
       { enableHighAccuracy: true, timeout: 10000 },
     );
   };
@@ -1089,7 +1089,7 @@ function BeatCheckIn() {
     <div className="space-y-4 max-w-xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Clock size={14} className="text-[var(--color-primary)]" /> Beat Check-In</h3>
-        <p className="text-xs text-[var(--color-muted)]">Geo + time attendance for field reps. Punch in when you reach the beat and out at end-of-day — proof against ghost visits.</p>
+        <p className="text-xs text-[var(--color-muted)]">Geo + time attendance for field reps. Punch in when you reach the beat and out at end-of-day - proof against ghost visits.</p>
         <input value={place} onChange={e => setPlace(e.target.value)} placeholder="Beat / market (e.g. Sadar Bazaar)" className={INP} />
         <div className="grid grid-cols-2 gap-3">
           <button onClick={() => punch("in")} disabled={busy !== null || isIn}
@@ -1101,7 +1101,7 @@ function BeatCheckIn() {
             <CheckCircle2 size={14} /> {busy === "out" ? "Stamping…" : "Check out"}
           </button>
         </div>
-        {!geoSupported && <p className="text-[10px] text-[var(--color-muted)]">GPS not available on this device — check-ins record with time only.</p>}
+        {!geoSupported && <p className="text-[10px] text-[var(--color-muted)]">GPS not available on this device - check-ins record with time only.</p>}
       </div>
 
       {log.length === 0 ? (
@@ -1150,14 +1150,14 @@ function OrderBooking() {
       meta: lines.map(l => `${l.qty}×${l.name}`).join(", "),
     }, ...prev]);
     setLines([]); setCustomer("");
-    toast.success("Order queued — syncs to the books on reconnect");
+    toast.success("Order queued - syncs to the books on reconnect");
   };
 
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ShoppingCart size={14} className="text-[var(--color-primary)]" /> Order Booking</h3>
-        <p className="text-xs text-[var(--color-muted)]">Take a shop's order on the beat — no signal needed. The order lands in the offline queue and posts when you're back online.</p>
+        <p className="text-xs text-[var(--color-muted)]">Take a shop's order on the beat - no signal needed. The order lands in the offline queue and posts when you're back online.</p>
         <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer / shop *" className={INP} />
         <div className="grid grid-cols-12 gap-2 items-end">
           <div className="col-span-6">
@@ -1245,7 +1245,7 @@ function BeatOutstanding() {
             {dues.length} due · {formatCurrency(totalDue)}
           </span>
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Unpaid invoices from your books, oldest-due first — collect on the beat and queue each receipt offline.</p>
+        <p className="text-xs text-[var(--color-muted)]">Unpaid invoices from your books, oldest-due first - collect on the beat and queue each receipt offline.</p>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Filter by customer" className={INP} />
       </div>
 
@@ -1263,7 +1263,7 @@ function BeatOutstanding() {
               {dues.map(inv => (
                 <tr key={inv.id} className="hover:bg-white/2">
                   <td className="px-4 py-2.5 text-xs font-medium">{inv.customer}</td>
-                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{inv.invoiceNumber ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{inv.invoiceNumber ?? "-"}</td>
                   <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] whitespace-nowrap">{format(new Date(inv.dueDate), "d MMM")}</td>
                   <td className="px-4 py-2.5">
                     <span className={`text-[10px] font-semibold ${inv.status === "overdue" ? "text-red-400" : "text-yellow-400"}`}>{inv.status === "overdue" ? "Overdue" : "Pending"}</span>
@@ -1316,7 +1316,7 @@ function FieldExpense() {
           <h3 className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> On-the-Go Expense</h3>
           <span className="text-[10px] text-[var(--color-muted)]">Today: <span className="text-[var(--color-text)] font-semibold tabular-nums">{formatCurrency(todayTotal)}</span></span>
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Log travel and field spends as they happen — they queue for reimbursement on reconnect.</p>
+        <p className="text-xs text-[var(--color-muted)]">Log travel and field spends as they happen - they queue for reimbursement on reconnect.</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Category</label>
@@ -1381,7 +1381,7 @@ function StockRequest() {
     <div className="space-y-4 max-w-xl">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><PackagePlus size={14} className="text-[var(--color-primary)]" /> Stock Request</h3>
-        <p className="text-xs text-[var(--color-muted)]">Out of stock on the van or counter? Raise a replenishment request — it queues for the warehouse.</p>
+        <p className="text-xs text-[var(--color-muted)]">Out of stock on the van or counter? Raise a replenishment request - it queues for the warehouse.</p>
         <div className="grid grid-cols-12 gap-2 items-end">
           <div className="col-span-6">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Item</label>
@@ -1485,7 +1485,7 @@ function SignatureCapture() {
     <div className="space-y-4 max-w-xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><PenLine size={14} className="text-[var(--color-primary)]" /> Signature Capture</h3>
-        <p className="text-xs text-[var(--color-muted)]">Customer signs on screen to acknowledge a credit sale or delivery — proof against later disputes.</p>
+        <p className="text-xs text-[var(--color-muted)]">Customer signs on screen to acknowledge a credit sale or delivery - proof against later disputes.</p>
         <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer name" className={INP} />
         <canvas
           ref={canvasRef} width={560} height={200}
@@ -1536,7 +1536,7 @@ function ProofOfDelivery() {
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 1_500_000) { setImage(null); toast.message("Large photo — stored by reference to keep data light"); return; }
+    if (file.size > 1_500_000) { setImage(null); toast.message("Large photo - stored by reference to keep data light"); return; }
     const reader = new FileReader();
     reader.onload = () => setImage(typeof reader.result === "string" ? reader.result : null);
     reader.readAsDataURL(file);
@@ -1564,7 +1564,7 @@ function ProofOfDelivery() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><PackageCheck size={14} className="text-[var(--color-primary)]" /> Proof of Delivery</h3>
-        <p className="text-xs text-[var(--color-muted)]">Capture a delivery photo, note and optional GPS at the doorstep — releases the invoice and settles delivery disputes.</p>
+        <p className="text-xs text-[var(--color-muted)]">Capture a delivery photo, note and optional GPS at the doorstep - releases the invoice and settles delivery disputes.</p>
         <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer / delivery point *" className={INP} />
         <label className="flex items-center justify-center gap-2 border border-dashed border-[var(--color-border)] rounded-lg py-5 cursor-pointer hover:border-[var(--color-primary)]/40 text-sm text-[var(--color-muted)]">
           <Camera size={16} /> {image ? "Re-capture photo" : "Capture delivery photo"}
@@ -1659,7 +1659,7 @@ function DailyTarget() {
           </div>
         </div>
         {salesPct >= 100 && visitPct >= 100 && (
-          <p className="text-xs text-green-400 font-medium flex items-center gap-1.5"><CheckCircle2 size={13} /> Both targets hit for today — strong beat!</p>
+          <p className="text-xs text-green-400 font-medium flex items-center gap-1.5"><CheckCircle2 size={13} /> Both targets hit for today - strong beat!</p>
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Targets are stored and synced across your devices; progress recalculates as you capture sales, collections and visits in the field.</p>
@@ -1738,7 +1738,7 @@ function KmExpenseClaim() {
           <h3 className="text-sm font-semibold flex items-center gap-2"><Navigation size={14} className="text-[var(--color-primary)]" /> KM Expense Claim</h3>
           <span className="text-[10px] text-[var(--color-muted)]">Today: <span className="text-[var(--color-text)] font-semibold tabular-nums">{todayKm.toFixed(1)} km · {formatCurrency(todayAmt)}</span></span>
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Claim travel reimbursement by distance. Mark start &amp; end with GPS to auto-fill the kilometres, or type them manually — the claim queues for reimbursement.</p>
+        <p className="text-xs text-[var(--color-muted)]">Claim travel reimbursement by distance. Mark start &amp; end with GPS to auto-fill the kilometres, or type them manually - the claim queues for reimbursement.</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">From</label>
@@ -1769,7 +1769,7 @@ function KmExpenseClaim() {
             <Navigation size={12} /> {busy ? "Locating…" : "End → auto-fill km"}
           </button>
           {start && <span className="text-[10px] text-green-400 tabular-nums">start {start.lat.toFixed(3)}, {start.lng.toFixed(3)}</span>}
-          {!geoSupported && <span className="text-[10px] text-[var(--color-muted)]">GPS not available — enter km manually</span>}
+          {!geoSupported && <span className="text-[10px] text-[var(--color-muted)]">GPS not available - enter km manually</span>}
         </div>
         <div className={`${CARD} p-3 flex items-center justify-between`}>
           <span className="text-xs text-[var(--color-muted)]">Claim amount</span>
@@ -1827,7 +1827,7 @@ function MarketIntel() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Eye size={14} className="text-[var(--color-primary)]" /> Market Intel Capture</h3>
-        <p className="text-xs text-[var(--color-muted)]">Log what rivals are charging on the beat. Note their price against yours so the owner can react to undercutting — works fully offline.</p>
+        <p className="text-xs text-[var(--color-muted)]">Log what rivals are charging on the beat. Note their price against yours so the owner can react to undercutting - works fully offline.</p>
         <div className="grid grid-cols-2 gap-3">
           <input value={competitor} onChange={e => setCompetitor(e.target.value)} placeholder="Competitor / brand *" className={INP} />
           <input value={product} onChange={e => setProduct(e.target.value)} placeholder="Product *" className={INP} />
@@ -1864,7 +1864,7 @@ function MarketIntel() {
                     <td className="px-4 py-2.5 text-xs">{it.product}{it.note && <span className="block text-[10px] text-[var(--color-muted)]">{it.note}</span>}</td>
                     <td className="px-4 py-2.5 tabular-nums text-xs font-semibold">{formatCurrency(it.price)}</td>
                     <td className="px-4 py-2.5 tabular-nums text-xs">
-                      {g == null ? <span className="text-[var(--color-muted)]">—</span>
+                      {g == null ? <span className="text-[var(--color-muted)]">-</span>
                         : g > 0 ? <span className="text-red-400">+{formatCurrency(g)} dearer</span>
                         : g < 0 ? <span className="text-green-400">{formatCurrency(-g)} cheaper</span>
                         : <span className="text-[var(--color-muted)]">level</span>}
@@ -1969,7 +1969,7 @@ function FieldIssueTicket() {
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 1_500_000) { setImage(null); toast.message("Large photo — stored by reference to keep data light"); return; }
+    if (file.size > 1_500_000) { setImage(null); toast.message("Large photo - stored by reference to keep data light"); return; }
     const reader = new FileReader();
     reader.onload = () => setImage(typeof reader.result === "string" ? reader.result : null);
     reader.readAsDataURL(file);
@@ -2003,7 +2003,7 @@ function FieldIssueTicket() {
           <h3 className="text-sm font-semibold flex items-center gap-2"><AlertTriangle size={14} className="text-[var(--color-primary)]" /> Field Issue Ticket</h3>
           <span className="text-[10px] text-[var(--color-muted)]">{open} open</span>
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Raise an on-site problem — damaged stock, dispute, signage, machine fault — with a photo and location. Queues for the back office to action on reconnect.</p>
+        <p className="text-xs text-[var(--color-muted)]">Raise an on-site problem - damaged stock, dispute, signage, machine fault - with a photo and location. Queues for the back office to action on reconnect.</p>
         <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Issue title *" className={INP} />
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -2101,7 +2101,7 @@ function OnSiteQuotation() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> On-Site Quotation</h3>
-        <p className="text-xs text-[var(--color-muted)]">Build a priced quote at the customer's premises — add lines, apply a discount and GST, and queue it. Sales tax shows for {store.firm?.name ?? "your firm"}.</p>
+        <p className="text-xs text-[var(--color-muted)]">Build a priced quote at the customer's premises - add lines, apply a discount and GST, and queue it. Sales tax shows for {store.firm?.name ?? "your firm"}.</p>
         <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer / shop *" className={INP} />
         <div className="grid grid-cols-12 gap-2 items-end">
           <div className="col-span-6">
@@ -2165,7 +2165,7 @@ function OnSiteQuotation() {
           </button>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A quotation is an offer, not a posted invoice — it queues as a visit record so the office can convert it to a GST invoice when accepted.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A quotation is an offer, not a posted invoice - it queues as a visit record so the office can convert it to a GST invoice when accepted.</p>
     </div>
   );
 }
@@ -2296,7 +2296,7 @@ function CashHandover() {
     <div className="space-y-4 max-w-xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> Daily Cash Handover</h3>
-        <p className="text-xs text-[var(--color-muted)]">Count the cash bag by denomination at end of beat and reconcile against collections captured today — settle the deposit honestly.</p>
+        <p className="text-xs text-[var(--color-muted)]">Count the cash bag by denomination at end of beat and reconcile against collections captured today - settle the deposit honestly.</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {NOTE_DENOMS.map(d => (
             <div key={d}>
@@ -2362,7 +2362,7 @@ function DiscountApproval() {
     <div className="space-y-4 max-w-xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> On-Site Discount Approval</h3>
-        <p className="text-xs text-[var(--color-muted)]">Field staff can grant up to the cap instantly; anything higher queues for the owner to approve — no leaking margin at the counter.</p>
+        <p className="text-xs text-[var(--color-muted)]">Field staff can grant up to the cap instantly; anything higher queues for the owner to approve - no leaking margin at the counter.</p>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Field cap (% staff can self-approve)</label>
           <input type="number" min={0} max={100} value={maxFieldPct} onChange={e => setMaxFieldPct(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))} className={`${INP} max-w-[120px]`} />
@@ -2422,7 +2422,7 @@ function SyncHealth({ online }: { online: boolean }) {
   const status = pending.length === 0 ? "healthy" : online ? "ready" : "waiting";
 
   const flush = () => {
-    if (!online) { toast.error("Offline — entries stay queued until the network returns"); return; }
+    if (!online) { toast.error("Offline - entries stay queued until the network returns"); return; }
     if (pending.length === 0) { toast.error("Nothing pending"); return; }
     setQueue(prev => prev.map(q => ({ ...q, synced: true })));
     toast.success(`Flushed ${pending.length} entr${pending.length === 1 ? "y" : "ies"}`);
@@ -2442,7 +2442,7 @@ function SyncHealth({ online }: { online: boolean }) {
           </p>
           <p className="text-xs text-[var(--color-muted)]">
             {status === "healthy"
-              ? "Nothing pending — the books match the field."
+              ? "Nothing pending - the books match the field."
               : status === "ready"
                 ? `${pending.length} entr${pending.length === 1 ? "y" : "ies"} can flush now.`
                 : `${pending.length} entr${pending.length === 1 ? "y" : "ies"} held safely until you reconnect.`}
@@ -2453,7 +2453,7 @@ function SyncHealth({ online }: { online: boolean }) {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
           { label: "Pending", value: String(pending.length), color: pending.length > 0 ? "text-yellow-400" : "text-green-400" },
-          { label: "Oldest pending", value: pending.length === 0 ? "—" : oldestMins < 1 ? "<1 min" : `${oldestMins} min`, color: stale ? "text-red-400" : "text-[var(--color-text)]" },
+          { label: "Oldest pending", value: pending.length === 0 ? "-" : oldestMins < 1 ? "<1 min" : `${oldestMins} min`, color: stale ? "text-red-400" : "text-[var(--color-text)]" },
           { label: "Network", value: online ? "Online" : "Offline", color: online ? "text-green-400" : "text-red-400" },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
@@ -2474,7 +2474,7 @@ function SyncHealth({ online }: { online: boolean }) {
         className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-2 rounded-lg hover:bg-[var(--color-primary)]/25 disabled:opacity-40">
         <CloudUpload size={12} /> Flush pending ({pending.length})
       </button>
-      <p className="text-[10px] text-[var(--color-muted)]">Health is derived live from the offline queue and navigator.onLine — the flush button marks staged entries committed; real sync runs automatically on reconnect.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Health is derived live from the offline queue and navigator.onLine - the flush button marks staged entries committed; real sync runs automatically on reconnect.</p>
     </div>
   );
 }
@@ -2500,7 +2500,7 @@ function DepositRecon() {
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 1_500_000) { setImage(null); toast.message("Large slip photo — stored by reference to keep data light"); return; }
+    if (file.size > 1_500_000) { setImage(null); toast.message("Large slip photo - stored by reference to keep data light"); return; }
     const reader = new FileReader();
     reader.onload = () => setImage(typeof reader.result === "string" ? reader.result : null);
     reader.readAsDataURL(file);
@@ -2514,14 +2514,14 @@ function DepositRecon() {
     setDeposits(prev => [d, ...prev]);
     setQueue(prev => [{ id: crypto.randomUUID(), kind: "daysheet", label: `Deposit · ${d.bank}`, amount: d.amount, at: d.at, synced: false, meta: ref.trim() ? `Slip ${ref.trim()}` : "Cash drop" }, ...prev]);
     setBank(""); setRef(""); setAmount(""); setImage(null);
-    toast.success("Deposit recorded — matches against collections on reconnect");
+    toast.success("Deposit recorded - matches against collections on reconnect");
   };
 
   return (
     <div className="space-y-4 max-w-xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Field-Deposit Reconciliation</h3>
-        <p className="text-xs text-[var(--color-muted)]">Record cash dropped at the bank or CMS point, snap the slip, and reconcile it against today's field collections — close the cash-in-transit loop.</p>
+        <p className="text-xs text-[var(--color-muted)]">Record cash dropped at the bank or CMS point, snap the slip, and reconcile it against today's field collections - close the cash-in-transit loop.</p>
         <input value={bank} onChange={e => setBank(e.target.value)} placeholder="Bank / CMS point *" className={INP} />
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -2664,7 +2664,7 @@ function TerritoryCoverage() {
     <div className="space-y-4 max-w-xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Map size={14} className="text-[var(--color-primary)]" /> Territory Coverage</h3>
-        <p className="text-xs text-[var(--color-muted)]">See how much of the day's beat you've actually covered — planned stops ticked off, and visits made against your territory target. Both read live from the field tools.</p>
+        <p className="text-xs text-[var(--color-muted)]">See how much of the day's beat you've actually covered - planned stops ticked off, and visits made against your territory target. Both read live from the field tools.</p>
         <div className="max-w-[200px]">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Territory target (customers/day)</label>
           <input type="number" min={1} value={target} onChange={e => setTarget(Math.max(1, parseInt(e.target.value) || 1))} className={INP} />
@@ -2680,7 +2680,7 @@ function TerritoryCoverage() {
           <div className="h-2.5 rounded-full bg-[var(--color-border)] overflow-hidden">
             <div className={`h-full rounded-full transition-all ${bar(planPct)}`} style={{ width: `${planPct}%` }} />
           </div>
-          <p className="text-[10px] text-[var(--color-muted)] mt-1">From the Beat / Route plan — tick stops there as you reach them.</p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">From the Beat / Route plan - tick stops there as you reach them.</p>
         </div>
         <div>
           <div className="flex justify-between text-xs mb-1.5">
@@ -2693,7 +2693,7 @@ function TerritoryCoverage() {
           <p className="text-[10px] text-[var(--color-muted)] mt-1">Counts visits logged today against your territory target.</p>
         </div>
         {planned === 0 && visitedToday === 0 && (
-          <p className="text-xs text-[var(--color-muted)]">Build a beat in the Route plan and log visits — coverage fills in as you work the territory.</p>
+          <p className="text-xs text-[var(--color-muted)]">Build a beat in the Route plan and log visits - coverage fills in as you work the territory.</p>
         )}
       </div>
     </div>
@@ -2718,7 +2718,7 @@ function SampleStock() {
     setSamples(prev => [s, ...prev]);
     setQueue(prev => [{ id: crypto.randomUUID(), kind: "visit", label: `Sample · ${s.item}`, amount: 0, at: s.at, synced: false, meta: `${s.qty}× to ${s.customer}` }, ...prev]);
     setItem(""); setCustomer(""); setQty("1");
-    toast.success("Sample issued — tracked against your demo float");
+    toast.success("Sample issued - tracked against your demo float");
   };
 
   const setStatus = (id: string, status: Sample["status"]) =>
@@ -2734,7 +2734,7 @@ function SampleStock() {
           <h3 className="text-sm font-semibold flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Sample / Demo-Stock Issue</h3>
           <span className="text-[10px] text-[var(--color-muted)]">Out on demo: <span className="text-[var(--color-text)] font-semibold tabular-nums">{outstanding}</span></span>
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Track samples and demo units you hand out on the beat so the float reconciles — mark each returned or converted to a sale.</p>
+        <p className="text-xs text-[var(--color-muted)]">Track samples and demo units you hand out on the beat so the float reconciles - mark each returned or converted to a sale.</p>
         <div className="grid grid-cols-12 gap-2 items-end">
           <div className="col-span-5">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Item</label>
@@ -2812,7 +2812,7 @@ function CallPlanner() {
           <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Daily-Call Planner</h3>
           <span className="text-[10px] text-[var(--color-muted)]">{pending} pending</span>
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Plan tomorrow's calls tonight — schedule customers by date and priority so the beat starts with a clear list. Works fully offline.</p>
+        <p className="text-xs text-[var(--color-muted)]">Plan tomorrow's calls tonight - schedule customers by date and priority so the beat starts with a clear list. Works fully offline.</p>
         <div className="grid grid-cols-2 gap-3">
           <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer *" className={INP} />
           <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />

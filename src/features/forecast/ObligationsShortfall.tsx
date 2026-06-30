@@ -6,11 +6,11 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, CalendarClock, ArrowDownRight, ArrowUpRight } from "lucide-react";
 
 /**
- * Obligations runway — the 2026 cash-intelligence play. Outflows are now legally
+ * Obligations runway - the 2026 cash-intelligence play. Outflows are now legally
  * time-boxed (43B(h) MSME deadlines, the 20th GST liability, bill due dates, EMIs),
  * so we can project a forward running balance from today's cash + expected
  * receivables, find the FIRST date cash goes negative, and recommend the lever
- * (chase receivables / defer a payable in-terms / draw credit) — not just a chart.
+ * (chase receivables / defer a payable in-terms / draw credit) - not just a chart.
  */
 interface BillLite { id: string; vendorName?: string; dueDate: string; amount: number; status: string }
 type EventKind = "in" | "out";
@@ -25,26 +25,26 @@ export default function ObligationsShortfall() {
     const cash = (store.bankAccounts ?? []).reduce((s, a) => s + (a.balance ?? 0), 0);
     const events: { date: Date; amount: number; label: string; kind: EventKind }[] = [];
 
-    // Inflows — open invoices on their due date (overdue → collectable from today).
+    // Inflows - open invoices on their due date (overdue → collectable from today).
     for (const inv of (store.invoices ?? [])) {
       if (inv.status === "paid") continue;
       const due = new Date(inv.dueDate); if (isNaN(due.getTime())) continue;
       const when = due < today ? today : due;
       if (when <= horizon) events.push({ date: when, amount: inv.amount || 0, label: `Receivable · ${inv.customer || "customer"}`, kind: "in" });
     }
-    // Outflows — scheduled obligations.
+    // Outflows - scheduled obligations.
     for (const o of (store.obligations ?? [])) {
       const due = new Date(o.dueDate); if (isNaN(due.getTime())) continue;
       if (due >= today && due <= horizon) events.push({ date: due, amount: -(o.amount || 0), label: o.name || "Obligation", kind: "out" });
     }
-    // Outflows — unpaid bills (their due date; 43B(h) detail lives in Vendors).
+    // Outflows - unpaid bills (their due date; 43B(h) detail lives in Vendors).
     for (const b of (bills ?? [])) {
       if (b.status !== "unpaid") continue;
       const due = new Date(b.dueDate); if (isNaN(due.getTime())) continue;
       const when = due < today ? today : due;
       if (when <= horizon) events.push({ date: when, amount: -(b.amount || 0), label: `Payable · ${b.vendorName || "vendor"}`, kind: "out" });
     }
-    // Outflows — loan EMIs over the next 3 months.
+    // Outflows - loan EMIs over the next 3 months.
     for (const l of (store.activeLoans ?? []) as { monthlyEmi?: number; emi?: number; lender?: string }[]) {
       const emi = l.monthlyEmi ?? l.emi; if (!emi) continue;
       for (let m = 1; m <= 3; m++) {
@@ -76,7 +76,7 @@ export default function ObligationsShortfall() {
       <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/40 px-5 py-6 text-center">
         <CalendarClock size={22} className="mx-auto mb-2 text-[var(--color-muted)] opacity-50" />
         <p className="text-sm font-semibold">Obligations runway</p>
-        <p className="text-xs text-[var(--color-muted)] mt-1 max-w-md mx-auto">Add bank balances, unpaid bills (Vendors → Bills) and receivables, and we'll project your first cash shortfall against your dated obligations — and tell you what to do about it.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-1 max-w-md mx-auto">Add bank balances, unpaid bills (Vendors → Bills) and receivables, and we'll project your first cash shortfall against your dated obligations - and tell you what to do about it.</p>
       </div>
     );
   }
@@ -87,7 +87,7 @@ export default function ObligationsShortfall() {
       <div className="flex items-start gap-2 mb-3">
         {hasShortfall ? <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" /> : <CheckCircle2 size={18} className="text-green-400 shrink-0 mt-0.5" />}
         <div>
-          <h3 className="text-sm font-semibold">Obligations runway — next 90 days</h3>
+          <h3 className="text-sm font-semibold">Obligations runway - next 90 days</h3>
           {hasShortfall ? (
             <p className="text-xs text-[var(--color-muted)] mt-0.5">
               Projected <span className="text-red-400 font-semibold">shortfall of {formatCurrency(Math.round(d.shortfall!.gap))}</span> on{" "}

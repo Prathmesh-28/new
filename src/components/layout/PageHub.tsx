@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 /**
- * PageHub — a thin tabbed shell that unifies several existing full pages under ONE
+ * PageHub - a thin tabbed shell that unifies several existing full pages under ONE
  * route, so duplicate landing pages collapse into tabs without rewriting the feature
  * pages. Each tab renders an existing page component verbatim. The active tab is
  * synced to the URL (?t=key) so deep-links and the back button work, and old routes

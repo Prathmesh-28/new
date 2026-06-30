@@ -143,7 +143,7 @@ export default function OperationsPage() {
     updateOrder({ ...o, status, updatedAt: new Date().toISOString() });
     try {
       await api.patch(`/api/operations/orders/${o.id}/status`, { status });
-      if (status === "confirmed") toast.success("Order confirmed — revenue transaction created");
+      if (status === "confirmed") toast.success("Order confirmed - revenue transaction created");
       else toast.success(`Order ${status}`);
     } catch {
       toast.error(`Couldn't update order status on the server`);
@@ -285,7 +285,7 @@ export default function OperationsPage() {
               <div className="flex-1">
                 <h3 className="text-sm font-semibold mb-1">WhatsApp Order Capture</h3>
                 <p className="text-sm text-[var(--color-muted)] mb-3">
-                  Share your business WhatsApp number with distributors and retailers. Every order message is automatically parsed and added here — no manual entry needed.
+                  Share your business WhatsApp number with distributors and retailers. Every order message is automatically parsed and added here - no manual entry needed.
                 </p>
                 <div className="grid grid-cols-3 gap-3 text-center">
                   {[
@@ -406,9 +406,9 @@ export default function OperationsPage() {
                       <td className="px-4 py-3 font-bold text-[var(--color-primary)]">{formatCurrency(o.totalValue)}</td>
                       <td className="px-4 py-3">
                         {["delivered","cancelled"].includes(o.status) ? (
-                          <span className="text-xs text-[var(--color-muted)]">—</span>
+                          <span className="text-xs text-[var(--color-muted)]">-</span>
                         ) : atp.untracked ? (
-                          <span className="text-xs text-[var(--color-muted)]" title="No matching inventory SKU — add the product to inventory to track stock">Untracked</span>
+                          <span className="text-xs text-[var(--color-muted)]" title="No matching inventory SKU - add the product to inventory to track stock">Untracked</span>
                         ) : atp.ok ? (
                           <span className="text-xs text-green-400 flex items-center gap-1" title="Enough stock on hand to fulfil this order"><CheckCircle2 size={11} />Stock OK</span>
                         ) : (
@@ -432,7 +432,7 @@ export default function OperationsPage() {
                           )}
                           {o.status === "pending"   && <button onClick={() => handleStatusChange(o, "confirmed")}  className="text-xs bg-blue-900/30 text-blue-400 border border-blue-800/30 px-2 py-0.5 rounded hover:bg-blue-900/50">Confirm</button>}
                           {o.status === "confirmed" && <button onClick={() => {
-                            if (!atp.ok && !atp.untracked && !window.confirm(`Short on stock — ${atp.short.map(s => `${s.name} (need ${s.need}, have ${s.have})`).join(", ")}. Dispatch anyway?`)) return;
+                            if (!atp.ok && !atp.untracked && !window.confirm(`Short on stock - ${atp.short.map(s => `${s.name} (need ${s.need}, have ${s.have})`).join(", ")}. Dispatch anyway?`)) return;
                             handleStatusChange(o, "dispatched");
                           }} className="text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-0.5 rounded">Dispatch</button>}
                           {o.status === "dispatched"&& <button onClick={() => handleStatusChange(o, "delivered")}  className="text-xs bg-green-900/30 text-green-400 border border-green-800/30 px-2 py-0.5 rounded">Delivered</button>}
@@ -504,7 +504,7 @@ export default function OperationsPage() {
                     const isOut = item.quantity === 0;
                     return (
                       <tr key={item.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{item.sku || "—"}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{item.sku || "-"}</td>
                         <td className="px-4 py-2.5 font-medium">{item.productName}</td>
                         <td className={`px-4 py-2.5 font-bold ${isOut ? "text-red-400" : isLow ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{item.quantity}</td>
                         <td className="px-4 py-2.5 text-[var(--color-muted)]">{formatCurrency(item.unitCost)}</td>
@@ -588,7 +588,7 @@ export default function OperationsPage() {
                     </td>
                     <td className="px-4 py-2.5">
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${CAT_STYLE[item.category]}`}>
-                        {item.category === "dead" ? "Dead (>180d)" : item.category === "slow" ? "Slow (60–180d)" : "Never sold"}
+                        {item.category === "dead" ? "Dead (>180d)" : item.category === "slow" ? "Slow (60-180d)" : "Never sold"}
                       </span>
                     </td>
                   </tr>
@@ -654,7 +654,7 @@ export default function OperationsPage() {
                     <td className="px-4 py-2.5 tabular-nums text-blue-400 font-semibold">{item.reorderPoint > 0 ? item.reorderPoint : item.reorderLevel}</td>
                     <td className="px-4 py-2.5">
                       {item.daysUntilOut === null ? (
-                        <span className="text-[var(--color-muted)]">—</span>
+                        <span className="text-[var(--color-muted)]">-</span>
                       ) : item.daysUntilOut <= 7 ? (
                         <span className="text-red-400 font-bold">{item.daysUntilOut}d ⚠</span>
                       ) : item.daysUntilOut <= 14 ? (
@@ -751,7 +751,7 @@ export default function OperationsPage() {
                       updateProcurement({ ...po, status: "received" });
                       try {
                         await api.patch(`/api/operations/procurement/${po.id}/status`, { status: "received" });
-                        toast.success("Marked received — expense recorded & inventory updated");
+                        toast.success("Marked received - expense recorded & inventory updated");
                       } catch {
                         toast.error("Couldn't mark received on the server");
                       }
@@ -771,7 +771,7 @@ export default function OperationsPage() {
             <Radar size={18} className="text-[var(--color-primary)]" />
             <div>
               <h2 className="text-base font-bold">Anomaly Radar</h2>
-              <p className="text-sm text-[var(--color-muted)]">Scans your transactions for duplicate payments, spend spikes, creeping subscriptions, and large new payees — every flag links to the underlying transactions.</p>
+              <p className="text-sm text-[var(--color-muted)]">Scans your transactions for duplicate payments, spend spikes, creeping subscriptions, and large new payees - every flag links to the underlying transactions.</p>
             </div>
           </div>
 
@@ -796,7 +796,7 @@ export default function OperationsPage() {
               <p className="text-sm text-[var(--color-muted)] max-w-sm mx-auto">
                 {transactions.length === 0
                   ? "Import or add transactions and the radar will watch for duplicate payments, spend spikes and subscription creep."
-                  : "Your recent spend looks clean — no duplicate payments, spikes, or unusual new payees."}
+                  : "Your recent spend looks clean - no duplicate payments, spikes, or unusual new payees."}
               </p>
             </div>
           ) : (
@@ -1457,7 +1457,7 @@ function ReorderAlertTab() {
         createdAt: new Date().toISOString(),
       });
     });
-    toast.success(`Created ${bySupplier.size} draft PO${bySupplier.size > 1 ? "s" : ""} for ${needsReorder.length} item${needsReorder.length > 1 ? "s" : ""} — review in Procurement`);
+    toast.success(`Created ${bySupplier.size} draft PO${bySupplier.size > 1 ? "s" : ""} for ${needsReorder.length} item${needsReorder.length > 1 ? "s" : ""} - review in Procurement`);
   };
 
   return (
@@ -1554,12 +1554,12 @@ function ReorderAlertTab() {
                         <input type="number" value={item.reorderQty} onChange={e => updateField(item.id, "reorderQty", e.target.value)} className="w-16 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none" />
                       </td>
                       <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{item.leadTimeDays}d</td>
-                      <td className="px-3 py-2.5 tabular-nums">{item.unitCost > 0 ? fc(item.reorderQty * item.unitCost) : "—"}</td>
-                      <td className="px-3 py-2.5 text-[var(--color-muted)] text-xs">{item.supplier || "—"}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{item.unitCost > 0 ? fc(item.reorderQty * item.unitCost) : "-"}</td>
+                      <td className="px-3 py-2.5 text-[var(--color-muted)] text-xs">{item.supplier || "-"}</td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-2">
                           {below && (
-                            <button onClick={() => { createPoFor(item); toast.success(`Draft PO created for ${item.name} — review in Procurement`); }}
+                            <button onClick={() => { createPoFor(item); toast.success(`Draft PO created for ${item.name} - review in Procurement`); }}
                               title={`Create a draft PO for ${suggestedQty(item)} units`}
                               className="text-xs text-[var(--color-primary)] hover:underline whitespace-nowrap">Create PO →</button>
                           )}
@@ -1602,9 +1602,9 @@ function AgedPayablesTab() {
   const unpaid = bills.filter(b => b.status === "unpaid");
   const buckets = [
     { key: "Current", test: (d: number) => d <= 0 },
-    { key: "1–30",    test: (d: number) => d >= 1 && d <= 30 },
-    { key: "31–60",   test: (d: number) => d >= 31 && d <= 60 },
-    { key: "61–90",   test: (d: number) => d >= 61 && d <= 90 },
+    { key: "1-30",    test: (d: number) => d >= 1 && d <= 30 },
+    { key: "31-60",   test: (d: number) => d >= 31 && d <= 60 },
+    { key: "61-90",   test: (d: number) => d >= 61 && d <= 90 },
     { key: "90+",     test: (d: number) => d > 90 },
   ].map(bk => {
     const list = unpaid.filter(b => bk.test(daysOverdue(b)));
@@ -1712,11 +1712,11 @@ function AgedPayablesTab() {
                   return (
                     <tr key={b.id} className={`border-b border-[var(--color-border)] last:border-0 ${overdue ? "bg-red-950/10" : "hover:bg-[var(--color-accent)]"}`}>
                       <td className="px-4 py-2.5 font-medium">{b.vendor}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{b.billNo || "—"}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{b.billNo || "-"}</td>
                       <td className="px-4 py-2.5 tabular-nums">{fc(b.amount)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{b.dueDate || "—"}</td>
-                      <td className={`px-4 py-2.5 tabular-nums ${overdue ? "text-red-400" : "text-[var(--color-muted)]"}`}>{b.status === "unpaid" && d > 0 ? `${d}d` : "—"}</td>
-                      <td className="px-4 py-2.5">{b.isMsme ? <span className="text-[10px] bg-blue-950/30 text-blue-400 px-1.5 py-0.5 rounded-full">MSME</span> : "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{b.dueDate || "-"}</td>
+                      <td className={`px-4 py-2.5 tabular-nums ${overdue ? "text-red-400" : "text-[var(--color-muted)]"}`}>{b.status === "unpaid" && d > 0 ? `${d}d` : "-"}</td>
+                      <td className="px-4 py-2.5">{b.isMsme ? <span className="text-[10px] bg-blue-950/30 text-blue-400 px-1.5 py-0.5 rounded-full">MSME</span> : "-"}</td>
                       <td className="px-4 py-2.5">
                         <button onClick={() => toggle(b.id)} className={`text-xs font-semibold px-2 py-0.5 rounded-full ${b.status === "paid" ? "bg-green-950/30 text-green-400" : "bg-yellow-950/30 text-yellow-400"}`}>{b.status === "paid" ? "Paid" : "Unpaid"}</button>
                       </td>
@@ -1876,7 +1876,7 @@ function StockLedgerTab() {
                 {valuation.map(v => (
                   <tr key={v.key} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
                     <td className="px-4 py-2.5 font-medium">{v.product}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{v.sku || "—"}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{v.sku || "-"}</td>
                     <td className={`px-4 py-2.5 tabular-nums font-bold ${v.closingQty < 0 ? "text-red-400" : ""}`}>{v.closingQty}</td>
                     <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(v.avgRate))}</td>
                     <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)] font-semibold">{formatCurrency(Math.round(v.closingValue))}</td>
@@ -1911,9 +1911,9 @@ function StockLedgerTab() {
                       </span>
                     </td>
                     <td className="px-4 py-2.5 tabular-nums">{m.qty}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{m.rate > 0 ? formatCurrency(m.rate) : "—"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{m.rate > 0 ? formatCurrency(m.qty * m.rate) : "—"}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{m.note || "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{m.rate > 0 ? formatCurrency(m.rate) : "-"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{m.rate > 0 ? formatCurrency(m.qty * m.rate) : "-"}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{m.note || "-"}</td>
                     <td className="px-4 py-2.5"><button onClick={() => setMoves(prev => prev.filter(x => x.id !== m.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
                   </tr>
                 ))}
@@ -2028,12 +2028,12 @@ function BatchExpiryTab() {
                     <tr key={b.id} className={`border-b border-[var(--color-border)] last:border-0 ${s.days !== null && s.days < 0 ? "bg-red-950/10" : "hover:bg-[var(--color-accent)]"}`}>
                       <td className="px-4 py-2.5 font-medium text-xs">{b.product}</td>
                       <td className="px-4 py-2.5 font-mono text-xs">{b.batchNo}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{b.serial || "—"}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{b.serial || "-"}</td>
                       <td className="px-4 py-2.5 tabular-nums">{b.qty}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{b.mfgDate || "—"}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{b.expiryDate || "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{b.mfgDate || "-"}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{b.expiryDate || "-"}</td>
                       <td className={`px-4 py-2.5 text-xs font-semibold ${s.cls}`}>{s.label}</td>
-                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{b.location || "—"}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{b.location || "-"}</td>
                       <td className="px-4 py-2.5"><button onClick={() => setBatches(prev => prev.filter(x => x.id !== b.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
                     </tr>
                   );
@@ -2156,7 +2156,7 @@ function JobWorkTab() {
                       <td className="px-3 py-2.5 tabular-nums">{r.sentQty}</td>
                       <td className="px-3 py-2.5 tabular-nums">{r.receivedQty}</td>
                       <td className="px-3 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{r.sentDate}</td>
-                      <td className={`px-3 py-2.5 tabular-nums text-xs ${age > 365 ? "text-red-400 font-bold" : "text-[var(--color-muted)]"}`}>{r.status === "received" ? "—" : `${age}d`}</td>
+                      <td className={`px-3 py-2.5 tabular-nums text-xs ${age > 365 ? "text-red-400 font-bold" : "text-[var(--color-muted)]"}`}>{r.status === "received" ? "-" : `${age}d`}</td>
                       <td className="px-3 py-2.5"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS[r.status]}`}>{r.status}</span></td>
                       <td className="px-3 py-2.5">
                         {r.status !== "received" && (
@@ -2292,7 +2292,7 @@ function ProductionCostingTab() {
               </div>
               {yieldPct !== null && (
                 <div className={`mt-3 rounded-lg px-4 py-2 text-xs border ${yieldPct >= 95 ? "bg-green-950/30 border-green-800/40 text-green-400" : yieldPct >= 85 ? "bg-yellow-950/30 border-yellow-800/40 text-yellow-400" : "bg-red-950/30 border-red-800/40 text-red-400"}`}>
-                  Yield {yieldPct}% — {active.producedQty} of {active.plannedQty} planned ({active.plannedQty - active.producedQty} loss)
+                  Yield {yieldPct}% - {active.producedQty} of {active.plannedQty} planned ({active.plannedQty - active.producedQty} loss)
                 </div>
               )}
             </div>
@@ -2384,7 +2384,7 @@ function WarehouseStockTab() {
     setTProduct(""); setTQty(""); toast.success("Transfer completed");
   };
 
-  const locName = (id: string) => locs.find(l => l.id === id)?.name ?? "—";
+  const locName = (id: string) => locs.find(l => l.id === id)?.name ?? "-";
   const products = [...new Set(bals.map(b => b.product))];
   const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
 
@@ -2562,7 +2562,7 @@ function StockTakeTab() {
           </div>
           <button onClick={submitScan} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 whitespace-nowrap">+ Count</button>
         </div>
-        <p className="text-[10px] text-[var(--color-muted)] mt-2">USB / Bluetooth scanners type the code and send Enter automatically — this field is ready for them.</p>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">USB / Bluetooth scanners type the code and send Enter automatically - this field is ready for them.</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -2770,7 +2770,7 @@ function AbcAnalysisTab() {
         <PieChart size={16} className="text-[var(--color-primary)]" />
         <div>
           <h2 className="text-sm font-semibold">ABC Inventory Analysis</h2>
-          <p className="text-[11px] text-[var(--color-muted)]">Pareto classification by stock value — focus controls on the vital few (A) items.</p>
+          <p className="text-[11px] text-[var(--color-muted)]">Pareto classification by stock value - focus controls on the vital few (A) items.</p>
         </div>
       </div>
 
@@ -2872,7 +2872,7 @@ function EoqCalculatorTab() {
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-lg p-5 text-center">
         <p className="text-xs text-[var(--color-muted)] mb-1">Optimal order quantity</p>
-        <p className="text-4xl font-bold text-[var(--color-primary)] tabular-nums">{eoq > 0 ? Math.round(eoq) : "—"}</p>
+        <p className="text-4xl font-bold text-[var(--color-primary)] tabular-nums">{eoq > 0 ? Math.round(eoq) : "-"}</p>
         <p className="text-[11px] text-[var(--color-muted)] mt-1">units per order{eoq > 0 ? ` · ${ordersPerYear.toFixed(1)} orders/yr · every ${Math.round(cycleDays)} days` : ""}</p>
       </div>
 
@@ -2931,7 +2931,7 @@ function StockTurnoverTab() {
           <Repeat size={16} className="text-[var(--color-primary)]" />
           <div>
             <h2 className="text-sm font-semibold">Stock Turnover &amp; Days of Inventory</h2>
-            <p className="text-[11px] text-[var(--color-muted)]">How many times stock cycles per period — higher turns free up working capital.</p>
+            <p className="text-[11px] text-[var(--color-muted)]">How many times stock cycles per period - higher turns free up working capital.</p>
           </div>
         </div>
         <label className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]">Period (days)<input type="number" value={periodDays} onChange={e => setPeriodDays(e.target.value)} className={inp} /></label>
@@ -2939,8 +2939,8 @@ function StockTurnoverTab() {
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Overall Turns", value: overallTurns > 0 ? `${overallTurns.toFixed(1)}×` : "—", color: "text-[var(--color-primary)]" },
-          { label: "Avg Days of Inventory", value: overallDio > 0 ? `${Math.round(overallDio)}d` : "—", color: overallDio > 90 ? "text-red-400" : "text-green-400" },
+          { label: "Overall Turns", value: overallTurns > 0 ? `${overallTurns.toFixed(1)}×` : "-", color: "text-[var(--color-primary)]" },
+          { label: "Avg Days of Inventory", value: overallDio > 0 ? `${Math.round(overallDio)}d` : "-", color: overallDio > 90 ? "text-red-400" : "text-green-400" },
           { label: "Period COGS (est.)", value: formatCurrency(Math.round(totalCogs)), color: "text-orange-400" },
         ].map(c => (
           <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -2964,8 +2964,8 @@ function StockTurnoverTab() {
                     <td className="px-4 py-2.5 tabular-nums">{r.sold}</td>
                     <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(r.avgInvValue))}</td>
                     <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(r.cogs))}</td>
-                    <td className={`px-4 py-2.5 tabular-nums font-bold ${r.turns >= 4 ? "text-green-400" : r.turns > 0 ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>{r.turns > 0 ? `${r.turns.toFixed(1)}×` : "—"}</td>
-                    <td className={`px-4 py-2.5 tabular-nums ${r.dio !== null && r.dio > 120 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.dio !== null ? `${Math.round(r.dio)}d` : "—"}</td>
+                    <td className={`px-4 py-2.5 tabular-nums font-bold ${r.turns >= 4 ? "text-green-400" : r.turns > 0 ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>{r.turns > 0 ? `${r.turns.toFixed(1)}×` : "-"}</td>
+                    <td className={`px-4 py-2.5 tabular-nums ${r.dio !== null && r.dio > 120 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.dio !== null ? `${Math.round(r.dio)}d` : "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -3274,13 +3274,13 @@ function GrnDiscrepancyTab() {
                 {[...analysed].sort((a, b) => b.date.localeCompare(a.date)).map(r => (
                   <tr key={r.id} className={`border-b border-[var(--color-border)] last:border-0 ${!r.ok ? "bg-red-950/10" : "hover:bg-[var(--color-accent)]"}`}>
                     <td className="px-3 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{r.date}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs">{r.poRef || "—"}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs">{r.poRef || "-"}</td>
                     <td className="px-3 py-2.5 text-xs font-medium">{r.vendor}</td>
                     <td className="px-3 py-2.5 text-xs">{r.item}</td>
                     <td className="px-3 py-2.5 tabular-nums text-xs">{r.orderedQty} / {r.receivedQty}</td>
                     <td className={`px-3 py-2.5 tabular-nums text-xs font-bold ${r.qtyDiff !== 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.qtyDiff > 0 ? `+${r.qtyDiff}` : r.qtyDiff}</td>
                     <td className="px-3 py-2.5 tabular-nums text-xs">{formatCurrency(r.orderedRate)} → {formatCurrency(r.invoicedRate)}</td>
-                    <td className={`px-3 py-2.5 tabular-nums text-xs font-semibold ${r.priceVariance > 0 ? "text-red-400" : r.priceVariance < 0 ? "text-green-400" : "text-[var(--color-muted)]"}`}>{r.priceVariance !== 0 ? formatCurrency(Math.round(r.priceVariance)) : "—"}</td>
+                    <td className={`px-3 py-2.5 tabular-nums text-xs font-semibold ${r.priceVariance > 0 ? "text-red-400" : r.priceVariance < 0 ? "text-green-400" : "text-[var(--color-muted)]"}`}>{r.priceVariance !== 0 ? formatCurrency(Math.round(r.priceVariance)) : "-"}</td>
                     <td className="px-3 py-2.5">{r.ok ? <span className="text-[10px] font-semibold text-green-400 bg-green-950/30 px-2 py-0.5 rounded-full">Matched</span> : <span className="text-[10px] font-semibold text-red-400 bg-red-950/30 px-2 py-0.5 rounded-full">Discrepancy</span>}</td>
                     <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
                   </tr>
@@ -3290,7 +3290,7 @@ function GrnDiscrepancyTab() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Positive qty Δ = over-delivery; negative = short receipt. Positive price variance = vendor invoiced above PO rate — resolve before approving payment.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Positive qty Δ = over-delivery; negative = short receipt. Positive price variance = vendor invoiced above PO rate - resolve before approving payment.</p>
     </div>
   );
 }
@@ -3347,7 +3347,7 @@ function ScrapWastageTab() {
         {[
           { label: "Entries", value: rows.length.toString(), color: "text-[var(--color-primary)]" },
           { label: "Total Loss Value", value: formatCurrency(Math.round(totalLoss)), color: totalLoss > 0 ? "text-red-400" : "text-green-400" },
-          { label: "Top Reason", value: byReason[0]?.reason ?? "—", color: "text-yellow-400" },
+          { label: "Top Reason", value: byReason[0]?.reason ?? "-", color: "text-yellow-400" },
         ].map(c => (
           <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
@@ -3538,7 +3538,7 @@ function ReturnsRegisterTab() {
                     <td className="px-3 py-2.5 text-xs">{r.product}</td>
                     <td className="px-3 py-2.5 tabular-nums">{r.qty}</td>
                     <td className="px-3 py-2.5 tabular-nums text-xs">{formatCurrency(Math.round(r.qty * r.unitValue))}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.reason || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.reason || "-"}</td>
                     <td className={`px-3 py-2.5 text-xs font-semibold ${DISP_STYLE[r.disposition]}`}>{r.disposition}</td>
                     <td className="px-3 py-2.5"><button onClick={() => toggle(r.id)} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${r.status === "closed" ? "bg-green-950/30 text-green-400" : "bg-yellow-950/30 text-yellow-400"}`}>{r.status}</button></td>
                     <td className="px-3 py-2.5"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
@@ -3549,7 +3549,7 @@ function ReturnsRegisterTab() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">RTV (return-to-vendor) defective stock may need an ITC reversal / debit note under GST — consult a CA. Restock returns flow back to sellable inventory; quarantine and scrap do not.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">RTV (return-to-vendor) defective stock may need an ITC reversal / debit note under GST - consult a CA. Restock returns flow back to sellable inventory; quarantine and scrap do not.</p>
     </div>
   );
 }
@@ -3592,7 +3592,7 @@ function StockValuationTab() {
 
   const downloadCsv = () => {
     const headers = ["SKU", "Product", "Qty", "Unit Cost (method)", `Closing Value (${method === "fifo" ? "FIFO" : "Weighted-avg"})`];
-    const lines = rows.map(r => [r.sku || "—", r.productName, r.quantity, Math.round(r.unit), Math.round(r.value)].join(","));
+    const lines = rows.map(r => [r.sku || "-", r.productName, r.quantity, Math.round(r.unit), Math.round(r.value)].join(","));
     const csv = [headers.join(","), ...lines].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const a = document.createElement("a"); a.href = url; a.download = `stock-valuation-${method}.csv`; a.click();
@@ -3609,7 +3609,7 @@ function StockValuationTab() {
           <Scale size={16} className="text-[var(--color-primary)]" />
           <div>
             <h2 className="text-sm font-semibold">Stock Valuation Report</h2>
-            <p className="text-[11px] text-[var(--color-muted)]">Closing-stock value by costing method — for year-end audit and balance-sheet COGS.</p>
+            <p className="text-[11px] text-[var(--color-muted)]">Closing-stock value by costing method - for year-end audit and balance-sheet COGS.</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -3652,7 +3652,7 @@ function StockValuationTab() {
               <tbody>
                 {rows.map(r => (
                   <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{r.sku || "—"}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{r.sku || "-"}</td>
                     <td className="px-4 py-2.5 font-medium text-xs">{r.productName}</td>
                     <td className="px-4 py-2.5 tabular-nums">{r.quantity}</td>
                     <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(r.unitCost)}</td>
@@ -3724,7 +3724,7 @@ function SafetyStockTab() {
         <ShieldCheck size={16} className="text-[var(--color-primary)]" />
         <div>
           <h2 className="text-sm font-semibold">Safety-Stock &amp; Min/Max Planner</h2>
-          <p className="text-[11px] text-[var(--color-muted)]">Set buffer stock from lead-time variability and a target service level — then min/max levels per SKU.</p>
+          <p className="text-[11px] text-[var(--color-muted)]">Set buffer stock from lead-time variability and a target service level - then min/max levels per SKU.</p>
         </div>
       </div>
 
@@ -3767,7 +3767,7 @@ function SafetyStockTab() {
                   <tr key={r.id} className={`border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)] ${r.below ? "bg-red-950/10" : ""}`}>
                     <td className="px-4 py-2.5 font-medium text-xs">{r.productName}</td>
                     <td className={`px-4 py-2.5 tabular-nums font-bold ${r.below ? "text-red-400" : "text-[var(--color-text)]"}`}>{r.quantity}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.dailyDemand > 0 ? `${r.dailyDemand.toFixed(2)}/day` : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.dailyDemand > 0 ? `${r.dailyDemand.toFixed(2)}/day` : "-"}</td>
                     <td className="px-4 py-2.5 tabular-nums text-yellow-400">{r.safety}</td>
                     <td className="px-4 py-2.5 tabular-nums text-blue-400 font-semibold">{r.min}</td>
                     <td className="px-4 py-2.5 tabular-nums text-emerald-400 font-semibold">{r.max}</td>
@@ -3812,7 +3812,7 @@ function CarryingCostTab() {
         <Coins size={16} className="text-[var(--color-primary)]" />
         <div>
           <h2 className="text-sm font-semibold">Carrying-Cost Calculator</h2>
-          <p className="text-[11px] text-[var(--color-muted)]">Quantify the true annual cost of holding stock — capital, storage, obsolescence and insurance.</p>
+          <p className="text-[11px] text-[var(--color-muted)]">Quantify the true annual cost of holding stock - capital, storage, obsolescence and insurance.</p>
         </div>
       </div>
 
@@ -3861,7 +3861,7 @@ function CarryingCostTab() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Carrying cost = stock value × total annual rate. Typical SMB carrying rates run 18–30% — the biggest hidden tax on slow stock. Cut it by shrinking dead stock and tightening reorder quantities (see EOQ).</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Carrying cost = stock value × total annual rate. Typical SMB carrying rates run 18-30% - the biggest hidden tax on slow stock. Cut it by shrinking dead stock and tightening reorder quantities (see EOQ).</p>
     </div>
   );
 }
@@ -3884,10 +3884,10 @@ function StockAgingTab() {
   }, [orders]);
 
   const BUCKETS = [
-    { key: "b0", label: "0–30 days", max: 30, color: "text-green-400", bar: "bg-green-500/70" },
-    { key: "b30", label: "31–60 days", max: 60, color: "text-blue-400", bar: "bg-blue-500/70" },
-    { key: "b60", label: "61–90 days", max: 90, color: "text-yellow-400", bar: "bg-yellow-500/70" },
-    { key: "b90", label: "91–180 days", max: 180, color: "text-orange-400", bar: "bg-orange-500/70" },
+    { key: "b0", label: "0-30 days", max: 30, color: "text-green-400", bar: "bg-green-500/70" },
+    { key: "b30", label: "31-60 days", max: 60, color: "text-blue-400", bar: "bg-blue-500/70" },
+    { key: "b60", label: "61-90 days", max: 90, color: "text-yellow-400", bar: "bg-yellow-500/70" },
+    { key: "b90", label: "91-180 days", max: 180, color: "text-orange-400", bar: "bg-orange-500/70" },
     { key: "b180", label: "180+ days", max: Infinity, color: "text-red-400", bar: "bg-red-500/70" },
   ];
 
@@ -3948,7 +3948,7 @@ function StockAgingTab() {
                     <td className="px-4 py-2.5 font-medium text-xs">{r.productName}</td>
                     <td className="px-4 py-2.5 tabular-nums">{r.quantity}</td>
                     <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(r.value))}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.days === null ? "—" : `${r.days}d`}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.days === null ? "-" : `${r.days}d`}</td>
                     <td className={`px-4 py-2.5 text-xs font-semibold ${r.bucket.color}`}>{r.bucket.label}</td>
                   </tr>
                 ))}
@@ -3957,7 +3957,7 @@ function StockAgingTab() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Days held is measured from the last fulfilled sale (or last stock update if never sold). Stock in the 180+ bucket is a strong write-off / clearance candidate — review provisioning with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Days held is measured from the last fulfilled sale (or last stock update if never sold). Stock in the 180+ bucket is a strong write-off / clearance candidate - review provisioning with your CA.</p>
     </div>
   );
 }
@@ -4021,7 +4021,7 @@ function StockoutCostTab() {
         <AlertOctagon size={16} className="text-[var(--color-primary)]" />
         <div>
           <h2 className="text-sm font-semibold">Stockout-Cost Estimator</h2>
-          <p className="text-[11px] text-[var(--color-muted)]">Estimate lost gross profit and goodwill from running out — over a 30-day horizon.</p>
+          <p className="text-[11px] text-[var(--color-muted)]">Estimate lost gross profit and goodwill from running out - over a 30-day horizon.</p>
         </div>
       </div>
 
@@ -4058,12 +4058,12 @@ function StockoutCostTab() {
                     <td className="px-4 py-2.5 font-medium text-xs">{r.productName}</td>
                     <td className="px-4 py-2.5 tabular-nums">{r.quantity}</td>
                     <td className="px-4 py-2.5 tabular-nums">
-                      {r.daysToStockout === null ? <span className="text-[var(--color-muted)]">—</span>
+                      {r.daysToStockout === null ? <span className="text-[var(--color-muted)]">-</span>
                         : r.daysToStockout <= 7 ? <span className="text-red-400 font-bold">{r.daysToStockout}d</span>
                         : r.daysToStockout <= 14 ? <span className="text-orange-400 font-semibold">{r.daysToStockout}d</span>
                         : <span className="text-[var(--color-muted)]">{r.daysToStockout}d</span>}
                     </td>
-                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.unitsShort > 0 ? Math.round(r.unitsShort) : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.unitsShort > 0 ? Math.round(r.unitsShort) : "-"}</td>
                     <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(Math.round(r.lostMargin))}</td>
                     <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(r.goodwillCost))}</td>
                     <td className="px-4 py-2.5 tabular-nums font-bold text-[var(--color-primary)]">{formatCurrency(Math.round(r.totalRisk))}</td>
@@ -4084,11 +4084,11 @@ function CycleCountScheduleTab() {
   const { store } = useApp();
   const { inventory, orders } = store;
 
-  // Counting cadence (days) per ABC class — A counted most often, C least.
+  // Counting cadence (days) per ABC class - A counted most often, C least.
   const [freqA, setFreqA] = useFeatureState<number>("ops-cycle-freq-a", 30);
   const [freqB, setFreqB] = useFeatureState<number>("ops-cycle-freq-b", 90);
   const [freqC, setFreqC] = useFeatureState<number>("ops-cycle-freq-c", 180);
-  // Last counted date per SKU id (ISO date) — marked when the user records a count.
+  // Last counted date per SKU id (ISO date) - marked when the user records a count.
   const [lastCounted, setLastCounted] = useFeatureState<Record<string, string>>("ops-cycle-last-counted", {});
 
   // Sales value per product over fulfilled orders → ABC ranking by revenue contribution.
@@ -4122,7 +4122,7 @@ function CycleCountScheduleTab() {
   const dueNow = rows.filter(r => r.due).length;
   const markCounted = (id: string) => {
     setLastCounted(prev => ({ ...prev, [id]: new Date().toISOString() }));
-    toast.success("Count recorded — next cycle scheduled");
+    toast.success("Count recorded - next cycle scheduled");
   };
   const CLS_STYLE: Record<"A" | "B" | "C", string> = {
     A: "bg-red-950/30 text-red-400 border-red-800/30",
@@ -4236,7 +4236,7 @@ function MinMaxPlannerTab() {
         <SlidersHorizontal size={16} className="text-[var(--color-primary)]" />
         <div>
           <h2 className="text-sm font-semibold">Min/Max Stock Planner</h2>
-          <p className="text-[11px] text-[var(--color-muted)]">Set per-SKU min and max levels from real demand so you reorder up to a target — not by gut feel.</p>
+          <p className="text-[11px] text-[var(--color-muted)]">Set per-SKU min and max levels from real demand so you reorder up to a target - not by gut feel.</p>
         </div>
       </div>
 
@@ -4276,7 +4276,7 @@ function MinMaxPlannerTab() {
                     <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.dailyDemand > 0 ? `${r.dailyDemand.toFixed(2)}/day` : "No history"}</td>
                     <td className="px-4 py-2.5 tabular-nums text-yellow-400">{r.min}</td>
                     <td className="px-4 py-2.5 tabular-nums text-blue-400">{r.max}</td>
-                    <td className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{r.status === "below" ? r.orderUpTo : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{r.status === "below" ? r.orderUpTo : "-"}</td>
                     <td className="px-4 py-2.5 text-xs font-semibold">
                       {r.status === "below" ? <span className="text-red-400">Reorder</span>
                         : r.status === "above" ? <span className="text-orange-400">Overstock</span>
@@ -4328,7 +4328,7 @@ function WarehouseUtilizationTab() {
         <Boxes size={16} className="text-[var(--color-primary)]" />
         <div>
           <h2 className="text-sm font-semibold">Warehouse-Utilization Planner</h2>
-          <p className="text-[11px] text-[var(--color-muted)]">Track used vs available capacity per zone or rack so you know when to expand — or when space is wasted.</p>
+          <p className="text-[11px] text-[var(--color-muted)]">Track used vs available capacity per zone or rack so you know when to expand - or when space is wasted.</p>
         </div>
       </div>
 
@@ -4383,7 +4383,7 @@ function WarehouseUtilizationTab() {
                 <div className="mt-2 flex items-center gap-2">
                   <label className="text-[10px] text-[var(--color-muted)]">Update used:</label>
                   <input type="number" min="0" defaultValue={z.used} onBlur={e => updateUsed(z.id, e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] w-28" />
-                  {z.used > z.capacity && <span className="text-[10px] text-red-400 font-semibold">Over capacity — rebalance or expand</span>}
+                  {z.used > z.capacity && <span className="text-[10px] text-red-400 font-semibold">Over capacity - rebalance or expand</span>}
                 </div>
               </div>
             );
@@ -4425,7 +4425,7 @@ function OversellGuardTab() {
         <Ban size={16} className="text-[var(--color-primary)]" />
         <div>
           <h2 className="text-sm font-semibold">Oversell / Negative-Stock Guard</h2>
-          <p className="text-[11px] text-[var(--color-muted)]">Catch SKUs where open orders promise more than you physically hold — before you ship phantom stock.</p>
+          <p className="text-[11px] text-[var(--color-muted)]">Catch SKUs where open orders promise more than you physically hold - before you ship phantom stock.</p>
         </div>
       </div>
 

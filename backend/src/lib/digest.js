@@ -97,7 +97,7 @@ async function sendDailyDigest() {
         alertsSection = `
           <tr><td style="padding:16px 32px 0">
             <p style="margin:0;font-size:13px;color:#22c55e;font-family:system-ui,sans-serif">
-              ✓ No critical alerts — your cash flow looks healthy today.
+              ✓ No critical alerts - your cash flow looks healthy today.
             </p>
           </td></tr>
         `;
@@ -128,7 +128,7 @@ async function sendDailyDigest() {
               </td></tr>
               <tr><td style="padding:24px 32px 12px">
                 <p style="margin:0;font-size:18px;font-weight:700;color:#ffffff;font-family:system-ui,sans-serif">
-                  Good morning — here's your cash snapshot
+                  Good morning - here's your cash snapshot
                 </p>
                 <p style="margin:6px 0 0;font-size:13px;color:#5a5a40;font-family:system-ui,sans-serif">
                   ${new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
@@ -149,7 +149,7 @@ async function sendDailyDigest() {
               </td></tr>
               <tr><td style="padding:20px 32px;border-top:1px solid #2a2a1a;text-align:center">
                 <p style="margin:0;font-size:11px;color:#5a5a40;font-family:system-ui,sans-serif">
-                  Headroom — Cash flow intelligence for Indian SMBs<br>
+                  Headroom - Cash flow intelligence for Indian SMBs<br>
                   This digest is sent at 7:00 AM IST every day.
                 </p>
               </td></tr>
@@ -158,9 +158,9 @@ async function sendDailyDigest() {
         </table>
       </body></html>`;
 
-      await sendMail({ to: owner.email, subject: `Your morning cash snapshot — ${fmt(totalCash)}, ${runway} days runway`, html });
+      await sendMail({ to: owner.email, subject: `Your morning cash snapshot - ${fmt(totalCash)}, ${runway} days runway`, html });
 
-      // WhatsApp digest — send if user has a bound number
+      // WhatsApp digest - send if user has a bound number
       const { rows: waRows } = await pool.query(
         "SELECT phone FROM whatsapp_bindings WHERE tenant_id=$1 LIMIT 1",
         [owner.tenant_id]
@@ -172,7 +172,7 @@ async function sendDailyDigest() {
           : `✅ No critical alerts`;
         const overdueAmt  = overdueInvoices.reduce((s, i) => s + i.amount, 0);
         const invoiceLine = overdueAmt > 0 ? `\n📋 Overdue invoices: *${fmt(overdueAmt)}*` : "";
-        const waMsg = `☀️ *Good morning — Headroom snapshot*\n${new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}\n\n💰 Cash: *${fmt(totalCash)}*\n🔥 Burn: *${fmt(burn)}/mo*\n${runwayEmoji} Runway: *${runway} days*\n\n${alertLine}${invoiceLine}\n\nReply *cash*, *runway*, *alerts*, or *help*`;
+        const waMsg = `☀️ *Good morning - Headroom snapshot*\n${new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}\n\n💰 Cash: *${fmt(totalCash)}*\n🔥 Burn: *${fmt(burn)}/mo*\n${runwayEmoji} Runway: *${runway} days*\n\n${alertLine}${invoiceLine}\n\nReply *cash*, *runway*, *alerts*, or *help*`;
         await sendWhatsApp(waRows[0].phone, waMsg).catch(e => console.error("[digest wa]", e.message));
       }
 
@@ -240,7 +240,7 @@ async function sendMondayBrief() {
               </td></tr>
               <tr><td style="padding:20px 32px;border-top:1px solid #2a2a1a;text-align:center">
                 <p style="margin:0;font-size:11px;color:#5a5a40;font-family:system-ui,sans-serif">
-                  Headroom — Cash flow intelligence for Indian SMBs<br>
+                  Headroom - Cash flow intelligence for Indian SMBs<br>
                   Monday CFO Brief is sent at 8:00 AM IST every Monday.
                 </p>
               </td></tr>
@@ -249,7 +249,7 @@ async function sendMondayBrief() {
         </table>
       </body></html>`;
 
-      await sendMail({ to: owner.email, subject: `Your Monday CFO Brief — 3 things this week`, html });
+      await sendMail({ to: owner.email, subject: `Your Monday CFO Brief - 3 things this week`, html });
 
       // WhatsApp Monday brief
       const { rows: waRows } = await pool.query(

@@ -2,10 +2,10 @@ import { type ReactNode, type CSSProperties } from "react";
 
 /**
  * Minimal, safe Markdown renderer for LLM prose (insights, assistant replies, drafts).
- * Handles headings (#–######), **bold**, *italic*, `code`, [links](url), bullet (- / *)
+ * Handles headings (#-######), **bold**, *italic*, `code`, [links](url), bullet (- / *)
  * and numbered (1.) lists, > blockquotes, --- horizontal rules, and GitHub-style
  * | pipe | tables | (with :--: alignment). No dependency and no dangerouslySetInnerHTML
- * — it builds React elements, so model output can't inject HTML. Anything it doesn't
+ * - it builds React elements, so model output can't inject HTML. Anything it doesn't
  * recognise renders as plain text, so it degrades gracefully.
  *
  * Tables matter most: LLM financial answers lean on them heavily, and without real
@@ -34,7 +34,7 @@ function inline(text: string): ReactNode[] {
 }
 
 const HR = /^(-{3,}|\*{3,}|_{3,})$/;
-// A table separator row, e.g. |---|:--:|--:| — only dashes, colons, pipes, spaces.
+// A table separator row, e.g. |---|:--:|--:| - only dashes, colons, pipes, spaces.
 const isSep = (s: string) => s.includes("-") && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(s);
 // Split a pipe row into trimmed cells, dropping the empties from leading/trailing pipes.
 const splitRow = (s: string) => s.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());

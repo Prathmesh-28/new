@@ -3,14 +3,14 @@ import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import Markdown from "./Markdown";
 
-const sample = `## Cash Position — Immediate Action Required
+const sample = `## Cash Position - Immediate Action Required
 
 - You have a **balance of ₹67,40,000** against a monthly burn of **4,02,26,574**.
 - **Overdue payables stand at ₹24,72,000 across 5 invoices**
 
 ### Top Priorities This Week
 
-1. **Secure immediate liquidity** — arrange an OD/CC line.
+1. **Secure immediate liquidity** - arrange an OD/CC line.
 2. **TDS deposit** is overdue.
 
 > ⚠️ At current burn, you will be **cash-negative** by the end of this week.`;
@@ -51,7 +51,7 @@ describe("Markdown renderer", () => {
   });
 });
 
-describe("Markdown renderer — tables, rules, links, italics", () => {
+describe("Markdown renderer - tables, rules, links, italics", () => {
   const html = renderToStaticMarkup(<Markdown text={tableSample} />);
 
   it("renders a real <table> (not pipe-soup)", () => {

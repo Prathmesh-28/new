@@ -1,4 +1,4 @@
-// §7 (M2) — Document pipelines. Estimate/SO/Challan and PO/GRN are NON-POSTING
+// §7 (M2) - Document pipelines. Estimate/SO/Challan and PO/GRN are NON-POSTING
 // documents; only converting to an Invoice (SALES) or Bill (PURCHASE) hits the
 // ledger via the posting engine. Plus advances/credit allocation, Undeposited
 // Funds deposits, and recurring templates.
@@ -61,7 +61,7 @@ async function salesCtx(tenantId, customerLedgerId) {
     sgstLedgerId: await ledgerIdByName(tenantId, "SGST Output"),
     igstLedgerId: await ledgerIdByName(tenantId, "IGST Output"),
   };
-  if (!ctx.salesLedgerId || !ctx.cgstLedgerId || !ctx.sgstLedgerId || !ctx.igstLedgerId) throw new PostError("NOT_SEEDED", "Sales/tax ledgers missing — seed first", 422);
+  if (!ctx.salesLedgerId || !ctx.cgstLedgerId || !ctx.sgstLedgerId || !ctx.igstLedgerId) throw new PostError("NOT_SEEDED", "Sales/tax ledgers missing - seed first", 422);
   return ctx;
 }
 async function purchaseCtx(tenantId, vendorLedgerId) {
@@ -72,7 +72,7 @@ async function purchaseCtx(tenantId, vendorLedgerId) {
     sgstInputLedgerId: await ledgerIdByName(tenantId, "SGST Input"),
     igstInputLedgerId: await ledgerIdByName(tenantId, "IGST Input"),
   };
-  if (!ctx.purchaseLedgerId || !ctx.cgstInputLedgerId || !ctx.sgstInputLedgerId || !ctx.igstInputLedgerId) throw new PostError("NOT_SEEDED", "Purchase/tax ledgers missing — seed first", 422);
+  if (!ctx.purchaseLedgerId || !ctx.cgstInputLedgerId || !ctx.sgstInputLedgerId || !ctx.igstInputLedgerId) throw new PostError("NOT_SEEDED", "Purchase/tax ledgers missing - seed first", 422);
   return ctx;
 }
 
@@ -103,14 +103,14 @@ async function convertDocument(tenantId, actorId, docId, toKind, opts = {}) {
     }
     // Gross = the party-ledger movement on this voucher (customer debit / vendor credit).
     const gross = Math.abs(m.entries.filter((e) => e.ledgerId === doc.party_ledger_id).reduce((s, e) => s + Number(e.debit || 0) - Number(e.credit || 0), 0));
-    // Approval gate — when a rule for this entity exists and the amount crosses its
+    // Approval gate - when a rule for this entity exists and the amount crosses its
     // threshold, the document can only post once an APPROVED record exists for it.
     const entityType = toKind === "INVOICE" ? "invoice" : "bill";
     if (!opts.skipApproval && (await auto.requiresApproval(tenantId, entityType, gross))) {
       const { rows: ap } = await pool.query("SELECT 1 FROM book_approvals WHERE tenant_id=$1 AND entity_type='document' AND entity_id=$2 AND status='APPROVED' LIMIT 1", [tenantId, docId]);
-      if (!ap[0]) throw new PostError("NEEDS_APPROVAL", `This ${entityType} (₹${gross.toFixed(0)}) needs approval before posting — request approval first`, 409);
+      if (!ap[0]) throw new PostError("NEEDS_APPROVAL", `This ${entityType} (₹${gross.toFixed(0)}) needs approval before posting - request approval first`, 409);
     }
-    // Credit-limit gate (sales) — block if the customer's outstanding + this invoice
+    // Credit-limit gate (sales) - block if the customer's outstanding + this invoice
     // would exceed their credit limit, unless explicitly overridden.
     if (toKind === "INVOICE" && !opts.overrideCreditLimit) {
       const { rows: cl } = await pool.query("SELECT credit_limit FROM book_ledgers WHERE tenant_id=$1 AND id=$2", [tenantId, doc.party_ledger_id]);
@@ -118,7 +118,7 @@ async function convertDocument(tenantId, actorId, docId, toKind, opts = {}) {
       if (limit > 0) {
         const { rows: o } = await pool.query("SELECT COALESCE(SUM(e.debit-e.credit),0) AS bal FROM book_voucher_entries e JOIN book_vouchers v ON v.id=e.voucher_id AND v.is_cancelled=false WHERE e.tenant_id=$1 AND e.ledger_id=$2", [tenantId, doc.party_ledger_id]);
         const outstanding = Number(o[0].bal || 0);
-        if (outstanding + gross > limit) throw new PostError("CREDIT_LIMIT_EXCEEDED", `Credit limit ₹${limit.toFixed(0)} exceeded — outstanding ₹${outstanding.toFixed(0)} + ₹${gross.toFixed(0)}. Override to proceed.`, 409);
+        if (outstanding + gross > limit) throw new PostError("CREDIT_LIMIT_EXCEEDED", `Credit limit ₹${limit.toFixed(0)} exceeded - outstanding ₹${outstanding.toFixed(0)} + ₹${gross.toFixed(0)}. Override to proceed.`, 409);
       }
     }
     const r = await postVoucher(tenantId, actorId, m.voucher, m.entries, { taxes: m.taxes });
@@ -150,7 +150,7 @@ async function listDocuments(tenantId, filter = {}) {
   return rows;
 }
 
-// Advance / credit application — a reporting link (ledger movement already posted).
+// Advance / credit application - a reporting link (ledger movement already posted).
 async function allocate(tenantId, actorId, sourceVoucherId, targetVoucherId, amount) {
   if (!sourceVoucherId || !targetVoucherId || amount == null) throw new PostError("BAD_INPUT", "sourceVoucherId, targetVoucherId, amount required", 400);
   const { rows } = await pool.query(
@@ -163,7 +163,7 @@ async function allocate(tenantId, actorId, sourceVoucherId, targetVoucherId, amo
 // Undeposited Funds → Bank: a CONTRA (Dr Bank / Cr Undeposited Funds).
 async function recordDeposit(tenantId, actorId, bankLedgerId, amount, date) {
   const undep = await ledgerIdByName(tenantId, "Undeposited Funds");
-  if (!undep) throw new PostError("NOT_SEEDED", "Undeposited Funds ledger missing — seed first", 422);
+  if (!undep) throw new PostError("NOT_SEEDED", "Undeposited Funds ledger missing - seed first", 422);
   if (!bankLedgerId || amount == null || !date) throw new PostError("BAD_INPUT", "bankLedgerId, amount, date required", 400);
   return postVoucher(tenantId, actorId, { voucherType: "CONTRA", voucherDate: date, narration: "Deposit of undeposited funds", source: "manual" },
     [{ ledgerId: bankLedgerId, debit: toDb(amount), credit: "0" }, { ledgerId: undep, debit: "0", credit: toDb(amount) }]);
@@ -180,7 +180,7 @@ async function resolvePartyLedgerByName(tenantId, name, type) {
   if (rows[0]) return rows[0].id;
   const groupName = type === "PURCHASE" ? "Sundry Creditors" : "Sundry Debtors";
   const { rows: g } = await pool.query("SELECT id FROM book_account_groups WHERE tenant_id=$1 AND name=$2 LIMIT 1", [tenantId, groupName]);
-  if (!g[0]) throw new PostError("NOT_SEEDED", `${groupName} group missing — seed first`, 422);
+  if (!g[0]) throw new PostError("NOT_SEEDED", `${groupName} group missing - seed first`, 422);
   const { rows: ins } = await pool.query(
     "INSERT INTO book_ledgers(tenant_id,name,group_id,is_party) VALUES($1,$2,$3,true) ON CONFLICT(tenant_id,name) DO UPDATE SET name=EXCLUDED.name RETURNING id",
     [tenantId, nm, g[0].id]
@@ -245,7 +245,7 @@ async function createRecurring(tenantId, actorId, r) {
   return rows[0];
 }
 // Generate all due recurring docs as of a date. (A scheduler/worker would call
-// this daily; for now it's an explicit endpoint — no queue infra yet.)
+// this daily; for now it's an explicit endpoint - no queue infra yet.)
 async function runRecurringDue(tenantId, actorId, asOf) {
   const today = asOf || new Date().toISOString().slice(0, 10);
   const { rows } = await pool.query("SELECT * FROM book_recurring WHERE tenant_id=$1 AND active=true AND next_run<=$2", [tenantId, today]);
@@ -254,7 +254,7 @@ async function runRecurringDue(tenantId, actorId, asOf) {
     const tmpl = r.template || {};
     // Catch up EVERY missed period (e.g. after downtime): generate one voucher
     // per period dated at that period's date, advancing next_run from the stored
-    // anchor — not from today — so nothing is silently dropped. Cap to avoid runaway.
+    // anchor - not from today - so nothing is silently dropped. Cap to avoid runaway.
     let runDate = r.next_run instanceof Date ? r.next_run.toISOString().slice(0, 10) : String(r.next_run).slice(0, 10);
     let iterations = 0;
     const MAX_CATCHUP = 60;
@@ -300,7 +300,7 @@ async function runAllRecurring(asOf) {
 // line is receive()d (qty + rate). Lines without an itemId (e.g. free-text/service
 // rows) are skipped. Idempotent: once moved, the document's reference carries a
 // STOCK_POSTED marker and a second call is a no-op (returns moved:[]). Only valid
-// for DELIVERY_CHALLAN / GRN — anything else raises a PostError.
+// for DELIVERY_CHALLAN / GRN - anything else raises a PostError.
 async function postDocumentStock(tenantId, actorId, docId) {
   const { rows } = await pool.query("SELECT * FROM book_documents WHERE tenant_id=$1 AND id=$2", [tenantId, docId]);
   const doc = rows[0];
@@ -311,7 +311,7 @@ async function postDocumentStock(tenantId, actorId, docId) {
   }
   if (doc.status === "CANCELLED") throw new PostError("BAD_STATE", "Document is CANCELLED", 409);
 
-  // Idempotency guard — never double-move the same document.
+  // Idempotency guard - never double-move the same document.
   const ref = doc.reference || "";
   if (ref.includes(STOCK_POSTED_MARK)) return { docKind, moved: [] };
 

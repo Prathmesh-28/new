@@ -145,14 +145,14 @@ function fmtNum(v: number | null | undefined): string {
 }
 
 function fmtCell(v: CellValue): string {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined) return "-";
   if (typeof v === "boolean") return v ? "Yes" : "No";
   return String(v);
 }
 
 // Resolve a metric key against the loaded overview into a display value.
 function metricValue(key: string, ov: Overview | null): { value: string; money: boolean } {
-  if (!ov) return { value: "—", money: false };
+  if (!ov) return { value: "-", money: false };
   switch (key) {
     case "income":           return { value: fmtINR(ov.finance.income), money: true };
     case "expense":          return { value: fmtINR(ov.finance.expense), money: true };
@@ -163,7 +163,7 @@ function metricValue(key: string, ov: Overview | null): { value: string; money: 
     case "wonValue":         return { value: fmtINR(ov.sales.wonValue), money: true };
     case "headcount":        return { value: fmtNum(ov.people.headcount), money: false };
     case "lastPayrollNet":   return { value: fmtINR(ov.people.lastPayrollNet), money: true };
-    default:                 return { value: "—", money: false };
+    default:                 return { value: "-", money: false };
   }
 }
 
@@ -808,7 +808,7 @@ export default function InsightsPage() {
             Query builder
           </h2>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Build a safe query over your own data — pick a dataset, columns, filters and group-by, then Run.
+            Build a safe query over your own data - pick a dataset, columns, filters and group-by, then Run.
           </p>
 
           <div className="mt-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
@@ -837,7 +837,7 @@ export default function InsightsPage() {
                     </button>
                   </div>
                   {qCols.length === 0 ? (
-                    <p className="text-[11px] text-[var(--color-muted)]">No columns picked — all whitelisted columns will be returned.</p>
+                    <p className="text-[11px] text-[var(--color-muted)]">No columns picked - all whitelisted columns will be returned.</p>
                   ) : (
                     <div className="space-y-1.5">
                       {qCols.map((c, i) => (

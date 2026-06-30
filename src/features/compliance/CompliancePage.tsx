@@ -82,7 +82,7 @@ export default function CompliancePage() {
       push(7,  "TDS deposit",  "tds", null, "/tax", "Tax deducted last month must reach the government");
       if (store.firm.gstRegistered ?? true) {
         push(11, "GSTR-1 filing",  "gst", null, "/gst", "Outward supplies return for last month");
-        push(20, "GSTR-3B + payment", "gst", offset === 0 ? snap.gstThisMonth.netPayable : null, "/gst", "Summary return — net GST is payable with this");
+        push(20, "GSTR-3B + payment", "gst", offset === 0 ? snap.gstThisMonth.netPayable : null, "/gst", "Summary return - net GST is payable with this");
       }
       if (hasPayroll) push(15, "PF & ESI deposit", "payroll", null, "/payroll", "Statutory payroll contributions for last month");
       if ([2, 5, 8, 11].includes(m)) {
@@ -94,12 +94,12 @@ export default function CompliancePage() {
     // ROC / MCA annual filings (fixed calendar, not month-rolling)
     const year = now.getFullYear();
     const rocDates: { day: number; month: number; label: string; note: string }[] = [
-      { day: 30, month: 9,  label: "MGT-7 / MGT-7A — Annual Return", note: "File within 60 days of AGM (default: Sep 30). Private companies with turnover ≤₹2 crore use MGT-7A." },
-      { day: 30, month: 9,  label: "AOC-4 / AOC-4 XBRL — Financial Statements", note: "File audited financials within 30 days of AGM (default: Sep 30 for Oct AGM deadline)." },
-      { day: 30, month: 6,  label: "Form 11 — LLP Annual Return", note: "Annual return for LLPs — due June 30 every year." },
-      { day: 30, month: 9,  label: "Form 8 — LLP Statement of Accounts", note: "LLP statement of accounts and solvency — due Oct 30 (offset 30 days after Oct 31 FY end)." },
-      { day: 31, month: 3,  label: "DIR-3 KYC — Director KYC", note: "Annual KYC for every DIN holder — due March 31." },
-      { day: 30, month: 11, label: "MSME Form-1 — Outstanding Payments Disclosure", note: "Half-yearly return: payments outstanding >45 days to MSME vendors (Apr–Sep due Oct 31, Oct–Mar due Apr 30)." },
+      { day: 30, month: 9,  label: "MGT-7 / MGT-7A - Annual Return", note: "File within 60 days of AGM (default: Sep 30). Private companies with turnover ≤₹2 crore use MGT-7A." },
+      { day: 30, month: 9,  label: "AOC-4 / AOC-4 XBRL - Financial Statements", note: "File audited financials within 30 days of AGM (default: Sep 30 for Oct AGM deadline)." },
+      { day: 30, month: 6,  label: "Form 11 - LLP Annual Return", note: "Annual return for LLPs - due June 30 every year." },
+      { day: 30, month: 9,  label: "Form 8 - LLP Statement of Accounts", note: "LLP statement of accounts and solvency - due Oct 30 (offset 30 days after Oct 31 FY end)." },
+      { day: 31, month: 3,  label: "DIR-3 KYC - Director KYC", note: "Annual KYC for every DIN holder - due March 31." },
+      { day: 30, month: 11, label: "MSME Form-1 - Outstanding Payments Disclosure", note: "Half-yearly return: payments outstanding >45 days to MSME vendors (Apr-Sep due Oct 31, Oct-Mar due Apr 30)." },
     ];
     rocDates.forEach(({ day, month, label, note }) => {
       const d = new Date(year, month, day);
@@ -134,7 +134,7 @@ export default function CompliancePage() {
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><CalendarCheck size={18} className="text-[var(--color-primary)]" /> Compliance Calendar</h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Every statutory date — GST, TDS, advance tax, PF/ESI — derived from your firm profile and transactions, with cash amounts attached.
+            Every statutory date - GST, TDS, advance tax, PF/ESI - derived from your firm profile and transactions, with cash amounts attached.
           </p>
         </div>
       </div>
@@ -249,7 +249,7 @@ export default function CompliancePage() {
       {overdueObligations.length > 0 && (
         <div className="bg-red-950/30 border border-red-800/40 rounded-lg px-4 py-3 flex items-center gap-3">
           <AlertTriangle size={15} className="text-red-400 shrink-0" />
-          <p className="text-sm">{overdueObligations.length} obligation(s) past due — interest and late fees are accruing.</p>
+          <p className="text-sm">{overdueObligations.length} obligation(s) past due - interest and late fees are accruing.</p>
         </div>
       )}
 
@@ -504,7 +504,7 @@ function MsmeChecker() {
             {isMsme && (
               <div className="text-xs text-[var(--color-muted)]">
                 <div>P&M: {fc(pm)} · Turnover: {fc(at)}</div>
-                {!registered && <div className="text-yellow-400 mt-0.5">⚠ Not registered — register free at udyamregistration.gov.in</div>}
+                {!registered && <div className="text-yellow-400 mt-0.5">⚠ Not registered - register free at udyamregistration.gov.in</div>}
               </div>
             )}
             {!isMsme && <span className="text-xs text-red-400">Exceeds MSME thresholds. Not eligible for MSME benefits.</span>}
@@ -532,7 +532,7 @@ function MsmeChecker() {
                     <td className={`px-3 py-2.5 font-semibold ${CATEGORY_COLOR[r.cat]}`}>{r.cat}</td>
                     <td className="px-3 py-2.5">≤ {fc(r.pm)}</td>
                     <td className="px-3 py-2.5">≤ {fc(r.at)}</td>
-                    <td className="px-3 py-2.5">{match ? <span className="font-bold text-[var(--color-primary)]">← You</span> : "—"}</td>
+                    <td className="px-3 py-2.5">{match ? <span className="font-bold text-[var(--color-primary)]">← You</span> : "-"}</td>
                   </tr>
                 );
               })}
@@ -578,7 +578,7 @@ function LabourLawChecklist({ employeeCount }: { employeeCount: number }) {
     { id: "pt",       name: "Professional Tax",                    threshold: 1,  desc: "Deduct state PT from employee salary per applicable slab. Remit to state government.",          freq: "Monthly",   risk: "medium" },
     { id: "maternity",name: "Maternity Benefit Act",               threshold: 10, desc: "26 weeks paid maternity leave. Advance pay before leave, creche facilities if >50 employees.", freq: "As needed", risk: "medium" },
     { id: "shops",    name: "Shops & Establishments Act",          threshold: 1,  desc: "Register shop/office with labour department. Governs working hours, leave, holidays.",          freq: "Annual",    risk: "medium" },
-    { id: "lwf",      name: "Labour Welfare Fund",                 threshold: 1,  desc: "State-specific contribution to LWF. Ranges from ₹3–₹60/employee per period.",                  freq: "Monthly",   risk: "low" },
+    { id: "lwf",      name: "Labour Welfare Fund",                 threshold: 1,  desc: "State-specific contribution to LWF. Ranges from ₹3-₹60/employee per period.",                  freq: "Monthly",   risk: "low" },
     { id: "factories",name: "Factories Act",                       threshold: 10, desc: "Applicable if using power & ≥10 workers, or ≥20 workers without power. Safety compliance.",   freq: "Ongoing",   risk: "high" },
     { id: "contract", name: "Contract Labour (Regulation)",        threshold: 20, desc: "If engaging contract workers, obtain principal employer registration. Contractor needs licence.", freq: "Ongoing",  risk: "medium" },
     { id: "posh",     name: "POSH Act (Sexual Harassment)",        threshold: 10, desc: "Constitute Internal Complaints Committee. Display policy. Annual report to District Officer.",  freq: "Annual",    risk: "high" },
@@ -632,7 +632,7 @@ function LabourLawChecklist({ employeeCount }: { employeeCount: number }) {
 
       {done === applicable.length && applicable.length > 0 && (
         <div className="px-5 py-3 bg-green-950/30 border-t border-green-800/40 text-sm text-green-400 flex items-center gap-2">
-          <ShieldCheck size={14} /> All {applicable.length} applicable acts checked — review periodically as employee count grows.
+          <ShieldCheck size={14} /> All {applicable.length} applicable acts checked - review periodically as employee count grows.
         </div>
       )}
     </div>
@@ -650,7 +650,7 @@ function RocFilingCalendar() {
     { title: "ADT-1 (Auditor Appoint.)",  form: "ADT-1",           due: `15 days of AGM (by ${fy+1}-10-14)`,  entity: "Company",  note: "File within 15 days of AGM for auditor appointment." },
     { title: "DIR-3 KYC",                 form: "DIR-3 KYC",       due: `30-Sep-${fy+1}`,                      entity: "Director", note: "Annual KYC of all directors having DIN. Penalty ₹5,000 if late." },
     { title: "LLP Annual Return",         form: "Form 11",         due: `30-May-${fy+1}`,                      entity: "LLP",      note: "Within 60 days of end of FY (i.e. by 30-May)." },
-    { title: "LLP Financial Statements",  form: "Form 8",          due: `30-Oct-${fy+1}`,                      entity: "LLP",      note: "Statement of Accounts & Solvency — within 30 days of 6 months of FY close." },
+    { title: "LLP Financial Statements",  form: "Form 8",          due: `30-Oct-${fy+1}`,                      entity: "LLP",      note: "Statement of Accounts & Solvency - within 30 days of 6 months of FY close." },
     { title: "INC-20A (Business Commencement)", form: "INC-20A",   due: "180 days of incorporation",           entity: "New Co",   note: "Declaration of commencement of business. One-time." },
     { title: "MSME Half-Yearly Return",   form: "MSME-1",          due: `Apr & Oct`,                           entity: "Company",  note: "If ₹45L+ outstanding to MSME suppliers > 45 days." },
   ];
@@ -675,7 +675,7 @@ function RocFilingCalendar() {
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-4 border-b border-[var(--color-border)]">
         <CalendarCheck size={14} className="text-[var(--color-primary)]" />
-        <p className="text-sm font-semibold">ROC / MCA Filing Calendar — FY {fy}–{(fy+1).toString().slice(2)}</p>
+        <p className="text-sm font-semibold">ROC / MCA Filing Calendar - FY {fy}-{(fy+1).toString().slice(2)}</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[600px]">
@@ -821,9 +821,9 @@ function InsuranceCalendar() {
                     <tr key={p.id} className={`border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)] ${expired ? "opacity-60" : ""}`}>
                       <td className="px-4 py-3 font-semibold">{p.name}</td>
                       <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{p.type}</td>
-                      <td className="px-4 py-3 text-[var(--color-muted)]">{p.insurer || "—"}</td>
-                      <td className="px-4 py-3 tabular-nums">{p.premium > 0 ? fc(p.premium) : "—"}</td>
-                      <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{p.sumInsured > 0 ? fc(p.sumInsured) : "—"}</td>
+                      <td className="px-4 py-3 text-[var(--color-muted)]">{p.insurer || "-"}</td>
+                      <td className="px-4 py-3 tabular-nums">{p.premium > 0 ? fc(p.premium) : "-"}</td>
+                      <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{p.sumInsured > 0 ? fc(p.sumInsured) : "-"}</td>
                       <td className="px-4 py-3 tabular-nums">{p.renewalDate}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${statusCls}`}>{statusLabel}</span>
@@ -886,7 +886,7 @@ function RocAutoPrep() {
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileStack size={14} className="text-[var(--color-primary)]" /> ROC Filing Auto-Prep — AOC-4 / MGT-7</h2>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileStack size={14} className="text-[var(--color-primary)]" /> ROC Filing Auto-Prep - AOC-4 / MGT-7</h2>
         <p className="text-xs text-[var(--color-muted)] mb-4">Pre-fills annual MCA filing data from your books and computes statutory due dates off your AGM date.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
@@ -946,14 +946,14 @@ function RocAutoPrep() {
         <p className="text-sm font-semibold mb-2">Filing Notes</p>
         <div className="space-y-1.5">
           {filings.map(f => (
-            <p key={f.form} className="text-xs text-[var(--color-muted)]"><span className="font-mono text-[var(--color-primary)]">{f.form}</span> — {f.note}</p>
+            <p key={f.form} className="text-xs text-[var(--color-muted)]"><span className="font-mono text-[var(--color-primary)]">{f.form}</span> - {f.note}</p>
           ))}
         </div>
       </div>
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        Late MCA filing fee is ₹100/day per form with no upper cap. AOC-4: within 30 days of AGM; MGT-7/7A: within 60 days; ADT-1: within 15 days. Figures auto-filled from your books are indicative — reconcile with audited financials before filing.
+        Late MCA filing fee is ₹100/day per form with no upper cap. AOC-4: within 30 days of AGM; MGT-7/7A: within 60 days; ADT-1: within 15 days. Figures auto-filled from your books are indicative - reconcile with audited financials before filing.
       </div>
     </div>
   );
@@ -1021,11 +1021,11 @@ function KycDpt3Tracker() {
               ))}
             </div>
           )}
-          {pending > 0 && <p className="text-[11px] text-yellow-400 mt-2">{pending} director(s) pending KYC — file before {fmt(kycEffective)}.</p>}
+          {pending > 0 && <p className="text-[11px] text-yellow-400 mt-2">{pending} director(s) pending KYC - file before {fmt(kycEffective)}.</p>}
         </div>
 
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-          <p className="text-sm font-semibold mb-1 flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> DPT-3 — Return of Deposits</p>
+          <p className="text-sm font-semibold mb-1 flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> DPT-3 - Return of Deposits</p>
           <p className="text-xs text-[var(--color-muted)] mb-3">Annual return of deposits & exempted deposits (loans from directors, advances) outstanding as on 31 Mar. Due {fmt(dpt3Effective)}.</p>
           <label className="flex items-center gap-2 text-xs cursor-pointer mb-3">
             <input type="checkbox" checked={hasDeposits} onChange={e => setHasDeposits(e.target.checked)} className="accent-[var(--color-primary)]" />
@@ -1039,14 +1039,14 @@ function KycDpt3Tracker() {
             </div>
           )}
           <div className={`rounded-lg p-3 border text-xs ${hasDeposits ? "bg-yellow-950/20 border-yellow-800/40 text-yellow-300" : "bg-green-950/20 border-green-800/40 text-green-400"}`}>
-            {hasDeposits ? `DPT-3 filing required by ${fmt(dpt3Effective)}. Penalty: ₹5,000 + ₹500/day continuing default.` : "No outstanding deposits flagged — DPT-3 may not apply. Re-check at year-end (31 Mar)."}
+            {hasDeposits ? `DPT-3 filing required by ${fmt(dpt3Effective)}. Penalty: ₹5,000 + ₹500/day continuing default.` : "No outstanding deposits flagged - DPT-3 may not apply. Re-check at year-end (31 Mar)."}
           </div>
         </div>
       </div>
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        DIR-3 KYC: WEB form if no detail changed, else e-form. DPT-3 covers both deposits and exempted deposits (e.g. director loans) — most private companies must still file the "nil deposit but money outstanding" return. Consult your CS.
+        DIR-3 KYC: WEB form if no detail changed, else e-form. DPT-3 covers both deposits and exempted deposits (e.g. director loans) - most private companies must still file the "nil deposit but money outstanding" return. Consult your CS.
       </div>
     </div>
   );
@@ -1073,10 +1073,10 @@ function BoardAgmManager() {
   };
 
   const TIMELINES = [
-    { rule: "Board meetings — minimum", val: "4 per year (1 per quarter), gap ≤ 120 days", flag: boardCount < 4 },
+    { rule: "Board meetings - minimum", val: "4 per year (1 per quarter), gap ≤ 120 days", flag: boardCount < 4 },
     { rule: "Board notice", val: "≥ 7 days before meeting (shorter with consent)", flag: false },
-    { rule: "AGM — first", val: "Within 9 months of first FY-end", flag: false },
-    { rule: "AGM — subsequent", val: "Within 6 months of FY-end; gap ≤ 15 months", flag: false },
+    { rule: "AGM - first", val: "Within 9 months of first FY-end", flag: false },
+    { rule: "AGM - subsequent", val: "Within 6 months of FY-end; gap ≤ 15 months", flag: false },
     { rule: "AGM notice", val: "≥ 21 clear days to members", flag: false },
     { rule: "Minutes finalised", val: "Within 30 days of meeting; entered in minute book", flag: false },
     { rule: "MGT-14 (special resolutions)", val: "Within 30 days of passing the resolution", flag: false },
@@ -1133,7 +1133,7 @@ function BoardAgmManager() {
             </div>
           ))}
         </div>
-        {boardCount < 4 && <p className="text-[11px] text-yellow-400 mt-3">Only {boardCount} board meeting(s) logged this cycle — minimum is 4 per year with no gap exceeding 120 days (one-person/small/dormant companies: 2 per year).</p>}
+        {boardCount < 4 && <p className="text-[11px] text-yellow-400 mt-3">Only {boardCount} board meeting(s) logged this cycle - minimum is 4 per year with no gap exceeding 120 days (one-person/small/dormant companies: 2 per year).</p>}
       </div>
     </div>
   );
@@ -1308,7 +1308,7 @@ function AgreementTemplateLibrary() {
       </div>
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <pre className="text-[11px] text-[var(--color-text)] whitespace-pre-wrap font-mono leading-relaxed">{t.body}</pre>
-        <p className="text-[10px] text-[var(--color-muted)] mt-3">Starter templates only — have a lawyer review before signing. Replace bracketed placeholders.</p>
+        <p className="text-[10px] text-[var(--color-muted)] mt-3">Starter templates only - have a lawyer review before signing. Replace bracketed placeholders.</p>
       </div>
     </div>
   );
@@ -1352,7 +1352,7 @@ function PoshPolicyTracker() {
         <p className="text-sm font-semibold">IC Validity Check</p>
         <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={iccWomen} onChange={e => setIccWomen(e.target.checked)} className="accent-[var(--color-primary)]" /> Presiding officer is a woman & ≥50% members are women</label>
         <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={iccExternal} onChange={e => setIccExternal(e.target.checked)} className="accent-[var(--color-primary)]" /> One external member from an NGO/association familiar with POSH</label>
-        <p className={`text-xs font-medium ${iccWomen && iccExternal ? "text-green-400" : "text-yellow-400"}`}>{iccWomen && iccExternal ? "IC composition is valid under the POSH Act, 2013." : "IC composition is incomplete — non-compliant IC orders can be challenged."}</p>
+        <p className={`text-xs font-medium ${iccWomen && iccExternal ? "text-green-400" : "text-yellow-400"}`}>{iccWomen && iccExternal ? "IC composition is valid under the POSH Act, 2013." : "IC composition is incomplete - non-compliant IC orders can be challenged."}</p>
       </div>
     </div>
   );
@@ -1371,7 +1371,7 @@ function MultiActPenaltyEstimator() {
     case "roc": penalty = d * 100; basis = "₹100 per day of delay per form (MCA additional fee)"; break;
     case "tds-deposit": penalty = Math.round(amt * 0.015 * months); basis = "1.5% per month (part) on late deposit of deducted TDS (Sec 201(1A))"; break;
     case "tds-return": penalty = Math.min(d * 200, amt); basis = "₹200 per day late-filing fee, capped at the TDS amount (Sec 234E)"; break;
-    case "pf": penalty = Math.round(amt * 0.12 * months / 12) + Math.round(amt * (d > 180 ? 0.25 : d > 60 ? 0.15 : 0.05)); basis = "Interest @12% p.a. (Sec 7Q) + damages 5–25% (Sec 14B) by delay slab"; break;
+    case "pf": penalty = Math.round(amt * 0.12 * months / 12) + Math.round(amt * (d > 180 ? 0.25 : d > 60 ? 0.15 : 0.05)); basis = "Interest @12% p.a. (Sec 7Q) + damages 5-25% (Sec 14B) by delay slab"; break;
     case "esi": penalty = Math.round(amt * 0.12 * months / 12); basis = "Simple interest @12% p.a. on delayed ESI contribution"; break;
     case "gst": penalty = d * 50 + Math.round(amt * 0.18 * d / 365); basis = "Late fee ₹50/day (₹20 nil) + interest @18% p.a. on tax"; break;
     default: break;
@@ -1392,7 +1392,7 @@ function MultiActPenaltyEstimator() {
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Delay</p><p className="text-lg font-bold tabular-nums">{d} days</p></div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 col-span-2 md:col-span-1"><p className="text-xs text-[var(--color-muted)] mb-1">Months (part)</p><p className="text-lg font-bold tabular-nums">{months}</p></div>
       </div>
-      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />{basis}. Indicative only — actual penalties depend on facts and officer discretion.</p>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />{basis}. Indicative only - actual penalties depend on facts and officer discretion.</p>
     </div>
   );
 }
@@ -1441,7 +1441,7 @@ function ComplianceHealthScore() {
   );
 }
 
-// ── #134 PROFESSIONAL TAX — MULTI-STATE REGISTRATION TRACKER ─────────────────
+// ── #134 PROFESSIONAL TAX - MULTI-STATE REGISTRATION TRACKER ─────────────────
 type PtRegState = { id: string; state: string; ec: boolean; rc: boolean; ecNo: string; rcNo: string; slab: string; due: number };
 function ProfessionalTaxTracker() {
   // PT is a state levy. EC = Enrolment Certificate (employer/firm itself), RC = Registration Certificate (to deduct from employees).
@@ -1469,7 +1469,7 @@ function ProfessionalTaxTracker() {
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Receipt size={14} className="text-[var(--color-primary)]" /> Professional Tax — Multi-State Registration Tracker</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Receipt size={14} className="text-[var(--color-primary)]" /> Professional Tax - Multi-State Registration Tracker</h3>
         <p className="text-xs text-[var(--color-muted)] mb-4">PT is a state levy. Track the employer Enrolment Certificate (EC) and the Registration Certificate (RC, to deduct from staff) for every state you operate in. Capped at ₹2,500/employee/year.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <select className={INP} value={state} onChange={e => setState(e.target.value)}>
@@ -1506,7 +1506,7 @@ function ProfessionalTaxTracker() {
           })}
         </div>
       )}
-      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />States with no PT: {NO_PT.join(", ")}. Due dates and slabs vary by state — verify on the state commercial-tax portal.</p>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />States with no PT: {NO_PT.join(", ")}. Due dates and slabs vary by state - verify on the state commercial-tax portal.</p>
     </div>
   );
 }
@@ -1581,7 +1581,7 @@ function IecComplianceTracker() {
   const [adCodes, setAdCodes] = useFeatureState<{ id: string; port: string; bank: string; reg: boolean }[]>("comp-iec-adcodes", []);
   const [port, setPort] = useState("");
   const [bank, setBank] = useState("");
-  // DGFT mandates annual IEC update during Apr–Jun each FY, even if no change, else IEC is deactivated.
+  // DGFT mandates annual IEC update during Apr-Jun each FY, even if no change, else IEC is deactivated.
   const now = new Date();
   const fyStart = now.getMonth() >= 3 ? new Date(now.getFullYear(), 3, 1) : new Date(now.getFullYear() - 1, 3, 1);
   const updatedThisFy = updated ? new Date(updated) >= fyStart : false;
@@ -1594,14 +1594,14 @@ function IecComplianceTracker() {
   };
   const CHECKS = [
     { label: "IEC obtained from DGFT (PAN-based, lifetime)", ok: !!iec },
-    { label: "IEC updated/confirmed this financial year (Apr–Jun)", ok: updatedThisFy },
+    { label: "IEC updated/confirmed this financial year (Apr-Jun)", ok: updatedThisFy },
     { label: "AD-Code registered at every port of export", ok: adCodes.length > 0 && adCodes.every(a => a.reg) },
   ];
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Ship size={14} className="text-[var(--color-primary)]" /> Import-Export (IEC) Compliance</h3>
-        <p className="text-xs text-[var(--color-muted)] mb-4">IEC is a one-time, PAN-based code, but DGFT requires you to electronically update/confirm it every year (Apr–Jun) or it is deactivated and shipments stop.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">IEC is a one-time, PAN-based code, but DGFT requires you to electronically update/confirm it every year (Apr-Jun) or it is deactivated and shipments stop.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">IEC Number</label>
@@ -1614,8 +1614,8 @@ function IecComplianceTracker() {
         </div>
         <div className={`mt-3 rounded-lg p-3 border text-xs ${updatedThisFy ? "bg-green-950/20 border-green-800/40 text-green-400" : "bg-yellow-950/20 border-yellow-800/40 text-yellow-300"}`}>
           {updatedThisFy
-            ? `IEC confirmed for FY ${fyStart.getFullYear()}–${(fyStart.getFullYear() + 1).toString().slice(2)}. Next update window opens 1 Apr ${fyStart.getFullYear() + 1}.`
-            : `Annual IEC update is pending — deadline ${format(updateDeadline, "dd MMM yyyy")} (${daysToDeadline >= 0 ? `${daysToDeadline}d left` : `${-daysToDeadline}d overdue — IEC may be deactivated`}).`}
+            ? `IEC confirmed for FY ${fyStart.getFullYear()}-${(fyStart.getFullYear() + 1).toString().slice(2)}. Next update window opens 1 Apr ${fyStart.getFullYear() + 1}.`
+            : `Annual IEC update is pending - deadline ${format(updateDeadline, "dd MMM yyyy")} (${daysToDeadline >= 0 ? `${daysToDeadline}d left` : `${-daysToDeadline}d overdue - IEC may be deactivated`}).`}
         </div>
       </div>
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
@@ -1662,7 +1662,7 @@ function PollutionConsentTracker() {
   const [issued, setIssued] = useState("");
   const [valid, setValid] = useState("");
   // SPCB consent validity by category: Red 5yr, Orange 10yr, Green 15yr, White exempt (intimation only).
-  const CAT_VALIDITY: Record<Consent["category"], string> = { Red: "5 years", Orange: "10 years", Green: "15 years", White: "Exempt — intimation only" };
+  const CAT_VALIDITY: Record<Consent["category"], string> = { Red: "5 years", Orange: "10 years", Green: "15 years", White: "Exempt - intimation only" };
   const add = () => {
     if (category !== "White" && (!number || !valid)) { toast.error("Enter consent number and validity date"); return; }
     setItems(prev => [...prev, { id: Math.random().toString(36).slice(2), kind, category, number, issued, valid }]);
@@ -1808,7 +1808,7 @@ function CsrSpendTracker() {
         </div>
       </div>
       <div className={`rounded-lg p-4 border ${applies ? "border-[var(--color-primary)]/40 bg-[var(--color-accent)]" : "border-green-800/40 bg-green-950/20"}`}>
-        <p className="text-sm font-semibold">{applies ? "CSR is applicable to your company." : "CSR is not applicable — you are below all three thresholds."}</p>
+        <p className="text-sm font-semibold">{applies ? "CSR is applicable to your company." : "CSR is not applicable - you are below all three thresholds."}</p>
         <p className="text-[11px] text-[var(--color-muted)] mt-1">{applies ? "Constitute a CSR committee, adopt a policy, spend, and file Form CSR-2 with AOC-4." : "Re-check at each year-end; CSR triggers if you cross any one threshold."}</p>
       </div>
       {applies && (
@@ -1919,7 +1919,7 @@ function DirectorDisqualChecker() {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><UserX size={14} className="text-[var(--color-primary)]" /> Director Disqualification Checker (Sec 164)</h3>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Self-assessment against Section 164 disqualification triggers. A director defaulting under 164(2) in one company is disqualified across all companies for 5 years — verify each board member.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Self-assessment against Section 164 disqualification triggers. A director defaulting under 164(2) in one company is disqualified across all companies for 5 years - verify each board member.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           <input className={INP} placeholder="Director name *" value={name} onChange={e => setName(e.target.value)} />
           <input className={INP} placeholder="DIN" value={din} onChange={e => setDin(e.target.value)} />
@@ -1935,7 +1935,7 @@ function DirectorDisqualChecker() {
           <div key={d.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
             <div className="flex items-center gap-2 mb-3">
               <p className="text-sm font-semibold flex-1">{d.name} {d.din && <span className="text-[10px] text-[var(--color-muted)] font-mono">· DIN {d.din}</span>}</p>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${disqualified ? "bg-red-900/30 text-red-400 border border-red-800/40" : "bg-green-900/30 text-green-400 border border-green-800/40"}`}>{disqualified ? `Disqualified — ${hit} trigger${hit > 1 ? "s" : ""}` : "No triggers flagged"}</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${disqualified ? "bg-red-900/30 text-red-400 border border-red-800/40" : "bg-green-900/30 text-green-400 border border-green-800/40"}`}>{disqualified ? `Disqualified - ${hit} trigger${hit > 1 ? "s" : ""}` : "No triggers flagged"}</span>
               <button onClick={() => setDirs(prev => prev.filter(x => x.id !== d.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><X size={12} /></button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
@@ -1949,7 +1949,7 @@ function DirectorDisqualChecker() {
           </div>
         );
       })}
-      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />Acting as a director while disqualified is an offence (fine + imprisonment). This is an indicative self-check — confirm DIN status on the MCA portal.</p>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />Acting as a director while disqualified is an offence (fine + imprisonment). This is an indicative self-check - confirm DIN status on the MCA portal.</p>
     </div>
   );
 }
@@ -1989,10 +1989,10 @@ function EventBasedRocTracker() {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><FileClock size={14} className="text-[var(--color-primary)]" /> Event-Based ROC Filing Tracker {overdue > 0 && <span className="text-[9px] bg-red-900/30 text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded-full font-semibold">{overdue} overdue</span>}</h3>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Unlike annual filings, these are triggered by corporate events (allotment, resolution, director change, charge) and must reach MCA within a fixed window — usually 30 days. Log the event date to get the deadline.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Unlike annual filings, these are triggered by corporate events (allotment, resolution, director change, charge) and must reach MCA within a fixed window - usually 30 days. Log the event date to get the deadline.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <select className={INP} value={form} onChange={e => setForm(e.target.value)}>
-            {FORMS.map(f => <option key={f.form} value={f.form}>{f.form} — {f.event}</option>)}
+            {FORMS.map(f => <option key={f.form} value={f.form}>{f.form} - {f.event}</option>)}
           </select>
           <input type="date" className={INP} title="Event date" value={eventDate} onChange={e => setEventDate(e.target.value)} />
           <button onClick={add} className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-lg font-medium bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90"><Plus size={12} /> Add filing</button>
@@ -2016,7 +2016,7 @@ function EventBasedRocTracker() {
           </div>
         )}
       </div>
-      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />Late event-based filings attract ₹100/day MCA additional fee with no cap; charge forms (CHG-1) filed beyond 30 days need a separate condonation route. Windows are indicative — confirm the exact rule per form.</p>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />Late event-based filings attract ₹100/day MCA additional fee with no cap; charge forms (CHG-1) filed beyond 30 days need a separate condonation route. Windows are indicative - confirm the exact rule per form.</p>
     </div>
   );
 }
@@ -2025,7 +2025,7 @@ function EventBasedRocTracker() {
 function AnnualMasterCalendar() {
   const { store } = useApp();
   const now = new Date();
-  // Pick the financial year currently in progress (Apr–Mar). fyStart = April of the FY we're in.
+  // Pick the financial year currently in progress (Apr-Mar). fyStart = April of the FY we're in.
   const fyStartYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
   type Stream = "GST" | "Income Tax" | "ROC / MCA" | "Labour" | "TDS";
   type Row = { stream: Stream; form: string; freq: string; due: Date; note: string };
@@ -2060,8 +2060,8 @@ function AnnualMasterCalendar() {
     out.push({ stream: "ROC / MCA", form: "AOC-4", freq: "Within 30d of AGM", due: d(9, 29), note: "Financial statements (default 29-Oct for 30-Sep AGM)." });
     out.push({ stream: "ROC / MCA", form: "MGT-7 / 7A", freq: "Within 60d of AGM", due: d(10, 29), note: "Annual return (default 29-Nov)." });
     out.push({ stream: "GST", form: "GSTR-9 / 9C", freq: "31-Dec", due: d(11, 31), note: "Annual return & reconciliation (if turnover > ₹2 cr / ₹5 cr)." });
-    out.push({ stream: "ROC / MCA", form: "MSME Form-1 (H2)", freq: "30-Apr", due: d(13, 30), note: "Oct–Mar dues > 45 days to MSE suppliers." });
-    out.push({ stream: "ROC / MCA", form: "MSME Form-1 (H1)", freq: "31-Oct", due: d(9, 31), note: "Apr–Sep dues > 45 days to MSE suppliers." });
+    out.push({ stream: "ROC / MCA", form: "MSME Form-1 (H2)", freq: "30-Apr", due: d(13, 30), note: "Oct-Mar dues > 45 days to MSE suppliers." });
+    out.push({ stream: "ROC / MCA", form: "MSME Form-1 (H1)", freq: "31-Oct", due: d(9, 31), note: "Apr-Sep dues > 45 days to MSE suppliers." });
     return out.sort((a, b) => a.due.getTime() - b.due.getTime());
   }, [fyStartYear, gstReg, hasPayroll]);
 
@@ -2086,8 +2086,8 @@ function AnnualMasterCalendar() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><CalendarRange size={14} className="text-[var(--color-primary)]" /> Annual Compliance Master Calendar — FY {fyStartYear}–{(fyStartYear + 1).toString().slice(2)}</h3>
-            <p className="text-xs text-[var(--color-muted)]">Every statutory due date for the year in one place — GST, income tax, TDS, ROC/MCA and labour — scoped to your firm profile (GST {gstReg ? "registered" : "not registered"}{hasPayroll ? ", payroll active" : ""}).</p>
+            <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><CalendarRange size={14} className="text-[var(--color-primary)]" /> Annual Compliance Master Calendar - FY {fyStartYear}-{(fyStartYear + 1).toString().slice(2)}</h3>
+            <p className="text-xs text-[var(--color-muted)]">Every statutory due date for the year in one place - GST, income tax, TDS, ROC/MCA and labour - scoped to your firm profile (GST {gstReg ? "registered" : "not registered"}{hasPayroll ? ", payroll active" : ""}).</p>
           </div>
           <button onClick={copyAll} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] px-3 py-1.5 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-text)] shrink-0"><Copy size={12} /> Copy all</button>
         </div>
@@ -2142,7 +2142,7 @@ function MsmeForm1Tracker() {
   };
 
   const today = new Date();
-  // RBI / MSMED accepted-day default: 45 days. Interest = 3× bank rate (~3 × 6.5% = 19.5% p.a., compounded monthly — simplified to simple here).
+  // RBI / MSMED accepted-day default: 45 days. Interest = 3× bank rate (~3 × 6.5% = 19.5% p.a., compounded monthly - simplified to simple here).
   const RATE = 0.195;
   const enriched = dues.map(d => {
     const ageDays = differenceInDays(today, new Date(d.invoiceDate));
@@ -2154,13 +2154,13 @@ function MsmeForm1Tracker() {
   const reportable = enriched.filter(d => d.reportable);
   const totalReportable = reportable.reduce((s, d) => s + d.amount, 0);
   const totalInterest = reportable.reduce((s, d) => s + d.interest, 0);
-  const period = today.getMonth() >= 3 && today.getMonth() <= 8 ? "Apr–Sep (due 31 Oct)" : "Oct–Mar (due 30 Apr)";
+  const period = today.getMonth() >= 3 && today.getMonth() <= 8 ? "Apr-Sep (due 31 Oct)" : "Oct-Mar (due 30 Apr)";
 
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Banknote size={14} className="text-[var(--color-primary)]" /> MSME Form-1 — Delayed Payments to MSE Suppliers</h3>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Half-yearly MCA return (MSME-1) disclosing amounts outstanding beyond 45 days to Micro & Small suppliers. Current half-year: <span className="text-[var(--color-text)] font-medium">{period}</span>. Also feeds §43B(h) — unpaid dues lose income-tax deduction.</p>
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Banknote size={14} className="text-[var(--color-primary)]" /> MSME Form-1 - Delayed Payments to MSE Suppliers</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Half-yearly MCA return (MSME-1) disclosing amounts outstanding beyond 45 days to Micro & Small suppliers. Current half-year: <span className="text-[var(--color-text)] font-medium">{period}</span>. Also feeds §43B(h) - unpaid dues lose income-tax deduction.</p>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <input className={INP} placeholder="MSE supplier name" value={supplier} onChange={e => setSupplier(e.target.value)} />
           <input className={INP} placeholder="Udyam no. (optional)" value={udyam} onChange={e => setUdyam(e.target.value)} />
@@ -2206,7 +2206,7 @@ function MsmeForm1Tracker() {
           </div>
         )}
       </div>
-      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />45-day limit applies where there is a written agreement (else 15 days). Interest is compounded monthly under the MSMED Act — figures here are a simplified estimate. Confirm supplier MSE status from their Udyam certificate.</p>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />45-day limit applies where there is a written agreement (else 15 days). Interest is compounded monthly under the MSMED Act - figures here are a simplified estimate. Confirm supplier MSE status from their Udyam certificate.</p>
     </div>
   );
 }
@@ -2272,9 +2272,9 @@ function BeneficialOwnerRegister() {
             ))}
           </div>
         )}
-        {sbos.length > 0 && <p className="text-[11px] text-[var(--color-muted)] mt-3 pt-3 border-t border-[var(--color-border)]">{sbos.length} significant beneficial owner(s) identified — each must file BEN-1; the company files BEN-2 within 30 days of receiving it.</p>}
+        {sbos.length > 0 && <p className="text-[11px] text-[var(--color-muted)] mt-3 pt-3 border-t border-[var(--color-border)]">{sbos.length} significant beneficial owner(s) identified - each must file BEN-1; the company files BEN-2 within 30 days of receiving it.</p>}
       </div>
-      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />The 10% SBO threshold tests beneficial interest in shares, voting rights, dividend or control held indirectly (alone or with direct holdings). Pure direct shareholders shown on the register are not SBOs. Determination is fact-specific — confirm with your CS.</p>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />The 10% SBO threshold tests beneficial interest in shares, voting rights, dividend or control held indirectly (alone or with direct holdings). Pure direct shareholders shown on the register are not SBOs. Determination is fact-specific - confirm with your CS.</p>
     </div>
   );
 }
@@ -2301,8 +2301,8 @@ function SecretarialStandardsChecklist() {
   ];
 
   const groups: { std: Item["std"]; label: string }[] = [
-    { std: "SS-1", label: "SS-1 — Meetings of the Board of Directors" },
-    { std: "SS-2", label: "SS-2 — General Meetings" },
+    { std: "SS-1", label: "SS-1 - Meetings of the Board of Directors" },
+    { std: "SS-2", label: "SS-2 - General Meetings" },
   ];
   const total = ITEMS.length;
   const checked = ITEMS.filter(i => done[i.id]).length;
@@ -2339,7 +2339,7 @@ function SecretarialStandardsChecklist() {
           </div>
         </div>
       ))}
-      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />Non-compliance with SS-1/SS-2 is reported in the secretarial audit (MR-3) and can invalidate resolutions. Quorum and notice thresholds vary by company class — verify with your CS.</p>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />Non-compliance with SS-1/SS-2 is reported in the secretarial audit (MR-3) and can invalidate resolutions. Quorum and notice thresholds vary by company class - verify with your CS.</p>
     </div>
   );
 }
@@ -2367,9 +2367,9 @@ function GstTurnoverRecon() {
 
   const STATUS: Record<string, { cls: string; label: string }> = {
     info: { cls: "bg-[var(--color-accent)] text-[var(--color-muted)]", label: "Enter GST turnover to reconcile" },
-    ok: { cls: "bg-green-950/30 text-green-400 border border-green-800/40", label: "Reconciled — books match GST returns" },
-    minor: { cls: "bg-yellow-950/30 text-yellow-400 border border-yellow-800/40", label: "Minor difference — within 1%, document the reason" },
-    review: { cls: "bg-red-950/30 text-red-400 border border-red-800/40", label: "Material difference — investigate before GSTR-9C" },
+    ok: { cls: "bg-green-950/30 text-green-400 border border-green-800/40", label: "Reconciled - books match GST returns" },
+    minor: { cls: "bg-yellow-950/30 text-yellow-400 border border-yellow-800/40", label: "Minor difference - within 1%, document the reason" },
+    review: { cls: "bg-red-950/30 text-red-400 border border-red-800/40", label: "Material difference - investigate before GSTR-9C" },
   };
 
   const rows = [
@@ -2385,7 +2385,7 @@ function GstTurnoverRecon() {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Scale size={14} className="text-[var(--color-primary)]" /> GST vs Books Turnover Reconciliation</h3>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Reconciles turnover declared in GST returns against your books — the core of GSTR-9C (mandatory above ₹5 cr) and a common GST-audit query. Books turnover is pulled from your transactions; enter GST and adjustment figures below.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Reconciles turnover declared in GST returns against your books - the core of GSTR-9C (mandatory above ₹5 cr) and a common GST-audit query. Books turnover is pulled from your transactions; enter GST and adjustment figures below.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Turnover as per GSTR-1 / 3B (₹)</label>
@@ -2420,7 +2420,7 @@ function GstTurnoverRecon() {
           {gstr !== 0 && <span className="tabular-nums font-bold">Diff {formatCurrency(diff)} ({pctDiff.toFixed(1)}%)</span>}
         </div>
       </div>
-      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />A clean reconciliation needs every difference explained (timing, schemes, credit notes, cross-charges). GSTR-9C requires the auditor to certify these adjustments — this is a prep aid, not the certified statement.</p>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />A clean reconciliation needs every difference explained (timing, schemes, credit notes, cross-charges). GSTR-9C requires the auditor to certify these adjustments - this is a prep aid, not the certified statement.</p>
     </div>
   );
 }

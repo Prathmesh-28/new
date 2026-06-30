@@ -215,7 +215,7 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
 
     -- ── Password-reset OTP (stored separately so a reset request can never
-    --    overwrite/destroy the user's real password — see auth.js) ─────────────
+    --    overwrite/destroy the user's real password - see auth.js) ─────────────
     ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp_expiry TIMESTAMPTZ;
 
@@ -602,25 +602,25 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS bnpl_tenant          ON bnpl_drawdowns(tenant_id, disbursed_at DESC);
     CREATE INDEX IF NOT EXISTS merchant_cat_tenant  ON merchant_categories(tenant_id);
   `);
-  // books module (double-entry GL) — §5 data model
+  // books module (double-entry GL) - §5 data model
   await pool.query(require("./modules/books/schema").BOOKS_SCHEMA);
   // business modules layered on books + Headroom tenancy
   await pool.query(require("./modules/crm/schema").CRM_SCHEMA);
   await pool.query(require("./modules/erp/schema").ERP_SCHEMA);
   await pool.query(require("./modules/hrms/schema").HRMS_SCHEMA);
   await pool.query(require("./modules/insights/schema").INSIGHTS_SCHEMA);
-  // collab module (Teams-style real-time collaboration) — Phase 0 data model + RLS
+  // collab module (Teams-style real-time collaboration) - Phase 0 data model + RLS
   await pool.query(require("./modules/collab/schema").COLLAB_SCHEMA);
-  // studio module (App Builder) — Phase 0; reuses collab_uuidv7() (applied above)
+  // studio module (App Builder) - Phase 0; reuses collab_uuidv7() (applied above)
   await pool.query(require("./modules/studio/schema").STUDIO_SCHEMA);
-  // flows module (native workflow automation engine) — reuses collab_uuidv7()
+  // flows module (native workflow automation engine) - reuses collab_uuidv7()
   await pool.query(require("./modules/flows/schema").FLOWS_SCHEMA);
-  // crowdfunding module (rewards / pre-order campaigns) — reuses collab_uuidv7()
+  // crowdfunding module (rewards / pre-order campaigns) - reuses collab_uuidv7()
   await pool.query(require("./modules/crowdfunding/schema").CROWDFUNDING_SCHEMA);
-  // lending module (SMB embedded LOS/LMS + invoice-financing wedge) — reuses collab_uuidv7()
+  // lending module (SMB embedded LOS/LMS + invoice-financing wedge) - reuses collab_uuidv7()
   await pool.query(require("./modules/lending/schema").LENDING_SCHEMA);
 
-  // Platform-level settings (super-admin editable, e.g. social links) — key/value JSON.
+  // Platform-level settings (super-admin editable, e.g. social links) - key/value JSON.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS platform_settings (
       key        TEXT PRIMARY KEY,
@@ -629,7 +629,7 @@ async function initDb() {
     );
   `);
 
-  // SMB AI-agent platform — per-tenant LLM engine + agents + run audit.
+  // SMB AI-agent platform - per-tenant LLM engine + agents + run audit.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS tenant_llm_config (
       tenant_id   TEXT PRIMARY KEY,
@@ -687,9 +687,9 @@ async function initDb() {
 
   // ── Wave-1c depth tables: real master/persistence behind features that were stubs ──
   await pool.query(`
-    -- Company UPI/VPA — used by sales "Accept → create order" + invoice payment links.
+    -- Company UPI/VPA - used by sales "Accept → create order" + invoice payment links.
     ALTER TABLE tenant_profile ADD COLUMN IF NOT EXISTS upi_id TEXT;
-    -- Deductor TAN — used on TDS/TCS return files + Form 16A.
+    -- Deductor TAN - used on TDS/TCS return files + Form 16A.
     ALTER TABLE tenant_profile ADD COLUMN IF NOT EXISTS tan TEXT;
 
     -- Per-employee payroll-run breakdown (PF/ESI/PT/TDS → net) persisted so it

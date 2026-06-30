@@ -1,4 +1,4 @@
-// §4 — Money. The single most common way bookkeeping software corrupts itself is
+// §4 - Money. The single most common way bookkeeping software corrupts itself is
 // floating point. ALL money math goes through decimal.js. Never JS number.
 const Decimal = require("decimal.js");
 Decimal.set({ precision: 30, rounding: Decimal.ROUND_HALF_UP });

@@ -8,7 +8,7 @@ import { useState, useCallback } from "react";
 
 export interface SegOption<T extends string> { value: T; label: string }
 
-/** Compact pill segmented control — for range (3M/6M/12M), chart type, etc. */
+/** Compact pill segmented control - for range (3M/6M/12M), chart type, etc. */
 export function SegmentedToggle<T extends string>({
   options, value, onChange, ariaLabel,
 }: {
@@ -41,7 +41,7 @@ export function SegmentedToggle<T extends string>({
 
 export interface SeriesDef { key: string; label: string; color: string }
 
-/** Clickable legend — tap a series to hide/show it in the chart. */
+/** Clickable legend - tap a series to hide/show it in the chart. */
 export function SeriesLegend({
   series, hidden, onToggle,
 }: {

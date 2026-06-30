@@ -26,7 +26,7 @@ export type TeamUser = {
   last_login_at?: string | null;
 };
 
-// "3d ago" / "2h ago" / "Never" — compact last-seen labels.
+// "3d ago" / "2h ago" / "Never" - compact last-seen labels.
 export function relTime(iso?: string | null): string {
   if (!iso) return "Never";
   const d = new Date(iso).getTime();
@@ -116,7 +116,7 @@ export function PermissionMatrixCard() {
                   return (
                     <td key={r.id} className="text-center py-2.5 px-2">
                       <input type="checkbox" checked={on} onChange={() => toggle(r.id, p.id)}
-                        aria-label={`${r.label} — ${p.label}`}
+                        aria-label={`${r.label} - ${p.label}`}
                         className="accent-[var(--color-primary)] w-4 h-4 cursor-pointer" />
                     </td>
                   );
@@ -159,7 +159,7 @@ export function ApprovalPolicyCard() {
         </div>
         <div>
           <h2 className="text-sm font-semibold">Approval Policy</h2>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Maker-checker rules — require a second approver once a payment crosses an amount.</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Maker-checker rules - require a second approver once a payment crosses an amount.</p>
         </div>
       </div>
 
@@ -191,7 +191,7 @@ export function ApprovalPolicyCard() {
       <div className="mt-5 space-y-2">
         {rules.length === 0 ? (
           <p className="text-xs text-[var(--color-muted)] py-3 text-center border border-dashed border-[var(--color-border)] rounded-lg">
-            No rules yet — every payment is auto-approved. Add a threshold above to require sign-off.
+            No rules yet - every payment is auto-approved. Add a threshold above to require sign-off.
           </p>
         ) : rules.map(r => (
           <div key={r.id} className="flex items-center justify-between gap-3 p-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg">
@@ -249,7 +249,7 @@ export function BooksLockCard() {
             className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
             {FY_MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
           </select>
-          <p className="text-[10px] text-[var(--color-muted)] mt-1">India's standard FY runs April–March.</p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">India's standard FY runs April-March.</p>
         </div>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Lock books up to &amp; including</label>
@@ -274,7 +274,7 @@ export function BooksLockCard() {
       <div className={`mt-4 p-3 rounded-lg text-xs border ${cfg.lockDate ? "bg-[var(--color-accent)] border-[var(--color-border)] text-[var(--color-muted)]" : "border-dashed border-[var(--color-border)] text-[var(--color-muted)]"}`}>
         {cfg.lockDate
           ? <>Books are <strong className="text-[var(--color-text)]">locked through {format(new Date(cfg.lockDate), "dd MMM yyyy")}</strong>. Entries dated on or before this are treated as filed and closed.</>
-          : <>No lock set — all periods are open for edits.</>}
+          : <>No lock set - all periods are open for edits.</>}
       </div>
     </div>
   );
@@ -335,7 +335,7 @@ export function AuditLogCard() {
 
       {events.length === 0 && (
         <p className="text-[11px] text-[var(--color-muted)] mt-3 flex items-center gap-1.5">
-          <ShieldQuestion size={12} /> Showing your current session — older history appears here as it's recorded.
+          <ShieldQuestion size={12} /> Showing your current session - older history appears here as it's recorded.
         </p>
       )}
     </div>
@@ -442,8 +442,8 @@ function CurrencyLocaleCard() {
           <label className="text-xs text-[var(--color-muted)] block mb-1">Decimal places</label>
           <select value={cfg.decimals} onChange={e => set("decimals", Number(e.target.value) as LocaleCfg["decimals"])}
             className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
-            <option value={0}>0 — whole rupees</option>
-            <option value={2}>2 — paise</option>
+            <option value={0}>0 - whole rupees</option>
+            <option value={2}>2 - paise</option>
           </select>
         </div>
         <div>
@@ -511,7 +511,7 @@ function DocumentBrandingCard() {
           </div>
         </div>
       </div>
-      {err && <p className="text-[10px] text-red-400 mt-2">Couldn't load that image — check the URL is public.</p>}
+      {err && <p className="text-[10px] text-red-400 mt-2">Couldn't load that image - check the URL is public.</p>}
     </div>
   );
 }
@@ -650,7 +650,7 @@ function NumberRoundingCard() {
 }
 
 /* ── #179 Theme & Density ──────────────────────────────────────────────────
-   Visual preferences — appearance, layout density and motion. Saved so the
+   Visual preferences - appearance, layout density and motion. Saved so the
    choice follows the user across devices. */
 type AppearanceCfg = { theme: "system" | "dark" | "light"; density: "comfortable" | "compact"; reduceMotion: boolean };
 
@@ -787,7 +787,7 @@ function EInvoiceDefaultsCard() {
       <div className="mt-4 p-3 bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-muted)]">
         {cfg.ewayEnabled
           ? <>E-way bills will be prepared for consignments over <strong className="text-[var(--color-text)]">{formatCurrency(cfg.ewayThreshold)}</strong> moving by {EWAY_TRANSPORT.find(m => m.id === cfg.defaultTransportMode)?.label.toLowerCase()}.</>
-          : <>E-way bills are off — only enable if you move goods worth over ₹50,000 inter-state. Saved automatically.</>}
+          : <>E-way bills are off - only enable if you move goods worth over ₹50,000 inter-state. Saved automatically.</>}
       </div>
     </div>
   );
@@ -840,7 +840,7 @@ function BankAccountDefaultsCard() {
         </div>
         <div>
           <h2 className="text-sm font-semibold">Bank Account Defaults</h2>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Your settlement accounts — the primary one is printed on invoices and pre-selected for payouts.</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Your settlement accounts - the primary one is printed on invoices and pre-selected for payouts.</p>
         </div>
       </div>
 
@@ -874,7 +874,7 @@ function BankAccountDefaultsCard() {
       <div className="mt-5 space-y-2">
         {accounts.length === 0 ? (
           <p className="text-xs text-[var(--color-muted)] py-3 text-center border border-dashed border-[var(--color-border)] rounded-lg">
-            No accounts yet — add your business current account so it appears on invoices and payouts.
+            No accounts yet - add your business current account so it appears on invoices and payouts.
           </p>
         ) : accounts.map(a => {
           const isPrimary = a.id === primaryId;
@@ -1003,7 +1003,7 @@ export function DataRetentionCard() {
             </button>
           ))}
         </div>
-        <p className="text-[10px] text-[var(--color-muted)] mt-2">India's Companies Act requires books be kept at least 8 years — shorter windows only archive non-statutory data.</p>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">India's Companies Act requires books be kept at least 8 years - shorter windows only archive non-statutory data.</p>
       </div>
 
       <div className="mt-5 space-y-3">
@@ -1202,10 +1202,10 @@ type TaxCodeCfg = {
   tdsRate: number;
 };
 const TDS_SECTIONS = [
-  { id: "194C", label: "194C — Contractors" },
-  { id: "194J", label: "194J — Professional / technical" },
-  { id: "194H", label: "194H — Commission / brokerage" },
-  { id: "194Q", label: "194Q — Purchase of goods" },
+  { id: "194C", label: "194C - Contractors" },
+  { id: "194J", label: "194J - Professional / technical" },
+  { id: "194H", label: "194H - Commission / brokerage" },
+  { id: "194Q", label: "194Q - Purchase of goods" },
 ] as const;
 
 function TaxCodeDefaultsCard() {
@@ -1232,7 +1232,7 @@ function TaxCodeDefaultsCard() {
           <input value={cfg.defaultHsn} onChange={e => set("defaultHsn", e.target.value.replace(/\D/g, "").slice(0, 8))}
             placeholder={cfg.itemType === "goods" ? "e.g. 6109 (T-shirts)" : "e.g. 9983 (consultancy)"} inputMode="numeric"
             className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] font-mono tracking-wide" />
-          <p className="text-[10px] text-[var(--color-muted)] mt-1">HSN for goods, SAC for services — used as the default on new invoice lines.</p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">HSN for goods, SAC for services - used as the default on new invoice lines.</p>
         </div>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Primary item type</label>
@@ -1272,7 +1272,7 @@ function TaxCodeDefaultsCard() {
 
       <div className="mt-4 p-3 bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-muted)]">
         New lines default to {cfg.itemType === "goods" ? "HSN" : "SAC"}{" "}
-        <strong className="text-[var(--color-text)] font-mono">{cfg.defaultHsn || "—"}</strong>
+        <strong className="text-[var(--color-text)] font-mono">{cfg.defaultHsn || "-"}</strong>
         {cfg.tdsEnabled ? <>; payments deduct <strong className="text-[var(--color-text)]">{cfg.tdsRate}%</strong> under {cfg.tdsSection}</> : null}. Saved automatically.
       </div>
     </div>
@@ -1317,7 +1317,7 @@ export function LocationsCard() {
         </div>
         <div>
           <h2 className="text-sm font-semibold">Locations &amp; Branches</h2>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Add each place of business — invoices and reports can be tagged per branch GSTIN.</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Add each place of business - invoices and reports can be tagged per branch GSTIN.</p>
         </div>
       </div>
 
@@ -1346,7 +1346,7 @@ export function LocationsCard() {
       <div className="mt-5 space-y-2">
         {branches.length === 0 ? (
           <p className="text-xs text-[var(--color-muted)] py-3 text-center border border-dashed border-[var(--color-border)] rounded-lg">
-            No locations yet — add your head office so invoices show the right place of supply.
+            No locations yet - add your head office so invoices show the right place of supply.
           </p>
         ) : branches.map(b => {
           const isPrimary = b.id === primaryId;
@@ -1382,7 +1382,7 @@ export function LocationsCard() {
 }
 
 /* ── #188 Customer-Statement Template ──────────────────────────────────────
-   How the periodic account statement sent to customers is composed — opening
+   How the periodic account statement sent to customers is composed - opening
    balance, ageing, and an intro / sign-off line. */
 type StatementCfg = {
   frequency: "monthly" | "fortnightly" | "weekly";
@@ -1432,7 +1432,7 @@ function StatementTemplateCard() {
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input type="checkbox" checked={cfg.showAgeing} onChange={e => set("showAgeing", e.target.checked)}
               className="accent-[var(--color-primary)] w-4 h-4" />
-            Include ageing breakup (0–30 / 30–60 / 60+)
+            Include ageing breakup (0-30 / 30-60 / 60+)
           </label>
         </div>
       </div>
@@ -1491,7 +1491,7 @@ export function TeamInvitesCard() {
     setBusy(true);
     const res = await fetch(`${BASE}/api/invites`, { method: "POST", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
     setBusy(false);
-    if (res.ok) { toast.success("Invite sent — they'll see it in-app"); setInvitee(""); load(); return; }
+    if (res.ok) { toast.success("Invite sent - they'll see it in-app"); setInvitee(""); load(); return; }
     const err = await res.json().catch(() => ({}));
     if (res.status === 402) {
       toast.error(err.error ?? "Your plan is full", { description: err.seat?.nextPlan ? `Upgrade to ${err.seat.nextPlan} for more seats.` : undefined, action: err.seat?.nextPlan ? { label: "Upgrade", onClick: () => navigate("/settings") } : undefined });
@@ -1503,7 +1503,7 @@ export function TeamInvitesCard() {
   };
   const actRequest = async (id: string, action: "approve" | "decline") => {
     const res = await fetch(`${BASE}/api/invites/${id}/${action}`, { method: "POST", headers: headers() });
-    if (res.ok) { toast.success(action === "approve" ? "Request approved — they're on your team" : "Request declined"); load(); }
+    if (res.ok) { toast.success(action === "approve" ? "Request approved - they're on your team" : "Request declined"); load(); }
     else toast.error((await res.json().catch(() => ({}))).error ?? "Failed");
   };
   const badge = (s: string) => s === "pending" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"
@@ -1520,7 +1520,7 @@ export function TeamInvitesCard() {
           </span>
         )}
       </div>
-      <p className="text-xs text-[var(--color-muted)] mb-4">Invite people to your team by email or user-id. They accept or decline in-app — no email is sent.</p>
+      <p className="text-xs text-[var(--color-muted)] mb-4">Invite people to your team by email or user-id. They accept or decline in-app - no email is sent.</p>
 
       {seats?.full && (
         <div className="mb-4 p-3 rounded-lg bg-yellow-900/15 border border-yellow-700/40 text-xs text-yellow-300 flex items-center justify-between gap-3 flex-wrap">
@@ -1578,7 +1578,7 @@ export function TeamInvitesCard() {
   );
 }
 
-// B3 — anyone can search for their company and request to join it (in-platform).
+// B3 - anyone can search for their company and request to join it (in-platform).
 export function JoinCompanyCard() {
   const { user } = useAuth();
   const [q, setQ] = useState("");
@@ -1603,14 +1603,14 @@ export function JoinCompanyCard() {
   };
   const request = async (tenant_id: string) => {
     const res = await fetch(`${BASE}/api/invites/request`, { method: "POST", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ tenant_id }) });
-    if (res.ok) { toast.success("Request sent — the owner will approve or decline it in-app"); loadMine(); }
+    if (res.ok) { toast.success("Request sent - the owner will approve or decline it in-app"); loadMine(); }
     else toast.error((await res.json().catch(() => ({}))).error ?? "Failed to send request");
   };
 
   return (
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
       <div className="flex items-center gap-2 mb-1"><GitBranch size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Join an existing company</h2></div>
-      <p className="text-xs text-[var(--color-muted)] mb-4">Already have a team on Headroom? Find your company and request to join — the owner approves it. No email needed.</p>
+      <p className="text-xs text-[var(--color-muted)] mb-4">Already have a team on Headroom? Find your company and request to join - the owner approves it. No email needed.</p>
       <div className="flex gap-2 mb-3">
         <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && search()} placeholder="Search by company name or workspace id…" className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
         <button onClick={search} disabled={searching} className="bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">Search</button>
@@ -1640,7 +1640,7 @@ export function JoinCompanyCard() {
   );
 }
 
-// B5 — company identity (legal name, GSTIN, industry, address…) → /api/company.
+// B5 - company identity (legal name, GSTIN, industry, address…) → /api/company.
 const COMPANY_FIELDS: [string, string, string][] = [
   ["company_name", "Company name", "Acme Traders Pvt Ltd"],
   ["legal_name", "Legal / registered name", "Acme Traders Private Limited"],
@@ -1676,7 +1676,7 @@ export function CompanyProfileCard() {
   return (
     <div id="company-profile" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
       <div className="flex items-center gap-2 mb-1"><Landmark size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Company profile</h2></div>
-      <p className="text-xs text-[var(--color-muted)] mb-4">Your business identity — used on invoices, statements and compliance. Only an owner can edit this.</p>
+      <p className="text-xs text-[var(--color-muted)] mb-4">Your business identity - used on invoices, statements and compliance. Only an owner can edit this.</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {COMPANY_FIELDS.map(([k, label, ph]) => (
           <div key={k}>
@@ -1692,7 +1692,7 @@ export function CompanyProfileCard() {
   );
 }
 
-// B6 / B10 — owner first-run guide: the few things that make Headroom useful on day one.
+// B6 / B10 - owner first-run guide: the few things that make Headroom useful on day one.
 export function OwnerOnboardingCard({ users, firmName }: { users: TeamUser[]; firmName?: string }) {
   const { user } = useAuth();
   const { store } = useApp();
@@ -1731,7 +1731,7 @@ export function OwnerOnboardingCard({ users, firmName }: { users: TeamUser[]; fi
   );
 }
 
-// Owner accountability — recent actions inside their own organisation (B7/access).
+// Owner accountability - recent actions inside their own organisation (B7/access).
 type OrgAudit = { id: string; action: string; entity: string | null; entity_id: string | null; meta: Record<string, unknown> | null; created_at: string; actor_email: string | null };
 export function OrgActivityCard() {
   const { user } = useAuth();
@@ -1747,13 +1747,13 @@ export function OrgActivityCard() {
         <div className="flex items-center gap-2"><History size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Organisation activity</h2></div>
         <button onClick={load} className="text-xs flex items-center gap-1 text-[var(--color-primary)] hover:underline"><RotateCcw size={12} /> Refresh</button>
       </div>
-      <p className="text-xs text-[var(--color-muted)] mb-4">Who did what in your workspace — invites, role changes, plan changes and more.</p>
+      <p className="text-xs text-[var(--color-muted)] mb-4">Who did what in your workspace - invites, role changes, plan changes and more.</p>
       {loading ? <p className="text-xs text-[var(--color-muted)] py-4 text-center">Loading…</p> :
         rows.length === 0 ? <p className="text-xs text-[var(--color-muted)] py-4 text-center">No activity recorded yet.</p> : (
         <div className="divide-y divide-[var(--color-border)]">
           {rows.slice(0, 25).map(r => (
             <div key={r.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-              <span className="truncate"><span className="text-[var(--color-muted)]">{r.actor_email || "—"}</span> · <span className="font-medium">{r.action.replace(/[._]/g, " ")}</span></span>
+              <span className="truncate"><span className="text-[var(--color-muted)]">{r.actor_email || "-"}</span> · <span className="font-medium">{r.action.replace(/[._]/g, " ")}</span></span>
               <span className="text-[10px] text-[var(--color-muted)] shrink-0" title={new Date(r.created_at).toLocaleString("en-IN")}>{relTime(r.created_at)}</span>
             </div>
           ))}
@@ -1763,7 +1763,7 @@ export function OrgActivityCard() {
   );
 }
 
-// Jump-nav for the long settings page — anchors to each section below so users
+// Jump-nav for the long settings page - anchors to each section below so users
 // don't scroll a 2000-line wall. Order matches the render order.
 const SETTINGS_SECTIONS: { id: string; label: string }[] = [
   { id: "app-lock", label: "App lock" },
@@ -1794,7 +1794,7 @@ export default function SettingsPage() {
   const startPreview = (role: UserRole) => {
     setPreviewRole(role);
     navigate(landingFor(role));
-    toast.success(`Previewing as ${roleLabel(role)} — exit from the banner up top`);
+    toast.success(`Previewing as ${roleLabel(role)} - exit from the banner up top`);
   };
   const toggleTab = (role: UserRole, tab: string) => {
     const current = roleTabs(role);
@@ -1860,7 +1860,7 @@ export default function SettingsPage() {
     setWaConnecting(true);
     try {
       await api.post("/api/whatsapp/register", { phone: waPhone });
-      toast.success("WhatsApp connected — check your phone for a welcome message");
+      toast.success("WhatsApp connected - check your phone for a welcome message");
       setWaPhone("");
       loadWaStatus();
     } catch (err) {
@@ -1913,7 +1913,7 @@ export default function SettingsPage() {
         body:    JSON.stringify({ invitee_email: email.toLowerCase(), role }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
-      toast.success(`Invite sent to ${email} — they'll see it in-app to accept (no email is sent)`);
+      toast.success(`Invite sent to ${email} - they'll see it in-app to accept (no email is sent)`);
       setEmail(""); setShowForm(false);
       loadUsers();
     } catch (err) {
@@ -1953,14 +1953,14 @@ export default function SettingsPage() {
     }
   };
 
-  // B9 — promote a teammate to (co-)owner; continuity if the primary owner leaves.
+  // B9 - promote a teammate to (co-)owner; continuity if the primary owner leaves.
   const makeOwner = async (u: TeamUser) => {
     if (!window.confirm(`Make ${u.email} an owner too? They'll get full control of this workspace.`)) return;
     const res = await fetch(`${BASE}/api/users/${u.id}/make-owner`, { method: "POST", headers: { Authorization: `Bearer ${token()}` } });
     if (res.ok) { toast.success(`${u.email} is now an owner`); loadUsers(); }
     else toast.error((await res.json().catch(() => ({}))).error ?? "Failed");
   };
-  // B9 — leave this workspace (gets a fresh solo one); blocked if last owner.
+  // B9 - leave this workspace (gets a fresh solo one); blocked if last owner.
   const leaveTeam = async () => {
     if (!window.confirm("Leave this workspace? You'll get a fresh empty one of your own. Your team's data stays with them.")) return;
     const res = await fetch(`${BASE}/api/users/leave`, { method: "POST", headers: { Authorization: `Bearer ${token()}` } });
@@ -1970,7 +1970,7 @@ export default function SettingsPage() {
 
   const isOwner = user?.role === "owner" || user?.role === "super_admin";
 
-  // Deep-link support — /settings#team (from the sidebar "Team & Access" link)
+  // Deep-link support - /settings#team (from the sidebar "Team & Access" link)
   // scrolls straight to the team-management section. Re-runs whenever the hash
   // changes, so it works even when already on the Settings page.
   const location = useLocation();
@@ -1985,10 +1985,10 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold">Settings</h1>
-        <p className="text-sm text-[var(--color-muted)] mt-0.5">Your personal &amp; workspace preferences — appearance, notifications, and document defaults.</p>
+        <p className="text-sm text-[var(--color-muted)] mt-0.5">Your personal &amp; workspace preferences - appearance, notifications, and document defaults.</p>
       </div>
 
-      {/* Sticky jump-nav — quick access to any section without scrolling the whole page */}
+      {/* Sticky jump-nav - quick access to any section without scrolling the whole page */}
       <div className="sticky top-0 z-20 -mx-1 bg-[var(--color-bg)]/90 px-1 py-2 backdrop-blur border-b border-[var(--color-border)] overflow-x-auto">
         <div className="flex gap-1.5 min-w-max">
           {SETTINGS_SECTIONS.map(s => (
@@ -2011,7 +2011,7 @@ export default function SettingsPage() {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold">Organization</p>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Manage company members &amp; roles, billing, company identity and audit — now in its own console.</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Manage company members &amp; roles, billing, company identity and audit - now in its own console.</p>
         </div>
         <ChevronRight size={16} className="text-[var(--color-muted)] group-hover:text-[var(--color-primary)] shrink-0" />
       </button>
@@ -2071,7 +2071,7 @@ export default function SettingsPage() {
           <h2 className="text-sm font-semibold">WhatsApp Alerts</h2>
         </div>
         <p className="text-xs text-[var(--color-muted)] mb-5">
-          Get a 7am cash snapshot every morning and ask your numbers anytime — reply <strong className="text-[var(--color-text)]">cash</strong>, <strong className="text-[var(--color-text)]">runway</strong>, <strong className="text-[var(--color-text)]">alerts</strong>, or anything in plain language.
+          Get a 7am cash snapshot every morning and ask your numbers anytime - reply <strong className="text-[var(--color-text)]">cash</strong>, <strong className="text-[var(--color-text)]">runway</strong>, <strong className="text-[var(--color-text)]">alerts</strong>, or anything in plain language.
         </p>
 
         {waLoading ? (

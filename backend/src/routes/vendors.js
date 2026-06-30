@@ -1,4 +1,4 @@
-// Vendor master — /api/vendors. A real, persisted profile per vendor (GSTIN, PAN,
+// Vendor master - /api/vendors. A real, persisted profile per vendor (GSTIN, PAN,
 // payment terms, bank/UPI, MSME/Udyam) so vendor compliance & history travel with
 // the record instead of being re-typed across the vendors tabs. Tenant-scoped.
 const router = require("express").Router();

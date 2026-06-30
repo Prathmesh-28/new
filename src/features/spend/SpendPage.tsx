@@ -66,7 +66,7 @@ export default function SpendPage() {
 
   const totalCur = Object.values(curSpend).reduce((s, v) => s + v, 0);
 
-  // Top vendors across all history — used for the AI insight context.
+  // Top vendors across all history - used for the AI insight context.
   const topVendorsAll = useMemo(() => {
     const byVendor: Record<string, number> = {};
     expenses.forEach(t => { byVendor[t.counterparty] = (byVendor[t.counterparty] ?? 0) + Math.abs(t.amount); });
@@ -127,7 +127,7 @@ export default function SpendPage() {
 
   // ── Category benchmark from the tenant's OWN trailing-12-month norm ─────────
   // For each category we collect its monthly % of total spend over the last 12
-  // months and take the median — that's "your typical" mix. Categories without
+  // months and take the median - that's "your typical" mix. Categories without
   // enough history fall back to the static reference. This is real, not invented.
   const selfMedian = useMemo<Record<string, number>>(() => {
     const series: Record<string, number[]> = {};
@@ -266,7 +266,7 @@ export default function SpendPage() {
         </div>
 
         {duplicates.length === 0 ? (
-          <p className="text-xs text-green-400 py-2">No duplicate vendor categories detected — spend is well-consolidated.</p>
+          <p className="text-xs text-green-400 py-2">No duplicate vendor categories detected - spend is well-consolidated.</p>
         ) : (
           <div className="space-y-2">
             {duplicates.map(d => (
@@ -418,7 +418,7 @@ export default function SpendPage() {
         <div>
           <p className="text-sm font-semibold">Connect more accounts for deeper insights</p>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            AA-linked accounts give Spend Intelligence a complete picture — across all banks, credit lines, and expense cards.
+            AA-linked accounts give Spend Intelligence a complete picture - across all banks, credit lines, and expense cards.
           </p>
         </div>
         <button onClick={() => navigate("/connectors")}
@@ -471,7 +471,7 @@ function SpendCategorisation() {
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 8);
 
-  // Vendor concentration — share held by the top 5 payees
+  // Vendor concentration - share held by the top 5 payees
   const top5Share = topVendors.slice(0, 5).reduce((s, v) => s + v.pct, 0);
   const concentrated = top5Share > 60;
 
@@ -1000,7 +1000,7 @@ function CategoryTrend12mo() {
   );
 }
 
-// ── Recurring-Spend (Subscriptions) Detector — auto-found from transactions ───────
+// ── Recurring-Spend (Subscriptions) Detector - auto-found from transactions ───────
 function RecurringSpendDetector() {
   const { store } = useApp();
   const fc = formatCurrency;
@@ -1233,7 +1233,7 @@ function SavingsOpportunityFinder() {
     const out: Opp[] = [];
     const ks = monthKeys(6, today);
 
-    // 1) Vendors with multiple peers in same category — consolidation leverage (~5%)
+    // 1) Vendors with multiple peers in same category - consolidation leverage (~5%)
     const byCatVendors: Record<string, Record<string, number>> = {};
     expenses.forEach(t => {
       const c = (byCatVendors[t.category] ??= {});
@@ -1252,7 +1252,7 @@ function SavingsOpportunityFinder() {
       }
     });
 
-    // 2) Recurring vendors growing month-on-month — review for downgrade (~half of the increase)
+    // 2) Recurring vendors growing month-on-month - review for downgrade (~half of the increase)
     const byVendorMonth: Record<string, Record<string, number>> = {};
     expenses.forEach(t => {
       const mk = t.date.slice(0, 7);
@@ -1290,7 +1290,7 @@ function SavingsOpportunityFinder() {
       </div>
 
       {opps.length === 0 ? (
-        <p className="text-xs text-green-400 py-2">No obvious consolidation or rising-spend opportunities found — spend looks lean.</p>
+        <p className="text-xs text-green-400 py-2">No obvious consolidation or rising-spend opportunities found - spend looks lean.</p>
       ) : (
         <>
           <div className="rounded-lg p-3 border border-green-800/40 bg-green-950/20 mb-3">
@@ -1391,7 +1391,7 @@ function ExpensePolicyChecker() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)] mt-3">Define plain per-category spend caps and the checker scans this month's live transactions for any single payment that exceeds the threshold — a lightweight policy audit without programmable cards.</p>
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Define plain per-category spend caps and the checker scans this month's live transactions for any single payment that exceeds the threshold - a lightweight policy audit without programmable cards.</p>
     </div>
   );
 }
@@ -1459,7 +1459,7 @@ function TravelSpendTracker() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)] mt-3">Identifies travel &amp; entertainment spend by matching vendor and description against common airline, rail, hotel, cab and fuel keywords. A keyword heuristic — re-tag any miscategorised line in your books.</p>
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Identifies travel &amp; entertainment spend by matching vendor and description against common airline, rail, hotel, cab and fuel keywords. A keyword heuristic - re-tag any miscategorised line in your books.</p>
     </div>
   );
 }
@@ -1546,7 +1546,7 @@ function SpendApprovalQueue() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)] mt-3">A simple pre-spend approval workflow: queue a request, review pending value at a glance, then approve or reject with a full status trail — durable across devices.</p>
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">A simple pre-spend approval workflow: queue a request, review pending value at a glance, then approve or reject with a full status trail - durable across devices.</p>
     </div>
   );
 }
@@ -1629,7 +1629,7 @@ function SpendVarianceVsLastMonth() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)] mt-3">Month-over-month variance per category from live transactions, ranked by the largest rupee swing — so you instantly see what drove this month's spend up or down versus last month.</p>
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Month-over-month variance per category from live transactions, ranked by the largest rupee swing - so you instantly see what drove this month's spend up or down versus last month.</p>
     </div>
   );
 }
@@ -1691,7 +1691,7 @@ function DiscretionaryVsCommitted() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)] mt-3">Splits this month's spend into committed obligations (payroll, debt service, tax — hard to cut quickly) versus discretionary spend (operations, transfers — your real lever in a cash crunch).</p>
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Splits this month's spend into committed obligations (payroll, debt service, tax - hard to cut quickly) versus discretionary spend (operations, transfers - your real lever in a cash crunch).</p>
     </div>
   );
 }
@@ -1754,7 +1754,7 @@ function TopGrowingCategories() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)] mt-3">Ranks categories by the rupee increase between the last three months and the prior three — the fastest-rising cost heads to investigate before they compound.</p>
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Ranks categories by the rupee increase between the last three months and the prior three - the fastest-rising cost heads to investigate before they compound.</p>
     </div>
   );
 }
@@ -1881,9 +1881,9 @@ function ApprovalTurnaroundTracker() {
         <>
           <div className="grid grid-cols-3 gap-3 mb-3">
             {[
-              { label: "Avg decision time", value: turnarounds.length > 0 ? `${avgDays.toFixed(1)}d` : "—", color: "text-[var(--color-text)]" },
+              { label: "Avg decision time", value: turnarounds.length > 0 ? `${avgDays.toFixed(1)}d` : "-", color: "text-[var(--color-text)]" },
               { label: "Pending now", value: String(pending.length), color: pending.length > 0 ? "text-yellow-400" : "text-green-400" },
-              { label: "Oldest pending", value: pending.length > 0 ? `${oldestPending}d` : "—", color: oldestPending > 3 ? "text-red-400" : "text-[var(--color-muted)]" },
+              { label: "Oldest pending", value: pending.length > 0 ? `${oldestPending}d` : "-", color: oldestPending > 3 ? "text-red-400" : "text-[var(--color-muted)]" },
             ].map(c => (
               <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
                 <p className="text-[10px] text-[var(--color-muted)] mb-0.5">{c.label}</p>
@@ -1894,7 +1894,7 @@ function ApprovalTurnaroundTracker() {
           <button onClick={stampMissing} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 mb-3">Stamp decided requests now</button>
 
           {turnarounds.length === 0 ? (
-            <p className="text-xs text-[var(--color-muted)] py-1">Once requests are approved/rejected in the queue, press the button to record when — then per-request turnaround appears here.</p>
+            <p className="text-xs text-[var(--color-muted)] py-1">Once requests are approved/rejected in the queue, press the button to record when - then per-request turnaround appears here.</p>
           ) : (
             <div className="space-y-2">
               {turnarounds.sort((a, b) => b.hours - a.hours).map(t => (

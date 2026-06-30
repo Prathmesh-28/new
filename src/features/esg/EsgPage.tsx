@@ -35,7 +35,7 @@ export default function EsgPage() {
             <Leaf size={18} className="text-[var(--color-primary)]" /> Sustainability & ESG
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Carbon footprint, Scope 1/2/3, BRSR-lite, green spend & ESG goals — estimated from your live books, India-aware (BRSR, SEBI, CBAM).
+            Carbon footprint, Scope 1/2/3, BRSR-lite, green spend & ESG goals - estimated from your live books, India-aware (BRSR, SEBI, CBAM).
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -117,7 +117,7 @@ export default function EsgPage() {
   );
 }
 
-// ── India emission factors (kg CO2e per unit) — spend & activity based ──────────
+// ── India emission factors (kg CO2e per unit) - spend & activity based ──────────
 // Spend-based: kg CO2e per ₹1,000 of spend (rough EEIO-style screening factors).
 const SPEND_FACTORS: { id: string; label: string; perThousand: number }[] = [
   { id: "fuel", label: "Fuel (diesel/petrol)", perThousand: 70 },
@@ -128,7 +128,7 @@ const SPEND_FACTORS: { id: string; label: string; perThousand: number }[] = [
   { id: "services", label: "Professional services", perThousand: 8 },
 ];
 // Activity factors
-const GRID_FACTOR = 0.71;      // kg CO2e / kWh — India CEA average grid factor
+const GRID_FACTOR = 0.71;      // kg CO2e / kWh - India CEA average grid factor
 const DIESEL_FACTOR = 2.68;    // kg CO2e / litre
 const PETROL_FACTOR = 2.31;    // kg CO2e / litre
 const LPG_FACTOR = 2.98;       // kg CO2e / kg
@@ -223,12 +223,12 @@ function CarbonFootprintEstimator() {
           <span className="text-[10px] text-[var(--color-muted)]">Annual expense in books: {formatCurrency(Math.round(annualExpense))}</span>
         </div>
         <p className="text-xs text-[var(--color-muted)]">
-          Quick screening footprint from how much you spend per category. Use this when activity data (litres, kWh) isn't handy — it's an order-of-magnitude estimate, not an audited inventory.
+          Quick screening footprint from how much you spend per category. Use this when activity data (litres, kWh) isn't handy - it's an order-of-magnitude estimate, not an audited inventory.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {SPEND_FACTORS.map(f => (
             <div key={f.id}>
-              <label className="text-xs text-[var(--color-muted)] block mb-1">{f.label} — annual ₹</label>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">{f.label} - annual ₹</label>
               <input type="number" value={spend[f.id] ?? ""} onChange={e => set(f.id, e.target.value)} placeholder="0" className={INP} />
               <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{f.perThousand} kg CO₂e / ₹1,000</p>
             </div>
@@ -271,7 +271,7 @@ function CarbonFootprintEstimator() {
       ) : (
         <p className="text-xs text-[var(--color-muted)] px-1">Enter at least one category's annual spend to estimate your carbon footprint.</p>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Spend-based (EEIO-style) screening factors for India. For BRSR or CBAM you'll need activity-based data — use the Scope 1/2/3 calculator for that.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Spend-based (EEIO-style) screening factors for India. For BRSR or CBAM you'll need activity-based data - use the Scope 1/2/3 calculator for that.</p>
     </div>
   );
 }
@@ -279,14 +279,14 @@ function CarbonFootprintEstimator() {
 // ── #2 Scope 1/2/3 Calculator (activity-based) ──────────────────────────────────
 function ScopeCalculator() {
   const { store } = useApp();
-  // Scope 1 — direct combustion
+  // Scope 1 - direct combustion
   const [diesel, setDiesel] = useState("");
   const [petrol, setPetrol] = useState("");
   const [lpg, setLpg] = useState("");
-  // Scope 2 — purchased electricity
+  // Scope 2 - purchased electricity
   const [kwh, setKwh] = useState("");
   const [stateCode, setStateCode] = useState("");
-  // Scope 3 — value chain (spend-based proxy)
+  // Scope 3 - value chain (spend-based proxy)
   const [purchased, setPurchased] = useState("");
   const [logistics, setLogistics] = useState("");
   const [businessTravel, setBusinessTravel] = useState("");
@@ -305,7 +305,7 @@ function ScopeCalculator() {
       if (est.diesel > 0) setDiesel(String(est.diesel));
       if (est.petrol > 0) setPetrol(String(est.petrol));
       if (est.kwh > 0) setKwh(String(est.kwh));
-      toast.success(`Pre-filled from ${est.matched} book entr${est.matched === 1 ? "y" : "ies"} — adjust as needed`);
+      toast.success(`Pre-filled from ${est.matched} book entr${est.matched === 1 ? "y" : "ies"} - adjust as needed`);
     } catch {
       toast.error("Could not estimate from books");
     }
@@ -320,9 +320,9 @@ function ScopeCalculator() {
   const has = total > 0;
 
   const scopes = [
-    { label: "Scope 1 — Direct", kg: scope1, color: "#ef4444", desc: "Fuel burned in your own vehicles & equipment" },
-    { label: "Scope 2 — Energy", kg: scope2, color: "#f97316", desc: "Purchased grid electricity (state CEA factor)" },
-    { label: "Scope 3 — Value chain", kg: scope3, color: "#eab308", desc: "Purchased goods, freight, business travel" },
+    { label: "Scope 1 - Direct", kg: scope1, color: "#ef4444", desc: "Fuel burned in your own vehicles & equipment" },
+    { label: "Scope 2 - Energy", kg: scope2, color: "#f97316", desc: "Purchased grid electricity (state CEA factor)" },
+    { label: "Scope 3 - Value chain", kg: scope3, color: "#eab308", desc: "Purchased goods, freight, business travel" },
   ];
 
   // Export the inventory + intensity as a CSV download, plus a printable summary.
@@ -334,7 +334,7 @@ function ScopeCalculator() {
     try {
       if (!has) { toast.error("Enter at least one activity figure first"); return; }
       const rows: string[][] = [
-        ["Headroom ESG — Scope 1/2/3 GHG Inventory"],
+        ["Headroom ESG - Scope 1/2/3 GHG Inventory"],
         ["Generated", new Date().toISOString().slice(0, 10)],
         ["Grid region", stateLabel, `${gridFactor} kgCO2e/kWh`],
         [],
@@ -375,7 +375,7 @@ function ScopeCalculator() {
     <div className="space-y-4">
       <div className={`${CARD} p-3 flex items-center justify-between flex-wrap gap-2`}>
         <p className="text-xs text-[var(--color-muted)]">
-          Build a GHG Protocol inventory. Auto-fill fuel & power from your books, then refine — values are yours to override.
+          Build a GHG Protocol inventory. Auto-fill fuel & power from your books, then refine - values are yours to override.
         </p>
         <div className="flex gap-2 flex-wrap">
           <button onClick={autofill} className="flex items-center gap-1.5 border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 rounded-lg px-3 py-1.5 text-xs font-medium">
@@ -391,7 +391,7 @@ function ScopeCalculator() {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className={`${CARD} p-4 space-y-3`}>
-          <h3 className="text-sm font-semibold flex items-center gap-2"><Factory size={13} className="text-red-400" /> Scope 1 — Direct</h3>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Factory size={13} className="text-red-400" /> Scope 1 - Direct</h3>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Diesel (litres/yr)</label>
             <input type="number" value={diesel} onChange={e => setDiesel(e.target.value)} placeholder="0" className={INP} />
@@ -406,12 +406,12 @@ function ScopeCalculator() {
           </div>
         </div>
         <div className={`${CARD} p-4 space-y-3`}>
-          <h3 className="text-sm font-semibold flex items-center gap-2"><Zap size={13} className="text-orange-400" /> Scope 2 — Energy</h3>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Zap size={13} className="text-orange-400" /> Scope 2 - Energy</h3>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">State / grid region</label>
             <select value={stateCode} onChange={e => setStateCode(e.target.value)} className={INP}>
               {STATE_GRID_FACTORS.map(s => (
-                <option key={s.code || "national"} value={s.code}>{s.label} — {s.factor} kg/kWh</option>
+                <option key={s.code || "national"} value={s.code}>{s.label} - {s.factor} kg/kWh</option>
               ))}
             </select>
           </div>
@@ -422,7 +422,7 @@ function ScopeCalculator() {
           <p className="text-[10px] text-[var(--color-muted)]">Grid factor {gridFactor} kg CO₂e/kWh ({stateLabel}). Coal-heavy state grids emit more; hydro/renewable grids less. Subtract renewable/REC-backed units.</p>
         </div>
         <div className={`${CARD} p-4 space-y-3`}>
-          <h3 className="text-sm font-semibold flex items-center gap-2"><Truck size={13} className="text-yellow-400" /> Scope 3 — Value chain (₹)</h3>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Truck size={13} className="text-yellow-400" /> Scope 3 - Value chain (₹)</h3>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Purchased goods (₹/yr)</label>
             <input type="number" value={purchased} onChange={e => setPurchased(e.target.value)} placeholder="0" className={INP} />
@@ -464,7 +464,7 @@ function ScopeCalculator() {
             {scopes.map(s => (
               <p key={s.label} className="text-[11px] text-[var(--color-muted)]">
                 <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: s.color }} />
-                {s.label} — {s.desc}
+                {s.label} - {s.desc}
               </p>
             ))}
           </div>
@@ -636,7 +636,7 @@ function EsgScorecard() {
           ))}
         </div>
       ))}
-      <p className="text-[10px] text-[var(--color-muted)]">A directional self-assessment across Environment, Social and Governance — useful for investor/lender ESG questionnaires. Not a certified rating.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A directional self-assessment across Environment, Social and Governance - useful for investor/lender ESG questionnaires. Not a certified rating.</p>
     </div>
   );
 }
@@ -693,7 +693,7 @@ function BrsrLiteChecklist() {
 
       {pct === 100 && (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> All BRSR-lite data points are in place — you can respond to a value-chain disclosure request with confidence.</p>
+          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> All BRSR-lite data points are in place - you can respond to a value-chain disclosure request with confidence.</p>
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">A simplified readiness list inspired by SEBI BRSR Core. Full BRSR has nine principles; consult your CA / ESG advisor for a formal filing.</p>
@@ -730,7 +730,7 @@ function GreenSpendTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Recycle size={14} className="text-green-400" /> Green Spend Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">Tag the spend that advances sustainability — useful for green-finance applications and impact reporting.</p>
+        <p className="text-xs text-[var(--color-muted)]">Tag the spend that advances sustainability - useful for green-finance applications and impact reporting.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Description</label>
@@ -840,7 +840,7 @@ function EmissionIntensity() {
             {[
               { label: "Carbon intensity", value: `${intensity.toFixed(2)}`, sub: "tCO₂e / ₹ crore revenue", color: "text-orange-400" },
               { label: "Per ₹1 lakh revenue", value: `${(intensity / 100).toFixed(3)}`, sub: "tCO₂e / ₹ lakh", color: "text-[var(--color-text)]" },
-              { label: "YoY change", value: delta === null ? "—" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}%`, sub: delta === null ? "Add prior year" : delta < 0 ? "Improving" : "Worsening", color: delta === null ? "text-[var(--color-muted)]" : delta < 0 ? "text-green-400" : "text-red-400" },
+              { label: "YoY change", value: delta === null ? "-" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}%`, sub: delta === null ? "Add prior year" : delta < 0 ? "Improving" : "Worsening", color: delta === null ? "text-[var(--color-muted)]" : delta < 0 ? "text-green-400" : "text-red-400" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -853,7 +853,7 @@ function EmissionIntensity() {
             <div className={`rounded-lg p-4 border ${delta < 0 ? "border-green-800/40 bg-green-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
               <p className={`text-sm font-bold flex items-center gap-2 ${delta < 0 ? "text-green-400" : "text-orange-400"}`}>
                 {delta < 0 ? <TrendingDown size={14} /> : <AlertTriangle size={14} />}
-                Your carbon intensity {delta < 0 ? "fell" : "rose"} {Math.abs(delta).toFixed(1)}% YoY — {delta < 0 ? "real decarbonisation, not just lower output." : "emissions are growing faster than revenue; review your biggest sources."}
+                Your carbon intensity {delta < 0 ? "fell" : "rose"} {Math.abs(delta).toFixed(1)}% YoY - {delta < 0 ? "real decarbonisation, not just lower output." : "emissions are growing faster than revenue; review your biggest sources."}
               </p>
             </div>
           )}
@@ -894,7 +894,7 @@ function SupplierSustainabilityRating() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Truck size={14} className="text-[var(--color-primary)]" /> Supplier Sustainability Rating</h3>
-        <p className="text-xs text-[var(--color-muted)]">Rate each key supplier 1–5 on three ESG dimensions to surface supply-chain risk and prioritise engagement.</p>
+        <p className="text-xs text-[var(--color-muted)]">Rate each key supplier 1-5 on three ESG dimensions to surface supply-chain risk and prioritise engagement.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Supplier name</label>
@@ -936,7 +936,7 @@ function SupplierSustainabilityRating() {
                       <td className="px-3 py-2.5 tabular-nums">{s.emissions}/5</td>
                       <td className="px-3 py-2.5 tabular-nums">{s.labour}/5</td>
                       <td className="px-3 py-2.5 tabular-nums">{s.governance}/5</td>
-                      <td className="px-3 py-2.5">{s.certified ? <CheckCircle2 size={13} className="text-green-400" /> : <span className="text-[var(--color-muted)] text-xs">—</span>}</td>
+                      <td className="px-3 py-2.5">{s.certified ? <CheckCircle2 size={13} className="text-green-400" /> : <span className="text-[var(--color-muted)] text-xs">-</span>}</td>
                       <td className="px-3 py-2.5 tabular-nums font-semibold">{s.score}</td>
                       <td className={`px-3 py-2.5 text-xs font-semibold ${t.color}`}>{t.label}</td>
                       <td className="px-3 py-2.5 text-right">
@@ -968,9 +968,9 @@ function CarbonOffsetEstimator() {
   const cost = tonnes * unit;
 
   const QUALITY: { id: "basic" | "verified" | "removal"; label: string; desc: string }[] = [
-    { id: "basic", label: "Basic / avoidance", desc: "REDD+, cookstoves — lower price, higher scrutiny" },
+    { id: "basic", label: "Basic / avoidance", desc: "REDD+, cookstoves - lower price, higher scrutiny" },
     { id: "verified", label: "Verified (Verra/Gold Std)", desc: "Independently audited, India afforestation/biogas" },
-    { id: "removal", label: "Carbon removal", desc: "Biochar, DAC — highest integrity, premium price" },
+    { id: "removal", label: "Carbon removal", desc: "Biochar, DAC - highest integrity, premium price" },
   ];
 
   return (
@@ -1016,7 +1016,7 @@ function CarbonOffsetEstimator() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative only — voluntary carbon market prices vary widely by vintage, project and registry. Verify credit serial numbers to avoid double-counting. Offsetting is no substitute for cutting emissions at source.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative only - voluntary carbon market prices vary widely by vintage, project and registry. Verify credit serial numbers to avoid double-counting. Offsetting is no substitute for cutting emissions at source.</p>
     </div>
   );
 }
@@ -1106,7 +1106,7 @@ function SustainabilityGoalTracker() {
                 <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
                   <div className={`h-full rounded-full transition-all ${achieved ? "bg-green-500" : "bg-[var(--color-primary)]"}`} style={{ width: `${pct}%` }} />
                 </div>
-                {achieved && <p className="text-[11px] text-green-400 flex items-center gap-1"><CheckCircle2 size={11} /> Target achieved — set a more ambitious next milestone.</p>}
+                {achieved && <p className="text-[11px] text-green-400 flex items-center gap-1"><CheckCircle2 size={11} /> Target achieved - set a more ambitious next milestone.</p>}
               </div>
             );
           })}
@@ -1132,7 +1132,7 @@ function Overview({ onJump }: { onJump: (t: Tab) => void }) {
   const cards = [
     { label: "Annual revenue (books)", value: formatCurrency(Math.round(revenue)), color: "text-green-400", sub: "Basis for emission intensity" },
     { label: "Annual expense (books)", value: formatCurrency(Math.round(expense)), color: "text-[var(--color-text)]", sub: "Basis for spend-based footprint" },
-    { label: "Screening footprint", value: fmtT(screeningKg), color: "text-orange-400", sub: "Rough estimate — refine in Footprint" },
+    { label: "Screening footprint", value: fmtT(screeningKg), color: "text-orange-400", sub: "Rough estimate - refine in Footprint" },
     { label: "Frameworks covered", value: "BRSR · GHG · CBAM", color: "text-[var(--color-primary)]", sub: "India-aware tooling" },
   ];
 
@@ -1164,7 +1164,7 @@ function Overview({ onJump }: { onJump: (t: Tab) => void }) {
       <div className={`${CARD} p-4`}>
         <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Leaf size={14} className="text-[var(--color-primary)]" /> Turn your books into an ESG ledger</p>
         <p className="text-xs text-[var(--color-muted)]">
-          Most of these tools estimate carbon, energy and ESG metrics straight from the spend already in your books — no duplicate data entry.
+          Most of these tools estimate carbon, energy and ESG metrics straight from the spend already in your books - no duplicate data entry.
           As India's BRSR value-chain asks and EU CBAM start touching SMBs and exporters, having a defensible baseline ready matters. Start with a spend-based footprint, then refine with activity data.
         </p>
       </div>
@@ -1221,7 +1221,7 @@ function CommuteEmissions() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> Employee Commute Emissions</h3>
-        <p className="text-xs text-[var(--color-muted)]">GHG Protocol Scope 3 category 7. Add a leg per transport mode — annualised over {WORK_DAYS} working days/month, round trips.</p>
+        <p className="text-xs text-[var(--color-muted)]">GHG Protocol Scope 3 category 7. Add a leg per transport mode - annualised over {WORK_DAYS} working days/month, round trips.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Mode</label>
@@ -1249,7 +1249,7 @@ function CommuteEmissions() {
             {[
               { label: "Annual commute footprint", value: fmtT(totalKg), color: "text-orange-400" },
               { label: "Employees covered", value: `${totalEmp}`, color: "text-[var(--color-text)]" },
-              { label: "Per employee / yr", value: totalEmp > 0 ? fmtT(totalKg / totalEmp) : "—", color: "text-[var(--color-primary)]" },
+              { label: "Per employee / yr", value: totalEmp > 0 ? fmtT(totalKg / totalEmp) : "-", color: "text-[var(--color-primary)]" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -1283,7 +1283,7 @@ function CommuteEmissions() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Per-passenger-km factors (India-typical). Shifting staff to metro, bus or WFH days cuts this fastest — model it by editing the leg.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Per-passenger-km factors (India-typical). Shifting staff to metro, bus or WFH days cuts this fastest - model it by editing the leg.</p>
     </div>
   );
 }
@@ -1391,7 +1391,7 @@ function WasteTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Trash2 size={14} className="text-[var(--color-primary)]" /> Waste & Recycling Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">Log waste generated vs recycled per stream — the diversion rate is a core BRSR and circularity metric, and the data behind EPR obligations.</p>
+        <p className="text-xs text-[var(--color-muted)]">Log waste generated vs recycled per stream - the diversion rate is a core BRSR and circularity metric, and the data behind EPR obligations.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Stream</label>
@@ -1457,7 +1457,7 @@ function WasteTracker() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Diversion rate = recycled ÷ generated. Plastic, e-waste and battery streams here also drive your EPR targets — see the EPR Tracker.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Diversion rate = recycled ÷ generated. Plastic, e-waste and battery streams here also drive your EPR targets - see the EPR Tracker.</p>
     </div>
   );
 }
@@ -1513,7 +1513,7 @@ function RenewableSwitchRoi() {
               { label: "System cost (capex)", value: formatCurrency(Math.round(capex)), color: "text-[var(--color-text)]" },
               { label: "Annual generation", value: `${Math.round(annualGen).toLocaleString("en-IN")} kWh`, color: "text-yellow-400" },
               { label: "Annual bill saving", value: formatCurrency(Math.round(annualSaving)), color: "text-green-400" },
-              { label: "Simple payback", value: payback > 0 ? `${payback.toFixed(1)} yrs` : "—", color: "text-[var(--color-primary)]" },
+              { label: "Simple payback", value: payback > 0 ? `${payback.toFixed(1)} yrs` : "-", color: "text-[var(--color-primary)]" },
               { label: "CO₂e avoided / yr", value: fmtT(co2Saved), color: "text-green-400" },
               { label: "25-yr net benefit", value: formatCurrency(Math.round(lifetime25)), color: lifetime25 > 0 ? "text-green-400" : "text-red-400" },
             ].map(k => (
@@ -1525,7 +1525,7 @@ function RenewableSwitchRoi() {
           </div>
           {payback > 0 && payback <= 6 && (
             <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-              <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> Payback under ~6 years — strong case. Check accelerated depreciation and state net-metering before committing.</p>
+              <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> Payback under ~6 years - strong case. Check accelerated depreciation and state net-metering before committing.</p>
             </div>
           )}
         </>
@@ -1560,7 +1560,7 @@ function EvFleetCalculator() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Car size={14} className="text-[var(--color-primary)]" /> EV-Fleet Transition Calculator</h3>
-        <p className="text-xs text-[var(--color-muted)]">Compares running an ICE fleet vs going electric — fuel/energy cost and emissions. EV emissions use the CEA grid factor ({GRID_FACTOR} kg/kWh).</p>
+        <p className="text-xs text-[var(--color-muted)]">Compares running an ICE fleet vs going electric - fuel/energy cost and emissions. EV emissions use the CEA grid factor ({GRID_FACTOR} kg/kWh).</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {([
             ["Vehicles in fleet", vehicles, setVehicles, "0"],
@@ -1600,7 +1600,7 @@ function EvFleetCalculator() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Operating comparison only — model upfront EV cost separately. As the grid greens, EV emissions fall further; ICE stays flat.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Operating comparison only - model upfront EV cost separately. As the grid greens, EV emissions fall further; ICE stays flat.</p>
     </div>
   );
 }
@@ -1646,7 +1646,7 @@ function DiversityMetrics() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Globe size={14} className="text-[var(--color-primary)]" /> Diversity & Social Metrics</h3>
-        <p className="text-xs text-[var(--color-muted)]">The 'S' in ESG and BRSR Section C, Principle 3/5. Enter your headcount mix — figures auto-save and feed disclosure requests.</p>
+        <p className="text-xs text-[var(--color-muted)]">The 'S' in ESG and BRSR Section C, Principle 3/5. Enter your headcount mix - figures auto-save and feed disclosure requests.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {fields.map(([k, label]) => (
             <div key={k}>
@@ -1719,7 +1719,7 @@ function GovernanceChecklist() {
           ))}
         </div>
       ))}
-      <p className="text-[10px] text-[var(--color-muted)]">A practical governance baseline for an Indian SMB (Companies Act, DPDP 2023). Not legal advice — confirm statutory obligations with your CA / company secretary.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A practical governance baseline for an Indian SMB (Companies Act, DPDP 2023). Not legal advice - confirm statutory obligations with your CA / company secretary.</p>
     </div>
   );
 }
@@ -1827,7 +1827,7 @@ function CbamExportEstimator() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Uses default embedded-emission intensities; actuals from a verified product carbon footprint usually lower your liability. Transitional reporting is underway — definitive certificates phase in from 2026.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Uses default embedded-emission intensities; actuals from a verified product carbon footprint usually lower your liability. Transitional reporting is underway - definitive certificates phase in from 2026.</p>
     </div>
   );
 }
@@ -1860,7 +1860,7 @@ function EprTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Recycle size={14} className="text-[var(--color-primary)]" /> EPR Compliance Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">Track Extended Producer Responsibility targets under CPCB rules (plastic, e-waste, battery). Shortfalls must be met by buying EPR certificates — or face environmental compensation.</p>
+        <p className="text-xs text-[var(--color-muted)]">Track Extended Producer Responsibility targets under CPCB rules (plastic, e-waste, battery). Shortfalls must be met by buying EPR certificates - or face environmental compensation.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Category</label>
@@ -1954,10 +1954,10 @@ function GreenLoanEligibility() {
 
   const score = GREEN_CRITERIA.reduce((s, c) => s + (checks[c.id] ? c.weight : 0), 0);
   const band = score >= 75
-    ? { label: "Strong candidate", color: "text-green-400", note: "Approach SIDBI / bank green lines and sustainability-linked loans with confidence.", rate: "—0.5% to —1.0%" }
+    ? { label: "Strong candidate", color: "text-green-400", note: "Approach SIDBI / bank green lines and sustainability-linked loans with confidence.", rate: "-0.5% to -1.0%" }
     : score >= 50
-      ? { label: "Eligible with gaps", color: "text-yellow-400", note: "Close the unchecked items to unlock better rate step-downs.", rate: "—0.25%" }
-      : { label: "Not yet ready", color: "text-orange-400", note: "Build a footprint and a reduction target first — these are table-stakes for green credit.", rate: "standard" };
+      ? { label: "Eligible with gaps", color: "text-yellow-400", note: "Close the unchecked items to unlock better rate step-downs.", rate: "-0.25%" }
+      : { label: "Not yet ready", color: "text-orange-400", note: "Build a footprint and a reduction target first - these are table-stakes for green credit.", rate: "standard" };
   const loanAmt = parseFloat(amount) || 0;
   // illustrative annual interest saving from a rate step-down tied to band
   const stepDown = score >= 75 ? 0.0075 : score >= 50 ? 0.0025 : 0;
@@ -1967,7 +1967,7 @@ function GreenLoanEligibility() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> Green-Loan Eligibility Score</h3>
-        <p className="text-xs text-[var(--color-muted)]">Self-assess readiness for green / sustainability-linked finance (SIDBI, bank green lines). Tick what you can evidence — lenders often offer a rate step-down for strong ESG profiles.</p>
+        <p className="text-xs text-[var(--color-muted)]">Self-assess readiness for green / sustainability-linked finance (SIDBI, bank green lines). Tick what you can evidence - lenders often offer a rate step-down for strong ESG profiles.</p>
         <div className="space-y-1.5">
           {GREEN_CRITERIA.map(c => (
             <label key={c.id} className="flex items-center justify-between gap-2.5 cursor-pointer text-sm py-1">
@@ -2008,7 +2008,7 @@ function GreenLoanEligibility() {
           <p className="text-xs text-[var(--color-text)] mt-1">{band.note}</p>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative screening only — actual eligibility, rates and step-downs are set by the lender. Use this to prioritise which ESG gaps to close before applying.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative screening only - actual eligibility, rates and step-downs are set by the lender. Use this to prioritise which ESG gaps to close before applying.</p>
     </div>
   );
 }
@@ -2086,7 +2086,7 @@ function NetZeroPathwayPlanner() {
           <div className={`rounded-lg p-4 border ${sbtiAligned ? "border-green-800/40 bg-green-950/20" : "border-yellow-800/40 bg-yellow-950/20"}`}>
             <p className={`text-sm font-bold flex items-center gap-2 ${sbtiAligned ? "text-green-400" : "text-yellow-400"}`}>
               {sbtiAligned ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-              {sbtiAligned ? "Pace meets the ~4.2%/yr linear cut a 1.5°C SBTi pathway expects." : "Pace is below the ~4.2%/yr a 1.5°C SBTi pathway expects — bring the target year forward or cut deeper early."}
+              {sbtiAligned ? "Pace meets the ~4.2%/yr linear cut a 1.5°C SBTi pathway expects." : "Pace is below the ~4.2%/yr a 1.5°C SBTi pathway expects - bring the target year forward or cut deeper early."}
             </p>
           </div>
           <div className={`${CARD} p-4 space-y-2`}>
@@ -2108,7 +2108,7 @@ function NetZeroPathwayPlanner() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A simple linear glide path. Real plans front-load cuts via marginal-abatement-cost ordering and verify residual offsets — treat this as a directional target, not a committed SBTi submission.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A simple linear glide path. Real plans front-load cuts via marginal-abatement-cost ordering and verify residual offsets - treat this as a directional target, not a committed SBTi submission.</p>
     </div>
   );
 }
@@ -2147,7 +2147,7 @@ function SupplierQuestionnaireTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} className="text-[var(--color-primary)]" /> Supplier ESG Questionnaire Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">Track who you've asked for primary ESG / emissions data and how far each has progressed — the response rate is what turns Scope 3 estimates into assurance-grade figures.</p>
+        <p className="text-xs text-[var(--color-muted)]">Track who you've asked for primary ESG / emissions data and how far each has progressed - the response rate is what turns Scope 3 estimates into assurance-grade figures.</p>
         <div className="flex gap-2 items-end max-w-md">
           <div className="flex-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Supplier name</label>
@@ -2206,7 +2206,7 @@ function SupplierQuestionnaireTracker() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Advance each supplier as you send, receive and verify their questionnaire. Prioritise your highest-spend vendors — they usually drive most of your Scope 3.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Advance each supplier as you send, receive and verify their questionnaire. Prioritise your highest-spend vendors - they usually drive most of your Scope 3.</p>
     </div>
   );
 }
@@ -2234,13 +2234,13 @@ function EsgReportBuilder() {
   const exportReport = () => {
     if (chosen.length === 0) { toast.error("Select at least one section"); return; }
     const lines: string[] = [];
-    lines.push(`${orgName.trim() || "Our Business"} — Sustainability Report ${year}`);
+    lines.push(`${orgName.trim() || "Our Business"} - Sustainability Report ${year}`);
     lines.push("=".repeat(60), "");
     chosen.forEach((s, i) => {
       lines.push(`${i + 1}. ${s.title}`);
       lines.push(s.body, "");
     });
-    lines.push("Generated from your books — figures should be reviewed before publication.");
+    lines.push("Generated from your books - figures should be reviewed before publication.");
     const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -2320,7 +2320,7 @@ function ClimateRiskAssessment() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-2`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Climate-Risk Assessment</h3>
-        <p className="text-xs text-[var(--color-muted)]">A TCFD-style screen of physical (acute/chronic) and transition risks. Rate each from None to High — the result frames the climate-risk section of disclosures and lender questionnaires.</p>
+        <p className="text-xs text-[var(--color-muted)]">A TCFD-style screen of physical (acute/chronic) and transition risks. Rate each from None to High - the result frames the climate-risk section of disclosures and lender questionnaires.</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -2449,7 +2449,7 @@ function SustainableProcurementScorecard() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">"Sustainable" is what you define — certified (ISO 14001/FSC), recycled-content, local or low-carbon. Document the criteria so the share is defensible.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">"Sustainable" is what you define - certified (ISO 14001/FSC), recycled-content, local or low-carbon. Document the criteria so the share is defensible.</p>
     </div>
   );
 }
@@ -2491,7 +2491,7 @@ function CsrImpactTracker() {
           <h3 className="text-sm font-semibold flex items-center gap-2"><HeartHandshake size={14} className="text-[var(--color-primary)]" /> Community / CSR Impact Tracker</h3>
           {csrGuide > 0 && <span className="text-[10px] text-[var(--color-muted)]">2% of profit (indicative CSR): {formatCurrency(Math.round(csrGuide))}</span>}
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Log community and CSR projects with spend and reach — the 'S' that BRSR Principle 8 and investors ask for. (Companies Act Sec 135 mandates 2% CSR above ₹5cr profit / ₹500cr turnover thresholds.)</p>
+        <p className="text-xs text-[var(--color-muted)]">Log community and CSR projects with spend and reach - the 'S' that BRSR Principle 8 and investors ask for. (Companies Act Sec 135 mandates 2% CSR above ₹5cr profit / ₹500cr turnover thresholds.)</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Project</label>
@@ -2523,7 +2523,7 @@ function CsrImpactTracker() {
             {[
               { label: "Total CSR spend", value: formatCurrency(Math.round(totalSpend)), color: "text-green-400" },
               { label: "People reached", value: totalBen.toLocaleString("en-IN"), color: "text-[var(--color-primary)]" },
-              { label: "Cost per beneficiary", value: costPerBen > 0 ? formatCurrency(Math.round(costPerBen)) : "—", color: "text-[var(--color-text)]" },
+              { label: "Cost per beneficiary", value: costPerBen > 0 ? formatCurrency(Math.round(costPerBen)) : "-", color: "text-[var(--color-text)]" },
               { label: "Projects", value: `${rows.length}`, color: "text-[var(--color-text)]" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
@@ -2558,7 +2558,7 @@ function CsrImpactTracker() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">The 2% figure is indicative — statutory CSR under Sec 135 only applies above net-worth/turnover/profit thresholds. Confirm applicability with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">The 2% figure is indicative - statutory CSR under Sec 135 only applies above net-worth/turnover/profit thresholds. Confirm applicability with your CA.</p>
     </div>
   );
 }
@@ -2648,7 +2648,7 @@ function EnergySavingsTracker() {
                         <td className="px-4 py-2.5 font-medium">{r.measure}</td>
                         <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.capex))}</td>
                         <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(Math.round(r.annualSaving))}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{pay > 0 ? `${pay.toFixed(1)} yrs` : "—"}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{pay > 0 ? `${pay.toFixed(1)} yrs` : "-"}</td>
                         <td className="px-4 py-2.5 tabular-nums text-green-400">{r.co2Saving.toFixed(1)} t</td>
                         <td className="px-4 py-2.5 text-right">
                           <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
@@ -2662,7 +2662,7 @@ function EnergySavingsTracker() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Measures are ranked by payback — fastest first. Energy efficiency is usually the cheapest abatement; many measures also qualify for accelerated depreciation.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Measures are ranked by payback - fastest first. Energy efficiency is usually the cheapest abatement; many measures also qualify for accelerated depreciation.</p>
     </div>
   );
 }
@@ -2706,7 +2706,7 @@ function EmissionsPerEmployee() {
             {[
               { label: "Per employee", value: `${perHead.toFixed(2)}`, sub: "tCO₂e / FTE", color: "text-orange-400" },
               { label: "Per employee (kg)", value: `${Math.round(perHead * 1000).toLocaleString("en-IN")}`, sub: "kg CO₂e / FTE", color: "text-[var(--color-text)]" },
-              { label: "YoY change", value: delta === null ? "—" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}%`, sub: delta === null ? "Add prior year" : delta < 0 ? "Improving" : "Worsening", color: delta === null ? "text-[var(--color-muted)]" : delta < 0 ? "text-green-400" : "text-red-400" },
+              { label: "YoY change", value: delta === null ? "-" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}%`, sub: delta === null ? "Add prior year" : delta < 0 ? "Improving" : "Worsening", color: delta === null ? "text-[var(--color-muted)]" : delta < 0 ? "text-green-400" : "text-red-400" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -2717,7 +2717,7 @@ function EmissionsPerEmployee() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Per-FTE emissions normalise for company size — useful for benchmarking against peers and for office-based businesses where revenue intensity is less comparable.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Per-FTE emissions normalise for company size - useful for benchmarking against peers and for office-based businesses where revenue intensity is less comparable.</p>
     </div>
   );
 }
@@ -2747,7 +2747,7 @@ function RenewableGridMix() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><BatteryCharging size={14} className="text-green-400" /> Renewable vs Grid Mix</h3>
-        <p className="text-xs text-[var(--color-muted)]">Split your annual electricity into grid, on-site solar and REC/green-tariff units to compute your renewable share — the headline number for RE100-style commitments.</p>
+        <p className="text-xs text-[var(--color-muted)]">Split your annual electricity into grid, on-site solar and REC/green-tariff units to compute your renewable share - the headline number for RE100-style commitments.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Grid electricity (kWh/yr)</label>
@@ -2789,7 +2789,7 @@ function RenewableGridMix() {
             {segs.filter(s => s.kwh > 0).map(s => (
               <p key={s.label} className="text-[11px] text-[var(--color-muted)]">
                 <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: s.color }} />
-                {s.label} — {s.kwh.toLocaleString("en-IN")} kWh · {((s.kwh / total) * 100).toFixed(0)}%
+                {s.label} - {s.kwh.toLocaleString("en-IN")} kWh · {((s.kwh / total) * 100).toFixed(0)}%
               </p>
             ))}
           </div>
@@ -2803,14 +2803,14 @@ function RenewableGridMix() {
 // ── Green Certification Checklist ───────────────────────────────────────────────
 type CertItem = { id: string; name: string; group: string; note: string };
 const CERT_ITEMS: CertItem[] = [
-  { id: "c1", group: "Environment", name: "ISO 14001 — Environmental management", note: "Most-requested by procurement teams" },
-  { id: "c2", group: "Environment", name: "ISO 50001 — Energy management", note: "Pairs well with energy audits" },
+  { id: "c1", group: "Environment", name: "ISO 14001 - Environmental management", note: "Most-requested by procurement teams" },
+  { id: "c2", group: "Environment", name: "ISO 50001 - Energy management", note: "Pairs well with energy audits" },
   { id: "c3", group: "Environment", name: "IGBC / GRIHA green building rating", note: "For owned/leased premises" },
   { id: "c4", group: "Product", name: "BIS / Ecomark eco-label", note: "Indian product environmental label" },
   { id: "c5", group: "Product", name: "EPR registration (CPCB)", note: "Mandatory for plastic/e-waste producers" },
-  { id: "c6", group: "Social", name: "ISO 45001 — Occupational health & safety", note: "Worker safety assurance" },
-  { id: "c7", group: "Social", name: "SA8000 — Social accountability", note: "Labour-rights audit for exporters" },
-  { id: "c8", group: "Governance", name: "ISO 27001 — Information security", note: "Often bundled in ESG questionnaires" },
+  { id: "c6", group: "Social", name: "ISO 45001 - Occupational health & safety", note: "Worker safety assurance" },
+  { id: "c7", group: "Social", name: "SA8000 - Social accountability", note: "Labour-rights audit for exporters" },
+  { id: "c8", group: "Governance", name: "ISO 27001 - Information security", note: "Often bundled in ESG questionnaires" },
 ];
 function GreenCertificationChecklist() {
   const [status, setStatus] = useFeatureState<Record<string, "none" | "progress" | "held">>("esg-certifications", {});
@@ -2856,7 +2856,7 @@ function GreenCertificationChecklist() {
           })}
         </div>
       ))}
-      <p className="text-[10px] text-[var(--color-muted)]">An indicative shortlist of common India-relevant certifications. Scope, cost and applicability vary — confirm requirements with the issuing body or your auditor before applying.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">An indicative shortlist of common India-relevant certifications. Scope, cost and applicability vary - confirm requirements with the issuing body or your auditor before applying.</p>
     </div>
   );
 }
@@ -2934,7 +2934,7 @@ function EsgRatingPlanner() {
           ))}
         </div>
       ))}
-      <p className="text-[10px] text-[var(--color-muted)]">A directional planner weighted by typical rater impact and effort — not a substitute for a CRISIL/CDP/EcoVadis methodology. Use it to sequence improvements, not to predict an exact agency score.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A directional planner weighted by typical rater impact and effort - not a substitute for a CRISIL/CDP/EcoVadis methodology. Use it to sequence improvements, not to predict an exact agency score.</p>
     </div>
   );
 }

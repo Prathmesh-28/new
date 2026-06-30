@@ -1,4 +1,4 @@
-// §9.3-adjacent — online collection links. Gateway-agnostic record; a live
+// §9.3-adjacent - online collection links. Gateway-agnostic record; a live
 // provider (Razorpay/Cashfree) would mint a hosted link when keys are present.
 // markPaid posts a RECEIPT and allocates it against the invoice.
 const crypto = require("crypto");
@@ -13,7 +13,7 @@ const retry = require("./paymentretry");
 // One thin interface every gateway implements; the rest of this module talks to a
 // provider only through {key, isConfigured, webhookSecret, verifyWebhook}. Razorpay is
 // the live path (HMAC-SHA256 today, but we verify with the configured algo below);
-// Cashfree is a STUB gated on its own keys so it stays inert until those exist — no
+// Cashfree is a STUB gated on its own keys so it stays inert until those exist - no
 // silent half-wired second gateway.
 const PROVIDERS = {
   razorpay: {
@@ -60,12 +60,12 @@ async function createLink(tenantId, { invoiceVoucherId, partyLedgerId, amount, p
       return { ...link, provider: "razorpay", provider_ref: rl.id, link_url: rl.short_url };
     } catch (e) {
       await pool.query("UPDATE book_payment_links SET link_url=$2 WHERE id=$1", [link.id, null]);
-      return { ...link, link_url: null, note: `Razorpay link couldn't be created (${e.message}) — mark paid manually.` };
+      return { ...link, link_url: null, note: `Razorpay link couldn't be created (${e.message}) - mark paid manually.` };
     }
   }
   const url = `pending-gateway://link/${link.id}`;
   await pool.query("UPDATE book_payment_links SET link_url=$2 WHERE id=$1", [link.id, url]);
-  return { ...link, link_url: url, note: "No live payment gateway configured — mark paid manually, or set RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET to mint a hosted link." };
+  return { ...link, link_url: url, note: "No live payment gateway configured - mark paid manually, or set RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET to mint a hosted link." };
 }
 
 // Webhook settlement: find the link by gateway ref and post the receipt into
@@ -137,9 +137,9 @@ function verifySignature(provider, rawBody, signature) {
 
 // Idempotency + ordering store. Returns a verdict the caller acts on:
 //   {accept:true}                       → first time we've seen this event_id; process it.
-//   {accept:false, reason:'duplicate'}  → already processed (≥24h retention) — ack, skip.
+//   {accept:false, reason:'duplicate'}  → already processed (≥24h retention) - ack, skip.
 //   {accept:false, reason:'stale'}      → an OLDER update than one we've already applied
-//                                          for this resource — ack, skip (ordering guard).
+//                                          for this resource - ack, skip (ordering guard).
 // `updatedAt` is the gateway's own event/resource timestamp (epoch seconds, ms, or ISO).
 async function recordWebhookEvent(provider, eventId, resourceKey, updatedAt, eventType) {
   if (!eventId) return { accept: false, reason: "missing_event_id" };
@@ -177,7 +177,7 @@ function toEpochMs(t) {
 }
 
 // Internal webhook entry point (POST /payments/webhook/verify). Verifies the signature,
-// dedupes/orders via the event store, and — on a settlement event — posts the receipt
+// dedupes/orders via the event store, and - on a settlement event - posts the receipt
 // through the existing idempotent markPaidByProviderRef. Never throws to the caller for
 // a replay/stale event: those are acknowledged (200) so the gateway stops retrying.
 async function handleWebhook({ providerName, headers, rawBody, body }) {

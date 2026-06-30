@@ -38,7 +38,7 @@ async function copy(text: string, label = "Copied") {
     await navigator.clipboard.writeText(text);
     toast.success(label);
   } catch {
-    toast.error("Could not copy — copy manually");
+    toast.error("Could not copy - copy manually");
   }
 }
 
@@ -53,7 +53,7 @@ export default function PaymentsPage() {
             <IndianRupee size={18} className="text-[var(--color-primary)]" /> Payments &amp; UPI
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Collect over UPI &amp; cards, build payment links, track autopay mandates, reconcile settlements and watch success rate — India-first money movement.
+            Collect over UPI &amp; cards, build payment links, track autopay mandates, reconcile settlements and watch success rate - India-first money movement.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -176,7 +176,7 @@ function Overview({ onJump }: { onJump: (t: Tab) => void }) {
     { label: "Collected this month", value: formatAmount(collected), color: "text-green-400", sub: `${inbound.length} inbound payment(s)`, tab: "mix" as Tab },
     { label: "Active AutoPay mandates", value: String(activeMandates.length), color: "text-blue-400", sub: `${formatAmount(monthlyMandateValue)}/mo capped`, tab: "mandates" as Tab },
     { label: "Refunds pending", value: String(pendingRefunds.length), color: pendingRefunds.length ? "text-orange-400" : "text-green-400", sub: formatAmount(pendingRefundValue), tab: "refunds" as Tab },
-    { label: "Avg blended MDR", value: "~0.9%", color: "text-yellow-400", sub: "UPI 0% · cards ~2% — tune in MDR tool", tab: "mdr" as Tab },
+    { label: "Avg blended MDR", value: "~0.9%", color: "text-yellow-400", sub: "UPI 0% · cards ~2% - tune in MDR tool", tab: "mdr" as Tab },
   ];
 
   const quick: { id: Tab; label: string; desc: string; Icon: typeof QrCode }[] = [
@@ -202,7 +202,7 @@ function Overview({ onJump }: { onJump: (t: Tab) => void }) {
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1">What you can do here</h2>
         <p className="text-xs text-[var(--color-muted)] mb-4">
-          Everything below runs on your device — UPI links and QRs use the open NPCI <code className="text-[var(--color-primary)]">upi://pay</code> spec, so they work with any UPI app without a gateway account. Trackers persist to your synced store.
+          Everything below runs on your device - UPI links and QRs use the open NPCI <code className="text-[var(--color-primary)]">upi://pay</code> spec, so they work with any UPI app without a gateway account. Trackers persist to your synced store.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {quick.map(q => (
@@ -220,7 +220,7 @@ function Overview({ onJump }: { onJump: (t: Tab) => void }) {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        UPI is zero-MDR for merchants on P2M up to ₹2,000 and broadly subsidised; RuPay debit is also zero-MDR. Steer customers to UPI/RuPay to cut processing cost. Card MDR figures here are indicative — confirm with your acquirer.
+        UPI is zero-MDR for merchants on P2M up to ₹2,000 and broadly subsidised; RuPay debit is also zero-MDR. Steer customers to UPI/RuPay to cut processing cost. Card MDR figures here are indicative - confirm with your acquirer.
       </div>
     </>
   );
@@ -267,7 +267,7 @@ function UpiQrGenerator() {
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><QrCode size={14} className="text-[var(--color-primary)]" /> UPI QR &amp; Intent Link</h2>
-        <p className="text-xs text-[var(--color-muted)]">Builds a standard <code className="text-[var(--color-primary)]">upi://pay</code> intent so any UPI app can scan or tap to pay you — amount and reference pre-filled.</p>
+        <p className="text-xs text-[var(--color-muted)]">Builds a standard <code className="text-[var(--color-primary)]">upi://pay</code> intent so any UPI app can scan or tap to pay you - amount and reference pre-filled.</p>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Payee VPA (pa) *</label>
           <input value={pa} onChange={e => setPa(e.target.value)} placeholder="yourbusiness@okhdfcbank" className={INP} />
@@ -279,7 +279,7 @@ function UpiQrGenerator() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount ₹ (am) — blank = payer enters</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount ₹ (am) - blank = payer enters</label>
             <input type="number" min={0} value={am} onChange={e => setAm(e.target.value)} placeholder="1500" className={INP} />
           </div>
           <div>
@@ -309,7 +309,7 @@ function UpiQrGenerator() {
               )}
               {am.trim() && Number(am) > 0
                 ? <p className="text-lg font-bold tabular-nums">{formatCurrency(Number(am))}</p>
-                : <p className="text-xs text-[var(--color-muted)]">Open amount — payer enters the value</p>}
+                : <p className="text-xs text-[var(--color-muted)]">Open amount - payer enters the value</p>}
             </div>
             <div>
               <label className="text-xs text-[var(--color-muted)] block mb-1">UPI intent link</label>
@@ -329,7 +329,7 @@ function UpiQrGenerator() {
                 <MessageCircle size={12} /> Copy share text
               </button>
             </div>
-            <p className="text-[10px] text-[var(--color-muted)]">The link opens GPay / PhonePe / Paytm / any UPI app. Tapping on desktop won't work — share it to a phone, or let the customer scan the QR.</p>
+            <p className="text-[10px] text-[var(--color-muted)]">The link opens GPay / PhonePe / Paytm / any UPI app. Tapping on desktop won't work - share it to a phone, or let the customer scan the QR.</p>
           </>
         )}
       </div>
@@ -396,7 +396,7 @@ function PaymentLinkBuilder() {
       try {
         const l = await api.get<LedgerLite[]>("/api/books/ledgers");
         if (alive) setLedgers(Array.isArray(l) ? l : []);
-      } catch { /* books not set up / offline — manual UPI link still works */ }
+      } catch { /* books not set up / offline - manual UPI link still works */ }
     })();
     refreshLinks();
     return () => { alive = false; };
@@ -418,7 +418,7 @@ function PaymentLinkBuilder() {
 
   const shareText = useMemo(() => {
     const lines = [
-      `${store.firm?.name ?? "We"} — payment request${title ? `: ${title}` : ""}`,
+      `${store.firm?.name ?? "We"} - payment request${title ? `: ${title}` : ""}`,
       total > 0 ? `Amount: ${formatCurrency(total)}${gst > 0 ? ` (incl. ${formatCurrency(gst)} GST)` : ""}` : "",
       allowPartial ? "Partial payment allowed." : "",
       `Pay by: ${format(expiryDate, "d MMM yyyy")}`,
@@ -439,14 +439,14 @@ function PaymentLinkBuilder() {
       if (link?.link_url && !link.link_url.startsWith("pending-gateway://")) {
         toast.success("Live payment link created");
       } else {
-        toast.success(link?.note ? "Link created — mark paid manually" : "Link created");
+        toast.success(link?.note ? "Link created - mark paid manually" : "Link created");
         if (link?.note) toast.message(link.note);
       }
       setApiAvailable(true);
       await refreshLinks();
     } catch (e) {
       setApiAvailable(false);
-      toast.error(e instanceof Error ? e.message.replace(/^\d+:\s*/, "") : "Could not create link — books may not be set up");
+      toast.error(e instanceof Error ? e.message.replace(/^\d+:\s*/, "") : "Could not create link - books may not be set up");
     } finally {
       setCreating(false);
     }
@@ -457,7 +457,7 @@ function PaymentLinkBuilder() {
     setPayingId(linkId);
     try {
       await api.post(`/api/books/payments/links/${linkId}/paid`, { bankLedgerId });
-      toast.success("Marked paid — receipt posted & allocated");
+      toast.success("Marked paid - receipt posted & allocated");
       await refreshLinks();
     } catch (e) {
       toast.error(e instanceof Error ? e.message.replace(/^\d+:\s*/, "") : "Could not mark paid");
@@ -469,7 +469,7 @@ function PaymentLinkBuilder() {
   function shareLinkText(link: PaymentLink) {
     const url = link.link_url && !link.link_url.startsWith("pending-gateway://") ? link.link_url : "";
     return [
-      `${store.firm?.name ?? "We"} — payment request${title ? `: ${title}` : ""}`,
+      `${store.firm?.name ?? "We"} - payment request${title ? `: ${title}` : ""}`,
       `Amount: ${formatCurrency(Number(link.amount) || 0)}`,
       url ? `Pay securely: ${url}` : "",
     ].filter(Boolean).join("\n");
@@ -486,7 +486,7 @@ function PaymentLinkBuilder() {
         <p className="text-xs text-[var(--color-muted)]">Compose a shareable pay-request with GST, expiry and partial-pay terms, backed by a UPI intent link.</p>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Title / what it's for</label>
-          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Invoice 1042 — design retainer" className={INP} />
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Invoice 1042 - design retainer" className={INP} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -521,9 +521,9 @@ function PaymentLinkBuilder() {
           <p className="text-xs font-medium flex items-center gap-1.5"><Zap size={12} className="text-[var(--color-primary)]" /> Generate a real hosted link</p>
           {partyLedgers.length > 0 && (
             <div>
-              <label className="text-xs text-[var(--color-muted)] block mb-1">Bill to (party ledger) — optional, enables auto-allocation</label>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Bill to (party ledger) - optional, enables auto-allocation</label>
               <select value={partyLedgerId} onChange={e => setPartyLedgerId(e.target.value)} className={INP}>
-                <option value="">— Account-level (no party) —</option>
+                <option value="">- Account-level (no party) -</option>
                 {partyLedgers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </div>
@@ -543,7 +543,7 @@ function PaymentLinkBuilder() {
           {title && <p className="text-xs text-[var(--color-muted)]">{title}</p>}
           <div className="flex items-end justify-between pt-1">
             <span className="text-xs text-[var(--color-muted)]">Amount due</span>
-            <span className="text-2xl font-bold tabular-nums">{total > 0 ? formatCurrency(total) : "—"}</span>
+            <span className="text-2xl font-bold tabular-nums">{total > 0 ? formatCurrency(total) : "-"}</span>
           </div>
           {gst > 0 && <p className="text-[10px] text-[var(--color-muted)] text-right">Includes {formatCurrency(gst)} GST @ {gstPct}%</p>}
           <div className="flex items-center justify-between text-[11px] text-[var(--color-muted)] pt-2 border-t border-[var(--color-border)]">
@@ -579,18 +579,18 @@ function PaymentLinkBuilder() {
         <div className="flex items-center gap-2 flex-wrap">
           <label className="text-xs text-[var(--color-muted)]">Settle into</label>
           <select value={bankLedgerId} onChange={e => setBankLedgerId(e.target.value)} className={`${INP} max-w-[260px]`}>
-            <option value="">— Pick bank / UPI ledger —</option>
+            <option value="">- Pick bank / UPI ledger -</option>
             {bankLedgers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
         </div>
       )}
       {!apiAvailable ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">Books backend unavailable — manual UPI links above still work. Links will appear here once you're online and the chart of accounts is set up.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">Books backend unavailable - manual UPI links above still work. Links will appear here once you're online and the chart of accounts is set up.</p>
       ) : links.length === 0 ? (
         <EmptyState
           icon={Link2}
           title="No payment links yet"
-          description="Create a branded UPI / card payment link to collect from a customer — it appears here with a copyable URL, a WhatsApp share, and a mark-paid action."
+          description="Create a branded UPI / card payment link to collect from a customer - it appears here with a copyable URL, a WhatsApp share, and a mark-paid action."
           ctaText="Create a payment link"
           onCta={() => { amountRef.current?.focus(); amountRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }}
         />
@@ -609,7 +609,7 @@ function PaymentLinkBuilder() {
                   </div>
                   {url
                     ? <a href={url} target="_blank" rel="noreferrer" className="text-[11px] text-[var(--color-primary)] hover:underline break-all">{url}</a>
-                    : <span className="text-[11px] text-[var(--color-muted)]">{link.note ? link.note : "No hosted URL — mark paid manually."}</span>}
+                    : <span className="text-[11px] text-[var(--color-muted)]">{link.note ? link.note : "No hosted URL - mark paid manually."}</span>}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap shrink-0">
                   {url && (
@@ -682,7 +682,7 @@ function MandateTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> AutoPay / e-Mandate Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)]">Track recurring debit mandates across UPI AutoPay, e-NACH and card standing instructions — caps, frequency and next debit date.</p>
+        <p className="text-xs text-[var(--color-muted)]">Track recurring debit mandates across UPI AutoPay, e-NACH and card standing instructions - caps, frequency and next debit date.</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
@@ -785,7 +785,7 @@ function MdrCalculator() {
     upi: { label: "UPI (P2M)", pct: 0, note: "Zero-MDR by NPCI policy" },
     "rupay-debit": { label: "RuPay debit", pct: 0, note: "Zero-MDR by mandate" },
     debit: { label: "Visa/MC debit", pct: 0.9, note: "Capped ~0.9% (≤₹2,000 lower)" },
-    credit: { label: "Credit card", pct: 2.0, note: "Typically 1.8–2.5%" },
+    credit: { label: "Credit card", pct: 2.0, note: "Typically 1.8-2.5%" },
     amex: { label: "Amex / Diners", pct: 3.0, note: "Premium network ~3%+" },
     netbanking: { label: "Net banking", pct: 1.0, note: "Flat fee or ~1%" },
     wallet: { label: "Wallets", pct: 1.5, note: "Varies by wallet" },
@@ -840,7 +840,7 @@ function MdrCalculator() {
           {r.pct > 0 && (
             <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
               <p className="text-sm font-bold text-green-400 flex items-center gap-2">
-                <TrendingUp size={14} /> Steering this {formatCurrency(base)} sale to UPI/RuPay saves the full {formatCurrency(Math.round(totalCost))} in fees — your effective margin uplift on every such transaction.
+                <TrendingUp size={14} /> Steering this {formatCurrency(base)} sale to UPI/RuPay saves the full {formatCurrency(Math.round(totalCost))} in fees - your effective margin uplift on every such transaction.
               </p>
             </div>
           )}
@@ -882,7 +882,7 @@ function SettlementRecon() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Settlement / Payout Reconciliation</h2>
-        <p className="text-xs text-[var(--color-muted)]">Enter each gateway settlement batch — we compute the expected payout (gross less MDR &amp; GST) and flag any variance to chase.</p>
+        <p className="text-xs text-[var(--color-muted)]">Enter each gateway settlement batch - we compute the expected payout (gross less MDR &amp; GST) and flag any variance to chase.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Settlement date</label>
@@ -952,7 +952,7 @@ function SettlementRecon() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Expected payout = gross − MDR fee − 18% GST on the fee. A negative variance means the gateway withheld more than expected (TDS, rolling reserve or extra charges) — reconcile against the settlement report.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Expected payout = gross − MDR fee − 18% GST on the fee. A negative variance means the gateway withheld more than expected (TDS, rolling reserve or extra charges) - reconcile against the settlement report.</p>
     </div>
   );
 }
@@ -1043,9 +1043,9 @@ function RefundTracker() {
                   return (
                     <tr key={r.id} className="hover:bg-white/2">
                       <td className="px-4 py-2.5 font-medium">{r.customer}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.orderRef || "—"}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.orderRef || "-"}</td>
                       <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{r.reason || "—"}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{r.reason || "-"}</td>
                       <td className={`px-4 py-2.5 tabular-nums ${r.status === "pending" && age > 5 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{age}d</td>
                       <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
                       <td className="px-4 py-2.5 text-right whitespace-nowrap">
@@ -1065,7 +1065,7 @@ function RefundTracker() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Refunds to the original instrument typically settle in 5–7 working days for cards and instantly for UPI. Pair every refund with a GST credit note where the original sale was taxed.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Refunds to the original instrument typically settle in 5-7 working days for cards and instantly for UPI. Pair every refund with a GST credit note where the original sale was taxed.</p>
     </div>
   );
 }
@@ -1092,7 +1092,7 @@ function SplitCalculator() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Split size={14} className="text-[var(--color-primary)]" /> Split-Payment Calculator</h2>
-        <p className="text-xs text-[var(--color-muted)]">Model a marketplace / partner split — divide one captured payment across several parties by % or fixed amount.</p>
+        <p className="text-xs text-[var(--color-muted)]">Model a marketplace / partner split - divide one captured payment across several parties by % or fixed amount.</p>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Total payment captured ₹</label>
           <input type="number" min={0} value={amount} onChange={e => setAmount(e.target.value)} placeholder="50000" className={`${INP} max-w-xs`} />
@@ -1128,7 +1128,7 @@ function SplitCalculator() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Split settlement routes one customer payment to multiple bank accounts at capture. Ensure percentages plus fixed amounts don't exceed the captured total — any unallocated balance stays in your account.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Split settlement routes one customer payment to multiple bank accounts at capture. Ensure percentages plus fixed amounts don't exceed the captured total - any unallocated balance stays in your account.</p>
     </div>
   );
 }
@@ -1210,7 +1210,7 @@ function SuccessRateDashboard() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Success rate", value: attempts.length ? `${rate.toFixed(1)}%` : "—", color: rate >= 90 ? "text-green-400" : rate >= 75 ? "text-yellow-400" : "text-red-400" },
+          { label: "Success rate", value: attempts.length ? `${rate.toFixed(1)}%` : "-", color: rate >= 90 ? "text-green-400" : rate >= 75 ? "text-yellow-400" : "text-red-400" },
           { label: "Attempts", value: String(attempts.length), color: "text-[var(--color-text)]" },
           { label: "Revenue captured", value: formatAmount(recovered), color: "text-green-400" },
           { label: "Revenue at risk", value: formatAmount(lost), color: lost ? "text-red-400" : "text-green-400" },
@@ -1243,7 +1243,7 @@ function SuccessRateDashboard() {
           <div className={`${CARD} p-5`}>
             <p className="text-sm font-semibold mb-3">Top decline reasons</p>
             {topDecline.length === 0 ? (
-              <p className="text-xs text-[var(--color-muted)]">No failures logged — nice.</p>
+              <p className="text-xs text-[var(--color-muted)]">No failures logged - nice.</p>
             ) : (
               <div className="space-y-2">
                 {topDecline.map(([reason, count]) => (
@@ -1344,7 +1344,7 @@ function CollectComposer() {
             <Copy size={12} /> Copy message
           </button>
         </div>
-        <p className="text-[10px] text-[var(--color-muted)]">Opens WhatsApp with the message pre-filled to the customer — you still tap send, so it stays personal and within WhatsApp's policy.</p>
+        <p className="text-[10px] text-[var(--color-muted)]">Opens WhatsApp with the message pre-filled to the customer - you still tap send, so it stays personal and within WhatsApp's policy.</p>
       </div>
     </div>
   );
@@ -1387,7 +1387,7 @@ function MethodMix() {
         <p className="text-xs text-[var(--color-muted)] mt-1">
           {usingAttempts
             ? "Share of collections by instrument, from your logged successful attempts."
-            : "No attempts logged yet — showing an inferred mix from inbound revenue by amount band. Log attempts in the Success Rate tab for exact instrument data."}
+            : "No attempts logged yet - showing an inferred mix from inbound revenue by amount band. Log attempts in the Success Rate tab for exact instrument data."}
         </p>
       </div>
 
@@ -1456,7 +1456,7 @@ function AutoPayCalculator() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Repeat size={14} className="text-[var(--color-primary)]" /> UPI AutoPay Mandate Calculator</h2>
-        <p className="text-xs text-[var(--color-muted)]">Size the right mandate cap for a recurring plan — we add headroom for taxes and price revisions, and flag the ₹15,000 PIN-less threshold and pre-debit notification.</p>
+        <p className="text-xs text-[var(--color-muted)]">Size the right mandate cap for a recurring plan - we add headroom for taxes and price revisions, and flag the ₹15,000 PIN-less threshold and pre-debit notification.</p>
         <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Charge per cycle ₹</label>
@@ -1498,7 +1498,7 @@ function AutoPayCalculator() {
             <div className="space-y-2">
               {debitDates.map((d, i) => (
                 <div key={i} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
-                  <span className="text-xs">Debit {i + 1} — <span className="font-medium">{format(d, "d MMM yyyy")}</span></span>
+                  <span className="text-xs">Debit {i + 1} - <span className="font-medium">{format(d, "d MMM yyyy")}</span></span>
                   <span className="text-[11px] text-[var(--color-muted)]">Notify by {format(new Date(d.getTime() - 864e5), "d MMM")}</span>
                 </div>
               ))}
@@ -1530,7 +1530,7 @@ function BulkPayoutBuilder() {
     toast.success("Payee added");
   };
 
-  // Detect duplicate account numbers — a classic bulk-transfer error.
+  // Detect duplicate account numbers - a classic bulk-transfer error.
   const dupAccounts = useMemo(() => {
     const seen = new Map<string, number>();
     rows.forEach(r => seen.set(r.account, (seen.get(r.account) ?? 0) + 1));
@@ -1548,14 +1548,14 @@ function BulkPayoutBuilder() {
     a.href = url; a.download = `bulk-payout-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("CSV downloaded — upload to your bank/PG portal");
+    toast.success("CSV downloaded - upload to your bank/PG portal");
   };
 
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><FileSpreadsheet size={14} className="text-[var(--color-primary)]" /> Bulk-Payout File Builder</h2>
-        <p className="text-xs text-[var(--color-muted)]">Build a validated payee sheet for IMPS/NEFT/UPI bulk disbursal — dedupe accounts, check IFSC format, then export a bank-ready CSV.</p>
+        <p className="text-xs text-[var(--color-muted)]">Build a validated payee sheet for IMPS/NEFT/UPI bulk disbursal - dedupe accounts, check IFSC format, then export a bank-ready CSV.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Beneficiary</label>
@@ -1614,7 +1614,7 @@ function BulkPayoutBuilder() {
                     <tr key={r.id} className={`hover:bg-white/2 ${dupAccounts.has(r.account) ? "bg-red-950/10" : ""}`}>
                       <td className="px-4 py-2.5 font-medium">{r.name}</td>
                       <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.account}{dupAccounts.has(r.account) && <span className="ml-2 text-[9px] text-red-400">DUP</span>}</td>
-                      <td className="px-4 py-2.5">{r.ifsc || <span className="text-[var(--color-muted)]">—</span>}</td>
+                      <td className="px-4 py-2.5">{r.ifsc || <span className="text-[var(--color-muted)]">-</span>}</td>
                       <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
                       <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                     </tr>
@@ -1625,7 +1625,7 @@ function BulkPayoutBuilder() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">CSV columns match most bank/PG bulk-upload templates (name, account, IFSC, amount, narration). Always run a penny-drop verification before disbursing — a wrong account number is rarely recoverable.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">CSV columns match most bank/PG bulk-upload templates (name, account, IFSC, amount, narration). Always run a penny-drop verification before disbursing - a wrong account number is rarely recoverable.</p>
     </div>
   );
 }
@@ -1744,7 +1744,7 @@ function ReminderScheduler() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A polite 3-day cadence collects materially faster than a single reminder. Keep WhatsApp messages personal and within policy — you tap send from the Collect-Request composer.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A polite 3-day cadence collects materially faster than a single reminder. Keep WhatsApp messages personal and within policy - you tap send from the Collect-Request composer.</p>
     </div>
   );
 }
@@ -1820,7 +1820,7 @@ function QrBatchGenerator() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Each QR embeds its label as the transaction reference (tr), so your settlement report shows which table/counter collected what — invaluable for tip splitting and per-station reconciliation.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Each QR embeds its label as the transaction reference (tr), so your settlement report shows which table/counter collected what - invaluable for tip splitting and per-station reconciliation.</p>
     </div>
   );
 }
@@ -1862,7 +1862,7 @@ function DisputeTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Chargeback / Dispute Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)]">Log every card chargeback with its evidence deadline so you never miss the window — undefended disputes are auto-lost. Track your win rate over time.</p>
+        <p className="text-xs text-[var(--color-muted)]">Log every card chargeback with its evidence deadline so you never miss the window - undefended disputes are auto-lost. Track your win rate over time.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
@@ -1890,7 +1890,7 @@ function DisputeTracker() {
         {[
           { label: "Open disputes", value: String(openD.length), color: openD.length ? "text-orange-400" : "text-green-400" },
           { label: "Amount at risk", value: formatAmount(Math.round(atRisk)), color: "text-red-400" },
-          { label: "Win rate", value: decided.length ? `${winRate.toFixed(0)}%` : "—", color: winRate >= 50 ? "text-green-400" : "text-yellow-400" },
+          { label: "Win rate", value: decided.length ? `${winRate.toFixed(0)}%` : "-", color: winRate >= 50 ? "text-green-400" : "text-yellow-400" },
           { label: "Total logged", value: String(disputes.length), color: "text-[var(--color-text)]" },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
@@ -1918,7 +1918,7 @@ function DisputeTracker() {
                   return (
                     <tr key={d.id} className={`hover:bg-white/2 ${open && daysLeft < 0 ? "bg-red-950/10" : ""}`}>
                       <td className="px-4 py-2.5 font-medium">{d.customer}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{d.orderRef || "—"}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{d.orderRef || "-"}</td>
                       <td className="px-4 py-2.5 tabular-nums">{formatCurrency(d.amount)}</td>
                       <td className="px-4 py-2.5 tabular-nums">
                         {format(new Date(d.deadline), "d MMM")}
@@ -1943,7 +1943,7 @@ function DisputeTracker() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Compile a strong evidence packet — order confirmation, delivery proof, customer comms, and your refund/return policy — before the acquirer's deadline. A clear bank-statement descriptor prevents many disputes in the first place.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Compile a strong evidence packet - order confirmation, delivery proof, customer comms, and your refund/return policy - before the acquirer's deadline. A clear bank-statement descriptor prevents many disputes in the first place.</p>
     </div>
   );
 }
@@ -1981,7 +1981,7 @@ function EmiOnInvoiceBuilder() {
   const shareText = useMemo(() =>
     schedule.length === 0 ? "" :
       [`Payment plan: ${formatCurrency(Math.round(P))} over ${nMonths} months`,
-      `EMI: ${formatCurrency(Math.round(emi))}/month${annualRate > 0 ? ` @ ${annualRate}% p.a.` : " (0% — no interest)"}`,
+      `EMI: ${formatCurrency(Math.round(emi))}/month${annualRate > 0 ? ` @ ${annualRate}% p.a.` : " (0% - no interest)"}`,
       ...schedule.map(s => `${format(s.date, "d MMM yyyy")}: ${formatCurrency(Math.round(s.principal + s.interest))}`)].join("\n"),
     [schedule, P, nMonths, emi, annualRate]);
 
@@ -1989,7 +1989,7 @@ function EmiOnInvoiceBuilder() {
     <div className="space-y-4 max-w-3xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarRange size={14} className="text-[var(--color-primary)]" /> EMI-on-Invoice / Payment-Plan Builder</h2>
-        <p className="text-xs text-[var(--color-muted)]">Split a large invoice into instalments — set interest (or 0% for a no-cost plan) and generate a dated schedule you can share with the customer.</p>
+        <p className="text-xs text-[var(--color-muted)]">Split a large invoice into instalments - set interest (or 0% for a no-cost plan) and generate a dated schedule you can share with the customer.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice amount ₹</label>
@@ -2055,7 +2055,7 @@ function EmiOnInvoiceBuilder() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A 0% plan is a no-cost EMI — you absorb financing in exchange for a closed sale. Pair each instalment with a UPI AutoPay mandate (see the AutoPay calculator) so collections are automatic.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A 0% plan is a no-cost EMI - you absorb financing in exchange for a closed sale. Pair each instalment with a UPI AutoPay mandate (see the AutoPay calculator) so collections are automatic.</p>
     </div>
   );
 }
@@ -2107,7 +2107,7 @@ function ConvenienceFeeCalculator() {
       {net > 0 && (
         <>
           {denom <= 0 ? (
-            <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20 text-xs text-red-400">Fee % is too high to gross-up — reduce it below {(100 / gstMult).toFixed(0)}%.</div>
+            <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20 text-xs text-red-400">Fee % is too high to gross-up - reduce it below {(100 / gstMult).toFixed(0)}%.</div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
@@ -2171,7 +2171,7 @@ function SettlementForecaster() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> Settlement T+1 / T+2 Forecaster</h2>
-        <p className="text-xs text-[var(--color-muted)]">Enter captured sales by instrument — we project when each settles (UPI T+1, cards T+2) net of MDR, so you know exactly what lands in your bank and when.</p>
+        <p className="text-xs text-[var(--color-muted)]">Enter captured sales by instrument - we project when each settles (UPI T+1, cards T+2) net of MDR, so you know exactly what lands in your bank and when.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Capture date</label>
@@ -2234,7 +2234,7 @@ function SettlementForecaster() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Cycles are indicative — most gateways settle UPI/net-banking at T+1 and cards at T+2, excluding bank holidays. Same-day/instant settlement is usually available for a transparent extra fee. Confirm your exact cycle with your acquirer.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Cycles are indicative - most gateways settle UPI/net-banking at T+1 and cards at T+2, excluding bank holidays. Same-day/instant settlement is usually available for a transparent extra fee. Confirm your exact cycle with your acquirer.</p>
     </div>
   );
 }
@@ -2259,7 +2259,7 @@ function TipRoundingConfig() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><IndianRupee size={14} className="text-[var(--color-primary)]" /> Tip &amp; Rounding Config</h2>
-        <p className="text-xs text-[var(--color-muted)]">Add an optional tip line and round the payable to a clean figure — the rounding goes to staff/charity as a transparent extra. Useful for cafes, salons and delivery.</p>
+        <p className="text-xs text-[var(--color-muted)]">Add an optional tip line and round the payable to a clean figure - the rounding goes to staff/charity as a transparent extra. Useful for cafes, salons and delivery.</p>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Bill amount ₹</label>
           <input type="number" min={0} value={bill} onChange={e => setBill(e.target.value)} placeholder="850" className={`${INP} max-w-xs`} />
@@ -2321,7 +2321,7 @@ function TipRoundingConfig() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Tips and round-ups should be optional and clearly itemised — never auto-added without consent. The tip line can be routed to a staff payout pool in your bulk-payout file.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Tips and round-ups should be optional and clearly itemised - never auto-added without consent. The tip line can be routed to a staff payout pool in your bulk-payout file.</p>
     </div>
   );
 }
@@ -2339,7 +2339,7 @@ function UtrReconciliation() {
   const add = () => {
     const a = parseFloat(amount);
     if (!utr.trim() || isNaN(a) || a <= 0) { toast.error("Enter a UTR / RRN and amount"); return; }
-    if (!utrValid(utr)) { toast.error("UTR/RRN is typically 12–22 alphanumeric chars"); return; }
+    if (!utrValid(utr)) { toast.error("UTR/RRN is typically 12-22 alphanumeric chars"); return; }
     setRows([...rows, { id: crypto.randomUUID(), utr: utr.trim().toUpperCase(), amount: a, expected: side === "expected", note: note.trim() }]);
     setUtr(""); setAmount(""); setNote("");
     toast.success("Entry added");
@@ -2372,7 +2372,7 @@ function UtrReconciliation() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><FileSearch size={14} className="text-[var(--color-primary)]" /> Payout Reconciliation by UTR</h2>
-        <p className="text-xs text-[var(--color-muted)]">Match expected payouts to actual bank credits by UTR / RRN. Add both your expected entries and the credits from your statement — we flag missing, unexpected and amount-mismatched UTRs.</p>
+        <p className="text-xs text-[var(--color-muted)]">Match expected payouts to actual bank credits by UTR / RRN. Add both your expected entries and the credits from your statement - we flag missing, unexpected and amount-mismatched UTRs.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">UTR / RRN</label>
@@ -2427,10 +2427,10 @@ function UtrReconciliation() {
                 {evaluated.map(e => (
                   <tr key={e.utr} className={`hover:bg-white/2 ${e.status === "mismatch" ? "bg-red-950/10" : ""}`}>
                     <td className="px-4 py-2.5 font-mono text-[11px]">{e.utr}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{e.exp ? formatCurrency(e.exp.amount) : <span className="text-[var(--color-muted)]">—</span>}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{e.rec ? formatCurrency(e.rec.amount) : <span className="text-[var(--color-muted)]">—</span>}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{e.exp ? formatCurrency(e.exp.amount) : <span className="text-[var(--color-muted)]">-</span>}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{e.rec ? formatCurrency(e.rec.amount) : <span className="text-[var(--color-muted)]">-</span>}</td>
                     <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[e.status]}`}>{e.status}</span></td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{e.note || "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{e.note || "-"}</td>
                     <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.utr !== e.utr))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
@@ -2490,7 +2490,7 @@ function NachRegister() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><FileCheck size={14} className="text-[var(--color-primary)]" /> NACH / e-NACH Mandate Register</h2>
-        <p className="text-xs text-[var(--color-muted)]">Maintain the formal mandate paperwork — UMRN, sponsor &amp; destination bank, validity window and approval state — for every NACH / e-NACH debit you sponsor. Distinct from the live AutoPay tracker; this is your register of record.</p>
+        <p className="text-xs text-[var(--color-muted)]">Maintain the formal mandate paperwork - UMRN, sponsor &amp; destination bank, validity window and approval state - for every NACH / e-NACH debit you sponsor. Distinct from the live AutoPay tracker; this is your register of record.</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">UMRN</label>
@@ -2575,13 +2575,13 @@ function NachRegister() {
                   const daysLeft = differenceInCalendarDays(new Date(r.end), new Date());
                   return (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-mono text-[11px]">{r.umrn || "—"}</td>
+                      <td className="px-4 py-2.5 font-mono text-[11px]">{r.umrn || "-"}</td>
                       <td className="px-4 py-2.5 font-medium">{r.customer} <span className="text-[9px] text-[var(--color-muted)]">{r.mode === "e-mandate" ? "e-NACH" : "physical"}</span></td>
                       <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
                       <td className="px-4 py-2.5 capitalize text-[var(--color-muted)]">{r.freq.replace("-", " ")}</td>
-                      <td className="px-4 py-2.5 text-[11px] text-[var(--color-muted)]">{r.sponsorBank || "—"} → {r.debitBank || "—"}</td>
+                      <td className="px-4 py-2.5 text-[11px] text-[var(--color-muted)]">{r.sponsorBank || "-"} → {r.debitBank || "-"}</td>
                       <td className="px-4 py-2.5 tabular-nums text-[11px]">
-                        {format(new Date(r.start), "MMM yy")}–{format(new Date(r.end), "MMM yy")}
+                        {format(new Date(r.start), "MMM yy")}-{format(new Date(r.end), "MMM yy")}
                         {r.status === "active" && daysLeft <= 30 && <span className="ml-1 text-[9px] text-orange-400">{daysLeft < 0 ? "expired" : `${daysLeft}d`}</span>}
                       </td>
                       <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
@@ -2631,7 +2631,7 @@ function GatewayComparator() {
     const fee = mdr + flatTotal;
     const gst = fee * 0.18;
     const totalCost = fee + gst;
-    // realised GMV factors in success rate — failed attempts are lost / retried elsewhere
+    // realised GMV factors in success rate - failed attempts are lost / retried elsewhere
     const realisedGmv = vol * g.successPct / 100;
     // effective cost as % of realised volume
     const effPct = realisedGmv > 0 ? totalCost / realisedGmv * 100 : 0;
@@ -2644,7 +2644,7 @@ function GatewayComparator() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Payment-Gateway Comparator</h2>
-        <p className="text-xs text-[var(--color-muted)]">Compare acquirers on true cost — MDR % plus per-txn flat fee plus 18% GST — and weight it by success rate and settlement speed. The lowest sticker rate isn't always the cheapest once declines are priced in.</p>
+        <p className="text-xs text-[var(--color-muted)]">Compare acquirers on true cost - MDR % plus per-txn flat fee plus 18% GST - and weight it by success rate and settlement speed. The lowest sticker rate isn't always the cheapest once declines are priced in.</p>
         <div className="grid grid-cols-2 gap-3 max-w-md">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Monthly volume ₹</label>
@@ -2701,7 +2701,7 @@ function GatewayComparator() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Effective cost % = (MDR + flat fees + 18% GST) ÷ realised GMV, where realised GMV discounts the volume lost to declines. A gateway with a higher sticker MDR but better success can net out cheaper. Faster settlement (lower T+n) frees working capital — weigh it against cost.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Effective cost % = (MDR + flat fees + 18% GST) ÷ realised GMV, where realised GMV discounts the volume lost to declines. A gateway with a higher sticker MDR but better success can net out cheaper. Faster settlement (lower T+n) frees working capital - weigh it against cost.</p>
     </div>
   );
 }
@@ -2711,7 +2711,7 @@ type DunStep = { id: string; dayOffset: number; channel: "upi-autopay" | "whatsa
 function DunningLadder() {
   const [steps, setSteps] = useFeatureState<DunStep[]>("pay-dunning", [
     { id: "d1", dayOffset: 0, channel: "upi-autopay", action: "Auto re-present mandate (T+0)" },
-    { id: "d2", dayOffset: 1, channel: "whatsapp", action: "WhatsApp: 'Payment failed — tap to pay now'" },
+    { id: "d2", dayOffset: 1, channel: "whatsapp", action: "WhatsApp: 'Payment failed - tap to pay now'" },
     { id: "d3", dayOffset: 3, channel: "upi-autopay", action: "Second re-presentment after payday window" },
     { id: "d4", dayOffset: 5, channel: "sms", action: "SMS with fresh payment link" },
     { id: "d5", dayOffset: 7, channel: "call", action: "Human call + pause/cancel offer" },
@@ -2806,7 +2806,7 @@ function DunningLadder() {
             <p className="text-sm font-semibold mb-1">Ladder waterfall</p>
             {ladder.map((s, i) => (
               <div key={s.id} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
-                <span className="text-xs"><span className="text-[var(--color-muted)]">#{i + 1} · T+{s.dayOffset} · {CH_LABEL[s.channel]}</span> — {s.action}</span>
+                <span className="text-xs"><span className="text-[var(--color-muted)]">#{i + 1} · T+{s.dayOffset} · {CH_LABEL[s.channel]}</span> - {s.action}</span>
                 <span className="tabular-nums text-green-400 font-semibold whitespace-nowrap">+{formatCurrency(Math.round(s.recovered))}</span>
               </div>
             ))}
@@ -2817,7 +2817,7 @@ function DunningLadder() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Recovery percentages are planning heuristics — UPI AutoPay re-presentment and a human call typically recover the most. NPCI allows limited re-presentments per mandate cycle; spacing them around the 1st/payday lifts success. Offer pause over cancel to save the relationship.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Recovery percentages are planning heuristics - UPI AutoPay re-presentment and a human call typically recover the most. NPCI allows limited re-presentments per mandate cycle; spacing them around the 1st/payday lifts success. Offer pause over cancel to save the relationship.</p>
     </div>
   );
 }
@@ -2847,11 +2847,11 @@ function VirtualAccountAllocator() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Virtual-Account Allocator</h2>
-        <p className="text-xs text-[var(--color-muted)]">Mint a unique virtual account number and VPA per customer so every inbound NEFT/IMPS/UPI auto-tags to the right ledger — no more guessing who paid. Share each customer their own deterministic credentials.</p>
+        <p className="text-xs text-[var(--color-muted)]">Mint a unique virtual account number and VPA per customer so every inbound NEFT/IMPS/UPI auto-tags to the right ledger - no more guessing who paid. Share each customer their own deterministic credentials.</p>
         <div className="flex gap-2 items-end max-w-lg">
           <div className="flex-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer / cost-centre</label>
-            <input value={customer} onChange={e => setCustomer(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="Acme Retail — Pune" className={INP} />
+            <input value={customer} onChange={e => setCustomer(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="Acme Retail - Pune" className={INP} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
             <Plus size={13} /> Allocate
@@ -2916,7 +2916,7 @@ function PayeeVerifyLog() {
     const result: VerifyRow["result"] = match ? "verified" : "name-mismatch";
     setRows([{ id: crypto.randomUUID(), payee: payee.trim(), type, identifier: identifier.trim(), ifsc: ifsc.trim().toUpperCase(), nameAtBank: nameAtBank.trim(), checked: new Date().toISOString().split("T")[0], result }, ...rows]);
     setPayee(""); setIdentifier(""); setIfsc(""); setNameAtBank("");
-    if (match) toast.success("Name matches — safe to pay"); else toast.error("Name mismatch — do not pay until resolved");
+    if (match) toast.success("Name matches - safe to pay"); else toast.error("Name mismatch - do not pay until resolved");
   };
 
   const verified = rows.filter(r => r.result === "verified").length;
@@ -3002,7 +3002,7 @@ function PayeeVerifyLog() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Name matching here is a fuzzy check (ignores Pvt/Ltd/LLP and punctuation) — treat a mismatch as a hard stop and re-confirm with the payee. Penny-drop (a ₹1 credit) returns the registered account name; VPA name-check returns the UPI-registered name. Both prevent misdirected funds.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Name matching here is a fuzzy check (ignores Pvt/Ltd/LLP and punctuation) - treat a mismatch as a hard stop and re-confirm with the payee. Penny-drop (a ₹1 credit) returns the registered account name; VPA name-check returns the UPI-registered name. Both prevent misdirected funds.</p>
     </div>
   );
 }
@@ -3072,8 +3072,8 @@ function InstantSettleCalculator() {
             <p className={`text-sm font-bold flex items-center gap-2 ${worthIt ? "text-green-400" : "text-orange-400"}`}>
               {worthIt ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
               {worthIt
-                ? `Opt in — bringing ${formatCurrency(amt)} forward ${days} day(s) is worth ${formatCurrency(Math.round(carryValue))}, more than the ${formatCurrency(Math.round(totalFee))} fee.`
-                : `Skip it — the ${formatCurrency(Math.round(totalFee))} fee exceeds the ${formatCurrency(Math.round(carryValue))} value of the cash arriving ${days} day(s) early. Only worthwhile if your effective cost of capital is above ${breakevenApr.toFixed(1)}%.`}
+                ? `Opt in - bringing ${formatCurrency(amt)} forward ${days} day(s) is worth ${formatCurrency(Math.round(carryValue))}, more than the ${formatCurrency(Math.round(totalFee))} fee.`
+                : `Skip it - the ${formatCurrency(Math.round(totalFee))} fee exceeds the ${formatCurrency(Math.round(carryValue))} value of the cash arriving ${days} day(s) early. Only worthwhile if your effective cost of capital is above ${breakevenApr.toFixed(1)}%.`}
             </p>
           </div>
         </>
@@ -3134,7 +3134,7 @@ function DuplicateGuard() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><CopyCheck size={14} className="text-[var(--color-primary)]" /> Duplicate-Payment Guard</h2>
-        <p className="text-xs text-[var(--color-muted)]">Paste or add payments and we flag likely double-charges — same reference, or same customer + same amount within a tolerance window — so you can refund the extra before it becomes a complaint or chargeback.</p>
+        <p className="text-xs text-[var(--color-muted)]">Paste or add payments and we flag likely double-charges - same reference, or same customer + same amount within a tolerance window - so you can refund the extra before it becomes a complaint or chargeback.</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
@@ -3180,7 +3180,7 @@ function DuplicateGuard() {
         <div className="space-y-3">
           {flagged.groups.map((g, gi) => (
             <div key={gi} className={`${CARD} p-4 border-orange-800/40`}>
-              <p className="text-xs font-semibold text-orange-400 flex items-center gap-1.5 mb-2"><AlertTriangle size={12} /> Possible duplicate — {g.length} payments of {formatCurrency(g[0].amount)} {g[0].ref ? `· ref ${g[0].ref}` : `to ${g[0].customer}`}</p>
+              <p className="text-xs font-semibold text-orange-400 flex items-center gap-1.5 mb-2"><AlertTriangle size={12} /> Possible duplicate - {g.length} payments of {formatCurrency(g[0].amount)} {g[0].ref ? `· ref ${g[0].ref}` : `to ${g[0].customer}`}</p>
               <div className="space-y-1">
                 {g.map((e, ei) => (
                   <div key={e.id} className="flex items-center justify-between text-xs">
@@ -3210,7 +3210,7 @@ function DuplicateGuard() {
                   <tr key={e.id} className={`hover:bg-white/2 ${flagged.dupIds.has(e.id) ? "bg-orange-950/10" : ""}`}>
                     <td className="px-4 py-2.5 font-medium">{e.customer}</td>
                     <td className="px-4 py-2.5 tabular-nums">{formatCurrency(e.amount)}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{e.ref || "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{e.ref || "-"}</td>
                     <td className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(e.date), "d MMM")}</td>
                     <td className="px-4 py-2.5">{flagged.dupIds.has(e.id) ? <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-orange-800/40 bg-orange-900/30 text-orange-400">dupe?</span> : <span className="text-[10px] text-green-400">ok</span>}</td>
                     <td className="px-4 py-2.5 text-right"><button onClick={() => setEntries(entries.filter(x => x.id !== e.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
@@ -3221,7 +3221,7 @@ function DuplicateGuard() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Heuristic match: identical non-empty reference, or same customer + same amount within the tolerance window. Genuine repeat purchases can trip this — review each group before refunding. Refund the extra charge to the original instrument and issue a GST credit note if the sale was taxed.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Heuristic match: identical non-empty reference, or same customer + same amount within the tolerance window. Genuine repeat purchases can trip this - review each group before refunding. Refund the extra charge to the original instrument and issue a GST credit note if the sale was taxed.</p>
     </div>
   );
 }
@@ -3257,7 +3257,7 @@ function FeeTierModeler() {
       const slab = Math.max(0, Math.min(remaining, bandTop - prevCeil));
       if (slab > 0) {
         const f = slab * t.ratePct / 100;
-        breakdown.push({ band: `${formatCurrency(prevCeil)} – ${formatCurrency(bandTop)}`, amount: slab, ratePct: t.ratePct, fee: f });
+        breakdown.push({ band: `${formatCurrency(prevCeil)} - ${formatCurrency(bandTop)}`, amount: slab, ratePct: t.ratePct, fee: f });
         fee += f; remaining -= slab;
       }
       prevCeil = bandTop;
@@ -3294,7 +3294,7 @@ function FeeTierModeler() {
       </div>
 
       {sorted.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No tiers yet. Add your gateway's slab card — e.g. 2.0% up to ₹5L, 1.8% up to ₹20L, 1.5% above.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">No tiers yet. Add your gateway's slab card - e.g. 2.0% up to ₹5L, 1.8% up to ₹20L, 1.5% above.</p>
       ) : (
         <div className={`${CARD} p-5 space-y-4`}>
           <div className="flex flex-wrap gap-2">
@@ -3376,7 +3376,7 @@ function PaymentAllocator() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><ArrowDownUp size={14} className="text-[var(--color-primary)]" /> Partial-Payment Allocation</h2>
-        <p className="text-xs text-[var(--color-muted)]">A customer paid a lump sum that doesn't match any one invoice. List the open invoices, enter what landed, and decide whether to clear oldest-first or split pro-rata — then post clean part-payments to each bill.</p>
+        <p className="text-xs text-[var(--color-muted)]">A customer paid a lump sum that doesn't match any one invoice. List the open invoices, enter what landed, and decide whether to clear oldest-first or split pro-rata - then post clean part-payments to each bill.</p>
         <div className="flex gap-2 items-end flex-wrap">
           <div className="w-40">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice #</label>
@@ -3448,7 +3448,7 @@ function RollingReserveTracker() {
   const add = () => {
     const g = Number(gross), p = Number(pct), h = Number(holdMonths);
     if (!Number.isFinite(g) || g <= 0) { toast.error("Enter the month's gross processed volume"); return; }
-    if (!Number.isFinite(p) || p < 0 || p > 100) { toast.error("Reserve % must be 0–100"); return; }
+    if (!Number.isFinite(p) || p < 0 || p > 100) { toast.error("Reserve % must be 0-100"); return; }
     if (!Number.isFinite(h) || h < 1) { toast.error("Hold period must be at least 1 month"); return; }
     if (rows.some(r => r.month === month)) { toast.error("That month is already tracked"); return; }
     const release = format(addMonths(new Date(month + "-01"), h), "yyyy-MM");
@@ -3466,7 +3466,7 @@ function RollingReserveTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><PiggyBank size={14} className="text-[var(--color-primary)]" /> Rolling-Reserve Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)]">High-risk merchants and new accounts often have a slice of every settlement withheld as a rolling reserve, released months later. Log each month's hold so you can forecast the cash that frees up — and chase releases the gateway forgets.</p>
+        <p className="text-xs text-[var(--color-muted)]">High-risk merchants and new accounts often have a slice of every settlement withheld as a rolling reserve, released months later. Log each month's hold so you can forecast the cash that frees up - and chase releases the gateway forgets.</p>
         <div className="flex gap-2 items-end flex-wrap">
           <div className="w-36">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Month</label>
@@ -3530,7 +3530,7 @@ function RollingReserveTracker() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Reserves are your money sitting in the gateway's escrow — treat them as a receivable, not an expense. A clean chargeback history is your strongest lever to get the % cut or the hold period shortened at renewal.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Reserves are your money sitting in the gateway's escrow - treat them as a receivable, not an expense. A clean chargeback history is your strongest lever to get the % cut or the hold period shortened at renewal.</p>
     </div>
   );
 }
@@ -3559,7 +3559,7 @@ function MethodDowntimeLog() {
   const worst = useMemo(() => {
     const map = new Map<string, number>();
     for (const r of rows) map.set(r.method, (map.get(r.method) ?? 0) + r.minutes);
-    let name = "—", mins = 0;
+    let name = "-", mins = 0;
     for (const [k, v] of map) if (v > mins) { name = k; mins = v; }
     return { name, mins };
   }, [rows]);
@@ -3599,7 +3599,7 @@ function MethodDowntimeLog() {
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No outages logged. Capture each one as it happens — exact start time and lost value are your strongest SLA evidence.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">No outages logged. Capture each one as it happens - exact start time and lost value are your strongest SLA evidence.</p>
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -3624,8 +3624,8 @@ function MethodDowntimeLog() {
                       <td className="px-4 py-2.5 font-medium">{r.method}</td>
                       <td className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(r.start), "d MMM HH:mm")}</td>
                       <td className="px-4 py-2.5 tabular-nums">{r.minutes} min</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.failedTxns || "—"}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.lostValue ? formatCurrency(r.lostValue) : "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.failedTxns || "-"}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.lostValue ? formatCurrency(r.lostValue) : "-"}</td>
                       <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                     </tr>
                   ))}
@@ -3660,9 +3660,9 @@ function MandateRetryPlanner() {
 
   const attempts = useMemo(() => {
     const list: { label: string; date: Date; rationale: string }[] = [
-      { label: "Retry 1 — T+1", date: new Date(base.getTime() + 1 * 864e5), rationale: "Catch a same-cycle top-up before the balance moves again" },
-      { label: "Retry 2 — payday +1", date: new Date(nextPayday.getTime() + 1 * 864e5), rationale: "Salary has landed — highest success window" },
-      { label: "Retry 3 — payday +3", date: new Date(nextPayday.getTime() + 3 * 864e5), rationale: "Final attempt before flagging for manual collection" },
+      { label: "Retry 1 - T+1", date: new Date(base.getTime() + 1 * 864e5), rationale: "Catch a same-cycle top-up before the balance moves again" },
+      { label: "Retry 2 - payday +1", date: new Date(nextPayday.getTime() + 1 * 864e5), rationale: "Salary has landed - highest success window" },
+      { label: "Retry 3 - payday +3", date: new Date(nextPayday.getTime() + 3 * 864e5), rationale: "Final attempt before flagging for manual collection" },
     ];
     return list;
   }, [base, nextPayday]);
@@ -3671,7 +3671,7 @@ function MandateRetryPlanner() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><RefreshCw size={14} className="text-[var(--color-primary)]" /> Mandate Retry Planner</h2>
-        <p className="text-xs text-[var(--color-muted)]">A failed AutoPay debit is usually just an empty balance, not a lost customer. This schedules re-presentments around the payer's next payday — when money is most likely to be there.</p>
+        <p className="text-xs text-[var(--color-muted)]">A failed AutoPay debit is usually just an empty balance, not a lost customer. This schedules re-presentments around the payer's next payday - when money is most likely to be there.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Debit amount ₹</label>
@@ -3702,7 +3702,7 @@ function MandateRetryPlanner() {
                   <td className="px-4 py-2.5 font-medium">{a.label}</td>
                   <td className="px-4 py-2.5 tabular-nums">{format(a.date, "EEE d MMM")}</td>
                   <td className="px-4 py-2.5 text-[var(--color-muted)] text-[11px]">{a.rationale}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{amt > 0 ? formatCurrency(amt) : "—"}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{amt > 0 ? formatCurrency(amt) : "-"}</td>
                 </tr>
               ))}
             </tbody>
@@ -3713,7 +3713,7 @@ function MandateRetryPlanner() {
         className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">
         <Copy size={12} /> Copy schedule
       </button>
-      <p className="text-[10px] text-[var(--color-muted)]">UPI AutoPay and e-NACH cap the number of re-presentments per mandate cycle — don't burn all attempts on day one. A 24h pre-debit notification is still required before each retry; pair this with the Dunning Ladder for the messaging.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">UPI AutoPay and e-NACH cap the number of re-presentments per mandate cycle - don't burn all attempts on day one. A 24h pre-debit notification is still required before each retry; pair this with the Dunning Ladder for the messaging.</p>
     </div>
   );
 }
@@ -3722,13 +3722,13 @@ function MandateRetryPlanner() {
 function DeclineDecoder() {
   const [q, setQ] = useState("");
   const CODES: { code: string; aliases: string[]; meaning: string; fix: string; retry: "yes" | "no" | "later" }[] = [
-    { code: "INSUFFICIENT_FUNDS", aliases: ["51", "u30", "low balance"], meaning: "Payer's account/card didn't have enough balance.", fix: "Ask the customer to top up, then retry — or schedule around their payday.", retry: "later" },
-    { code: "DO_NOT_HONOUR", aliases: ["05", "decline"], meaning: "Issuing bank declined without a specific reason — often a soft risk block.", fix: "Retry once; if it repeats, ask the customer to contact their bank or use another method.", retry: "yes" },
+    { code: "INSUFFICIENT_FUNDS", aliases: ["51", "u30", "low balance"], meaning: "Payer's account/card didn't have enough balance.", fix: "Ask the customer to top up, then retry - or schedule around their payday.", retry: "later" },
+    { code: "DO_NOT_HONOUR", aliases: ["05", "decline"], meaning: "Issuing bank declined without a specific reason - often a soft risk block.", fix: "Retry once; if it repeats, ask the customer to contact their bank or use another method.", retry: "yes" },
     { code: "EXPIRED_CARD", aliases: ["54"], meaning: "The card on file has expired.", fix: "Collect a fresh card or switch the customer to UPI AutoPay.", retry: "no" },
-    { code: "AUTH_TIMEOUT", aliases: ["91", "u69", "no response"], meaning: "The bank or UPI app didn't respond in time.", fix: "Safe to retry immediately — this is usually transient.", retry: "yes" },
+    { code: "AUTH_TIMEOUT", aliases: ["91", "u69", "no response"], meaning: "The bank or UPI app didn't respond in time.", fix: "Safe to retry immediately - this is usually transient.", retry: "yes" },
     { code: "LIMIT_EXCEEDED", aliases: ["61", "u16"], meaning: "Transaction exceeds the per-txn or daily limit on the instrument.", fix: "Split into smaller amounts or ask the customer to raise their limit.", retry: "later" },
     { code: "MANDATE_NOT_FOUND", aliases: ["um", "revoked"], meaning: "The AutoPay mandate is paused, revoked or never activated.", fix: "Re-create the mandate; don't keep retrying against a dead one.", retry: "no" },
-    { code: "RISK_DECLINED", aliases: ["59", "fraud", "u67"], meaning: "Flagged by the bank or gateway risk engine.", fix: "Don't hammer retries — ask the customer to authenticate via their bank app first.", retry: "no" },
+    { code: "RISK_DECLINED", aliases: ["59", "fraud", "u67"], meaning: "Flagged by the bank or gateway risk engine.", fix: "Don't hammer retries - ask the customer to authenticate via their bank app first.", retry: "no" },
   ];
   const norm = q.trim().toLowerCase();
   const matches = norm === "" ? CODES : CODES.filter(c =>
@@ -3740,7 +3740,7 @@ function DeclineDecoder() {
     <div className="space-y-4 max-w-3xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><HelpCircle size={14} className="text-[var(--color-primary)]" /> Decline-Reason Decoder</h2>
-        <p className="text-xs text-[var(--color-muted)]">Acquirer error codes are cryptic — "05" or "U69" means nothing to counter staff. Search the code or symptom to get a plain-language meaning, the fix, and whether it's safe to retry.</p>
+        <p className="text-xs text-[var(--color-muted)]">Acquirer error codes are cryptic - "05" or "U69" means nothing to counter staff. Search the code or symptom to get a plain-language meaning, the fix, and whether it's safe to retry.</p>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Type a code (51, U30) or a symptom (low balance, expired)…" className={INP} />
       </div>
 
@@ -3761,7 +3761,7 @@ function DeclineDecoder() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Codes vary slightly by acquirer — these are the common mappings across major Indian gateways. When in doubt, the gateway's settlement report carries the canonical reason; never retry a hard decline (expired/revoked/risk) more than once.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Codes vary slightly by acquirer - these are the common mappings across major Indian gateways. When in doubt, the gateway's settlement report carries the canonical reason; never retry a hard decline (expired/revoked/risk) more than once.</p>
     </div>
   );
 }
@@ -3791,7 +3791,7 @@ function SettlementTdsTagger() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><ReceiptText size={14} className="text-[var(--color-primary)]" /> Settlement-TDS Tagger</h2>
-        <p className="text-xs text-[var(--color-muted)]">Marketplaces (194-O) and some gateways deduct TDS before they pay you out. That TDS is your credit — tag it here so it shows up in your 26AS reconciliation and isn't written off as a fee.</p>
+        <p className="text-xs text-[var(--color-muted)]">Marketplaces (194-O) and some gateways deduct TDS before they pay you out. That TDS is your credit - tag it here so it shows up in your 26AS reconciliation and isn't written off as a fee.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Settlement date</label>
@@ -3857,7 +3857,7 @@ function SettlementTdsTagger() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Section 194-O TDS on e-commerce is typically 0.1–1%. The deductor must file it against your PAN for the credit to appear in 26AS/AIS — chase a missing entry with the marketplace before you file your return.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Section 194-O TDS on e-commerce is typically 0.1-1%. The deductor must file it against your PAN for the credit to appear in 26AS/AIS - chase a missing entry with the marketplace before you file your return.</p>
     </div>
   );
 }
@@ -3897,7 +3897,7 @@ function PreAuthHoldTracker() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
-            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Room 204 — Mehta" className={INP} />
+            <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Room 204 - Mehta" className={INP} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Amount blocked ₹</label>
@@ -3970,7 +3970,7 @@ function PreAuthHoldTracker() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Card pre-auths typically lapse in 5–7 days (longer for hotels); after that you must re-auth, which can fail. Capture only the amount actually consumed — over-capturing beyond the held value usually needs a fresh authorization.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Card pre-auths typically lapse in 5-7 days (longer for hotels); after that you must re-auth, which can fail. Capture only the amount actually consumed - over-capturing beyond the held value usually needs a fresh authorization.</p>
     </div>
   );
 }
@@ -4056,12 +4056,12 @@ function CodToPrepaidSaver() {
           </div>
           <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
             <p className="text-sm font-bold text-green-400 flex items-center gap-2">
-              <TrendingUp size={14} /> Converting {convertPct}% of COD to prepaid saves about {formatCurrency(Math.round(totalSaved))}/month in shipping &amp; fees — roughly {formatCurrency(Math.round(totalSaved * 12))} a year — before counting the working capital freed from cash-in-transit.
+              <TrendingUp size={14} /> Converting {convertPct}% of COD to prepaid saves about {formatCurrency(Math.round(totalSaved))}/month in shipping &amp; fees - roughly {formatCurrency(Math.round(totalSaved * 12))} a year - before counting the working capital freed from cash-in-transit.
             </p>
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A small prepaid discount (₹20–50) often pays for itself many times over against RTO cost. Send a UPI link the moment the order is placed and again before dispatch; prepaid orders also return far less often than COD.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A small prepaid discount (₹20-50) often pays for itself many times over against RTO cost. Send a UPI link the moment the order is placed and again before dispatch; prepaid orders also return far less often than COD.</p>
     </div>
   );
 }
@@ -4095,7 +4095,7 @@ function FeeGstItcTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><ReceiptIndianRupee size={14} className="text-[var(--color-primary)]" /> Gateway-Fee GST &amp; ITC Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)]">Payment gateways charge 18% GST on their processing fee — and you can claim it back as input tax credit. Log each month's fee so the ITC shows up in your GSTR-3B instead of leaking away.</p>
+        <p className="text-xs text-[var(--color-muted)]">Payment gateways charge 18% GST on their processing fee - and you can claim it back as input tax credit. Log each month's fee so the ITC shows up in your GSTR-3B instead of leaking away.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Month</label>
@@ -4163,7 +4163,7 @@ function FeeGstItcTracker() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">ITC is claimable only if the gateway's GSTIN and your invoice details match what's filed in their GSTR-1 and reflected in your GSTR-2B. Reconcile this log against 2B before claiming, and keep the tax invoice — not just the settlement statement — on file.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">ITC is claimable only if the gateway's GSTIN and your invoice details match what's filed in their GSTR-1 and reflected in your GSTR-2B. Reconcile this log against 2B before claiming, and keep the tax invoice - not just the settlement statement - on file.</p>
     </div>
   );
 }
@@ -4208,7 +4208,7 @@ function PennyDropVerifier() {
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Account number</label>
             <input value={account} onChange={e => setAccount(e.target.value)} inputMode="numeric" placeholder="50100123456789" className={INP} />
-            {account.trim() !== "" && !acctValid && <p className="text-[10px] text-red-400 mt-1">6–18 digits</p>}
+            {account.trim() !== "" && !acctValid && <p className="text-[10px] text-red-400 mt-1">6-18 digits</p>}
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">IFSC</label>
@@ -4221,7 +4221,7 @@ function PennyDropVerifier() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button onClick={() => add("verified")} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-xs font-medium"><CheckCircle2 size={12} /> Name matches — verify</button>
+          <button onClick={() => add("verified")} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-xs font-medium"><CheckCircle2 size={12} /> Name matches - verify</button>
           <button onClick={() => add("mismatch")} className="flex items-center gap-1.5 bg-[var(--color-accent)] border border-[var(--color-border)] text-[var(--color-text)] rounded-lg px-3 py-2 text-xs hover:border-yellow-800/40">Name mismatch</button>
           <button onClick={() => add("failed")} className="flex items-center gap-1.5 bg-[var(--color-accent)] border border-[var(--color-border)] text-[var(--color-text)] rounded-lg px-3 py-2 text-xs hover:border-red-800/40">Drop failed</button>
         </div>
@@ -4259,7 +4259,7 @@ function PennyDropVerifier() {
                     <td className="px-4 py-2.5 font-medium">{r.payee}</td>
                     <td className="px-4 py-2.5 tabular-nums text-[11px]">{r.account}</td>
                     <td className="px-4 py-2.5 font-mono text-[11px]">{r.ifsc}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[180px] truncate">{r.nameAtBank || "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[180px] truncate">{r.nameAtBank || "-"}</td>
                     <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
                     <td className="px-4 py-2.5 tabular-nums text-[11px] text-[var(--color-muted)]">{format(new Date(r.ts), "d MMM")}</td>
                     <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
@@ -4270,7 +4270,7 @@ function PennyDropVerifier() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A penny-drop costs a rupee or two per check but prevents a misdirected payout that's almost impossible to claw back. Treat a name mismatch as a hard stop — confirm the spelling with the payee before releasing funds.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A penny-drop costs a rupee or two per check but prevents a misdirected payout that's almost impossible to claw back. Treat a name mismatch as a hard stop - confirm the spelling with the payee before releasing funds.</p>
     </div>
   );
 }
@@ -4291,7 +4291,7 @@ function PayoutApprovalDesk() {
     const needsApproval = a >= threshold;
     setRows([{
       id: crypto.randomUUID(), payee: payee.trim(), amount: a, purpose: purpose.trim(),
-      requestedBy: requestedBy.trim() || "—", ts: new Date().toISOString(),
+      requestedBy: requestedBy.trim() || "-", ts: new Date().toISOString(),
       status: needsApproval ? "pending" : "approved",
     }, ...rows]);
     setPayee(""); setAmount(""); setPurpose("");
@@ -4373,7 +4373,7 @@ function PayoutApprovalDesk() {
                   <tr key={r.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 font-medium">{r.payee}</td>
                     <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{r.purpose || "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{r.purpose || "-"}</td>
                     <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.requestedBy}</td>
                     <td className="px-4 py-2.5 tabular-nums text-[11px] text-[var(--color-muted)]">{format(new Date(r.ts), "d MMM")}</td>
                     <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
@@ -4393,7 +4393,7 @@ function PayoutApprovalDesk() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Maker-checker is the single cheapest control against payout fraud and fat-finger errors. The person who raises a payout should never be the one who approves it — keep submit and approve in different hands.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Maker-checker is the single cheapest control against payout fraud and fat-finger errors. The person who raises a payout should never be the one who approves it - keep submit and approve in different hands.</p>
     </div>
   );
 }
@@ -4432,7 +4432,7 @@ function RecoveryAnalytics() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><LineChart size={14} className="text-[var(--color-primary)]" /> Failed-Payment Recovery Analytics</h2>
-        <p className="text-xs text-[var(--color-muted)]">A failed payment isn't lost revenue yet — most of it is recoverable with a timely retry or fresh link. Log failed cohorts by period or method to see how much you've clawed back and how much is still on the table.</p>
+        <p className="text-xs text-[var(--color-muted)]">A failed payment isn't lost revenue yet - most of it is recoverable with a timely retry or fresh link. Log failed cohorts by period or method to see how much you've clawed back and how much is still on the table.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Cohort (period / method)</label>
@@ -4501,7 +4501,7 @@ function RecoveryAnalytics() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Insufficient-balance and step-up declines recover best when retried 2–3 days after payday; hard declines (closed card, blocked account) rarely do. Use the Dunning Ladder and Mandate Retry tools to action the "still recoverable" pool.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Insufficient-balance and step-up declines recover best when retried 2-3 days after payday; hard declines (closed card, blocked account) rarely do. Use the Dunning Ladder and Mandate Retry tools to action the "still recoverable" pool.</p>
     </div>
   );
 }
@@ -4539,7 +4539,7 @@ function TipPoolingSplitter() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> Tip Pooling &amp; Staff Split</h2>
-        <p className="text-xs text-[var(--color-muted)]">Tips collected at checkout go into one pool — this splits them fairly across staff by share weight (e.g. full-timers 2, part-timers 1), to the rupee, with no money lost to rounding.</p>
+        <p className="text-xs text-[var(--color-muted)]">Tips collected at checkout go into one pool - this splits them fairly across staff by share weight (e.g. full-timers 2, part-timers 1), to the rupee, with no money lost to rounding.</p>
         <div className="flex items-end gap-2 flex-wrap">
           <div className="w-44">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Tip pool to split ₹</label>
@@ -4592,7 +4592,7 @@ function TipPoolingSplitter() {
                   <tr key={a.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 font-medium">{a.name}</td>
                     <td className="px-4 py-2.5 tabular-nums">{a.shares}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{totalShares > 0 ? `${(a.shares / totalShares * 100).toFixed(1)}%` : "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{totalShares > 0 ? `${(a.shares / totalShares * 100).toFixed(1)}%` : "-"}</td>
                     <td className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(a.paid)}</td>
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
                       <button onClick={() => copy(`${a.name}: ${formatCurrency(a.paid)}`, "Payout copied")} className="text-[10px] text-[var(--color-primary)] hover:underline mr-3">Copy</button>
@@ -4605,7 +4605,7 @@ function TipPoolingSplitter() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">The largest-share staffer absorbs the rounding remainder so the payouts always add back exactly to the pool. Disbursed tips are taxable as the recipients' income — keep this split sheet as the record behind each payout.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">The largest-share staffer absorbs the rounding remainder so the payouts always add back exactly to the pool. Disbursed tips are taxable as the recipients' income - keep this split sheet as the record behind each payout.</p>
     </div>
   );
 }

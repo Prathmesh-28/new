@@ -10,7 +10,7 @@ const platformConfig = require("../lib/platformConfig");
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant","sales"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
-// The SMB's own firm name — so a reminder a CUSTOMER receives is signed by the
+// The SMB's own firm name - so a reminder a CUSTOMER receives is signed by the
 // business, not the logged-in user's display name or a generic "your supplier".
 async function firmNameOf(tenantId) {
   try {
@@ -95,7 +95,7 @@ router.post("/", authenticate, canWrite, async (req, res) => {
   res.status(201).json(inv);
 });
 
-// PATCH /api/invoices/:id — update status
+// PATCH /api/invoices/:id - update status
 router.patch("/:id", authenticate, canWrite, async (req, res) => {
   const { status } = req.body;
   const valid = ["draft", "sent", "paid", "cancelled"];
@@ -110,7 +110,7 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
   res.json(inv);
 });
 
-// DELETE /api/invoices/:id — remove an invoice (and its line items), tenant-scoped.
+// DELETE /api/invoices/:id - remove an invoice (and its line items), tenant-scoped.
 // The Receivables page calls this to sync a deletion to the ledger.
 router.delete("/:id", authenticate, canWrite, async (req, res) => {
   const { rows: [inv] } = await pool.query(
@@ -122,7 +122,7 @@ router.delete("/:id", authenticate, canWrite, async (req, res) => {
   res.status(204).end();
 });
 
-// GET /api/invoices/:id/pdf — generate PDF with PDFKit
+// GET /api/invoices/:id/pdf - generate PDF with PDFKit
 router.get("/:id/pdf", authenticate, async (req, res) => {
   const { rows: [inv] } = await pool.query(
     `SELECT i.*, json_agg(ii ORDER BY ii.id) AS items
@@ -215,7 +215,7 @@ router.post("/:id/remind", authenticate, canWrite, async (req, res) => {
   const { id } = req.params;
   const tenantId = req.user.tenant_id;
   try {
-    // The invoice row already carries the customer's contact details — there is
+    // The invoice row already carries the customer's contact details - there is
     // no separate tenants table to join (the previous LEFT JOIN tenants crashed).
     const { rows } = await pool.query(
       `SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2`,
@@ -232,7 +232,7 @@ router.post("/:id/remind", authenticate, canWrite, async (req, res) => {
       [id, tenantId]
     ).catch(() => ({ rows: [{ n: 0 }] }));
     if (reminderCap > 0 && (recent[0]?.n ?? 0) >= reminderCap) {
-      return res.status(429).json({ error: `You've already sent ${reminderCap} reminders for this invoice in the last 7 days — give the customer some space before nudging again.` });
+      return res.status(429).json({ error: `You've already sent ${reminderCap} reminders for this invoice in the last 7 days - give the customer some space before nudging again.` });
     }
 
     const amount = Number(invoice.total_amount || 0);
@@ -253,7 +253,7 @@ router.post("/:id/remind", authenticate, canWrite, async (req, res) => {
         : "";
       delivered = await sendMail({
         to: invoice.customer_email,
-        subject: `Payment reminder — invoice ${invoice.invoice_number}`,
+        subject: `Payment reminder - invoice ${invoice.invoice_number}`,
         html: `<div style="font-family:system-ui,-apple-system,sans-serif"><p>${esc}</p>${payBtn}<p style="color:#8a8a8a;font-size:12px;margin-top:20px">Sent by ${sender}.</p></div>`,
       }).then(() => true).catch(() => false);
     }
@@ -278,7 +278,7 @@ router.post("/:id/remind", authenticate, canWrite, async (req, res) => {
       delivered,
       message: delivered
         ? `Reminder sent via ${channel}`
-        : `Reminder recorded (${channel} not delivered — provider not configured)`,
+        : `Reminder recorded (${channel} not delivered - provider not configured)`,
     });
   } catch (err) {
     console.error("remind error", err);
@@ -301,7 +301,7 @@ router.get("/:id/reminders", authenticate, async (req, res) => {
   }
 });
 
-// POST /api/invoices/:id/send — email invoice
+// POST /api/invoices/:id/send - email invoice
 router.post("/:id/send", authenticate, canWrite, async (req, res) => {
   const { rows: [inv] } = await pool.query(
     "SELECT * FROM invoices WHERE id=$1 AND tenant_id=$2",
@@ -312,7 +312,7 @@ router.post("/:id/send", authenticate, canWrite, async (req, res) => {
 
   await sendMail({
     to:      inv.customer_email,
-    subject: `Invoice ${inv.invoice_number} — ₹${parseFloat(inv.total_amount).toLocaleString("en-IN")}`,
+    subject: `Invoice ${inv.invoice_number} - ₹${parseFloat(inv.total_amount).toLocaleString("en-IN")}`,
     text:    `Please find your invoice ${inv.invoice_number} for ₹${parseFloat(inv.total_amount).toLocaleString("en-IN")}. Due by ${inv.due_date || "on receipt"}.`,
     html:    `<p>Dear ${inv.customer_name},</p><p>Please find your invoice <strong>${inv.invoice_number}</strong> for <strong>₹${parseFloat(inv.total_amount).toLocaleString("en-IN")}</strong>.</p><p>Due date: <strong>${inv.due_date || "On receipt"}</strong></p><p>Thank you for your business.</p>`,
   }).catch(() => {});
@@ -321,7 +321,7 @@ router.post("/:id/send", authenticate, canWrite, async (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/invoices/:id/upi-link — generate UPI QR (Razorpay optional, fallback to static UPI)
+// POST /api/invoices/:id/upi-link - generate UPI QR (Razorpay optional, fallback to static UPI)
 router.post("/:id/upi-link", authenticate, canWrite, async (req, res) => {
   const { rows: [inv] } = await pool.query(
     "SELECT i.*, kv.value AS kv FROM invoices i LEFT JOIN kv_store kv ON kv.tenant_id=i.tenant_id AND kv.namespace='app' AND kv.key='store' WHERE i.id=$1 AND i.tenant_id=$2",
@@ -330,10 +330,10 @@ router.post("/:id/upi-link", authenticate, canWrite, async (req, res) => {
   if (!inv) return res.status(404).json({ error: "Invoice not found" });
 
   const firm = inv.kv?.value?.firm ?? {};
-  // Never fabricate a payee VPA — a placeholder/wrong UPI id sends the customer's
+  // Never fabricate a payee VPA - a placeholder/wrong UPI id sends the customer's
   // money to the wrong place. Require the firm's real UPI ID (set in Settings).
   const upiId = firm.upiId || null;
-  if (!upiId) return res.status(400).json({ error: "Add your UPI ID in Settings before generating a payment link — we won't send a placeholder account to your customer." });
+  if (!upiId) return res.status(400).json({ error: "Add your UPI ID in Settings before generating a payment link - we won't send a placeholder account to your customer." });
   const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(firm.name || "")}&am=${inv.total_amount}&tn=${encodeURIComponent(inv.invoice_number)}&cu=INR`;
 
   let qrDataUrl = null;

@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES — shapes mirror backend/src/modules/books/{ops,closing,vouchertools,importer}.js
+// TYPES - shapes mirror backend/src/modules/books/{ops,closing,vouchertools,importer}.js
 // ─────────────────────────────────────────────────────────────────────────────
 type PeriodStatus = "OPEN" | "LOCKED" | "CLOSED";
 
@@ -137,7 +137,7 @@ function HowToUse() {
         <p className="text-sm font-semibold text-[var(--color-text)]">Period close &amp; year-end</p>
         <p>
           <b>Lock</b> a month to stop new postings into it (reversible); <b>close</b> it for hard finality.
-          Set your <b>opening balances</b> once at onboarding — a correct opening trial balance nets to zero.
+          Set your <b>opening balances</b> once at onboarding - a correct opening trial balance nets to zero.
           When the books are final, run the <b>year-end Period-Closing-Voucher</b>: it zeroes every P&amp;L
           ledger into Reserves &amp; Surplus and locks all 12 periods of that financial year.
           Use a <b>reversing journal</b> for accruals that auto-unwind on a later date.
@@ -211,7 +211,7 @@ export default function BooksClosingTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PERIODS — list 12 months + lock/close/reopen each
+// PERIODS - list 12 months + lock/close/reopen each
 // ─────────────────────────────────────────────────────────────────────────────
 function PeriodsCard({ fy }: { fy: string }) {
   const [rows, setRows] = useState<PeriodRow[]>([]);
@@ -293,7 +293,7 @@ function PeriodsCard({ fy }: { fy: string }) {
                   </td>
                   <td className="px-3 py-2.5"><StatusBadge status={status} /></td>
                   <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">
-                    {row?.locked_at ? new Date(row.locked_at).toLocaleDateString("en-IN") : "—"}
+                    {row?.locked_at ? new Date(row.locked_at).toLocaleDateString("en-IN") : "-"}
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-1.5">
@@ -349,7 +349,7 @@ function PeriodsCard({ fy }: { fy: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// YEAR-END CLOSE — Period-Closing-Voucher (zeroes P&L → Reserves, locks the FY)
+// YEAR-END CLOSE - Period-Closing-Voucher (zeroes P&L → Reserves, locks the FY)
 // ─────────────────────────────────────────────────────────────────────────────
 function YearEndCloseCard({ fy }: { fy: string }) {
   const [busy, setBusy] = useState(false);
@@ -361,7 +361,7 @@ function YearEndCloseCard({ fy }: { fy: string }) {
   const run = async () => {
     if (!isFy(fy)) { toast.error("Pick a financial year (YYYY-yy)"); return; }
     if (!window.confirm(
-      `Run the year-end Period-Closing-Voucher for FY ${fy}?\n\nThis posts a closing journal that zeroes every P&L ledger into Reserves & Surplus and LOCKS all 12 periods. It is idempotent — an already-closed FY is refused.`
+      `Run the year-end Period-Closing-Voucher for FY ${fy}?\n\nThis posts a closing journal that zeroes every P&L ledger into Reserves & Surplus and LOCKS all 12 periods. It is idempotent - an already-closed FY is refused.`
     )) return;
     setBusy(true);
     try {
@@ -405,7 +405,7 @@ function YearEndCloseCard({ fy }: { fy: string }) {
             <div className="flex justify-between">
               <span className="text-[var(--color-muted)]">Closing voucher</span>
               <span className="font-mono text-xs">
-                #{result.closingVoucher?.voucherNumber ?? "—"}
+                #{result.closingVoucher?.voucherNumber ?? "-"}
               </span>
             </div>
             <div className="flex justify-between">
@@ -420,7 +420,7 @@ function YearEndCloseCard({ fy }: { fy: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OPENING BALANCES — edit opening balance per ledger (bulk save)
+// OPENING BALANCES - edit opening balance per ledger (bulk save)
 // ─────────────────────────────────────────────────────────────────────────────
 interface OpeningEdit {
   ledgerId: string;
@@ -529,7 +529,7 @@ function OpeningBalancesCard() {
               {busy ? (
                 <tr><td colSpan={3} className="px-3 py-8 text-center text-[var(--color-muted)]">Loading ledgers…</td></tr>
               ) : edits.length === 0 ? (
-                <tr><td colSpan={3} className="px-3 py-8 text-center text-[var(--color-muted)]">No ledgers yet — create ledgers first.</td></tr>
+                <tr><td colSpan={3} className="px-3 py-8 text-center text-[var(--color-muted)]">No ledgers yet - create ledgers first.</td></tr>
               ) : (
                 edits.map((e) => (
                   <tr key={e.ledgerId} className={`border-b border-[var(--color-border)] last:border-b-0 ${e.dirty ? "bg-[var(--color-bg)]/40" : ""}`}>
@@ -578,7 +578,7 @@ function OpeningBalancesCard() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// IMPORT OPENING BALANCES — paste CSV (ledger, opening_balance, opening_is_debit)
+// IMPORT OPENING BALANCES - paste CSV (ledger, opening_balance, opening_is_debit)
 // ─────────────────────────────────────────────────────────────────────────────
 const OB_PLACEHOLDER =
   "ledger,opening_balance,opening_is_debit\nCash,50000,true\nState Bank of India,250000,true\nCapital A/c,300000,false";
@@ -634,7 +634,7 @@ function OpeningImportCard() {
       <div className="space-y-3">
         <div>
           <label className={labelCls}>
-            Paste rows (CSV: ledger, opening_balance, opening_is_debit — ledger may be a name or id)
+            Paste rows (CSV: ledger, opening_balance, opening_is_debit - ledger may be a name or id)
           </label>
           <textarea
             value={csv}
@@ -669,7 +669,7 @@ function OpeningImportCard() {
                 <ul className="text-xs space-y-0.5 max-h-32 overflow-y-auto">
                   {result.skipped.map((s, i) => (
                     <li key={i} className="text-[var(--color-muted)]">
-                      <span className="font-mono">{s.name}</span> — {s.reason}
+                      <span className="font-mono">{s.name}</span> - {s.reason}
                     </li>
                   ))}
                 </ul>
@@ -683,7 +683,7 @@ function OpeningImportCard() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REVERSING JOURNAL — post a journal + its auto-reversal on a later date
+// REVERSING JOURNAL - post a journal + its auto-reversal on a later date
 // ─────────────────────────────────────────────────────────────────────────────
 interface JLine { key: string; ledgerId: string; debit: string; credit: string }
 function newJLine(): JLine {
@@ -752,7 +752,7 @@ function ReversingJournalCard() {
     <Card title="Reversing journal" icon={<ListChecks size={15} />}>
       <div className="space-y-4">
         <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-xs text-[var(--color-muted)]">
-          Posts the journal on the entry date, then a mirror entry (debits ↔ credits) on the reverse date —
+          Posts the journal on the entry date, then a mirror entry (debits ↔ credits) on the reverse date -
           ideal for month-end accruals and provisions that should auto-unwind in the next period.
         </div>
 
@@ -828,8 +828,8 @@ function ReversingJournalCard() {
 
         {result && (
           <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-sm flex flex-wrap gap-x-6 gap-y-1">
-            <span><span className="text-[var(--color-muted)]">Posted:</span> <b className="font-mono">#{result.posted?.voucherNumber ?? "—"}</b></span>
-            <span><span className="text-[var(--color-muted)]">Auto-reversal:</span> <b className="font-mono">#{result.reversal?.voucherNumber ?? "—"}</b></span>
+            <span><span className="text-[var(--color-muted)]">Posted:</span> <b className="font-mono">#{result.posted?.voucherNumber ?? "-"}</b></span>
+            <span><span className="text-[var(--color-muted)]">Auto-reversal:</span> <b className="font-mono">#{result.reversal?.voucherNumber ?? "-"}</b></span>
           </div>
         )}
       </div>

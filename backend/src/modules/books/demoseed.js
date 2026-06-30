@@ -1,11 +1,11 @@
-// §DEMO — investor-demo data seeder. Populates the books module for a tenant with
+// §DEMO - investor-demo data seeder. Populates the books module for a tenant with
 // a realistic FY2025-26 dataset: a few customers/vendors, ~6 sales invoices, ~4
 // purchase bills, receipt/payment vouchers, manual journals, inventory items with
 // opening stock, a subscription plan + active subscription + usage events, and a
 // GST output rate.
 //
 // EVERYTHING routes through the REAL module functions (the same posting engine,
-// mappers and masters the HTTP API uses) — nothing writes the ledger tables
+// mappers and masters the HTTP API uses) - nothing writes the ledger tables
 // directly except party/bank ledger masters, which are created with an idempotent
 // ON CONFLICT INSERT exactly the way http.js POST /ledgers does.
 //
@@ -44,14 +44,14 @@ function ik(tenantId, tag) {
 }
 
 // Create (or fetch) a ledger master by name under a named group. Idempotent via
-// ON CONFLICT(tenant_id,name) DO NOTHING — mirrors http.js POST /ledgers. Returns
+// ON CONFLICT(tenant_id,name) DO NOTHING - mirrors http.js POST /ledgers. Returns
 // the ledger id (existing or newly inserted).
 async function ensureLedger(tenantId, name, groupName, extra = {}) {
   const { rows: g } = await pool.query(
     "SELECT id FROM book_account_groups WHERE tenant_id=$1 AND name=$2",
     [tenantId, groupName]
   );
-  if (!g[0]) throw new Error(`group "${groupName}" not found — seedBooks must run first`);
+  if (!g[0]) throw new Error(`group "${groupName}" not found - seedBooks must run first`);
   await pool.query(
     `INSERT INTO book_ledgers
        (tenant_id,name,group_id,is_party,is_bank,gstin,state_code,opening_balance,opening_is_debit)
@@ -95,17 +95,17 @@ async function seedDemo(tenantId, actorId) {
   }
 
   // ── 1. Party + bank ledgers ─────────────────────────────────────────────────
-  // Customers (Sundry Debtors) — a mix of in-state (27) and out-of-state buyers.
+  // Customers (Sundry Debtors) - a mix of in-state (27) and out-of-state buyers.
   const CUSTOMERS = [
-    { name: "Demo Customer — Acme Retail Pvt Ltd", stateCode: "27", gstin: "27AAAAA0000A1Z5", interState: false },
-    { name: "Demo Customer — Blue Ocean Traders",  stateCode: "29", gstin: "29BBBBB0000B1Z4", interState: true },
-    { name: "Demo Customer — Crest Solutions LLP",  stateCode: "27", gstin: "27CCCCC0000C1Z3", interState: false },
-    { name: "Demo Customer — Delta Enterprises",    stateCode: "07", gstin: "07DDDDD0000D1Z2", interState: true },
+    { name: "Demo Customer - Acme Retail Pvt Ltd", stateCode: "27", gstin: "27AAAAA0000A1Z5", interState: false },
+    { name: "Demo Customer - Blue Ocean Traders",  stateCode: "29", gstin: "29BBBBB0000B1Z4", interState: true },
+    { name: "Demo Customer - Crest Solutions LLP",  stateCode: "27", gstin: "27CCCCC0000C1Z3", interState: false },
+    { name: "Demo Customer - Delta Enterprises",    stateCode: "07", gstin: "07DDDDD0000D1Z2", interState: true },
   ];
   const VENDORS = [
-    { name: "Demo Vendor — Pioneer Supplies Co",    stateCode: "27", gstin: "27EEEEE0000E1Z1", interState: false },
-    { name: "Demo Vendor — Summit Components Pvt",   stateCode: "24", gstin: "24FFFFF0000F1Z9", interState: true },
-    { name: "Demo Vendor — Harbor Logistics",        stateCode: "27", gstin: "27GGGGG0000G1Z8", interState: false },
+    { name: "Demo Vendor - Pioneer Supplies Co",    stateCode: "27", gstin: "27EEEEE0000E1Z1", interState: false },
+    { name: "Demo Vendor - Summit Components Pvt",   stateCode: "24", gstin: "24FFFFF0000F1Z9", interState: true },
+    { name: "Demo Vendor - Harbor Logistics",        stateCode: "27", gstin: "27GGGGG0000G1Z8", interState: false },
   ];
 
   const customers = [];
@@ -128,7 +128,7 @@ async function seedDemo(tenantId, actorId) {
   // Bank ledger for receipts/payments (idempotent).
   let bankLedgerId = null;
   try {
-    bankLedgerId = await ensureLedger(tenantId, "Demo Bank — HDFC Current A/c", "Bank Accounts", { isBank: true });
+    bankLedgerId = await ensureLedger(tenantId, "Demo Bank - HDFC Current A/c", "Bank Accounts", { isBank: true });
   } catch (e) {
     note("bankLedger", e);
     // Fall back to seeded Cash ledger so downstream receipt/payment steps still run.
@@ -151,7 +151,7 @@ async function seedDemo(tenantId, actorId) {
     { cust: 0, date: "2025-10-09", lineTotal: 59500,  ref: "DEMO-INV-005", hsn: "8471" },
     { cust: 2, date: "2026-01-15", lineTotal: 91200,  ref: "DEMO-INV-006", hsn: "9983" },
   ];
-  const salesVouchers = []; // { voucherId, custId } — used to back the receipts.
+  const salesVouchers = []; // { voucherId, custId } - used to back the receipts.
   if (sCtxBase && customers.length) {
     for (const s of SALES) {
       const cust = customers[s.cust % customers.length];
@@ -181,7 +181,7 @@ async function seedDemo(tenantId, actorId) {
     { vend: 2, date: "2025-09-11", lineTotal: 15500, ref: "DEMO-BILL-003", hsn: "9965" },
     { vend: 0, date: "2025-12-01", lineTotal: 41000, ref: "DEMO-BILL-004", hsn: "8471" },
   ];
-  const purchaseVouchers = []; // { voucherId, vendId } — used to back the payments.
+  const purchaseVouchers = []; // { voucherId, vendId } - used to back the payments.
   if (pCtxBase && vendors.length) {
     for (const p of PURCHASES) {
       const vend = vendors[p.vend % vendors.length];
@@ -287,17 +287,17 @@ async function seedDemo(tenantId, actorId) {
   // movement needed). A duplicate name raises a unique violation (23505) which we
   // swallow so re-running is safe.
   const ITEMS = [
-    { name: "Demo Item — Wireless Mouse",   unit: "Nos", hsn: "8471", gstRate: 18, openingQty: 120, openingValue: 36000 },
-    { name: "Demo Item — Mechanical Keyboard", unit: "Nos", hsn: "8471", gstRate: 18, openingQty: 60,  openingValue: 48000 },
-    { name: "Demo Item — USB-C Cable",       unit: "Nos", hsn: "8544", gstRate: 18, openingQty: 500, openingValue: 25000 },
-    { name: "Demo Item — 27in Monitor",      unit: "Nos", hsn: "8528", gstRate: 18, openingQty: 25,  openingValue: 187500 },
+    { name: "Demo Item - Wireless Mouse",   unit: "Nos", hsn: "8471", gstRate: 18, openingQty: 120, openingValue: 36000 },
+    { name: "Demo Item - Mechanical Keyboard", unit: "Nos", hsn: "8471", gstRate: 18, openingQty: 60,  openingValue: 48000 },
+    { name: "Demo Item - USB-C Cable",       unit: "Nos", hsn: "8544", gstRate: 18, openingQty: 500, openingValue: 25000 },
+    { name: "Demo Item - 27in Monitor",      unit: "Nos", hsn: "8528", gstRate: 18, openingQty: 25,  openingValue: 187500 },
   ];
   for (const it of ITEMS) {
     try {
       await inventory.createItem(tenantId, it);
       created.items++;
     } catch (e) {
-      if (e && e.code === "23505") { /* already seeded — tolerate */ }
+      if (e && e.code === "23505") { /* already seeded - tolerate */ }
       else note(`item:${it.name}`, e);
     }
   }
@@ -308,13 +308,13 @@ async function seedDemo(tenantId, actorId) {
     // Reuse a previously-seeded demo plan if present (createPlan is not idempotent).
     const { rows: ep } = await pool.query(
       "SELECT id FROM book_subscription_plans WHERE tenant_id=$1 AND name=$2 LIMIT 1",
-      [tenantId, "Demo Plan — Pro (Monthly)"]
+      [tenantId, "Demo Plan - Pro (Monthly)"]
     );
     if (ep[0]) {
       planId = ep[0].id;
     } else {
       const plan = await subscriptions.createPlan(tenantId, {
-        name: "Demo Plan — Pro (Monthly)",
+        name: "Demo Plan - Pro (Monthly)",
         price: 2999, interval: "monthly", intervalCount: 1,
         gstRate: 18, hsnSac: "9983",
       });
@@ -361,7 +361,7 @@ async function seedDemo(tenantId, actorId) {
     }
   }
 
-  // ── 9. GST OUTPUT RATE (HSN → 18%) — upsert, idempotent ──────────────────────
+  // ── 9. GST OUTPUT RATE (HSN → 18%) - upsert, idempotent ──────────────────────
   try {
     await gst.setGstRate(tenantId, { hsn: "8471", rate: 18, description: "Demo: Automatic data processing machines (18%)" });
     created.gstRates++;

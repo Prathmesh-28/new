@@ -13,9 +13,9 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
     return await fetch(url, { ...options, signal: controller.signal });
   } catch (err: unknown) {
     if (err instanceof Error && err.name === "AbortError") {
-      throw new Error("Server is waking up — please try again in a few seconds.");
+      throw new Error("Server is waking up - please try again in a few seconds.");
     }
-    throw new Error("Cannot connect to server. If this is your first visit, the server may still be deploying — try again in 60 seconds.");
+    throw new Error("Cannot connect to server. If this is your first visit, the server may still be deploying - try again in 60 seconds.");
   } finally {
     clearTimeout(timer);
   }
@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers,
         body: JSON.stringify({ email, password }),
       },
-      65_000  // 65 s — enough for Render cold start
+      65_000  // 65 s - enough for Render cold start
     );
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: "Login failed" }));

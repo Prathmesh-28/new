@@ -13,7 +13,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // A lazy chunk that 404s after a deploy isn't a real crash — reload once.
+    // A lazy chunk that 404s after a deploy isn't a real crash - reload once.
     if (isChunkError(error.message)) { recoverFromChunkError(); return; }
     reportError(error.message, error.stack ?? info.componentStack ?? undefined);
   }

@@ -33,7 +33,7 @@ export const defaultConfig: AppStore = {
       namespaces: ["app", "forecast", "credit", "capital", "operations"],
     },
     {
-      // Finance lead / controller — runs day-to-day money but not cap table or team admin.
+      // Finance lead / controller - runs day-to-day money but not cap table or team admin.
       id: "finance_manager",
       label: "Finance Manager",
       accessibleTabs: ["dashboard", "transactions", "alerts", "receivables", "forecast", "analytics", "health", "cfo-brief", "invoices", "working-capital", "debt", "valuation", "statements", "gst", "tax", "budgets", "credit", "lenders", "payroll", "vendors", "suppliers", "operations", "spend", "connectors", "compliance", "scenarios", "collections", "benchmarks", "documents", "data", "books", "crm", "erp", "hrms", "insights"],
@@ -52,7 +52,7 @@ export const defaultConfig: AppStore = {
       namespaces: ["app", "forecast", "operations"],
     },
     {
-      // Customer-facing — invoices, receivables, collections. No costs/payroll/banking.
+      // Customer-facing - invoices, receivables, collections. No costs/payroll/banking.
       id: "sales",
       label: "Sales / Collections",
       accessibleTabs: ["dashboard", "invoices", "receivables", "collections", "alerts", "analytics", "benchmarks", "documents", "data", "books", "crm", "insights"],
@@ -72,7 +72,7 @@ export const defaultConfig: AppStore = {
       namespaces: ["app", "operations"],
     },
     {
-      // Read-only stakeholder — board member, mentor, prospective lender.
+      // Read-only stakeholder - board member, mentor, prospective lender.
       id: "viewer",
       label: "Viewer (Read-only)",
       accessibleTabs: ["dashboard", "analytics", "health", "cfo-brief", "forecast", "benchmarks"],
@@ -109,7 +109,7 @@ export const defaultConfig: AppStore = {
   orders:             [],
   inventory:          [],
   procurement:        [],
-  // Starter budget categories — editable presets; once the user changes them,
+  // Starter budget categories - editable presets; once the user changes them,
   // their saved set takes over (the KV load merges saved over these defaults).
   budgets: [
     { id: "payroll", category: "payroll", label: "Payroll",    monthlyLimit: 500000, color: "#3b82f6" },

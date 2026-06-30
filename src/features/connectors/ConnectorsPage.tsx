@@ -20,7 +20,7 @@ const PROVIDERS: {
   {
     id: "aa_network",
     name: "Account Aggregator (AA Network)",
-    desc: "RBI-mandated open banking. Fetch live bank statements via user consent — no credentials stored.",
+    desc: "RBI-mandated open banking. Fetch live bank statements via user consent - no credentials stored.",
     tag: "India Open Banking",
     icon: "🏦",
     setupFields: [
@@ -146,7 +146,7 @@ export default function ConnectorsPage() {
     const accountName = fields.accountName || provider.name;
     const id          = await persistConnector(setupFor, accountName);
     addConnector({ id, provider: setupFor, label: provider.name, accountName, status: "pending", lastSync: null, accountCount: 0, consentExpiry: null });
-    toast.success(`${provider.name} connector added — complete consent to activate.`);
+    toast.success(`${provider.name} connector added - complete consent to activate.`);
     setSetupFor(null); setFields({});
   };
 
@@ -162,11 +162,11 @@ export default function ConnectorsPage() {
       });
       toast.success(
         typeof res.synced === "number"
-          ? `Sync complete — ${res.synced} transaction${res.synced === 1 ? "" : "s"} pulled.`
+          ? `Sync complete - ${res.synced} transaction${res.synced === 1 ? "" : "s"} pulled.`
           : "Sync complete."
       );
     } catch (err) {
-      // Surface the real backend error (e.g. 503 "Set AA_CLIENT_ID…") — never fake a synced state.
+      // Surface the real backend error (e.g. 503 "Set AA_CLIENT_ID…") - never fake a synced state.
       const raw = err instanceof Error ? err.message : String(err);
       let msg = raw;
       const jsonStart = raw.indexOf("{");
@@ -324,7 +324,7 @@ export default function ConnectorsPage() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h3 className="text-sm font-semibold mb-2">🇮🇳 About Account Aggregator (AA Network)</h3>
         <p className="text-sm text-[var(--color-muted)] leading-relaxed mb-3">
-          The AA Network is India's RBI-mandated open banking framework. It lets you securely share bank statement data with Headroom via a one-time consent — no credentials or passwords shared. Supported by all major Indian banks including HDFC, ICICI, SBI, Axis, Kotak, and Yes Bank.
+          The AA Network is India's RBI-mandated open banking framework. It lets you securely share bank statement data with Headroom via a one-time consent - no credentials or passwords shared. Supported by all major Indian banks including HDFC, ICICI, SBI, Axis, Kotak, and Yes Bank.
         </p>
         <div className="grid grid-cols-3 gap-3">
           {[
@@ -341,7 +341,7 @@ export default function ConnectorsPage() {
         </div>
       </div>
 
-      {/* #166–#169 — Connector tools */}
+      {/* #166-#169 - Connector tools */}
       {([["bank-upi-feed", "Bank / UPI Feed", Banknote], ["gateway-recon", "Gateway Recon", GitCompareArrows], ["ecom-sync", "E-commerce Sync", ShoppingCart], ["sync-monitor", "Sync Monitor", Activity], ["conn-catalog", "Catalog", Store], ["conn-schedule", "Schedules", CalendarClock], ["conn-mapping", "Field Mapping", Workflow], ["conn-vault", "Credential Vault", KeyRound], ["conn-webhooks", "Webhooks", Webhook], ["conn-history", "Sync History", History], ["conn-erp-agent", "ERP Agent", Server], ["conn-gstn", "GSTN Portal", FileCheck2], ["conn-cost", "Cost Estimate", Calculator], ["conn-dataflow", "Data Flow", ShieldCheck], ["conn-environment", "Sandbox/Prod", FlaskConical], ["conn-pos", "POS System", CreditCard], ["conn-payroll", "Payroll Software", Wallet], ["conn-crm", "CRM", Users], ["conn-shipping", "Shipping / Logistics", Truck], ["conn-eway", "E-Way Bill API", Route], ["conn-awb", "Courier AWB / Labels", PackageCheck], ["conn-whatsapp-bsp", "WhatsApp BSP", MessageCircle], ["conn-fx-rates", "FX Rate Feed", Globe]] as const).map(([id, label, Icon]) => (
         <a key={id} href={`#${id}`} className="sr-only">{label} <Icon size={10} /></a>
       ))}
@@ -375,7 +375,7 @@ export default function ConnectorsPage() {
 const FC_INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
 // ── #166 Bank / UPI Feed Connector ──────────────────────────────────────────────
-// AA-style consent connect flow + simulated last-sync state. No real bank link —
+// AA-style consent connect flow + simulated last-sync state. No real bank link -
 // honest in-UI disclaimer; consent/sync is simulated client-side only.
 type FeedAccount = {
   id: string;
@@ -406,12 +406,12 @@ function BankUpiFeedConnector() {
     };
     setAccounts(prev => [acct, ...prev]);
     setFipName(""); setVpa("");
-    toast.success("Consent request raised — approve in your bank's AA app to activate (simulated).");
+    toast.success("Consent request raised - approve in your bank's AA app to activate (simulated).");
   };
 
   const approveConsent = (id: string) => {
     setAccounts(prev => prev.map(a => a.id === id ? { ...a, consentStatus: "active" } : a));
-    toast.success("Consent approved — feed is live.");
+    toast.success("Consent approved - feed is live.");
   };
 
   const syncNow = async (id: string) => {
@@ -444,7 +444,7 @@ function BankUpiFeedConnector() {
         <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">AA-based auto-pull · #166</span>
       </div>
       <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-        Raise an Account Aggregator consent to auto-pull bank statement &amp; UPI transactions. No credentials are stored —
+        Raise an Account Aggregator consent to auto-pull bank statement &amp; UPI transactions. No credentials are stored -
         you approve each consent in your bank's AA app.
       </p>
 
@@ -481,7 +481,7 @@ function BankUpiFeedConnector() {
 
       <div className="space-y-2">
         {accounts.length === 0 && (
-          <p className="text-xs text-[var(--color-muted)] text-center py-3 border border-dashed border-[var(--color-border)] rounded-lg">No feeds yet — start a consent above.</p>
+          <p className="text-xs text-[var(--color-muted)] text-center py-3 border border-dashed border-[var(--color-border)] rounded-lg">No feeds yet - start a consent above.</p>
         )}
         {accounts.map(a => {
           const statusUi = a.consentStatus === "active"
@@ -658,17 +658,17 @@ function PaymentGatewayReconciliation() {
                     <tr key={`ms-${r.ref}`}>
                       <td className="px-3 py-2 text-xs font-mono">{r.ref}</td>
                       <td className="px-3 py-2 text-xs tabular-nums">{formatCurrency(r.amount)}</td>
-                      <td className="px-3 py-2 text-xs text-[var(--color-muted)]">—</td>
-                      <td className="px-3 py-2 text-xs text-[var(--color-muted)]">—</td>
+                      <td className="px-3 py-2 text-xs text-[var(--color-muted)]">-</td>
+                      <td className="px-3 py-2 text-xs text-[var(--color-muted)]">-</td>
                       <td className="px-3 py-2 text-[10px] text-red-400">Not settled yet</td>
                     </tr>
                   ))}
                   {result.orphanSettlements.map(r => (
                     <tr key={`o-${r.ref}`}>
                       <td className="px-3 py-2 text-xs font-mono">{r.ref}</td>
-                      <td className="px-3 py-2 text-xs text-[var(--color-muted)]">—</td>
+                      <td className="px-3 py-2 text-xs text-[var(--color-muted)]">-</td>
                       <td className="px-3 py-2 text-xs tabular-nums">{formatCurrency(r.amount)}</td>
-                      <td className="px-3 py-2 text-xs text-[var(--color-muted)]">—</td>
+                      <td className="px-3 py-2 text-xs text-[var(--color-muted)]">-</td>
                       <td className="px-3 py-2 text-[10px] text-yellow-400">Payout with no order</td>
                     </tr>
                   ))}
@@ -677,7 +677,7 @@ function PaymentGatewayReconciliation() {
             </div>
           )}
           {result.mismatched.length === 0 && result.missingSettlement.length === 0 && result.orphanSettlements.length === 0 && (
-            <p className="text-xs text-green-400 flex items-center gap-1.5"><CheckCircle2 size={13} /> Fully reconciled — every order matches a settlement within tolerance.</p>
+            <p className="text-xs text-green-400 flex items-center gap-1.5"><CheckCircle2 size={13} /> Fully reconciled - every order matches a settlement within tolerance.</p>
           )}
         </>
       )}
@@ -721,11 +721,11 @@ function EcommerceMarketplaceSync() {
   const previewNet = preview.reduce((s, o) => s + o.net, 0);
 
   const importBatch = () => {
-    if (preview.length === 0) { toast.error("No valid rows found — check the CSV format."); return; }
+    if (preview.length === 0) { toast.error("No valid rows found - check the CSV format."); return; }
     const batch: EcomBatch = { id: generateId(), marketplace, importedAt: new Date().toISOString(), orders: preview };
     setBatches(prev => [batch, ...prev]);
     setCsv("");
-    toast.success(`Imported ${preview.length} ${marketplace} orders — net payout ${formatCurrency(previewNet)}.`);
+    toast.success(`Imported ${preview.length} ${marketplace} orders - net payout ${formatCurrency(previewNet)}.`);
   };
 
   const removeBatch = (id: string) => setBatches(prev => prev.filter(b => b.id !== id));
@@ -807,7 +807,7 @@ function EcommerceMarketplaceSync() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-3 py-2 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertCircle size={12} className="shrink-0 mt-px" />
-        Demo: CSV import only — no live Amazon SP-API / Flipkart connection. Net payout excludes TCS &amp; reserve holds.
+        Demo: CSV import only - no live Amazon SP-API / Flipkart connection. Net payout excludes TCS &amp; reserve holds.
       </div>
     </section>
   );
@@ -860,7 +860,7 @@ function ConnectorHealthMonitor() {
     const c = connectors.find(x => x.id === connectorId);
     if (c) updateConnector({ ...c, status: "connected", lastSync: new Date().toISOString() });
     setRetrying(null);
-    toast.success("Retry succeeded — connector back online.");
+    toast.success("Retry succeeded - connector back online.");
   };
 
   const HEALTH_UI: Record<string, { color: string; bg: string; label: string }> = {
@@ -898,7 +898,7 @@ function ConnectorHealthMonitor() {
 
       <div className="space-y-2">
         {rows.length === 0 && (
-          <p className="text-xs text-[var(--color-muted)] text-center py-3 border border-dashed border-[var(--color-border)] rounded-lg">No active connectors — connect one above to monitor it here.</p>
+          <p className="text-xs text-[var(--color-muted)] text-center py-3 border border-dashed border-[var(--color-border)] rounded-lg">No active connectors - connect one above to monitor it here.</p>
         )}
         {rows.map(({ c, health, failure }) => {
           const ui = HEALTH_UI[health];
@@ -949,7 +949,7 @@ const DemoNote = ({ children }: { children: ReactNode }) => (
 
 // ── Connector Catalog / Marketplace ───────────────────────────────────────────────
 // Browse a catalogue of integrations and "connect" them. Connection state is durable
-// per-app (useFeatureState) but entirely simulated — no real OAuth handshake.
+// per-app (useFeatureState) but entirely simulated - no real OAuth handshake.
 type CatalogItem = { id: string; name: string; category: string; icon: string; desc: string };
 const CATALOG: CatalogItem[] = [
   { id: "shopify", name: "Shopify", category: "E-commerce", icon: "🛍️", desc: "Sync store orders, refunds & payouts." },
@@ -994,7 +994,7 @@ function ConnectorCatalog() {
         <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{connectedCount} connected</span>
       </div>
       <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-        Browse Headroom's integration marketplace. Tap connect to add an integration — connections are remembered on this device.
+        Browse Headroom's integration marketplace. Tap connect to add an integration - connections are remembered on this device.
       </p>
 
       <div className="flex gap-2 flex-wrap">
@@ -1033,7 +1033,7 @@ function ConnectorCatalog() {
         })}
       </div>
 
-      <DemoNote>Demo: the marketplace is a static catalogue; "connect" stores a flag locally — no real OAuth or API handshake happens.</DemoNote>
+      <DemoNote>Demo: the marketplace is a static catalogue; "connect" stores a flag locally - no real OAuth or API handshake happens.</DemoNote>
     </section>
   );
 }
@@ -1045,7 +1045,7 @@ type SyncSchedule = { freq: "manual" | "hourly" | "daily" | "weekly"; hour: numb
 const FREQ_LABEL: Record<SyncSchedule["freq"], string> = { manual: "Manual only", hourly: "Every hour", daily: "Once a day", weekly: "Once a week" };
 
 function nextRun(s: SyncSchedule): string {
-  if (!s.enabled || s.freq === "manual") return "—";
+  if (!s.enabled || s.freq === "manual") return "-";
   const now = new Date();
   const next = new Date(now);
   if (s.freq === "hourly") { next.setHours(now.getHours() + 1, 0, 0, 0); }
@@ -1074,7 +1074,7 @@ function SyncScheduleConfig() {
       </p>
 
       {connectors.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] text-center py-3 border border-dashed border-[var(--color-border)] rounded-lg">No active connectors — connect one above to schedule its syncs.</p>
+        <p className="text-xs text-[var(--color-muted)] text-center py-3 border border-dashed border-[var(--color-border)] rounded-lg">No active connectors - connect one above to schedule its syncs.</p>
       ) : (
         <div className="space-y-2">
           {connectors.map(c => {
@@ -1203,7 +1203,7 @@ function FieldMappingStudio() {
 }
 
 // ── Credential Vault ──────────────────────────────────────────────────────────────
-// Store API keys/secrets per connector, masked by default. Stored in-browser only —
+// Store API keys/secrets per connector, masked by default. Stored in-browser only -
 // honest warning that this is NOT a production secret store.
 type Credential = { id: string; connector: string; keyName: string; secret: string; addedAt: string };
 
@@ -1276,7 +1276,7 @@ function CredentialVault() {
         })}
       </div>
 
-      <DemoNote>Security note: this demo stores secrets in your browser's local state only — NOT encrypted or production-safe. Never paste real live keys here.</DemoNote>
+      <DemoNote>Security note: this demo stores secrets in your browser's local state only - NOT encrypted or production-safe. Never paste real live keys here.</DemoNote>
     </section>
   );
 }
@@ -1308,9 +1308,9 @@ function WebhookRegistry() {
     const status = ok ? 200 : (Math.random() > 0.5 ? 500 : 0);
     setHooks(prev => prev.map(h => h.id === id ? { ...h, lastPing: new Date().toISOString(), lastStatus: status } : h));
     setPinging(null);
-    if (status === 200) toast.success("Test ping delivered — 200 OK (simulated).");
-    else if (status === 0) toast.error("Test ping failed — connection timed out (simulated).");
-    else toast.error(`Test ping failed — ${status} from endpoint (simulated).`);
+    if (status === 200) toast.success("Test ping delivered - 200 OK (simulated).");
+    else if (status === 0) toast.error("Test ping failed - connection timed out (simulated).");
+    else toast.error(`Test ping failed - ${status} from endpoint (simulated).`);
   };
 
   return (
@@ -1366,7 +1366,7 @@ function WebhookRegistry() {
         })}
       </div>
 
-      <DemoNote>Demo: test pings do not make a real HTTP request — the 200/500/timeout outcome is simulated client-side.</DemoNote>
+      <DemoNote>Demo: test pings do not make a real HTTP request - the 200/500/timeout outcome is simulated client-side.</DemoNote>
     </section>
   );
 }
@@ -1391,7 +1391,7 @@ function SyncHistoryTimeline() {
     const records = outcome === "failed" ? 0 : 3 + Math.floor(Math.random() * 60);
     setEvents(prev => [{ id: generateId(), connector: name, at: new Date().toISOString(), records, outcome }, ...prev].slice(0, 50));
     if (outcome === "success") toast.success(`${name}: pulled ${records} records.`);
-    else if (outcome === "partial") toast(`${name}: partial sync — ${records} records, some skipped.`);
+    else if (outcome === "partial") toast(`${name}: partial sync - ${records} records, some skipped.`);
     else toast.error(`${name}: sync failed.`);
   };
   const clear = () => { setEvents([]); toast.success("History cleared."); };
@@ -1495,7 +1495,7 @@ function ErpAgentConfig() {
       lastBeat: null,
     }, ...prev]);
     setCompany("");
-    toast.success("Agent profile created — paste the token into the on-prem sync agent to pair.");
+    toast.success("Agent profile created - paste the token into the on-prem sync agent to pair.");
   };
 
   const togglePush = (id: string, key: "pushVouchers" | "pushMasters") =>
@@ -1506,7 +1506,7 @@ function ErpAgentConfig() {
     await new Promise(r => setTimeout(r, 1100));
     setAgents(prev => prev.map(a => a.id === id ? { ...a, paired: true, lastBeat: new Date().toISOString() } : a));
     setBeating(null);
-    toast.success("Agent paired — heartbeat received (simulated).");
+    toast.success("Agent paired - heartbeat received (simulated).");
   };
 
   const heartbeat = async (id: string) => {
@@ -1514,7 +1514,7 @@ function ErpAgentConfig() {
     await new Promise(r => setTimeout(r, 800));
     setAgents(prev => prev.map(a => a.id === id ? { ...a, lastBeat: new Date().toISOString() } : a));
     setBeating(null);
-    toast.success("Heartbeat received — agent is online (simulated).");
+    toast.success("Heartbeat received - agent is online (simulated).");
   };
 
   const copyToken = (t: string) => { navigator.clipboard?.writeText(t); toast.success("Pairing token copied."); };
@@ -1602,14 +1602,14 @@ function ErpAgentConfig() {
         ))}
       </div>
 
-      <DemoNote>Demo: pairing tokens and heartbeats are generated locally — no agent actually connects to a Tally / Busy instance.</DemoNote>
+      <DemoNote>Demo: pairing tokens and heartbeats are generated locally - no agent actually connects to a Tally / Busy instance.</DemoNote>
     </section>
   );
 }
 
 // ── GSTN Portal Connect ─────────────────────────────────────────────────────────────
 // Simulated GST portal login (GSTIN + OTP) to enable returns / e-invoice pull. No real
-// GSTN / GSP call — OTP and session are faked client-side.
+// GSTN / GSP call - OTP and session are faked client-side.
 type GstnSession = { gstin: string; legalName: string; connectedAt: string; scopes: string[] };
 const GSTN_SCOPES = ["GSTR-1 (outward)", "GSTR-2B (ITC)", "GSTR-3B summary", "e-Invoice IRN", "e-Way bills"] as const;
 
@@ -1644,7 +1644,7 @@ function GstnPortalConnect() {
       scopes,
     });
     setOtpSent(false); setOtp(""); setGstin(""); setLegalName("");
-    toast.success("GSTN portal connected — returns can now sync.");
+    toast.success("GSTN portal connected - returns can now sync.");
   };
 
   const disconnect = () => {
@@ -1735,7 +1735,7 @@ function GstnPortalConnect() {
 
 // ── Integration Cost Estimator ──────────────────────────────────────────────────────
 // Estimate monthly cost of running connectors based on per-source pricing and expected
-// transaction volume. Pure client-side calculator — pricing is illustrative.
+// transaction volume. Pure client-side calculator - pricing is illustrative.
 type CostSource = { id: string; name: string; perTxn: number; monthlyFee: number; defaultVolume: number };
 const COST_SOURCES: CostSource[] = [
   { id: "aa", name: "Account Aggregator fetch", perTxn: 0.5, monthlyFee: 0, defaultVolume: 800 },
@@ -1813,7 +1813,7 @@ function IntegrationCostEstimator() {
         </div>
       </div>
 
-      <DemoNote>Demo: pricing figures are illustrative placeholders for budgeting only — they are not Headroom's commercial rates.</DemoNote>
+      <DemoNote>Demo: pricing figures are illustrative placeholders for budgeting only - they are not Headroom's commercial rates.</DemoNote>
     </section>
   );
 }
@@ -1860,7 +1860,7 @@ function DataFlowAudit() {
               <div>
                 <p className="text-[var(--color-muted)] mb-1 flex items-center gap-1"><ArrowDownUp size={10} className="rotate-180" /> Reads</p>
                 <div className="flex flex-wrap gap-1">
-                  {f.reads.length === 0 ? <span className="text-[var(--color-muted)]">—</span> : f.reads.map(r => (
+                  {f.reads.length === 0 ? <span className="text-[var(--color-muted)]">-</span> : f.reads.map(r => (
                     <span key={r} className="bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{r}</span>
                   ))}
                 </div>
@@ -1897,7 +1897,7 @@ function DataFlowAudit() {
 
 // ── Sandbox vs Production Environment Toggle ─────────────────────────────────────────
 // Per-connector environment switch (test sandbox vs live). Live mode requires an
-// explicit confirmation. All state is local — no environment is actually switched.
+// explicit confirmation. All state is local - no environment is actually switched.
 type Environment = "sandbox" | "production";
 
 function EnvironmentToggle() {
@@ -1961,7 +1961,7 @@ function EnvironmentToggle() {
         })}
       </div>
 
-      <DemoNote>Demo: the environment switch is stored locally for planning only — no connector actually changes between test and live endpoints.</DemoNote>
+      <DemoNote>Demo: the environment switch is stored locally for planning only - no connector actually changes between test and live endpoints.</DemoNote>
     </section>
   );
 }
@@ -2021,7 +2021,7 @@ function PosSystemConnector() {
         <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{formatCurrency(totalImported)} imported · #185</span>
       </div>
       <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-        Link your point-of-sale to auto-import daily sales totals into Headroom — keeping revenue and cash reconciliation current per outlet.
+        Link your point-of-sale to auto-import daily sales totals into Headroom - keeping revenue and cash reconciliation current per outlet.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -2055,7 +2055,7 @@ function PosSystemConnector() {
         ))}
       </div>
 
-      <DemoNote>Demo: POS links and imported sales totals are simulated and stored locally — no real POS API is called.</DemoNote>
+      <DemoNote>Demo: POS links and imported sales totals are simulated and stored locally - no real POS API is called.</DemoNote>
     </section>
   );
 }
@@ -2088,7 +2088,7 @@ function PayrollSoftwareConnector() {
     };
     setLinks(prev => [link, ...prev]);
     setApiKey("");
-    toast.success(`${provider} connected (simulated — key not stored).`);
+    toast.success(`${provider} connected (simulated - key not stored).`);
   };
 
   const syncNow = async (id: string) => {
@@ -2146,7 +2146,7 @@ function PayrollSoftwareConnector() {
         ))}
       </div>
 
-      <DemoNote>Demo: payroll provider links, headcount and cost figures are simulated locally — no real payroll API is contacted and no key is stored.</DemoNote>
+      <DemoNote>Demo: payroll provider links, headcount and cost figures are simulated locally - no real payroll API is contacted and no key is stored.</DemoNote>
     </section>
   );
 }
@@ -2206,7 +2206,7 @@ function CrmConnector() {
         <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{formatCurrency(totalPipeline)} pipeline · #187</span>
       </div>
       <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-        Connect your CRM to pull open-deal count and pipeline value into Headroom's revenue forecast — so projected cash reflects your real sales funnel.
+        Connect your CRM to pull open-deal count and pipeline value into Headroom's revenue forecast - so projected cash reflects your real sales funnel.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -2240,7 +2240,7 @@ function CrmConnector() {
         ))}
       </div>
 
-      <DemoNote>Demo: CRM links, deal counts and pipeline values are simulated and stored locally — no real CRM OAuth or API call happens.</DemoNote>
+      <DemoNote>Demo: CRM links, deal counts and pipeline values are simulated and stored locally - no real CRM OAuth or API call happens.</DemoNote>
     </section>
   );
 }
@@ -2301,7 +2301,7 @@ function ShippingLogisticsConnector() {
         <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{formatCurrency(totalCod)} COD owed · #188</span>
       </div>
       <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-        Link a courier aggregator to track in-transit shipments and COD remittance owed back to you — surfacing cash that's stuck in delivery as a receivable.
+        Link a courier aggregator to track in-transit shipments and COD remittance owed back to you - surfacing cash that's stuck in delivery as a receivable.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -2335,14 +2335,14 @@ function ShippingLogisticsConnector() {
         ))}
       </div>
 
-      <DemoNote>Demo: courier links, shipment counts and COD figures are simulated and stored locally — no real logistics API is contacted.</DemoNote>
+      <DemoNote>Demo: courier links, shipment counts and COD figures are simulated and stored locally - no real logistics API is contacted.</DemoNote>
     </section>
   );
 }
 
 // ── #189 E-Way Bill API Connector ─────────────────────────────────────────────────
 // NIC E-Way Bill (EWB) GSP credential config + simulated EWB generation log.
-// No real NIC/GSP call — generation and validity are simulated client-side.
+// No real NIC/GSP call - generation and validity are simulated client-side.
 type EwbEntry = { id: string; ewbNo: string; docNo: string; value: number; toState: string; validTill: string; createdAt: string };
 const EWB_STATES = ["Maharashtra", "Karnataka", "Gujarat", "Delhi", "Tamil Nadu", "Uttar Pradesh", "West Bengal", "Telangana"] as const;
 
@@ -2392,7 +2392,7 @@ function EWayBillConnector() {
         <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{entries.length} EWBs · {formatCurrency(totalValue)} · #189</span>
       </div>
       <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-        Link your NIC E-Way Bill portal via a GST Suvidha Provider (GSP) and auto-generate EWBs for consignments above ₹50,000 — keeping logistics compliant without re-keying invoice data.
+        Link your NIC E-Way Bill portal via a GST Suvidha Provider (GSP) and auto-generate EWBs for consignments above ₹50,000 - keeping logistics compliant without re-keying invoice data.
       </p>
 
       {!creds.linked ? (
@@ -2434,7 +2434,7 @@ function EWayBillConnector() {
         ))}
       </div>
 
-      <DemoNote>Demo: no NIC / GSP call is made. EWB numbers, validity and the GSTIN check are simulated locally — never paste production GSP credentials here.</DemoNote>
+      <DemoNote>Demo: no NIC / GSP call is made. EWB numbers, validity and the GSTIN check are simulated locally - never paste production GSP credentials here.</DemoNote>
     </section>
   );
 }
@@ -2471,7 +2471,7 @@ function CourierAwbConnector() {
     setShipments(prev => [{ id: generateId(), courier: apiKey.courier, awb, orderRef: orderRef.trim(), weightKg: w, status: "manifested", createdAt: new Date().toISOString() }, ...prev]);
     setOrderRef(""); setWeight("");
     setBusy(false);
-    toast.success(`AWB ${awb} booked — label ready (simulated).`);
+    toast.success(`AWB ${awb} booked - label ready (simulated).`);
   };
 
   const markPicked = (id: string) => setShipments(prev => prev.map(s => s.id === id ? { ...s, status: "picked_up" } : s));
@@ -2489,7 +2489,7 @@ function CourierAwbConnector() {
         <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{active} active AWBs · #190</span>
       </div>
       <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-        Plug in a courier's shipping API to generate Air-Waybill numbers and printable labels straight from an order — so dispatch and the books stay in lock-step.
+        Plug in a courier's shipping API to generate Air-Waybill numbers and printable labels straight from an order - so dispatch and the books stay in lock-step.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -2528,7 +2528,7 @@ function CourierAwbConnector() {
         ))}
       </div>
 
-      <DemoNote>Demo: AWB numbers and label downloads are simulated locally — no courier shipping API is called and no real label is produced.</DemoNote>
+      <DemoNote>Demo: AWB numbers and label downloads are simulated locally - no courier shipping API is called and no real label is produced.</DemoNote>
     </section>
   );
 }
@@ -2582,7 +2582,7 @@ function WhatsappBspConnector() {
         <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{approved}/{templates.length} templates live · #191</span>
       </div>
       <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-        Register your WhatsApp business number through a BSP (Meta Cloud API) and manage approved message templates — the channel used to send payment reminders and invoice links to customers.
+        Register your WhatsApp business number through a BSP (Meta Cloud API) and manage approved message templates - the channel used to send payment reminders and invoice links to customers.
       </p>
 
       {!num.verified ? (
@@ -2627,14 +2627,14 @@ function WhatsappBspConnector() {
         ))}
       </div>
 
-      <DemoNote>Demo: BSP registration, OTP verification and template approval are all simulated locally — no message is sent and no Meta / BSP API is contacted.</DemoNote>
+      <DemoNote>Demo: BSP registration, OTP verification and template approval are all simulated locally - no message is sent and no Meta / BSP API is contacted.</DemoNote>
     </section>
   );
 }
 
 // ── #192 FX Rate Feed Connector ─────────────────────────────────────────────────────
 // Multi-currency exchange-rate provider config + simulated rate snapshot. Rates are
-// generated client-side around plausible mid-points — not a live market feed.
+// generated client-side around plausible mid-points - not a live market feed.
 type FxRate = { ccy: string; rate: number };
 const FX_PROVIDERS = ["RBI Reference Rate", "Open Exchange Rates", "Fixer.io", "ExchangeRate-API", "Wise"] as const;
 const FX_BASE: { ccy: string; mid: number }[] = [
@@ -2674,7 +2674,7 @@ function FxRateFeedConnector() {
         <span className="text-[10px] bg-[var(--color-accent)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">{rates.length} pairs · #192</span>
       </div>
       <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-        Connect an exchange-rate provider to value foreign-currency invoices and bank balances in INR — pulling a daily INR mid-rate snapshot for every currency you trade in.
+        Connect an exchange-rate provider to value foreign-currency invoices and bank balances in INR - pulling a daily INR mid-rate snapshot for every currency you trade in.
       </p>
 
       {!cfg.linked ? (
@@ -2709,7 +2709,7 @@ function FxRateFeedConnector() {
         ))}
       </div>
 
-      <DemoNote>Demo: rates are generated client-side around illustrative mid-points and are NOT a live market feed — do not use them for actual settlement or accounting.</DemoNote>
+      <DemoNote>Demo: rates are generated client-side around illustrative mid-points and are NOT a live market feed - do not use them for actual settlement or accounting.</DemoNote>
     </section>
   );
 }

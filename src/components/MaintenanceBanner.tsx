@@ -11,7 +11,7 @@ export default function MaintenanceBanner() {
       role="status"
       style={{ background: "#7c2d12", color: "#fff", textAlign: "center", padding: "9px 16px", fontSize: 13, lineHeight: 1.4, fontWeight: 600 }}
     >
-      🛠 {maintenance.message || "Scheduled maintenance is in progress — some features may be temporarily unavailable."}
+      🛠 {maintenance.message || "Scheduled maintenance is in progress - some features may be temporarily unavailable."}
     </div>
   );
 }

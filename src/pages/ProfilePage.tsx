@@ -3,6 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { User, Lock, Check } from "lucide-react";
+import PasswordInput from "@/components/PasswordInput";
 
 function AvatarCircle({ name, email }: { name: string; email: string }) {
   const initials = name
@@ -112,15 +113,15 @@ export default function ProfilePage() {
         <form onSubmit={changePassword} className="space-y-4">
           <div>
             <label className={lbl}>Current password</label>
-            <input type="password" value={curPwd} onChange={e => setCurPwd(e.target.value)} className={inp} autoComplete="current-password" />
+            <PasswordInput value={curPwd} onChange={e => setCurPwd(e.target.value)} className={inp} autoComplete="current-password" />
           </div>
           <div>
             <label className={lbl}>New password (min 8 characters)</label>
-            <input type="password" value={newPwd} onChange={e => setNewPwd(e.target.value)} className={inp} autoComplete="new-password" />
+            <PasswordInput value={newPwd} onChange={e => setNewPwd(e.target.value)} className={inp} autoComplete="new-password" />
           </div>
           <div>
             <label className={lbl}>Confirm new password</label>
-            <input type="password" value={confPwd} onChange={e => setConfPwd(e.target.value)} className={inp} autoComplete="new-password" />
+            <PasswordInput value={confPwd} onChange={e => setConfPwd(e.target.value)} className={inp} autoComplete="new-password" />
             {confPwd && newPwd !== confPwd && (
               <p className="mt-1 text-xs text-red-400">Passwords do not match</p>
             )}

@@ -1,22 +1,22 @@
-// §ITR — Schema-aware, portal-ready ITR JSON assembler.
+// §ITR - Schema-aware, portal-ready ITR JSON assembler.
 //
 // This module turns the DEEP, already-correct income-tax COMPUTATION in
 // ./incometax (which itself reads dated legislation from ./taxrules) into the
-// nested JSON shape the Income-Tax Department's e-filing utility ingests — an
+// nested JSON shape the Income-Tax Department's e-filing utility ingests - an
 // ITR-3 (business/profession with full books) or ITR-4 SUGAM (44AD/44ADA
 // presumptive). Nothing here re-implements the tax math: we call
 // incometax.itrSummary + incometax.computeIncomeTax and MAP their figures into
-// the portal envelope. Nothing is marked "filed" — this is a download the user
+// the portal envelope. Nothing is marked "filed" - this is a download the user
 // reviews and uploads themselves.
 //
 // Two patterns are deliberately borrowed:
-//   • nootus/opentax "ITR Builder" — the FORM STRUCTURE (PartA-GEN identity block,
+//   • nootus/opentax "ITR Builder" - the FORM STRUCTURE (PartA-GEN identity block,
 //     Schedule BP/HP/OS/CG income heads, Schedule VIA deductions, PartB-TI total
 //     income, PartB-TTI tax-on-total-income + taxes-paid, Verification). We emit a
 //     trimmed, faithfully-named subset of that tree (real ITR JSON is huge; we fill
 //     the SMB-relevant heads and leave declared-empty stubs for the rest so the
 //     shape validates and the utility accepts it).
-//   • ustaxes declarative FIELD-MAPPING — instead of hand-building each node we
+//   • ustaxes declarative FIELD-MAPPING - instead of hand-building each node we
 //     declare a FORM_SPEC (per form × the schedules + required fields it carries)
 //     and a single assembler walks it. The required-field list per form/AY drives
 //     itrSchema validation, so a missing PAN or AY fails loudly here, not on the
@@ -46,7 +46,7 @@ const incometax = require("./incometax");
 const SUPPORTED_FORMS = ["ITR-3", "ITR-4"];
 const SUPPORTED_AYS = ["2024-25", "2025-26"];
 
-// ── (B) FORM_SPEC — declarative field map (ustaxes pattern) ──────────────────
+// ── (B) FORM_SPEC - declarative field map (ustaxes pattern) ──────────────────
 // For each form: the human label, the income schedules it carries, and the
 // REQUIRED fields (dotted paths into the assembled JSON) that itrSchema asserts
 // are present + non-empty before the JSON is considered portal-ready. The schedule
@@ -55,7 +55,7 @@ const SUPPORTED_AYS = ["2024-25", "2025-26"];
 // directly), so its schedule set is intentionally small.
 const FORM_SPEC = {
   "ITR-3": {
-    label: "ITR-3 — Individual/HUF/Firm with income from business or profession (regular books)",
+    label: "ITR-3 - Individual/HUF/Firm with income from business or profession (regular books)",
     schedules: ["BP", "HP", "OS", "CG", "VIA"],
     requiredFields: [
       "ITR.PartA_GEN.PersonalInfo.PAN",
@@ -68,7 +68,7 @@ const FORM_SPEC = {
     ],
   },
   "ITR-4": {
-    label: "ITR-4 SUGAM — Presumptive income from business & profession (44AD/44ADA)",
+    label: "ITR-4 SUGAM - Presumptive income from business & profession (44AD/44ADA)",
     schedules: ["BP_PRESUMPTIVE", "OS", "VIA"],
     requiredFields: [
       "ITR.PartA_GEN.PersonalInfo.PAN",
@@ -130,13 +130,13 @@ async function _identity(tenantId) {
 }
 
 // Prepaid-tax credits for the FY, off the books:
-//   • TDS/TCS SUFFERED — book_tax_entries rows with tax_kind TDS/TCS and
+//   • TDS/TCS SUFFERED - book_tax_entries rows with tax_kind TDS/TCS and
 //     is_input=true (tax others withheld on the tenant's receipts = a credit the
 //     tenant claims). Grouped by counterparty (the deductor/collector) for the
 //     Schedule-TDS/TCS line shape the portal expects.
-//   • Advance tax & self-assessment challans — book_advance_tax rows (the table
+//   • Advance tax & self-assessment challans - book_advance_tax rows (the table
 //     this module's DDL adds), each a BSR/CIN-stamped payment.
-// Falls back to empty arrays if nothing recorded — never throws on absence.
+// Falls back to empty arrays if nothing recorded - never throws on absence.
 async function _taxesPaid(tenantId, fy) {
   // FY "2024-25" → 2024-04-01 .. 2025-03-31.
   const startYear = Number(String(fy).slice(0, 4));
@@ -185,7 +185,7 @@ async function _taxesPaid(tenantId, fy) {
       amount: toRupees(r.amount),
     }));
   } catch (e) {
-    // Table not migrated yet on this DB — treat as no challans.
+    // Table not migrated yet on this DB - treat as no challans.
     advance = [];
   }
 
@@ -213,7 +213,7 @@ async function _taxesPaid(tenantId, fy) {
 // emitted as declared-zero stubs so the tree shape stays stable and the utility
 // accepts it (a missing schedule and a zero schedule are different to the portal).
 
-// Schedule BP — Profits & gains of business or profession (ITR-3, regular books).
+// Schedule BP - Profits & gains of business or profession (ITR-3, regular books).
 function scheduleBP(businessProfit) {
   const p = toRupees(money(businessProfit));
   return {
@@ -223,7 +223,7 @@ function scheduleBP(businessProfit) {
   };
 }
 
-// Schedule BP (presumptive) — ITR-4 SUGAM. 44AD (business) / 44ADA (profession):
+// Schedule BP (presumptive) - ITR-4 SUGAM. 44AD (business) / 44ADA (profession):
 // the presumptive income IS the declared profit; no detailed P&L is filed.
 function scheduleBP44(businessProfit, regime) {
   const p = toRupees(money(businessProfit));
@@ -236,27 +236,27 @@ function scheduleBP44(businessProfit, regime) {
   };
 }
 
-// Schedule HP — Income from house property. SMB books don't track this; declared
+// Schedule HP - Income from house property. SMB books don't track this; declared
 // zero stub (the user fills it in the utility if they have rental income).
 function scheduleHP() {
   return { TotalIncomeChargeableUnHP: "0.00", PassThroughIncome: "0.00" };
 }
 
-// Schedule OS — Income from other sources (interest, etc.). Caller-supplied via
+// Schedule OS - Income from other sources (interest, etc.). Caller-supplied via
 // otherIncome; otherwise zero.
 function scheduleOS(otherIncome) {
   const v = toRupees(money(otherIncome || 0));
   return { TotOthSrcNoRaceHorse: v, IncChargeable: v };
 }
 
-// Schedule CG — Capital gains. Caller-supplied total via capitalGains; we don't
+// Schedule CG - Capital gains. Caller-supplied total via capitalGains; we don't
 // split STCG/LTCG (the user refines in the utility). Declared as a single total.
 function scheduleCG(capitalGains) {
   const v = toRupees(money(capitalGains || 0));
   return { TotalCapGains: v, ShortTermCapGainFor15Per: "0.00", LongTermCapGain10Per: "0.00" };
 }
 
-// Schedule VIA — Chapter VI-A deductions (80C/80D/…). Caller passes either a
+// Schedule VIA - Chapter VI-A deductions (80C/80D/…). Caller passes either a
 // single `deductions` total or a `deductionsBreakup` map of section→amount. We
 // emit the named lines we recognise plus the total; the engine only ever consumed
 // the total, so the JSON total must equal what itrSummary deducted.
@@ -272,7 +272,7 @@ function scheduleVIA(deductionsTotal, breakup) {
   return node;
 }
 
-// ── (E) PartA-GEN — assessee identity + filing status ────────────────────────
+// ── (E) PartA-GEN - assessee identity + filing status ────────────────────────
 function partAGen(form, ay, identity, regime) {
   // Split a free-form name into surname/first for the portal's name node; an org/
   // firm name goes whole into SurNameOrOrgName.
@@ -303,7 +303,7 @@ function partAGen(form, ay, identity, regime) {
   };
 }
 
-// ── (F) PartB-TI — total income roll-up ──────────────────────────────────────
+// ── (F) PartB-TI - total income roll-up ──────────────────────────────────────
 function partBTI(summary, schedules, form) {
   // Head amounts, taken from the engine's head-wise summary (single source of
   // truth) so PartB-TI always reconciles to the computation.
@@ -324,7 +324,7 @@ function partBTI(summary, schedules, form) {
   };
 }
 
-// ── (G) PartB-TTI — tax on total income + taxes paid + balance ───────────────
+// ── (G) PartB-TTI - tax on total income + taxes paid + balance ───────────────
 function partBTTI(summary, taxesPaid) {
   const tc = summary.taxComputation;
   const totalTaxPayable = money(tc.total); // tax + surcharge + cess, post-rebate
@@ -396,7 +396,7 @@ function verification(identity) {
   };
 }
 
-// ── (J) Schema validation — required fields per form/AY (ustaxes pattern) ─────
+// ── (J) Schema validation - required fields per form/AY (ustaxes pattern) ─────
 // Walk a dotted path into the assembled object; undefined if any segment missing.
 function _get(obj, path) {
   return path.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
@@ -421,13 +421,13 @@ function itrSchema(itrJson, form) {
   return { valid: errors.length === 0, errors };
 }
 
-// ── (K) buildItrJson — the assembler ─────────────────────────────────────────
+// ── (K) buildItrJson - the assembler ─────────────────────────────────────────
 // Assemble the portal-ready ITR JSON for a tenant. opts:
-//   ay      — assessment year, e.g. "2025-26" (required; must be SUPPORTED_AYS)
-//   regime  — "new" (default, 115BAC) | "old"; or "44AD"/"44ADA" for presumptive
-//   form    — "ITR-3" (default) | "ITR-4"; if 44AD/44ADA and form unset ⇒ ITR-4
+//   ay      - assessment year, e.g. "2025-26" (required; must be SUPPORTED_AYS)
+//   regime  - "new" (default, 115BAC) | "old"; or "44AD"/"44ADA" for presumptive
+//   form    - "ITR-3" (default) | "ITR-4"; if 44AD/44ADA and form unset ⇒ ITR-4
 //   entityType, otherIncome, capitalGains, deductions, deductionsBreakup,
-//   companyRate25 — passed through to incometax.itrSummary.
+//   companyRate25 - passed through to incometax.itrSummary.
 // Returns { form, assessmentYear, financialYear, regime, itr, schema, sources }.
 async function buildItrJson(tenantId, opts = {}) {
   if (!tenantId) throw new PostError("BAD_INPUT", "tenantId required", 400);
@@ -447,7 +447,7 @@ async function buildItrJson(tenantId, opts = {}) {
 
   const fy = ayToFy(ay);
 
-  // (1) The DEEP computation — single source of truth for every rupee figure.
+  // (1) The DEEP computation - single source of truth for every rupee figure.
   // Presumptive income is taxed under normal slabs, so pass "new"/"old" to the
   // engine (it does not slab-tax differently for 44AD; the presumptive scheme only
   // changes how the PROFIT is arrived at, which the books already reflect).
@@ -509,7 +509,7 @@ async function buildItrJson(tenantId, opts = {}) {
       advanceChallans: taxesPaid.advance.length,
       identityComplete: !!(identity.pan && identity.name),
     },
-    note: "Portal-ready JSON for review/upload — NOT a filed return. Verify totals before uploading to the e-filing utility.",
+    note: "Portal-ready JSON for review/upload - NOT a filed return. Verify totals before uploading to the e-filing utility.",
   };
 }
 

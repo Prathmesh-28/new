@@ -32,7 +32,7 @@ type Channel = typeof CHANNELS[number];
 
 // ── SHARED imported-settlement bucket ──────────────────────────────────────────
 // One source of truth for settlement-report rows that the Consolidator, Payout
-// Calendar and Cash-Cycle tabs all read from — so the same channel totals are
+// Calendar and Cash-Cycle tabs all read from - so the same channel totals are
 // never re-keyed across three tabs. Manual entry remains a fallback everywhere.
 type ImportedSettlement = {
   id: string;
@@ -186,7 +186,7 @@ function SettlementImportCard({ compact }: { compact?: boolean }) {
       }
       setRows(prev => [...prev, ...parsed]);
       setLastMap(mapped);
-      toast.success(`Imported ${parsed.length} settlement row(s)${skipped ? `, skipped ${skipped}` : ""} — shared across Consolidator, Payout & Cash-Cycle`);
+      toast.success(`Imported ${parsed.length} settlement row(s)${skipped ? `, skipped ${skipped}` : ""} - shared across Consolidator, Payout & Cash-Cycle`);
     } catch (err) {
       toast.error("Could not parse that CSV. Check it is a settlement export.");
     }
@@ -213,7 +213,7 @@ function SettlementImportCard({ compact }: { compact?: boolean }) {
       </h2>
       <p className="text-xs text-[var(--color-muted)]">
         Upload the settlement export from Amazon, Flipkart or Meesho. Columns are auto-mapped by header
-        (settlement/order id, gross/order-value, fees/commission, net/payout, date) — no fixed format needed.
+        (settlement/order id, gross/order-value, fees/commission, net/payout, date) - no fixed format needed.
         One import feeds the Sales Consolidator, Payout Calendar and Cash-Cycle tabs at once.
       </p>
       <div className="flex flex-wrap items-end gap-3">
@@ -291,7 +291,7 @@ export default function MarketplacePage() {
             <ShoppingCart size={18} className="text-[var(--color-primary)]" /> E-commerce & ONDC
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Reconcile marketplace payouts, find true per-SKU margin and stay GST-compliant — Amazon, Flipkart, Meesho, ONDC & D2C in one ledger.
+            Reconcile marketplace payouts, find true per-SKU margin and stay GST-compliant - Amazon, Flipkart, Meesho, ONDC & D2C in one ledger.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -394,8 +394,8 @@ function Overview({ onJump }: { onJump: (t: MktTab) => void }) {
   const skusBelowBreakeven = skus.filter(s => skuNet(s) < 0).length;
 
   const cards = [
-    { label: "Net marketplace payout", value: recon.length ? formatCurrency(Math.round(netPayout)) : "—", sub: `${recon.length} settlement line(s)`, color: "text-green-400" },
-    { label: "Return / RTO loss", value: rtos.length ? formatCurrency(Math.round(rtoLoss)) : "—", sub: `${rtos.length} return event(s)`, color: rtoLoss > 0 ? "text-red-400" : "text-[var(--color-text)]" },
+    { label: "Net marketplace payout", value: recon.length ? formatCurrency(Math.round(netPayout)) : "-", sub: `${recon.length} settlement line(s)`, color: "text-green-400" },
+    { label: "Return / RTO loss", value: rtos.length ? formatCurrency(Math.round(rtoLoss)) : "-", sub: `${rtos.length} return event(s)`, color: rtoLoss > 0 ? "text-red-400" : "text-[var(--color-text)]" },
     { label: "SKUs tracked", value: String(skus.length), sub: `${skusBelowBreakeven} selling below cost`, color: skusBelowBreakeven > 0 ? "text-yellow-400" : "text-[var(--color-text)]" },
     { label: "Channels covered", value: String(CHANNELS.length), sub: "Amazon · Flipkart · Meesho · ONDC · D2C", color: "text-[var(--color-text)]" },
   ];
@@ -403,7 +403,7 @@ function Overview({ onJump }: { onJump: (t: MktTab) => void }) {
   const tools: { id: MktTab; title: string; desc: string }[] = [
     { id: "settlement", title: "Settlement reconciliation", desc: "Paste an Amazon/Flipkart settlement CSV → net payout after fees, refunds & TCS." },
     { id: "commission", title: "Commission / fee calculator", desc: "Effective platform fee per channel: referral, closing, shipping & ad cut." },
-    { id: "rto", title: "Return / RTO loss tracker", desc: "True cost of every return — lost margin, forward & reverse freight." },
+    { id: "rto", title: "Return / RTO loss tracker", desc: "True cost of every return - lost margin, forward & reverse freight." },
     { id: "consolidate", title: "Multi-channel consolidator", desc: "One revenue + fee + net view across all your sales channels." },
     { id: "payout-cycle", title: "Payout calendar", desc: "Project each channel's next settlement date and amount." },
     { id: "tcs52", title: "TCS u/s 52", desc: "1% operator-collected TCS reconciled to claim as cash-ledger credit." },
@@ -430,7 +430,7 @@ function Overview({ onJump }: { onJump: (t: MktTab) => void }) {
         <p className="text-xs text-[var(--color-muted)] mb-3">
           Gross order value is never what hits your bank. Referral, closing, weight-handling and ad fees, customer
           returns and RTO freight, plus 1% TCS, all carve into it silently. These tools rebuild the path from
-          gross sale to net cash so you can see — and recover — the leakage.
+          gross sale to net cash so you can see - and recover - the leakage.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {tools.map(t => (
@@ -445,7 +445,7 @@ function Overview({ onJump }: { onJump: (t: MktTab) => void }) {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        Marketplace operators collect 1% TCS under Sec 52 of the CGST Act and file it in GSTR-8 — reconcile it so you claim the credit. Fee schedules differ by category and change often; verify against your latest rate card.
+        Marketplace operators collect 1% TCS under Sec 52 of the CGST Act and file it in GSTR-8 - reconcile it so you claim the credit. Fee schedules differ by category and change often; verify against your latest rate card.
       </div>
     </>
   );
@@ -508,7 +508,7 @@ function SettlementRecon() {
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><FileSpreadsheet size={14} className="text-[var(--color-primary)]" /> Settlement Reconciliation</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Paste your Amazon / Flipkart settlement export as CSV — one line per order:
+          Paste your Amazon / Flipkart settlement export as CSV - one line per order:
           <span className="text-[var(--color-text)] font-medium"> orderId, orderValue, fees, refunds, tcs</span>. We compute the net payout that should hit your bank.
         </p>
         <textarea value={raw} onChange={e => setRaw(e.target.value)} rows={5}
@@ -548,8 +548,8 @@ function SettlementRecon() {
               <p className={`text-sm font-bold flex items-center gap-2 ${Math.abs(variance) < 1 ? "text-green-400" : "text-red-400"}`}>
                 {Math.abs(variance) < 1 ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
                 {Math.abs(variance) < 1
-                  ? "Computed net payout matches the expected bank credit — settlement reconciled."
-                  : `${variance > 0 ? "Shortfall" : "Excess credit"} of ${formatCurrency(Math.round(Math.abs(variance)))} vs the expected bank credit — investigate unaccounted fees or held reserves.`}
+                  ? "Computed net payout matches the expected bank credit - settlement reconciled."
+                  : `${variance > 0 ? "Shortfall" : "Excess credit"} of ${formatCurrency(Math.round(Math.abs(variance)))} vs the expected bank credit - investigate unaccounted fees or held reserves.`}
               </p>
             </div>
           )}
@@ -642,7 +642,7 @@ function CommissionCalculator() {
       {p > 0 && (
         <div className={`${CARD} p-5`}>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold">{channel} — per-order economics</h3>
+            <h3 className="text-sm font-semibold">{channel} - per-order economics</h3>
             <span className={`text-xs font-bold px-2 py-0.5 rounded border ${effectivePct > 30 ? "bg-red-950/30 text-red-400 border-red-800/30" : "bg-blue-950/30 text-blue-400 border-blue-800/30"}`}>{effectivePct.toFixed(1)}% effective fee</span>
           </div>
           <div className="space-y-2">
@@ -676,7 +676,7 @@ function rtoLossOf(r: RtoRow): number {
   const perUnit = r.kind === "rto"
     ? r.fwdFreight + r.revFreight                       // goods come back; freight is the bleed
     : r.fwdFreight + r.revFreight + (r.orderValue - r.cogs > 0 ? 0 : 0); // delivered return: freight bleed (margin reversed on credit note)
-  // For a delivered return we also lose the forward margin opportunity only if item is unsellable — approximated as freight here.
+  // For a delivered return we also lose the forward margin opportunity only if item is unsellable - approximated as freight here.
   return perUnit * r.count;
 }
 
@@ -710,7 +710,7 @@ function RtoLossTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Undo2 size={14} className="text-[var(--color-primary)]" /> Return / RTO Loss Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)]">RTO (return-to-origin) means the order never delivered — you bleed forward + reverse freight. Track it per SKU to see where returns are quietly killing margin.</p>
+        <p className="text-xs text-[var(--color-muted)]">RTO (return-to-origin) means the order never delivered - you bleed forward + reverse freight. Track it per SKU to see where returns are quietly killing margin.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">SKU</label>
@@ -897,7 +897,7 @@ function SalesConsolidator() {
                       <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(r.fees)}</td>
                       <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.returns)}</td>
                       <td className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(Math.round(net(r)))}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{totNet > 0 ? `${Math.round((net(r) / totNet) * 100)}%` : "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{totNet > 0 ? `${Math.round((net(r) / totNet) * 100)}%` : "-"}</td>
                       <td className="px-4 py-2.5 text-right">
                         {r.source === "manual"
                           ? <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
@@ -949,7 +949,7 @@ function PayoutCalendar() {
 
   // Build payout rows straight from the shared imported settlements: each
   // imported channel's net becomes the pending amount and its latest settlement
-  // date becomes the "last payout" anchor — no re-keying.
+  // date becomes the "last payout" anchor - no re-keying.
   const prefillFromImport = () => {
     try {
       const roll = rollupImported(imported);
@@ -984,7 +984,7 @@ function PayoutCalendar() {
       <ImportedTotalsBanner note="Click 'Prefill from imported' below to load each channel's pending amount (its imported net) and last-settlement date automatically." />
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Platform Payout Calendar</h2>
-        <p className="text-xs text-[var(--color-muted)]">Each marketplace settles on its own cycle (Amazon ~7 days, Flipkart ~7–15). Prefill from your imported settlement file, or log a cycle and last payout manually to project when cash lands and how much is still locked.</p>
+        <p className="text-xs text-[var(--color-muted)]">Each marketplace settles on its own cycle (Amazon ~7 days, Flipkart ~7-15). Prefill from your imported settlement file, or log a cycle and last payout manually to project when cash lands and how much is still locked.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Channel</label>
@@ -1066,7 +1066,7 @@ function Tcs52Tracker() {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> TCS u/s 52 — Marketplace Sales</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> TCS u/s 52 - Marketplace Sales</h2>
         <p className="text-xs text-[var(--color-muted)]">E-commerce operators deduct 1% TCS on your net taxable supplies (Sec 52, CGST Act) and file it in GSTR-8. Reconcile each month so you claim it as a credit in your electronic cash ledger.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
@@ -1231,14 +1231,14 @@ function ChannelCompare() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><GitCompareArrows size={14} className="text-[var(--color-primary)]" /> Channel Profitability Compare</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-1">Ranks channels by net margin % using the figures you entered in the Sales Consolidator — so you push volume to the channels that actually pay.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-1">Ranks channels by net margin % using the figures you entered in the Sales Consolidator - so you push volume to the channels that actually pay.</p>
       </div>
 
       {evaluated.length === 0 ? (
         <div className="bg-[var(--color-surface)] border border-dashed border-[var(--color-border)] rounded-lg p-8 text-center">
           <Layers size={22} className="mx-auto text-[var(--color-muted)] mb-2" />
           <p className="text-sm font-medium mb-1">No channel data yet</p>
-          <p className="text-xs text-[var(--color-muted)]">Add channels in the Sales Consolidator tab — they will appear here ranked by margin.</p>
+          <p className="text-xs text-[var(--color-muted)]">Add channels in the Sales Consolidator tab - they will appear here ranked by margin.</p>
         </div>
       ) : (
         <>
@@ -1249,7 +1249,7 @@ function ChannelCompare() {
               </div>
               {worst && worst.id !== best.id && (
                 <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
-                  <p className="text-sm font-bold text-red-400 flex items-center gap-2"><TrendingDown size={14} /> Weakest: {worst.channel} at {worst.marginPct.toFixed(1)}% — review fees or shift volume away</p>
+                  <p className="text-sm font-bold text-red-400 flex items-center gap-2"><TrendingDown size={14} /> Weakest: {worst.channel} at {worst.marginPct.toFixed(1)}% - review fees or shift volume away</p>
                 </div>
               )}
             </div>
@@ -1325,7 +1325,7 @@ function OndcReadiness() {
 
       {pct === 100 && (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> You are ONDC-ready — reach out to your chosen seller app to publish your catalog to the network.</p>
+          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> You are ONDC-ready - reach out to your chosen seller app to publish your catalog to the network.</p>
         </div>
       )}
     </div>
@@ -1352,7 +1352,7 @@ function RoasCalculator() {
     <div className="space-y-4 max-w-xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Megaphone size={14} className="text-[var(--color-primary)]" /> Ad-spend ROAS Calculator</h2>
-        <p className="text-xs text-[var(--color-muted)]">For Amazon/Flipkart PPC: ROAS = ad sales ÷ ad spend, ACoS = spend ÷ sales. Your break-even ACoS equals your gross margin % — spend more than that and the ad-driven order loses money.</p>
+        <p className="text-xs text-[var(--color-muted)]">For Amazon/Flipkart PPC: ROAS = ad sales ÷ ad spend, ACoS = spend ÷ sales. Your break-even ACoS equals your gross margin % - spend more than that and the ad-driven order loses money.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Ad spend (₹)</label><input type="number" value={adSpend} onChange={e => setAdSpend(e.target.value)} placeholder="15000" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Sales from ads (₹)</label><input type="number" value={adSales} onChange={e => setAdSales(e.target.value)} placeholder="75000" className={INP} /></div>
@@ -1379,8 +1379,8 @@ function RoasCalculator() {
             <p className={`text-sm font-bold flex items-center gap-2 ${profitable ? "text-green-400" : "text-red-400"}`}>
               {profitable ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
               {profitable
-                ? `Profitable: ACoS ${acos.toFixed(1)}% is within your ${breakEvenAcos.toFixed(1)}% break-even — keep scaling while it holds.`
-                : `Loss-making: ACoS ${acos.toFixed(1)}% exceeds your ${breakEvenAcos.toFixed(1)}% break-even — cut bids or improve conversion before spending more.`}
+                ? `Profitable: ACoS ${acos.toFixed(1)}% is within your ${breakEvenAcos.toFixed(1)}% break-even - keep scaling while it holds.`
+                : `Loss-making: ACoS ${acos.toFixed(1)}% exceeds your ${breakEvenAcos.toFixed(1)}% break-even - cut bids or improve conversion before spending more.`}
             </p>
           </div>
         </>
@@ -1438,7 +1438,7 @@ function TargetMarginPricer() {
 
       {c > 0 && !feasible && (
         <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
-          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> Referral % + target margin % must be under 100% — at these inputs no price can hit the margin.</p>
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> Referral % + target margin % must be under 100% - at these inputs no price can hit the margin.</p>
         </div>
       )}
 
@@ -1495,7 +1495,7 @@ function InventorySync() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Inventory Sync Across Channels</h2>
-        <p className="text-xs text-[var(--color-muted)]">Hold one physical stock count and the quantity you've listed on each channel. When listed exceeds warehouse, you risk overselling and a marketplace penalty — those rows flag red.</p>
+        <p className="text-xs text-[var(--color-muted)]">Hold one physical stock count and the quantity you've listed on each channel. When listed exceeds warehouse, you risk overselling and a marketplace penalty - those rows flag red.</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">SKU</label><input value={sku} onChange={e => setSku(e.target.value)} placeholder="MUG-01" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Warehouse</label><input type="number" value={wh} onChange={e => setWh(e.target.value)} placeholder="200" className={INP} /></div>
@@ -1569,7 +1569,7 @@ function FbaFeeEstimator() {
   const h = parseFloat(height) || 0;
   const qty = Math.max(0, Math.round(parseFloat(units) || 0));
 
-  // Volumetric weight (kg) ≈ (L×W×H cm) / 5000 — couriers bill the higher of actual vs volumetric.
+  // Volumetric weight (kg) ≈ (L×W×H cm) / 5000 - couriers bill the higher of actual vs volumetric.
   const volWeightKg = (l * w * h) / 5000;
   const billedWeight = Math.max(wt, volWeightKg);
   // Weight-handling proxy: ₹40 base for first 0.5kg + ₹20 per additional 0.5kg slab.
@@ -1586,7 +1586,7 @@ function FbaFeeEstimator() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Warehouse size={14} className="text-[var(--color-primary)]" /> FBA / Warehouse Fee Estimator</h2>
-        <p className="text-xs text-[var(--color-muted)]">Estimate per-unit fulfilment cost: weight-handling (billed on the higher of actual vs volumetric weight), pick-and-pack, and monthly storage by volume. Rates are indicative — match to your latest rate card.</p>
+        <p className="text-xs text-[var(--color-muted)]">Estimate per-unit fulfilment cost: weight-handling (billed on the higher of actual vs volumetric weight), pick-and-pack, and monthly storage by volume. Rates are indicative - match to your latest rate card.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {([
             ["Actual weight (kg)", weight, setWeight, "0.5"],
@@ -1650,13 +1650,13 @@ function PpcBudgetAllocator() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> PPC Budget Allocator</h2>
-        <p className="text-xs text-[var(--color-muted)]">Split a total monthly ad budget across campaigns by weight (priority / expected ROI). Weights are relative — a campaign with weight 3 gets thrice the budget of one with weight 1.</p>
+        <p className="text-xs text-[var(--color-muted)]">Split a total monthly ad budget across campaigns by weight (priority / expected ROI). Weights are relative - a campaign with weight 3 gets thrice the budget of one with weight 1.</p>
         <div>
           <label className="block text-xs text-[var(--color-muted)] mb-1">Total monthly ad budget (₹)</label>
           <input type="number" value={budget} onChange={e => setBudget(e.target.value)} placeholder="50000" className={INP} />
         </div>
         <div className="grid grid-cols-2 gap-3 items-end">
-          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Campaign</label><input value={name} onChange={e => setName(e.target.value)} placeholder="Sponsored Products — Mugs" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Campaign</label><input value={name} onChange={e => setName(e.target.value)} placeholder="Sponsored Products - Mugs" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Weight</label><input type="number" value={weight} onChange={e => setWeight(e.target.value)} placeholder="3" className={INP} /></div>
         </div>
         <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add campaign</button>
@@ -1748,10 +1748,10 @@ function RepricingSimulator() {
         <p className={`text-sm font-bold flex items-center gap-2 ${breachesFloor ? "text-red-400" : "text-blue-400"}`}>
           {breachesFloor ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
           {floorDenom <= 0
-            ? "Fees % + min margin % ≥ 100% — no floor price exists at these inputs."
+            ? "Fees % + min margin % ≥ 100% - no floor price exists at these inputs."
             : breachesFloor
-              ? `New price ${formatCurrency(Math.round(nw))} is below the margin floor of ${formatCurrency(Math.round(floorPrice))} — it breaches your ${minMarginPct || 0}% minimum.`
-              : `Margin floor is ${formatCurrency(Math.round(floorPrice))}. The new price stays above it — safe to reprice.`}
+              ? `New price ${formatCurrency(Math.round(nw))} is below the margin floor of ${formatCurrency(Math.round(floorPrice))} - it breaches your ${minMarginPct || 0}% minimum.`
+              : `Margin floor is ${formatCurrency(Math.round(floorPrice))}. The new price stays above it - safe to reprice.`}
         </p>
       </div>
 
@@ -1784,7 +1784,7 @@ function RatingTracker() {
 
   const add = () => {
     const r = parseFloat(rating) || 0;
-    if (!sku.trim() || r <= 0 || r > 5) { toast.error("Enter a SKU and rating (0–5)"); return; }
+    if (!sku.trim() || r <= 0 || r > 5) { toast.error("Enter a SKU and rating (0-5)"); return; }
     setRows(prev => [...prev, { id: crypto.randomUUID(), sku: sku.trim(), channel, rating: r, reviews: Math.max(0, Math.round(parseFloat(reviews) || 0)) }]);
     setSku(""); setRating(""); setReviews("");
     toast.success("Listing rating added");
@@ -1799,11 +1799,11 @@ function RatingTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Star size={14} className="text-[var(--color-primary)]" /> Review / Rating Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)]">Log each listing's star rating and review count per channel. A listing under 4.0 stars loses buy-box share and discoverability — those rows flag so you prioritise fixing them.</p>
+        <p className="text-xs text-[var(--color-muted)]">Log each listing's star rating and review count per channel. A listing under 4.0 stars loses buy-box share and discoverability - those rows flag so you prioritise fixing them.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">SKU</label><input value={sku} onChange={e => setSku(e.target.value)} placeholder="MUG-01" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Channel</label><select value={channel} onChange={e => setChannel(e.target.value as Channel)} className={INP}>{CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Rating (0–5)</label><input type="number" step="0.1" value={rating} onChange={e => setRating(e.target.value)} placeholder="4.2" className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Rating (0-5)</label><input type="number" step="0.1" value={rating} onChange={e => setRating(e.target.value)} placeholder="4.2" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1"># Reviews</label><input type="number" value={reviews} onChange={e => setReviews(e.target.value)} placeholder="86" className={INP} /></div>
         </div>
         <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add listing</button>
@@ -1847,7 +1847,7 @@ function RatingTracker() {
   );
 }
 
-// ── #17 GSTR-8 (TCS) reconciliation — operator-filed vs your books ─────────────
+// ── #17 GSTR-8 (TCS) reconciliation - operator-filed vs your books ─────────────
 type Gstr8Row = { id: string; operator: Channel; month: string; tcsAsPerBooks: number; tcsInGstr8: number };
 
 function Gstr8Recon() {
@@ -1874,7 +1874,7 @@ function Gstr8Recon() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><FileCheck size={14} className="text-[var(--color-primary)]" /> GSTR-8 (TCS) Reconciliation</h2>
-        <p className="text-xs text-[var(--color-muted)]">Operators file the 1% TCS they collected in GSTR-8, which flows to your GSTR-2B. Compare what each operator <em>filed</em> against the TCS in <em>your</em> books — any gap means a credit you can't claim, or one to chase the operator to correct.</p>
+        <p className="text-xs text-[var(--color-muted)]">Operators file the 1% TCS they collected in GSTR-8, which flows to your GSTR-2B. Compare what each operator <em>filed</em> against the TCS in <em>your</em> books - any gap means a credit you can't claim, or one to chase the operator to correct.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Operator</label><select value={operator} onChange={e => setOperator(e.target.value as Channel)} className={INP}>{CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Month</label><input type="month" value={month} onChange={e => setMonth(e.target.value)} className={INP} /></div>
@@ -1921,7 +1921,7 @@ function Gstr8Recon() {
               </table>
             </div>
           </div>
-          <p className="text-[10px] text-[var(--color-muted)]">A negative gap means the operator under-reported TCS in GSTR-8 — raise it with them so the full credit reflects in your GSTR-2B before you file.</p>
+          <p className="text-[10px] text-[var(--color-muted)]">A negative gap means the operator under-reported TCS in GSTR-8 - raise it with them so the full credit reflects in your GSTR-2B before you file.</p>
         </>
       )}
     </div>
@@ -1932,7 +1932,7 @@ function Gstr8Recon() {
 type RefundRow = { id: string; sku: string; kind: "refund" | "returnless" | "replacement"; orderValue: number; refundAmt: number; replacementCogs: number; count: number };
 
 function refundCostOf(r: RefundRow): number {
-  // Refund: customer returns goods, you refund — net cost is the refunded amount you can't fully recover (proxy: refund - resaleable value handled elsewhere; here refund amount).
+  // Refund: customer returns goods, you refund - net cost is the refunded amount you can't fully recover (proxy: refund - resaleable value handled elsewhere; here refund amount).
   // Returnless: you refund AND lose the goods → refund + COGS proxy (replacementCogs field doubles as lost-goods cost).
   // Replacement: you ship a new unit free → COGS of replacement + (any partial refund).
   const per = r.kind === "returnless"
@@ -1972,7 +1972,7 @@ function RefundCostTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><RotateCcw size={14} className="text-[var(--color-primary)]" /> Refund / Replacement Cost Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)]">Separate from RTO freight: this tracks the cash cost of <em>refunds</em>, marketplace <em>returnless refunds</em> (you refund and lose the goods) and free <em>replacements</em> (you ship a new unit's COGS). Returnless refunds are the most abused — watch that total.</p>
+        <p className="text-xs text-[var(--color-muted)]">Separate from RTO freight: this tracks the cash cost of <em>refunds</em>, marketplace <em>returnless refunds</em> (you refund and lose the goods) and free <em>replacements</em> (you ship a new unit's COGS). Returnless refunds are the most abused - watch that total.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">SKU</label><input value={sku} onChange={e => setSku(e.target.value)} placeholder="MUG-01" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Type</label>
@@ -2050,7 +2050,7 @@ function ListingQuality() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Listing-Quality Checklist</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-1 mb-3">A complete listing converts better and ranks higher. Score a SKU against these eight levers before you spend on ads — a weak listing wastes ad budget.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-1 mb-3">A complete listing converts better and ranks higher. Score a SKU against these eight levers before you spend on ads - a weak listing wastes ad budget.</p>
         <div className="flex items-center gap-3">
           <div className="flex-1 h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
             <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct === 100 ? "#22c55e" : pct >= 60 ? "#3b82f6" : "#eab308" }} />
@@ -2078,7 +2078,7 @@ function ListingQuality() {
 
       {pct < 100 && (
         <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
-          <AlertTriangle size={12} className="shrink-0 mt-px" /> Fix the remaining {LISTING_CHECKS.length - completed} item(s) before scaling ad spend — ads amplify a good listing and burn cash on a weak one.
+          <AlertTriangle size={12} className="shrink-0 mt-px" /> Fix the remaining {LISTING_CHECKS.length - completed} item(s) before scaling ad spend - ads amplify a good listing and burn cash on a weak one.
         </div>
       )}
     </div>
@@ -2125,7 +2125,7 @@ function CodMixAnalyzer() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> COD vs Prepaid Mix Analyzer</h2>
-        <p className="text-xs text-[var(--color-muted)]">COD orders RTO far more often than prepaid, and each RTO bleeds freight with zero revenue. Model your current mix to see the real net per order of each — then decide how hard to nudge buyers to prepay.</p>
+        <p className="text-xs text-[var(--color-muted)]">COD orders RTO far more often than prepaid, and each RTO bleeds freight with zero revenue. Model your current mix to see the real net per order of each - then decide how hard to nudge buyers to prepay.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {([
             ["Total orders", totalOrders, setTotalOrders, "1000"],
@@ -2168,7 +2168,7 @@ function CodMixAnalyzer() {
       </div>
 
       <div className="rounded-lg p-4 border border-blue-800/40 bg-blue-950/20">
-        <p className="text-sm font-bold text-blue-400 flex items-center gap-2"><TrendingUp size={14} /> Total net margin {formatCurrency(Math.round(totalNet))} across {orders} orders. Prepaid nets {formatCurrency(Math.round(ppNetPerOrder))}/order vs COD {formatCurrency(Math.round(codNetPerOrder))}/order — a prepaid discount under that gap still leaves you ahead.</p>
+        <p className="text-sm font-bold text-blue-400 flex items-center gap-2"><TrendingUp size={14} /> Total net margin {formatCurrency(Math.round(totalNet))} across {orders} orders. Prepaid nets {formatCurrency(Math.round(ppNetPerOrder))}/order vs COD {formatCurrency(Math.round(codNetPerOrder))}/order - a prepaid discount under that gap still leaves you ahead.</p>
       </div>
     </div>
   );
@@ -2257,7 +2257,7 @@ function BuyBoxTracker() {
               </table>
             </div>
           </div>
-          <p className="text-[10px] text-[var(--color-muted)]">A low win % with a positive price gap means you're being undercut — close the gap or improve fulfilment/rating. A low win % at price parity points to account-health or stock issues, not price.</p>
+          <p className="text-[10px] text-[var(--color-muted)]">A low win % with a positive price gap means you're being undercut - close the gap or improve fulfilment/rating. A low win % at price parity points to account-health or stock issues, not price.</p>
         </>
       )}
     </div>
@@ -2404,7 +2404,7 @@ function ChargebackLedger() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Open exposure</p><p className="text-xl font-bold tabular-nums text-yellow-400">{formatCurrency(Math.round(atRisk))}</p><p className="text-[10px] text-[var(--color-muted)] mt-0.5">{open.length} open</p></div>
             <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Lost (written off)</p><p className="text-xl font-bold tabular-nums text-red-400">{formatCurrency(Math.round(lost))}</p></div>
-            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Dispute win rate</p><p className={`text-xl font-bold tabular-nums ${winRate >= 50 ? "text-green-400" : "text-orange-400"}`}>{settled > 0 ? `${winRate.toFixed(0)}%` : "—"}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Dispute win rate</p><p className={`text-xl font-bold tabular-nums ${winRate >= 50 ? "text-green-400" : "text-orange-400"}`}>{settled > 0 ? `${winRate.toFixed(0)}%` : "-"}</p></div>
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
@@ -2557,7 +2557,7 @@ function BreakEvenCalculator() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> SKU Break-even Price Calculator</h2>
-        <p className="text-xs text-[var(--color-muted)]">Find the minimum price that recovers cost after fees, shipping, ads and a return-loss provision — and the price needed to hit a target net margin. Anything below break-even is selling at a loss.</p>
+        <p className="text-xs text-[var(--color-muted)]">Find the minimum price that recovers cost after fees, shipping, ads and a return-loss provision - and the price needed to hit a target net margin. Anything below break-even is selling at a loss.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {([
             ["COGS (₹)", cogs, setCogs, "300"],
@@ -2590,7 +2590,7 @@ function BreakEvenCalculator() {
         </div>
       ) : (
         <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
-          <AlertTriangle size={12} className="shrink-0 mt-px" /> Enter a COGS. If fees + half the return rate + target margin exceed 100%, no price can hit that margin — lower the target or the fee load.
+          <AlertTriangle size={12} className="shrink-0 mt-px" /> Enter a COGS. If fees + half the return rate + target margin exceed 100%, no price can hit that margin - lower the target or the fee load.
         </div>
       )}
     </div>
@@ -2635,7 +2635,7 @@ function FestivalPlanner() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><PartyPopper size={14} className="text-[var(--color-primary)]" /> Festival / Sale Event Planner</h2>
-        <p className="text-xs text-[var(--color-muted)]">Big Billion Days, Great Indian Festival and Diwali sales make or break the quarter. Set the event date and the checklist auto-dates each prep task backwards from it — so stock, pricing, ads and cash are ready in time.</p>
+        <p className="text-xs text-[var(--color-muted)]">Big Billion Days, Great Indian Festival and Diwali sales make or break the quarter. Set the event date and the checklist auto-dates each prep task backwards from it - so stock, pricing, ads and cash are ready in time.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
           <div className="md:col-span-2"><label className="block text-xs text-[var(--color-muted)] mb-1">Event</label><input value={eventName} onChange={e => setEventName(e.target.value)} placeholder="Big Billion Days" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Event date</label><input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} className={INP} /></div>
@@ -2738,7 +2738,7 @@ function HoldingCostCalculator() {
       <ImportedTotalsBanner note="Click 'Prefill from imported' to derive each channel's monthly GMV from imported gross (annualised over the import's date range)." />
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Hourglass size={14} className="text-[var(--color-primary)]" /> Cash-Cycle / Holding-Period Cost</h2>
-        <p className="text-xs text-[var(--color-muted)]">Every day between a sale and its payout, your money is locked at the marketplace — and if you fund operations on credit, that wait has a real interest cost. Prefill GMV from your imported settlement file, or enter it manually per channel.</p>
+        <p className="text-xs text-[var(--color-muted)]">Every day between a sale and its payout, your money is locked at the marketplace - and if you fund operations on credit, that wait has a real interest cost. Prefill GMV from your imported settlement file, or enter it manually per channel.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Channel</label>
@@ -2785,7 +2785,7 @@ function HoldingCostCalculator() {
               </table>
             </div>
           </div>
-          <p className="text-[10px] text-[var(--color-muted)]">Capital locked ≈ daily GMV × payout-lag days. Faster payouts or settlement financing cut this carry cost — compare it against any financing fee before deciding.</p>
+          <p className="text-[10px] text-[var(--color-muted)]">Capital locked ≈ daily GMV × payout-lag days. Faster payouts or settlement financing cut this carry cost - compare it against any financing fee before deciding.</p>
         </>
       )}
     </div>
@@ -2827,9 +2827,9 @@ function CouponRoi() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3 max-w-2xl`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Ticket size={14} className="text-[var(--color-primary)]" /> Coupon / Promo ROI</h2>
-        <p className="text-xs text-[var(--color-muted)]">A coupon only pays off if the extra units it drives earn more margin than the discount costs. Enter baseline units (what you'd sell anyway) and promo-period units — we count only the incremental ones.</p>
+        <p className="text-xs text-[var(--color-muted)]">A coupon only pays off if the extra units it drives earn more margin than the discount costs. Enter baseline units (what you'd sell anyway) and promo-period units - we count only the incremental ones.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <div className="col-span-2 md:col-span-1"><label className="block text-xs text-[var(--color-muted)] mb-1">Promo name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="10% off — Diwali" className={INP} /></div>
+          <div className="col-span-2 md:col-span-1"><label className="block text-xs text-[var(--color-muted)] mb-1">Promo name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="10% off - Diwali" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Discount spend (₹)</label><input type="number" value={spend} onChange={e => setSpend(e.target.value)} placeholder="15000" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Baseline units</label><input type="number" value={baseline} onChange={e => setBaseline(e.target.value)} placeholder="200" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Promo units</label><input type="number" value={promo} onChange={e => setPromo(e.target.value)} placeholder="320" className={INP} /></div>
@@ -2898,7 +2898,7 @@ function ConversionTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3 max-w-2xl`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><MousePointerClick size={14} className="text-[var(--color-primary)]" /> Listing Conversion Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)]">Conversion rate (orders ÷ sessions) is the fastest read on listing health. Low CVR with high sessions usually means price, images or reviews — not traffic. Pull sessions from your Seller/Flipkart dashboard.</p>
+        <p className="text-xs text-[var(--color-muted)]">Conversion rate (orders ÷ sessions) is the fastest read on listing health. Low CVR with high sessions usually means price, images or reviews - not traffic. Pull sessions from your Seller/Flipkart dashboard.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div className="col-span-2 md:col-span-1"><label className="block text-xs text-[var(--color-muted)] mb-1">Listing / ASIN</label><input value={listing} onChange={e => setListing(e.target.value)} placeholder="Steel Bottle 1L" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Sessions</label><input type="number" value={sessions} onChange={e => setSessions(e.target.value)} placeholder="1200" className={INP} /></div>
@@ -2932,7 +2932,7 @@ function ConversionTracker() {
               </table>
             </div>
           </div>
-          <p className="text-[10px] text-[var(--color-muted)]">Listings flagged ⚠ convert below 60% of your blended rate — review price, hero image and Q&amp;A first.</p>
+          <p className="text-[10px] text-[var(--color-muted)]">Listings flagged ⚠ convert below 60% of your blended rate - review price, hero image and Q&amp;A first.</p>
         </>
       )}
     </div>
@@ -2966,7 +2966,7 @@ function ReturnRateBySku() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3 max-w-2xl`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><PackageX size={14} className="text-[var(--color-primary)]" /> Return Rate by SKU</h2>
-        <p className="text-xs text-[var(--color-muted)]">Return rate (returns ÷ delivered) isolates which products customers send back — a sizing, quality or expectation problem. High-rate SKUs quietly erase margin through reverse logistics, so fix the listing or drop them.</p>
+        <p className="text-xs text-[var(--color-muted)]">Return rate (returns ÷ delivered) isolates which products customers send back - a sizing, quality or expectation problem. High-rate SKUs quietly erase margin through reverse logistics, so fix the listing or drop them.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div className="col-span-2 md:col-span-1"><label className="block text-xs text-[var(--color-muted)] mb-1">SKU</label><input value={sku} onChange={e => setSku(e.target.value)} placeholder="TSHIRT-BLK-M" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Delivered</label><input type="number" value={delivered} onChange={e => setDelivered(e.target.value)} placeholder="500" className={INP} /></div>
@@ -3038,7 +3038,7 @@ function FeeReconciliation() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3 max-w-2xl`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><ScrollText size={14} className="text-[var(--color-primary)]" /> Marketplace Fee Reconciliation</h2>
-        <p className="text-xs text-[var(--color-muted)]">Marketplaces routinely deduct more commission, shipping or closing fees than their own rate card implies. Enter what you expected to be charged versus what the settlement actually deducted — we flag the overcharges worth disputing.</p>
+        <p className="text-xs text-[var(--color-muted)]">Marketplaces routinely deduct more commission, shipping or closing fees than their own rate card implies. Enter what you expected to be charged versus what the settlement actually deducted - we flag the overcharges worth disputing.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="col-span-2 md:col-span-1"><label className="block text-xs text-[var(--color-muted)] mb-1">Order / settlement ID</label><input value={order} onChange={e => setOrder(e.target.value)} placeholder="402-1234567" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Expected fee (₹)</label><input type="number" value={expected} onChange={e => setExpected(e.target.value)} placeholder="85" className={INP} /></div>
@@ -3109,7 +3109,7 @@ function PlaceOfSupplyResolver() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><MapPin size={14} className="text-[var(--color-primary)]" /> Place-of-Supply Resolver</h2>
-        <p className="text-xs text-[var(--color-muted)]">For goods, place of supply is the buyer's ship-to state. If it differs from your registered state the supply is inter-state (charge IGST); if it matches, it is intra-state (split into CGST + SGST). Marketplace orders ship pan-India, so the head flips order to order — get it wrong and you mis-report in GSTR-1.</p>
+        <p className="text-xs text-[var(--color-muted)]">For goods, place of supply is the buyer's ship-to state. If it differs from your registered state the supply is inter-state (charge IGST); if it matches, it is intra-state (split into CGST + SGST). Marketplace orders ship pan-India, so the head flips order to order - get it wrong and you mis-report in GSTR-1.</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Your (seller) state</label>
@@ -3144,7 +3144,7 @@ function PlaceOfSupplyResolver() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-[var(--color-muted)] mt-3">Rule applies to goods (Sec 10, IGST Act). Services and special cases (e-commerce operator supplies, bill-to/ship-to) can differ — confirm with your CA for edge scenarios.</p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-3">Rule applies to goods (Sec 10, IGST Act). Services and special cases (e-commerce operator supplies, bill-to/ship-to) can differ - confirm with your CA for edge scenarios.</p>
         </div>
       )}
     </div>
@@ -3183,7 +3183,7 @@ function CodRemittanceTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> COD Remittance Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)]">Your courier collects cash on delivery and remits it days later. That float is your money sitting in their account — track collected vs remitted per partner so nothing goes unremitted past its due date.</p>
+        <p className="text-xs text-[var(--color-muted)]">Your courier collects cash on delivery and remits it days later. That float is your money sitting in their account - track collected vs remitted per partner so nothing goes unremitted past its due date.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
           <div className="col-span-2 md:col-span-1"><label className="block text-xs text-[var(--color-muted)] mb-1">Logistics partner</label><input value={partner} onChange={e => setPartner(e.target.value)} placeholder="Delhivery" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">COD orders</label><input type="number" value={orders} onChange={e => setOrders(e.target.value)} placeholder="120" className={INP} /></div>
@@ -3227,7 +3227,7 @@ function CodRemittanceTracker() {
               </table>
             </div>
           </div>
-          <p className="text-[10px] text-[var(--color-muted)]">Float = collected − remitted. Overdue rows (due date passed, still unremitted) are your courier holding your cash — follow up.</p>
+          <p className="text-[10px] text-[var(--color-muted)]">Float = collected − remitted. Overdue rows (due date passed, still unremitted) are your courier holding your cash - follow up.</p>
         </>
       )}
     </div>
@@ -3255,7 +3255,7 @@ function GatewayFeeRecon() {
     const g = parseFloat(gross) || 0;
     if (g <= 0) { toast.error("Enter the gross transaction value"); return; }
     setRows(prev => [...prev, {
-      id: crypto.randomUUID(), gateway: gateway.trim() || "Gateway", method: method.trim() || "—",
+      id: crypto.randomUUID(), gateway: gateway.trim() || "Gateway", method: method.trim() || "-",
       gross: g, feePct: parseFloat(feePct) || 0, fixedFee: parseFloat(fixedFee) || 0, gstOnFee,
     }]);
     setGross("");
@@ -3309,7 +3309,7 @@ function GatewayFeeRecon() {
                         <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
                         <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(Math.round(fee))}</td>
                         <td className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(Math.round(r.gross - fee))}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.gross > 0 ? `${(fee / r.gross * 100).toFixed(2)}%` : "—"}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.gross > 0 ? `${(fee / r.gross * 100).toFixed(2)}%` : "-"}</td>
                         <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                       </tr>
                     );
@@ -3439,7 +3439,7 @@ function ChannelAddRoi() {
     <div className="space-y-4 max-w-3xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Rocket size={14} className="text-[var(--color-primary)]" /> Channel-Add ROI Simulator</h2>
-        <p className="text-xs text-[var(--color-muted)]">Before launching on a new marketplace, model whether it actually adds profit. Account for that channel's fees, shipping, returns, one-time onboarding, recurring fixed costs and — crucially — how much volume just cannibalizes your existing channels rather than being net-new.</p>
+        <p className="text-xs text-[var(--color-muted)]">Before launching on a new marketplace, model whether it actually adds profit. Account for that channel's fees, shipping, returns, one-time onboarding, recurring fixed costs and - crucially - how much volume just cannibalizes your existing channels rather than being net-new.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {([
             ["Monthly units", monthlyUnits, setMonthlyUnits, "300"],
@@ -3466,16 +3466,16 @@ function ChannelAddRoi() {
             <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Net contribution / unit</p><p className={`text-xl font-bold tabular-nums ${netPerUnit >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(netPerUnit))}</p></div>
             <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Monthly contribution</p><p className={`text-xl font-bold tabular-nums ${monthlyContribution >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(monthlyContribution))}</p><p className="text-[10px] text-[var(--color-muted)] mt-0.5">on {Math.round(eff)} incremental units</p></div>
             <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Payback period</p><p className={`text-xl font-bold tabular-nums ${Number.isFinite(paybackMonths) && paybackMonths <= 12 ? "text-green-400" : "text-yellow-400"}`}>{Number.isFinite(paybackMonths) ? `${paybackMonths.toFixed(1)} mo` : "Never"}</p></div>
-            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Year-1 ROI</p><p className={`text-xl font-bold tabular-nums ${roiPct >= 0 ? "text-green-400" : "text-red-400"}`}>{Number.isFinite(roiPct) ? `${roiPct.toFixed(0)}%` : "—"}</p></div>
+            <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Year-1 ROI</p><p className={`text-xl font-bold tabular-nums ${roiPct >= 0 ? "text-green-400" : "text-red-400"}`}>{Number.isFinite(roiPct) ? `${roiPct.toFixed(0)}%` : "-"}</p></div>
           </div>
           <div className={`rounded-lg p-4 border ${annualNet >= 0 && netPerUnit >= 0 ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
             <p className={`text-sm font-bold flex items-center gap-2 ${annualNet >= 0 && netPerUnit >= 0 ? "text-green-400" : "text-red-400"}`}>
               {annualNet >= 0 && netPerUnit >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
               {netPerUnit < 0
-                ? "Each unit loses money on this channel after fees, shipping and returns — adding it erodes profit regardless of volume."
+                ? "Each unit loses money on this channel after fees, shipping and returns - adding it erodes profit regardless of volume."
                 : annualNet >= 0
-                  ? `Year-1 net profit of ${formatCurrency(Math.round(annualNet))} after setup — this channel is worth adding.`
-                  : `Year-1 still ${formatCurrency(Math.round(Math.abs(annualNet)))} underwater after setup — only add if you expect volume or margin to improve.`}
+                  ? `Year-1 net profit of ${formatCurrency(Math.round(annualNet))} after setup - this channel is worth adding.`
+                  : `Year-1 still ${formatCurrency(Math.round(Math.abs(annualNet)))} underwater after setup - only add if you expect volume or margin to improve.`}
             </p>
           </div>
           <p className="text-[10px] text-[var(--color-muted)]">Cannibalization discounts units that would have sold on an existing channel anyway, so only genuinely incremental volume counts toward this channel's ROI. Per-return loss assumes freight both ways plus unrecovered cost.</p>

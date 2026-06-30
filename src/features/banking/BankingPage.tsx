@@ -39,7 +39,7 @@ export default function BankingPage() {
   const totalBalance = useMemo(() => accounts.reduce((s, a) => s + a.balance, 0), [accounts]);
   const connected = accounts.filter(a => a.status === "connected").length;
   const issues = accounts.filter(a => a.status === "error").length;
-  // Balances are only as good as the last sync — surface age + flag stale (>24h) so
+  // Balances are only as good as the last sync - surface age + flag stale (>24h) so
   // owners don't make sweep/transfer decisions on days-old numbers.
   const syncInfo = (lastSync: string | null | undefined): { label: string; stale: boolean } => {
     if (!lastSync) return { label: "Never synced", stale: true };
@@ -60,7 +60,7 @@ export default function BankingPage() {
             <Landmark size={18} className="text-[var(--color-primary)]" /> Banking &amp; Cash
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Every rupee across every bank — balances, reconciliation, rail choice, fees and idle-cash, India-first (NEFT/RTGS/IMPS/UPI).
+            Every rupee across every bank - balances, reconciliation, rail choice, fees and idle-cash, India-first (NEFT/RTGS/IMPS/UPI).
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -113,8 +113,8 @@ export default function BankingPage() {
 
       <AiInsight
         collapsed
-        title="✨ AI insight — banking"
-        question="Looking at my bank accounts and balances, what should I act on — idle cash, low balances, feed issues, or single-bank concentration (DICGC insures only ₹5L per bank)?"
+        title="✨ AI insight - banking"
+        question="Looking at my bank accounts and balances, what should I act on - idle cash, low balances, feed issues, or single-bank concentration (DICGC insures only ₹5L per bank)?"
         context={{
           totalCash: totalBalance,
           accountCount: accounts.length,
@@ -137,7 +137,7 @@ export default function BankingPage() {
               { label: "Total Cash (all banks)", value: formatCurrency(totalBalance), color: "text-[var(--color-text)]", sub: `${accounts.length} account(s)` },
               { label: "Connected Feeds", value: `${connected}/${accounts.length}`, color: connected === accounts.length ? "text-green-400" : "text-yellow-400", sub: "Live balance feeds" },
               { label: "Feed Issues", value: `${issues}`, color: issues > 0 ? "text-red-400" : "text-green-400", sub: issues > 0 ? "Re-consent needed" : "All healthy" },
-              { label: "Largest Balance", value: accounts.length ? formatAmount(Math.max(...accounts.map(a => a.balance))) : "—", color: "text-blue-400", sub: "Concentration check" },
+              { label: "Largest Balance", value: accounts.length ? formatAmount(Math.max(...accounts.map(a => a.balance))) : "-", color: "text-blue-400", sub: "Concentration check" },
             ].map(c => (
               <div key={c.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
@@ -150,7 +150,7 @@ export default function BankingPage() {
           {staleCount > 0 && (
             <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-2 text-xs text-red-300">
               <span className="font-semibold">{staleCount} account{staleCount === 1 ? "" : "s"} not synced in over 24h.</span>
-              <span className="text-red-300/70">Balances below may be out of date — reconnect the feed before making sweep or transfer decisions.</span>
+              <span className="text-red-300/70">Balances below may be out of date - reconnect the feed before making sweep or transfer decisions.</span>
             </div>
           )}
           {accounts.length === 0 ? (
@@ -377,7 +377,7 @@ function ReconciliationWorkbench() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><GitCompareArrows size={14} className="text-[var(--color-primary)]" /> Reconciliation Workbench</h3>
-        <p className="text-xs text-[var(--color-muted)]">Paste statement lines from your bank (one per line: <code>date, amount, narration</code> — Dr/Cr or a minus sign marks debits). We match them against your book transactions by amount within tolerance.</p>
+        <p className="text-xs text-[var(--color-muted)]">Paste statement lines from your bank (one per line: <code>date, amount, narration</code> - Dr/Cr or a minus sign marks debits). We match them against your book transactions by amount within tolerance.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Account</label>
@@ -443,7 +443,7 @@ function UnmatchedList({ title, tone, lines }: { title: string; tone: "red"; lin
           ? <p className="px-5 py-4 text-xs text-[var(--color-muted)]">No unmatched lines.</p>
           : lines.map((l, i) => (
             <div key={i} className="px-5 py-2.5 flex items-center justify-between gap-3">
-              <div className="min-w-0"><p className="text-xs font-medium truncate">{l.narration || "—"}</p><p className="text-[10px] text-[var(--color-muted)]">{l.date}</p></div>
+              <div className="min-w-0"><p className="text-xs font-medium truncate">{l.narration || "-"}</p><p className="text-[10px] text-[var(--color-muted)]">{l.date}</p></div>
               <span className={`text-xs tabular-nums font-semibold ${l.amount < 0 ? "text-red-400" : "text-green-400"}`}>{formatCurrency(l.amount)}</span>
             </div>
           ))}
@@ -497,7 +497,7 @@ function DailyCashPosition() {
 
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> Pending debits &amp; holds</h3>
-        <p className="text-xs text-[var(--color-muted)]">Cheques not yet cleared, scheduled standing instructions, holds — these reduce truly available cash even though the bank balance still shows them.</p>
+        <p className="text-xs text-[var(--color-muted)]">Cheques not yet cleared, scheduled standing instructions, holds - these reduce truly available cash even though the bank balance still shows them.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Description</label>
@@ -535,7 +535,7 @@ function DailyCashPosition() {
 
       {availableNow < 0 && (
         <Callout tone="warn" icon={AlertTriangle}>
-          Pending holds ({formatCurrency(pendingHolds)}) exceed your bank balance — you risk a returned cheque or failed auto-debit. Arrange funds or reschedule a debit.
+          Pending holds ({formatCurrency(pendingHolds)}) exceed your bank balance - you risk a returned cheque or failed auto-debit. Arrange funds or reschedule a debit.
         </Callout>
       )}
     </div>
@@ -637,7 +637,7 @@ function VirtualAccountTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Hash size={14} className="text-[var(--color-primary)]" /> Virtual-Account Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">Issue a dedicated virtual account number per customer so every inflow auto-identifies who paid — no more guessing from cryptic NEFT/UPI narrations.</p>
+        <p className="text-xs text-[var(--color-muted)]">Issue a dedicated virtual account number per customer so every inflow auto-identifies who paid - no more guessing from cryptic NEFT/UPI narrations.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
@@ -735,7 +735,7 @@ function BankFeeAnalyzer() {
           { label: "Fee debits found", value: `${feeTxns.length}`, color: "text-blue-400" },
           { label: "Total fees paid", value: formatCurrency(Math.round(totalFees)), color: "text-red-400" },
           { label: "Fees as bps of debits", value: `${actualBps.toFixed(1)} bps`, color: actualBps > benchBps ? "text-red-400" : "text-green-400" },
-          { label: "Over benchmark", value: overcharge > 0 ? formatCurrency(Math.round(overcharge)) : "—", color: overcharge > 0 ? "text-red-400" : "text-green-400" },
+          { label: "Over benchmark", value: overcharge > 0 ? formatCurrency(Math.round(overcharge)) : "-", color: overcharge > 0 ? "text-red-400" : "text-green-400" },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -763,7 +763,7 @@ function BankFeeAnalyzer() {
 
       {overcharge > 0 && (
         <Callout tone="warn" icon={AlertTriangle}>
-          You paid about {formatCurrency(Math.round(overcharge))} more in fees than your {benchBps} bps benchmark. Raise these with your relationship manager — many charges (min-balance, SMS, AMC) are negotiable for business accounts.
+          You paid about {formatCurrency(Math.round(overcharge))} more in fees than your {benchBps} bps benchmark. Raise these with your relationship manager - many charges (min-balance, SMS, AMC) are negotiable for business accounts.
         </Callout>
       )}
     </div>
@@ -773,10 +773,10 @@ function BankFeeAnalyzer() {
 // ── 7. Payment-rail chooser (NEFT/RTGS/IMPS/UPI limits, cutoffs, cost) ────────────
 type Rail = { id: string; name: string; min: number; max: number; instant: boolean; cost: string; cutoff: string; note: string };
 const RAILS: Rail[] = [
-  { id: "upi", name: "UPI", min: 1, max: 100000, instant: true, cost: "Free", cutoff: "24x7", note: "₹1L/txn (₹2L–₹5L for some categories). Best for small, instant payments." },
-  { id: "imps", name: "IMPS", min: 1, max: 500000, instant: true, cost: "₹5–₹15 + GST", cutoff: "24x7", note: "Instant up to ₹5L. Good when UPI limit is exceeded." },
-  { id: "neft", name: "NEFT", min: 1, max: Infinity, instant: false, cost: "₹2–₹25 + GST", cutoff: "24x7 (half-hourly batches)", note: "No upper limit; settles in batches. Cheapest for non-urgent bulk." },
-  { id: "rtgs", name: "RTGS", min: 200000, instant: true, max: Infinity, cost: "₹20–₹50 + GST", cutoff: "24x7", note: "Real-time, ₹2L minimum. Use for large, urgent transfers." },
+  { id: "upi", name: "UPI", min: 1, max: 100000, instant: true, cost: "Free", cutoff: "24x7", note: "₹1L/txn (₹2L-₹5L for some categories). Best for small, instant payments." },
+  { id: "imps", name: "IMPS", min: 1, max: 500000, instant: true, cost: "₹5-₹15 + GST", cutoff: "24x7", note: "Instant up to ₹5L. Good when UPI limit is exceeded." },
+  { id: "neft", name: "NEFT", min: 1, max: Infinity, instant: false, cost: "₹2-₹25 + GST", cutoff: "24x7 (half-hourly batches)", note: "No upper limit; settles in batches. Cheapest for non-urgent bulk." },
+  { id: "rtgs", name: "RTGS", min: 200000, instant: true, max: Infinity, cost: "₹20-₹50 + GST", cutoff: "24x7", note: "Real-time, ₹2L minimum. Use for large, urgent transfers." },
 ];
 function PaymentRailChooser() {
   const [amount, setAmount] = useState("");
@@ -800,7 +800,7 @@ function PaymentRailChooser() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Route size={14} className="text-[var(--color-primary)]" /> Payment-Rail Chooser</h3>
-        <p className="text-xs text-[var(--color-muted)]">Pick the right rail — NEFT, RTGS, IMPS or UPI — for an outgoing payment based on amount, urgency, limits and cost.</p>
+        <p className="text-xs text-[var(--color-muted)]">Pick the right rail - NEFT, RTGS, IMPS or UPI - for an outgoing payment based on amount, urgency, limits and cost.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Payment amount (₹)</label>
@@ -815,7 +815,7 @@ function PaymentRailChooser() {
 
       {amt > 0 && recommended && (
         <Callout tone="ok" icon={CheckCircle2}>
-          For {formatCurrency(amt)}{urgent ? " (urgent)" : ""}, use <strong>{recommended.name}</strong> — {recommended.note}
+          For {formatCurrency(amt)}{urgent ? " (urgent)" : ""}, use <strong>{recommended.name}</strong> - {recommended.note}
         </Callout>
       )}
 
@@ -830,11 +830,11 @@ function PaymentRailChooser() {
                 return (
                   <tr key={r.id} className={`hover:bg-white/2 ${recommended?.id === r.id ? "bg-green-950/20" : ""}`}>
                     <td className="px-4 py-2.5 font-medium">{r.name}{recommended?.id === r.id && <span className="ml-1.5 text-[9px] text-green-400 font-semibold">PICK</span>}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{formatAmount(r.min)} – {r.max === Infinity ? "no limit" : formatAmount(r.max)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{formatAmount(r.min)} - {r.max === Infinity ? "no limit" : formatAmount(r.max)}</td>
                     <td className="px-4 py-2.5 text-xs">{r.instant ? "Instant" : "Batch (mins)"}</td>
                     <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.cost}</td>
                     <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.cutoff}</td>
-                    <td className="px-4 py-2.5">{amt <= 0 ? <span className="text-[var(--color-muted)] text-xs">—</span> : ok ? <CheckCircle2 size={13} className="text-green-400" /> : <span className="text-[10px] text-red-400">limit</span>}</td>
+                    <td className="px-4 py-2.5">{amt <= 0 ? <span className="text-[var(--color-muted)] text-xs">-</span> : ok ? <CheckCircle2 size={13} className="text-green-400" /> : <span className="text-[10px] text-red-400">limit</span>}</td>
                   </tr>
                 );
               })}
@@ -884,7 +884,7 @@ function ChequeRegister() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><FileCheck2 size={14} className="text-[var(--color-primary)]" /> Cheque &amp; PDC Register</h3>
-        <p className="text-xs text-[var(--color-muted)]">Track issued and received cheques (including post-dated) through their lifecycle — click a status chip to advance it.</p>
+        <p className="text-xs text-[var(--color-muted)]">Track issued and received cheques (including post-dated) through their lifecycle - click a status chip to advance it.</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Cheque no.</label>
@@ -1120,9 +1120,9 @@ function IdleBalanceAlert() {
                 <tr key={r.id} className={`hover:bg-white/2 ${r.idleAmt > 0 ? "bg-yellow-950/10" : ""}`}>
                   <td className="px-4 py-2.5 font-medium">{r.name}</td>
                   <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.balance)}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-yellow-400">{r.idleAmt > 0 ? formatCurrency(r.idleAmt) : "—"}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{r.daysIdle === null ? "—" : `${r.daysIdle}d`}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-red-400">{r.foregoneAnnual > 0 ? formatCurrency(r.foregoneAnnual) : "—"}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-yellow-400">{r.idleAmt > 0 ? formatCurrency(r.idleAmt) : "-"}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{r.daysIdle === null ? "-" : `${r.daysIdle}d`}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-red-400">{r.foregoneAnnual > 0 ? formatCurrency(r.foregoneAnnual) : "-"}</td>
                 </tr>
               ))}
             </tbody>
@@ -1272,7 +1272,7 @@ function MandateTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Repeat size={14} className="text-[var(--color-primary)]" /> NACH / eNACH Mandate Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">One console for every recurring auto-debit — EMIs, SIPs, utility and SaaS subscriptions running on NACH or UPI AutoPay. Pause or cancel a mandate from one place to stop silent leakage.</p>
+        <p className="text-xs text-[var(--color-muted)]">One console for every recurring auto-debit - EMIs, SIPs, utility and SaaS subscriptions running on NACH or UPI AutoPay. Pause or cancel a mandate from one place to stop silent leakage.</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">UMRN / ref</label>
@@ -1453,7 +1453,7 @@ function GuaranteeLimitTracker() {
 
       {utilPct > 90 && (
         <Callout tone="warn" icon={AlertTriangle}>
-          You have used {utilPct.toFixed(0)}% of your sanctioned BG/LC limit. New guarantees may be declined — ask your bank for an enhancement or release a closed BG to free up headroom.
+          You have used {utilPct.toFixed(0)}% of your sanctioned BG/LC limit. New guarantees may be declined - ask your bank for an enhancement or release a closed BG to free up headroom.
         </Callout>
       )}
       {expiringSoon.length > 0 && (
@@ -1587,7 +1587,7 @@ function StatementImporter() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Statement Importer &amp; Categorizer</h3>
-        <p className="text-xs text-[var(--color-muted)]">Paste raw statement lines (<code>date, amount, narration</code> — Dr/Cr or minus marks debits). Each line is auto-bucketed into salary, vendor, tax, bank-charge, transfer or income so you get an instant spend breakdown without uploading anything.</p>
+        <p className="text-xs text-[var(--color-muted)]">Paste raw statement lines (<code>date, amount, narration</code> - Dr/Cr or minus marks debits). Each line is auto-bucketed into salary, vendor, tax, bank-charge, transfer or income so you get an instant spend breakdown without uploading anything.</p>
         <textarea value={raw} onChange={e => setRaw(e.target.value)} rows={6}
           placeholder={"2026-06-01, 200000, NEFT CR INFOSYS\n2026-06-02, 45000 Dr, SALARY PAYROLL JUNE\n2026-06-03, 11800 Dr, GST CHALLAN\n2026-06-04, 354 Dr, SMS CHARGE GST"}
           className={`${INP} font-mono text-xs`} />
@@ -1634,7 +1634,7 @@ function StatementImporter() {
                   {lines.map((l, i) => (
                     <tr key={i} className="hover:bg-white/2">
                       <td className="px-4 py-2 text-xs text-[var(--color-muted)]">{l.date}</td>
-                      <td className="px-4 py-2 text-xs truncate max-w-[240px]">{l.narration || "—"}</td>
+                      <td className="px-4 py-2 text-xs truncate max-w-[240px]">{l.narration || "-"}</td>
                       <td className={`px-4 py-2 text-xs capitalize font-medium ${CAT_CLR[l.cat]}`}>{l.cat.replace("-", " ")}</td>
                       <td className={`px-4 py-2 tabular-nums text-xs ${l.amount < 0 ? "text-red-400" : "text-green-400"}`}>{formatCurrency(l.amount)}</td>
                     </tr>
@@ -1643,7 +1643,7 @@ function StatementImporter() {
               </table>
             </div>
           </div>
-          <p className="text-[10px] text-[var(--color-muted)]">Categorization is rule-based on the narration text — review before posting to your books. It does not write to the ledger.</p>
+          <p className="text-[10px] text-[var(--color-muted)]">Categorization is rule-based on the narration text - review before posting to your books. It does not write to the ledger.</p>
         </>
       )}
     </div>
@@ -1666,7 +1666,7 @@ function BeneficiaryWhitelist() {
     if (payees.some(p => p.account === account.trim())) { toast.error("This account is already whitelisted"); return; }
     setPayees([...payees, { id: crypto.randomUUID(), name: name.trim(), account: account.trim(), ifsc: ifsc.trim().toUpperCase(), verified: false }]);
     setName(""); setAccount(""); setIfsc("");
-    toast.success("Beneficiary added — verify before first payment");
+    toast.success("Beneficiary added - verify before first payment");
   };
 
   const verified = payees.filter(p => p.verified).length;
@@ -1675,7 +1675,7 @@ function BeneficiaryWhitelist() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><UserCheck size={14} className="text-[var(--color-primary)]" /> Beneficiary Whitelist</h3>
-        <p className="text-xs text-[var(--color-muted)]">Keep one verified payee master. Add an account, validate the IFSC format, then mark it verified once a penny-drop name check matches — so you never wire money to a wrong or fraudulent account.</p>
+        <p className="text-xs text-[var(--color-muted)]">Keep one verified payee master. Add an account, validate the IFSC format, then mark it verified once a penny-drop name check matches - so you never wire money to a wrong or fraudulent account.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Beneficiary name</label>
@@ -1716,7 +1716,7 @@ function BeneficiaryWhitelist() {
                     <tr key={p.id} className="hover:bg-white/2">
                       <td className="px-4 py-2.5 font-medium">{p.name}</td>
                       <td className="px-4 py-2.5 font-mono text-xs">{p.account}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{p.ifsc || "—"}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{p.ifsc || "-"}</td>
                       <td className="px-4 py-2.5">
                         <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${p.verified ? "bg-green-950/30 text-green-400 border-green-800/40" : "bg-yellow-950/30 text-yellow-400 border-yellow-800/40"}`}>{p.verified ? "Verified" : "Unverified"}</span>
                       </td>
@@ -1772,7 +1772,7 @@ function FundTransferPlanner() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Split size={14} className="text-[var(--color-primary)]" /> Fund-Transfer Planner</h3>
-        <p className="text-xs text-[var(--color-muted)]">Set a target balance every account should hold. We work out the fewest transfers to top up accounts below the target using surplus from the others — handy before a payment run.</p>
+        <p className="text-xs text-[var(--color-muted)]">Set a target balance every account should hold. We work out the fewest transfers to top up accounts below the target using surplus from the others - handy before a payment run.</p>
         <div className="max-w-xs">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Target balance per account (₹)</label>
           <input type="number" value={buffer} onChange={e => setBuffer(e.target.value)} className={INP} />
@@ -1810,10 +1810,10 @@ function FundTransferPlanner() {
         </div>
       ) : (
         <Callout tone="ok" icon={CheckCircle2}>
-          {plan.deficit.length === 0 ? "Every account already meets the target balance — no transfers needed." : "No surplus is available to cover the shortfall. Bring in external funds or lower the target."}
+          {plan.deficit.length === 0 ? "Every account already meets the target balance - no transfers needed." : "No surplus is available to cover the shortfall. Bring in external funds or lower the target."}
         </Callout>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A plan only — execute transfers via your bank using the right rail (see the Payment-Rail Chooser). Intra-bank transfers are usually instant and free.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A plan only - execute transfers via your bank using the right rail (see the Payment-Rail Chooser). Intra-bank transfers are usually instant and free.</p>
     </div>
   );
 }
@@ -1895,8 +1895,8 @@ function MinBalanceChecker() {
                       <td className="px-4 py-2.5 font-medium">{r.name}</td>
                       <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.required)}</td>
                       <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.maintained)}</td>
-                      <td className={`px-4 py-2.5 tabular-nums ${r.shortfall > 0 ? "text-red-400" : "text-green-400"}`}>{r.shortfall > 0 ? formatCurrency(r.shortfall) : "—"}</td>
-                      <td className={`px-4 py-2.5 tabular-nums ${r.penalty > 0 ? "text-red-400 font-semibold" : "text-green-400"}`}>{r.penalty > 0 ? formatCurrency(r.penalty) : "—"}</td>
+                      <td className={`px-4 py-2.5 tabular-nums ${r.shortfall > 0 ? "text-red-400" : "text-green-400"}`}>{r.shortfall > 0 ? formatCurrency(r.shortfall) : "-"}</td>
+                      <td className={`px-4 py-2.5 tabular-nums ${r.penalty > 0 ? "text-red-400 font-semibold" : "text-green-400"}`}>{r.penalty > 0 ? formatCurrency(r.penalty) : "-"}</td>
                       <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                     </tr>
                   ))}
@@ -1959,7 +1959,7 @@ function SavingsInterestEstimator() {
           { label: "Interest earned", value: formatCurrency(Math.round(interest)), color: "text-green-400" },
           { label: "Maturity value", value: formatCurrency(Math.round(maturity)), color: "text-[var(--color-text)]" },
           { label: "Effective yield", value: `${effectiveYield.toFixed(2)}%`, color: "text-blue-400" },
-          { label: "Indicative TDS", value: tds > 0 ? formatCurrency(Math.round(tds)) : "—", color: tds > 0 ? "text-yellow-400" : "text-green-400" },
+          { label: "Indicative TDS", value: tds > 0 ? formatCurrency(Math.round(tds)) : "-", color: tds > 0 ? "text-yellow-400" : "text-green-400" },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -1969,7 +1969,7 @@ function SavingsInterestEstimator() {
       </div>
 
       <Callout tone="ok" icon={Coins}>
-        A savings account at {r}% barely beats inflation. For idle business cash, an overnight/liquid fund or an auto-sweep FD usually yields more — compare in the Sweep Planner.
+        A savings account at {r}% barely beats inflation. For idle business cash, an overnight/liquid fund or an auto-sweep FD usually yields more - compare in the Sweep Planner.
       </Callout>
       <p className="text-[10px] text-[var(--color-muted)]">Estimate only, assuming a steady average balance and quarterly compounding. TDS shown is indicative (10% u/s 194A above the ₹40,000 threshold; banks deduct on actual interest credited). Confirm with your bank and CA.</p>
     </div>
@@ -2061,10 +2061,10 @@ function PaymentDatePicker() {
             </div>
           ) : (
             <Callout tone="ok" icon={CheckCircle2}>
-              {result.settles} is a working day — your cheque/NACH instruction should be honoured on the date you intended.
+              {result.settles} is a working day - your cheque/NACH instruction should be honoured on the date you intended.
             </Callout>
           )}
-          <p className="text-[10px] text-[var(--color-muted)]">Holiday list is the common national set; state-specific RBI holidays vary by location — add them in the extra-dates field. Verify with your bank&apos;s holiday calendar.</p>
+          <p className="text-[10px] text-[var(--color-muted)]">Holiday list is the common national set; state-specific RBI holidays vary by location - add them in the extra-dates field. Verify with your bank&apos;s holiday calendar.</p>
         </>
       )}
     </div>
@@ -2243,7 +2243,7 @@ function ForexSpreadTracker() {
               </table>
             </div>
           </div>
-          <p className="text-[10px] text-[var(--color-muted)]">A spread above ~0.5–1% over the interbank rate is high for business volumes — negotiate a finer card/TT rate or compare banks before your next remittance.</p>
+          <p className="text-[10px] text-[var(--color-muted)]">A spread above ~0.5-1% over the interbank rate is high for business volumes - negotiate a finer card/TT rate or compare banks before your next remittance.</p>
         </>
       )}
     </div>
@@ -2273,7 +2273,7 @@ function DuplicatePaymentDetector() {
         const d0 = parseISO(sorted[i - 1].date), d1 = parseISO(sorted[i].date);
         if (!isNaN(d0.getTime()) && !isNaN(d1.getTime()) && Math.abs(differenceInCalendarDays(d1, d0)) <= windowDays) { close = true; break; }
       }
-      if (close) suspects.push({ key, counterparty: arr[0].counterparty || "—", amount: Math.abs(arr[0].amount), txns: sorted });
+      if (close) suspects.push({ key, counterparty: arr[0].counterparty || "-", amount: Math.abs(arr[0].amount), txns: sorted });
     }
     return suspects.sort((a, b) => b.amount - a.amount);
   }, [store.transactions, windowDays]);
@@ -2284,7 +2284,7 @@ function DuplicatePaymentDetector() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><CopyCheck size={14} className="text-[var(--color-primary)]" /> Duplicate-Payment Detector</h3>
-        <p className="text-xs text-[var(--color-muted)]">Flags debits with the same amount to the same counterparty within a short window — the classic signature of an invoice paid twice across banks or rails.</p>
+        <p className="text-xs text-[var(--color-muted)]">Flags debits with the same amount to the same counterparty within a short window - the classic signature of an invoice paid twice across banks or rails.</p>
         <div className="max-w-xs">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Match window: same amount &amp; payee within <strong className="text-[var(--color-text)]">{windowDays}</strong> day(s)</label>
           <input type="range" min={1} max={30} step={1} value={windowDays} onChange={e => setWindowDays(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
@@ -2408,7 +2408,7 @@ function CounterpartyNetting() {
           </div>
           {saved > 0 && (
             <Callout tone="ok" icon={CheckCircle2}>
-              Netting cuts cash movement by {formatCurrency(Math.round(saved))} — fewer transfers, lower fees and float retained. Agree a netting statement with each party before adjusting their ledger.
+              Netting cuts cash movement by {formatCurrency(Math.round(saved))} - fewer transfers, lower fees and float retained. Agree a netting statement with each party before adjusting their ledger.
             </Callout>
           )}
         </>
@@ -2443,7 +2443,7 @@ function InterestCertificateTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Award size={14} className="text-[var(--color-primary)]" /> Interest-Certificate Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">At year-end you need interest certificates from every bank — FD/savings interest (taxable income, TDS credit) and loan/OD interest (deductible). Track which are still pending.</p>
+        <p className="text-xs text-[var(--color-muted)]">At year-end you need interest certificates from every bank - FD/savings interest (taxable income, TDS credit) and loan/OD interest (deductible). Track which are still pending.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Bank</label>
@@ -2510,7 +2510,7 @@ function InterestCertificateTracker() {
           </div>
           {pending.length > 0 && (
             <Callout tone="warn" icon={AlertTriangle}>
-              {pending.length} interest certificate(s) still to collect. Request them before filing — FD/savings interest must be declared and the TDS claimed; loan/OD interest reduces your taxable profit.
+              {pending.length} interest certificate(s) still to collect. Request them before filing - FD/savings interest must be declared and the TDS claimed; loan/OD interest reduces your taxable profit.
             </Callout>
           )}
         </>
@@ -2560,7 +2560,7 @@ function AccountOpeningChecklist() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><FolderCheck size={14} className="text-[var(--color-primary)]" /> Current-Account Opening Checklist</h3>
-        <p className="text-xs text-[var(--color-muted)]">Banks reject account-opening forms over missing KYC. Pick your entity type and tick documents as you gather them — the list follows RBI KYC norms for business accounts.</p>
+        <p className="text-xs text-[var(--color-muted)]">Banks reject account-opening forms over missing KYC. Pick your entity type and tick documents as you gather them - the list follows RBI KYC norms for business accounts.</p>
         <div className="max-w-xs">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Entity type</label>
           <select value={entityType} onChange={e => setEntityType(e.target.value as keyof typeof ENTITY_DOCS)} className={INP}>
@@ -2595,7 +2595,7 @@ function AccountOpeningChecklist() {
       </div>
 
       {pct === 100 ? (
-        <Callout tone="ok" icon={CheckCircle2}>All documents ready — book a branch appointment or start the online onboarding. Carry originals for verification.</Callout>
+        <Callout tone="ok" icon={CheckCircle2}>All documents ready - book a branch appointment or start the online onboarding. Carry originals for verification.</Callout>
       ) : (
         <p className="text-[10px] text-[var(--color-muted)]">Requirements vary slightly by bank; some also ask for a cancelled cheque of an existing account or trade licences specific to your activity.</p>
       )}
@@ -2654,11 +2654,11 @@ function CashRunwayMeter() {
       {stats.count === 0 ? (
         <EmptyHint text="No transactions in the selected window to compute burn. Widen the window or import recent transactions." />
       ) : runwayMonths === Infinity ? (
-        <Callout tone="ok" icon={CheckCircle2}>You are cash-flow positive over this window — inflows cover outflows, so your runway is not shrinking. Consider sweeping the surplus to earn yield.</Callout>
+        <Callout tone="ok" icon={CheckCircle2}>You are cash-flow positive over this window - inflows cover outflows, so your runway is not shrinking. Consider sweeping the surplus to earn yield.</Callout>
       ) : (
         <Callout tone={runwayMonths < 3 ? "warn" : "ok"} icon={runwayMonths < 3 ? AlertTriangle : CheckCircle2}>
-          At the current net burn of {formatCurrency(Math.round(stats.netBurn))}/month, your cash lasts about {runwayMonths.toFixed(1)} months ({runwayDays === Infinity ? "—" : `${runwayDays} days`}).
-          {runwayMonths < 3 ? " That is tight — accelerate collections, trim discretionary spend or arrange a line of credit now." : " Keep an eye on large upcoming debits that could shorten this."}
+          At the current net burn of {formatCurrency(Math.round(stats.netBurn))}/month, your cash lasts about {runwayMonths.toFixed(1)} months ({runwayDays === Infinity ? "-" : `${runwayDays} days`}).
+          {runwayMonths < 3 ? " That is tight - accelerate collections, trim discretionary spend or arrange a line of credit now." : " Keep an eye on large upcoming debits that could shorten this."}
         </Callout>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Burn is an average over the window and treats one-off items the same as recurring ones; exclude exceptional inflows/outflows for a truer picture.</p>
@@ -2685,8 +2685,8 @@ function CashDepositSlip() {
     const body = [
       "CASH DEPOSIT SLIP",
       `Date: ${date}`,
-      `Bank: ${acct?.name ?? "—"} (${acct?.provider ?? ""})`,
-      `Depositor: ${depositor || "—"}`,
+      `Bank: ${acct?.name ?? "-"} (${acct?.provider ?? ""})`,
+      `Depositor: ${depositor || "-"}`,
       "",
       ...lines.filter(l => l.n > 0).map(l => `  ${l.n} x ₹${l.d} = ${formatCurrency(l.value)}`),
       "",
@@ -2702,7 +2702,7 @@ function CashDepositSlip() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ScrollText size={14} className="text-[var(--color-primary)]" /> Cash-Deposit-Slip Generator</h3>
-        <p className="text-xs text-[var(--color-muted)]">Enter the number of notes per denomination — we tally the amount and produce a slip you can copy onto the bank&apos;s pay-in form (RBI no longer issues ₹2000 / ₹1 notes for fresh deposits).</p>
+        <p className="text-xs text-[var(--color-muted)]">Enter the number of notes per denomination - we tally the amount and produce a slip you can copy onto the bank&apos;s pay-in form (RBI no longer issues ₹2000 / ₹1 notes for fresh deposits).</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Deposit into</label>
@@ -2978,7 +2978,7 @@ function OdRenewalReminder() {
           </div>
           {dueSoon.length > 0 && (
             <Callout tone="warn" icon={AlertTriangle}>
-              {dueSoon.length} facility(ies) renew within {leadDays} days. Start collating audited financials, stock &amp; debtor statements and the renewal application now — banks often take 3–6 weeks to re-sanction.
+              {dueSoon.length} facility(ies) renew within {leadDays} days. Start collating audited financials, stock &amp; debtor statements and the renewal application now - banks often take 3-6 weeks to re-sanction.
             </Callout>
           )}
         </>
@@ -3013,14 +3013,14 @@ function SpendByBank() {
     <div className="space-y-4">
       <div className={`${CARD} p-4`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Spend by Bank</h3>
-        <p className="text-xs text-[var(--color-muted)] mt-1">See which account carries most of your outflow — useful for steering spend toward the bank that offers the best fee waivers or float.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-1">See which account carries most of your outflow - useful for steering spend toward the bank that offers the best fee waivers or float.</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
           { label: "Total outflow", value: formatCurrency(totalDebit), color: "text-red-400" },
           { label: "Accounts with activity", value: `${byBank.length}`, color: "text-blue-400" },
-          { label: "Busiest account", value: byBank[0]?.bank ?? "—", color: "text-[var(--color-text)]" },
+          { label: "Busiest account", value: byBank[0]?.bank ?? "-", color: "text-[var(--color-text)]" },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -3090,13 +3090,13 @@ function FdLadderPlanner() {
   }, [rungs, step, perRung, annualRate]);
 
   const totalInterest = ladder.reduce((s, r) => s + r.interest, 0);
-  const firstMaturity = ladder[0]?.maturity ?? "—";
+  const firstMaturity = ladder[0]?.maturity ?? "-";
 
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> FD Ladder Planner</h3>
-        <p className="text-xs text-[var(--color-muted)]">Instead of locking one lump-sum FD, split surplus into equal rungs that mature in staggered intervals. You keep regular access to liquidity while still earning term-deposit rates — and you re-price as rates move.</p>
+        <p className="text-xs text-[var(--color-muted)]">Instead of locking one lump-sum FD, split surplus into equal rungs that mature in staggered intervals. You keep regular access to liquidity while still earning term-deposit rates - and you re-price as rates move.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Surplus to ladder (₹)</label>
@@ -3182,7 +3182,7 @@ function EarlyPayDiscountEngine() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><HandCoins size={14} className="text-[var(--color-primary)]" /> Early-Pay Discount Engine</h3>
-        <p className="text-xs text-[var(--color-muted)]">A supplier offers e.g. <strong>2/10 net 30</strong> — 2% off if you pay within 10 days instead of 30. Compare the implied annualized return against what the same cash earns sitting idle, so you only take discounts that genuinely beat your cost of cash.</p>
+        <p className="text-xs text-[var(--color-muted)]">A supplier offers e.g. <strong>2/10 net 30</strong> - 2% off if you pay within 10 days instead of 30. Compare the implied annualized return against what the same cash earns sitting idle, so you only take discounts that genuinely beat your cost of cash.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice (₹)</label>
@@ -3224,15 +3224,15 @@ function EarlyPayDiscountEngine() {
       {inv > 0 && daysSaved > 0 && (
         worthIt ? (
           <Callout tone="ok" icon={CheckCircle2}>
-            Take it. Paying {daysSaved} days early for a {disc}% discount is an implied <strong>{effAnnual.toFixed(1)}% p.a.</strong> return — well above the {yld}% your idle cash earns. Net gain ≈ {formatCurrency(netBenefit)} on this invoice.
+            Take it. Paying {daysSaved} days early for a {disc}% discount is an implied <strong>{effAnnual.toFixed(1)}% p.a.</strong> return - well above the {yld}% your idle cash earns. Net gain ≈ {formatCurrency(netBenefit)} on this invoice.
           </Callout>
         ) : (
           <Callout tone="warn" icon={AlertTriangle}>
-            Skip it (if cash is tight). The {effAnnual.toFixed(1)}% implied return is below your {yld}% idle yield, so you are better off holding the cash to the net due date — unless the supplier relationship or a stock-out risk justifies paying early.
+            Skip it (if cash is tight). The {effAnnual.toFixed(1)}% implied return is below your {yld}% idle yield, so you are better off holding the cash to the net due date - unless the supplier relationship or a stock-out risk justifies paying early.
           </Callout>
         )
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Implied return = discount / (1 − discount) × 365 / days-saved. The decision flips if your true cost of cash is higher (e.g. OD interest) — use your borrowing rate, not the savings rate, when you are running on overdraft.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Implied return = discount / (1 − discount) × 365 / days-saved. The decision flips if your true cost of cash is higher (e.g. OD interest) - use your borrowing rate, not the savings rate, when you are running on overdraft.</p>
     </div>
   );
 }
@@ -3296,15 +3296,15 @@ function WorkingCapitalCycle() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {metrics.map(m => (
           <div key={m.key} className={`${CARD} p-4`}>
-            <p className="text-xs text-[var(--color-muted)] mb-1">{m.key} — {m.label}</p>
+            <p className="text-xs text-[var(--color-muted)] mb-1">{m.key} - {m.label}</p>
             <p className="text-xl font-bold tabular-nums text-[var(--color-text)]">{m.value.toFixed(0)} days</p>
             <p className="text-[10px] text-[var(--color-muted)] mt-1">{m.hint}</p>
           </div>
         ))}
         <div className={`${CARD} p-4`}>
-          <p className="text-xs text-[var(--color-muted)] mb-1">CCC — Cash-Conversion Cycle</p>
+          <p className="text-xs text-[var(--color-muted)] mb-1">CCC - Cash-Conversion Cycle</p>
           <p className={`text-xl font-bold tabular-nums ${ccc <= 0 ? "text-green-400" : ccc > 60 ? "text-red-400" : "text-yellow-400"}`}>{ccc.toFixed(0)} days</p>
-          <p className="text-[10px] text-[var(--color-muted)] mt-1">{ccc <= 0 ? "Negative — suppliers fund you" : "Cash tied up in the cycle"}</p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">{ccc <= 0 ? "Negative - suppliers fund you" : "Cash tied up in the cycle"}</p>
         </div>
       </div>
 
@@ -3321,7 +3321,7 @@ function WorkingCapitalCycle() {
 
       {ccc > 60 && (
         <Callout tone="warn" icon={AlertTriangle}>
-          A {ccc.toFixed(0)}-day cycle is long — cash is trapped in receivables and stock. Tighten credit terms (lower DSO), trim slow inventory (lower DIO), or negotiate longer supplier terms (higher DPO) to release working capital.
+          A {ccc.toFixed(0)}-day cycle is long - cash is trapped in receivables and stock. Tighten credit terms (lower DSO), trim slow inventory (lower DIO), or negotiate longer supplier terms (higher DPO) to release working capital.
         </Callout>
       )}
     </div>
@@ -3355,7 +3355,7 @@ function DrawingPowerCalculator() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> Drawing-Power Calculator</h3>
-        <p className="text-xs text-[var(--color-muted)]">Banks cap your cash-credit drawing power (DP) at a haircut of paid stock plus eligible book debts — not the full sanctioned limit. Compute DP before you file the monthly stock statement so you never assume more credit than the bank will allow.</p>
+        <p className="text-xs text-[var(--color-muted)]">Banks cap your cash-credit drawing power (DP) at a haircut of paid stock plus eligible book debts - not the full sanctioned limit. Compute DP before you file the monthly stock statement so you never assume more credit than the bank will allow.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Closing stock (₹)</label>
@@ -3409,11 +3409,11 @@ function DrawingPowerCalculator() {
 
       {capped ? (
         <Callout tone="ok" icon={CheckCircle2}>
-          Your computed drawing power ({formatCurrency(drawingPower)}) exceeds the sanctioned limit — you can draw the full {formatCurrency(limit)}. Available headroom: {formatCurrency(headroom)} (before deducting current utilization).
+          Your computed drawing power ({formatCurrency(drawingPower)}) exceeds the sanctioned limit - you can draw the full {formatCurrency(limit)}. Available headroom: {formatCurrency(headroom)} (before deducting current utilization).
         </Callout>
       ) : (
         <Callout tone="warn" icon={AlertTriangle}>
-          Your drawing power ({formatCurrency(drawingPower)}) is below the {formatCurrency(limit)} sanction, so the bank will only let you draw up to DP. Build up paid stock or eligible debtors — or reduce creditors — to unlock the rest of the limit.
+          Your drawing power ({formatCurrency(drawingPower)}) is below the {formatCurrency(limit)} sanction, so the bank will only let you draw up to DP. Build up paid stock or eligible debtors - or reduce creditors - to unlock the rest of the limit.
         </Callout>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Margins (haircuts) and the &lt;90-day debtor rule vary by sanction letter; some banks exclude inter-group debtors and slow-moving stock entirely. Use your facility&apos;s exact terms when filing the statement.</p>
@@ -3454,7 +3454,7 @@ function BankRelationshipScorecard() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Star size={14} className="text-[var(--color-primary)]" /> Bank-Relationship Scorecard</h3>
-        <p className="text-xs text-[var(--color-muted)]">Score each banking relationship 1–5 on the rates you get, the fees you pay, service quality, and how much of your limit you actually use. A neutral scorecard tells you where to consolidate business and which relationship to renegotiate.</p>
+        <p className="text-xs text-[var(--color-muted)]">Score each banking relationship 1-5 on the rates you get, the fees you pay, service quality, and how much of your limit you actually use. A neutral scorecard tells you where to consolidate business and which relationship to renegotiate.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Bank</label>
@@ -3473,8 +3473,8 @@ function BankRelationshipScorecard() {
           <div className="grid grid-cols-3 gap-3">
             {[
               { label: "Banks scored", value: `${banks.length}`, color: "text-blue-400" },
-              { label: "Top relationship", value: best ? `${best.bank} (${best.score.toFixed(1)})` : "—", color: "text-green-400" },
-              { label: "Weakest relationship", value: weakest ? `${weakest.bank} (${weakest.score.toFixed(1)})` : "—", color: weakest ? "text-yellow-400" : "text-[var(--color-muted)]" },
+              { label: "Top relationship", value: best ? `${best.bank} (${best.score.toFixed(1)})` : "-", color: "text-green-400" },
+              { label: "Weakest relationship", value: weakest ? `${weakest.bank} (${weakest.score.toFixed(1)})` : "-", color: weakest ? "text-yellow-400" : "text-[var(--color-muted)]" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>

@@ -1,4 +1,4 @@
-// Headroom Collab — tenant context (Phase 0).
+// Headroom Collab - tenant context (Phase 0).
 //
 // The collab tables have FORCE ROW LEVEL SECURITY keyed on the `app.current_tenant`
 // session GUC (see ./schema.js). Postgres connections are pooled, so the GUC MUST
@@ -6,7 +6,7 @@
 // can never be a plain SET (that would leak to the next request reusing the
 // connection). withTenant() is the ONLY sanctioned way to touch collab tables:
 // it opens a transaction, sets the GUC for that transaction, runs the callback,
-// and commits/rolls back — the GUC resets automatically on release.
+// and commits/rolls back - the GUC resets automatically on release.
 //
 // RLS is the backstop, not the primary guard. Routes still do the authoritative
 // org-membership + conversation-membership checks in the app layer (spec §8).
@@ -28,7 +28,7 @@ async function withTenant(tenantId, fn) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    // set_config(name, value, is_local=true) === SET LOCAL — transaction-scoped,
+    // set_config(name, value, is_local=true) === SET LOCAL - transaction-scoped,
     // auto-reset on COMMIT/ROLLBACK, never leaks across pooled connections.
     await client.query("SELECT set_config('app.current_tenant', $1, true)", [String(tenantId)]);
     const result = await fn(client);
@@ -65,7 +65,7 @@ function tenantOf(req) {
 /**
  * Express middleware: require an authenticated user and stamp collab context onto
  * the request. Mount AFTER the existing `authenticate` middleware. This is the
- * "auth middleware that sets the tenant context" from the spec — the actual GUC
+ * "auth middleware that sets the tenant context" from the spec - the actual GUC
  * is applied per-query by withTenant() (pool-safe), and req.collab carries the
  * resolved identity plus a pre-bound query helper for handlers.
  */

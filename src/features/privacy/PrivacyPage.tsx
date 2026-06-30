@@ -75,7 +75,7 @@ export default function PrivacyPage() {
             <ShieldCheck size={18} className="text-[var(--color-primary)]" /> Privacy & Consent
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            DEPA / Account Aggregator consents, DPDP Act 2023 compliance, data-rights tracking and breach response — one control centre.
+            DEPA / Account Aggregator consents, DPDP Act 2023 compliance, data-rights tracking and breach response - one control centre.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -177,10 +177,10 @@ function Overview({ onJump }: { onJump: (t: TabId) => void }) {
   ];
 
   const alerts: { tone: "red" | "yellow"; text: string; tab: TabId }[] = [];
-  if (openBreaches > 0) alerts.push({ tone: "red", text: `${openBreaches} reportable breach(es) not yet notified to the Data Protection Board — the DPDP Act expects notification without delay.`, tab: "breach" });
-  if (expiringSoon > 0) alerts.push({ tone: "yellow", text: `${expiringSoon} Account-Aggregator consent(s) expire within 30 days — renew before cash-flow underwriting breaks.`, tab: "expiry" });
+  if (openBreaches > 0) alerts.push({ tone: "red", text: `${openBreaches} reportable breach(es) not yet notified to the Data Protection Board - the DPDP Act expects notification without delay.`, tab: "breach" });
+  if (expiringSoon > 0) alerts.push({ tone: "yellow", text: `${expiringSoon} Account-Aggregator consent(s) expire within 30 days - renew before cash-flow underwriting breaks.`, tab: "expiry" });
   if (unsignedDpa > 0) alerts.push({ tone: "yellow", text: `${unsignedDpa} third-party data recipient(s) have no signed processing agreement on file.`, tab: "third-party" });
-  if (openDsr > 0) alerts.push({ tone: "yellow", text: `${openDsr} data-subject request(s) awaiting fulfilment — DPDP expects a response within ~30 days.`, tab: "dsr" });
+  if (openDsr > 0) alerts.push({ tone: "yellow", text: `${openDsr} data-subject request(s) awaiting fulfilment - DPDP expects a response within ~30 days.`, tab: "dsr" });
 
   return (
     <div className="space-y-5">
@@ -210,12 +210,12 @@ function Overview({ onJump }: { onJump: (t: TabId) => void }) {
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1">Your privacy obligations under Indian law</h2>
         <p className="text-xs text-[var(--color-muted)] mb-4">
-          The Digital Personal Data Protection Act 2023 makes your firm a Data Fiduciary for any personal data you hold. DEPA and the RBI's Account Aggregator framework govern how you fetch financial data with consent. This centre keeps the durable proof — registers, logs and request trails — that an audit or the Data Protection Board can ask for.
+          The Digital Personal Data Protection Act 2023 makes your firm a Data Fiduciary for any personal data you hold. DEPA and the RBI's Account Aggregator framework govern how you fetch financial data with consent. This centre keeps the durable proof - registers, logs and request trails - that an audit or the Data Protection Board can ask for.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {[
-            { t: "Consent must be specific & withdrawable", d: "Log every grant and revocation — tracked in the AA register and DPDP log." },
-            { t: "Honour data-subject rights", d: "Access, correction, erasure and portability — fulfilled via the request tracker." },
+            { t: "Consent must be specific & withdrawable", d: "Log every grant and revocation - tracked in the AA register and DPDP log." },
+            { t: "Honour data-subject rights", d: "Access, correction, erasure and portability - fulfilled via the request tracker." },
             { t: "Minimise & time-box retention", d: "Define a retention clock per data category so nothing is hoarded." },
             { t: "Report breaches promptly", d: "Maintain a breach log and notify the Data Protection Board and affected people." },
           ].map(r => (
@@ -228,7 +228,7 @@ function Overview({ onJump }: { onJump: (t: TabId) => void }) {
       </div>
 
       <p className="text-[10px] text-[var(--color-muted)]">
-        These tools maintain your own compliance records. Backend consent toggles, data export and account-deletion requests live in Settings → Privacy & Data. This is not legal advice — confirm obligations with your counsel or CA.
+        These tools maintain your own compliance records. Backend consent toggles, data export and account-deletion requests live in Settings → Privacy & Data. This is not legal advice - confirm obligations with your counsel or CA.
       </p>
     </div>
   );
@@ -258,7 +258,7 @@ function AAConsentRegister() {
   };
   const setStatus = (id: string, status: AAStatus) => {
     setRows(rows.map(r => r.id === id ? { ...r, status } : r));
-    if (status === "revoked") toast.success("Consent marked revoked — keep the FIP acknowledgement for your records");
+    if (status === "revoked") toast.success("Consent marked revoked - keep the FIP acknowledgement for your records");
   };
   const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
 
@@ -266,7 +266,7 @@ function AAConsentRegister() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Landmark size={14} className="text-[var(--color-primary)]" /> Account Aggregator Consent Register</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Every DEPA consent you grant through an RBI-licensed Account Aggregator — the FIP holding your data, the purpose, scope and expiry. Track grant → active → revoke to stay in control.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Every DEPA consent you grant through an RBI-licensed Account Aggregator - the FIP holding your data, the purpose, scope and expiry. Track grant → active → revoke to stay in control.</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">FIP (data holder)</label>
@@ -330,7 +330,7 @@ function AAConsentRegister() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Under DEPA, consent is purpose-bound and revocable at any time. When you revoke, the FIP must stop sharing — keep the AA acknowledgement as proof.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Under DEPA, consent is purpose-bound and revocable at any time. When you revoke, the FIP must stop sharing - keep the AA acknowledgement as proof.</p>
     </div>
   );
 }
@@ -514,7 +514,7 @@ function DataRightsTracker() {
     if (!subject.trim()) { toast.error("Enter who raised the request"); return; }
     setRows([{ id: uid(), subject: subject.trim(), type, raisedOn: today(), status: "open", note: note.trim() }, ...rows]);
     setSubject(""); setNote("");
-    toast.success("Request logged — SLA clock started");
+    toast.success("Request logged - SLA clock started");
   };
   const setStatus = (id: string, status: DsrStatus) => setRows(rows.map(r => r.id === id ? { ...r, status } : r));
   const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
@@ -523,7 +523,7 @@ function DataRightsTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Inbox size={14} className="text-[var(--color-primary)]" /> Data-Access & Erasure Request Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">When a customer or employee exercises a DPDP right — to access, correct, erase or port their data — log it here. Each request runs against a ~{DSR_SLA_DAYS}-day response clock.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">When a customer or employee exercises a DPDP right - to access, correct, erase or port their data - log it here. Each request runs against a ~{DSR_SLA_DAYS}-day response clock.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Raised by</label>
@@ -563,7 +563,7 @@ function DataRightsTracker() {
                       <td className="px-4 py-3 font-medium">{r.subject}{r.note && <p className="text-[10px] text-[var(--color-muted)] font-normal">{r.note}</p>}</td>
                       <td className="px-4 py-3 text-xs">{DSR_TYPE_LABEL[r.type]}</td>
                       <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.raisedOn}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums">{closed ? "—" : <span className={due < 0 ? "text-red-400 font-semibold" : due <= 7 ? "text-yellow-400" : "text-[var(--color-muted)]"}>{due < 0 ? `${Math.abs(due)}d overdue` : `${due}d`}</span>}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums">{closed ? "-" : <span className={due < 0 ? "text-red-400 font-semibold" : due <= 7 ? "text-yellow-400" : "text-[var(--color-muted)]"}>{due < 0 ? `${Math.abs(due)}d overdue` : `${due}d`}</span>}</td>
                       <td className="px-4 py-3"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${DSR_STATUS_PILL[r.status]}`}>{r.status.replace("_", " ")}</span></td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <select value={r.status} onChange={e => setStatus(r.id, e.target.value as DsrStatus)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-[11px] outline-none focus:border-[var(--color-primary)] mr-2">
@@ -587,7 +587,7 @@ function DataRightsTracker() {
 const DEFAULT_RETENTION: RetentionRow[] = [
   { id: "r1", category: "Books of account & invoices", years: 8, basis: "Income-tax Act / Companies Act" },
   { id: "r2", category: "GST records & returns", years: 6, basis: "CGST Act s.36" },
-  { id: "r3", category: "Marketing contact lists", years: 2, basis: "Consent — DPDP minimisation" },
+  { id: "r3", category: "Marketing contact lists", years: 2, basis: "Consent - DPDP minimisation" },
   { id: "r4", category: "Website analytics / logs", years: 1, basis: "Operational need" },
 ];
 function RetentionPolicy() {
@@ -608,7 +608,7 @@ function RetentionPolicy() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Clock4 size={14} className="text-[var(--color-primary)]" /> Data-Retention Policy</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Define how long you keep each data category and the legal or business basis. DPDP expects you to erase personal data once its purpose is served — unless a statute (tax, GST, companies law) mandates a longer hold.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Define how long you keep each data category and the legal or business basis. DPDP expects you to erase personal data once its purpose is served - unless a statute (tax, GST, companies law) mandates a longer hold.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Data category</label>
@@ -647,7 +647,7 @@ function RetentionPolicy() {
           </table>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Statutory minimums shown are typical — confirm exact periods with your CA. Set a calendar reminder to purge data once a clock expires and no legal hold applies.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Statutory minimums shown are typical - confirm exact periods with your CA. Set a calendar reminder to purge data once a clock expires and no legal hold applies.</p>
     </div>
   );
 }
@@ -675,7 +675,7 @@ function ThirdPartyRegistry() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Share2 size={14} className="text-[var(--color-primary)]" /> Third-Party Data-Sharing Registry</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Track every processor, SaaS tool or partner that receives personal data downstream — what you share, why, and whether a Data Processing Agreement (DPA) is on file. DPDP holds you accountable for your processors.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track every processor, SaaS tool or partner that receives personal data downstream - what you share, why, and whether a Data Processing Agreement (DPA) is on file. DPDP holds you accountable for your processors.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Recipient</label>
@@ -719,7 +719,7 @@ function ThirdPartyRegistry() {
                   <tr key={r.id} className="hover:bg-white/2">
                     <td className="px-4 py-3 font-medium">{r.recipient}</td>
                     <td className="px-4 py-3 text-xs">{r.dataShared}</td>
-                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.purpose || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.purpose || "-"}</td>
                     <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.sharedOn}</td>
                     <td className="px-4 py-3">
                       <button onClick={() => toggleDpa(r.id)} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${r.dpaSigned ? "bg-green-950/30 text-green-400 border-green-800/40" : "bg-yellow-950/30 text-yellow-400 border-yellow-800/40"}`}>
@@ -802,7 +802,7 @@ const HYGIENE_ITEMS = [
   { id: "h5", text: "Defined retention periods and a purge process per data category", weight: "medium" },
   { id: "h6", text: "Documented a breach-detection and 'notify without delay' procedure", weight: "high" },
   { id: "h7", text: "Can fulfil access / erasure requests within ~30 days", weight: "medium" },
-  { id: "h8", text: "Data minimisation reviewed — collect only what each purpose needs", weight: "medium" },
+  { id: "h8", text: "Data minimisation reviewed - collect only what each purpose needs", weight: "medium" },
   { id: "h9", text: "Verifiable parental consent flow for any data subject under 18", weight: "low" },
   { id: "h10", text: "Sensitive data (PAN, Aadhaar, bank) stored encrypted on Indian soil", weight: "high" },
 ] as const;
@@ -873,7 +873,7 @@ function DataInventory() {
 
   const add = () => {
     if (!element.trim()) { toast.error("Enter a data element"); return; }
-    setRows([...rows, { id: uid(), element: element.trim(), sensitivity, location: location.trim() || "Unspecified", purpose: purpose.trim() || "—" }]);
+    setRows([...rows, { id: uid(), element: element.trim(), sensitivity, location: location.trim() || "Unspecified", purpose: purpose.trim() || "-" }]);
     setElement(""); setLocation(""); setPurpose("");
     toast.success("Data element mapped");
   };
@@ -891,7 +891,7 @@ function DataInventory() {
 
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Database size={14} className="text-[var(--color-primary)]" /> Personal-Data Inventory & Map</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Catalogue every category of personal data you hold, how sensitive it is, where it lives and why. This is the foundation of any DPDP audit — you can't protect what you haven't mapped.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Catalogue every category of personal data you hold, how sensitive it is, where it lives and why. This is the foundation of any DPDP audit - you can't protect what you haven't mapped.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Data element</label>
@@ -959,7 +959,7 @@ function BreachLog() {
     if (!description.trim()) { toast.error("Describe the incident"); return; }
     setRows([{ id: uid(), detectedOn: today(), description: description.trim(), records: Math.max(0, Math.round(parseFloat(records) || 0)), severity, dpbNotified: false, subjectsNotified: false }, ...rows]);
     setDescription(""); setRecords("");
-    toast.success("Incident logged — assess notification duties");
+    toast.success("Incident logged - assess notification duties");
   };
   const toggle = (id: string, field: "dpbNotified" | "subjectsNotified") => setRows(rows.map(r => r.id === id ? { ...r, [field]: !r[field] } : r));
   const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
@@ -1039,7 +1039,7 @@ function BreachLog() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative exposure is a rough internal prompt (₹{PENALTY_PER_RECORD.toLocaleString("en-IN")}/high-severity record), not a legal estimate — DPDP penalties for failure to safeguard data can reach ₹250 crore. Notify the Data Protection Board promptly.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative exposure is a rough internal prompt (₹{PENALTY_PER_RECORD.toLocaleString("en-IN")}/high-severity record), not a legal estimate - DPDP penalties for failure to safeguard data can reach ₹250 crore. Notify the Data Protection Board promptly.</p>
     </div>
   );
 }
@@ -1061,7 +1061,7 @@ function buildPolicy(f: PolicyFirm): string {
   const officer = f.officer.trim() || "[Grievance Officer]";
   const offMail = f.officerEmail.trim() || mail;
   return [
-    `PRIVACY NOTICE — ${firm}`,
+    `PRIVACY NOTICE - ${firm}`,
     `Last updated: ${today()}`,
     ``,
     `${firm} ("we") acts as a Data Fiduciary under the Digital Personal Data Protection Act, 2023 (DPDP Act). This notice explains how we handle your personal data.`,
@@ -1085,7 +1085,7 @@ function buildPolicy(f: PolicyFirm): string {
     `You have the right to access, correct, complete, update and erase your personal data, to nominate, and to grievance redressal. To exercise these rights, contact us.`,
     ``,
     `7. GRIEVANCE OFFICER`,
-    `${officer} — ${offMail}. We will respond to grievances within the timelines prescribed under the DPDP Act.`,
+    `${officer} - ${offMail}. We will respond to grievances within the timelines prescribed under the DPDP Act.`,
     ``,
     `8. CONTACT`,
     `${firm}, ${mail}.`,
@@ -1129,7 +1129,7 @@ function PolicyGenerator() {
         </div>
         <pre className="text-[11px] leading-relaxed whitespace-pre-wrap text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 max-h-[420px] overflow-y-auto">{text}</pre>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Template only — not legal advice. The DPDP Act expects notices to be clear and available in English and the Eighth-Schedule languages on request.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Template only - not legal advice. The DPDP Act expects notices to be clear and available in English and the Eighth-Schedule languages on request.</p>
     </div>
   );
 }
@@ -1150,7 +1150,7 @@ function CookieConsentConfig() {
   const toggleCat = (k: "analytics" | "marketing" | "preferences") => set(k, !cfg[k]);
 
   const categories: { k: "necessary" | "analytics" | "marketing" | "preferences"; label: string; desc: string; locked?: boolean }[] = [
-    { k: "necessary", label: "Strictly necessary", desc: "Required for the site to work — no consent needed.", locked: true },
+    { k: "necessary", label: "Strictly necessary", desc: "Required for the site to work - no consent needed.", locked: true },
     { k: "analytics", label: "Analytics", desc: "Usage measurement (e.g. GA). Requires opt-in consent." },
     { k: "marketing", label: "Marketing / ads", desc: "Retargeting and ad pixels. Requires opt-in consent." },
     { k: "preferences", label: "Preferences", desc: "Remembers choices like language. Requires consent." },
@@ -1267,7 +1267,7 @@ function DpaChecklist() {
           </button>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A DPA is your contractual safeguard under DPDP — the fiduciary stays accountable even when a processor mishandles data. Pair this with the Sharing Registry tab.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A DPA is your contractual safeguard under DPDP - the fiduciary stays accountable even when a processor mishandles data. Pair this with the Sharing Registry tab.</p>
     </div>
   );
 }
@@ -1291,7 +1291,7 @@ function GrievanceOfficerRegister() {
     if (!complainant.trim() || !subject.trim()) { toast.error("Enter who complained and about what"); return; }
     setRows([{ id: uid(), complainant: complainant.trim(), subject: subject.trim(), raisedOn: today(), status: "open", resolution: "" }, ...rows]);
     setComplainant(""); setSubject("");
-    toast.success("Grievance logged — SLA clock started");
+    toast.success("Grievance logged - SLA clock started");
   };
   const setStatus = (id: string, status: GrievanceStatus) => setRows(rows.map(r => r.id === id ? { ...r, status } : r));
   const remove = (id: string) => setRows(rows.filter(r => r.id !== id));
@@ -1326,7 +1326,7 @@ function GrievanceOfficerRegister() {
       )}
 
       {rows.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No grievances logged yet — this register is ready when the first one arrives.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">No grievances logged yet - this register is ready when the first one arrives.</p>
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
@@ -1345,7 +1345,7 @@ function GrievanceOfficerRegister() {
                       <td className="px-4 py-3 font-medium">{r.complainant}</td>
                       <td className="px-4 py-3 text-xs">{r.subject}</td>
                       <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.raisedOn}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums">{closed ? "—" : <span className={due < 0 ? "text-red-400 font-semibold" : due <= 7 ? "text-yellow-400" : "text-[var(--color-muted)]"}>{due < 0 ? `${Math.abs(due)}d overdue` : `${due}d`}</span>}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums">{closed ? "-" : <span className={due < 0 ? "text-red-400 font-semibold" : due <= 7 ? "text-yellow-400" : "text-[var(--color-muted)]"}>{due < 0 ? `${Math.abs(due)}d overdue` : `${due}d`}</span>}</td>
                       <td className="px-4 py-3"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${GRIEVANCE_PILL[r.status]}`}>{r.status.replace("_", " ")}</span></td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <select value={r.status} onChange={e => setStatus(r.id, e.target.value as GrievanceStatus)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-[11px] outline-none focus:border-[var(--color-primary)] mr-2">
@@ -1469,7 +1469,7 @@ function ClassificationMatrix() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Layers size={14} className="text-[var(--color-primary)]" /> Data-Classification Matrix</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Tag each data element with a sensitivity tier so the right handling rules apply. Classification is the basis for proportionate security — you protect the riskiest data hardest.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Tag each data element with a sensitivity tier so the right handling rules apply. Classification is the basis for proportionate security - you protect the riskiest data hardest.</p>
         <div className="flex flex-wrap gap-2 items-end">
           <div className="flex-1 min-w-[180px]">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Data element</label>
@@ -1646,7 +1646,7 @@ function PenaltyEstimator() {
         <div className={`${CARD} p-5`}>
           <p className="text-xs text-[var(--color-muted)] mb-1">Likelihood-weighted exposure</p>
           <p className="text-2xl font-bold tabular-nums text-yellow-400">{formatCurrency(adjusted)}</p>
-          <p className="text-[10px] text-[var(--color-muted)] mt-1">At {Math.round(lk * 100)}% likelihood — budgeting figure only</p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">At {Math.round(lk * 100)}% likelihood - budgeting figure only</p>
         </div>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Caps reflect the DPDP Act 2023 penalty schedule (the Board decides actual amounts case-by-case). This is a prioritisation aid, not a legal or actuarial estimate.</p>
@@ -1846,12 +1846,12 @@ function SarSlaTimer() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Update statuses in the Access / Erasure tab — fulfilled and rejected requests drop off this timer automatically.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Update statuses in the Access / Erasure tab - fulfilled and rejected requests drop off this timer automatically.</p>
     </div>
   );
 }
 
-// ── RoPA — Record of Processing Activities ───────────────────────────────────────
+// ── RoPA - Record of Processing Activities ───────────────────────────────────────
 interface RopaRow {
   id: string; activity: string; categories: string; subjects: string;
   lawfulBasis: string; recipients: string; retention: string;
@@ -1868,7 +1868,7 @@ function RopaRegister() {
 
   const add = () => {
     if (!activity.trim() || !categories.trim()) { toast.error("Enter the processing activity and the data categories"); return; }
-    setRows([{ id: uid(), activity: activity.trim(), categories: categories.trim(), subjects: subjects.trim() || "Customers", lawfulBasis, recipients: recipients.trim() || "—", retention: retention.trim() || "Per retention policy" }, ...rows]);
+    setRows([{ id: uid(), activity: activity.trim(), categories: categories.trim(), subjects: subjects.trim() || "Customers", lawfulBasis, recipients: recipients.trim() || "-", retention: retention.trim() || "Per retention policy" }, ...rows]);
     setActivity(""); setCategories(""); setRecipients(""); setRetention("");
     toast.success("Processing activity recorded in your RoPA");
   };
@@ -1891,7 +1891,7 @@ function RopaRegister() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><ClipboardList size={14} className="text-[var(--color-primary)]" /> Record of Processing Activities (RoPA)</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">A single register of every way your business processes personal data — the activity, the data categories, whose data, your lawful basis, who receives it, and how long it is kept. The defensible document a Data Protection Board audit will ask for first.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A single register of every way your business processes personal data - the activity, the data categories, whose data, your lawful basis, who receives it, and how long it is kept. The defensible document a Data Protection Board audit will ask for first.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Processing activity</label>
@@ -1993,7 +1993,7 @@ function DataFlowMap() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Workflow size={14} className="text-[var(--color-primary)]" /> Data-Flow Map</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Trace each hop personal data takes — from a source system to a destination, whether the leg stays internal, goes to a processor, or leaves to an external party, and whether it is encrypted in transit. The picture that powers a DPIA and a breach blast-radius assessment.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Trace each hop personal data takes - from a source system to a destination, whether the leg stays internal, goes to a processor, or leaves to an external party, and whether it is encrypted in transit. The picture that powers a DPIA and a breach blast-radius assessment.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">From</label>
@@ -2025,7 +2025,7 @@ function DataFlowMap() {
       {unencryptedExternal > 0 && (
         <div className="rounded-lg p-3.5 border border-red-800/40 bg-red-950/20 flex items-center gap-2.5">
           <AlertTriangle size={14} className="text-red-400 shrink-0" />
-          <p className="text-xs text-red-300">{unencryptedExternal} external data flow(s) marked unencrypted — personal data leaving your perimeter in clear is a high-severity exposure.</p>
+          <p className="text-xs text-red-300">{unencryptedExternal} external data flow(s) marked unencrypted - personal data leaving your perimeter in clear is a high-severity exposure.</p>
         </div>
       )}
 
@@ -2110,7 +2110,7 @@ function ConsentReceiptGenerator() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Receipt size={14} className="text-[var(--color-primary)]" /> Consent-Receipt Generator</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Issue a plain-language, machine-readable receipt to a customer for every data grant — what they consented to, the purpose, the lawful basis and their rights. Giving people proof of their consent is a hallmark of DPDP good faith.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Issue a plain-language, machine-readable receipt to a customer for every data grant - what they consented to, the purpose, the lawful basis and their rights. Giving people proof of their consent is a hallmark of DPDP good faith.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Data subject</label>
@@ -2170,7 +2170,7 @@ function DpiaWizard() {
   const max = DPIA_QUESTIONS.reduce((s, q) => s + q.weight, 0);
   const score = DPIA_QUESTIONS.reduce((s, q) => s + (answers[q.id] ? q.weight : 0), 0);
   const pct = Math.round((score / max) * 100);
-  const level = score >= 8 ? "High risk — full DPIA required" : score >= 4 ? "Medium risk — document mitigations" : "Low risk — proceed with care";
+  const level = score >= 8 ? "High risk - full DPIA required" : score >= 4 ? "Medium risk - document mitigations" : "Low risk - proceed with care";
   const levelColor = score >= 8 ? "text-red-400" : score >= 4 ? "text-yellow-400" : "text-green-400";
   const toggle = (id: string) => setAnswers({ ...answers, [id]: !answers[id] });
 
@@ -2186,7 +2186,7 @@ function DpiaWizard() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><FileSearch size={14} className="text-[var(--color-primary)]" /> Data-Protection Impact Assessment (DPIA) Wizard</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Before launching a new feature, data flow or vendor, answer these screening questions. A high score means you should run and file a full DPIA before going live — the kind of due diligence that protects you if the Data Protection Board ever asks.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Before launching a new feature, data flow or vendor, answer these screening questions. A high score means you should run and file a full DPIA before going live - the kind of due diligence that protects you if the Data Protection Board ever asks.</p>
         <div className="flex gap-2 items-end max-w-md">
           <div className="flex-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Project / feature</label>
@@ -2198,7 +2198,7 @@ function DpiaWizard() {
 
       <div className={`${CARD} p-5`}>
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs text-[var(--color-muted)]">Screening questions — tick any that apply</p>
+          <p className="text-xs text-[var(--color-muted)]">Screening questions - tick any that apply</p>
           <div className="text-right">
             <p className={`text-lg font-bold tabular-nums ${levelColor}`}>{score}/{max}</p>
             <p className={`text-[10px] font-medium ${levelColor}`}>{level}</p>
@@ -2270,7 +2270,7 @@ function CrossBorderLog() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Globe size={14} className="text-[var(--color-primary)]" /> Cross-Border Transfer Log</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">The DPDP Act lets the government restrict personal-data transfers to certain countries. Record every time Indian personal data leaves the country — who receives it, where, what data, and the safeguard in place — so you can prove a lawful basis for each transfer.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">The DPDP Act lets the government restrict personal-data transfers to certain countries. Record every time Indian personal data leaves the country - who receives it, where, what data, and the safeguard in place - so you can prove a lawful basis for each transfer.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Overseas recipient</label>
@@ -2297,12 +2297,12 @@ function CrossBorderLog() {
       {unsafeguarded > 0 && (
         <div className="rounded-lg p-3.5 border border-yellow-800/40 bg-yellow-950/20 flex items-center gap-2.5">
           <AlertTriangle size={14} className="text-yellow-400 shrink-0" />
-          <p className="text-xs text-yellow-300">{unsafeguarded} transfer(s) have no safeguard recorded — put contractual clauses or explicit consent in place before relying on these.</p>
+          <p className="text-xs text-yellow-300">{unsafeguarded} transfer(s) have no safeguard recorded - put contractual clauses or explicit consent in place before relying on these.</p>
         </div>
       )}
 
       {rows.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No cross-border transfers logged. Many SaaS tools and clouds store data abroad — record each one.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">No cross-border transfers logged. Many SaaS tools and clouds store data abroad - record each one.</p>
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
@@ -2363,7 +2363,7 @@ function VendorRiskScorecard() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Vendor Privacy-Risk Scorecard</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Before you entrust any vendor with personal data, score them against the controls that matter under DPDP. A low score is a flag to push for a DPA, localisation or a safer alternative — you remain accountable for what your processors do.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Before you entrust any vendor with personal data, score them against the controls that matter under DPDP. A low score is a flag to push for a DPA, localisation or a safer alternative - you remain accountable for what your processors do.</p>
         <div className="flex gap-2 items-end max-w-md">
           <div className="flex-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Vendor / processor</label>
@@ -2427,11 +2427,11 @@ function WithdrawalHandler() {
     setLog(log.map(r => r.id === entry.id ? { ...r, granted: false, withdrawnOn: today() } : r));
     const newTasks: WithdrawTask[] = shares.map(s => ({ id: uid(), entryId: entry.id, recipient: s.recipient, done: false }));
     setTasks([...newTasks, ...tasks]);
-    toast.success(`Consent withdrawn for ${entry.subject} — ${newTasks.length} processor notice(s) queued`);
+    toast.success(`Consent withdrawn for ${entry.subject} - ${newTasks.length} processor notice(s) queued`);
   };
   const toggle = (id: string) => setTasks(tasks.map(t => t.id === id ? { ...t, done: !t.done } : t));
 
-  const subjectOf = (entryId: string) => log.find(r => r.id === entryId)?.subject ?? "—";
+  const subjectOf = (entryId: string) => log.find(r => r.id === entryId)?.subject ?? "-";
   const open = tasks.filter(t => !t.done);
 
   return (
@@ -2485,7 +2485,7 @@ function WithdrawalHandler() {
 }
 
 // ── Breach-Severity Triage ─────────────────────────────────────────────────────────
-// A guided severity assessor — feeds a recommendation on notification duties.
+// A guided severity assessor - feeds a recommendation on notification duties.
 function BreachTriage() {
   const [records, setRecords] = useState("0");
   const [sensitive, setSensitive] = useState(false);
@@ -2508,7 +2508,7 @@ function BreachTriage() {
   const meta: Record<BreachSeverity, { label: string; color: string; bg: string; advice: string }> = {
     high: { label: "High severity", color: "text-red-400", bg: "border-red-800/40 bg-red-950/20", advice: "Notify the Data Protection Board and affected data subjects without delay. Document the timeline, scope and remediation. Log it in your Breach Log." },
     medium: { label: "Medium severity", color: "text-yellow-400", bg: "border-yellow-800/40 bg-yellow-950/20", advice: "Notification to the Board is likely expected. Assess subject impact, prepare a notice, and record your reasoning either way in the Breach Log." },
-    low: { label: "Low severity", color: "text-green-400", bg: "border-green-800/40 bg-green-950/20", advice: "Likely contained / low-risk. Still log the incident and your assessment — the decision not to notify should itself be documented." },
+    low: { label: "Low severity", color: "text-green-400", bg: "border-green-800/40 bg-green-950/20", advice: "Likely contained / low-risk. Still log the incident and your assessment - the decision not to notify should itself be documented." },
   };
   const m = meta[level];
 
@@ -2523,7 +2523,7 @@ function BreachTriage() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Siren size={14} className="text-[var(--color-primary)]" /> Breach-Severity Triage</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">A quick, structured assessment of a suspected data breach. Answer the factors below to get a severity rating and a notification recommendation. This is a triage aid, not legal advice — record the outcome in your Breach Log.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A quick, structured assessment of a suspected data breach. Answer the factors below to get a severity rating and a notification recommendation. This is a triage aid, not legal advice - record the outcome in your Breach Log.</p>
         <div className="max-w-xs mb-4">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Records affected (estimate)</label>
           <input type="number" value={records} onChange={e => setRecords(e.target.value)} className={INP} />
@@ -2613,12 +2613,12 @@ function PurgeScheduler() {
                       <td className="px-4 py-3 font-medium">{r.category}</td>
                       <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.lastDataDate}</td>
                       <td className="px-4 py-3 text-xs tabular-nums">{r.years <= 0 ? "Purpose-based" : `${r.years}y`}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums">{due ? due.toISOString().split("T")[0] : "—"}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums">{due ? due.toISOString().split("T")[0] : "-"}</td>
                       <td className="px-4 py-3">
                         {r.purgedOn
                           ? <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={12} /> Purged {r.purgedOn}</span>
                           : days !== null && days < 0
-                            ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-red-950/30 text-red-400 border-red-800/40">{Math.abs(days)}d overdue — purge</span>
+                            ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-red-950/30 text-red-400 border-red-800/40">{Math.abs(days)}d overdue - purge</span>
                             : days !== null && days <= 30
                               ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-yellow-950/30 text-yellow-400 border-yellow-800/40">Due in {days}d</span>
                               : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]">Within retention</span>}
@@ -2635,7 +2635,7 @@ function PurgeScheduler() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A legal hold (litigation, audit) overrides scheduled purge — confirm none applies before erasing.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A legal hold (litigation, audit) overrides scheduled purge - confirm none applies before erasing.</p>
     </div>
   );
 }
@@ -2646,11 +2646,11 @@ function LawfulBasisAdvisor() {
   const { store } = useApp();
   const firmName = store.firm?.name || "your firm";
   const SCENARIOS = [
-    { id: "marketing", label: "Marketing / newsletters / promotions", basis: "Consent", note: "No legitimate-use exemption — you need specific, opt-in consent and an easy withdrawal path.", tone: "yellow" as const },
+    { id: "marketing", label: "Marketing / newsletters / promotions", basis: "Consent", note: "No legitimate-use exemption - you need specific, opt-in consent and an easy withdrawal path.", tone: "yellow" as const },
     { id: "order", label: "Fulfilling an order / service the person asked for", basis: "Legitimate use (voluntary provision)", note: "Where the individual voluntarily gave data for this purpose and hasn't objected, you may process without separate consent.", tone: "green" as const },
     { id: "employment", label: "Employment / payroll / HR records", basis: "Legitimate use (employment)", note: "Processing for employment purposes is a recognised legitimate use under DPDP.", tone: "green" as const },
     { id: "legal", label: "Meeting a legal / tax / GST obligation", basis: "Legitimate use (compliance with law)", note: "Retention and processing mandated by statute (Income-tax, GST, Companies Act) is permitted.", tone: "green" as const },
-    { id: "third-party", label: "Buying / sharing a contact list with a partner", basis: "Consent (of each subject)", note: "High risk — each person must have consented to this sharing. Without it, do not proceed.", tone: "red" as const },
+    { id: "third-party", label: "Buying / sharing a contact list with a partner", basis: "Consent (of each subject)", note: "High risk - each person must have consented to this sharing. Without it, do not proceed.", tone: "red" as const },
     { id: "minor", label: "Collecting data from someone under 18", basis: "Verifiable parental consent", note: "DPDP mandates verifiable consent from a parent/guardian and bars behavioural tracking of children.", tone: "red" as const },
   ];
   const [pick, setPick] = useState<string>(SCENARIOS[0].id);
@@ -2661,14 +2661,14 @@ function LawfulBasisAdvisor() {
   const copy = () => {
     const txt = `Lawful basis for ${firmName}: "${sel.label}" → ${sel.basis}. ${sel.note}`;
     navigator.clipboard?.writeText(txt);
-    toast.success("Basis note copied — paste it into your RoPA");
+    toast.success("Basis note copied - paste it into your RoPA");
   };
 
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Scale size={14} className="text-[var(--color-primary)]" /> Lawful-Basis Advisor</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">DPDP lets you process personal data on consent or on a defined set of legitimate uses. Pick what you are doing to see which basis applies — and where consent is non-negotiable. Useful when filling your RoPA register.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">DPDP lets you process personal data on consent or on a defined set of legitimate uses. Pick what you are doing to see which basis applies - and where consent is non-negotiable. Useful when filling your RoPA register.</p>
         <div className="max-w-md">
           <label className="text-xs text-[var(--color-muted)] block mb-1">What are you doing with personal data?</label>
           <select value={pick} onChange={e => setPick(e.target.value)} className={INP}>

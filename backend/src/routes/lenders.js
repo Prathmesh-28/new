@@ -11,7 +11,7 @@ function scopeTenant(req, fallback) {
   return req.user.tenant_id;
 }
 
-// POST /applications — borrower submits a real loan application for their tenant.
+// POST /applications - borrower submits a real loan application for their tenant.
 router.post("/applications", authenticate, async (req, res) => {
   try {
     const { company_name, amount, purpose, tenure_months } = req.body || {};
@@ -31,7 +31,7 @@ router.post("/applications", authenticate, async (req, res) => {
   }
 });
 
-// GET /applications/mine — the caller's own applications, each with its bids.
+// GET /applications/mine - the caller's own applications, each with its bids.
 router.get("/applications/mine", authenticate, async (req, res) => {
   try {
     const tenant_id = scopeTenant(req);
@@ -59,7 +59,7 @@ router.get("/applications/mine", authenticate, async (req, res) => {
   }
 });
 
-// GET /queue — open applications across all tenants for lenders to browse, each
+// GET /queue - open applications across all tenants for lenders to browse, each
 // annotated with how many bids it already has.
 router.get("/queue", authenticate, async (req, res) => {
   try {
@@ -80,7 +80,7 @@ router.get("/queue", authenticate, async (req, res) => {
   }
 });
 
-// POST /applications/:id/bid — a lender persists a bid on an application.
+// POST /applications/:id/bid - a lender persists a bid on an application.
 router.post("/applications/:id/bid", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -105,7 +105,7 @@ router.post("/applications/:id/bid", authenticate, async (req, res) => {
   }
 });
 
-// GET /applications/:id/bids — all bids on a single application.
+// GET /applications/:id/bids - all bids on a single application.
 router.get("/applications/:id/bids", authenticate, async (req, res) => {
   try {
     const { id } = req.params;

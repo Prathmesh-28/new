@@ -1,5 +1,5 @@
 "use strict";
-// SMB embedded lending — LOS (offers + KFS) + LMS (loans, amortization schedule,
+// SMB embedded lending - LOS (offers + KFS) + LMS (loans, amortization schedule,
 // repayments, DPD). Tenant-scoped; collab_uuidv7 PKs. Models the SMB-SIDE of the
 // loan (Headroom is the SMB's books): a disbursal is cash in + a Borrowings LIABILITY;
 // repayment splits principal/interest. The invoice-financing wedge links a loan to a

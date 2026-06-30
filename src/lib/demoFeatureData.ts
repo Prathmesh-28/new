@@ -1,5 +1,5 @@
 // Investor-demo feature data bag.
-// AUTO-GENERATED from scratchpad/demoseed/*.json — do not edit by hand.
+// AUTO-GENERATED from scratchpad/demoseed/*.json - do not edit by hand.
 // Regenerate by re-running the demo-seed merge step.
 
 export const DEMO_FEATURE_DATA: Record<string, unknown> = {
@@ -2423,7 +2423,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
   "auto-reminders": [
     {
       "id": "rem-301",
-      "label": "Sunrise Textiles Pvt Ltd — ₹1,85,000 (due 2026-06-25)",
+      "label": "Sunrise Textiles Pvt Ltd - ₹1,85,000 (due 2026-06-25)",
       "source": "invoice",
       "refId": "inv-501",
       "baseDate": "2026-06-25",
@@ -2432,7 +2432,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     },
     {
       "id": "rem-302",
-      "label": "Bharat Engineering Works — ₹2,40,000 (due 2026-06-30)",
+      "label": "Bharat Engineering Works - ₹2,40,000 (due 2026-06-30)",
       "source": "invoice",
       "refId": "inv-502",
       "baseDate": "2026-06-30",
@@ -2450,7 +2450,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     },
     {
       "id": "rem-304",
-      "label": "GST payment Q1 — ₹1,20,000 (due 2026-07-20)",
+      "label": "GST payment Q1 - ₹1,20,000 (due 2026-07-20)",
       "source": "obligation",
       "refId": "obl-701",
       "baseDate": "2026-07-20",
@@ -2459,7 +2459,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     },
     {
       "id": "rem-305",
-      "label": "Krishna Traders — ₹65,000 (due 2026-07-05)",
+      "label": "Krishna Traders - ₹65,000 (due 2026-07-05)",
       "source": "invoice",
       "refId": "inv-503",
       "baseDate": "2026-07-05",
@@ -2549,7 +2549,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "title": "GSTR-3B filing",
       "cadence": "monthly",
       "anchorDate": "2026-07-20",
-      "owner": "CA — Verma & Associates"
+      "owner": "CA - Verma & Associates"
     },
     {
       "id": "task-503",
@@ -2563,7 +2563,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "title": "Advance tax estimate",
       "cadence": "quarterly",
       "anchorDate": "2026-09-15",
-      "owner": "CA — Verma & Associates"
+      "owner": "CA - Verma & Associates"
     },
     {
       "id": "task-505",
@@ -2643,7 +2643,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "id": "notif-704",
       "event": "GST due date",
       "channel": "email",
-      "recipient": "CA — Verma & Associates",
+      "recipient": "CA - Verma & Associates",
       "quietHours": true
     },
     {
@@ -2734,17 +2734,17 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     {
       "id": "esc-1001",
       "afterDays": 7,
-      "assignee": "Collections — Priya Sharma"
+      "assignee": "Collections - Priya Sharma"
     },
     {
       "id": "esc-1002",
       "afterDays": 15,
-      "assignee": "Finance Lead — Rohan Gupta"
+      "assignee": "Finance Lead - Rohan Gupta"
     },
     {
       "id": "esc-1003",
       "afterDays": 30,
-      "assignee": "Director — Anita Rao"
+      "assignee": "Director - Anita Rao"
     },
     {
       "id": "esc-1004",
@@ -2789,14 +2789,14 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "id": "jrn-1201",
       "name": "Monthly office rent",
       "debit": "Rent Expense",
-      "credit": "Bank — HDFC Current",
+      "credit": "Bank - HDFC Current",
       "amount": 85000,
       "cadence": "monthly",
       "anchorDate": "2026-07-01"
     },
     {
       "id": "jrn-1202",
-      "name": "Depreciation — plant",
+      "name": "Depreciation - plant",
       "debit": "Depreciation Expense",
       "credit": "Accumulated Depreciation",
       "amount": 42000,
@@ -2916,13 +2916,13 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "id": "disc-1501",
       "minAmount": 50000,
       "percent": 2,
-      "label": "Bulk order — 2% off above ₹50k"
+      "label": "Bulk order - 2% off above ₹50k"
     },
     {
       "id": "disc-1502",
       "minAmount": 100000,
       "percent": 5,
-      "label": "Wholesale tier — 5% above ₹1L"
+      "label": "Wholesale tier - 5% above ₹1L"
     },
     {
       "id": "disc-1503",
@@ -3126,7 +3126,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "metric": "obligations-due-30",
       "op": ">",
       "threshold": 250000,
-      "notify": "CA — Verma & Associates"
+      "notify": "CA - Verma & Associates"
     },
     {
       "id": "kpi-1805",
@@ -4029,7 +4029,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "id": "r3",
       "category": "Marketing contact lists",
       "years": 2,
-      "basis": "Consent — DPDP minimisation"
+      "basis": "Consent - DPDP minimisation"
     },
     {
       "id": "r4",
@@ -4418,7 +4418,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "project": "AA-powered credit scoring",
       "score": 10,
       "max": 16,
-      "level": "High risk — full DPIA required",
+      "level": "High risk - full DPIA required",
       "on": "2026-05-12"
     },
     {
@@ -4426,7 +4426,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "project": "WhatsApp marketing automation",
       "score": 5,
       "max": 16,
-      "level": "Medium risk — document mitigations",
+      "level": "Medium risk - document mitigations",
       "on": "2026-04-03"
     },
     {
@@ -4434,7 +4434,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "project": "Anonymous usage analytics",
       "score": 2,
       "max": 16,
-      "level": "Low risk — proceed with care",
+      "level": "Low risk - proceed with care",
       "on": "2026-03-18"
     },
     {
@@ -4442,7 +4442,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "project": "Customer loyalty programme",
       "score": 6,
       "max": 16,
-      "level": "Medium risk — document mitigations",
+      "level": "Medium risk - document mitigations",
       "on": "2026-02-22"
     }
   ],
@@ -4959,7 +4959,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "at": "2026-06-09T14:20:00.000Z",
       "actor": "Vikram Singh",
       "action": "Edited vendor bank details",
-      "detail": "Patel Packaging Co — account updated"
+      "detail": "Patel Packaging Co - account updated"
     },
     {
       "id": "al-2",
@@ -4994,7 +4994,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "at": "2026-03-22T10:05:00.000Z",
       "actor": "Vikram Singh",
       "action": "Granted access",
-      "detail": "Meena Krishnan — Orders module"
+      "detail": "Meena Krishnan - Orders module"
     }
   ],
   "sec-staff-banks": [
@@ -5526,14 +5526,14 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
   "glb-mc-pnl": [
     {
       "id": "mc-1",
-      "label": "Export sales — USA",
+      "label": "Export sales - USA",
       "kind": "revenue",
       "ccy": "USD",
       "amount": "68000"
     },
     {
       "id": "mc-2",
-      "label": "Export sales — EU",
+      "label": "Export sales - EU",
       "kind": "revenue",
       "ccy": "EUR",
       "amount": "42000"
@@ -9813,7 +9813,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "id": "d2",
       "dayOffset": 1,
       "channel": "whatsapp",
-      "action": "WhatsApp: 'Payment failed — tap to pay now'"
+      "action": "WhatsApp: 'Payment failed - tap to pay now'"
     },
     {
       "id": "d3",
@@ -10731,7 +10731,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     {
       "id": "pos-01",
       "provider": "PineLabs",
-      "outletName": "Acme Factory Outlet — Whitefield",
+      "outletName": "Acme Factory Outlet - Whitefield",
       "status": "connected",
       "lastImport": "2026-06-21T06:00:00.000Z",
       "salesImported": 482350,
@@ -10740,7 +10740,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     {
       "id": "pos-02",
       "provider": "Petpooja",
-      "outletName": "Acme Canteen — Peenya",
+      "outletName": "Acme Canteen - Peenya",
       "status": "connected",
       "lastImport": "2026-06-20T05:00:00.000Z",
       "salesImported": 128900,
@@ -10749,7 +10749,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     {
       "id": "pos-03",
       "provider": "Posist",
-      "outletName": "Acme Showroom — Indiranagar",
+      "outletName": "Acme Showroom - Indiranagar",
       "status": "paused",
       "lastImport": "2026-05-28T05:00:00.000Z",
       "salesImported": 254100,
@@ -11104,13 +11104,13 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "reason": "payment_stopped",
       "status": "open",
       "representDate": "2026-07-05",
-      "notes": "Disputed delivery shortfall — under reconciliation."
+      "notes": "Disputed delivery shortfall - under reconciliation."
     }
   ],
   "recurring-templates": [
     {
       "id": "rt-01",
-      "description": "Office rent — Peenya plant",
+      "description": "Office rent - Peenya plant",
       "amount": 185000,
       "direction": "expense",
       "category": "expense",
@@ -11132,7 +11132,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     },
     {
       "id": "rt-03",
-      "description": "Annual maintenance contract — Zoho",
+      "description": "Annual maintenance contract - Zoho",
       "amount": 96000,
       "direction": "expense",
       "category": "expense",
@@ -11143,7 +11143,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     },
     {
       "id": "rt-04",
-      "description": "Retainer — Tata Steel supply",
+      "description": "Retainer - Tata Steel supply",
       "amount": 750000,
       "direction": "income",
       "category": "revenue",
@@ -11154,7 +11154,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     },
     {
       "id": "rt-05",
-      "description": "GST payment — monthly",
+      "description": "GST payment - monthly",
       "amount": 220000,
       "direction": "expense",
       "category": "tax",
@@ -11233,7 +11233,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     },
     {
       "id": "cc-03",
-      "name": "R&D — New Products"
+      "name": "R&D - New Products"
     },
     {
       "id": "cc-04",
@@ -11295,7 +11295,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "id": "jv-03",
       "voucherNo": "JV-2026-003",
       "date": "2026-06-15",
-      "narration": "Provision for doubtful debts — Galaxy Traders",
+      "narration": "Provision for doubtful debts - Galaxy Traders",
       "legs": [
         {
           "account": "Bad Debt Provision",
@@ -11389,7 +11389,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     {
       "id": "coa-inventory",
       "code": "1300",
-      "name": "Inventory — Raw Material",
+      "name": "Inventory - Raw Material",
       "group": "asset"
     },
     {
@@ -11419,13 +11419,13 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     {
       "id": "seed-rev",
       "code": "4000",
-      "name": "Revenue — Domestic Sales",
+      "name": "Revenue - Domestic Sales",
       "group": "income"
     },
     {
       "id": "coa-export",
       "code": "4100",
-      "name": "Revenue — Export Sales",
+      "name": "Revenue - Export Sales",
       "group": "income"
     },
     {
@@ -13449,7 +13449,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
   "doc-checklist-done": {
     "loan::PAN card (business + proprietor/directors)": true,
     "loan::GST registration certificate": true,
-    "loan::Last 6–12 months bank statements": true,
+    "loan::Last 6-12 months bank statements": true,
     "loan::Last 2 years ITR with computation": true,
     "loan::Audited financials / P&L + balance sheet": false,
     "loan::KYC of promoters (Aadhaar + PAN)": true,
@@ -14493,7 +14493,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "party": "Bharat Auto Components Pvt Ltd",
       "invoiceRef": "INV-2026-0142",
       "amount": 86000,
-      "reason": "Short shipment — 12 units less than PO",
+      "reason": "Short shipment - 12 units less than PO",
       "status": "open",
       "openedAt": "2026-06-10",
       "proposed": 74000,
@@ -15467,7 +15467,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "number": "CN-2026-009",
       "againstInvoice": "INV-2026-0097",
       "customer": "Krishna Engineering Works",
-      "reason": "Damaged goods in transit — credit for damaged lot",
+      "reason": "Damaged goods in transit - credit for damaged lot",
       "taxable": "118000",
       "gst": "18",
       "createdAt": "2026-04-20T10:00:00.000Z"
@@ -15603,7 +15603,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "amount": 320000,
       "maker": "Ravi Kumar",
       "status": "rejected",
-      "note": "Customer on risk watchlist — require advance",
+      "note": "Customer on risk watchlist - require advance",
       "createdAt": "2026-06-08T11:30:00.000Z"
     },
     {
@@ -15640,7 +15640,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "id": "ch-001",
       "number": "DC-2026-001",
       "customer": "Bharat Auto Components Pvt Ltd",
-      "purpose": "Job work — machining",
+      "purpose": "Job work - machining",
       "vehicle": "KA 05 MH 4521",
       "items": [
         {
@@ -15697,7 +15697,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "id": "ch-004",
       "number": "DC-2026-004",
       "customer": "Mehta Industrial Supplies",
-      "purpose": "Returnable — testing",
+      "purpose": "Returnable - testing",
       "vehicle": "KA 05 EF 6633",
       "items": [
         {
@@ -15766,7 +15766,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "party": "Bharat Auto Components Pvt Ltd",
       "invoiceRef": "INV-2026-0142",
       "amount": 86000,
-      "reason": "Short shipment — 12 units less than PO",
+      "reason": "Short shipment - 12 units less than PO",
       "status": "open",
       "openedAt": "2026-06-10",
       "proposed": 74000,
@@ -16024,7 +16024,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
   "gst-rcm-register": [
     {
       "id": "rcm-001",
-      "desc": "Legal fees — advocate (unregistered)",
+      "desc": "Legal fees - advocate (unregistered)",
       "supplier": "Rao & Associates, Advocates",
       "amount": 85000,
       "rate": 18,
@@ -16154,7 +16154,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "claimed": 152000,
       "status": "Deficiency",
       "filedDate": "2026-03-18",
-      "notes": "RFD-03 issued — resubmit with EPCG annexure"
+      "notes": "RFD-03 issued - resubmit with EPCG annexure"
     }
   ],
   "tds-gst-entries": [
@@ -16170,7 +16170,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     {
       "id": "tdsg-002",
       "deductor": "Karnataka State PWD",
-      "contract": "Works contract — plant shed",
+      "contract": "Works contract - plant shed",
       "amount": 920000,
       "tdsAmt": 18400,
       "month": "2026-05",
@@ -16339,7 +16339,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
   "blocked-credit-entries": [
     {
       "id": "bce-001",
-      "head": "Motor vehicles (≤13 seats) — not for resale/transport/training",
+      "head": "Motor vehicles (≤13 seats) - not for resale/transport/training",
       "amount": 126000,
       "blocked": true,
       "reason": "17(5)(a)"
@@ -17014,7 +17014,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
   "depreciation-assets": [
     {
       "id": "dep-001",
-      "name": "Factory building — Peenya",
+      "name": "Factory building - Peenya",
       "block": "Buildings (general)",
       "openWdv": 12500000,
       "additions": 0,
@@ -17300,7 +17300,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "invoiceId": "inv-acme-0133",
       "date": "2026-06-12",
       "amount": "275000",
-      "note": "Promised but date lapsed — chase",
+      "note": "Promised but date lapsed - chase",
       "loggedAt": "2026-06-02"
     }
   },
@@ -17574,19 +17574,19 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     },
     {
       "id": "lic-6002",
-      "name": "Factory Licence — KSPCB",
+      "name": "Factory Licence - KSPCB",
       "expiryDate": "2026-08-31",
       "createdAt": "2026-01-10T09:05:00.000Z"
     },
     {
       "id": "lic-6003",
-      "name": "Fire NOC — Karnataka Fire Dept",
+      "name": "Fire NOC - Karnataka Fire Dept",
       "expiryDate": "2026-07-15",
       "createdAt": "2026-01-10T09:10:00.000Z"
     },
     {
       "id": "lic-6004",
-      "name": "Trade Licence — BBMP",
+      "name": "Trade Licence - BBMP",
       "expiryDate": "2026-12-31",
       "createdAt": "2026-01-10T09:12:00.000Z"
     },
@@ -17843,25 +17843,25 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
   "ins-ncb": [
     {
       "id": "ncb-12001",
-      "policy": "Commercial Motor — Tempo KA01AB1234",
+      "policy": "Commercial Motor - Tempo KA01AB1234",
       "basePremium": 96000,
       "claimFreeYears": 3
     },
     {
       "id": "ncb-12002",
-      "policy": "Commercial Motor — Truck KA02CD5678",
+      "policy": "Commercial Motor - Truck KA02CD5678",
       "basePremium": 128000,
       "claimFreeYears": 5
     },
     {
       "id": "ncb-12003",
-      "policy": "Director's Car — KA03EF9012",
+      "policy": "Director's Car - KA03EF9012",
       "basePremium": 42000,
       "claimFreeYears": 2
     },
     {
       "id": "ncb-12004",
-      "policy": "Forklift Cover — Plant",
+      "policy": "Forklift Cover - Plant",
       "basePremium": 31000,
       "claimFreeYears": 4
     }
@@ -19436,7 +19436,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "date": "2026-06-10",
       "direction": "out",
       "amount": 248000,
-      "note": "Contractor milestone payout — Phase 1"
+      "note": "Contractor milestone payout - Phase 1"
     }
   ],
   "tok-rules": [
@@ -19643,7 +19643,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     {
       "id": "log-1",
       "ts": "2026-06-20T09:14:00.000Z",
-      "text": "Chased 3 overdue invoices after the daily brief — Tata Motors, Bosch, Ashok Leyland"
+      "text": "Chased 3 overdue invoices after the daily brief - Tata Motors, Bosch, Ashok Leyland"
     },
     {
       "id": "log-2",
@@ -19779,7 +19779,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     },
     {
       "id": "g-4",
-      "name": "Capex — CNC machine",
+      "name": "Capex - CNC machine",
       "target": 3500000,
       "saved": 1200000,
       "deadline": "2027-03-31",
@@ -20161,25 +20161,25 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
   "fc-pipeline-deals": [
     {
       "id": "pd-1",
-      "name": "Bosch India — annual rate contract",
+      "name": "Bosch India - annual rate contract",
       "value": 4800000,
       "winPct": 70
     },
     {
       "id": "pd-2",
-      "name": "Ashok Leyland — component supply",
+      "name": "Ashok Leyland - component supply",
       "value": 3200000,
       "winPct": 50
     },
     {
       "id": "pd-3",
-      "name": "TVS Motor — tooling order",
+      "name": "TVS Motor - tooling order",
       "value": 1800000,
       "winPct": 40
     },
     {
       "id": "pd-4",
-      "name": "Mahindra — prototype batch",
+      "name": "Mahindra - prototype batch",
       "value": 950000,
       "winPct": 60
     }
@@ -20578,7 +20578,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     {
       "id": "r1",
       "lender": "HDFC Bank",
-      "contact": "RM — Priya Nair",
+      "contact": "RM - Priya Nair",
       "lastContacted": "2026-06-05",
       "nextAction": "Submit Q1 stock statement",
       "nextDate": "2026-06-12"
@@ -20586,7 +20586,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     {
       "id": "r2",
       "lender": "Bajaj Finserv",
-      "contact": "Credit — Amit Shah",
+      "contact": "Credit - Amit Shah",
       "lastContacted": "2026-06-10",
       "nextAction": "Renewal review call",
       "nextDate": "2026-06-25"
@@ -20594,7 +20594,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     {
       "id": "r3",
       "lender": "ICICI Bank",
-      "contact": "RM — Rohan Mehta",
+      "contact": "RM - Rohan Mehta",
       "lastContacted": "2026-06-14",
       "nextAction": "Share audited FY26 financials",
       "nextDate": "2026-06-28"
@@ -20602,7 +20602,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     {
       "id": "r4",
       "lender": "Tata Capital",
-      "contact": "Sales — Deepa Rao",
+      "contact": "Sales - Deepa Rao",
       "lastContacted": "2026-06-08",
       "nextAction": "Negotiate rate reset",
       "nextDate": "2026-07-02"
@@ -20806,7 +20806,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     {
       "id": "fp-3",
       "name": "Meera Iyer",
-      "firm": "Angel — ex-CFO",
+      "firm": "Angel - ex-CFO",
       "stage": "term_sheet",
       "check": 5000000,
       "nextStep": "Review terms with counsel"
@@ -20961,35 +20961,35 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "id": "ws1",
       "date": "2026-06-18",
       "customer": "Sharma Hardware",
-      "item": "MS Angle 50mm — 200 kg",
+      "item": "MS Angle 50mm - 200 kg",
       "amount": 14500
     },
     {
       "id": "ws2",
       "date": "2026-06-19",
       "customer": "Verma Constructions",
-      "item": "TMT Bars Fe500 — 1 tonne",
+      "item": "TMT Bars Fe500 - 1 tonne",
       "amount": 62000
     },
     {
       "id": "ws3",
       "date": "2026-06-19",
       "customer": "Lakshmi Fabricators",
-      "item": "GI Sheet 2mm — 50 units",
+      "item": "GI Sheet 2mm - 50 units",
       "amount": 38750
     },
     {
       "id": "ws4",
       "date": "2026-06-20",
       "customer": "Reddy Interiors",
-      "item": "Aluminium Section — 80 m",
+      "item": "Aluminium Section - 80 m",
       "amount": 21200
     },
     {
       "id": "ws5",
       "date": "2026-06-20",
       "customer": "Bengaluru Steel Mart",
-      "item": "MS Plate 10mm — 500 kg",
+      "item": "MS Plate 10mm - 500 kg",
       "amount": 47500
     },
     {
@@ -21006,7 +21006,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "type": "invoice",
       "reference": "INV-2026-0142",
       "amount": 285000,
-      "requestedBy": "Sales — Ramesh",
+      "requestedBy": "Sales - Ramesh",
       "status": "pending"
     },
     {
@@ -21014,23 +21014,23 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "type": "payment",
       "reference": "PO-2026-0098 (vendor)",
       "amount": 120000,
-      "requestedBy": "Purchase — Sunita",
+      "requestedBy": "Purchase - Sunita",
       "status": "approved"
     },
     {
       "id": "ap3",
       "type": "expense",
-      "reference": "Travel reimbursement — Mumbai",
+      "reference": "Travel reimbursement - Mumbai",
       "amount": 18500,
-      "requestedBy": "Field — Arjun",
+      "requestedBy": "Field - Arjun",
       "status": "pending"
     },
     {
       "id": "ap4",
       "type": "payment",
-      "reference": "Electricity bill — Peenya unit",
+      "reference": "Electricity bill - Peenya unit",
       "amount": 64200,
-      "requestedBy": "Admin — Deepa",
+      "requestedBy": "Admin - Deepa",
       "status": "approved"
     },
     {
@@ -21038,7 +21038,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "type": "invoice",
       "reference": "INV-2026-0139",
       "amount": 92000,
-      "requestedBy": "Sales — Ramesh",
+      "requestedBy": "Sales - Ramesh",
       "status": "rejected"
     },
     {
@@ -21046,7 +21046,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "type": "expense",
       "reference": "Office supplies",
       "amount": 7600,
-      "requestedBy": "Admin — Deepa",
+      "requestedBy": "Admin - Deepa",
       "status": "pending"
     }
   ],
@@ -21383,7 +21383,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     },
     {
       "id": "ct4",
-      "name": "Seed — Blume Ventures",
+      "name": "Seed - Blume Ventures",
       "shareClass": "VC",
       "sharesHeld": 1500000,
       "amountInvested": 15000000
@@ -21423,7 +21423,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "date": "2026-05-15",
       "bureau": "CIBIL Rank",
       "score": 5,
-      "note": "CMR-5 — moved up one tier"
+      "note": "CMR-5 - moved up one tier"
     },
     {
       "id": "rd5",
@@ -21552,7 +21552,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     },
     {
       "id": "uf4",
-      "category": "Capex — Machinery",
+      "category": "Capex - Machinery",
       "committed": 5000000,
       "deployed": 3000000
     },

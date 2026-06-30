@@ -76,7 +76,7 @@ export default function DebtPage() {
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Scale size={18} className="text-[var(--color-primary)]" /> Debt Manager</h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Consolidated view of every loan — amortisation, prepayment savings, refinance maths, lender covenants.
+            Consolidated view of every loan - amortisation, prepayment savings, refinance maths, lender covenants.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -148,8 +148,8 @@ export default function DebtPage() {
         {[
           { label: "Total Outstanding", value: formatAmount(snap.debtOutstanding), color: "text-[var(--color-text)]", sub: `${loans.length} active loan(s)` },
           { label: "Monthly Debt Service", value: formatAmount(snap.monthlyDebtService), color: "text-red-400", sub: `${formatAmount(snap.monthlyInterest)}/mo is pure interest` },
-          { label: "Weighted Avg Rate", value: snap.weightedAvgRatePct !== null ? `${snap.weightedAvgRatePct.toFixed(1)}%` : "—", color: "text-yellow-400", sub: "Across all loans" },
-          { label: "DSCR", value: snap.dscr !== null ? `${snap.dscr.toFixed(2)}x` : "No debt", color: dscrOk ? "text-green-400" : "text-red-400", sub: dscrOk ? "Above 1.25x lender bar" : "Below 1.25x — refinance risk" },
+          { label: "Weighted Avg Rate", value: snap.weightedAvgRatePct !== null ? `${snap.weightedAvgRatePct.toFixed(1)}%` : "-", color: "text-yellow-400", sub: "Across all loans" },
+          { label: "DSCR", value: snap.dscr !== null ? `${snap.dscr.toFixed(2)}x` : "No debt", color: dscrOk ? "text-green-400" : "text-red-400", sub: dscrOk ? "Above 1.25x lender bar" : "Below 1.25x - refinance risk" },
         ].map(k => (
           <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -235,7 +235,7 @@ export default function DebtPage() {
             <>
               {/* Amortisation chart */}
               <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-                <p className="text-sm font-semibold mb-1">Amortisation — {selected.lender}</p>
+                <p className="text-sm font-semibold mb-1">Amortisation - {selected.lender}</p>
                 <p className="text-xs text-[var(--color-muted)] mb-4">
                   {selRemaining} months remaining · EMI {formatCurrency(Math.round(selected.monthlyEmi))} · every EMI early in the term is mostly interest.
                 </p>
@@ -254,7 +254,7 @@ export default function DebtPage() {
                 {/* Prepayment simulator */}
                 <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
                   <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Zap size={13} className="text-yellow-400" /> Prepayment Simulator</p>
-                  <p className="text-xs text-[var(--color-muted)] mb-4">One-time lump sum, same EMI — see how much interest disappears.</p>
+                  <p className="text-xs text-[var(--color-muted)] mb-4">One-time lump sum, same EMI - see how much interest disappears.</p>
                   <label className="text-xs text-[var(--color-muted)]">Lump-sum amount</label>
                   <input
                     type="range" min={10000} max={Math.max(10000, selected.outstanding)} step={10000} value={Math.min(prepay, selected.outstanding)}
@@ -307,7 +307,7 @@ export default function DebtPage() {
               {/* Schedule table (first 12 months) */}
               <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
                 <div className="px-5 py-3 border-b border-[var(--color-border)]">
-                  <p className="text-sm font-semibold">Repayment Schedule — next 12 months</p>
+                  <p className="text-sm font-semibold">Repayment Schedule - next 12 months</p>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -461,7 +461,7 @@ function AmortisePrepaySimulator() {
             {[
               { label: "Monthly EMI", value: fc(Math.round(result.baseEmi)), color: "text-[var(--color-text)]" },
               { label: "Total Interest (no prepay)", value: formatAmount(Math.round(result.base.totalInterest)), color: "text-red-400" },
-              { label: "Interest Saved", value: result.withPrepay ? formatAmount(Math.max(0, Math.round(result.base.totalInterest - result.withPrepay.totalInterest))) : "—", color: "text-green-400" },
+              { label: "Interest Saved", value: result.withPrepay ? formatAmount(Math.max(0, Math.round(result.base.totalInterest - result.withPrepay.totalInterest))) : "-", color: "text-green-400" },
               { label: result.withPrepay && prepayMode === "tenure" ? "Months Cut" : "New Term", value: result.withPrepay ? (prepayMode === "tenure" ? `${result.base.term - result.withPrepay.term} mo` : `${result.withPrepay.term} mo`) : `${result.base.term} mo`, color: "text-green-400" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
@@ -483,7 +483,7 @@ function AmortisePrepaySimulator() {
 
           <div className={`${CARD} overflow-hidden`}>
             <div className="px-5 py-3 border-b border-[var(--color-border)]">
-              <p className="text-sm font-semibold">Amortisation Schedule {result.withPrepay ? "(with prepayment)" : ""} — first 24 months</p>
+              <p className="text-sm font-semibold">Amortisation Schedule {result.withPrepay ? "(with prepayment)" : ""} - first 24 months</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[640px]">
@@ -500,7 +500,7 @@ function AmortisePrepaySimulator() {
                       <td className="px-4 py-2 tabular-nums">{fc(Math.round(r.payment))}</td>
                       <td className="px-4 py-2 tabular-nums text-red-400">{fc(Math.round(r.interest))}</td>
                       <td className="px-4 py-2 tabular-nums text-green-400">{fc(Math.round(r.principal))}</td>
-                      <td className="px-4 py-2 tabular-nums text-[var(--color-primary)]">{r.prepay > 0 ? fc(Math.round(r.prepay)) : "—"}</td>
+                      <td className="px-4 py-2 tabular-nums text-[var(--color-primary)]">{r.prepay > 0 ? fc(Math.round(r.prepay)) : "-"}</td>
                       <td className="px-4 py-2 tabular-nums">{formatAmount(Math.round(r.closing))}</td>
                     </tr>
                   ))}
@@ -559,8 +559,8 @@ function DscrCoverageTracker() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "DSCR", value: dscr !== null ? `${dscr.toFixed(2)}x` : "No debt", color: dscr === null || dscr >= 1.25 ? "text-green-400" : "text-red-400", sub: "NOI ÷ debt service" },
-          { label: "Interest Coverage", value: icr !== null ? `${icr.toFixed(2)}x` : "—", color: icr === null || icr >= 2 ? "text-green-400" : "text-red-400", sub: "EBIT-proxy ÷ interest" },
-          { label: "Debt / NOI (leverage)", value: leverage !== null ? `${leverage.toFixed(2)}x` : "—", color: leverage === null || leverage <= 3 ? "text-green-400" : "text-yellow-400", sub: "Outstanding ÷ annual NOI" },
+          { label: "Interest Coverage", value: icr !== null ? `${icr.toFixed(2)}x` : "-", color: icr === null || icr >= 2 ? "text-green-400" : "text-red-400", sub: "EBIT-proxy ÷ interest" },
+          { label: "Debt / NOI (leverage)", value: leverage !== null ? `${leverage.toFixed(2)}x` : "-", color: leverage === null || leverage <= 3 ? "text-green-400" : "text-yellow-400", sub: "Outstanding ÷ annual NOI" },
           { label: "Annual NOI (est.)", value: formatAmount(Math.round(annualNoi)), color: "text-[var(--color-text)]", sub: "Net + interest add-back ×12" },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
@@ -628,7 +628,7 @@ function DscrCoverageTracker() {
                     <tr key={c.id} className="hover:bg-white/2">
                       <td className="px-3 py-2.5 font-medium">{c.name}</td>
                       <td className="px-3 py-2.5 text-[var(--color-muted)]">{label} {c.operator} {c.threshold}x</td>
-                      <td className="px-3 py-2.5 tabular-nums">{v !== null ? `${v.toFixed(2)}x` : "—"}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{v !== null ? `${v.toFixed(2)}x` : "-"}</td>
                       <td className="px-3 py-2.5">
                         {v === null ? <span className="text-xs text-[var(--color-muted)]">No data</span>
                           : isBreach ? <span className="inline-flex items-center gap-1 text-xs text-red-400 font-semibold"><AlertTriangle size={12} /> Breach</span>
@@ -648,7 +648,7 @@ function DscrCoverageTracker() {
 
       {anyBreach && (
         <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
-          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> One or more covenants are in breach. Lenders can recall the facility or reprice — engage proactively before the next reporting date.</p>
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> One or more covenants are in breach. Lenders can recall the facility or reprice - engage proactively before the next reporting date.</p>
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">NOI is approximated as operating net cash flow plus interest add-back (an EBITDA proxy). DSCR ≥ 1.25x and interest coverage ≥ 2x are common lender bars. Use your audited figures for covenant certificates.</p>
@@ -785,7 +785,7 @@ function RefinanceComparator() {
                     <td className="px-3 py-2.5 tabular-nums text-yellow-400">{fc(Math.round(o.fees))}</td>
                     <td className="px-3 py-2.5 tabular-nums text-red-400">{formatAmount(Math.round(o.interest))}</td>
                     <td className="px-3 py-2.5 tabular-nums font-semibold">{formatAmount(Math.round(o.totalCost))}</td>
-                    <td className="px-3 py-2.5 tabular-nums text-[var(--color-primary)]">{o.effRate !== null ? `${o.effRate.toFixed(2)}%` : "—"}</td>
+                    <td className="px-3 py-2.5 tabular-nums text-[var(--color-primary)]">{o.effRate !== null ? `${o.effRate.toFixed(2)}%` : "-"}</td>
                     <td className="px-3 py-2.5 text-right"><button onClick={() => setOffers(offers.filter(x => x.id !== o.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
@@ -798,11 +798,11 @@ function RefinanceComparator() {
       {best && existing && (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
           <p className="text-sm font-bold text-green-400 flex items-center gap-2">
-            <TrendingDown size={14} /> {best.lender} at {best.rate}% has the lowest all-in cost ({formatAmount(Math.round(best.totalCost))} incl. {fc(Math.round(best.fees))} fees){best.totalCost < existing.totalInterest ? ` — ~${formatAmount(Math.round(existing.totalInterest - best.totalCost))} cheaper than staying put.` : " — but your current loans are still cheaper; consolidating may not pay off."}
+            <TrendingDown size={14} /> {best.lender} at {best.rate}% has the lowest all-in cost ({formatAmount(Math.round(best.totalCost))} incl. {fc(Math.round(best.fees))} fees){best.totalCost < existing.totalInterest ? ` - ~${formatAmount(Math.round(existing.totalInterest - best.totalCost))} cheaper than staying put.` : " - but your current loans are still cheaper; consolidating may not pay off."}
           </p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">All-in cost = lifetime interest + processing & other upfront fees. Effective APR is the IRR of the net disbursal vs the EMI stream — the true comparable cost. Factor in any foreclosure charges on the loans being closed.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">All-in cost = lifetime interest + processing & other upfront fees. Effective APR is the IRR of the net disbursal vs the EMI stream - the true comparable cost. Factor in any foreclosure charges on the loans being closed.</p>
     </div>
   );
 }
@@ -851,7 +851,7 @@ function MoratoriumRecaster({ loans }: { loans: ActiveLoanLike[] }) {
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Loan</label>
             <select value={selId ?? ""} onChange={e => setSelId(e.target.value)} className={`${DINP} max-w-sm`}>
-              {loans.map(l => <option key={l.id} value={l.id}>{l.lender} — {fc(Math.round(l.outstanding))} @ {l.rate}%</option>)}
+              {loans.map(l => <option key={l.id} value={l.id}>{l.lender} - {fc(Math.round(l.outstanding))} @ {l.rate}%</option>)}
             </select>
           </div>
         ) : (
@@ -887,7 +887,7 @@ function MoratoriumRecaster({ loans }: { loans: ActiveLoanLike[] }) {
         </div>
         <label className="flex items-center gap-2 cursor-pointer text-xs">
           <input type="checkbox" checked={accrueInterest} onChange={e => setAccrueInterest(e.target.checked)} className="accent-[var(--color-primary)]" />
-          Capitalise interest during moratorium (add to principal) — uncheck if the lender waives it
+          Capitalise interest during moratorium (add to principal) - uncheck if the lender waives it
         </label>
       </div>
 
@@ -1024,7 +1024,7 @@ function RepaymentLadder({ loans }: { loans: ActiveLoanLike[] }) {
 
       <div className={`${CARD} p-5`}>
         <p className="text-sm font-semibold mb-1">Combined EMI &amp; outstanding over time</p>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Each step down is a loan finishing — that freed cash is your future headroom.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Each step down is a loan finishing - that freed cash is your future headroom.</p>
         <ResponsiveContainer width="100%" height={220}>
           <AreaChart data={chartData}>
             <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval={Math.max(0, Math.floor(chartData.length / 12))} />
@@ -1144,7 +1144,7 @@ function PrepayOptimizer({ loans }: { loans: ActiveLoanLike[] }) {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2"><Target size={14} className="text-[var(--color-primary)]" /> Interest-Cost Optimizer — which loan to prepay first</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Target size={14} className="text-[var(--color-primary)]" /> Interest-Cost Optimizer - which loan to prepay first</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Spare cash for debt each month (over &amp; above EMIs) (₹)</label>
@@ -1180,7 +1180,7 @@ function PrepayOptimizer({ loans }: { loans: ActiveLoanLike[] }) {
 
           <div className={`${CARD} overflow-hidden`}>
             <div className="px-5 py-3 border-b border-[var(--color-border)]">
-              <p className="text-sm font-semibold">Attack order — {strategy === "avalanche" ? "highest rate first" : "smallest balance first"}</p>
+              <p className="text-sm font-semibold">Attack order - {strategy === "avalanche" ? "highest rate first" : "smallest balance first"}</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1196,7 +1196,7 @@ function PrepayOptimizer({ loans }: { loans: ActiveLoanLike[] }) {
                       <td className="px-4 py-2.5 font-medium">{l.lender}</td>
                       <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(l.bal))}</td>
                       <td className="px-4 py-2.5 tabular-nums">{l.rate}%</td>
-                      <td className="px-4 py-2.5 tabular-nums text-green-400">{l.closeAt ? `month ${l.closeAt}` : "—"}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-green-400">{l.closeAt ? `month ${l.closeAt}` : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1219,7 +1219,7 @@ function PrepayOptimizer({ loans }: { loans: ActiveLoanLike[] }) {
 // ── #92 Weighted-Average Cost of Debt (WACD) ─────────────────────────────────────
 // The single blended rate you actually pay, weighted by each loan's outstanding,
 // with each loan's contribution to the blend and its share of the monthly interest
-// bill — so you can see which loan is dragging the average up.
+// bill - so you can see which loan is dragging the average up.
 function CostOfDebtTracker({ loans }: { loans: ActiveLoanLike[] }) {
   const fc = formatCurrency;
   const data = useMemo(() => {
@@ -1252,7 +1252,7 @@ function CostOfDebtTracker({ loans }: { loans: ActiveLoanLike[] }) {
           { label: "Weighted Avg Cost of Debt", value: `${data.wacd.toFixed(2)}%`, color: "text-yellow-400", sub: "Blended across all loans" },
           { label: "Total Debt", value: formatAmount(Math.round(data.total)), color: "text-[var(--color-text)]", sub: `${loans.length} loan(s)` },
           { label: "Monthly Interest Bill", value: fc(Math.round(data.monthlyInt)), color: "text-red-400", sub: `${fc(Math.round(data.monthlyInt * 12))}/yr` },
-          { label: "Costliest Loan", value: data.rows[0] ? `${data.rows[0].rate}%` : "—", color: "text-red-400", sub: data.rows[0]?.lender ?? "" },
+          { label: "Costliest Loan", value: data.rows[0] ? `${data.rows[0].rate}%` : "-", color: "text-red-400", sub: data.rows[0]?.lender ?? "" },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -1264,7 +1264,7 @@ function CostOfDebtTracker({ loans }: { loans: ActiveLoanLike[] }) {
 
       <div className={`${CARD} p-5`}>
         <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Percent size={13} className="text-[var(--color-primary)]" /> Rate by loan vs blended {data.wacd.toFixed(2)}%</p>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Bars above the blend are pulling your cost of debt up — prime refinance / prepay candidates.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Bars above the blend are pulling your cost of debt up - prime refinance / prepay candidates.</p>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={chartData}>
             <XAxis dataKey="lender" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
@@ -1346,7 +1346,7 @@ function ForeclosureCalculator({ loans }: { loans: ActiveLoanLike[] }) {
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Loan to foreclose</label>
             <select value={selId ?? ""} onChange={e => setSelId(e.target.value)} className={DINP}>
-              {loans.map(l => <option key={l.id} value={l.id}>{l.lender} — {fc(Math.round(l.outstanding))} @ {l.rate}%</option>)}
+              {loans.map(l => <option key={l.id} value={l.id}>{l.lender} - {fc(Math.round(l.outstanding))} @ {l.rate}%</option>)}
             </select>
           </div>
           <div>
@@ -1386,20 +1386,20 @@ function ForeclosureCalculator({ loans }: { loans: ActiveLoanLike[] }) {
               {result.net > 0 ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
               {result.net > 0
                 ? `Foreclosing ${selected!.lender} now saves a net ${formatAmount(Math.round(result.net))} after ${fc(Math.round(result.totalCost))} in charges.`
-                : `The ${fc(Math.round(result.totalCost))} charge exceeds the ${formatAmount(Math.round(result.interestIfContinued))} interest left — continuing is cheaper unless you redeploy the cash at a higher return.`}
+                : `The ${fc(Math.round(result.totalCost))} charge exceeds the ${formatAmount(Math.round(result.interestIfContinued))} interest left - continuing is cheaper unless you redeploy the cash at a higher return.`}
               {" "}Break-even penalty is {result.breakEvenPct.toFixed(2)}% of outstanding.
             </p>
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">RBI bars foreclosure charges on floating-rate term loans to individuals; fixed-rate, business and many MSME loans can still levy 2–5%. GST applies to the charge. Confirm the exact figure in your sanction terms.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">RBI bars foreclosure charges on floating-rate term loans to individuals; fixed-rate, business and many MSME loans can still levy 2-5%. GST applies to the charge. Confirm the exact figure in your sanction terms.</p>
     </div>
   );
 }
 
 // ── #94 Balloon / Bullet Repayment Planner ───────────────────────────────────────
 // Plan a structure where you pay reduced (or interest-only) instalments during the
-// term and settle a large balloon/bullet at maturity — common for equipment and
+// term and settle a large balloon/bullet at maturity - common for equipment and
 // bridge loans. Compares against a fully-amortising loan of the same size.
 function BalloonPlanner() {
   const [principal, setPrincipal] = useState("");
@@ -1504,7 +1504,7 @@ function BalloonPlanner() {
 
           <div className={`${CARD} overflow-hidden`}>
             <div className="px-5 py-3 border-b border-[var(--color-border)]">
-              <p className="text-sm font-semibold">Schedule — first 12 months</p>
+              <p className="text-sm font-semibold">Schedule - first 12 months</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[560px]">
@@ -1536,7 +1536,7 @@ function BalloonPlanner() {
 }
 
 // ── #95 Step-Up / Step-Down EMI Planner ──────────────────────────────────────────
-// Graduated EMIs that rise (step-up — match a growing business) or fall (step-down)
+// Graduated EMIs that rise (step-up - match a growing business) or fall (step-down)
 // at a chosen % each year. Solves the starting EMI so the loan still clears in the
 // tenure, then schedules the annual steps and totals the interest vs a flat EMI.
 function StepEmiPlanner({ loans }: { loans: ActiveLoanLike[] }) {
@@ -1595,7 +1595,7 @@ function StepEmiPlanner({ loans }: { loans: ActiveLoanLike[] }) {
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Loan</label>
             <select value={selId ?? ""} onChange={e => setSelId(e.target.value)} className={`${DINP} max-w-sm`}>
-              {loans.map(l => <option key={l.id} value={l.id}>{l.lender} — {fc(Math.round(l.outstanding))} @ {l.rate}%</option>)}
+              {loans.map(l => <option key={l.id} value={l.id}>{l.lender} - {fc(Math.round(l.outstanding))} @ {l.rate}%</option>)}
             </select>
           </div>
         ) : (
@@ -1677,13 +1677,13 @@ function StepEmiPlanner({ loans }: { loans: ActiveLoanLike[] }) {
           <div className={`rounded-lg p-4 border ${direction === "up" ? "border-blue-800/40 bg-blue-950/20" : "border-green-800/40 bg-green-950/20"}`}>
             <p className={`text-sm font-bold ${direction === "up" ? "text-blue-400" : "text-green-400"} flex items-center gap-2`}>
               <CheckCircle2 size={14} /> {direction === "up"
-                ? `Start at a lighter ${fc(Math.round(result.baseEmi))} and step up ${parseFloat(stepPct) || 0}% a year as revenue grows — useful for early-stage cash crunch, though total interest is ${formatAmount(Math.round(result.interestTotal))}.`
-                : `Front-load with ${fc(Math.round(result.baseEmi))} now and ease off ${parseFloat(stepPct) || 0}% a year — pays down principal faster and trims interest to ${formatAmount(Math.round(result.interestTotal))}.`}
+                ? `Start at a lighter ${fc(Math.round(result.baseEmi))} and step up ${parseFloat(stepPct) || 0}% a year as revenue grows - useful for early-stage cash crunch, though total interest is ${formatAmount(Math.round(result.interestTotal))}.`
+                : `Front-load with ${fc(Math.round(result.baseEmi))} now and ease off ${parseFloat(stepPct) || 0}% a year - pays down principal faster and trims interest to ${formatAmount(Math.round(result.interestTotal))}.`}
             </p>
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">The starting EMI is solved so the present value of all stepped payments equals the principal, keeping the original tenure. Lenders offer step-up/step-down (graduated/flexi) EMIs selectively — confirm availability.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">The starting EMI is solved so the present value of all stepped payments equals the principal, keeping the original tenure. Lenders offer step-up/step-down (graduated/flexi) EMIs selectively - confirm availability.</p>
     </div>
   );
 }
@@ -1738,7 +1738,7 @@ function InterestSubsidyEstimator({ loans }: { loans: ActiveLoanLike[] }) {
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Loan</label>
             <select value={selId ?? ""} onChange={e => setSelId(e.target.value)} className={`${DINP} max-w-sm`}>
-              {loans.map(l => <option key={l.id} value={l.id}>{l.lender} — {fc(Math.round(l.outstanding))} @ {l.rate}%</option>)}
+              {loans.map(l => <option key={l.id} value={l.id}>{l.lender} - {fc(Math.round(l.outstanding))} @ {l.rate}%</option>)}
             </select>
           </div>
         ) : (
@@ -1821,7 +1821,7 @@ function InterestSubsidyEstimator({ loans }: { loans: ActiveLoanLike[] }) {
 // ── #97 Loan-Against-FD / Securities Estimator ───────────────────────────────────
 // Borrowing against your own fixed deposit or shares/MFs is cheap secured credit:
 // the limit is an LTV slice of the asset and the rate is usually a thin spread over
-// the FD rate. This shows the sanctionable limit and the true net carry cost — the
+// the FD rate. This shows the sanctionable limit and the true net carry cost - the
 // loan interest you pay minus the yield you keep earning on the pledged asset.
 function LoanAgainstAssetEstimator() {
   const [assetType, setAssetType] = useState<"fd" | "securities">("fd");
@@ -1833,7 +1833,7 @@ function LoanAgainstAssetEstimator() {
 
   // RBI/market norms: ~90% LTV against own FD, ~50% against listed equity/MF.
   const maxLtv = assetType === "fd" ? 90 : 50;
-  // Loan rate: FD-backed ≈ FD rate + ~1.5–2%; securities (LAS) ≈ 9–11% flat-ish.
+  // Loan rate: FD-backed ≈ FD rate + ~1.5-2%; securities (LAS) ≈ 9-11% flat-ish.
   const av = parseFloat(assetValue) || 0;
   const ay = parseFloat(yieldPct) || 0;
   const N = Math.max(0, Math.round(parseFloat(tenureMonths) || 0));
@@ -1904,12 +1904,12 @@ function LoanAgainstAssetEstimator() {
           </div>
           <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
             <p className="text-sm font-bold text-green-400 flex items-center gap-2">
-              <CheckCircle2 size={14} /> Pledging keeps your {assetType === "fd" ? "deposit earning" : "portfolio invested"} — the real cost is only {formatAmount(Math.round(result.netCarry))} (the {result.loanRate.toFixed(1)}% loan rate net of the {ay}% you still earn). Far cheaper than breaking the FD or selling at a loss.
+              <CheckCircle2 size={14} /> Pledging keeps your {assetType === "fd" ? "deposit earning" : "portfolio invested"} - the real cost is only {formatAmount(Math.round(result.netCarry))} (the {result.loanRate.toFixed(1)}% loan rate net of the {ay}% you still earn). Far cheaper than breaking the FD or selling at a loss.
             </p>
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">FD-backed overdrafts typically allow up to 90% LTV at ~1.5–2% over the FD rate; equity/MF loans (LAS) cap near 50% with mark-to-market margin calls if prices fall. Interest is usually charged only on the utilised amount.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">FD-backed overdrafts typically allow up to 90% LTV at ~1.5-2% over the FD rate; equity/MF loans (LAS) cap near 50% with mark-to-market margin calls if prices fall. Interest is usually charged only on the utilised amount.</p>
     </div>
   );
 }
@@ -2018,7 +2018,7 @@ function GoldLoanEstimator() {
           </div>
           <div className="rounded-lg p-4 border border-yellow-800/40 bg-yellow-950/20">
             <p className="text-sm font-bold text-yellow-400 flex items-center gap-2">
-              <AlertTriangle size={14} /> Gold loans disburse same-day but the lender holds your gold and can auction it on default. RBI caps LTV at 75% of value — if gold prices fall the lender may seek a top-up. Reserve the principal {result.bulletDue > 0 ? "for the maturity bullet" : "via your EMIs"} to redeem the pledge.
+              <AlertTriangle size={14} /> Gold loans disburse same-day but the lender holds your gold and can auction it on default. RBI caps LTV at 75% of value - if gold prices fall the lender may seek a top-up. Reserve the principal {result.bulletDue > 0 ? "for the maturity bullet" : "via your EMIs"} to redeem the pledge.
             </p>
           </div>
         </>
@@ -2121,14 +2121,14 @@ function EquipmentBuyVsLease() {
               <p className={`text-sm font-bold ${buyCheaper ? "text-green-400" : "text-blue-400"} flex items-center gap-2`}>
                 {buyCheaper ? <CheckCircle2 size={14} /> : <GitCompareArrows size={14} />}
                 {buyCheaper
-                  ? `Buying is ~${formatAmount(Math.round(result.leaseNetCost - result.buyNetCost))} cheaper net of the ${formatAmount(Math.round(result.residual))} residual you keep — sensible if the asset stays useful past the term.`
-                  : `Leasing is ~${formatAmount(Math.round(result.buyNetCost - result.leaseNetCost))} cheaper and keeps the asset off your balance sheet — better if the equipment dates fast or you want to preserve cash and limits.`}
+                  ? `Buying is ~${formatAmount(Math.round(result.leaseNetCost - result.buyNetCost))} cheaper net of the ${formatAmount(Math.round(result.residual))} residual you keep - sensible if the asset stays useful past the term.`
+                  : `Leasing is ~${formatAmount(Math.round(result.buyNetCost - result.leaseNetCost))} cheaper and keeps the asset off your balance sheet - better if the equipment dates fast or you want to preserve cash and limits.`}
               </p>
             </div>
           )}
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Simplified pre-tax cash comparison. Leasing rentals are fully deductible while ownership lets you claim depreciation and input tax credit — your CA can quantify the post-tax difference, which often shifts the verdict.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Simplified pre-tax cash comparison. Leasing rentals are fully deductible while ownership lets you claim depreciation and input tax credit - your CA can quantify the post-tax difference, which often shifts the verdict.</p>
     </div>
   );
 }
@@ -2203,7 +2203,7 @@ function RateResetImpact({ loans }: { loans: ActiveLoanLike[] }) {
 
       <div className={`${CARD} overflow-hidden`}>
         <div className="px-5 py-3 border-b border-[var(--color-border)]">
-          <p className="text-sm font-semibold">Per-loan reset — {mode === "emi" ? "EMI held to tenure" : "EMI fixed, tenure flexes"}</p>
+          <p className="text-sm font-semibold">Per-loan reset - {mode === "emi" ? "EMI held to tenure" : "EMI fixed, tenure flexes"}</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[640px]">
@@ -2226,7 +2226,7 @@ function RateResetImpact({ loans }: { loans: ActiveLoanLike[] }) {
           </table>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">External-benchmark (repo-linked) loans reprice within a quarter of an RBI move; MCLR loans reset on their reset date. Banks usually hold your EMI and stretch the tenure on a hike — watch for tenure ballooning past your plan. Fixed-rate loans are unaffected.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">External-benchmark (repo-linked) loans reprice within a quarter of an RBI move; MCLR loans reset on their reset date. Banks usually hold your EMI and stretch the tenure on a hike - watch for tenure ballooning past your plan. Fixed-rate loans are unaffected.</p>
     </div>
   );
 }
@@ -2264,8 +2264,8 @@ function ExposureStackingTracker({ loans }: { loans: ActiveLoanLike[] }) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "FOIR (EMIs ÷ income)", value: data.foir !== null ? `${data.foir.toFixed(0)}%` : "—", color: foirHot ? "text-red-400" : "text-green-400", sub: "lenders cap ~50%" },
-          { label: "Debt ÷ annual revenue", value: data.debtToRevenue !== null ? `${data.debtToRevenue.toFixed(2)}x` : "—", color: data.debtToRevenue !== null && data.debtToRevenue > 1 ? "text-yellow-400" : "text-green-400", sub: "leverage vs turnover" },
+          { label: "FOIR (EMIs ÷ income)", value: data.foir !== null ? `${data.foir.toFixed(0)}%` : "-", color: foirHot ? "text-red-400" : "text-green-400", sub: "lenders cap ~50%" },
+          { label: "Debt ÷ annual revenue", value: data.debtToRevenue !== null ? `${data.debtToRevenue.toFixed(2)}x` : "-", color: data.debtToRevenue !== null && data.debtToRevenue > 1 ? "text-yellow-400" : "text-green-400", sub: "leverage vs turnover" },
           { label: "Active lenders", value: `${data.lenderCount}`, color: data.lenderCount >= 4 ? "text-yellow-400" : "text-[var(--color-text)]", sub: "stacking flag at 4+" },
           { label: "Top-lender concentration", value: `${data.topConcentration.toFixed(0)}%`, color: "text-[var(--color-text)]", sub: data.rows[0]?.lender ?? "" },
         ].map(k => (
@@ -2313,11 +2313,11 @@ function ExposureStackingTracker({ loans }: { loans: ActiveLoanLike[] }) {
         <p className={`text-sm font-bold ${stackingRisk ? "text-red-400" : "text-green-400"} flex items-center gap-2`}>
           {stackingRisk ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
           {stackingRisk
-            ? `Over-leverage risk: ${foirHot ? `EMIs eat ${data.foir?.toFixed(0)}% of income (above the ~50% FOIR bar)` : `${data.lenderCount} active lenders can trip a loan-stacking check`}. A new lender may decline or reprice — consolidate before applying.`
+            ? `Over-leverage risk: ${foirHot ? `EMIs eat ${data.foir?.toFixed(0)}% of income (above the ~50% FOIR bar)` : `${data.lenderCount} active lenders can trip a loan-stacking check`}. A new lender may decline or reprice - consolidate before applying.`
             : `Healthy exposure: EMIs are ${data.foir !== null ? `${data.foir.toFixed(0)}% of income` : "well covered"} across ${data.lenderCount} lender(s), within typical underwriting bars.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">FOIR = total EMIs ÷ monthly income (3-month average revenue used as a proxy). Most lenders cap FOIR near 50–55% and watch for borrowing across many lenders ("stacking"). Bureau data may show obligations not tracked here — keep this list complete.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">FOIR = total EMIs ÷ monthly income (3-month average revenue used as a proxy). Most lenders cap FOIR near 50-55% and watch for borrowing across many lenders ("stacking"). Bureau data may show obligations not tracked here - keep this list complete.</p>
     </div>
   );
 }
@@ -2403,12 +2403,12 @@ function WorkingCapitalLineCalculator() {
           </div>
           <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
             <p className="text-sm font-bold text-green-400 flex items-center gap-2">
-              <CheckCircle2 size={14} /> At {avgUtilPct}% utilisation a revolving line costs {formatAmount(Math.round(result.annualInterest))} interest/yr versus {formatAmount(Math.round(result.termLoanInterest))} for a fully-drawn term loan of the same size — saving ~{formatAmount(Math.round(result.saved))} by paying only for what you use. The lower your steady-state draw, the bigger the saving.
+              <CheckCircle2 size={14} /> At {avgUtilPct}% utilisation a revolving line costs {formatAmount(Math.round(result.annualInterest))} interest/yr versus {formatAmount(Math.round(result.termLoanInterest))} for a fully-drawn term loan of the same size - saving ~{formatAmount(Math.round(result.saved))} by paying only for what you use. The lower your steady-state draw, the bigger the saving.
             </p>
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">CC/OD interest is charged on the daily drawn balance, so light users pay far less than on a term loan. Some lenders levy a commitment / non-utilisation fee on the idle limit and an annual renewal charge — include both for the true cost. Drawing power is also capped by your stock-and-debtor statements.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">CC/OD interest is charged on the daily drawn balance, so light users pay far less than on a term loan. Some lenders levy a commitment / non-utilisation fee on the idle limit and an annual renewal charge - include both for the true cost. Drawing power is also capped by your stock-and-debtor statements.</p>
     </div>
   );
 }
@@ -2448,10 +2448,10 @@ function InterestCoverageTrend({ loans }: { loans: ActiveLoanLike[] }) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Interest coverage (ICR)", value: data.icr !== null ? `${data.icr.toFixed(2)}x` : "—", color: icrThin ? "text-yellow-400" : "text-green-400", sub: "OCF ÷ interest; aim ≥ 3x" },
+          { label: "Interest coverage (ICR)", value: data.icr !== null ? `${data.icr.toFixed(2)}x` : "-", color: icrThin ? "text-yellow-400" : "text-green-400", sub: "OCF ÷ interest; aim ≥ 3x" },
           { label: "Pre-debt cash flow", value: fc(Math.round(data.ocf)) + "/mo", color: "text-[var(--color-text)]", sub: "EMIs added back" },
           { label: "Annual interest", value: formatAmount(Math.round(data.baseAnnualInterest)), color: "text-red-400", sub: "at current rates" },
-          { label: `ICR at +${shockBps}bps`, value: data.shockedIcr !== null ? `${data.shockedIcr.toFixed(2)}x` : "—", color: shockBreach ? "text-red-400" : "text-green-400", sub: `+${formatAmount(Math.round(data.extraInterest))} interest/yr` },
+          { label: `ICR at +${shockBps}bps`, value: data.shockedIcr !== null ? `${data.shockedIcr.toFixed(2)}x` : "-", color: shockBreach ? "text-red-400" : "text-green-400", sub: `+${formatAmount(Math.round(data.extraInterest))} interest/yr` },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -2483,26 +2483,26 @@ function InterestCoverageTrend({ loans }: { loans: ActiveLoanLike[] }) {
         <p className={`text-sm font-bold flex items-center gap-2 ${shockBreach ? "text-red-400" : "text-green-400"}`}>
           {shockBreach ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
           {shockBreach
-            ? `A +${shockBps}bps repo move would pull ICR to ${data.shockedIcr?.toFixed(2)}x — below the ~2x comfort bar — adding ${formatAmount(Math.round(data.extraInterest))}/yr of interest. Hedge or fix rates before your next reset.`
+            ? `A +${shockBps}bps repo move would pull ICR to ${data.shockedIcr?.toFixed(2)}x - below the ~2x comfort bar - adding ${formatAmount(Math.round(data.extraInterest))}/yr of interest. Hedge or fix rates before your next reset.`
             : `Even after a +${shockBps}bps shock, interest is covered ${data.shockedIcr?.toFixed(2)}x by operating cash flow. Comfortable headroom.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">ICR = pre-debt operating cash flow ÷ interest expense. It isolates the interest burden (DSCR includes principal too). Floating-rate loans reprice at reset dates — stress-test before borrowing more.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">ICR = pre-debt operating cash flow ÷ interest expense. It isolates the interest burden (DSCR includes principal too). Floating-rate loans reprice at reset dates - stress-test before borrowing more.</p>
     </div>
   );
 }
 
 // ── #104 Debt-Maturity Profile ───────────────────────────────────────────────────
 // Buckets every loan's payoff date into maturity windows so you can see refinancing
-// "walls" — years where a lot of debt rolls off and may need replacing or repaying.
+// "walls" - years where a lot of debt rolls off and may need replacing or repaying.
 function DebtMaturityProfile({ loans }: { loans: ActiveLoanLike[] }) {
   const fc = formatCurrency;
   const buckets = useMemo(() => {
     const defs = [
-      { key: "0-12m", label: "0–12m", lo: 0, hi: 12 },
-      { key: "1-2y", label: "1–2y", lo: 12, hi: 24 },
-      { key: "2-3y", label: "2–3y", lo: 24, hi: 36 },
-      { key: "3-5y", label: "3–5y", lo: 36, hi: 60 },
+      { key: "0-12m", label: "0-12m", lo: 0, hi: 12 },
+      { key: "1-2y", label: "1-2y", lo: 12, hi: 24 },
+      { key: "2-3y", label: "2-3y", lo: 24, hi: 36 },
+      { key: "3-5y", label: "3-5y", lo: 36, hi: 60 },
       { key: "5y+", label: "5y+", lo: 60, hi: Infinity },
     ];
     const rows = defs.map(d => ({ label: d.label, outstanding: 0, count: 0 }));
@@ -2564,11 +2564,11 @@ function DebtMaturityProfile({ loans }: { loans: ActiveLoanLike[] }) {
         <p className={`text-sm font-bold flex items-center gap-2 ${wall.sharePct > 40 ? "text-yellow-400" : "text-green-400"}`}>
           {wall.sharePct > 40 ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
           {wall.sharePct > 40
-            ? `${wall.sharePct.toFixed(0)}% of debt matures in the ${wall.label} window — a refinancing "wall". ${nearTerm > 30 ? `${nearTerm.toFixed(0)}% rolls off within a year, so line up replacement facilities early.` : "Plan replacement facilities ahead of that bunching."}`
-            : `Maturities are well laddered across windows — no single year carries an outsized roll-off. Refinancing risk is low.`}
+            ? `${wall.sharePct.toFixed(0)}% of debt matures in the ${wall.label} window - a refinancing "wall". ${nearTerm > 30 ? `${nearTerm.toFixed(0)}% rolls off within a year, so line up replacement facilities early.` : "Plan replacement facilities ahead of that bunching."}`
+            : `Maturities are well laddered across windows - no single year carries an outsized roll-off. Refinancing risk is low.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Time-to-maturity is estimated from each loan's outstanding, rate and EMI. Bunched maturities concentrate refinancing risk in one window — spreading them smooths cash flow and reduces dependence on any single credit cycle.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Time-to-maturity is estimated from each loan's outstanding, rate and EMI. Bunched maturities concentrate refinancing risk in one window - spreading them smooths cash flow and reduces dependence on any single credit cycle.</p>
     </div>
   );
 }
@@ -2649,21 +2649,21 @@ function PrepaymentPenaltyVsSavings({ loans }: { loans: ActiveLoanLike[] }) {
               <p className={`text-sm font-bold flex items-center gap-2 ${best.worthIt ? "text-green-400" : "text-yellow-400"}`}>
                 {best.worthIt ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
                 {best.worthIt
-                  ? `Prepay ${best.lender} first: ${formatAmount(Math.round(best.interestSaved))} interest saved beats the ${formatAmount(Math.round(best.penalty))} penalty — net ${fc(Math.round(best.net))} ahead. Target the highest-rate loan for the biggest payback.`
-                  : `At a ${pen}% penalty, no loan clears its foreclosure cost on this lump-sum — interest saved is below the penalty. Hold the cash or wait for the penalty-free window.`}
+                  ? `Prepay ${best.lender} first: ${formatAmount(Math.round(best.interestSaved))} interest saved beats the ${formatAmount(Math.round(best.penalty))} penalty - net ${fc(Math.round(best.net))} ahead. Target the highest-rate loan for the biggest payback.`
+                  : `At a ${pen}% penalty, no loan clears its foreclosure cost on this lump-sum - interest saved is below the penalty. Hold the cash or wait for the penalty-free window.`}
               </p>
             </div>
           )}
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Floating-rate term loans to individuals are usually penalty-free under RBI rules; fixed-rate and business loans often carry 2–4% foreclosure charges. Confirm the penalty in your sanction letter and net it against the interest saved before prepaying.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Floating-rate term loans to individuals are usually penalty-free under RBI rules; fixed-rate and business loans often carry 2-4% foreclosure charges. Confirm the penalty in your sanction letter and net it against the interest saved before prepaying.</p>
     </div>
   );
 }
 
 // ── #106 Debt-to-Equity Target Planner ───────────────────────────────────────────
-// Sets a target D/E (gearing) ratio and shows how much debt to repay — or equity to
-// inject — to hit it, so you stay inside covenant gearing caps before raising more.
+// Sets a target D/E (gearing) ratio and shows how much debt to repay - or equity to
+// inject - to hit it, so you stay inside covenant gearing caps before raising more.
 function DebtToEquityPlanner({ loans }: { loans: ActiveLoanLike[] }) {
   const [equityStr, setEquityStr] = useFeatureState<string>("debt-de-equity", "");
   const [targetDE, setTargetDE] = useState(1.5);
@@ -2712,7 +2712,7 @@ function DebtToEquityPlanner({ loans }: { loans: ActiveLoanLike[] }) {
               { label: "Current D/E", value: `${result.currentDE.toFixed(2)}x`, color: overGeared ? "text-red-400" : "text-green-400", sub: `target ${targetDE.toFixed(1)}x` },
               { label: "Debt allowed at target", value: formatAmount(Math.round(result.allowedDebt)), color: "text-[var(--color-text)]", sub: `${targetDE.toFixed(1)}x × equity` },
               { label: overGeared ? "Repay to hit target" : "Borrowing headroom", value: formatAmount(Math.round(overGeared ? result.repayNeeded : result.headroom)), color: overGeared ? "text-red-400" : "text-green-400", sub: overGeared ? "debt reduction needed" : "room before breach" },
-              { label: "Or inject equity", value: result.equityNeeded > 0 ? formatAmount(Math.round(result.equityNeeded)) : "—", color: "text-yellow-400", sub: "alternative to repaying" },
+              { label: "Or inject equity", value: result.equityNeeded > 0 ? formatAmount(Math.round(result.equityNeeded)) : "-", color: "text-yellow-400", sub: "alternative to repaying" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -2725,7 +2725,7 @@ function DebtToEquityPlanner({ loans }: { loans: ActiveLoanLike[] }) {
             <p className={`text-sm font-bold flex items-center gap-2 ${overGeared ? "text-red-400" : "text-green-400"}`}>
               {overGeared ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
               {overGeared
-                ? `Geared at ${result.currentDE.toFixed(2)}x — above your ${targetDE.toFixed(1)}x target. Repay ${fc(Math.round(result.repayNeeded))} of debt or raise ${fc(Math.round(result.equityNeeded))} of equity to come back inside. Many term-loan covenants cap D/E at 2–3x.`
+                ? `Geared at ${result.currentDE.toFixed(2)}x - above your ${targetDE.toFixed(1)}x target. Repay ${fc(Math.round(result.repayNeeded))} of debt or raise ${fc(Math.round(result.equityNeeded))} of equity to come back inside. Many term-loan covenants cap D/E at 2-3x.`
                 : `Geared at ${result.currentDE.toFixed(2)}x, comfortably under your ${targetDE.toFixed(1)}x target. You have ${fc(Math.round(result.headroom))} of debt headroom before you'd breach it.`}
             </p>
           </div>
@@ -2791,7 +2791,7 @@ function EmiDueCalendar({ loans }: { loans: ActiveLoanLike[] }) {
         `UID:headroom-emi-${e.loanId}-${i}@headroom`,
         `DTSTAMP:${stamp}`,
         `DTSTART;VALUE=DATE:${d}`,
-        `SUMMARY:EMI ${Math.round(e.amount)} — ${e.lender}`,
+        `SUMMARY:EMI ${Math.round(e.amount)} - ${e.lender}`,
         `DESCRIPTION:Loan EMI due to ${e.lender}. Ensure cash cover.`,
         "BEGIN:VALARM\nTRIGGER:-P2D\nACTION:DISPLAY\nDESCRIPTION:EMI due in 2 days\nEND:VALARM",
         "END:VEVENT",
@@ -2870,7 +2870,7 @@ function EmiDueCalendar({ loans }: { loans: ActiveLoanLike[] }) {
           </table>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Cover test assumes today's bank balance with no new inflows — a deliberately conservative floor. Each loan repeats its recorded EMI monthly from its next due date. The .ics file imports into Google/Apple/Outlook calendars with a 2-day reminder.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Cover test assumes today's bank balance with no new inflows - a deliberately conservative floor. Each loan repeats its recorded EMI monthly from its next due date. The .ics file imports into Google/Apple/Outlook calendars with a 2-day reminder.</p>
     </div>
   );
 }
@@ -2947,10 +2947,10 @@ function RateBenchmark({ loans }: { loans: ActiveLoanLike[] }) {
                   <td className="px-4 py-2.5 tabular-nums">{r.rate}%</td>
                   <td className={`px-4 py-2.5 tabular-nums ${r.premium > 0 ? "text-red-400" : "text-green-400"}`}>{r.premium > 0 ? "+" : ""}{r.premium.toFixed(1)} ppt</td>
                   <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(r.outstanding))}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-red-400">{r.overpay > 0 ? fc(Math.round(r.overpay)) : "—"}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-red-400">{r.overpay > 0 ? fc(Math.round(r.overpay)) : "-"}</td>
                   <td className="px-4 py-2.5">
-                    {r.status === "above" ? <span className="text-xs text-red-400 font-semibold">Above band — renegotiate</span>
-                      : r.status === "below" ? <span className="text-xs text-green-400 font-semibold">Below band — keep</span>
+                    {r.status === "above" ? <span className="text-xs text-red-400 font-semibold">Above band - renegotiate</span>
+                      : r.status === "below" ? <span className="text-xs text-green-400 font-semibold">Below band - keep</span>
                       : <span className="text-xs text-[var(--color-muted)]">In band</span>}
                   </td>
                 </tr>
@@ -2959,14 +2959,14 @@ function RateBenchmark({ loans }: { loans: ActiveLoanLike[] }) {
           </table>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Overpay = lifetime interest at your rate minus interest at the fair midpoint over each loan's remaining term. A clean repayment record is your strongest lever to negotiate any above-band loan down — or refinance it.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Overpay = lifetime interest at your rate minus interest at the fair midpoint over each loan's remaining term. A clean repayment record is your strongest lever to negotiate any above-band loan down - or refinance it.</p>
     </div>
   );
 }
 
 // ── #109 Premium / Liability Financing Cost ──────────────────────────────────────
-// Spreading a lump liability — annual insurance premium, an advance-tax instalment,
-// a GST dues bridge — into monthly EMIs has a real carrying cost. This computes the
+// Spreading a lump liability - annual insurance premium, an advance-tax instalment,
+// a GST dues bridge - into monthly EMIs has a real carrying cost. This computes the
 // EMI, total finance charge and effective APR so you can judge if instant cash is worth it.
 function PremiumFinancingCalculator() {
   const [lumpStr, setLumpStr] = useFeatureState<string>("debt-premiumfin-lump", "");
@@ -3037,7 +3037,7 @@ function PremiumFinancingCalculator() {
               { label: "Monthly instalment", value: fc(Math.round(result.monthlyEmi)), color: "text-[var(--color-text)]" },
               { label: "Total finance charge", value: formatAmount(Math.round(result.totalCost)), color: "text-red-400" },
               { label: "Of which fees", value: fc(Math.round(result.fees)), color: "text-yellow-400" },
-              { label: "Effective APR", value: result.effRate !== null ? `${result.effRate.toFixed(2)}%` : "—", color: "text-[var(--color-primary)]" },
+              { label: "Effective APR", value: result.effRate !== null ? `${result.effRate.toFixed(2)}%` : "-", color: "text-[var(--color-primary)]" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -3048,12 +3048,12 @@ function PremiumFinancingCalculator() {
           <div className="rounded-lg p-4 border border-[var(--color-border)] bg-[var(--color-bg)]">
             <p className="text-sm font-medium flex items-center gap-2">
               <HandCoins size={14} className="text-[var(--color-primary)]" />
-              Spreading {fc(lump)} over {tenure} months costs you {formatAmount(Math.round(result.totalCost))} extra — about {((result.totalCost / Math.max(1, lump)) * 100).toFixed(1)}% of the amount. Pay upfront if you have idle cash earning less than {result.effRate !== null ? `${result.effRate.toFixed(1)}%` : "this APR"}.
+              Spreading {fc(lump)} over {tenure} months costs you {formatAmount(Math.round(result.totalCost))} extra - about {((result.totalCost / Math.max(1, lump)) * 100).toFixed(1)}% of the amount. Pay upfront if you have idle cash earning less than {result.effRate !== null ? `${result.effRate.toFixed(1)}%` : "this APR"}.
             </p>
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Financing a one-off liability preserves working capital but the all-in cost (interest + fees) is real. Compare the effective APR to your next-best use of that cash — and to any penalty for paying the underlying liability late.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Financing a one-off liability preserves working capital but the all-in cost (interest + fees) is real. Compare the effective APR to your next-best use of that cash - and to any penalty for paying the underlying liability late.</p>
     </div>
   );
 }
@@ -3153,7 +3153,7 @@ function RefundBridgeAdvance() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Lenders advance a haircut (typically 80–90%) of a verified refund and settle on receipt. Interest accrues only for the days outstanding — so the faster the refund clears, the cheaper the bridge. GST ITC refunds can themselves earn statutory interest on delay; net that off before deciding.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Lenders advance a haircut (typically 80-90%) of a verified refund and settle on receipt. Interest accrues only for the days outstanding - so the faster the refund clears, the cheaper the bridge. GST ITC refunds can themselves earn statutory interest on delay; net that off before deciding.</p>
     </div>
   );
 }

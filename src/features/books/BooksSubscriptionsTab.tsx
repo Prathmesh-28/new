@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES (loose — backend response shapes inlined)
+// TYPES (loose - backend response shapes inlined)
 // ─────────────────────────────────────────────────────────────────────────────
 type Interval = "monthly" | "quarterly" | "yearly";
 type SubStatus = "trial" | "active" | "paused" | "cancelled";
@@ -84,19 +84,19 @@ function rupee(v: string | number | null | undefined): string {
 }
 
 function intervalLabel(p: Plan): string {
-  const i = INTERVAL_OPTIONS.find((o) => o.id === p.interval)?.label ?? (p.interval ?? "—");
+  const i = INTERVAL_OPTIONS.find((o) => o.id === p.interval)?.label ?? (p.interval ?? "-");
   const c = num(p.intervalCount ?? p.interval_count);
   return c > 1 ? `Every ${c} × ${i.toLowerCase()}` : i;
 }
 
 function partyOf(s: Subscription): string {
-  return s.partyName ?? s.party_name ?? s.party ?? "—";
+  return s.partyName ?? s.party_name ?? s.party ?? "-";
 }
 function planOf(s: Subscription): string {
-  return s.planName ?? s.plan_name ?? s.plan ?? "—";
+  return s.planName ?? s.plan_name ?? s.plan ?? "-";
 }
 function nextOf(s: Subscription): string {
-  return s.nextInvoiceDate ?? s.next_invoice_date ?? "—";
+  return s.nextInvoiceDate ?? s.next_invoice_date ?? "-";
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -111,7 +111,7 @@ function StatusPill({ status }: { status?: string }) {
   const cls = STATUS_STYLE[s] ?? "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]";
   return (
     <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full border capitalize ${cls}`}>
-      {s || "—"}
+      {s || "-"}
     </span>
   );
 }
@@ -359,7 +359,7 @@ function PlansSection() {
               {busy ? (
                 <SkeletonRows cols={5} />
               ) : plans.length === 0 ? (
-                <tr><td colSpan={5} className="px-3 py-8 text-center text-[var(--color-muted)]">No plans yet — create one above.</td></tr>
+                <tr><td colSpan={5} className="px-3 py-8 text-center text-[var(--color-muted)]">No plans yet - create one above.</td></tr>
               ) : (
                 plans.map((p) => (
                   <tr key={p.id} className="border-b border-[var(--color-border)] last:border-b-0">
@@ -367,7 +367,7 @@ function PlansSection() {
                     <td className="px-3 py-2.5 text-right tabular-nums">{rupee(p.price)}</td>
                     <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{intervalLabel(p)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{num(p.gstRate ?? p.gst_rate)}%</td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-[var(--color-muted)]">{p.hsnSac ?? p.hsn_sac ?? "—"}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-[var(--color-muted)]">{p.hsnSac ?? p.hsn_sac ?? "-"}</td>
                   </tr>
                 ))
               )}
@@ -547,7 +547,7 @@ function SubscriptionsSection() {
             <select value={planId} onChange={(e) => setPlanId(e.target.value)} className={inputCls}>
               <option value="">Select a plan…</option>
               {plans.map((p) => (
-                <option key={p.id} value={p.id}>{p.name} — {rupee(p.price)}</option>
+                <option key={p.id} value={p.id}>{p.name} - {rupee(p.price)}</option>
               ))}
             </select>
           </div>
@@ -690,7 +690,7 @@ interface UsageChargeResponse {
 }
 
 function subLabel(s: Subscription): string {
-  return `${partyOf(s)} — ${planOf(s)}`;
+  return `${partyOf(s)} - ${planOf(s)}`;
 }
 
 function UsageSection() {
@@ -851,7 +851,7 @@ function UsageSection() {
             <input
               value={iDedup}
               onChange={(e) => setIDedup(e.target.value)}
-              placeholder="Idempotency key — a repeat is ignored"
+              placeholder="Idempotency key - a repeat is ignored"
               className={`${inputCls} font-mono`}
             />
           </div>
@@ -945,13 +945,13 @@ function UsageSection() {
           </button>
         </div>
         {cNotMetered && (
-          <p className="text-sm text-[var(--color-muted)] mt-4">This subscription's plan is not metered — only the base fee applies.</p>
+          <p className="text-sm text-[var(--color-muted)] mt-4">This subscription's plan is not metered - only the base fee applies.</p>
         )}
         {cResult && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
             <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
               <div className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] mb-1">Metric</div>
-              <div className="text-sm font-mono">{cResult.metric ?? "—"}</div>
+              <div className="text-sm font-mono">{cResult.metric ?? "-"}</div>
             </div>
             <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
               <div className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] mb-1">Units</div>

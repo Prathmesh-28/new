@@ -1,4 +1,4 @@
-// Book Agents — user-defined LLM agents with tool-use, scoped per tenant. An
+// Book Agents - user-defined LLM agents with tool-use, scoped per tenant. An
 // agent is a saved (instructions, model, allowed-tools) bundle; runAgent drives
 // the OpenAI-style tool-use loop: ask the model, run any tool calls it requests,
 // feed results back, repeat (bounded) until it answers in prose. Every run is
@@ -122,7 +122,7 @@ async function deleteAgent(tenantId, id) {
 // system prompt, the running message history and the JSON schemas of its allowed
 // tools. If the model replies with tool_calls we execute each, append a matching
 // {role:"tool"} message, record a step, and loop. A failing tool never aborts the
-// run — its error becomes the tool result so the model can recover. We stop when
+// run - its error becomes the tool result so the model can recover. We stop when
 // the model answers in prose or after MAX_STEPS turns. Every run is persisted.
 async function runAgent(tenantId, actorId, agentId, userMessage) {
   const agent = await getAgent(tenantId, agentId);
@@ -148,7 +148,7 @@ async function runAgent(tenantId, actorId, agentId, userMessage) {
   let totalTokens = 0;
 
   try {
-    // readOnly when there's no actor (e.g. the public agent bridge) — defense-in-depth
+    // readOnly when there's no actor (e.g. the public agent bridge) - defense-in-depth
     // on top of write tools never executing inline.
     const out = await _driveLoop(tenantId, actorId, agent, userMessage, steps, pendingActions, !actorId);
     reply = out.reply;
@@ -162,7 +162,7 @@ async function runAgent(tenantId, actorId, agentId, userMessage) {
   }
 
   await persistRun(tenantId, agentId, actorId, userMessage, reply, steps, status, pendingActions);
-  // Best-effort token metering — must never throw or affect the run's result.
+  // Best-effort token metering - must never throw or affect the run's result.
   await _recordUsage(tenantId, runId, totalTokens);
   return { reply, steps, pendingActions };
 }
@@ -222,7 +222,7 @@ function _newRunId() {
 }
 
 // Record agent token usage for the tenant. Best-effort: ingestUsage may reject (it
-// requires a subscriptionId) or the table may be unavailable — either way we swallow
+// requires a subscriptionId) or the table may be unavailable - either way we swallow
 // it so metering never breaks or aborts an agent run.
 async function _recordUsage(tenantId, runId, totalTokens) {
   try {
@@ -239,7 +239,7 @@ async function _recordUsage(tenantId, runId, totalTokens) {
 // Shared tool-use loop. Drives the OpenAI-style turn loop, executing READ tools
 // inline and collecting WRITE tools as pendingActions. `readOnly` (used by scheduled
 // autonomous runs) forces ALL write tools to be recorded for human approval and never
-// executed — the inline path already does this, so readOnly is reserved for clarity
+// executed - the inline path already does this, so readOnly is reserved for clarity
 // and to forbid any future inline-write behaviour. Returns { reply, totalTokens }.
 async function _driveLoop(tenantId, actorId, agent, userMessage, steps, pendingActions, readOnly, onEvent = null, signal = null) {
   const useStream = typeof onEvent === "function";
@@ -300,10 +300,10 @@ async function _driveLoop(tenantId, actorId, agent, userMessage, steps, pendingA
 
       if (useStream) onEvent({ type: "tool_call", tool: name, args });
 
-      // WRITE tools are NEVER executed inline — collect them for human approval
+      // WRITE tools are NEVER executed inline - collect them for human approval
       // and feed the model an "awaiting_approval" result so it stops retrying.
       // (readOnly is true for autonomous scheduled runs; the inline path is already
-      // read-only for writes, so behaviour is identical either way — writes are
+      // read-only for writes, so behaviour is identical either way - writes are
       // never executed without an explicit confirmAction call.)
       if (!parseError && tools.isWrite(name)) {
         const id = `pa_${Date.now().toString(36)}_${pendingActions.length}`;
@@ -311,7 +311,7 @@ async function _driveLoop(tenantId, actorId, agent, userMessage, steps, pendingA
         pendingActions.push({ id, tool: name, args, label });
         result = { status: "awaiting_approval", message: "This action needs human approval before it runs.", tool: name };
       } else if (result === undefined) {
-        // READ tool — execute inline. A bad tool must never abort the run.
+        // READ tool - execute inline. A bad tool must never abort the run.
         try {
           result = await tools.runTool(tenantId, name, args, actorId);
         } catch (e) {
@@ -434,7 +434,7 @@ function _startOfWeek(now) {
 }
 
 // GLOBAL scan across all tenants: find enabled agents whose schedule is due at
-// `now` and run each autonomously. Autonomous runs are READ-ONLY — any write tool
+// `now` and run each autonomously. Autonomous runs are READ-ONLY - any write tool
 // the model requests is recorded as a pendingAction in the run row for a human to
 // approve later (via confirmAction), never executed here. last_run_at is advanced
 // to `now` for each agent that runs (so it won't re-fire this window). A failure in
@@ -474,7 +474,7 @@ async function runScheduledAgents(now = new Date()) {
     }
 
     // Persist the run (with any pendingActions for later human approval), meter
-    // tokens, and advance last_run_at — each step best-effort so one failure can't
+    // tokens, and advance last_run_at - each step best-effort so one failure can't
     // stall the rest of the global scan.
     await persistRun(tenantId, agent.id, agent.created_by || null, prompt, reply, steps, status, pendingActions);
     await _recordUsage(tenantId, runId, totalTokens);
@@ -538,7 +538,7 @@ async function persistRun(tenantId, agentId, actorId, input, reply, steps, statu
 // ── Sub-agent swarm (task mode) ────────────────────────────────────────────────
 // Kogo-style: a planner decomposes the goal into 2-4 SPECIALIST sub-agents, each with
 // its own ROLE + a focused subset of the agent's tools. The specialists run IN
-// PARALLEL (each through the tool-loop, read-only — writes become pending approvals),
+// PARALLEL (each through the tool-loop, read-only - writes become pending approvals),
 // then a lead synthesises one answer. Returns { reply, plan[], subResults[], pendingActions[] }.
 async function runSwarm(tenantId, actorId, agentId, userMessage) {
   const agent = await getAgent(tenantId, agentId);
@@ -560,7 +560,7 @@ async function runSwarm(tenantId, actorId, agentId, userMessage) {
   const allowed = Array.isArray(agent.tools) ? agent.tools : [];
   const catalogDesc = toolsLib.toolCatalog().filter((t) => allowed.includes(t.name)).map((t) => `${t.name} (${t.scope || "read"}): ${t.description || ""}`).join("\n");
 
-  // 1) Plan — specialists with role, tool subset, AND dependencies (a small DAG).
+  // 1) Plan - specialists with role, tool subset, AND dependencies (a small DAG).
   let plan = [];
   try {
     const planMsg = await llm.chat(tenantId, {
@@ -587,7 +587,7 @@ async function runSwarm(tenantId, actorId, agentId, userMessage) {
   const planIds = new Set(plan.map((p) => p.id));
   for (const p of plan) p.dependsOn = p.dependsOn.filter((d) => planIds.has(d) && d !== p.id);
 
-  // 2) Execute the DAG — each "wave" of ready sub-tasks runs IN PARALLEL; a dependent
+  // 2) Execute the DAG - each "wave" of ready sub-tasks runs IN PARALLEL; a dependent
   //    sub-agent receives its upstream dependencies' findings as context (chained agents).
   const runOne = async (p, depContext) => {
     const steps = [];
@@ -610,7 +610,7 @@ async function runSwarm(tenantId, actorId, agentId, userMessage) {
   let guard = 0;
   while (remaining.length && guard++ <= plan.length) {
     let ready = remaining.filter((p) => p.dependsOn.every((d) => done[d]));
-    if (!ready.length) ready = remaining; // unsatisfiable/cycle — break it, run the rest
+    if (!ready.length) ready = remaining; // unsatisfiable/cycle - break it, run the rest
     const wave = await Promise.all(ready.map((p) => {
       const depContext = p.dependsOn.map((d) => done[d]).filter(Boolean).map((r) => `- ${r.role}: ${r.reply}`).join("\n");
       return runOne(p, depContext);
@@ -623,7 +623,7 @@ async function runSwarm(tenantId, actorId, agentId, userMessage) {
   const pendingActions = subRuns.flatMap((r) => r.pending);
   const subResults = subRuns.map((r) => ({ task: `${r.role}: ${r.task}`, reply: r.reply, steps: r.steps }));
 
-  // 3) Discussion round — INTER-AGENT MESSAGING: each sub-agent reads the shared
+  // 3) Discussion round - INTER-AGENT MESSAGING: each sub-agent reads the shared
   //    blackboard (all peers' findings) and posts one short cross-check / build-on /
   //    conflict note, so the agents actually engage with each other before synthesis.
   let messages = [];
@@ -646,7 +646,7 @@ async function runSwarm(tenantId, actorId, agentId, userMessage) {
   // 4) Synthesise, then 5) SELF-REVIEW / RETRY: a strict reviewer checks the draft;
   //    if it flags issues the lead revises (up to MAX_REVIEW rounds). Every round is
   //    recorded so the UI can show the self-correction transparently.
-  const findingsBlock = subResults.map((r, i) => `Sub-agent ${i + 1} — ${r.task}\nFinding: ${r.reply}`).join("\n\n");
+  const findingsBlock = subResults.map((r, i) => `Sub-agent ${i + 1} - ${r.task}\nFinding: ${r.reply}`).join("\n\n");
   const discussionBlock = messages.length ? `\n\nInter-agent discussion:\n${messages.map((m) => `- ${m.role}: ${m.message}`).join("\n")}` : "";
   const critiques = [];
   const MAX_REVIEW = 2;
@@ -655,7 +655,7 @@ async function runSwarm(tenantId, actorId, agentId, userMessage) {
   for (let round = 1; round <= MAX_REVIEW + 1; round++) {
     try {
       const synth = await llm.chat(tenantId, {
-        system: "You are the lead agent. Produce ONE clear, actionable answer for an Indian SMB owner from the specialists' findings and their discussion. Be concise, use ₹ with Indian grouping, resolve conflicts, and use ONLY the findings provided." + (critiqueNote ? " A reviewer flagged issues with your previous draft — fix every one." : ""),
+        system: "You are the lead agent. Produce ONE clear, actionable answer for an Indian SMB owner from the specialists' findings and their discussion. Be concise, use ₹ with Indian grouping, resolve conflicts, and use ONLY the findings provided." + (critiqueNote ? " A reviewer flagged issues with your previous draft - fix every one." : ""),
         messages: [{ role: "user", content: `Goal: ${userMessage}\n\n${findingsBlock}${discussionBlock}` + (critiqueNote ? `\n\nYour previous draft:\n${reply}\n\nReviewer's required fixes:\n${critiqueNote}` : "") }],
         model: agent.model || undefined,
       });
@@ -697,7 +697,7 @@ async function usageSummary(tenantId) {
     tokensThisMonth = Number(rows[0]?.n ?? 0);
     const r2 = await pool.query("SELECT count(*)::int AS c FROM book_agent_runs WHERE tenant_id=$1 AND created_at >= date_trunc('month', now())", [tenantId]).catch(() => ({ rows: [{ c: 0 }] }));
     runs = Number(r2.rows[0]?.c ?? 0);
-  } catch { /* table may be empty/absent — return zeros */ }
+  } catch { /* table may be empty/absent - return zeros */ }
   return { tokensThisMonth, cap, runs };
 }
 

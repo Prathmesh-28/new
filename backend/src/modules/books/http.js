@@ -1,4 +1,4 @@
-// §14 — API surface for the books module. Mounted at /api/books. Tenant- and
+// §14 - API surface for the books module. Mounted at /api/books. Tenant- and
 // auth-scoped; money crosses as strings; Idempotency-Key honoured on posts.
 const router = require("express").Router();
 const { authenticate } = require("../../middleware/auth");
@@ -64,7 +64,7 @@ const portal = require("./portal");
 const cc = require("./costcentres");
 
 // GET /documents/:id/print is opened in a new browser tab (window.open) which can't
-// set an Authorization header — accept the short-lived access token as ?token= for
+// set an Authorization header - accept the short-lived access token as ?token= for
 // that print GET only, promoting it into the header the auth middleware expects.
 router.use((req, _res, next) => {
   if (req.method === "GET" && /\/print$/.test(req.path) && !req.headers.authorization && req.query.token) {
@@ -74,7 +74,7 @@ router.use((req, _res, next) => {
 });
 router.use(authenticate);
 
-// §12.2 RBAC — who may post to the books.
+// §12.2 RBAC - who may post to the books.
 const POST_ROLES = ["super_admin", "owner", "finance_manager", "accountant"];
 const canPost = (req, res, next) => (POST_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" }));
 // super_admin may target any tenant via ?tenant_id; everyone else is scoped to their own.
@@ -143,7 +143,7 @@ router.patch("/ledgers/:id", canPost, async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
-// Ledger cleanup — merge duplicates / delete unused.
+// Ledger cleanup - merge duplicates / delete unused.
 router.post("/ledgers/merge", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await ledgersadmin.mergeLedger(tenantOf(req), b.fromId, b.toId)); } catch (e) { fail(res, e); } });
 router.delete("/ledgers/:id", canPost, async (req, res) => { try { res.json(await ledgersadmin.deleteLedger(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 // Group rename / reparent / delete.
@@ -162,7 +162,7 @@ router.delete("/groups/:id", canPost, async (req, res) => {
   try {
     const t = tenantOf(req);
     const { rows: u } = await pool.query("SELECT 1 FROM book_ledgers WHERE tenant_id=$1 AND group_id=$2 LIMIT 1", [t, req.params.id]);
-    if (u[0]) return res.status(409).json({ error: "Group has ledgers — move them first", code: "IN_USE" });
+    if (u[0]) return res.status(409).json({ error: "Group has ledgers - move them first", code: "IN_USE" });
     const { rows } = await pool.query("DELETE FROM book_account_groups WHERE tenant_id=$1 AND id=$2 AND is_system=false RETURNING id", [t, req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: "Group not found or is a system group" });
     res.json({ ok: true, deleted: rows[0].id });
@@ -249,7 +249,7 @@ router.post("/documents/sales", canPost, async (req, res) => {
       igstLedgerId: await ledgerIdByName(t, "IGST Output"),
     };
     if (!ctx.salesLedgerId || (b.interState ? !ctx.igstLedgerId : (!ctx.cgstLedgerId || !ctx.sgstLedgerId))) {
-      return res.status(422).json({ error: "Sales/tax ledgers missing — POST /api/books/seed first", code: "NOT_SEEDED" });
+      return res.status(422).json({ error: "Sales/tax ledgers missing - POST /api/books/seed first", code: "NOT_SEEDED" });
     }
     const m = buildSalesVoucher(b, ctx);
     const r = await postVoucher(t, req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req), taxes: m.taxes });
@@ -309,7 +309,7 @@ router.post("/documents/credit-note", canPost, async (req, res) => {
       customerLedgerId: b.customerLedgerId, salesReturnsLedgerId: await ledgerIdByName(t, "Sales Returns"),
       cgstLedgerId: await ledgerIdByName(t, "CGST Output"), sgstLedgerId: await ledgerIdByName(t, "SGST Output"), igstLedgerId: await ledgerIdByName(t, "IGST Output"),
     };
-    if (!ctx.salesReturnsLedgerId) return res.status(422).json({ error: "Sales Returns ledger missing — seed first", code: "NOT_SEEDED" });
+    if (!ctx.salesReturnsLedgerId) return res.status(422).json({ error: "Sales Returns ledger missing - seed first", code: "NOT_SEEDED" });
     const m = buildCreditNote(b, ctx);
     const r = await postVoucher(t, req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req), taxes: m.taxes });
     res.status(r.replayed ? 200 : 201).json(r);
@@ -324,7 +324,7 @@ router.post("/documents/payment", canPost, async (req, res) => {
     res.status(r.replayed ? 200 : 201).json(r);
   } catch (e) { fail(res, e); }
 });
-// RCM bill (reverse charge) — vendor billed at taxable only; GST self-assessed as
+// RCM bill (reverse charge) - vendor billed at taxable only; GST self-assessed as
 // output liability + matching ITC, tagged supplyType:'RCM'.
 router.post("/documents/rcm-bill", canPost, async (req, res) => {
   try {
@@ -334,13 +334,13 @@ router.post("/documents/rcm-bill", canPost, async (req, res) => {
     ctx.cgstOutputLedgerId = await ledgerIdByName(t, "CGST Output");
     ctx.sgstOutputLedgerId = await ledgerIdByName(t, "SGST Output");
     ctx.igstOutputLedgerId = await ledgerIdByName(t, "IGST Output");
-    if (!ctx.cgstOutputLedgerId || !ctx.igstOutputLedgerId) return res.status(422).json({ error: "GST Output ledgers missing — seed first", code: "NOT_SEEDED" });
+    if (!ctx.cgstOutputLedgerId || !ctx.igstOutputLedgerId) return res.status(422).json({ error: "GST Output ledgers missing - seed first", code: "NOT_SEEDED" });
     const m = buildRcmBill(b, ctx);
     const r = await postVoucher(t, req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req), taxes: m.taxes });
     res.status(r.replayed ? 200 : 201).json(r);
   } catch (e) { fail(res, e); }
 });
-// Vendor debit note / purchase return — Dr vendor, Cr Purchases + reverse GST Input.
+// Vendor debit note / purchase return - Dr vendor, Cr Purchases + reverse GST Input.
 router.post("/documents/debit-note", canPost, async (req, res) => {
   try {
     const t = tenantOf(req); const b = req.body || {};
@@ -351,7 +351,7 @@ router.post("/documents/debit-note", canPost, async (req, res) => {
     res.status(r.replayed ? 200 : 201).json(r);
   } catch (e) { fail(res, e); }
 });
-// Customer refund of an advance / unapplied credit — Dr customer, Cr bank/cash.
+// Customer refund of an advance / unapplied credit - Dr customer, Cr bank/cash.
 router.post("/documents/refund", canPost, async (req, res) => {
   try {
     const b = req.body || {};
@@ -361,19 +361,19 @@ router.post("/documents/refund", canPost, async (req, res) => {
     res.status(r.replayed ? 200 : 201).json(r);
   } catch (e) { fail(res, e); }
 });
-// Bad-debt write-off — Dr Bad Debts, Cr customer.
+// Bad-debt write-off - Dr Bad Debts, Cr customer.
 router.post("/documents/write-off", canPost, async (req, res) => {
   try {
     const t = tenantOf(req); const b = req.body || {};
     if (!b.partyLedgerId || b.amount == null || !b.date) return res.status(400).json({ error: "partyLedgerId, amount, date required" });
     const badDebtsLedgerId = await ledgerIdByName(t, "Bad Debts");
-    if (!badDebtsLedgerId) return res.status(422).json({ error: "Bad Debts ledger missing — seed first", code: "NOT_SEEDED" });
+    if (!badDebtsLedgerId) return res.status(422).json({ error: "Bad Debts ledger missing - seed first", code: "NOT_SEEDED" });
     const m = buildBadDebt(b, { badDebtsLedgerId });
     const r = await postVoucher(t, req.user.id, m.voucher, m.entries, { idempotencyKey: idem(req) });
     res.status(r.replayed ? 200 : 201).json(r);
   } catch (e) { fail(res, e); }
 });
-// GST-compliant customer advance receipt — Dr bank, Cr customer (advance) + GST output.
+// GST-compliant customer advance receipt - Dr bank, Cr customer (advance) + GST output.
 router.post("/documents/advance-receipt", canPost, async (req, res) => {
   try {
     const t = tenantOf(req); const b = req.body || {};
@@ -384,7 +384,7 @@ router.post("/documents/advance-receipt", canPost, async (req, res) => {
     res.status(r.replayed ? 200 : 201).json(r);
   } catch (e) { fail(res, e); }
 });
-// Advance paid to a supplier — Dr vendor (advance), Cr bank.
+// Advance paid to a supplier - Dr vendor (advance), Cr bank.
 router.post("/documents/vendor-advance", canPost, async (req, res) => {
   try {
     const b = req.body || {};
@@ -503,7 +503,7 @@ async function renderDocumentHtml(tenantId, docId) {
         <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:center">${esc(l.hsn || "")}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:right">${esc(toRupees(l.qty))}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:right">${inr(l.rate)}</td>
-        <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:right">${money(l.discount).greaterThan(0) ? inr(l.discount) : "—"}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:right">${money(l.discount).greaterThan(0) ? inr(l.discount) : "-"}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:center">${esc(toRupees(l.gstRate))}%</td>
         <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:right">${inr(l.net)}</td>
       </tr>`).join("");
@@ -521,7 +521,7 @@ async function renderDocumentHtml(tenantId, docId) {
     </div>` : "";
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)} #${esc(doc.doc_number)} — ${esc(companyName)}</title>
+<title>${esc(title)} #${esc(doc.doc_number)} - ${esc(companyName)}</title>
 <style>@media print{.no-print{display:none}}body{margin:0}</style></head>
 <body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1a;background:#f4f4f0;margin:0;padding:24px">
   <div class="no-print" style="max-width:820px;margin:0 auto 16px;text-align:right">
@@ -546,7 +546,7 @@ async function renderDocumentHtml(tenantId, docId) {
 
     <div style="margin:28px 0 16px;padding:14px 16px;background:#fafaf7;border:1px solid #ececdf;border-radius:8px">
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#999">Bill to</div>
-      <div style="font-size:15px;font-weight:700;margin-top:4px">${esc(party.name || "—")}</div>
+      <div style="font-size:15px;font-weight:700;margin-top:4px">${esc(party.name || "-")}</div>
       ${party.billing_address ? `<div style="font-size:12px;color:#666;margin-top:2px">${esc(party.billing_address)}</div>` : ""}
       ${party.gstin ? `<div style="font-size:12px;color:#666;margin-top:2px">GSTIN: ${esc(party.gstin)}</div>` : ""}
       <div style="font-size:11px;color:#999;margin-top:4px">${interState ? "Inter-state supply (IGST)" : "Intra-state supply (CGST + SGST)"}</div>
@@ -601,10 +601,10 @@ router.post("/documents/:id/send", canPost, async (req, res) => {
     const to = b.email || null;
     const phone = b.phone || null;
     const link = b.link || null; // optional public link the caller already minted
-    const subject = b.subject || `${r.title} #${r.doc.doc_number} from ${r.companyName} — ${inr(r.gross)}`;
+    const subject = b.subject || `${r.title} #${r.doc.doc_number} from ${r.companyName} - ${inr(r.gross)}`;
     const channels = [];
 
-    // EMAIL — reuse lib/email.sendMail({to,subject,html}). Honest about config.
+    // EMAIL - reuse lib/email.sendMail({to,subject,html}). Honest about config.
     if (to) {
       if (process.env.SMTP_USER) {
         await email.sendMail({ to, subject, html: r.html });
@@ -614,7 +614,7 @@ router.post("/documents/:id/send", canPost, async (req, res) => {
       }
     }
 
-    // WHATSAPP — reuse lib/whatsapp.sendWhatsApp(to, body). It returns false when
+    // WHATSAPP - reuse lib/whatsapp.sendWhatsApp(to, body). It returns false when
     // Twilio isn't configured (logs a mock); surface that truthfully.
     if (phone) {
       const body = `${r.companyName}: ${r.title} #${r.doc.doc_number} for ${inr(r.gross)}.` + (link ? ` View/pay: ${link}` : "");
@@ -629,7 +629,7 @@ router.post("/documents/:id/send", canPost, async (req, res) => {
 });
 
 // ── M2: deposits, recurring ──────────────────────────────────────────────────
-// (POST /allocations is registered earlier via billwise.allocateBill — the
+// (POST /allocations is registered earlier via billwise.allocateBill - the
 // duplicate docs.allocate handler that used to sit here was unreachable, so removed.)
 router.get("/allocations", async (req, res) => {
   try {
@@ -832,9 +832,9 @@ router.post("/agents/:id/run/stream", async (req, res) => {
   res.end();
 });
 router.post("/agents/:id/swarm", async (req, res) => { try { res.json(await agents.runSwarm(tenantOf(req), req.user.id, req.params.id, (req.body || {}).message || "")); } catch (e) { fail(res, e); } });
-// Past runs (chat history) — so the workspace transcript survives a reload instead of living only in browser memory.
+// Past runs (chat history) - so the workspace transcript survives a reload instead of living only in browser memory.
 router.get("/agents/:id/runs", async (req, res) => { try { res.json(await agents.listRuns(tenantOf(req), req.params.id, req.query.limit)); } catch (e) { fail(res, e); } });
-// Approve a proposed write action (human-in-the-loop) — re-checks the actor's role.
+// Approve a proposed write action (human-in-the-loop) - re-checks the actor's role.
 router.post("/agents/:id/confirm", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await agents.confirmAction(tenantOf(req), req.user.id, { tool: b.tool, args: b.args, role: req.user.role })); } catch (e) { fail(res, e); } });
 // Agent knowledge (RAG) docs.
 router.post("/agents/:id/docs", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await agentrag.addDoc(tenantOf(req), req.params.id, { title: b.title, content: b.content })); } catch (e) { fail(res, e); } });

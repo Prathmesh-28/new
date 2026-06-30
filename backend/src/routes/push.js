@@ -3,7 +3,7 @@ const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
 const { sendPush } = require("../lib/push");
 
-// POST /api/push/register — store this device's FCM/APNs token for the user/tenant
+// POST /api/push/register - store this device's FCM/APNs token for the user/tenant
 router.post("/register", authenticate, async (req, res) => {
   const { token, platform } = req.body || {};
   if (!token || typeof token !== "string") return res.status(400).json({ error: "token required" });
@@ -22,11 +22,11 @@ router.post("/unregister", authenticate, async (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/push/test — send a test push to all of the tenant's devices
+// POST /api/push/test - send a test push to all of the tenant's devices
 router.post("/test", authenticate, async (req, res) => {
   const { rows } = await pool.query("SELECT token FROM push_tokens WHERE tenant_id=$1", [req.user.tenant_id]);
   const result = await sendPush(rows.map(r => r.token), {
-    title: "Headroom", body: "🔔 Push notifications are working — you'll get cash-pressure alerts here.",
+    title: "Headroom", body: "🔔 Push notifications are working - you'll get cash-pressure alerts here.",
     data: { path: "/forecast" },
   });
   // Drop tokens FCM reported as unregistered/invalid so we stop sending to dead devices.

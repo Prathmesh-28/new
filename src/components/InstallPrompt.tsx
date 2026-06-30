@@ -57,7 +57,7 @@ export default function InstallPrompt() {
           <div style={{ fontSize: 12, color: "rgba(253,250,240,0.6)", marginTop: 2 }}>
             {ios
               ? <>Tap <Share size={11} style={{ display: "inline", verticalAlign: "-1px" }} /> Share, then <strong>Add to Home Screen</strong>.</>
-              : "Get the full-screen app on your home screen — free, no app store."}
+              : "Get the full-screen app on your home screen - free, no app store."}
           </div>
         </div>
         {!ios && (

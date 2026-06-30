@@ -1,8 +1,8 @@
-// Bulk onboarding import — the #1 migration blocker. Lets a new tenant load their
+// Bulk onboarding import - the #1 migration blocker. Lets a new tenant load their
 // existing chart of accounts, stock masters and opening balances in one shot
 // (Tally "Masters export" / ERPNext "Chart of Accounts Importer" shape). Every
 // row is validated and upserted independently: one bad row never aborts the batch,
-// it lands in `skipped` with a reason. Idempotent — re-running the same file is safe.
+// it lands in `skipped` with a reason. Idempotent - re-running the same file is safe.
 const { pool } = require("../../db");
 const { money, toDb, eq, ZERO } = require("./money");
 const { PostError } = require("./posting-engine");
@@ -12,7 +12,7 @@ const s = (v) => (v == null ? "" : String(v).trim());
 const isBlank = (v) => s(v) === "";
 
 // ───────────────────────────────────────────────────────────────────────────
-// (1) importLedgers — chart of accounts. Resolve group by NAME → group_id.
+// (1) importLedgers - chart of accounts. Resolve group by NAME → group_id.
 // We require the group to already exist (seedBooks lays down Tally's 28); an
 // unknown group is reported, never auto-created (creating a group needs a
 // nature/affects_pl decision we won't guess). ON CONFLICT(tenant,name) upserts.
@@ -81,7 +81,7 @@ async function importLedgers(tenantId, rows) {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// (2) importItems — stock masters. Tally "Stock Item" / ERPNext "Item" import.
+// (2) importItems - stock masters. Tally "Stock Item" / ERPNext "Item" import.
 // ───────────────────────────────────────────────────────────────────────────
 async function importItems(tenantId, rows) {
   if (!Array.isArray(rows)) throw new PostError("BAD_INPUT", "rows must be an array", 400);
@@ -143,7 +143,7 @@ async function importItems(tenantId, rows) {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// (3) importOpeningBalances — set opening on existing ledgers and report the
+// (3) importOpeningBalances - set opening on existing ledgers and report the
 // net (Σ debit − Σ credit). A correct opening trial balance nets to zero; the
 // caller (orchestrator) checks `openingNet` and warns/blocks if it doesn't.
 // `ledger` may be a name or a uuid. Each row updated independently.

@@ -1,10 +1,10 @@
-// Headroom Flows — REST router. Mounted at /api/flows.
+// Headroom Flows - REST router. Mounted at /api/flows.
 const router = require("express").Router();
 const { authenticate } = require("../../middleware/auth");
 const flows = require("./index");
 const runner = require("./runner");
 
-// ── Public webhook trigger (no auth — the token is the capability) ────────────
+// ── Public webhook trigger (no auth - the token is the capability) ────────────
 // Declared before router.use(authenticate). POST the payload; it becomes ctx.trigger.
 router.post("/webhook/:token", async (req, res) => {
   try {

@@ -66,7 +66,7 @@ export default function AlertsPage() {
           if ((sa.is_read || sa.is_resolved) && !local.isRead) markAlertRead(sa.id);
         }
       } catch {
-        /* list pull optional — count probe already set synced */
+        /* list pull optional - count probe already set synced */
       }
     })();
     return () => { cancelled = true; };
@@ -95,7 +95,7 @@ export default function AlertsPage() {
       void refreshServerCount();
     } catch {
       setSynced(false);
-      toast.success("Marked all read on this device (offline — will not sync)");
+      toast.success("Marked all read on this device (offline - will not sync)");
     } finally {
       setMarkingAll(false);
     }
@@ -213,7 +213,7 @@ export default function AlertsPage() {
               </span>
             )}
             {synced === false && (
-              <span title="Backend unreachable — read-state is kept on this device only"
+              <span title="Backend unreachable - read-state is kept on this device only"
                 className="inline-flex items-center gap-1 text-[10px] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded-full">
                 <CloudOff size={10} /> Offline
               </span>
@@ -252,9 +252,9 @@ export default function AlertsPage() {
               </p>
             </div>
             <div className="space-y-1 text-xs text-[var(--color-muted)]">
-              <p><strong className="text-[var(--color-text)]">Critical</strong> — balance goes negative within 30 days → in-app + email + WhatsApp</p>
-              <p><strong className="text-[var(--color-text)]">Warning</strong> — below safety buffer within 45 days → in-app + email</p>
-              <p><strong className="text-[var(--color-text)]">Info</strong> — unusual spend detected → in-app only</p>
+              <p><strong className="text-[var(--color-text)]">Critical</strong> - balance goes negative within 30 days → in-app + email + WhatsApp</p>
+              <p><strong className="text-[var(--color-text)]">Warning</strong> - below safety buffer within 45 days → in-app + email</p>
+              <p><strong className="text-[var(--color-text)]">Info</strong> - unusual spend detected → in-app only</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -371,7 +371,7 @@ export default function AlertsPage() {
 }
 
 // ── #182 Smart Threshold Alert Builder ───────────────────────────────────────────
-// "Alert me when metric X crosses Y" — user-defined rules persisted via
+// "Alert me when metric X crosses Y" - user-defined rules persisted via
 // useFeatureState and evaluated live against the synced store every render.
 type Metric = "balance" | "burn" | "runway" | "revenue30" | "expense30";
 type Op = "below" | "above";
@@ -422,7 +422,7 @@ function ThresholdAlertBuilder() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><SlidersHorizontal size={14} className="text-[var(--color-primary)]" /> Smart Threshold Alert Builder</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Define your own rules — "alert me when balance is below ₹5,00,000" or "runway below 60 days". Each rule is evaluated live against your latest synced data, so a breach shows up the moment your numbers cross the line.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Define your own rules - "alert me when balance is below ₹5,00,000" or "runway below 60 days". Each rule is evaluated live against your latest synced data, so a breach shows up the moment your numbers cross the line.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Metric</label>
@@ -468,7 +468,7 @@ function ThresholdAlertBuilder() {
             </tbody>
           </table>
         </div>
-      ) : <p className="text-center py-8 text-sm text-[var(--color-muted)]">No rules yet — add one above to start monitoring a metric.</p>}
+      ) : <p className="text-center py-8 text-sm text-[var(--color-muted)]">No rules yet - add one above to start monitoring a metric.</p>}
 
       {triggered.length > 0 && (
         <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
@@ -478,7 +478,7 @@ function ThresholdAlertBuilder() {
           </ul>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Rules persist and sync across your devices. Evaluation is on the latest store snapshot — connect more bank feeds for a complete balance picture.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Rules persist and sync across your devices. Evaluation is on the latest store snapshot - connect more bank feeds for a complete balance picture.</p>
     </div>
   );
 }
@@ -527,7 +527,7 @@ function ComplianceDueDateAlerts() {
       : base;
     if (item.recurrence !== "monthly" && item.recurrence !== "quarterly" && item.recurrence !== "annual") return;
     // Roll forward (date-fns clamps to month-end, avoiding Jan31→Mar overflow)
-    // until the new due date is no longer in the past — covers multiple lapsed cycles.
+    // until the new due date is no longer in the past - covers multiple lapsed cycles.
     const cutoff = new Date(); cutoff.setHours(0, 0, 0, 0);
     do { d = step(d); } while (d.getTime() < cutoff.getTime());
     setItems(prev => prev.map(x => x.id === item.id ? { ...x, dueDate: d.toISOString().split("T")[0] } : x));
@@ -550,7 +550,7 @@ function ComplianceDueDateAlerts() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Compliance Due-Date Alerts</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Track statutory deadlines with escalating reminders — Upcoming → Due this week → Due ≤3 days → Overdue. Recurring items roll forward to the next cycle once filed.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track statutory deadlines with escalating reminders - Upcoming → Due this week → Due ≤3 days → Overdue. Recurring items roll forward to the next cycle once filed.</p>
         <div className="flex flex-wrap gap-1.5 mb-3">
           {PRESETS.map(p => <button key={p.name} onClick={() => addPreset(p)} className="text-[11px] bg-[var(--color-accent)] border border-[var(--color-border)] px-2 py-1 rounded-lg hover:border-[var(--color-primary)]/40">{p.name}</button>)}
         </div>
@@ -596,8 +596,8 @@ function ComplianceDueDateAlerts() {
             );
           })}
         </div>
-      ) : <p className="text-center py-8 text-sm text-[var(--color-muted)]">No deadlines tracked — add one above or pick a preset.</p>}
-      <p className="text-[10px] text-[var(--color-muted)]">Reminders escalate automatically as the date approaches. Verify exact statutory due dates with your CA — they shift with extensions and weekends/holidays.</p>
+      ) : <p className="text-center py-8 text-sm text-[var(--color-muted)]">No deadlines tracked - add one above or pick a preset.</p>}
+      <p className="text-[10px] text-[var(--color-muted)]">Reminders escalate automatically as the date approaches. Verify exact statutory due dates with your CA - they shift with extensions and weekends/holidays.</p>
     </div>
   );
 }
@@ -627,7 +627,7 @@ function CashLowOverdraftAlert() {
   if (data.overdrawn.length > 0) warnings.push({ sev: "critical", text: `${data.overdrawn.length} account(s) overdrawn: ${data.overdrawn.map(a => `${a.name} (${fc(a.balance)})`).join(", ")}` });
   if (data.balance < 0) warnings.push({ sev: "critical", text: `Aggregate cash is negative at ${fc(data.balance)}.` });
   else if (data.runway <= 14) warnings.push({ sev: "critical", text: `Only ${data.runway} days of runway left at current burn.` });
-  else if (data.runway <= 30) warnings.push({ sev: "high", text: `Runway is ${data.runway} days — below the 30-day comfort line.` });
+  else if (data.runway <= 30) warnings.push({ sev: "high", text: `Runway is ${data.runway} days - below the 30-day comfort line.` });
   if (floor > 0 && data.balance < floor) warnings.push({ sev: "high", text: `Balance ${fc(data.balance)} is below your minimum floor of ${fc(floor)}.` });
   else if (floor > 0 && daysToFloor <= 30 && daysToFloor >= 0) warnings.push({ sev: "medium", text: `At current burn you hit your ${fc(floor)} floor in ${daysToFloor} days.` });
 
@@ -637,9 +637,9 @@ function CashLowOverdraftAlert() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Droplets size={14} className="text-[var(--color-primary)]" /> Cash-Low / Overdraft Alert</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Proactive liquidity warnings from your live bank balances and burn rate — flags overdrawn accounts, thin runway, and how long until you hit a minimum-balance floor you set.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Proactive liquidity warnings from your live bank balances and burn rate - flags overdrawn accounts, thin runway, and how long until you hit a minimum-balance floor you set.</p>
         <div className="max-w-xs">
-          <label className="text-xs text-[var(--color-muted)] block mb-1">Minimum-balance floor (₹) — optional</label>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Minimum-balance floor (₹) - optional</label>
           <input type="number" value={floorInput} onChange={e => setFloorInput(e.target.value)} placeholder="e.g. 200000" className={INP} />
         </div>
       </div>
@@ -670,7 +670,7 @@ function CashLowOverdraftAlert() {
       ) : (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20 flex items-center gap-2">
           <CheckCircle2 size={15} className="text-green-400" />
-          <p className="text-sm text-green-400 font-medium">Liquidity is healthy — no accounts overdrawn and runway is comfortable.</p>
+          <p className="text-sm text-green-400 font-medium">Liquidity is healthy - no accounts overdrawn and runway is comfortable.</p>
         </div>
       )}
 
@@ -690,7 +690,7 @@ function CashLowOverdraftAlert() {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Runway uses last-30-day burn — seasonal or one-off outflows can distort it. Set a floor that covers payroll + statutory dues for at least one cycle.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Runway uses last-30-day burn - seasonal or one-off outflows can distort it. Set a floor that covers payroll + statutory dues for at least one cycle.</p>
     </div>
   );
 }
@@ -712,11 +712,11 @@ function FraudAnomalyAlerts() {
     const sd = amts.length ? Math.sqrt(amts.reduce((s, v) => s + (v - mean) ** 2, 0) / amts.length) : 0;
     const threshold = mean + sigma * sd;
 
-    // Outsized payments — beyond mean + N·σ.
+    // Outsized payments - beyond mean + N·σ.
     const outsized = outflows.filter(t => Math.abs(t.amount || 0) > threshold && sd > 0)
-      .map(t => ({ id: t.id, kind: "Large payment" as const, party: t.counterparty || t.description, detail: `${fc(Math.abs(t.amount))} — ${((Math.abs(t.amount) - mean) / (sd || 1)).toFixed(1)}σ above your average outflow`, date: t.date }));
+      .map(t => ({ id: t.id, kind: "Large payment" as const, party: t.counterparty || t.description, detail: `${fc(Math.abs(t.amount))} - ${((Math.abs(t.amount) - mean) / (sd || 1)).toFixed(1)}σ above your average outflow`, date: t.date }));
 
-    // New payees — counterparty first seen within the last 30 days.
+    // New payees - counterparty first seen within the last 30 days.
     const firstSeen = new Map<string, number>();
     [...txns].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).forEach(t => {
       const cp = (t.counterparty || "").trim();
@@ -726,9 +726,9 @@ function FraudAnomalyAlerts() {
     const newPayees = outflows.filter(t => {
       const cp = (t.counterparty || "").trim();
       return cp && (firstSeen.get(cp) ?? 0) >= cutoff;
-    }).map(t => ({ id: t.id, kind: "New payee" as const, party: t.counterparty, detail: `First payment to this payee — ${fc(Math.abs(t.amount))}`, date: t.date }));
+    }).map(t => ({ id: t.id, kind: "New payee" as const, party: t.counterparty, detail: `First payment to this payee - ${fc(Math.abs(t.amount))}`, date: t.date }));
 
-    // Round-trips — a counterparty with both inflow and outflow (money cycled).
+    // Round-trips - a counterparty with both inflow and outflow (money cycled).
     const byParty = new Map<string, { in: number; out: number }>();
     txns.forEach(t => {
       const cp = (t.counterparty || "").trim();
@@ -739,10 +739,10 @@ function FraudAnomalyAlerts() {
     });
     const roundTrips = [...byParty.entries()]
       .filter(([, v]) => v.in > 0 && v.out > 0)
-      .map(([party, v]) => ({ id: `rt-${party}`, kind: "Round-trip" as const, party, detail: `Both paid (${fc(v.out)}) and received (${fc(v.in)}) — possible circular flow`, date: "" }));
+      .map(([party, v]) => ({ id: `rt-${party}`, kind: "Round-trip" as const, party, detail: `Both paid (${fc(v.out)}) and received (${fc(v.in)}) - possible circular flow`, date: "" }));
 
     const flaggedManual = txns.filter(t => t.flagged)
-      .map(t => ({ id: `fl-${t.id}`, kind: "Manually flagged" as const, party: t.counterparty || t.description, detail: `${fc(Math.abs(t.amount || 0))} — flagged for review`, date: t.date }));
+      .map(t => ({ id: `fl-${t.id}`, kind: "Manually flagged" as const, party: t.counterparty || t.description, detail: `${fc(Math.abs(t.amount || 0))} - flagged for review`, date: t.date }));
 
     return { mean, sd, threshold, all: [...outsized, ...newPayees, ...roundTrips, ...flaggedManual] };
   }, [store.transactions, sigma]);
@@ -758,7 +758,7 @@ function FraudAnomalyAlerts() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Fraud / Anomaly Alerts</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Scans your transactions for unusual patterns — outsized payments (statistical outliers), brand-new payees, and round-trips where money flows out and back to the same party. Tune the outlier sensitivity below.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Scans your transactions for unusual patterns - outsized payments (statistical outliers), brand-new payees, and round-trips where money flows out and back to the same party. Tune the outlier sensitivity below.</p>
         <div className="max-w-xs">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Outlier sensitivity (σ above average): {sigma}</label>
           <input type="range" min="1.5" max="4" step="0.5" value={sigmaInput} onChange={e => setSigmaInput(e.target.value)} className="w-full accent-[var(--color-primary)]" />
@@ -787,10 +787,10 @@ function FraudAnomalyAlerts() {
       ) : (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20 flex items-center gap-2">
           <CheckCircle2 size={15} className="text-green-400" />
-          <p className="text-sm text-green-400 font-medium">No anomalies at this sensitivity — lower the σ threshold to scan more aggressively.</p>
+          <p className="text-sm text-green-400 font-medium">No anomalies at this sensitivity - lower the σ threshold to scan more aggressively.</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Heuristic detection — outliers and new payees are often legitimate (a large vendor settlement, a new supplier). Treat these as a review queue, not proof of fraud. Inter-account transfers are excluded.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Heuristic detection - outliers and new payees are often legitimate (a large vendor settlement, a new supplier). Treat these as a review queue, not proof of fraud. Inter-account transfers are excluded.</p>
     </div>
   );
 }
@@ -834,7 +834,7 @@ function SnoozeMuteConfig() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><BellOff size={14} className="text-[var(--color-primary)]" /> Snooze / Mute Alerts</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Temporarily silence a noisy alert category — say you already know runway is tight and don't want the reminder every few hours. Mutes auto-expire after the window you set; the underlying alert is never deleted.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Temporarily silence a noisy alert category - say you already know runway is tight and don't want the reminder every few hours. Mutes auto-expire after the window you set; the underlying alert is never deleted.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Alert type</label>
@@ -870,7 +870,7 @@ function SnoozeMuteConfig() {
             );
           })}
         </div>
-      ) : <p className="text-center py-8 text-sm text-[var(--color-muted)]">No active mutes — all alert categories are live.</p>}
+      ) : <p className="text-center py-8 text-sm text-[var(--color-muted)]">No active mutes - all alert categories are live.</p>}
       <p className="text-[10px] text-[var(--color-muted)]">Muting suppresses notifications, not the condition itself. Critical liquidity alerts will still surface on the dashboard.</p>
     </div>
   );
@@ -934,7 +934,7 @@ function AlertDigestScheduler() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)] mb-3">Next digest preview {enabled && <span className="text-[var(--color-primary)] normal-case">· {freq}, {hourLabel(parseInt(hour) || 0)}, via {channel}</span>}</p>
         {unread.length === 0 ? (
-          <p className="text-sm text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> No unread alerts — your digest would be empty.</p>
+          <p className="text-sm text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> No unread alerts - your digest would be empty.</p>
         ) : (
           <>
             <p className="text-sm mb-3"><span className="font-bold">{unread.length}</span> unread alert{unread.length > 1 ? "s" : ""}: <span className="text-red-400">{counts.critical} critical</span> · <span className="text-orange-400">{counts.high} high</span> · <span className="text-yellow-400">{counts.medium} warning</span> · <span className="text-blue-400">{counts.low} info</span></p>
@@ -942,7 +942,7 @@ function AlertDigestScheduler() {
               {unread.slice(0, 6).map(a => (
                 <li key={a.id} className="text-xs text-[var(--color-muted)] flex items-start gap-2">
                   <span className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${SEV[a.severity]?.color.replace("text-", "bg-")}`} />
-                  <span><span className="text-[var(--color-text)] font-medium">{a.title || a.type}</span> — {a.message}</span>
+                  <span><span className="text-[var(--color-text)] font-medium">{a.title || a.type}</span> - {a.message}</span>
                 </li>
               ))}
               {unread.length > 6 && <li className="text-xs text-[var(--color-muted)]">…and {unread.length - 6} more</li>}
@@ -986,7 +986,7 @@ function EscalationRules() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> Escalation Rules</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Route alerts to the right people by severity — a critical cash shortfall pings the founder on WhatsApp, while routine info stays with your accountant over email. Add one or more recipients per tier.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Route alerts to the right people by severity - a critical cash shortfall pings the founder on WhatsApp, while routine info stays with your accountant over email. Add one or more recipients per tier.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Severity</label>
@@ -1029,7 +1029,7 @@ function EscalationRules() {
                     </div>
                   ))}
                 </div>
-              ) : <p className="text-xs text-[var(--color-muted)] italic">No recipients — alerts at this tier go to in-app only.</p>}
+              ) : <p className="text-xs text-[var(--color-muted)] italic">No recipients - alerts at this tier go to in-app only.</p>}
             </div>
           );
         })}
@@ -1075,9 +1075,9 @@ function OverdueReceivablesAlerts() {
 
   const BUCKETS = [
     { label: "Not yet due", value: data.buckets.current, color: "text-green-400" },
-    { label: "1–30 days", value: data.buckets.b1, color: "text-yellow-400" },
-    { label: "31–60 days", value: data.buckets.b30, color: "text-orange-400" },
-    { label: "61–90 days", value: data.buckets.b60, color: "text-orange-400" },
+    { label: "1-30 days", value: data.buckets.b1, color: "text-yellow-400" },
+    { label: "31-60 days", value: data.buckets.b30, color: "text-orange-400" },
+    { label: "61-90 days", value: data.buckets.b60, color: "text-orange-400" },
     { label: "90+ days", value: data.buckets.b90, color: "text-red-400" },
   ];
 
@@ -1085,9 +1085,9 @@ function OverdueReceivablesAlerts() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> Overdue Receivables Alerts</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Watches your open invoices and ages them automatically. Set a ceiling for total overdue AR and we flag the moment it's crossed — so slipping collections never quietly drain your runway.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Watches your open invoices and ages them automatically. Set a ceiling for total overdue AR and we flag the moment it's crossed - so slipping collections never quietly drain your runway.</p>
         <div className="max-w-xs">
-          <label className="text-xs text-[var(--color-muted)] block mb-1">Alert when total overdue exceeds (₹) — optional</label>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Alert when total overdue exceeds (₹) - optional</label>
           <input type="number" value={thresholdInput} onChange={e => setThresholdInput(e.target.value)} placeholder="e.g. 500000" className={INP} />
         </div>
       </div>
@@ -1104,7 +1104,7 @@ function OverdueReceivablesAlerts() {
       {breached ? (
         <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-3 flex items-start gap-2.5">
           <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
-          <p className="text-sm text-red-400 leading-snug">Total overdue AR is {fc(data.overdueTotal)} — above your {fc(threshold)} alert ceiling.</p>
+          <p className="text-sm text-red-400 leading-snug">Total overdue AR is {fc(data.overdueTotal)} - above your {fc(threshold)} alert ceiling.</p>
         </div>
       ) : data.overdueTotal > 0 ? (
         <div className="rounded-lg border border-orange-800/40 bg-orange-950/20 px-4 py-3 flex items-start gap-2.5">
@@ -1114,7 +1114,7 @@ function OverdueReceivablesAlerts() {
       ) : (
         <div className="rounded-lg border border-green-800/40 bg-green-950/20 px-4 py-3 flex items-center gap-2">
           <CheckCircle2 size={15} className="text-green-400" />
-          <p className="text-sm text-green-400 font-medium">No overdue invoices — collections are on track.</p>
+          <p className="text-sm text-green-400 font-medium">No overdue invoices - collections are on track.</p>
         </div>
       )}
 
@@ -1170,7 +1170,7 @@ function PaymentDueAlerts() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Payment-Due Alerts</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Surfaces loan EMIs, tax payments, payroll and other obligations falling due inside a window you choose — so you can pre-fund the account before money leaves. Overdue items are always shown.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Surfaces loan EMIs, tax payments, payroll and other obligations falling due inside a window you choose - so you can pre-fund the account before money leaves. Overdue items are always shown.</p>
         <div className="max-w-xs">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Look-ahead window (days)</label>
           <input type="number" value={windowInput} onChange={e => setWindowInput(e.target.value)} placeholder="14" className={INP} />
@@ -1268,7 +1268,7 @@ function KpiTargetAlerts() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><SlidersHorizontal size={14} className="text-[var(--color-primary)]" /> KPI Target Alerts</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Set goals on the operating metrics that matter — "revenue at least ₹10L/month" or "gross margin at least 40%" — and see a live pass/miss read computed from your last-30-day transactions.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Set goals on the operating metrics that matter - "revenue at least ₹10L/month" or "gross margin at least 40%" - and see a live pass/miss read computed from your last-30-day transactions.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">KPI</label>
@@ -1312,7 +1312,7 @@ function KpiTargetAlerts() {
             </tbody>
           </table>
         </div>
-      ) : <p className="text-center py-8 text-sm text-[var(--color-muted)]">No KPI targets yet — add one above to start tracking.</p>}
+      ) : <p className="text-center py-8 text-sm text-[var(--color-muted)]">No KPI targets yet - add one above to start tracking.</p>}
 
       {missing.length > 0 && (
         <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
@@ -1322,7 +1322,7 @@ function KpiTargetAlerts() {
           </ul>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">KPIs use a rolling 30-day transaction window — margin and ratios need revenue in that window to be meaningful. Targets persist and sync across devices.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">KPIs use a rolling 30-day transaction window - margin and ratios need revenue in that window to be meaningful. Targets persist and sync across devices.</p>
     </div>
   );
 }
@@ -1400,7 +1400,7 @@ function LowStockAlerts() {
       ) : (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20 flex items-center gap-2">
           <CheckCircle2 size={15} className="text-green-400" />
-          <p className="text-sm text-green-400 font-medium">{data.total === 0 ? "No inventory tracked yet — add items in Operations to monitor stock." : "All SKUs are above their reorder level."}</p>
+          <p className="text-sm text-green-400 font-medium">{data.total === 0 ? "No inventory tracked yet - add items in Operations to monitor stock." : "All SKUs are above their reorder level."}</p>
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Re-order cost estimates the spend to refill back to the trigger quantity at last-known unit cost. Set realistic reorder levels per SKU in Operations for sharper alerts.</p>
@@ -1435,7 +1435,7 @@ function LargeTransactionAlerts() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ArrowUpRight size={14} className="text-[var(--color-primary)]" /> Large-Transaction Alerts</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Get a heads-up on any single transaction above a threshold you set — a hard rupee floor rather than a statistical outlier. Useful for sign-off on big vendor payments or spotting an unexpectedly large inflow.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Get a heads-up on any single transaction above a threshold you set - a hard rupee floor rather than a statistical outlier. Useful for sign-off on big vendor payments or spotting an unexpectedly large inflow.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Alert when amount is at least (₹)</label>
@@ -1481,7 +1481,7 @@ function LargeTransactionAlerts() {
           <p className="text-sm text-green-400 font-medium">{threshold <= 0 ? "Set a threshold above to start flagging large transactions." : `No transactions at or above ${fc(threshold)} in this direction.`}</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Inter-account transfers are excluded so internal sweeps don't trigger. This is a fixed-amount rule — use Fraud / Anomaly for statistical outlier detection.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Inter-account transfers are excluded so internal sweeps don't trigger. This is a fixed-amount rule - use Fraud / Anomaly for statistical outlier detection.</p>
     </div>
   );
 }
@@ -1550,7 +1550,7 @@ function BudgetOverrunAlerts() {
           })}
         </div>
       ) : (
-        <p className="text-center py-8 text-sm text-[var(--color-muted)]">No budgets defined — set category budgets to monitor overruns here.</p>
+        <p className="text-center py-8 text-sm text-[var(--color-muted)]">No budgets defined - set category budgets to monitor overruns here.</p>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Actuals use a rolling 30-day window of outflows matched on transaction category. Make sure transactions are categorised for accurate budget tracking.</p>
     </div>
@@ -1558,7 +1558,7 @@ function BudgetOverrunAlerts() {
 }
 
 // ── Customer Concentration Alerts ────────────────────────────────────────────────
-// Flags over-reliance on a single customer — what share of open receivables (and
+// Flags over-reliance on a single customer - what share of open receivables (and
 // of all-time invoiced revenue) sits with your top accounts, above a risk ceiling.
 function CustomerConcentrationAlerts() {
   const { store } = useApp();
@@ -1596,7 +1596,7 @@ function CustomerConcentrationAlerts() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Customer Concentration Alerts</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Warns when too much of your open receivables sits with one customer — a concentration risk if that account pays late or churns. Set the share above which a single customer should raise a flag.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Warns when too much of your open receivables sits with one customer - a concentration risk if that account pays late or churns. Set the share above which a single customer should raise a flag.</p>
         <div className="max-w-xs">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Flag a customer above: {ceiling}% of open AR</label>
           <input type="range" min="10" max="80" step="5" value={ceilingInput} onChange={e => setCeilingInput(e.target.value)} className="w-full accent-[var(--color-primary)]" />
@@ -1613,7 +1613,7 @@ function CustomerConcentrationAlerts() {
       ) : data.custCount > 0 ? (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20 flex items-center gap-2">
           <CheckCircle2 size={15} className="text-green-400" />
-          <p className="text-sm text-green-400 font-medium">Receivables are well spread — no single customer exceeds {ceiling}% of open AR.</p>
+          <p className="text-sm text-green-400 font-medium">Receivables are well spread - no single customer exceeds {ceiling}% of open AR.</p>
         </div>
       ) : null}
 
@@ -1634,7 +1634,7 @@ function CustomerConcentrationAlerts() {
           </table>
         </div>
       ) : (
-        <p className="text-center py-8 text-sm text-[var(--color-muted)]">No invoices yet — add receivables to assess customer concentration.</p>
+        <p className="text-center py-8 text-sm text-[var(--color-muted)]">No invoices yet - add receivables to assess customer concentration.</p>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">"Open AR" excludes paid invoices; "all-time" includes every invoice on record. A diversified book reduces the cashflow hit if one big customer slips.</p>
     </div>
@@ -1643,7 +1643,7 @@ function CustomerConcentrationAlerts() {
 
 // ── Priority Inbox ───────────────────────────────────────────────────────────────
 // A triage view of active alerts ordered by severity, with one-tap dismiss and
-// bulk actions to clear a whole severity tier at once — built for fast morning sweeps.
+// bulk actions to clear a whole severity tier at once - built for fast morning sweeps.
 function PriorityInbox() {
   const { store, markAlertRead } = useApp();
   const [filter, setFilter] = useState<"all" | "critical" | "high" | "medium" | "low">("all");
@@ -1673,7 +1673,7 @@ function PriorityInbox() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Inbox size={14} className="text-[var(--color-primary)]" /> Priority Inbox</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">A single triage queue of every active alert, ordered by severity then recency. Filter to one tier, dismiss individually, or clear a whole band in one tap — built for a fast morning sweep.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A single triage queue of every active alert, ordered by severity then recency. Filter to one tier, dismiss individually, or clear a whole band in one tap - built for a fast morning sweep.</p>
         <div className="flex flex-wrap gap-1.5">
           {TABS.map(t => {
             const n = t.key === "all" ? data.open.length : (data.counts[t.key] ?? 0);
@@ -1722,7 +1722,7 @@ function PriorityInbox() {
       ) : (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20 flex items-center gap-2">
           <CheckCircle2 size={15} className="text-green-400" />
-          <p className="text-sm text-green-400 font-medium">{data.open.length === 0 ? "Inbox zero — no active alerts." : "Nothing in this tier right now."}</p>
+          <p className="text-sm text-green-400 font-medium">{data.open.length === 0 ? "Inbox zero - no active alerts." : "Nothing in this tier right now."}</p>
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Dismissing moves an alert to Resolved without a note. To log what you did, use the Active tab's resolve box instead.</p>
@@ -1763,7 +1763,7 @@ function LicenceExpiryAlerts() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><BadgeCheck size={14} className="text-[var(--color-primary)]" /> Licence Expiry Alerts</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Track licences, registrations and certificates that lapse on a fixed date — trade licence, FSSAI, fire NOC, insurance, SSL. Reminders escalate from "Renew soon" to "Expired" so a lapsed permit never catches you out.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track licences, registrations and certificates that lapse on a fixed date - trade licence, FSSAI, fire NOC, insurance, SSL. Reminders escalate from "Renew soon" to "Expired" so a lapsed permit never catches you out.</p>
         <div className="flex flex-wrap gap-1.5 mb-3">
           {PRESETS.map(p => <button key={p} onClick={() => setName(p)} className="text-[11px] bg-[var(--color-accent)] border border-[var(--color-border)] px-2 py-1 rounded-lg hover:border-[var(--color-primary)]/40">{p}</button>)}
         </div>
@@ -1797,15 +1797,15 @@ function LicenceExpiryAlerts() {
             );
           })}
         </div>
-      ) : <p className="text-center py-8 text-sm text-[var(--color-muted)]">No licences tracked — add one above or pick a preset.</p>}
-      <p className="text-[10px] text-[var(--color-muted)]">For licences that renew on a cycle (GST returns, TDS), use Compliance Due-Dates instead — this tab is for fixed-expiry registrations. Start renewals early; some need inspections.</p>
+      ) : <p className="text-center py-8 text-sm text-[var(--color-muted)]">No licences tracked - add one above or pick a preset.</p>}
+      <p className="text-[10px] text-[var(--color-muted)]">For licences that renew on a cycle (GST returns, TDS), use Compliance Due-Dates instead - this tab is for fixed-expiry registrations. Start renewals early; some need inspections.</p>
     </div>
   );
 }
 
 // ── EMI Coverage Alerts ──────────────────────────────────────────────────────────
 // Checks whether your current bank balance can cover loan/EMI obligations falling
-// due inside a window — surfacing a funding shortfall before a payment bounces.
+// due inside a window - surfacing a funding shortfall before a payment bounces.
 function EmiCoverageAlerts() {
   const { store } = useApp();
   const [windowInput, setWindowInput] = useFeatureState<string>("alr-emicover-window", "30");
@@ -1832,7 +1832,7 @@ function EmiCoverageAlerts() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><HandCoins size={14} className="text-[var(--color-primary)]" /> EMI Coverage Alerts</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Adds up your loan EMIs due inside a window and checks them against your live bank balance — so you know whether you can cover every instalment, or need to arrange funds before a payment bounces and dents your credit.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Adds up your loan EMIs due inside a window and checks them against your live bank balance - so you know whether you can cover every instalment, or need to arrange funds before a payment bounces and dents your credit.</p>
         <div className="max-w-xs">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Coverage window (days)</label>
           <input type="number" value={windowInput} onChange={e => setWindowInput(e.target.value)} placeholder="30" className={INP} />
@@ -1855,7 +1855,7 @@ function EmiCoverageAlerts() {
       {shortfall ? (
         <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-3 flex items-start gap-2.5">
           <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
-          <p className="text-sm text-red-400 leading-snug">Projected shortfall of {fc(Math.abs(data.after))} — your balance won't cover all EMIs due in the next {lookAhead} days. Arrange funds or talk to your lender before the due date.</p>
+          <p className="text-sm text-red-400 leading-snug">Projected shortfall of {fc(Math.abs(data.after))} - your balance won't cover all EMIs due in the next {lookAhead} days. Arrange funds or talk to your lender before the due date.</p>
         </div>
       ) : data.due > 0 ? (
         <div className="rounded-lg border border-green-800/40 bg-green-950/20 px-4 py-3 flex items-center gap-2">
@@ -1882,7 +1882,7 @@ function EmiCoverageAlerts() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Only obligations typed as loans are counted here — see Payment-Due for tax and payroll. Balance is the live sum across connected accounts; expected inflows in the window are not netted in.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Only obligations typed as loans are counted here - see Payment-Due for tax and payroll. Balance is the live sum across connected accounts; expected inflows in the window are not netted in.</p>
     </div>
   );
 }
@@ -1898,7 +1898,7 @@ function RecurringSpendWatch() {
 
   const data = useMemo(() => {
     const recurring = (store.transactions ?? []).filter(t => t.isRecurring && (t.category === "expense" || t.category === "payroll") && (t.amount || 0) < 0);
-    // Latest recurring charge per counterparty — treat each as one monthly commitment.
+    // Latest recurring charge per counterparty - treat each as one monthly commitment.
     const latest = new Map<string, { id: string; party: string; amount: number; date: string }>();
     [...recurring].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).forEach(t => {
       const key = (t.counterparty || t.description || t.id).trim();
@@ -1915,9 +1915,9 @@ function RecurringSpendWatch() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Repeat size={14} className="text-[var(--color-primary)]" /> Recurring-Spend Watch</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Lists every recurring charge on file — SaaS subscriptions, rent, retainers — and totals your committed monthly outflow. Set a ceiling to catch subscription creep before it quietly eats your margin.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Lists every recurring charge on file - SaaS subscriptions, rent, retainers - and totals your committed monthly outflow. Set a ceiling to catch subscription creep before it quietly eats your margin.</p>
         <div className="max-w-xs">
-          <label className="text-xs text-[var(--color-muted)] block mb-1">Alert when recurring spend exceeds (₹/mo) — optional</label>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Alert when recurring spend exceeds (₹/mo) - optional</label>
           <input type="number" value={ceilingInput} onChange={e => setCeilingInput(e.target.value)} placeholder="e.g. 200000" className={INP} />
         </div>
       </div>
@@ -1938,7 +1938,7 @@ function RecurringSpendWatch() {
       {breached ? (
         <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-3 flex items-start gap-2.5">
           <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
-          <p className="text-sm text-red-400 leading-snug">Recurring spend is {fc(data.monthly)}/mo — above your {fc(ceiling)} ceiling. Review subscriptions for ones you can pause or downgrade.</p>
+          <p className="text-sm text-red-400 leading-snug">Recurring spend is {fc(data.monthly)}/mo - above your {fc(ceiling)} ceiling. Review subscriptions for ones you can pause or downgrade.</p>
         </div>
       ) : data.count > 0 ? (
         <div className="rounded-lg border border-green-800/40 bg-green-950/20 px-4 py-3 flex items-center gap-2">
@@ -1963,9 +1963,9 @@ function RecurringSpendWatch() {
           </table>
         </div>
       ) : (
-        <p className="text-center py-8 text-sm text-[var(--color-muted)]">No recurring charges found — mark subscription and rent transactions as recurring to track them here.</p>
+        <p className="text-center py-8 text-sm text-[var(--color-muted)]">No recurring charges found - mark subscription and rent transactions as recurring to track them here.</p>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Built from transactions flagged recurring, one commitment per counterparty at its latest amount. Annualised figure assumes the charge repeats monthly — adjust for quarterly or annual billing.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Built from transactions flagged recurring, one commitment per counterparty at its latest amount. Annualised figure assumes the charge repeats monthly - adjust for quarterly or annual billing.</p>
     </div>
   );
 }
@@ -1999,7 +1999,7 @@ function TaxSetAsideAlerts() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Tax Set-Aside Alerts</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Estimates the tax you should be parking from the last 90 days of profit at a rate you set, nets off tax already paid, and warns if your balance can't cover what's still owed — so advance-tax season never blindsides you.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Estimates the tax you should be parking from the last 90 days of profit at a rate you set, nets off tax already paid, and warns if your balance can't cover what's still owed - so advance-tax season never blindsides you.</p>
         <div className="max-w-xs">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Effective tax rate on profit: {rate}%</label>
           <input type="range" min="0" max="40" step="1" value={rateInput} onChange={e => setRateInput(e.target.value)} className="w-full accent-[var(--color-primary)]" />
@@ -2028,7 +2028,7 @@ function TaxSetAsideAlerts() {
       ) : data.stillOwed > 0 ? (
         <div className="rounded-lg border border-yellow-800/40 bg-yellow-950/20 px-4 py-3 flex items-start gap-2.5">
           <Info size={14} className="text-yellow-400 mt-0.5 shrink-0" />
-          <p className="text-sm text-yellow-400 leading-snug">Set aside about {fc(Math.round(data.stillOwed))} for tax on this quarter's profit. Your balance covers it — ring-fence it so it isn't spent.</p>
+          <p className="text-sm text-yellow-400 leading-snug">Set aside about {fc(Math.round(data.stillOwed))} for tax on this quarter's profit. Your balance covers it - ring-fence it so it isn't spent.</p>
         </div>
       ) : (
         <div className="rounded-lg border border-green-800/40 bg-green-950/20 px-4 py-3 flex items-center gap-2">
@@ -2036,7 +2036,7 @@ function TaxSetAsideAlerts() {
           <p className="text-sm text-green-400 font-medium">{data.profit <= 0 ? "No taxable profit in the last 90 days at the moment." : "Tax already paid covers the estimated provision for this period."}</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A rough provisioning aid, not a tax computation — it ignores carry-forward losses, depreciation, exemptions and surcharge. Confirm your actual liability and instalment dates with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A rough provisioning aid, not a tax computation - it ignores carry-forward losses, depreciation, exemptions and surcharge. Confirm your actual liability and instalment dates with your CA.</p>
     </div>
   );
 }

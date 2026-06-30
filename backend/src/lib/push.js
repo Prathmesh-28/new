@@ -1,4 +1,4 @@
-// Firebase Cloud Messaging sender — FCM HTTP v1 API.
+// Firebase Cloud Messaging sender - FCM HTTP v1 API.
 //
 // The legacy `https://fcm.googleapis.com/fcm/send` + "key=SERVER_KEY" transport
 // was shut down by Google in mid-2024, so this uses the v1 API, which authenticates

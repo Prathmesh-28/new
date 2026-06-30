@@ -6,6 +6,7 @@ import { ArrowLeft, Wifi, WifiOff } from "lucide-react";
 import type { AuthUser } from "@/data/types";
 import Logo from "@/components/Logo";
 import Turnstile, { turnstileEnabled } from "@/components/Turnstile";
+import PasswordInput from "@/components/PasswordInput";
 
 const ROLE_OPTIONS = [
   {
@@ -26,7 +27,7 @@ const ROLE_OPTIONS = [
 ];
 
 export default function SignupPage() {
-  useSeo({ title: "Start free — Headroom | GST Billing & Accounting for SMBs", description: "Create your free Headroom account — GST billing, accounting, invoicing, collections, payroll and cash-flow forecasts for Indian SMBs. No credit card." });
+  useSeo({ title: "Start free - Headroom | GST Billing & Accounting for SMBs", description: "Create your free Headroom account - GST billing, accounting, invoicing, collections, payroll and cash-flow forecasts for Indian SMBs. No credit card." });
   const { serverReady } = useAuth();
   const [email,       setEmail]       = useState("");
   const [password,    setPassword]    = useState("");
@@ -93,7 +94,7 @@ export default function SignupPage() {
         <p className="relative text-xs text-[var(--color-muted)]">Financial OS for lean Indian SMBs</p>
       </div>
 
-      {/* Right panel — form */}
+      {/* Right panel - form */}
       <div className="flex-1 flex flex-col items-center justify-center px-5 py-10">
         <div className="w-full max-w-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 sm:p-8 shadow-xl">
           <Link
@@ -178,8 +179,8 @@ export default function SignupPage() {
               <label className="block text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1.5">
                 Password
               </label>
-              <input
-                type="password" value={password} onChange={e => setPassword(e.target.value)}
+              <PasswordInput
+                value={password} onChange={e => setPassword(e.target.value)}
                 required minLength={8} placeholder="At least 8 characters"
                 className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-muted)]/50"
               />
@@ -189,8 +190,8 @@ export default function SignupPage() {
               <label className="block text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1.5">
                 Confirm Password
               </label>
-              <input
-                type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+              <PasswordInput
+                value={confirm} onChange={e => setConfirm(e.target.value)}
                 required placeholder="Repeat password"
                 className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-muted)]/50"
               />

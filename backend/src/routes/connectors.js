@@ -57,7 +57,7 @@ router.delete("/:id", authenticate, canWrite, async (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/connectors/:id/sync — trigger provider sync
+// POST /api/connectors/:id/sync - trigger provider sync
 router.post("/:id/sync", authenticate, canWrite, async (req, res) => {
   const { rows: c } = await pool.query(
     "SELECT * FROM connector_consents WHERE id=$1 AND tenant_id=$2",
@@ -92,7 +92,7 @@ router.post("/:id/sync", authenticate, canWrite, async (req, res) => {
   res.json({ ok: true, synced: 0 });
 });
 
-// POST /api/connectors/normalise — normalise a batch of raw transactions
+// POST /api/connectors/normalise - normalise a batch of raw transactions
 router.post("/normalise", authenticate, (req, res) => {
   const { transactions } = req.body;
   if (!Array.isArray(transactions)) return res.status(400).json({ error: "transactions array required" });
@@ -112,7 +112,7 @@ function tallyAuthorised(req) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-// POST /api/connectors/tally/webhook — Tally sync push (shared-secret protected)
+// POST /api/connectors/tally/webhook - Tally sync push (shared-secret protected)
 router.post("/tally/webhook", async (req, res) => {
   if (!tallyAuthorised(req)) {
     return res.status(process.env.TALLY_WEBHOOK_SECRET ? 401 : 503)

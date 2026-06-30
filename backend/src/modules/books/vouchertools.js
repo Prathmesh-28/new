@@ -1,15 +1,15 @@
-// §M-VT — VOUCHER TOOLS. Three Tally-flavoured conveniences that all bottom out
+// §M-VT - VOUCHER TOOLS. Three Tally-flavoured conveniences that all bottom out
 // in the posting-engine so the ledger invariant is never bypassed:
-//   (1) reversing journals — a JOURNAL now plus its auto-reversal, future-dated;
-//   (2) voucher templates  — reusable JSON entry skeletons (book_voucher_templates);
-//   (3) post-dated cheques — a PDC register (book_pdc) that posts the real
+//   (1) reversing journals - a JOURNAL now plus its auto-reversal, future-dated;
+//   (2) voucher templates  - reusable JSON entry skeletons (book_voucher_templates);
+//   (3) post-dated cheques - a PDC register (book_pdc) that posts the real
 //       RECEIPT/PAYMENT only when the cheque actually clears.
 // Money stays as strings via ./money; every ledger movement goes through postVoucher.
 const { pool } = require("../../db");
 const { postVoucher, PostError } = require("./posting-engine");
 const { money, toDb } = require("./money");
 
-// (1) Reversing journal — Tally's "reversing journal": post the JOURNAL today,
+// (1) Reversing journal - Tally's "reversing journal": post the JOURNAL today,
 // then immediately post its mirror (debit/credit swapped) dated in the future, so
 // the effect self-cancels on/after reverseDate. Both are real, posted vouchers.
 async function reversingJournal(tenantId, actorId, { entries, voucherDate, reverseDate, narration } = {}) {
@@ -39,7 +39,7 @@ async function reversingJournal(tenantId, actorId, { entries, voucherDate, rever
   return { posted, reversal };
 }
 
-// (2) Voucher templates — store a JSON entries skeleton keyed by name.
+// (2) Voucher templates - store a JSON entries skeleton keyed by name.
 async function saveTemplate(tenantId, { name, voucherType, template } = {}) {
   if (!tenantId) throw new PostError("BAD_INPUT", "tenantId required", 400);
   if (!name) throw new PostError("BAD_INPUT", "name required", 400);
@@ -76,7 +76,7 @@ async function deleteTemplate(tenantId, id) {
   return { deleted: true, id };
 }
 
-// (3) Post-dated cheques — register a cheque now, post the real voucher on clearing.
+// (3) Post-dated cheques - register a cheque now, post the real voucher on clearing.
 async function createPdc(tenantId, { kind, partyLedgerId, bankLedgerId, amount, chequeNo, chequeDate, note } = {}) {
   if (!tenantId) throw new PostError("BAD_INPUT", "tenantId required", 400);
   const k = kind || "RECEIVABLE";

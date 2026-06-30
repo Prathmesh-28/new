@@ -1,4 +1,4 @@
-// §TDS — Tax Deducted at Source (India, Income-Tax Act). The deductor (us, the
+// §TDS - Tax Deducted at Source (India, Income-Tax Act). The deductor (us, the
 // buyer/payer) withholds tax at the prescribed rate when crediting/paying a
 // resident vendor, pays the net, and remits the withheld amount to the
 // government against a TDS Payable liability. This is the mirror of GST input
@@ -6,7 +6,7 @@
 //
 // Logic ported from ERPNext India compliance (regional/india Tax Withholding
 // Category) and the Income-Tax Act sections 194C/194J/194H/194I/194Q + 206AA
-// (the 20% no-PAN floor). We write our own code — money math via ./money so it
+// (the 20% no-PAN floor). We write our own code - money math via ./money so it
 // reconciles exactly to the posting engine, never a JS float.
 const { money, toDb, toRupees } = require("./money");
 const { PostError } = require("./posting-engine");
@@ -16,13 +16,13 @@ const taxrules = require("./taxrules");
 // `threshold` is the per-transaction (single) floor; `aggregateThreshold`, where
 // it exists, is the annual cumulative floor (194C's ₹1,00,000 aggregate, 194Q's
 // ₹50,00,000 turnover trigger). `noPan` is the §206AA penal rate applied when the
-// deductee has no PAN — always 20% here. Thresholds are informational: the caller
+// deductee has no PAN - always 20% here. Thresholds are informational: the caller
 // decides whether the year-to-date crosses them; computeTds deducts on the amount
 // it is given (ERPNext applies the cumulative test upstream the same way).
 //
 // The numbers are no longer inline: they are sourced from ./taxrules as DATED,
 // VALIDATED parameters (rules-as-data). We materialise the currently-effective
-// entry for each section into the same shape the callers already consume — the
+// entry for each section into the same shape the callers already consume - the
 // dated `from` key is stripped so TDS_SECTIONS/TCS_SECTIONS are byte-identical to
 // the legacy inline tables.
 const NO_PAN_RATE = taxrules.NO_PAN_RATE;
@@ -34,7 +34,7 @@ function _strip(entry) {
 }
 
 // Materialise a { sectionKey: entry } table from a taxrules domain, resolved as of
-// `onDate` (defaults to today — the currently-effective rates).
+// `onDate` (defaults to today - the currently-effective rates).
 function _materialise(domain, onDate) {
   const out = {};
   for (const key of Object.keys(taxrules.PARAMS[domain])) {
@@ -54,7 +54,7 @@ function _section(section) {
   return s;
 }
 
-// (2) Pure rate→amount computation. No DB, no cumulative test — that lives in the
+// (2) Pure rate→amount computation. No DB, no cumulative test - that lives in the
 // caller (mirrors ERPNext, which resolves the applicable rate then withholds).
 //   - panAvailable=false → §206AA penal rate (20%), and a lowerRate certificate
 //     CANNOT lower it (a 197 certificate is issued against a valid PAN).
@@ -95,7 +95,7 @@ function computeTds({ section, amount, panAvailable = true, lowerRate } = {}) {
 // paid net of TDS and the withheld tax sits in a liability awaiting remittance.
 //
 // In a normal purchase the vendor is credited the full gross. To withhold TDS we
-// reduce that vendor credit by tdsAmount and credit TDS Payable instead — the
+// reduce that vendor credit by tdsAmount and credit TDS Payable instead - the
 // debit side (expense/purchase + input GST) is unchanged, so the voucher still
 // balances. We therefore return only the TWO TDS lines plus the net the vendor
 // should actually be settled for; the caller subtracts tdsAmount from the vendor
@@ -128,7 +128,7 @@ function buildTdsDeduction({ vendorLedgerId, tdsPayableLedgerId, grossAmount, se
 
   // Tax side-record: the authoritative TDS breakdown captured at posting time. The
   // section is now a FIRST-CLASS dimension (tdsSection) rather than overloaded onto
-  // hsn_sac — we still set hsnSac too so a posting-engine that hasn't yet learned the
+  // hsn_sac - we still set hsnSac too so a posting-engine that hasn't yet learned the
   // new column keeps storing the section (backward-compat; the read path COALESCEs).
   const taxes = [{
     taxKind: "TDS",
@@ -155,14 +155,14 @@ function buildTdsDeduction({ vendorLedgerId, tdsPayableLedgerId, grossAmount, se
   };
 }
 
-// §TCS — Tax Collected at Source (Income-Tax Act §206C). The mirror of TDS: here
+// §TCS - Tax Collected at Source (Income-Tax Act §206C). The mirror of TDS: here
 // WE are the SELLER and COLLECT an extra slice of tax FROM the buyer on top of the
 // sale value, then remit it to the government against a TCS Payable liability. So a
 // sale invoice's receivable from the customer is *grossed up* by the TCS, unlike
 // TDS which *reduces* what we pay a vendor.
 //
 // Sections per §206C. `rate` is a percentage on the sale value (206C(1H) collects
-// only on the amount above the ₹50,00,000 aggregate to a single buyer — the caller
+// only on the amount above the ₹50,00,000 aggregate to a single buyer - the caller
 // applies that aggregate test, same convention as 194Q above). `noPan` is the
 // §206CC penal rate: twice the normal rate, or 5%, whichever is HIGHER, applied
 // when the buyer has no PAN.
@@ -206,7 +206,7 @@ function computeTcs({ section, amount, panAvailable = true } = {}) {
 // the TCS on top and the collected tax sits in a liability awaiting remittance.
 //
 // In a normal sale the customer is debited (receivable) the full gross. To collect
-// TCS we ADD tcsAmount to that customer debit and credit TCS Payable — the credit
+// TCS we ADD tcsAmount to that customer debit and credit TCS Payable - the credit
 // side (sales income + output GST) is unchanged, so the voucher still balances. We
 // emit only the TWO extra lines so the caller appends them on top of its sale.
 //

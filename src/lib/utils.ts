@@ -13,7 +13,7 @@ export function formatCurrency(amount: number, currency = "INR"): string {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
 }
 
-// Compact Indian format: ₹12.5L, ₹1.2Cr — use for stat cards, chart tooltips
+// Compact Indian format: ₹12.5L, ₹1.2Cr - use for stat cards, chart tooltips
 export function formatAmount(n: number): string {
   const sign = n < 0 ? "-" : "";
   const abs  = Math.abs(n);

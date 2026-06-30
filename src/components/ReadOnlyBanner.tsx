@@ -15,7 +15,7 @@ export default function ReadOnlyBanner() {
   return (
     <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-slate-500/30 bg-slate-600/15 px-4 py-1.5 text-[11px] text-slate-300 backdrop-blur">
       <Eye size={12} className="shrink-0" />
-      <span>You have <strong>read-only</strong> access — explore everything, but changes are disabled. Ask a workspace owner for edit rights.</span>
+      <span>You have <strong>read-only</strong> access - explore everything, but changes are disabled. Ask a workspace owner for edit rights.</span>
     </div>
   );
 }

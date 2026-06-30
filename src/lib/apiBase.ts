@@ -14,7 +14,7 @@ const NATIVE_API_BASE = "https://headroom-backend.onrender.com";
  * - Web/Vercel: `VITE_API_URL` if set, otherwise "" (same-origin + rewrites).
  *   Behaviour is unchanged from before this file existed.
  * - Native (iOS/Android): `VITE_API_URL` if provided at build time, otherwise
- *   the production backend — the Capacitor WebView loads from
+ *   the production backend - the Capacitor WebView loads from
  *   capacitor://localhost, so relative paths have no backend to resolve to.
  *
  * CORS is sidestepped on native by `CapacitorHttp` (enabled in

@@ -1,4 +1,4 @@
-// §9 — GST returns. Pure aggregation over book_tax_entries (captured at posting
+// §9 - GST returns. Pure aggregation over book_tax_entries (captured at posting
 // time at full precision) so returns always reconcile to the books. Outward tax
 // is is_input=false; ITC is is_input=true. Taxable value is counted once per line
 // (from CGST/IGST rows) so CGST+SGST pairs don't double-count it.
@@ -36,7 +36,7 @@ function fyRange(fy) {
 }
 const r2 = (o) => { const x = {}; for (const k in o) x[k] = toRupees(o[k]); return x; };
 
-// GSTR-1 — outward supplies, grouped by rate × B2B/B2C × supply type.
+// GSTR-1 - outward supplies, grouped by rate × B2B/B2C × supply type.
 async function gstr1(tenantId, period) {
   const { from, to } = monthRange(period);
   const { rows } = await pool.query(
@@ -59,7 +59,7 @@ async function gstr1(tenantId, period) {
   };
 }
 
-// GSTR-3B — output tax vs eligible ITC, net liability per head.
+// GSTR-3B - output tax vs eligible ITC, net liability per head.
 async function gstr3b(tenantId, period) {
   const { from, to } = monthRange(period);
   const { rows } = await pool.query(
@@ -78,7 +78,7 @@ async function gstr3b(tenantId, period) {
   return { period, outputTax: r2(out), inputTaxCredit: r2(itc), netLiability: net };
 }
 
-// GSTR-2B reconcile — our inward (ITC) by supplier GSTIN vs the portal-furnished rows.
+// GSTR-2B reconcile - our inward (ITC) by supplier GSTIN vs the portal-furnished rows.
 async function gstr2bReconcile(tenantId, period, portalRows = []) {
   const { from, to } = monthRange(period);
   const { rows } = await pool.query(
@@ -102,11 +102,11 @@ async function gstr2bReconcile(tenantId, period, portalRows = []) {
 
 // ── GSTR-2B INVOICE-LEVEL matching ───────────────────────────────────────────
 // Re-implemented from resilient-tech/india-compliance's purchase-reconciliation
-// Reconciler (MIT/GPL — own code here). The portal furnishes 2B invoices; we
+// Reconciler (MIT/GPL - own code here). The portal furnishes 2B invoices; we
 // match each against our INWARD (is_input=true) booked invoices for the period
 // by (supplier GSTIN + fuzzy invoice-no + amount-within-tolerance), in passes:
-//   1. EXACT     — GSTIN + invoice-no equal + taxable & tax equal
-//   2. SUGGESTED — GSTIN + (fuzzy invoice-no OR rounding-diff ≤ ₹1 on amounts)
+//   1. EXACT     - GSTIN + invoice-no equal + taxable & tax equal
+//   2. SUGGESTED - GSTIN + (fuzzy invoice-no OR rounding-diff ≤ ₹1 on amounts)
 // Anything matched on GSTIN+amount but with a differing invoice-no is bucketed
 // as PROBABLE. Leftovers: portal-only → missingInBooks (booked nowhere, ITC
 // can't be claimed / should be booked); books-only → missingInPortal (we
@@ -137,7 +137,7 @@ function cleanerBillNo(billNo, fy) {
   return inv.toUpperCase();
 }
 
-// India GST financial year from a date: Apr–Mar, "YYYY-YYYY".
+// India GST financial year from a date: Apr-Mar, "YYYY-YYYY".
 function fyOfDate(d) {
   const dt = d instanceof Date ? d : new Date(d);
   if (isNaN(dt)) return "";
@@ -169,7 +169,7 @@ function levenshtein(a, b) {
   }
   return prev[n];
 }
-// rapidfuzz fuzz.ratio: 100 * (1 - dist / (len(a)+len(b))) — standard form.
+// rapidfuzz fuzz.ratio: 100 * (1 - dist / (len(a)+len(b))) - standard form.
 function ratio(a, b) {
   if (!a.length && !b.length) return 100;
   const dist = levenshtein(a, b);
@@ -266,7 +266,7 @@ async function gstr2bMatch(tenantId, period, portalInvoices = []) {
     (status === "EXACT" ? matched : probable).push(out);
   };
 
-  // Pass 1 — EXACT: same GSTIN, same cleaned invoice-no, equal taxable & tax.
+  // Pass 1 - EXACT: same GSTIN, same cleaned invoice-no, equal taxable & tax.
   for (const p of portal) {
     if (p._matched) continue;
     for (const b of booksByGstin.get(p.gstin) || []) {
@@ -274,7 +274,7 @@ async function gstr2bMatch(tenantId, period, portalInvoices = []) {
       if (p._bill && b._bill && p._bill === b._bill && amountExact(p, b)) { rec(p, b, "EXACT"); break; }
     }
   }
-  // Pass 2 — SUGGESTED (matched bucket): same GSTIN, fuzzy invoice-no, amounts
+  // Pass 2 - SUGGESTED (matched bucket): same GSTIN, fuzzy invoice-no, amounts
   // within ₹1 tolerance. A strong match → counts as matched/reconciled.
   for (const p of portal) {
     if (p._matched) continue;
@@ -283,7 +283,7 @@ async function gstr2bMatch(tenantId, period, portalInvoices = []) {
       if (fuzzyBillMatch(p, b) && amountWithinTolerance(p, b)) { rec(p, b, "SUGGESTED"); break; }
     }
   }
-  // Pass 3 — PROBABLE: same GSTIN + amounts within tolerance but invoice-no
+  // Pass 3 - PROBABLE: same GSTIN + amounts within tolerance but invoice-no
   // differs (no fuzzy hit). Likely the same invoice keyed differently.
   for (const p of portal) {
     if (p._matched) continue;
@@ -317,15 +317,15 @@ async function gstr2bMatch(tenantId, period, portalInvoices = []) {
   };
 }
 
-// ── GSTR-9 — annual return ───────────────────────────────────────────────────
+// ── GSTR-9 - annual return ───────────────────────────────────────────────────
 // Ported (logic, not code) from resilient-tech/india-compliance gstr_9 + the
 // statutory GSTR-9 offline-tool. Auto-populated from the same GSTR-3B + GSTR-1
 // period data this module already computes, summed over the FY's 12 months, so
 // the annual return reconciles to the books by construction.
 //
-// Anything the books can't know on their own — prior-FY amendments declared in
+// Anything the books can't know on their own - prior-FY amendments declared in
 // THIS year's returns (Pt V), demands/refunds (15), late fee (16), and the GSTR-2A
-// auto-drafted ITC for table 8A — is taken from `opts` (portal-furnished /
+// auto-drafted ITC for table 8A - is taken from `opts` (portal-furnished /
 // manual), defaulting to zero. Output is shaped to the portal/offline-tool JSON.
 
 const HEADS = ["CGST", "SGST", "IGST", "CESS"];
@@ -359,14 +359,14 @@ async function fyOutwardBuckets(tenantId, fy) {
   // Each bucket = { taxable, CGST, SGST, IGST, CESS }.
   const mk = () => ({ taxable: money(0), ...zeroHeads() });
   const acc = {
-    b2c: mk(),        // 4A — supplies to unregistered (B2C)
-    rcmOut: mk(),     // 4B — supplies on which RCM is payable (outward, recipient pays)
-    export: mk(),     // 4C/5A — exports
-    sez: mk(),        // 4D/5B — SEZ supplies
-    b2b: mk(),        // 4G-ish — B2B taxable
-    nil: mk(),        // 5D/5E/5F — nil-rated/exempt/non-GST
-    creditNotes: mk(),// 4I — credit notes
-    debitNotes: mk(), // 4J — debit notes
+    b2c: mk(),        // 4A - supplies to unregistered (B2C)
+    rcmOut: mk(),     // 4B - supplies on which RCM is payable (outward, recipient pays)
+    export: mk(),     // 4C/5A - exports
+    sez: mk(),        // 4D/5B - SEZ supplies
+    b2b: mk(),        // 4G-ish - B2B taxable
+    nil: mk(),        // 5D/5E/5F - nil-rated/exempt/non-GST
+    creditNotes: mk(),// 4I - credit notes
+    debitNotes: mk(), // 4J - debit notes
   };
   const add = (t, r) => {
     t.taxable = t.taxable.plus(r.taxable);
@@ -448,7 +448,7 @@ async function gstr9(tenantId, fy, opts = {}) {
   const { rows: tp } = await pool.query("SELECT gstin FROM tenant_profile WHERE tenant_id=$1", [tenantId]);
   const [, fyEnd] = String(fy).split("-");
 
-  // Pt II — Table 4: outward on which tax is payable.
+  // Pt II - Table 4: outward on which tax is payable.
   const t4 = {
     "4A_b2c": bkt(out.b2c), "4B_b2b": bkt(out.b2b), "4C_exports": bkt(out.export),
     "4D_sez": bkt(out.sez), "4E_deemed": bkt(headsFrom(opts.deemedExport)),
@@ -459,7 +459,7 @@ async function gstr9(tenantId, fy, opts = {}) {
   const t4Net = sumBkts([out.b2c, out.b2b, out.export, out.sez, headsFrom(opts.deemedExport), adv, out.rcmOut, out.debitNotes], [out.creditNotes]);
   t4["4N_total"] = bkt(t4Net);
 
-  // Pt II — Table 5: outward on which tax is NOT payable (exports w/o pay, SEZ w/o pay,
+  // Pt II - Table 5: outward on which tax is NOT payable (exports w/o pay, SEZ w/o pay,
   // nil/exempt/non-GST). Books don't separate with/without LUT, so 5A/5B mirror exports/SEZ.
   const t5 = {
     "5A_exports_no_tax": { taxable: toRupees(out.export.taxable) },
@@ -468,7 +468,7 @@ async function gstr9(tenantId, fy, opts = {}) {
     "5N_total": { taxable: toRupees(money(out.export.taxable).plus(out.sez.taxable).plus(out.nil.taxable)) },
   };
 
-  // Pt III — Table 6: ITC availed (6A auto from 3B, 6B inputs, 6C/6D RCM, 6O total).
+  // Pt III - Table 6: ITC availed (6A auto from 3B, 6B inputs, 6C/6D RCM, 6O total).
   const t6Avail = sumHeads([inw.inputs, inw.rcm]);
   const t6 = {
     "6A_as_per_3b": headsToRupees(t6Avail),
@@ -477,14 +477,14 @@ async function gstr9(tenantId, fy, opts = {}) {
     "6D_rcm_registered": headsToRupees(inw.rcm),
     "6O_total": headsToRupees(t6Avail),
   };
-  // Table 7 — ITC reversed / ineligible (7A..7H reversals + 7E s.17(5) blocked, 7J total).
+  // Table 7 - ITC reversed / ineligible (7A..7H reversals + 7E s.17(5) blocked, 7J total).
   const t7Total = sumHeads([inw.blocked, headsFrom(opts.itcReversedOther)]);
   const t7 = {
     "7E_blocked_17_5": headsToRupees(inw.blocked),
     "7H_other_reversal": headsToRupees(headsFrom(opts.itcReversedOther)),
     "7J_total_reversed": headsToRupees(t7Total),
   };
-  // Table 8 — ITC reconciliation vs GSTR-2A (8A = auto-drafted 2A from opts).
+  // Table 8 - ITC reconciliation vs GSTR-2A (8A = auto-drafted 2A from opts).
   const t8A = headsFrom(opts.itcAsPer2A);
   const t8B = subHeads(t6Avail, t7Total); // net ITC availed
   const t8 = {
@@ -493,7 +493,7 @@ async function gstr9(tenantId, fy, opts = {}) {
     "8D_difference": headsToRupees(subHeads(t8A, t8B)),
   };
 
-  // Pt IV — Table 9: tax paid during the year (liability vs paid via challans).
+  // Pt IV - Table 9: tax paid during the year (liability vs paid via challans).
   const liabilityPaid = await fyTaxPaid(tenantId, fy);
   const t9 = {
     "9_payable": headsToRupees(liabilityPaid.payable),
@@ -501,8 +501,8 @@ async function gstr9(tenantId, fy, opts = {}) {
     "9_paid_itc": headsToRupees(liabilityPaid.viaItc),
   };
 
-  // Pt V — Tables 10-14: transactions of THIS FY declared in NEXT FY's returns
-  // (Apr–Sep). The books can't know future filings → caller-supplied, default 0.
+  // Pt V - Tables 10-14: transactions of THIS FY declared in NEXT FY's returns
+  // (Apr-Sep). The books can't know future filings → caller-supplied, default 0.
   const ptV = {
     "10_supplies_declared_next_fy": bkt(headsFrom(opts.amendNextFyAddOutward)),
     "11_supplies_reduced_next_fy": bkt(headsFrom(opts.amendNextFyReduceOutward)),
@@ -510,7 +510,7 @@ async function gstr9(tenantId, fy, opts = {}) {
     "13_itc_availed_next_fy": headsToRupees(headsFrom(opts.amendNextFyAvailItc)),
   };
 
-  // Pt VI — Tables 15-18: demands/refunds, late fee, HSN inward/outward.
+  // Pt VI - Tables 15-18: demands/refunds, late fee, HSN inward/outward.
   const ptVI = {
     "15_demands_refunds": {
       refundClaimed: headsToRupees(headsFrom(opts.refundClaimed)),
@@ -602,7 +602,7 @@ async function hsnSummaryRange(tenantId, from, to, isInput) {
   return { rows: rows.map((r) => ({ hsn: r.hsn || "", rate: Number(r.rate), taxable: toRupees(r.taxable), cgst: toRupees(r.cgst), sgst: toRupees(r.sgst), igst: toRupees(r.igst), cess: toRupees(r.cess), totalTax: toRupees(money(r.cgst).plus(r.sgst).plus(r.igst).plus(r.cess)) })) };
 }
 
-// ── GSTR-9C — reconciliation statement (skeleton) ─────────────────────────────
+// ── GSTR-9C - reconciliation statement (skeleton) ─────────────────────────────
 // Reconciles the audited annual financial statements (caller-supplied) against
 // the GSTR-9 already computed above: turnover (Pt II, tables 5-8), taxable-turnover
 // + tax (Pt III, tables 9-11), and ITC (Pt IV, tables 12-16). The books fill the
@@ -626,14 +626,14 @@ async function gstr9c(tenantId, fy, audited = {}) {
   const itcPerReturnsTotal = HEADS.reduce((a, k) => a.plus(money(itcPerReturns[k.toLowerCase()])), money(0));
   const itcPerAccounts = money(audited.itcPerAccounts || 0);
 
-  // Tax payable per recon vs tax paid (Pt V — table 9 paid).
+  // Tax payable per recon vs tax paid (Pt V - table 9 paid).
   const t9 = nine.partIV_taxPaid.table9;
   const taxPaidPerReturns = HEADS.reduce((a, k) => a.plus(money(t9["9_paid_cash"][k.toLowerCase()])).plus(money(t9["9_paid_itc"][k.toLowerCase()])), money(0));
 
   return {
     financialYear: fy,
     gstin: (tp[0] && tp[0].gstin) || null,
-    // Pt II — turnover reconciliation (tables 5-7) + reasons (8).
+    // Pt II - turnover reconciliation (tables 5-7) + reasons (8).
     turnoverReconciliation: {
       "5A_audited_turnover": toRupees(auditedTurnover),
       "5_adjustments": adjList.map((x) => ({ label: x.label || "", amount: toRupees(x.amount || 0) })),
@@ -644,21 +644,21 @@ async function gstr9c(tenantId, fy, audited = {}) {
       "7_taxable_turnover_per_returns": toRupees(taxableTurnoverPerReturns),
       "8_reasons": audited.turnoverReasons || [],
     },
-    // Pt III — reconciliation of tax paid (tables 9-11).
+    // Pt III - reconciliation of tax paid (tables 9-11).
     taxPaidReconciliation: {
       "9_tax_payable_audited": toRupees(money(audited.taxPayableAudited || 0)),
       "9_tax_paid_per_returns": toRupees(taxPaidPerReturns),
       "10_unreconciled_tax": toRupees(money(audited.taxPayableAudited || 0).minus(taxPaidPerReturns)),
       "11_reasons": audited.taxReasons || [],
     },
-    // Pt IV — reconciliation of ITC (tables 12-16).
+    // Pt IV - reconciliation of ITC (tables 12-16).
     itcReconciliation: {
       "12_itc_per_accounts": toRupees(itcPerAccounts),
       "14_itc_per_returns": toRupees(itcPerReturnsTotal),
       "15_unreconciled_itc": toRupees(itcPerAccounts.minus(itcPerReturnsTotal)),
       "16_reasons": audited.itcReasons || [],
     },
-    // Pt V — auditor's recommendation on additional liability (caller-supplied).
+    // Pt V - auditor's recommendation on additional liability (caller-supplied).
     auditorRecommendation: headsToRupees(headsFrom(audited.additionalLiability)),
     sourceGstr9: nine.portalJson,
   };
@@ -721,7 +721,7 @@ async function gstr1Sections(tenantId, period) {
   return { period, b2b, b2cl, b2cs: b2csArr, cdnr, exp };
 }
 
-// GSTR-1 Table 12 — HSN/SAC-wise summary.
+// GSTR-1 Table 12 - HSN/SAC-wise summary.
 async function hsnSummary(tenantId, period) {
   const { from, to } = monthRange(period);
   const { rows } = await pool.query(
@@ -741,12 +741,12 @@ async function hsnSummary(tenantId, period) {
 
 // ── GSTR-1 extra subsections ──────────────────────────────────────────────────
 
-// AT (Table 11A) — advances received on which tax is payable but no invoice was
-// raised in the period; TXPD (Table 11B) — advance adjusted against invoices of
+// AT (Table 11A) - advances received on which tax is payable but no invoice was
+// raised in the period; TXPD (Table 11B) - advance adjusted against invoices of
 // the period. Both are derived from the supply_type='ADVANCE' outward tax rows,
 // grouped by place-of-supply × rate, the way the offline tool expects (pos/sply
 // ty/rate). AT and TXPD share the same SQL shape; we expose both keys so a caller
-// can net them — the books emit advance receipts (AT); adjustments are passed in.
+// can net them - the books emit advance receipts (AT); adjustments are passed in.
 async function gstr1Advances(tenantId, period, adjustments = []) {
   const { from, to } = monthRange(period);
   const { rows } = await pool.query(
@@ -763,21 +763,21 @@ async function gstr1Advances(tenantId, period, adjustments = []) {
     [tenantId, from, to]
   );
   const at = rows.map((r) => ({ pos: r.pos || null, rate: Number(r.rate), taxable: toRupees(r.taxable), cgst: toRupees(r.cgst), sgst: toRupees(r.sgst), igst: toRupees(r.igst), cess: toRupees(r.cess) }));
-  // TXPD (advance adjusted) — caller supplies adjustments [{pos,rate,taxable,...}] since
+  // TXPD (advance adjusted) - caller supplies adjustments [{pos,rate,taxable,...}] since
   // the books don't link an advance to the later invoice. Normalised to the AT shape.
   const txpd = (adjustments || []).map((a) => ({ pos: a.pos || null, rate: Number(a.rate || 0), taxable: toRupees(a.taxable || 0), cgst: toRupees(a.cgst || 0), sgst: toRupees(a.sgst || 0), igst: toRupees(a.igst || 0), cess: toRupees(a.cess || 0) }));
   return { period, at, txpd };
 }
 
-// DOC_ISSUE (Table 13) — document-series ranges issued in the period. Best-effort
+// DOC_ISSUE (Table 13) - document-series ranges issued in the period. Best-effort
 // auto-population: for each outward voucher_type we report the min/max
 // voucher_number actually used as one series, plus cancelled count. Caller may
 // pass `extra` ranges (manual series the books don't number, e.g. delivery challans).
 const DOC_ISSUE_NATURES = {
-  SALES: 1,       // 1 — Invoices for outward supply
-  CREDIT_NOTE: 5, // 5 — Credit note
-  DEBIT_NOTE: 6,  // 6 — Debit note
-  RECEIPT: 10,    // 10 — Receipt voucher (advances)
+  SALES: 1,       // 1 - Invoices for outward supply
+  CREDIT_NOTE: 5, // 5 - Credit note
+  DEBIT_NOTE: 6,  // 6 - Debit note
+  RECEIPT: 10,    // 10 - Receipt voucher (advances)
 };
 async function gstr1DocIssue(tenantId, period, extra = []) {
   const { from, to } = monthRange(period);
@@ -807,7 +807,7 @@ async function gstr1DocIssue(tenantId, period, extra = []) {
   return { period, docs };
 }
 
-// SUPECOM (Table 14/15) — supplies made THROUGH an e-commerce operator on which
+// SUPECOM (Table 14/15) - supplies made THROUGH an e-commerce operator on which
 // the operator collects TCS (u/s 52) or pays tax (u/s 9(5)). The books don't tag
 // the operator on a sale, so this is caller-supplied per operator GSTIN, summed
 // and normalised. Each entry: { operatorGstin, supplyType:'TCS'|'9(5)', taxable, cgst, sgst, igst, cess }.
@@ -826,7 +826,7 @@ function gstr1Ecommerce(period, entries = []) {
   };
 }
 
-// Amendment tables (B2BA/B2CLA/B2CSA/CDNRA/CDNURA/EXPA/ATA/TXPDA) — corrections to
+// Amendment tables (B2BA/B2CLA/B2CSA/CDNRA/CDNURA/EXPA/ATA/TXPDA) - corrections to
 // invoices/notes/advances ALREADY filed in an earlier period. The books store one
 // authoritative figure per voucher (no original-vs-amended versioning), so an
 // amendment is necessarily caller-supplied: each item carries the original
@@ -875,7 +875,7 @@ async function gstr1Json(tenantId, period, opts = {}) {
   const [y, m] = String(period).split("-");
   return {
     gstin: (tp[0] && tp[0].gstin) || null, fp: `${m}${y}`, version: "GST3.0", hash: "hash",
-    // existing sections — intact
+    // existing sections - intact
     b2b: sec.b2b, b2cl: sec.b2cl, b2cs: sec.b2cs, cdnr: sec.cdnr, exp: sec.exp, hsn: { data: hsn.rows },
     // new subsections
     doc_issue: { doc_det: docIssue.docs }, at: adv.at, txpd: adv.txpd,
@@ -887,7 +887,7 @@ async function gstr1Json(tenantId, period, opts = {}) {
 }
 
 // ── GST rate master (HSN → rate / cess) ──────────────────────────────────────
-// Upsert by (tenant_id, hsn) — the table PK — so there is one current row per HSN.
+// Upsert by (tenant_id, hsn) - the table PK - so there is one current row per HSN.
 async function setGstRate(tenantId, { hsn, rate, cessRate, description } = {}) {
   if (!hsn) throw new Error("hsn is required");
   const { rows } = await pool.query(
@@ -984,7 +984,7 @@ async function gstLiabilityVsPaid(tenantId, period) {
 // There is no dedicated "blocked" flag column on book_tax_entries, so blocked
 // credits are identified by supply_type='BLOCKED' on the inward (is_input=true)
 // tax rows. Alternatively pass an explicit list of voucher ids whose input tax
-// should be treated as reversed. Read-only report — it does not post anything.
+// should be treated as reversed. Read-only report - it does not post anything.
 async function blockedItcSummary(tenantId, period, voucherIds = null) {
   const { from, to } = monthRange(period);
   const params = [tenantId, from, to];

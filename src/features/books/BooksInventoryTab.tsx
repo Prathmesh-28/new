@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES (API responses typed loosely — backend shapes inferred from sibling tabs)
+// TYPES (API responses typed loosely - backend shapes inferred from sibling tabs)
 // ─────────────────────────────────────────────────────────────────────────────
 interface Item {
   id: string;
@@ -156,7 +156,7 @@ function rupee(v: string | number | null | undefined): string {
   return `₹${num(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 function itemName(i: Item): string {
-  return i.name || "—";
+  return i.name || "-";
 }
 function asArray<T>(v: unknown): T[] {
   if (Array.isArray(v)) return v as T[];
@@ -326,7 +326,7 @@ export default function BooksInventoryTab({ canWrite = true }: { canWrite?: bool
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ITEMS SECTION — list + create
+// ITEMS SECTION - list + create
 // ─────────────────────────────────────────────────────────────────────────────
 function ItemsSection({
   items, busy, canWrite, onReload,
@@ -520,25 +520,25 @@ function ItemsSection({
               ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-3 py-8 text-center text-[var(--color-muted)]">
-                    No items yet — create one above.
+                    No items yet - create one above.
                   </td>
                 </tr>
               ) : (
                 items.map((i) => (
                   <tr key={i.id} className="border-b border-[var(--color-border)] last:border-b-0">
                     <td className="px-3 py-2.5 font-medium">{itemName(i)}</td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{i.unit || "—"}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-[var(--color-muted)]">{i.hsn_sac ?? i.hsn ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{i.unit || "-"}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-[var(--color-muted)]">{i.hsn_sac ?? i.hsn ?? "-"}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">
-                      {(i.gst_rate ?? i.gstRate) != null ? `${num(i.gst_rate ?? i.gstRate)}%` : "—"}
+                      {(i.gst_rate ?? i.gstRate) != null ? `${num(i.gst_rate ?? i.gstRate)}%` : "-"}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">
-                      {(i.valuation_method ?? i.valuationMethod ?? "—").toString().replace(/_/g, " ")}
+                      {(i.valuation_method ?? i.valuationMethod ?? "-").toString().replace(/_/g, " ")}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums">
                       {(i.closing_qty ?? i.current_qty ?? i.opening_qty) != null
                         ? qtyFmt(i.closing_qty ?? i.current_qty ?? i.opening_qty)
-                        : "—"}
+                        : "-"}
                     </td>
                   </tr>
                 ))
@@ -552,7 +552,7 @@ function ItemsSection({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MOVES SECTION — receive + issue
+// MOVES SECTION - receive + issue
 // ─────────────────────────────────────────────────────────────────────────────
 function MovesSection({
   items, canWrite, onPosted,
@@ -725,7 +725,7 @@ function IssueCard({ items, onPosted }: { items: Item[]; onPosted: () => Promise
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MANUFACTURE SECTION — stock entry (consumes → produces)
+// MANUFACTURE SECTION - stock entry (consumes → produces)
 // ─────────────────────────────────────────────────────────────────────────────
 interface MoveLine { key: string; itemId: string; qty: string; rate: string }
 function newMoveLine(): MoveLine {
@@ -844,7 +844,7 @@ function ManufactureSection({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ADJUST SECTION — physical count adjustment
+// ADJUST SECTION - physical count adjustment
 // ─────────────────────────────────────────────────────────────────────────────
 function AdjustSection({
   items, canWrite, onPosted,
@@ -918,7 +918,7 @@ function AdjustSection({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ALERTS SECTION — near-expiry + low-stock
+// ALERTS SECTION - near-expiry + low-stock
 // ─────────────────────────────────────────────────────────────────────────────
 function AlertsSection() {
   const [days, setDays] = useState(30);
@@ -975,7 +975,7 @@ function AlertsSection() {
               ) : (
                 low.map((r, i) => (
                   <tr key={r.id ?? r.item_id ?? i} className="border-b border-[var(--color-border)] last:border-b-0">
-                    <td className="px-3 py-2.5 font-medium">{r.item_name ?? r.itemName ?? r.name ?? "—"}</td>
+                    <td className="px-3 py-2.5 font-medium">{r.item_name ?? r.itemName ?? r.name ?? "-"}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-amber-400">{qtyFmt(r.current_qty ?? r.qty)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{qtyFmt(r.reorder_level ?? r.reorderLevel)}</td>
                   </tr>
@@ -1021,10 +1021,10 @@ function AlertsSection() {
               ) : (
                 expiry.map((r, i) => (
                   <tr key={r.id ?? i} className="border-b border-[var(--color-border)] last:border-b-0">
-                    <td className="px-3 py-2.5 font-medium">{r.item_name ?? r.itemName ?? "—"}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-[var(--color-muted)]">{r.batch_no ?? r.batchNo ?? "—"}</td>
+                    <td className="px-3 py-2.5 font-medium">{r.item_name ?? r.itemName ?? "-"}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-[var(--color-muted)]">{r.batch_no ?? r.batchNo ?? "-"}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{qtyFmt(r.qty)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-red-400 whitespace-nowrap">{r.expiry_date ?? r.expiryDate ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-red-400 whitespace-nowrap">{r.expiry_date ?? r.expiryDate ?? "-"}</td>
                   </tr>
                 ))
               )}
@@ -1037,7 +1037,7 @@ function AlertsSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SUMMARY SECTION — item-wise opening/inward/outward/closing
+// SUMMARY SECTION - item-wise opening/inward/outward/closing
 // ─────────────────────────────────────────────────────────────────────────────
 function SummarySection() {
   const fyStart = (() => {
@@ -1125,7 +1125,7 @@ function SummarySection() {
               ) : (
                 rows.map((r, i) => (
                   <tr key={r.item_id ?? r.itemId ?? i} className="border-b border-[var(--color-border)] last:border-b-0">
-                    <td className="px-3 py-2.5 font-medium">{r.item_name ?? r.itemName ?? r.name ?? "—"}</td>
+                    <td className="px-3 py-2.5 font-medium">{r.item_name ?? r.itemName ?? r.name ?? "-"}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{qtyFmt(r.opening_qty ?? r.openingQty)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{rupee(r.opening_value ?? r.openingValue)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-green-400">{qtyFmt(r.inward_qty ?? r.inwardQty)}</td>
@@ -1161,7 +1161,7 @@ function SummarySection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SERIAL NUMBERS SECTION — receive serials, issue serials, list per item
+// SERIAL NUMBERS SECTION - receive serials, issue serials, list per item
 // ─────────────────────────────────────────────────────────────────────────────
 function SerialsSection({ items, canWrite }: { items: Item[]; canWrite: boolean }) {
   const [itemId, setItemId] = useState("");
@@ -1331,10 +1331,10 @@ function SerialsSection({ items, canWrite }: { items: Item[]; canWrite: boolean 
               ) : (
                 serials.map((s, i) => (
                   <tr key={s.id ?? i} className="border-b border-[var(--color-border)] last:border-b-0">
-                    <td className="px-3 py-2.5 font-mono text-xs">{s.serial_no ?? s.serialNo ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] capitalize">{(s.status ?? "—").toString().toLowerCase()}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{s.rate != null ? rupee(s.rate) : "—"}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)] whitespace-nowrap">{s.received_date ?? s.receivedDate ?? "—"}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs">{s.serial_no ?? s.serialNo ?? "-"}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] capitalize">{(s.status ?? "-").toString().toLowerCase()}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{s.rate != null ? rupee(s.rate) : "-"}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)] whitespace-nowrap">{s.received_date ?? s.receivedDate ?? "-"}</td>
                   </tr>
                 ))
               )}
@@ -1347,7 +1347,7 @@ function SerialsSection({ items, canWrite }: { items: Item[]; canWrite: boolean 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VARIANTS SECTION — create + list variants under an item
+// VARIANTS SECTION - create + list variants under an item
 // ─────────────────────────────────────────────────────────────────────────────
 function VariantsSection({ items, canWrite }: { items: Item[]; canWrite: boolean }) {
   const [itemId, setItemId] = useState("");
@@ -1410,9 +1410,9 @@ function VariantsSection({ items, canWrite }: { items: Item[]; canWrite: boolean
   };
 
   const fmtAttrs = (a: VariantRow["attributes"]): string => {
-    if (!a) return "—";
+    if (!a) return "-";
     if (typeof a === "string") return a;
-    return Object.entries(a).map(([k, v]) => `${k}: ${String(v)}`).join(" · ") || "—";
+    return Object.entries(a).map(([k, v]) => `${k}: ${String(v)}`).join(" · ") || "-";
   };
 
   return (
@@ -1473,10 +1473,10 @@ function VariantsSection({ items, canWrite }: { items: Item[]; canWrite: boolean
               ) : (
                 variants.map((v, i) => (
                   <tr key={v.id ?? i} className="border-b border-[var(--color-border)] last:border-b-0">
-                    <td className="px-3 py-2.5 font-medium">{v.name ?? "—"}</td>
+                    <td className="px-3 py-2.5 font-medium">{v.name ?? "-"}</td>
                     <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{fmtAttrs(v.attributes)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">
-                      {(v.closing_qty ?? v.closingQty) != null ? qtyFmt(v.closing_qty ?? v.closingQty) : "—"}
+                      {(v.closing_qty ?? v.closingQty) != null ? qtyFmt(v.closing_qty ?? v.closingQty) : "-"}
                     </td>
                   </tr>
                 ))
@@ -1490,7 +1490,7 @@ function VariantsSection({ items, canWrite }: { items: Item[]; canWrite: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// KITS SECTION — define a bill-of-materials + build the kit
+// KITS SECTION - define a bill-of-materials + build the kit
 // ─────────────────────────────────────────────────────────────────────────────
 interface KitLine { key: string; componentItemId: string; qty: string }
 function newKitLine(): KitLine {
@@ -1570,7 +1570,7 @@ function KitsSection({
         qty: Number(buildQty) || 0,
         date: buildDate,
       });
-      toast.success("Kit built — components consumed, kit stock added");
+      toast.success("Kit built - components consumed, kit stock added");
       setBuildQty("");
       await Promise.all([load(kitItemId), onPosted()]);
     } catch (e) {
@@ -1583,7 +1583,7 @@ function KitsSection({
   const compName = (c: KitComponentRow): string => {
     if (c.component_name ?? c.componentName) return (c.component_name ?? c.componentName) as string;
     const id = c.component_item_id ?? c.componentItemId;
-    return items.find((i) => i.id === id)?.name ?? (id ? `#${id}` : "—");
+    return items.find((i) => i.id === id)?.name ?? (id ? `#${id}` : "-");
   };
 
   return (
@@ -1690,7 +1690,7 @@ function KitsSection({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BARCODE SECTION — assign a barcode to an item + lookup by code
+// BARCODE SECTION - assign a barcode to an item + lookup by code
 // ─────────────────────────────────────────────────────────────────────────────
 function BarcodeSection({ items, canWrite }: { items: Item[]; canWrite: boolean }) {
   // assign
@@ -1739,8 +1739,8 @@ function BarcodeSection({ items, canWrite }: { items: Item[]; canWrite: boolean 
   };
 
   const resName = result
-    ? String(result.name ?? result.item_name ?? result.itemName ?? "—")
-    : "—";
+    ? String(result.name ?? result.item_name ?? result.itemName ?? "-")
+    : "-";
   const resUnit = result ? (result.unit ?? null) : null;
   const resQty = result ? (result.closing_qty ?? result.current_qty ?? result.qty ?? null) : null;
 
@@ -1780,8 +1780,8 @@ function BarcodeSection({ items, canWrite }: { items: Item[]; canWrite: boolean 
             {result && (
               <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-sm space-y-1">
                 <div className="flex justify-between"><span className="text-[var(--color-muted)]">Item</span><span className="font-medium">{resName}</span></div>
-                <div className="flex justify-between"><span className="text-[var(--color-muted)]">Unit</span><span>{resUnit ? String(resUnit) : "—"}</span></div>
-                <div className="flex justify-between"><span className="text-[var(--color-muted)]">Closing qty</span><span className="tabular-nums">{resQty != null ? qtyFmt(resQty as string | number) : "—"}</span></div>
+                <div className="flex justify-between"><span className="text-[var(--color-muted)]">Unit</span><span>{resUnit ? String(resUnit) : "-"}</span></div>
+                <div className="flex justify-between"><span className="text-[var(--color-muted)]">Closing qty</span><span className="tabular-nums">{resQty != null ? qtyFmt(resQty as string | number) : "-"}</span></div>
               </div>
             )}
           </div>
@@ -1796,7 +1796,7 @@ function BarcodeSection({ items, canWrite }: { items: Item[]; canWrite: boolean 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REPOSTING SECTION — re-run stock valuation from a date + recover failed runs
+// REPOSTING SECTION - re-run stock valuation from a date + recover failed runs
 // ─────────────────────────────────────────────────────────────────────────────
 function repostDetail(d: RepostRun["detail"]): Record<string, unknown> {
   if (!d) return {};
@@ -1861,7 +1861,7 @@ function RepostSection({
 
   const itemNameById = useCallback(
     (id: string | null | undefined): string => {
-      if (!id) return "—";
+      if (!id) return "-";
       return items.find((i) => i.id === id)?.name ?? `#${id}`;
     },
     [items],
@@ -1885,7 +1885,7 @@ function RepostSection({
         const errs = Array.isArray(res?.errors) ? res.errors.length : 0;
         toast.success(`Reposted ${n} item${n === 1 ? "" : "s"}${errs ? ` · ${errs} failed` : ""}`);
       } else {
-        toast.success(`Reposted — ${res?.rowsRewritten ?? 0} rows, Δ ${rupee(res?.delta)}`);
+        toast.success(`Reposted - ${res?.rowsRewritten ?? 0} rows, Δ ${rupee(res?.delta)}`);
       }
       await Promise.all([load(filterItemId, filterStatus), onPosted()]);
     } catch (e) {
@@ -1963,7 +1963,7 @@ function RepostSection({
             <div className="space-y-3 flex-1">
               <p className="text-sm text-[var(--color-muted)]">
                 Re-runs every repost that previously failed (status FAILED in the history). Each retry replays
-                from the opening balance, so transient failures self-heal — safe to run repeatedly.
+                from the opening balance, so transient failures self-heal - safe to run repeatedly.
               </p>
             </div>
             <button type="button" onClick={recover} disabled={recovering} className={`${btnPrimary} mt-4 w-full`}>
@@ -2023,12 +2023,12 @@ function RepostSection({
                   return (
                     <tr key={r.id ?? i} className="border-b border-[var(--color-border)] last:border-b-0">
                       <td className="px-3 py-2.5 font-medium">{itemNameById(r.item_id ?? r.itemId)}</td>
-                      <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{r.from_date ?? r.fromDate ?? "—"}</td>
-                      <td className="px-3 py-2.5"><RepostStatusPill status={String(r.status ?? "—")} /></td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{d.rowsRewritten != null ? qtyFmt(d.rowsRewritten as number) : "—"}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{d.delta != null ? rupee(d.delta as string | number) : "—"}</td>
-                      <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{err ? <span className="text-red-400">{err}</span> : (d.reason ? String(d.reason) : "—")}</td>
-                      <td className="px-3 py-2.5 text-right text-xs text-[var(--color-muted)] whitespace-nowrap">{(r.updated_at ?? r.updatedAt ?? "").toString().slice(0, 19).replace("T", " ") || "—"}</td>
+                      <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{r.from_date ?? r.fromDate ?? "-"}</td>
+                      <td className="px-3 py-2.5"><RepostStatusPill status={String(r.status ?? "-")} /></td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{d.rowsRewritten != null ? qtyFmt(d.rowsRewritten as number) : "-"}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{d.delta != null ? rupee(d.delta as string | number) : "-"}</td>
+                      <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{err ? <span className="text-red-400">{err}</span> : (d.reason ? String(d.reason) : "-")}</td>
+                      <td className="px-3 py-2.5 text-right text-xs text-[var(--color-muted)] whitespace-nowrap">{(r.updated_at ?? r.updatedAt ?? "").toString().slice(0, 19).replace("T", " ") || "-"}</td>
                     </tr>
                   );
                 })
@@ -2042,7 +2042,7 @@ function RepostSection({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LANDED COST SECTION — capitalise freight/customs/insurance into stock value
+// LANDED COST SECTION - capitalise freight/customs/insurance into stock value
 // ─────────────────────────────────────────────────────────────────────────────
 interface LcItemLine { key: string; itemId: string; qty: string; amount: string; weight: string }
 interface LcChargeLine { key: string; ledgerName: string; amount: string; basis: string }
@@ -2134,7 +2134,7 @@ function LandedCostSection({
         items: its,
         charges: chs,
       });
-      toast.success(`Landed cost posted — ${rupee(res?.totalCharge)} capitalised across ${its.length} item${its.length === 1 ? "" : "s"}`);
+      toast.success(`Landed cost posted - ${rupee(res?.totalCharge)} capitalised across ${its.length} item${its.length === 1 ? "" : "s"}`);
       setReference(""); setNarration("");
       setLcItems([newLcItem()]);
       setCharges([newLcCharge()]);
@@ -2151,7 +2151,7 @@ function LandedCostSection({
       <p className="text-sm text-[var(--color-muted)]">
         A landed-cost voucher capitalises freight, customs duty and insurance into the value of received stock,
         so item cost (and downstream COGS) reflects the true landed price. Charge ledgers must already exist
-        (e.g. Freight Payable, Customs Duty Payable) — the entry posts Dr Stock-in-hand / Cr each charge ledger
+        (e.g. Freight Payable, Customs Duty Payable) - the entry posts Dr Stock-in-hand / Cr each charge ledger
         and reposts the affected items.
       </p>
 
@@ -2281,10 +2281,10 @@ function LandedCostSection({
               ) : (
                 rows.map((r, i) => (
                   <tr key={r.voucher_id ?? r.voucherId ?? i} className="border-b border-[var(--color-border)] last:border-b-0">
-                    <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{r.lcv_date ?? r.lcvDate ?? "—"}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs">{r.voucher_number ?? r.voucherNumber ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.reference || "—"}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.narration || "—"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{r.lcv_date ?? r.lcvDate ?? "-"}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs">{r.voucher_number ?? r.voucherNumber ?? "-"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.reference || "-"}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{r.narration || "-"}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums font-medium text-[var(--color-primary)]">{rupee(r.total_charge ?? r.totalCharge)}</td>
                   </tr>
                 ))

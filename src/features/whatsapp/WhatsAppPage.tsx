@@ -17,7 +17,7 @@ function waLink(text: string, phone?: string): string {
 
 type WaTab = "overview" | "wa-invoice-pay" | "wa-reminder-bot" | "wa-sales-capture" | "wa-statement" | "wa-approvals" | "wa-broadcast" | "wa-order-status" | "wa-payment-confirm" | "wa-festive" | "wa-price-list" | "wa-review" | "wa-qr" | "wa-gst-invoice" | "wa-cod-confirm" | "wa-service-reminder" | "wa-loyalty" | "wa-quick-replies" | "wa-product-launch" | "wa-win-back" | "wa-appointment" | "wa-referral" | "wa-payment-plan" | "wa-quotation" | "wa-doc-request" | "wa-onboarding" | "wa-feedback";
 
-// authFetch throws Error("<status>: <body>") — pull the server's {error} message out.
+// authFetch throws Error("<status>: <body>") - pull the server's {error} message out.
 function apiError(err: unknown): string {
   const m = err instanceof Error ? err.message : String(err);
   const i = m.indexOf("{");
@@ -32,9 +32,9 @@ const DIGEST_PREVIEW = [
   { type: "stat", label: "Runway", value: "94 days", delta: "↑ 6d improvement", positive: true },
   { type: "divider" },
   { type: "section", text: "⚡ 3 actions for today:" },
-  { type: "action", text: "1. Chase Reddy Industries — ₹3.2L overdue 18d" },
-  { type: "action", text: "2. TDS deposit due in 4 days — ₹41,000" },
-  { type: "action", text: "3. Payroll ₹2.8L due Friday — buffer tight" },
+  { type: "action", text: "1. Chase Reddy Industries - ₹3.2L overdue 18d" },
+  { type: "action", text: "2. TDS deposit due in 4 days - ₹41,000" },
+  { type: "action", text: "3. Payroll ₹2.8L due Friday - buffer tight" },
   { type: "divider" },
   { type: "footer", text: "Reply *CASH* for balance · *FORECAST* for 30d view · *HELP* for all commands" },
 ];
@@ -170,7 +170,7 @@ export default function WhatsAppPage() {
       ...s,
       whatsappPreferences: { ...DEFAULT_WA_PREFS, ...(s.whatsappPreferences ?? {}), [key]: !alerts[key] },
     }));
-    toast.success(`${alerts[key] ? "Muted" : "Enabled"} — saved to your morning brief`, { id: "wa-pref" });
+    toast.success(`${alerts[key] ? "Muted" : "Enabled"} - saved to your morning brief`, { id: "wa-pref" });
   };
 
   const advanceChat = () => setChatStep(s => Math.min(s + 1, 2));
@@ -185,7 +185,7 @@ export default function WhatsAppPage() {
           WhatsApp Channel
         </h1>
         <p className="text-sm text-[var(--color-muted)] mt-1">
-          Get your cash flow on WhatsApp — morning brief, instant alerts, and ask your numbers any time.
+          Get your cash flow on WhatsApp - morning brief, instant alerts, and ask your numbers any time.
         </p>
       </div>
 
@@ -431,7 +431,7 @@ export default function WhatsAppPage() {
 
                 {chatStep >= 1 && <ReplyBubble text="FORECAST" />}
                 {chatStep >= 2 && (
-                  <ResponseBubble text="📈 30-day forecast: ₹14.2L → ₹19.8L (P50). Main driver: Mehta Corp payment expected Jun 22 (₹6.1L). Risk: Jun 30 payroll ₹2.8L — buffer ok." />
+                  <ResponseBubble text="📈 30-day forecast: ₹14.2L → ₹19.8L (P50). Main driver: Mehta Corp payment expected Jun 22 (₹6.1L). Risk: Jun 30 payroll ₹2.8L - buffer ok." />
                 )}
               </div>
 
@@ -454,8 +454,8 @@ export default function WhatsAppPage() {
             <div className="space-y-3">
               {[
                 { step: "1", title: "Connect your number", desc: "One-time OTP verification. No app download needed." },
-                { step: "2", title: "Get the morning digest", desc: "Every day at 9 AM — balance, top 3 actions, tax reminders." },
-                { step: "3", title: "Ask anything, anytime", desc: "Reply CASH, FORECAST, OVERDUE — get answers in seconds." },
+                { step: "2", title: "Get the morning digest", desc: "Every day at 9 AM - balance, top 3 actions, tax reminders." },
+                { step: "3", title: "Ask anything, anytime", desc: "Reply CASH, FORECAST, OVERDUE - get answers in seconds." },
                 { step: "4", title: "Accept credit offers", desc: "Pre-qualified offers delivered directly. Approve in one reply." },
               ].map(({ step: s, title, desc }) => (
                 <div key={s} className="flex gap-3">
@@ -567,7 +567,7 @@ function WaInvoicePay() {
             <input value={payLink} onChange={e => setPayLink(e.target.value)} placeholder="https://rzp.io/i/…" className={WA_INP} />
           </div>
         </div>
-        {invoices.length === 0 && <p className="text-xs text-[var(--color-muted)]">No invoices yet — create one in the Invoices page first.</p>}
+        {invoices.length === 0 && <p className="text-xs text-[var(--color-muted)]">No invoices yet - create one in the Invoices page first.</p>}
       </div>
 
       {inv && (
@@ -601,16 +601,16 @@ type ReminderTier = { id: string; daysOverdue: number; tone: string };
 const REMINDER_TIERS: ReminderTier[] = [
   { id: "gentle", daysOverdue: 1,  tone: "Gentle nudge" },
   { id: "firm",   daysOverdue: 7,  tone: "Firm reminder" },
-  { id: "urgent", daysOverdue: 15, tone: "Urgent — final notice" },
+  { id: "urgent", daysOverdue: 15, tone: "Urgent - final notice" },
 ];
 
 function buildReminder(tier: ReminderTier, customer: string, amount: number, days: number, firmName: string): string {
   const fc = formatCurrency;
   if (tier.id === "gentle")
-    return `Hi ${customer}, a friendly reminder that ${fc(amount)} is now ${days} day(s) overdue. Could you process it when convenient? Thanks — ${firmName}.`;
+    return `Hi ${customer}, a friendly reminder that ${fc(amount)} is now ${days} day(s) overdue. Could you process it when convenient? Thanks - ${firmName}.`;
   if (tier.id === "firm")
-    return `Hi ${customer}, our records show ${fc(amount)} is ${days} days overdue. Please arrange payment at the earliest. Let us know if there's an issue. — ${firmName}.`;
-  return `Hi ${customer}, this is a final notice: ${fc(amount)} is ${days} days overdue. Kindly clear it within 48 hours to avoid late fees / further action. — ${firmName}.`;
+    return `Hi ${customer}, our records show ${fc(amount)} is ${days} days overdue. Please arrange payment at the earliest. Let us know if there's an issue. - ${firmName}.`;
+  return `Hi ${customer}, this is a final notice: ${fc(amount)} is ${days} days overdue. Kindly clear it within 48 hours to avoid late fees / further action. - ${firmName}.`;
 }
 
 function WaReminderBot() {
@@ -653,7 +653,7 @@ function WaReminderBot() {
 
       {overdue.length === 0 ? (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-          <p className="text-sm font-bold text-green-400">✓ No overdue invoices — nothing to chase.</p>
+          <p className="text-sm font-bold text-green-400">✓ No overdue invoices - nothing to chase.</p>
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
@@ -724,7 +724,7 @@ function WaSalesCapture() {
   const total = sales.reduce((s, r) => s + r.amount, 0);
 
   const booked = sales.slice(0, 10).map(s => `${s.date} · ${s.customer} · ${s.item} · ${fc(s.amount)}`).join("\n");
-  const ownerMsg = `Sales booked (latest ${Math.min(sales.length, 10)}):\n${booked || "—"}\n\nToday: ${fc(todayTotal)} · All-time: ${fc(total)}`;
+  const ownerMsg = `Sales booked (latest ${Math.min(sales.length, 10)}):\n${booked || "-"}\n\nToday: ${fc(todayTotal)} · All-time: ${fc(total)}`;
 
   return (
     <div className="space-y-4">
@@ -812,11 +812,11 @@ function WaStatementOnDemand() {
   const lines = rows
     .slice()
     .sort((a, b) => a.invoiceDate.localeCompare(b.invoiceDate))
-    .map(i => `• ${i.invoiceDate} ${i.invoiceNumber ? `#${i.invoiceNumber} ` : ""}${fc(i.amount)} — ${i.status}`)
+    .map(i => `• ${i.invoiceDate} ${i.invoiceNumber ? `#${i.invoiceNumber} ` : ""}${fc(i.amount)} - ${i.status}`)
     .join("\n");
 
   const statement = customer
-    ? `*Statement of Account — ${customer}*\nFrom ${store.firm?.name ?? "us"}\n\n${lines || "No invoices on record."}\n\n*Outstanding:* ${fc(outstanding)}\n*Settled:* ${fc(paid)}\n\nReply *PAY* for a pay-link or *QUERY* to raise a dispute.`
+    ? `*Statement of Account - ${customer}*\nFrom ${store.firm?.name ?? "us"}\n\n${lines || "No invoices on record."}\n\n*Outstanding:* ${fc(outstanding)}\n*Settled:* ${fc(paid)}\n\nReply *PAY* for a pay-link or *QUERY* to raise a dispute.`
     : "";
 
   return (
@@ -837,7 +837,7 @@ function WaStatementOnDemand() {
             <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="9198XXXXXXXX" className={WA_INP} />
           </div>
         </div>
-        {customers.length === 0 && <p className="text-xs text-[var(--color-muted)]">No invoices yet — nothing to build a statement from.</p>}
+        {customers.length === 0 && <p className="text-xs text-[var(--color-muted)]">No invoices yet - nothing to build a statement from.</p>}
       </div>
 
       {customer && (
@@ -909,7 +909,7 @@ function WaApprovalActions() {
   const pendingTotal = pending.reduce((s, i) => s + i.amount, 0);
 
   const requestMsg = (i: ApprovalItem) =>
-    `*Approval needed* — ${i.type}\nRef: ${i.reference}\nAmount: ${fc(i.amount)}\nRequested by: ${i.requestedBy}\n\nReply *YES ${i.reference}* to approve or *NO ${i.reference}* to reject.`;
+    `*Approval needed* - ${i.type}\nRef: ${i.reference}\nAmount: ${fc(i.amount)}\nRequested by: ${i.requestedBy}\n\nReply *YES ${i.reference}* to approve or *NO ${i.reference}* to reject.`;
 
   return (
     <div className="space-y-4">
@@ -998,7 +998,7 @@ function WaApprovalActions() {
 // ── #182 WhatsApp Broadcast / Campaign Composer ─────────────────────────────
 // Personalised broadcast built from your customer list (derived from invoices).
 // Pick a segment, write a message with {name} merge, send each one-by-one on
-// WhatsApp (wa.me deep links — no bulk-send backend, stays WA-policy friendly).
+// WhatsApp (wa.me deep links - no bulk-send backend, stays WA-policy friendly).
 type Segment = "all" | "outstanding" | "paid";
 function WaBroadcastCampaign() {
   const { store } = useApp();
@@ -1043,7 +1043,7 @@ function WaBroadcastCampaign() {
             <textarea value={body} onChange={e => setBody(e.target.value)} rows={3} className={`${WA_INP} resize-none`} />
           </div>
         </div>
-        {customers.length === 0 && <p className="text-xs text-[var(--color-muted)]">No customers yet — invoices feed this list.</p>}
+        {customers.length === 0 && <p className="text-xs text-[var(--color-muted)]">No customers yet - invoices feed this list.</p>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -1073,7 +1073,7 @@ function WaBroadcastCampaign() {
               {recipients.map(r => (
                 <tr key={r.name} className="border-b border-[var(--color-border)] last:border-0">
                   <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{r.outstanding > 0 ? fc(r.outstanding) : "—"}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{r.outstanding > 0 ? fc(r.outstanding) : "-"}</td>
                   <td className="px-4 py-2.5">
                     <span className={`text-xs font-medium ${sent[r.name] ? "text-green-400" : "text-[var(--color-muted)]"}`}>{sent[r.name] ? "Sent ✓" : "Pending"}</span>
                   </td>
@@ -1088,7 +1088,7 @@ function WaBroadcastCampaign() {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Messages send one at a time via wa.me — keep broadcasts relevant to stay within WhatsApp's policy.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Messages send one at a time via wa.me - keep broadcasts relevant to stay within WhatsApp's policy.</p>
     </div>
   );
 }
@@ -1098,7 +1098,7 @@ const ORDER_STAGES = [
   { id: "confirmed", label: "Order confirmed",  emoji: "✅", line: "is confirmed and being prepared" },
   { id: "packed",    label: "Packed",            emoji: "📦", line: "has been packed and is ready" },
   { id: "shipped",   label: "Out for delivery",  emoji: "🚚", line: "is out for delivery" },
-  { id: "delivered", label: "Delivered",         emoji: "🎉", line: "has been delivered — thank you" },
+  { id: "delivered", label: "Delivered",         emoji: "🎉", line: "has been delivered - thank you" },
 ] as const;
 function WaOrderStatus() {
   const { store } = useApp();
@@ -1179,7 +1179,7 @@ function WaPaymentConfirm() {
   const customer = inv?.customer ?? "there";
   const today = new Date().toISOString().slice(0, 10);
 
-  const message = `✅ *Payment received* — thank you, ${customer}!\n\n*Amount:* ${fc(amt)}\n*Mode:* ${mode}\n*Date:* ${today}\n${ref.trim() ? `*Ref:* ${ref.trim()}\n` : ""}${inv?.invoiceNumber ? `*Against invoice:* #${inv.invoiceNumber}\n` : ""}\nThis is your receipt from ${store.firm?.name ?? "us"}. We appreciate your business!`;
+  const message = `✅ *Payment received* - thank you, ${customer}!\n\n*Amount:* ${fc(amt)}\n*Mode:* ${mode}\n*Date:* ${today}\n${ref.trim() ? `*Ref:* ${ref.trim()}\n` : ""}${inv?.invoiceNumber ? `*Against invoice:* #${inv.invoiceNumber}\n` : ""}\nThis is your receipt from ${store.firm?.name ?? "us"}. We appreciate your business!`;
 
   return (
     <div className="space-y-4">
@@ -1247,7 +1247,7 @@ function WaFestiveOffer() {
     <div className="space-y-4">
       <div className={`${WA_CARD} space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><PartyPopper size={15} className="text-green-400" />WhatsApp Festive Greeting + Offer</h3>
-        <p className="text-[11px] text-[var(--color-muted)]">Combine a warm festival greeting with a promo code in one message — then send it to customers (pair with Broadcast for the whole list).</p>
+        <p className="text-[11px] text-[var(--color-muted)]">Combine a warm festival greeting with a promo code in one message - then send it to customers (pair with Broadcast for the whole list).</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Festival</label>
@@ -1303,8 +1303,8 @@ function WaPriceList() {
   };
   const remove = (id: string) => setItems(prev => prev.filter(i => i.id !== id));
 
-  const lines = items.map(i => `• ${i.name} — ${fc(i.price)}${i.unit ? ` / ${i.unit}` : ""}`).join("\n");
-  const message = `*Price List — ${store.firm?.name ?? "us"}*\n\n${lines || "No items yet."}\n\n${store.firm?.gstNumber ? `GSTIN: ${store.firm.gstNumber}\n` : ""}Prices subject to change. Reply with what you'd like to order!`;
+  const lines = items.map(i => `• ${i.name} - ${fc(i.price)}${i.unit ? ` / ${i.unit}` : ""}`).join("\n");
+  const message = `*Price List - ${store.firm?.name ?? "us"}*\n\n${lines || "No items yet."}\n\n${store.firm?.gstNumber ? `GSTIN: ${store.firm.gstNumber}\n` : ""}Prices subject to change. Reply with what you'd like to order!`;
 
   return (
     <div className="space-y-4">
@@ -1346,7 +1346,7 @@ function WaPriceList() {
                   <tr key={i.id} className="border-b border-[var(--color-border)] last:border-0">
                     <td className="px-4 py-2.5 font-medium">{i.name}</td>
                     <td className="px-4 py-2.5 tabular-nums">{fc(i.price)}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{i.unit || "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{i.unit || "-"}</td>
                     <td className="px-4 py-2.5">
                       <button onClick={() => remove(i.id)} className="text-[var(--color-muted)] hover:text-red-400 transition-colors"><Trash2 size={13} /></button>
                     </td>
@@ -1378,13 +1378,13 @@ function WaReviewRequest() {
   const [phone, setPhone] = useState("");
   const stars = "⭐⭐⭐⭐⭐";
 
-  const message = `Hi ${customer.trim() || "there"}, thank you for choosing ${store.firm?.name ?? "us"}! 🙏\n\nWe'd love your honest feedback — it helps us serve you better.\n${stars}\n${reviewUrl.trim() ? `\nLeave a quick review here: ${reviewUrl.trim()}\n` : "\nReply with a rating from 1 to 5 and a line on how we did.\n"}\nThank you for your time!`;
+  const message = `Hi ${customer.trim() || "there"}, thank you for choosing ${store.firm?.name ?? "us"}! 🙏\n\nWe'd love your honest feedback - it helps us serve you better.\n${stars}\n${reviewUrl.trim() ? `\nLeave a quick review here: ${reviewUrl.trim()}\n` : "\nReply with a rating from 1 to 5 and a line on how we did.\n"}\nThank you for your time!`;
 
   return (
     <div className="space-y-4">
       <div className={`${WA_CARD} space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Star size={15} className="text-green-400" />WhatsApp Feedback / Review Request</h3>
-        <p className="text-[11px] text-[var(--color-muted)]">After a sale, ask for a rating or a Google review on WhatsApp. Drop in your review link, or collect a quick 1–5 reply.</p>
+        <p className="text-[11px] text-[var(--color-muted)]">After a sale, ask for a rating or a Google review on WhatsApp. Drop in your review link, or collect a quick 1-5 reply.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
@@ -1427,7 +1427,7 @@ function WaChatLinkQr() {
     <div className="space-y-4">
       <div className={`${WA_CARD} space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><QrCode size={15} className="text-green-400" />WhatsApp Click-to-Chat Link & QR</h3>
-        <p className="text-[11px] text-[var(--color-muted)]">Generate a tap-to-chat link (and printable QR) that opens your WhatsApp with a message already typed — perfect for invoices, posters, and shop signage.</p>
+        <p className="text-[11px] text-[var(--color-muted)]">Generate a tap-to-chat link (and printable QR) that opens your WhatsApp with a message already typed - perfect for invoices, posters, and shop signage.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Your WhatsApp number (with country code)</label>
@@ -1489,14 +1489,14 @@ function WaGstInvoiceShare() {
     : `*CGST @ ${rate / 2}%:* ${fc(half)}\n*SGST @ ${rate / 2}%:* ${fc(taxTotal - half)}\n`;
 
   const message = inv
-    ? `*Tax Invoice* — ${store.firm?.name ?? "us"}\n${store.firm?.gstNumber ? `GSTIN: ${store.firm.gstNumber}\n` : ""}\nBill to: ${inv.customer}\n${inv.invoiceNumber ? `Invoice: #${inv.invoiceNumber}\n` : ""}Date: ${inv.invoiceDate}\n${inv.description ? `For: ${inv.description}\n` : ""}\n*Taxable value:* ${fc(taxable)}\n${taxLines}*Total payable:* ${fc(gross)}\n\nReply *PAID* once settled. Thank you!`
+    ? `*Tax Invoice* - ${store.firm?.name ?? "us"}\n${store.firm?.gstNumber ? `GSTIN: ${store.firm.gstNumber}\n` : ""}\nBill to: ${inv.customer}\n${inv.invoiceNumber ? `Invoice: #${inv.invoiceNumber}\n` : ""}Date: ${inv.invoiceDate}\n${inv.description ? `For: ${inv.description}\n` : ""}\n*Taxable value:* ${fc(taxable)}\n${taxLines}*Total payable:* ${fc(gross)}\n\nReply *PAID* once settled. Thank you!`
     : "";
 
   return (
     <div className="space-y-4">
       <div className={`${WA_CARD} space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><ReceiptIndianRupee size={15} className="text-green-400" />WhatsApp GST Invoice Share</h3>
-        <p className="text-[11px] text-[var(--color-muted)]">Pick an invoice and send a GST-compliant breakup — taxable value plus CGST/SGST (or IGST inter-state) split from your firm's GST rate.</p>
+        <p className="text-[11px] text-[var(--color-muted)]">Pick an invoice and send a GST-compliant breakup - taxable value plus CGST/SGST (or IGST inter-state) split from your firm's GST rate.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice</label>
@@ -1516,8 +1516,8 @@ function WaGstInvoiceShare() {
           <input type="checkbox" checked={interState} onChange={e => setInterState(e.target.checked)} className="accent-green-700" />
           Inter-state supply (use IGST instead of CGST + SGST)
         </label>
-        {invoices.length === 0 && <p className="text-xs text-[var(--color-muted)]">No invoices yet — create one in the Invoices page first.</p>}
-        {!store.firm?.gstNumber && inv && <p className="text-xs text-orange-400">No GSTIN saved in firm settings — add one for a fully compliant invoice.</p>}
+        {invoices.length === 0 && <p className="text-xs text-[var(--color-muted)]">No invoices yet - create one in the Invoices page first.</p>}
+        {!store.firm?.gstNumber && inv && <p className="text-xs text-orange-400">No GSTIN saved in firm settings - add one for a fully compliant invoice.</p>}
       </div>
 
       {inv && (
@@ -1548,7 +1548,7 @@ function WaGstInvoiceShare() {
 
 // ── #190 WhatsApp COD-Order Confirmation Sender ─────────────────────────────
 // Confirms a cash-on-delivery order with the amount to keep ready and a
-// dispatch line — reduces COD refusals at the door.
+// dispatch line - reduces COD refusals at the door.
 function WaCodConfirm() {
   const { store } = useApp();
   const fc = formatCurrency;
@@ -1560,13 +1560,13 @@ function WaCodConfirm() {
   const [phone, setPhone] = useState("");
 
   const amt = parseFloat(amount) || 0;
-  const message = `🚚 *COD Order Confirmed*\n\nHi ${customer.trim() || "there"}, your order ${orderRef.trim() ? `*${orderRef.trim()}* ` : ""}is confirmed for *Cash on Delivery*.\n\n*Amount to keep ready:* ${fc(amt)}\n${address.trim() ? `*Delivery to:* ${address.trim()}\n` : ""}${eta.trim() ? `*Expected:* ${eta.trim()}\n` : ""}\nPlease keep the exact amount handy. Reply *CONFIRM* to lock the order or *CHANGE* to edit. — ${store.firm?.name ?? "us"}`;
+  const message = `🚚 *COD Order Confirmed*\n\nHi ${customer.trim() || "there"}, your order ${orderRef.trim() ? `*${orderRef.trim()}* ` : ""}is confirmed for *Cash on Delivery*.\n\n*Amount to keep ready:* ${fc(amt)}\n${address.trim() ? `*Delivery to:* ${address.trim()}\n` : ""}${eta.trim() ? `*Expected:* ${eta.trim()}\n` : ""}\nPlease keep the exact amount handy. Reply *CONFIRM* to lock the order or *CHANGE* to edit. - ${store.firm?.name ?? "us"}`;
 
   return (
     <div className="space-y-4">
       <div className={`${WA_CARD} space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Truck size={15} className="text-green-400" />WhatsApp COD-Order Confirmation</h3>
-        <p className="text-[11px] text-[var(--color-muted)]">Cut COD refusals — confirm the order, the exact cash to keep ready, and the delivery window on WhatsApp before you dispatch.</p>
+        <p className="text-[11px] text-[var(--color-muted)]">Cut COD refusals - confirm the order, the exact cash to keep ready, and the delivery window on WhatsApp before you dispatch.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
@@ -1582,7 +1582,7 @@ function WaCodConfirm() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">ETA (optional)</label>
-            <input value={eta} onChange={e => setEta(e.target.value)} placeholder="Tomorrow 11 AM–2 PM" className={WA_INP} />
+            <input value={eta} onChange={e => setEta(e.target.value)} placeholder="Tomorrow 11 AM-2 PM" className={WA_INP} />
           </div>
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Delivery address (optional)</label>
@@ -1644,7 +1644,7 @@ function WaServiceReminder() {
 
   const msgFor = (r: ServiceReminder & { days: number }) => {
     const when = r.days < 0 ? `was due ${Math.abs(r.days)} day(s) ago` : r.days === 0 ? "is due today" : `is due in ${r.days} day(s) (${r.dueDate})`;
-    return `Hi ${r.customer}, a reminder that your *${r.service}* ${when}.${r.amount > 0 ? `\nRenewal amount: ${fc(r.amount)}.` : ""}\n\nReply *RENEW* and we'll take care of it. — ${store.firm?.name ?? "us"}`;
+    return `Hi ${r.customer}, a reminder that your *${r.service}* ${when}.${r.amount > 0 ? `\nRenewal amount: ${fc(r.amount)}.` : ""}\n\nReply *RENEW* and we'll take care of it. - ${store.firm?.name ?? "us"}`;
   };
 
   return (
@@ -1705,7 +1705,7 @@ function WaServiceReminder() {
                   <td className="px-4 py-2.5">{r.service}</td>
                   <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.dueDate}</td>
                   <td className={`px-4 py-2.5 text-xs ${r.days < 0 ? "text-red-400" : r.days <= 30 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{r.days < 0 ? `${Math.abs(r.days)}d overdue` : r.days === 0 ? "Due today" : `in ${r.days}d`}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{r.amount > 0 ? fc(r.amount) : "—"}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{r.amount > 0 ? fc(r.amount) : "-"}</td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-3">
                       <a href={waLink(msgFor(r))} target="_blank" rel="noopener noreferrer" onClick={() => toast.success("Opening WhatsApp…")} className="inline-flex items-center gap-1 text-xs text-green-400 hover:underline"><Send size={12} />Remind</a>
@@ -1753,13 +1753,13 @@ function WaLoyaltyPoints() {
 
   const total = members.reduce((s, m) => s + m.points, 0);
   const msgFor = (m: LoyaltyMember) =>
-    `🎁 Hi ${m.name}, your ${store.firm?.name ?? "loyalty"} points balance is now *${m.points}*.\n\nKeep shopping to earn more — redeem points against your next purchase. Thank you for being a valued customer!`;
+    `🎁 Hi ${m.name}, your ${store.firm?.name ?? "loyalty"} points balance is now *${m.points}*.\n\nKeep shopping to earn more - redeem points against your next purchase. Thank you for being a valued customer!`;
 
   return (
     <div className="space-y-4">
       <div className={`${WA_CARD} space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Gift size={15} className="text-green-400" />WhatsApp Loyalty-Points Update</h3>
-        <p className="text-[11px] text-[var(--color-muted)]">Run a simple loyalty programme — add or redeem points per customer and text them their updated balance on WhatsApp. Balances saved across devices.</p>
+        <p className="text-[11px] text-[var(--color-muted)]">Run a simple loyalty programme - add or redeem points per customer and text them their updated balance on WhatsApp. Balances saved across devices.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
@@ -1829,7 +1829,7 @@ function WaLoyaltyPoints() {
 // any snippet on WhatsApp in one tap.
 interface Snippet { id: string; title: string; body: string; }
 const DEFAULT_SNIPPETS: Snippet[] = [
-  { id: "hours",   title: "Business hours", body: "Hi! We're open Mon–Sat, 10 AM–8 PM. How can we help you today? — {firm}" },
+  { id: "hours",   title: "Business hours", body: "Hi! We're open Mon-Sat, 10 AM-8 PM. How can we help you today? - {firm}" },
   { id: "payment", title: "Payment details", body: "You can pay via UPI to {firm}@upi or scan the QR we shared. Reply *PAID* with the UTR once done. Thank you!" },
   { id: "thanks",  title: "Thank you", body: "Thank you for your order with {firm}! 🙏 We'll keep you posted on the status. Reach out any time." },
 ];
@@ -1898,7 +1898,7 @@ function WaQuickReplies() {
 
 // ── #194 WhatsApp New-Product Launch Announcement ───────────────────────────
 // Composes a launch message (product, price, launch-offer) to share with
-// customers — pair with Broadcast to reach the whole list.
+// customers - pair with Broadcast to reach the whole list.
 function WaProductLaunch() {
   const { store } = useApp();
   const fc = formatCurrency;
@@ -1909,13 +1909,13 @@ function WaProductLaunch() {
   const [phone, setPhone] = useState("");
 
   const p = parseFloat(price) || 0;
-  const message = `🚀 *Now Launching: ${product.trim() || "our new product"}*\n${tagline.trim() ? `${tagline.trim()}\n` : ""}\n${p > 0 ? `*Price:* ${fc(p)}\n` : ""}${launchOffer.trim() ? `*Launch offer:* ${launchOffer.trim()}\n` : ""}\nReply *INTERESTED* and we'll share full details. — ${store.firm?.name ?? "us"}`;
+  const message = `🚀 *Now Launching: ${product.trim() || "our new product"}*\n${tagline.trim() ? `${tagline.trim()}\n` : ""}\n${p > 0 ? `*Price:* ${fc(p)}\n` : ""}${launchOffer.trim() ? `*Launch offer:* ${launchOffer.trim()}\n` : ""}\nReply *INTERESTED* and we'll share full details. - ${store.firm?.name ?? "us"}`;
 
   return (
     <div className="space-y-4">
       <div className={`${WA_CARD} space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Rocket size={15} className="text-green-400" />WhatsApp New-Product Launch</h3>
-        <p className="text-[11px] text-[var(--color-muted)]">Announce a new product or service with a price and launch offer in one polished message — then share it (use Broadcast for the whole list).</p>
+        <p className="text-[11px] text-[var(--color-muted)]">Announce a new product or service with a price and launch offer in one polished message - then share it (use Broadcast for the whole list).</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Product / service</label>
@@ -1980,7 +1980,7 @@ function WaWinBack() {
   }, [invoices, cutoff]);
 
   const msgFor = (name: string) =>
-    `Hi ${name}, we've missed you at ${store.firm?.name ?? "our shop"}! 👋\n\nIt's been a while — come back and enjoy *${offer.trim() || "a special welcome-back offer"}*.\n\nReply *YES* and we'll set it up for you. Hope to see you soon!`;
+    `Hi ${name}, we've missed you at ${store.firm?.name ?? "our shop"}! 👋\n\nIt's been a while - come back and enjoy *${offer.trim() || "a special welcome-back offer"}*.\n\nReply *YES* and we'll set it up for you. Hope to see you soon!`;
 
   return (
     <div className="space-y-4">
@@ -1997,7 +1997,7 @@ function WaWinBack() {
             <input value={offer} onChange={e => setOffer(e.target.value)} placeholder="10% off your next order" className={WA_INP} />
           </div>
         </div>
-        {invoices.length === 0 && <p className="text-xs text-[var(--color-muted)]">No invoices yet — invoice history feeds this list.</p>}
+        {invoices.length === 0 && <p className="text-xs text-[var(--color-muted)]">No invoices yet - invoice history feeds this list.</p>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -2043,7 +2043,7 @@ function WaWinBack() {
         </div>
       ) : invoices.length > 0 && (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-          <p className="text-sm font-bold text-green-400">✓ No lapsed customers in this window — everyone's active.</p>
+          <p className="text-sm font-bold text-green-400">✓ No lapsed customers in this window - everyone's active.</p>
         </div>
       )}
     </div>
@@ -2061,13 +2061,13 @@ function WaAppointmentReminder() {
   const [phone, setPhone] = useState("");
 
   const when = [date.trim(), time.trim()].filter(Boolean).join(" at ");
-  const message = `📅 Hi ${customer.trim() || "there"}, this is a reminder for your ${purpose.trim() || "appointment"}${when ? ` on *${when}*` : ""}.${location.trim() ? `\n*Where:* ${location.trim()}` : ""}\n\nReply *CONFIRM* to confirm or *RESCHEDULE* if the time doesn't work. See you then! — ${store.firm?.name ?? "us"}`;
+  const message = `📅 Hi ${customer.trim() || "there"}, this is a reminder for your ${purpose.trim() || "appointment"}${when ? ` on *${when}*` : ""}.${location.trim() ? `\n*Where:* ${location.trim()}` : ""}\n\nReply *CONFIRM* to confirm or *RESCHEDULE* if the time doesn't work. See you then! - ${store.firm?.name ?? "us"}`;
 
   return (
     <div className="space-y-4">
       <div className={`${WA_CARD} space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarCheck size={15} className="text-green-400" />WhatsApp Appointment / Visit Reminder</h3>
-        <p className="text-[11px] text-[var(--color-muted)]">Cut no-shows — send a clear reminder for a booking, site visit or service call with a one-tap confirm / reschedule prompt.</p>
+        <p className="text-[11px] text-[var(--color-muted)]">Cut no-shows - send a clear reminder for a booking, site visit or service call with a one-tap confirm / reschedule prompt.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
@@ -2119,7 +2119,7 @@ function WaReferralAsk() {
     <div className="space-y-4">
       <div className={`${WA_CARD} space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Share2 size={15} className="text-green-400" />WhatsApp Referral-Ask</h3>
-        <p className="text-[11px] text-[var(--color-muted)]">Turn happy customers into referrers — ask for a referral with a clear reward and an optional share link, in one tap on WhatsApp.</p>
+        <p className="text-[11px] text-[var(--color-muted)]">Turn happy customers into referrers - ask for a referral with a clear reward and an optional share link, in one tap on WhatsApp.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
@@ -2175,7 +2175,7 @@ function WaPaymentPlan() {
 
   const planLines = installments.map(i => `• ${i.label}: ${fc(i.amount)} by ${i.due}`).join("\n");
   const message = totalAmt > 0
-    ? `Hi ${customer.trim() || "there"}, to make it easier we can split *${fc(totalAmt)}* into *${n}* monthly instalments:\n\n${planLines}\n\nReply *ACCEPT* to confirm this plan, or suggest dates that suit you. — ${store.firm?.name ?? "us"}`
+    ? `Hi ${customer.trim() || "there"}, to make it easier we can split *${fc(totalAmt)}* into *${n}* monthly instalments:\n\n${planLines}\n\nReply *ACCEPT* to confirm this plan, or suggest dates that suit you. - ${store.firm?.name ?? "us"}`
     : "";
 
   return (
@@ -2193,7 +2193,7 @@ function WaPaymentPlan() {
             <input type="number" value={total} onChange={e => setTotal(e.target.value)} placeholder="60000" className={WA_INP} />
           </div>
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Instalments (1–12)</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Instalments (1-12)</label>
             <input type="number" value={count} onChange={e => setCount(e.target.value)} placeholder="3" className={WA_INP} />
           </div>
           <div>
@@ -2259,7 +2259,7 @@ function WaQuotationBuilder() {
   const tax = Math.round(subtotal * gstRate / 100);
   const grand = subtotal + tax;
 
-  const body = lines.map(l => `• ${l.item} — ${l.qty} × ${fc(l.rate)} = ${fc(l.qty * l.rate)}`).join("\n");
+  const body = lines.map(l => `• ${l.item} - ${l.qty} × ${fc(l.rate)} = ${fc(l.qty * l.rate)}`).join("\n");
   const message = lines.length > 0
     ? `*Quotation from ${store.firm?.name ?? "us"}*\n${customer.trim() ? `For: ${customer.trim()}\n` : ""}Date: ${new Date().toISOString().slice(0, 10)}\n\n${body}\n\n*Subtotal:* ${fc(subtotal)}\n*GST @ ${gstRate}%:* ${fc(tax)}\n*Total:* ${fc(grand)}\n\nReply *ACCEPT* to confirm this quote and we'll raise the invoice.`
     : "";
@@ -2370,7 +2370,7 @@ function WaDocRequest() {
   const chosen = KYC_DOCS.filter(d => picked.includes(d.id));
   const list = chosen.map((d, i) => `${i + 1}. ${d.label}`).join("\n");
   const message = chosen.length > 0
-    ? `Hi ${customer.trim() || "there"}, to complete your onboarding with ${store.firm?.name ?? "us"} please reply to this chat with photos/PDFs of:\n\n${list}\n\nJust attach each document here — your data stays private and is used only for verification. Thank you!`
+    ? `Hi ${customer.trim() || "there"}, to complete your onboarding with ${store.firm?.name ?? "us"} please reply to this chat with photos/PDFs of:\n\n${list}\n\nJust attach each document here - your data stays private and is used only for verification. Thank you!`
     : "";
 
   return (
@@ -2424,13 +2424,13 @@ function WaOnboardingForm() {
   ];
 
   const ask = fields.map((f, i) => `${i + 1}. ${f}`).join("\n");
-  const message = `${welcome ? `🙏 Welcome to ${store.firm?.name ?? "us"}, ${name.trim() || "and thank you for choosing us"}!\n\n` : ""}To set up your account, please reply with:\n\n${ask}\n\nYou can send it all in one message — we'll do the rest and confirm once you're set up. 🚀`;
+  const message = `${welcome ? `🙏 Welcome to ${store.firm?.name ?? "us"}, ${name.trim() || "and thank you for choosing us"}!\n\n` : ""}To set up your account, please reply with:\n\n${ask}\n\nYou can send it all in one message - we'll do the rest and confirm once you're set up. 🚀`;
 
   return (
     <div className="space-y-4">
       <div className={`${WA_CARD} space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><UserCheck size={15} className="text-green-400" />WhatsApp Customer Onboarding</h3>
-        <p className="text-[11px] text-[var(--color-muted)]">Self-serve onboarding without losing the first order — send new customers a guided checklist to capture name, GSTIN and address right inside the chat.</p>
+        <p className="text-[11px] text-[var(--color-muted)]">Self-serve onboarding without losing the first order - send new customers a guided checklist to capture name, GSTIN and address right inside the chat.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer name (optional)</label>
@@ -2465,13 +2465,13 @@ function WaFeedbackCollector() {
   const [phone, setPhone] = useState("");
 
   const max = scale === "5" ? 5 : 10;
-  const message = `Hi ${customer.trim() || "there"}, thanks for choosing ${store.firm?.name ?? "us"}${ref.trim() ? ` (order ${ref.trim()})` : ""}! 🙌\n\nHow was your experience? Reply with a number from *1* (poor) to *${max}* (excellent).\n\nIf anything fell short, tell us in a line — we read every reply and will make it right.`;
+  const message = `Hi ${customer.trim() || "there"}, thanks for choosing ${store.firm?.name ?? "us"}${ref.trim() ? ` (order ${ref.trim()})` : ""}! 🙌\n\nHow was your experience? Reply with a number from *1* (poor) to *${max}* (excellent).\n\nIf anything fell short, tell us in a line - we read every reply and will make it right.`;
 
   return (
     <div className="space-y-4">
       <div className={`${WA_CARD} space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><SmilePlus size={15} className="text-green-400" />WhatsApp Feedback / CSAT Collector</h3>
-        <p className="text-[11px] text-[var(--color-muted)]">Close the loop after a sale — send a quick rating ask on WhatsApp so complaints reach you directly instead of becoming silent churn.</p>
+        <p className="text-[11px] text-[var(--color-muted)]">Close the loop after a sale - send a quick rating ask on WhatsApp so complaints reach you directly instead of becoming silent churn.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
@@ -2484,8 +2484,8 @@ function WaFeedbackCollector() {
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Rating scale</label>
             <select value={scale} onChange={e => setScale(e.target.value as "5" | "10")} className={WA_INP}>
-              <option value="5">1–5 (CSAT)</option>
-              <option value="10">1–10 (NPS)</option>
+              <option value="5">1-5 (CSAT)</option>
+              <option value="10">1-10 (NPS)</option>
             </select>
           </div>
           <div>

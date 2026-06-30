@@ -45,7 +45,7 @@ export default function ReconcileModal({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--color-border)]">
           <div>
             <h2 className="text-base font-bold">Reconcile transactions</h2>
-            <p className="text-xs text-[var(--color-muted)]">{issues === 0 ? "No issues found — your ledger looks clean." : `${issues} thing${issues === 1 ? "" : "s"} to review`}</p>
+            <p className="text-xs text-[var(--color-muted)]">{issues === 0 ? "No issues found - your ledger looks clean." : `${issues} thing${issues === 1 ? "" : "s"} to review`}</p>
           </div>
           <button onClick={onClose} className="p-1 text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={18} /></button>
         </div>
@@ -61,7 +61,7 @@ export default function ReconcileModal({ onClose }: { onClose: () => void }) {
                     {g.txns.map((t, i) => (
                       <div key={t.id} className={`flex items-center justify-between gap-3 ${i > 0 ? "mt-2 pt-2 border-t border-[var(--color-border)]" : ""}`}>
                         <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{t.description || t.counterparty || "—"}</p>
+                          <p className="text-sm font-medium truncate">{t.description || t.counterparty || "-"}</p>
                           <p className="text-xs text-[var(--color-muted)] tabular-nums">{t.date} · <span className={t.amount < 0 ? "text-red-400" : "text-green-400"}>{formatCurrency(t.amount)}</span> · {t.category}</p>
                         </div>
                         {editable && (
@@ -84,7 +84,7 @@ export default function ReconcileModal({ onClose }: { onClose: () => void }) {
                 {missing.slice(0, 20).map((t) => (
                   <div key={t.id} className="flex items-center gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm truncate">{t.description || "—"}</p>
+                      <p className="text-sm truncate">{t.description || "-"}</p>
                       <p className="text-xs text-[var(--color-muted)] tabular-nums">{t.date} · {formatCurrency(t.amount)}</p>
                     </div>
                     {editable && (

@@ -108,7 +108,7 @@ router.post("/refresh", async (req, res) => {
   }
 });
 
-// POST /auth/logout — stateless, client drops tokens
+// POST /auth/logout - stateless, client drops tokens
 router.post("/logout", (_req, res) => res.json({ ok: true }));
 
 // GET /auth/me
@@ -128,7 +128,7 @@ router.post("/forgot-password", async (req, res) => {
   if (!rows[0]) return res.json({ ok: true }); // don't leak existence
   const otp = crypto.randomInt(100000, 999999).toString();
   const expiry = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  // Store the OTP in its own column — never overwrite `password` (doing so let
+  // Store the OTP in its own column - never overwrite `password` (doing so let
   // anyone DoS an account via /forgot-password). Also clear any lockout so the
   // legitimate owner, who alone receives the emailed OTP, can recover at once.
   await pool.query(
@@ -148,7 +148,7 @@ router.post("/set-password", authenticate, async (req, res) => {
   res.json({ ok: true });
 });
 
-// PUT /auth/profile — update display name
+// PUT /auth/profile - update display name
 router.put("/profile", authenticate, async (req, res) => {
   const { display_name } = req.body;
   if (!display_name || !display_name.trim()) return res.status(400).json({ error: "display_name required" });
@@ -159,7 +159,7 @@ router.put("/profile", authenticate, async (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /auth/change-password — requires current password
+// POST /auth/change-password - requires current password
 router.post("/change-password", authenticate, async (req, res) => {
   const { current_password, new_password } = req.body;
   if (!current_password || !new_password) return res.status(400).json({ error: "Both passwords required" });
@@ -176,7 +176,7 @@ router.post("/change-password", authenticate, async (req, res) => {
   res.json({ ok: true });
 });
 
-// GET /auth/me — extend to include display_name
+// GET /auth/me - extend to include display_name
 router.get("/me/profile", authenticate, async (req, res) => {
   const { rows } = await pool.query("SELECT id, email, role, tenant_id, first_login, display_name FROM users WHERE id=$1", [req.user.id]);
   if (!rows[0]) return res.status(404).json({ error: "User not found" });

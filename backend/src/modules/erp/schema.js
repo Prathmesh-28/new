@@ -1,4 +1,4 @@
-// ERP module — manufacturing on top of the books inventory module. A faithful
+// ERP module - manufacturing on top of the books inventory module. A faithful
 // port of ERPNext's manufacturing + stock domain logic:
 //   • Bills of Materials with components (optionally sub-assemblies that have
 //     their OWN default BOM) + routing operations (workstation, time, rate).
@@ -235,7 +235,7 @@ const ERP_SCHEMA = `
     name              TEXT NOT NULL,
     parent_id         UUID REFERENCES erp_warehouses(id) ON DELETE SET NULL,
     book_warehouse_id UUID,                               -- maps to book_warehouses.id (stock lives there)
-    is_group          BOOLEAN NOT NULL DEFAULT false,     -- structural node — holds NO stock
+    is_group          BOOLEAN NOT NULL DEFAULT false,     -- structural node - holds NO stock
     is_external       BOOLEAN NOT NULL DEFAULT false,     -- supplier/customer/transit (off-balance-sheet)
     location_type     TEXT NOT NULL DEFAULT 'STORAGE'
                       CHECK (location_type IN ('STORAGE','RECEIVING','SHIPPING','PRODUCTION','QUARANTINE','SCRAP','TRANSIT')),

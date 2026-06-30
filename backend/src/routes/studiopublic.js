@@ -1,5 +1,5 @@
 // Public serving for Headroom Studio published apps (App Builder, v1 publish).
-// NO authentication — addressed by an unguessable token. Mounted at /api/pub.
+// NO authentication - addressed by an unguessable token. Mounted at /api/pub.
 //
 // Generated app HTML is UNTRUSTED model output, so it is served sandboxed: the CSP
 // `sandbox` directive (without allow-same-origin) puts the document in a unique
@@ -31,8 +31,8 @@ router.get("/:token", async (req, res) => {
     const html = (app.agents && app.agents.length) ? injectBridge(app.html, req.params.token, app.agents, bridgeBase) : app.html;
     // The global securityHeaders middleware set X-Frame-Options: DENY + a strict CSP
     // on this response; replace them so the published app can be embedded (it stays
-    // isolated via the CSP `sandbox` directive — a unique opaque origin, scripts but
-    // no same-origin access — so framing it is safe).
+    // isolated via the CSP `sandbox` directive - a unique opaque origin, scripts but
+    // no same-origin access - so framing it is safe).
     res.removeHeader("X-Frame-Options");
     res.set({
       "Content-Type": "text/html; charset=utf-8",

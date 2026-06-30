@@ -1,5 +1,5 @@
 "use strict";
-// SMB embedded lending — data layer. LOS (offers + KFS) + LMS (loans, schedule,
+// SMB embedded lending - data layer. LOS (offers + KFS) + LMS (loans, schedule,
 // repayments, DPD) + the invoice-financing wedge (self-liquidating: repays when the
 // source invoice is paid). Eligibility reuses the deterministic scorecard. GL postings
 // are SMB-side, best-effort + idempotent, and degrade when the chart isn't seeded.
@@ -38,7 +38,7 @@ function bullet(principal, apr, days, startDate) {
   return { rows: [{ installment_no: 1, due_date: addDays(startDate, days), principal_due: P, interest_due: interest, total_due: r2(P + interest) }], totalInterest: interest, totalRepayable: r2(P + interest) };
 }
 
-// RBI-style Key Fact Statement — the mandated all-in cost disclosure shown before accept.
+// RBI-style Key Fact Statement - the mandated all-in cost disclosure shown before accept.
 function buildKFS({ kind, principal, processingFee, apr, sched }) {
   const disbursal = r2(n(principal) - n(processingFee));
   const totalRepayable = r2(sched.totalRepayable + 0); // fee is taken upfront from disbursal
@@ -57,7 +57,7 @@ function buildKFS({ kind, principal, processingFee, apr, sched }) {
     schedule_preview: sched.rows.slice(0, 3),
     cooling_off_days: 1,
     recovery: kind === "invoice_finance" ? "Auto-recovered from the financed invoice on payment" : "e-NACH / UPI AutoPay (when configured)",
-    disclosure: "Indicative — final terms confirmed by the lending partner. Charges are all-inclusive of the APR shown.",
+    disclosure: "Indicative - final terms confirmed by the lending partner. Charges are all-inclusive of the APR shown.",
   };
 }
 

@@ -57,7 +57,7 @@ const LANGUAGES: { name: string; bcp47: string }[] = [
   { name: "Telugu", bcp47: "te-IN" }, { name: "Urdu", bcp47: "ur-IN" },
 ];
 
-// Speak helper — feature-detected; returns false if unsupported.
+// Speak helper - feature-detected; returns false if unsupported.
 function speak(text: string, lang = "en-IN", rate = 1): boolean {
   if (!SPEECH_OUT) return false;
   const synth = window.speechSynthesis;
@@ -113,7 +113,7 @@ export default function VoicePage() {
             <Mic size={18} className="text-[var(--color-primary)]" /> Voice &amp; Vernacular
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Run your books by speaking, listen to summaries aloud, and tune the app for any language or ability — built on your browser&apos;s own speech engine.
+            Run your books by speaking, listen to summaries aloud, and tune the app for any language or ability - built on your browser&apos;s own speech engine.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -200,7 +200,7 @@ function Overview() {
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1">Voice-first finance, honestly scoped</h2>
         <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-          Everything here works <strong className="text-[var(--color-text)]">today, in your browser</strong> — no cloud speech service required.
+          Everything here works <strong className="text-[var(--color-text)]">today, in your browser</strong> - no cloud speech service required.
           Each tool feature-detects the underlying API and falls back to typing when it is unavailable.
         </p>
       </div>
@@ -222,7 +222,7 @@ function Overview() {
 
       <FallbackNote>
         Voice quality depends entirely on your device and browser. Web Speech recognition works best in Chrome/Edge on desktop and Android WebViews;
-        Safari/iOS support is partial. Accent and vernacular accuracy vary by the OS speech engine installed — when recognition is unavailable, every tool here accepts typed input instead.
+        Safari/iOS support is partial. Accent and vernacular accuracy vary by the OS speech engine installed - when recognition is unavailable, every tool here accepts typed input instead.
       </FallbackNote>
     </div>
   );
@@ -319,7 +319,7 @@ function VoiceCapture() {
 
   const toggleListen = () => {
     const Ctor = getRecognitionCtor();
-    if (!Ctor) { toast.error("Speech recognition not supported — type the line instead"); return; }
+    if (!Ctor) { toast.error("Speech recognition not supported - type the line instead"); return; }
     if (listening) { recRef.current?.stop(); return; }
     const rec = new Ctor();
     rec.lang = "en-IN";
@@ -341,7 +341,7 @@ function VoiceCapture() {
 
   const post = () => {
     if (!draft) return;
-    if (isReadOnly) { toast.error("Read-only view — switch to your own books to post entries"); return; }
+    if (isReadOnly) { toast.error("Read-only view - switch to your own books to post entries"); return; }
     if (amountValue <= 0) { toast.error("Enter an amount greater than zero before posting"); return; }
     setPosting(true);
     try {
@@ -364,7 +364,7 @@ function VoiceCapture() {
       setText("");
       lastSeed.current = "";
     } catch (err) {
-      toast.error(`Couldn't post entry${err instanceof Error ? `: ${err.message}` : ""} — it stays here so you don't lose it`);
+      toast.error(`Couldn't post entry${err instanceof Error ? `: ${err.message}` : ""} - it stays here so you don't lose it`);
     } finally {
       setPosting(false);
     }
@@ -377,7 +377,7 @@ function VoiceCapture() {
         <p className="text-xs text-[var(--color-muted)]">
           Say or type a line like <em className="text-[var(--color-text)]">&ldquo;received 5000 from Sharma&rdquo;</em> or <em className="text-[var(--color-text)]">&ldquo;paid 1200 to electricity&rdquo;</em>. We parse it into a draft you can review and post straight to your ledger.
         </p>
-        {!SPEECH_IN && <FallbackNote>Microphone dictation isn&apos;t available in this browser. Type the line in the box below — parsing works exactly the same.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>Microphone dictation isn&apos;t available in this browser. Type the line in the box below - parsing works exactly the same.</FallbackNote>}
         <div className="flex gap-2">
           <input value={text} onChange={e => setText(e.target.value)} placeholder="received 5000 from Sharma" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
@@ -455,7 +455,7 @@ function VoiceCapture() {
                 </button>
               </div>
               <p className="text-[11px] text-[var(--color-muted)] mt-2">
-                Posts a real transaction to your ledger via the same path as the Dashboard — it appears instantly in <strong className="text-[var(--color-text)]">Transactions</strong>.
+                Posts a real transaction to your ledger via the same path as the Dashboard - it appears instantly in <strong className="text-[var(--color-text)]">Transactions</strong>.
                 {isReadOnly && " Posting is disabled in this read-only client view."}
                 {store.transactions.length > 0 && ` You currently have ${store.transactions.length} recorded transaction(s).`}
               </p>
@@ -552,7 +552,7 @@ function SummaryReader() {
             <Square size={13} /> Stop
           </button>
         </div>
-        {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available — the script is shown below so a screen reader can read it instead.</FallbackNote>}
+        {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available - the script is shown below so a screen reader can read it instead.</FallbackNote>}
         <p className="text-[11px] text-[var(--color-muted)] italic border-t border-[var(--color-border)] pt-2">&ldquo;{summary.script}&rdquo;</p>
       </div>
     </div>
@@ -588,7 +588,7 @@ function CommandCheatSheet() {
     <div className="space-y-4">
       <div className={`${CARD} p-4`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><BookOpen size={14} className="text-[var(--color-primary)]" /> Supported phrases</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-1">A reference of phrasings the parser understands. Phrasing is flexible — these are examples, not exact commands.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-1">A reference of phrasings the parser understands. Phrasing is flexible - these are examples, not exact commands.</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {groups.map(g => (
@@ -665,7 +665,7 @@ function VernacularNumbers() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Hash size={14} className="text-[var(--color-primary)]" /> Number formatting</h2>
-        <p className="text-xs text-[var(--color-muted)]">Display amounts the way Indians actually read them — lakh and crore with 2-digit grouping — or switch to the international system.</p>
+        <p className="text-xs text-[var(--color-muted)]">Display amounts the way Indians actually read them - lakh and crore with 2-digit grouping - or switch to the international system.</p>
         <div className="flex gap-2">
           {([["indian", "Indian (lakh / crore)"], ["intl", "International (million / billion)"]] as const).map(([id, label]) => {
             const on = (id === "indian") === indian;
@@ -800,7 +800,7 @@ function VoiceAuthSetup() {
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Fingerprint size={14} className="text-[var(--color-primary)]" /> Voice-auth setup</h2>
         <FallbackNote>
-          Setup stub only. This captures a spoken/typed passphrase and stores a one-way SHA-256 hash — it does <strong>not</strong> perform real voiceprint biometrics or gate any action yet. True voice-liveness auth needs a server-side model.
+          Setup stub only. This captures a spoken/typed passphrase and stores a one-way SHA-256 hash - it does <strong>not</strong> perform real voiceprint biometrics or gate any action yet. True voice-liveness auth needs a server-side model.
         </FallbackNote>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Passphrase</label>
@@ -811,7 +811,7 @@ function VoiceAuthSetup() {
         </button>
         {stored && (
           <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-[11px] text-[var(--color-muted)] break-all">
-            <p className="mb-1 text-[var(--color-text)] font-medium flex items-center gap-1.5"><CheckCircle2 size={12} className="text-green-400" /> Enrolled — stored hash:</p>
+            <p className="mb-1 text-[var(--color-text)] font-medium flex items-center gap-1.5"><CheckCircle2 size={12} className="text-green-400" /> Enrolled - stored hash:</p>
             <code>{stored.slice(0, 48)}…</code>
             <button onClick={() => { setStored(null); toast.success("Passphrase cleared"); }} className="block mt-2 text-red-400 hover:underline">Clear enrollment</button>
           </div>
@@ -831,7 +831,7 @@ function DictationScratchpad() {
 
   const toggleListen = () => {
     const Ctor = getRecognitionCtor();
-    if (!Ctor) { toast.error("Speech recognition not supported — type your notes"); return; }
+    if (!Ctor) { toast.error("Speech recognition not supported - type your notes"); return; }
     if (listening) { recRef.current?.stop(); return; }
     const rec = new Ctor();
     rec.lang = bcp47;
@@ -856,7 +856,7 @@ function DictationScratchpad() {
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><NotebookPen size={14} className="text-[var(--color-primary)]" /> Dictation scratchpad</h2>
         <p className="text-xs text-[var(--color-muted)]">Speak freely and your words append to the notes below. Notes are saved and synced. Works for vendor memos, to-dos, anything.</p>
-        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available in this browser — type directly into the notes field.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available in this browser - type directly into the notes field.</FallbackNote>}
         <div className="flex gap-2">
           <button onClick={toggleListen} disabled={!SPEECH_IN}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
@@ -920,7 +920,7 @@ function VoiceExpenseLogger() {
 
   const toggleListen = () => {
     const Ctor = getRecognitionCtor();
-    if (!Ctor) { toast.error("Speech recognition not supported — type the expenses instead"); return; }
+    if (!Ctor) { toast.error("Speech recognition not supported - type the expenses instead"); return; }
     if (listening) { recRef.current?.stop(); return; }
     const rec = new Ctor();
     rec.lang = "en-IN"; rec.continuous = false; rec.interimResults = true;
@@ -936,9 +936,9 @@ function VoiceExpenseLogger() {
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> Voice expense logger</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Rattle off petty cash in one breath — <em className="text-[var(--color-text)]">&ldquo;paid 200 for tea, 1500 diesel, 300 packing&rdquo;</em> — and each item is split out and auto-categorised into a draft.
+          Rattle off petty cash in one breath - <em className="text-[var(--color-text)]">&ldquo;paid 200 for tea, 1500 diesel, 300 packing&rdquo;</em> - and each item is split out and auto-categorised into a draft.
         </p>
-        {!SPEECH_IN && <FallbackNote>Microphone dictation isn&apos;t available here. Type the items below — splitting and categorising work identically.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>Microphone dictation isn&apos;t available here. Type the items below - splitting and categorising work identically.</FallbackNote>}
         <div className="flex gap-2">
           <input value={text} onChange={e => setText(e.target.value)} placeholder="200 tea, 1500 diesel, 300 packing" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
@@ -966,7 +966,7 @@ function VoiceExpenseLogger() {
               </div>
             ))}
           </div>
-          <p className="text-[11px] text-[var(--color-muted)] mt-3">Preview only — not posted. Confirm and save these against the right ledger in <strong className="text-[var(--color-text)]">Transactions</strong>.</p>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">Preview only - not posted. Confirm and save these against the right ledger in <strong className="text-[var(--color-text)]">Transactions</strong>.</p>
         </div>
       )}
     </div>
@@ -1005,7 +1005,7 @@ function SpokenInvoiceCreator() {
 
   const toggleListen = () => {
     const Ctor = getRecognitionCtor();
-    if (!Ctor) { toast.error("Speech recognition not supported — type the line instead"); return; }
+    if (!Ctor) { toast.error("Speech recognition not supported - type the line instead"); return; }
     if (listening) { recRef.current?.stop(); return; }
     const rec = new Ctor();
     rec.lang = "en-IN"; rec.continuous = false; rec.interimResults = true;
@@ -1023,7 +1023,7 @@ function SpokenInvoiceCreator() {
         <p className="text-xs text-[var(--color-muted)]">
           Say <em className="text-[var(--color-text)]">&ldquo;invoice Sharma 5000 for consulting&rdquo;</em> and we draft the invoice header, amount, and an indicative 18% GST line.
         </p>
-        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available — type the invoice line; parsing is identical.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available - type the invoice line; parsing is identical.</FallbackNote>}
         <div className="flex gap-2">
           <input value={text} onChange={e => setText(e.target.value)} placeholder="invoice Sharma 5000 for consulting" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
@@ -1051,7 +1051,7 @@ function SpokenInvoiceCreator() {
                 <div className="flex justify-between"><span className="text-[var(--color-muted)]">GST @ 18% (indicative)</span><span className="tabular-nums">{formatCurrency(gst)}</span></div>
                 <div className="flex justify-between font-bold border-t border-[var(--color-border)] pt-1.5 mt-1.5"><span>Total</span><span className="tabular-nums text-[var(--color-primary)]">{formatCurrency(draft.amount + gst)}</span></div>
               </div>
-              <p className="text-[11px] text-[var(--color-muted)] mt-3">Preview only. Rate, HSN, and place-of-supply are placeholders — finalise and issue from <strong className="text-[var(--color-text)]">Invoices</strong>.</p>
+              <p className="text-[11px] text-[var(--color-muted)] mt-3">Preview only. Rate, HSN, and place-of-supply are placeholders - finalise and issue from <strong className="text-[var(--color-text)]">Invoices</strong>.</p>
             </>
           ) : (
             <p className="text-xs text-[var(--color-muted)]">Couldn&apos;t find an amount. Try &ldquo;invoice <strong>Ramesh 8000</strong> for repairs&rdquo;.</p>
@@ -1099,7 +1099,7 @@ function VoiceTransactionSearch() {
 
   const toggleListen = () => {
     const Ctor = getRecognitionCtor();
-    if (!Ctor) { toast.error("Speech recognition not supported — type your query"); return; }
+    if (!Ctor) { toast.error("Speech recognition not supported - type your query"); return; }
     if (listening) { recRef.current?.stop(); return; }
     const rec = new Ctor();
     rec.lang = "en-IN"; rec.continuous = false; rec.interimResults = true;
@@ -1117,7 +1117,7 @@ function VoiceTransactionSearch() {
         <p className="text-xs text-[var(--color-muted)]">
           Speak or type a query like <em className="text-[var(--color-text)]">&ldquo;cash sales above 5000&rdquo;</em> or <em className="text-[var(--color-text)]">&ldquo;rent paid&rdquo;</em>. We filter your live transactions by direction, amount, and keywords.
         </p>
-        {!SPEECH_IN && <FallbackNote>Voice query isn&apos;t available — type your filter; it works the same.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>Voice query isn&apos;t available - type your filter; it works the same.</FallbackNote>}
         <div className="flex gap-2">
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="sales above 5000" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
@@ -1239,7 +1239,7 @@ function ReadMyDayDigest() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Sun size={14} className="text-[var(--color-primary)]" /> Read my day</h2>
-        <p className="text-xs text-[var(--color-muted)]">A spoken digest of today ({format(today, "d MMM yyyy")}) drawn live from your books — meant for the end-of-day glance you skip when you can&apos;t read the dashboard.</p>
+        <p className="text-xs text-[var(--color-muted)]">A spoken digest of today ({format(today, "d MMM yyyy")}) drawn live from your books - meant for the end-of-day glance you skip when you can&apos;t read the dashboard.</p>
         <div className="grid grid-cols-3 gap-3">
           {[
             { label: "In today", value: formatCurrency(digest.inflow), color: "text-green-400" },
@@ -1258,7 +1258,7 @@ function ReadMyDayDigest() {
           <button onClick={() => { if (SPEECH_OUT) window.speechSynthesis.cancel(); }} disabled={!SPEECH_OUT}
             className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg disabled:opacity-40"><Square size={13} /> Stop</button>
         </div>
-        {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available — the digest script is shown below for a screen reader.</FallbackNote>}
+        {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available - the digest script is shown below for a screen reader.</FallbackNote>}
         <p className="text-[11px] text-[var(--color-muted)] italic border-t border-[var(--color-border)] pt-2">&ldquo;{digest.script}&rdquo;</p>
       </div>
     </div>
@@ -1276,7 +1276,7 @@ function VoiceReminderSetter() {
 
   const toggleListen = () => {
     const Ctor = getRecognitionCtor();
-    if (!Ctor) { toast.error("Speech recognition not supported — type the reminder"); return; }
+    if (!Ctor) { toast.error("Speech recognition not supported - type the reminder"); return; }
     if (listening) { recRef.current?.stop(); return; }
     const rec = new Ctor();
     rec.lang = "en-IN"; rec.continuous = false; rec.interimResults = true;
@@ -1300,8 +1300,8 @@ function VoiceReminderSetter() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Bell size={14} className="text-[var(--color-primary)]" /> Voice reminders</h2>
-        <p className="text-xs text-[var(--color-muted)]">Speak a reminder — <em className="text-[var(--color-text)]">&ldquo;collect 5000 from Ramesh&rdquo;</em> — pick a date, and it&apos;s saved and synced. These are personal notes shown here; they don&apos;t trigger push notifications yet.</p>
-        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available — type the reminder text instead.</FallbackNote>}
+        <p className="text-xs text-[var(--color-muted)]">Speak a reminder - <em className="text-[var(--color-text)]">&ldquo;collect 5000 from Ramesh&rdquo;</em> - pick a date, and it&apos;s saved and synced. These are personal notes shown here; they don&apos;t trigger push notifications yet.</p>
+        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available - type the reminder text instead.</FallbackNote>}
         <div className="flex gap-2">
           <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") add(); }} placeholder="collect payment from Ramesh" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
@@ -1380,7 +1380,7 @@ function AmountInWords() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Type size={14} className="text-[var(--color-primary)]" /> Amount in words (Indian)</h2>
-        <p className="text-xs text-[var(--color-muted)]">Spell out any amount the way it must appear on cheques and invoices — using lakh and crore, not millions. Includes paise.</p>
+        <p className="text-xs text-[var(--color-muted)]">Spell out any amount the way it must appear on cheques and invoices - using lakh and crore, not millions. Includes paise.</p>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Enter an amount</label>
           <input value={raw} onChange={e => setRaw(e.target.value)} className={INP} placeholder="125000.50" inputMode="decimal" />
@@ -1439,7 +1439,7 @@ function TransliterationHelper() {
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><ArrowRightLeft size={14} className="text-[var(--color-primary)]" /> Transliteration helper</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Type a note in Roman letters (e.g. <em className="text-[var(--color-text)]">&ldquo;ramesh ko 5000 dena hai&rdquo;</em>) and preview it in Devanagari. This is a quick phonetic approximation for jotting vernacular notes — not a precise linguistic transliteration.
+          Type a note in Roman letters (e.g. <em className="text-[var(--color-text)]">&ldquo;ramesh ko 5000 dena hai&rdquo;</em>) and preview it in Devanagari. This is a quick phonetic approximation for jotting vernacular notes - not a precise linguistic transliteration.
         </p>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Roman input</label>
@@ -1458,7 +1458,7 @@ function TransliterationHelper() {
           <button onClick={() => { navigator.clipboard?.writeText(dev); toast.success("Copied"); }}
             className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg"><Copy size={13} /> Copy Devanagari</button>
         )}
-        <FallbackNote>Phonetic approximation only — vowel matras and conjuncts won&apos;t always be exact. Use it for rough notes, not for printing official documents.</FallbackNote>
+        <FallbackNote>Phonetic approximation only - vowel matras and conjuncts won&apos;t always be exact. Use it for rough notes, not for printing official documents.</FallbackNote>
       </div>
     </div>
   );
@@ -1562,7 +1562,7 @@ function VoiceToWhatsApp() {
 
   const toggleListen = () => {
     const Ctor = getRecognitionCtor();
-    if (!Ctor) { toast.error("Speech recognition not supported — type the message"); return; }
+    if (!Ctor) { toast.error("Speech recognition not supported - type the message"); return; }
     if (listening) { recRef.current?.stop(); return; }
     const rec = new Ctor();
     rec.lang = bcp47; rec.continuous = true; rec.interimResults = false;
@@ -1591,9 +1591,9 @@ function VoiceToWhatsApp() {
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><MessageCircle size={14} className="text-[var(--color-primary)]" /> Voice to WhatsApp</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Speak a message in your language, then hand it straight to WhatsApp pre-filled. We open WhatsApp&apos;s share link — your unsent draft, your number — so you tap send yourself. No message is sent in the background.
+          Speak a message in your language, then hand it straight to WhatsApp pre-filled. We open WhatsApp&apos;s share link - your unsent draft, your number - so you tap send yourself. No message is sent in the background.
         </p>
-        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available — type the message; the WhatsApp hand-off works the same.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available - type the message; the WhatsApp hand-off works the same.</FallbackNote>}
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Recipient number (optional, with country code)</label>
           <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="91XXXXXXXXXX" inputMode="tel" className={INP} />
@@ -1646,7 +1646,7 @@ function FinanceGlossary() {
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><BookMarked size={14} className="text-[var(--color-primary)]" /> Audio finance glossary</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Plain-language explanations of the jargon that trips up owners — tap any term to expand it, or hear it read aloud. The voice uses your preferred language locale ({bcp47}); the explanation text is in simple English for now.
+          Plain-language explanations of the jargon that trips up owners - tap any term to expand it, or hear it read aloud. The voice uses your preferred language locale ({bcp47}); the explanation text is in simple English for now.
         </p>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search a term, e.g. ITC, EBITDA…" className={INP} />
       </div>
@@ -1673,7 +1673,7 @@ function FinanceGlossary() {
             </div>
           );
         })}
-        {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available — every explanation is shown on screen so a screen reader can read it.</FallbackNote>}
+        {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available - every explanation is shown on screen so a screen reader can read it.</FallbackNote>}
       </div>
     </div>
   );
@@ -1703,7 +1703,7 @@ function SpeakTheTotal() {
 
   const toggleListen = () => {
     const Ctor = getRecognitionCtor();
-    if (!Ctor) { toast.error("Speech recognition not supported — type the amounts"); return; }
+    if (!Ctor) { toast.error("Speech recognition not supported - type the amounts"); return; }
     if (listening) { recRef.current?.stop(); return; }
     const rec = new Ctor();
     rec.lang = "en-IN"; rec.continuous = false; rec.interimResults = true;
@@ -1724,9 +1724,9 @@ function SpeakTheTotal() {
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> Speak the total</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Rattle off amounts — <em className="text-[var(--color-text)]">&ldquo;200 plus 1500 and 300&rdquo;</em> — and Headroom adds them up and reads the total back to you, so you can tally cash without looking. Say <em className="text-[var(--color-text)]">&ldquo;minus&rdquo;</em> anywhere to subtract the rest.
+          Rattle off amounts - <em className="text-[var(--color-text)]">&ldquo;200 plus 1500 and 300&rdquo;</em> - and Headroom adds them up and reads the total back to you, so you can tally cash without looking. Say <em className="text-[var(--color-text)]">&ldquo;minus&rdquo;</em> anywhere to subtract the rest.
         </p>
-        {!SPEECH_IN && <FallbackNote>Microphone dictation isn&apos;t available here — type the numbers; the totalling works identically.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>Microphone dictation isn&apos;t available here - type the numbers; the totalling works identically.</FallbackNote>}
         <div className="flex gap-2">
           <input value={text} onChange={e => setText(e.target.value)} placeholder="200 plus 1500 and 300" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
@@ -1753,7 +1753,7 @@ function SpeakTheTotal() {
           </div>
           <button onClick={speakTotal} disabled={!SPEECH_OUT}
             className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Volume2 size={13} /> Speak the total</button>
-          {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available — the total is shown above instead.</FallbackNote>}
+          {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available - the total is shown above instead.</FallbackNote>}
         </div>
       )}
     </div>
@@ -1764,10 +1764,10 @@ function SpeakTheTotal() {
 // Records a short audio greeting via MediaRecorder; falls back to a typed/spoken script.
 type GreetingTemplate = { id: string; label: string; text: (firm: string) => string };
 const GREETING_TEMPLATES: GreetingTemplate[] = [
-  { id: "welcome", label: "Welcome", text: (f) => `Namaste, and welcome to ${f}. Thank you for choosing us — how may we help you today?` },
+  { id: "welcome", label: "Welcome", text: (f) => `Namaste, and welcome to ${f}. Thank you for choosing us - how may we help you today?` },
   { id: "thanks", label: "Thank you", text: (f) => `Thank you for your business with ${f}. We truly appreciate your trust and look forward to serving you again.` },
   { id: "diwali", label: "Diwali wishes", text: (f) => `Wishing you and your family a very happy Diwali from all of us at ${f}. May the year ahead bring prosperity and good health.` },
-  { id: "newyear", label: "New year", text: (f) => `A very happy new year from ${f}. Thank you for being with us — here is to a successful year ahead together.` },
+  { id: "newyear", label: "New year", text: (f) => `A very happy new year from ${f}. Thank you for being with us - here is to a successful year ahead together.` },
 ];
 function GreetingRecorder() {
   const { store } = useApp();
@@ -1825,7 +1825,7 @@ function GreetingRecorder() {
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><PartyPopper size={14} className="text-[var(--color-primary)]" /> Greeting recorder</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Record a short voice greeting in your own language to send customers on WhatsApp or play at the counter. Pick a starter script, hear it read, then record your own take. Recording stays on your device — nothing uploads.
+          Record a short voice greeting in your own language to send customers on WhatsApp or play at the counter. Pick a starter script, hear it read, then record your own take. Recording stays on your device - nothing uploads.
         </p>
         <div className="flex flex-wrap gap-2">
           {GREETING_TEMPLATES.map(t => (
@@ -1909,7 +1909,7 @@ function AskBalanceAloud() {
 
   const toggleListen = () => {
     const Ctor = getRecognitionCtor();
-    if (!Ctor) { toast.error("Speech recognition not supported — type your question"); return; }
+    if (!Ctor) { toast.error("Speech recognition not supported - type your question"); return; }
     if (listening) { recRef.current?.stop(); return; }
     const rec = new Ctor();
     rec.lang = "en-IN"; rec.continuous = false; rec.interimResults = false;
@@ -1931,7 +1931,7 @@ function AskBalanceAloud() {
         <p className="text-xs text-[var(--color-muted)]">
           Ask a question like <em className="text-[var(--color-text)]">&ldquo;what is my balance&rdquo;</em> or <em className="text-[var(--color-text)]">&ldquo;how much money out&rdquo;</em>. We answer from your live transactions and read it back aloud.
         </p>
-        {!SPEECH_IN && <FallbackNote>Microphone questions aren&apos;t available here — type your question and we&apos;ll answer below.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>Microphone questions aren&apos;t available here - type your question and we&apos;ll answer below.</FallbackNote>}
         <div className="flex gap-2">
           <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === "Enter") ask(SPEECH_OUT); }} placeholder="what is my balance" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
@@ -1976,7 +1976,7 @@ function SpellItOut() {
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><SpellCheck2 size={14} className="text-[var(--color-primary)]" /> Spell it out</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Paste an IFSC, GSTIN, account number or reference and have it read back <strong className="text-[var(--color-text)]">character by character</strong> — letters with NATO phonetics — so it&apos;s unmistakable over a phone call.
+          Paste an IFSC, GSTIN, account number or reference and have it read back <strong className="text-[var(--color-text)]">character by character</strong> - letters with NATO phonetics - so it&apos;s unmistakable over a phone call.
         </p>
         <input value={raw} onChange={e => setRaw(e.target.value.toUpperCase())} placeholder="e.g. HDFC0001234 or 27AAAC…" className={`${INP} font-mono tracking-wider`} />
         {chars.length > 0 && (
@@ -1997,7 +1997,7 @@ function SpellItOut() {
             </div>
           </>
         )}
-        {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available here — the phonetic breakdown above can be read out or copied instead.</FallbackNote>}
+        {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available here - the phonetic breakdown above can be read out or copied instead.</FallbackNote>}
       </div>
     </div>
   );
@@ -2041,7 +2041,7 @@ function SpokenDateEntry() {
 
   const toggleListen = () => {
     const Ctor = getRecognitionCtor();
-    if (!Ctor) { toast.error("Speech recognition not supported — type the date"); return; }
+    if (!Ctor) { toast.error("Speech recognition not supported - type the date"); return; }
     if (listening) { recRef.current?.stop(); return; }
     const rec = new Ctor();
     rec.lang = "en-IN"; rec.continuous = false; rec.interimResults = true;
@@ -2057,9 +2057,9 @@ function SpokenDateEntry() {
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Spoken date entry</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Say or type a date the way you&apos;d speak it — <em className="text-[var(--color-text)]">&ldquo;yesterday&rdquo;</em>, <em className="text-[var(--color-text)]">&ldquo;3 days ago&rdquo;</em>, <em className="text-[var(--color-text)]">&ldquo;15 march&rdquo;</em> — and we resolve it to a calendar date you can reuse.
+          Say or type a date the way you&apos;d speak it - <em className="text-[var(--color-text)]">&ldquo;yesterday&rdquo;</em>, <em className="text-[var(--color-text)]">&ldquo;3 days ago&rdquo;</em>, <em className="text-[var(--color-text)]">&ldquo;15 march&rdquo;</em> - and we resolve it to a calendar date you can reuse.
         </p>
-        {!SPEECH_IN && <FallbackNote>Microphone input isn&apos;t available here — type the date phrase instead; parsing is identical.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>Microphone input isn&apos;t available here - type the date phrase instead; parsing is identical.</FallbackNote>}
         <div className="flex gap-2">
           <input value={text} onChange={e => setText(e.target.value)} placeholder="yesterday / 3 days ago / 15 march" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
@@ -2106,7 +2106,7 @@ function VoiceWorkLog() {
 
   const toggleListen = () => {
     const Ctor = getRecognitionCtor();
-    if (!Ctor) { toast.error("Speech recognition not supported — type your entry"); return; }
+    if (!Ctor) { toast.error("Speech recognition not supported - type your entry"); return; }
     if (listening) { recRef.current?.stop(); return; }
     const rec = new Ctor();
     rec.lang = bcp47; rec.continuous = false; rec.interimResults = false;
@@ -2121,8 +2121,8 @@ function VoiceWorkLog() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} className="text-[var(--color-primary)]" /> Voice work log</h2>
-        <p className="text-xs text-[var(--color-muted)]">Dictate what you did and when — each entry is timestamped automatically. Handy for site visits, billable hours, or a daily diary. Entries are saved and synced.</p>
-        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available here — type each entry and press Add; timestamps are still recorded.</FallbackNote>}
+        <p className="text-xs text-[var(--color-muted)]">Dictate what you did and when - each entry is timestamped automatically. Handy for site visits, billable hours, or a daily diary. Entries are saved and synced.</p>
+        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available here - type each entry and press Add; timestamps are still recorded.</FallbackNote>}
         <div className="flex gap-2">
           <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter") add(draft); }} placeholder="Visited Sharma's shop, collected payment…" className={INP} />
           <button onClick={() => add(draft)} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg text-sm font-medium"><Plus size={13} /> Add</button>

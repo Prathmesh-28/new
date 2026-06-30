@@ -1,4 +1,4 @@
-// Headroom Flows — starter templates. Real, working flow definitions an SMB owner can
+// Headroom Flows - starter templates. Real, working flow definitions an SMB owner can
 // install in one click. Node configs reference verified payload/tool fields:
 //   • invoice.* event payload carries trigger.invoice.{invoice_number,customer_name,
 //     customer_email,total_amount,...} (the full invoice row).
@@ -11,7 +11,7 @@ const FLOW_TEMPLATES = [
     description: "When an invoice goes overdue, raise an in-app alert. Works out of the box.",
     trigger: { type: "event", config: { event: "invoice.overdue" } },
     graph: {
-      nodes: [{ id: "alert", type: "notify", config: { title: "Invoice overdue", severity: "high", message: "Invoice {{trigger.invoice.invoice_number}} for {{trigger.invoice.customer_name}} (₹{{trigger.invoice.total_amount}}) is overdue — chase the payment." } }],
+      nodes: [{ id: "alert", type: "notify", config: { title: "Invoice overdue", severity: "high", message: "Invoice {{trigger.invoice.invoice_number}} for {{trigger.invoice.customer_name}} (₹{{trigger.invoice.total_amount}}) is overdue - chase the payment." } }],
       edges: [],
     },
   },
@@ -31,7 +31,7 @@ const FLOW_TEMPLATES = [
     description: "Email the customer a thank-you when their invoice is paid. Connect SMTP to deliver.",
     trigger: { type: "event", config: { event: "invoice.paid" } },
     graph: {
-      nodes: [{ id: "mail", type: "email", config: { to: "{{trigger.invoice.customer_email}}", subject: "Thanks — payment received for {{trigger.invoice.invoice_number}}", body: "Hi {{trigger.invoice.customer_name}},<br><br>We've received your payment for invoice <b>{{trigger.invoice.invoice_number}}</b> (₹{{trigger.invoice.total_amount}}). Thank you!<br><br>— {{trigger.invoice.customer_name}}'s team at Headroom" } }],
+      nodes: [{ id: "mail", type: "email", config: { to: "{{trigger.invoice.customer_email}}", subject: "Thanks - payment received for {{trigger.invoice.invoice_number}}", body: "Hi {{trigger.invoice.customer_name}},<br><br>We've received your payment for invoice <b>{{trigger.invoice.invoice_number}}</b> (₹{{trigger.invoice.total_amount}}). Thank you!<br><br>- {{trigger.invoice.customer_name}}'s team at Headroom" } }],
       edges: [],
     },
   },
@@ -41,7 +41,7 @@ const FLOW_TEMPLATES = [
     description: "Raise an alert whenever a new invoice is created.",
     trigger: { type: "event", config: { event: "invoice.created" } },
     graph: {
-      nodes: [{ id: "alert", type: "notify", config: { title: "New invoice", severity: "low", message: "Invoice {{trigger.invoice.invoice_number}} created for {{trigger.invoice.customer_name}} — ₹{{trigger.invoice.total_amount}}." } }],
+      nodes: [{ id: "alert", type: "notify", config: { title: "New invoice", severity: "low", message: "Invoice {{trigger.invoice.invoice_number}} created for {{trigger.invoice.customer_name}} - ₹{{trigger.invoice.total_amount}}." } }],
       edges: [],
     },
   },

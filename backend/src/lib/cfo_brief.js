@@ -1,5 +1,5 @@
-// Weekly Monday CFO brief — AI-generated 3 actionable items from live tenant data.
-// Runs on the tenant's own engine (OpenRouter / self-host gateway) — no direct Anthropic.
+// Weekly Monday CFO brief - AI-generated 3 actionable items from live tenant data.
+// Runs on the tenant's own engine (OpenRouter / self-host gateway) - no direct Anthropic.
 const llm = require("../modules/books/llm");
 
 function fmt(n) {
@@ -79,21 +79,21 @@ async function generateCFOBrief(data, tenantId) {
   const ruleItems = [];
   if (overdue.length) {
     const biggest = invoices.filter(i => i.status !== "paid" && i.dueDate < today).sort((a, b) => b.amount - a.amount)[0];
-    ruleItems.push(`Chase ${biggest?.customer ?? "overdue customers"} — ${fmt(biggest?.amount)} invoice is overdue. Send a payment reminder today.`);
+    ruleItems.push(`Chase ${biggest?.customer ?? "overdue customers"} - ${fmt(biggest?.amount)} invoice is overdue. Send a payment reminder today.`);
   }
   if (runway < 60) {
-    ruleItems.push(`Cash runway is ${runway} days — review your largest expense categories and consider whether any can be deferred or renegotiated.`);
+    ruleItems.push(`Cash runway is ${runway} days - review your largest expense categories and consider whether any can be deferred or renegotiated.`);
   }
   if (burnChangePct > 20) {
-    ruleItems.push(`Monthly burn is up ${burnChangePct}% vs last month — identify which category drove the increase and assess if it's one-time or recurring.`);
+    ruleItems.push(`Monthly burn is up ${burnChangePct}% vs last month - identify which category drove the increase and assess if it's one-time or recurring.`);
   }
   if (upcomingObl.length) {
     const o = obligations.filter(ob => ob.dueDate >= today && ob.dueDate <= in30d).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
-    if (o) ruleItems.push(`${o.name} of ${fmt(o.amount)} is due ${o.dueDate} — ensure this is accounted for in your cash plan.`);
+    if (o) ruleItems.push(`${o.name} of ${fmt(o.amount)} is due ${o.dueDate} - ensure this is accounted for in your cash plan.`);
   }
   if (dueSoon.length) {
     const d = invoices.filter(i => i.status !== "paid" && i.dueDate >= today && i.dueDate <= in7d)[0];
-    if (d) ruleItems.push(`Confirm ${d.customer} will pay ${fmt(d.amount)} by ${d.dueDate} — follow up if you haven't heard from them.`);
+    if (d) ruleItems.push(`Confirm ${d.customer} will pay ${fmt(d.amount)} by ${d.dueDate} - follow up if you haven't heard from them.`);
   }
   while (ruleItems.length < 3) {
     ruleItems.push("Review your week-on-week transaction patterns to identify any unusual spend categories.");
@@ -113,7 +113,7 @@ Critical/high alerts: ${critAlerts.length ? critAlerts.join("; ") : "none"}
 
   try {
     const out = await llm.chat(tenantId, {
-      system:   `You are a CFO assistant for an Indian SMB. Generate exactly 3 specific, actionable items for this week. Rules: (1) Each item is exactly 1 sentence. (2) Mention specific customer names, amounts in Indian format (₹ with L/Cr), and exact dates from the data. (3) Start each with a clear action verb (Chase, Defer, Review, Confirm, Transfer, File, Negotiate). (4) Only recommend actions supported by the data — do not invent. Return a raw JSON array of 3 strings with no markdown or explanation.`,
+      system:   `You are a CFO assistant for an Indian SMB. Generate exactly 3 specific, actionable items for this week. Rules: (1) Each item is exactly 1 sentence. (2) Mention specific customer names, amounts in Indian format (₹ with L/Cr), and exact dates from the data. (3) Start each with a clear action verb (Chase, Defer, Review, Confirm, Transfer, File, Negotiate). (4) Only recommend actions supported by the data - do not invent. Return a raw JSON array of 3 strings with no markdown or explanation.`,
       messages: [{ role: "user", content: context }],
     });
     const raw   = out?.content ?? "[]";

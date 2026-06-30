@@ -10,7 +10,7 @@ import { CURATED_FAQ, type FaqEntry } from "@/data/assistantFaq";
 import { TAB_CATALOG } from "@/data/roles";
 import { detectAction, parseAiDirective } from "@/lib/assistantActions";
 
-// Web Speech API (voice input) — available in Chrome/Edge/Android WebView; absent in
+// Web Speech API (voice input) - available in Chrome/Edge/Android WebView; absent in
 // iOS WKWebView, so we feature-detect and only show the mic when supported.
 const getRecognition = (): any => { const w = window as any; const C = w.SpeechRecognition || w.webkitSpeechRecognition; return C ? new C() : null; };
 const SPEECH_OK = typeof window !== "undefined" && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
@@ -27,7 +27,7 @@ function buildKb(): KbItem[] {
   const guides: KbItem[] = Object.entries(FEATURE_GUIDES).map(([key, g]) => {
     const meta = tabLabel[key] ?? { label: key, group: "Features" };
     return {
-      id: `guide-${key}`, category: meta.group, title: `${meta.label} — what it does & how to use it`,
+      id: `guide-${key}`, category: meta.group, title: `${meta.label} - what it does & how to use it`,
       what: g.what, steps: g.steps, tips: g.tips, route: `/${key}`,
       haystack: `${meta.label} ${meta.group} ${g.what} ${g.steps.join(" ")} ${g.tips.join(" ")}`.toLowerCase(),
     };
@@ -56,11 +56,11 @@ const STARTERS = [
   "How do I get paid faster on overdue invoices?",
   "How do I run payroll with PF & ESI?",
   "How do I switch from Tally?",
-  "Who can see what — how do roles work?",
+  "Who can see what - how do roles work?",
 ];
 const GREETING: Msg = {
   role: "assistant", seed: true,
-  content: "Hi 👋 I'm your Headroom Assistant. Ask me anything about your books, GST, invoices, payroll, collections, your team — or how to do something. Try one of these:",
+  content: "Hi 👋 I'm your Headroom Assistant. Ask me anything about your books, GST, invoices, payroll, collections, your team - or how to do something. Try one of these:",
   chips: STARTERS,
 };
 
@@ -76,7 +76,7 @@ export default function HeadroomAssistant() {
   const recogRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  // The tenant's own agents — selectable so they're usable from anywhere via this chatbox.
+  // The tenant's own agents - selectable so they're usable from anywhere via this chatbox.
   const [agents, setAgents] = useState<any[]>([]);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   useEffect(() => { if (open && user) api.get<any[]>("/api/books/agents").then(a => setAgents(Array.isArray(a) ? a : [])).catch(() => { /* no agents / no access */ }); }, [open, user]);
@@ -100,7 +100,7 @@ export default function HeadroomAssistant() {
         setMsgs(m => [...m, { role: "assistant", content: res?.reply || "(no response)", pending: Array.isArray(res?.pendingActions) ? res.pendingActions : [] }]);
       } catch (e: any) {
         const msg = String(e?.message || "");
-        setMsgs(m => [...m, { role: "assistant", content: /LLM|key|configur/i.test(msg) ? "This agent needs an LLM key — set it in Books → AI Agents → Engine." : (msg || "Agent error.") }]);
+        setMsgs(m => [...m, { role: "assistant", content: /LLM|key|configur/i.test(msg) ? "This agent needs an LLM key - set it in Books → AI Agents → Engine." : (msg || "Agent error.") }]);
       } finally { setBusy(false); }
       return;
     }
@@ -120,15 +120,15 @@ export default function HeadroomAssistant() {
     // Multi-turn: send the real conversation (exclude the seeded greeting) to the AI,
     // grounded with the top KB matches so answers stay accurate to Headroom.
     const ctx = matches.slice(0, 6).map(m => `• ${m.title}: ${m.what}${m.steps ? " Steps: " + m.steps.join("; ") : ""}`).join("\n");
-    const system = `You are the Headroom Assistant, a friendly in-app helper for an India-first SMB finance & accounting super-app (books/GL, GST & India tax filing, invoicing, collections, payroll, inventory, banking, capital, CRM). Answer conversationally and concisely (2-4 short sentences or tight bullets), reference the real screen/route, and be accurate. Use ONLY this product context where relevant:\n${ctx || "(no direct match — answer from general Headroom knowledge and suggest where to look.)"}\n\nIf the user wants to DO or OPEN something in the app, end your reply with a directive on its own line in the form [[go:/route|Button label]] using a real route (e.g. /invoices, /gst, /payroll, /collections, /books, /payments, /banking, /forecast, /vendors, /advisor, /settings). Never describe or mention the directive itself.`;
+    const system = `You are the Headroom Assistant, a friendly in-app helper for an India-first SMB finance & accounting super-app (books/GL, GST & India tax filing, invoicing, collections, payroll, inventory, banking, capital, CRM). Answer conversationally and concisely (2-4 short sentences or tight bullets), reference the real screen/route, and be accurate. Use ONLY this product context where relevant:\n${ctx || "(no direct match - answer from general Headroom knowledge and suggest where to look.)"}\n\nIf the user wants to DO or OPEN something in the app, end your reply with a directive on its own line in the form [[go:/route|Button label]] using a real route (e.g. /invoices, /gst, /payroll, /collections, /books, /payments, /banking, /forecast, /vendors, /advisor, /settings). Never describe or mention the directive itself.`;
     const apiMsgs = history.filter(m => !m.seed).map(m => ({ role: m.role, content: m.content }));
 
     // Knowledge-base answer (used as the AI-off fallback AND the logged-out path,
-    // since /api/ai/ask needs auth — so the assistant still helps public visitors).
+    // since /api/ai/ask needs auth - so the assistant still helps public visitors).
     const kbAnswer = () => {
       const content = top
         ? `${top.what}${top.steps && top.steps.length ? "\n\nQuick steps:\n" + top.steps.slice(0, 4).map((s, i) => `${i + 1}. ${s}`).join("\n") : ""}`
-        : (user ? "I couldn't find a direct answer — tap the list icon (top-right) to browse all help topics."
+        : (user ? "I couldn't find a direct answer - tap the list icon (top-right) to browse all help topics."
                 : "Sign in to chat with the AI or your agents. Meanwhile, browse help topics via the list icon (top-right).");
       const { route, routeLabel } = resolve(null);
       setMsgs(m => [...m, { role: "assistant", content, route, routeLabel, chips }]);
@@ -137,7 +137,7 @@ export default function HeadroomAssistant() {
 
     try {
       const res = await api.post<{ content?: string; error?: string }>("/api/ai/ask", { system, messages: apiMsgs });
-      let content = res?.content?.trim() || (top ? top.what : "I couldn't find that — try rephrasing, or tap the list icon to browse topics.");
+      let content = res?.content?.trim() || (top ? top.what : "I couldn't find that - try rephrasing, or tap the list icon to browse topics.");
       const parsed = parseAiDirective(content);          // AI may emit [[go:/route|Label]]
       content = parsed.text || content;
       const { route, routeLabel } = resolve(parsed.action);
@@ -213,7 +213,7 @@ export default function HeadroomAssistant() {
 
           {view === "chat" ? (
             <>
-              {/* "Chat with" selector — Headroom Help or one of the tenant's own agents */}
+              {/* "Chat with" selector - Headroom Help or one of the tenant's own agents */}
               {agents.length > 0 && (
                 <div className="flex items-center gap-1.5 border-b border-[var(--color-border)] px-3 py-1.5 text-[11px]">
                   <Bot size={12} className="shrink-0 text-[var(--color-primary)]" />
@@ -294,7 +294,7 @@ export default function HeadroomAssistant() {
                     {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                   </button>
                 </div>
-                <p className="mt-1 px-1 text-center text-[9px] text-[var(--color-muted)]">Answers are guidance — verify figures in the app.</p>
+                <p className="mt-1 px-1 text-center text-[9px] text-[var(--color-muted)]">Answers are guidance - verify figures in the app.</p>
               </div>
             </>
           ) : (

@@ -42,7 +42,7 @@ export default function UpsellGate({ feature, requiredPlan }: { feature: string;
           <p className="mt-2 text-sm text-[var(--color-muted)] max-w-md mx-auto leading-relaxed">{pitch.blurb}</p>
         </div>
 
-        {/* Blurred preview — show what they're unlocking, not just describe it */}
+        {/* Blurred preview - show what they're unlocking, not just describe it */}
         <div className="relative px-8 pt-6 border-b border-[var(--color-border)] pb-6">
           <div aria-hidden className="pointer-events-none select-none blur-[3px] opacity-60">
             <div className="grid grid-cols-3 gap-3 mb-3">
@@ -61,7 +61,7 @@ export default function UpsellGate({ feature, requiredPlan }: { feature: string;
           </div>
           <div className="absolute inset-0 flex items-center justify-center">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-muted)] bg-[var(--color-surface)]/85 border border-[var(--color-border)] px-3 py-1 rounded-full backdrop-blur-sm">
-              Preview — upgrade to unlock the live view
+              Preview - upgrade to unlock the live view
             </span>
           </div>
         </div>

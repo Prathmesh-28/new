@@ -1,4 +1,4 @@
-// Headroom Flows — the execution engine.
+// Headroom Flows - the execution engine.
 //
 // Walks the flow graph in topological order with BRANCH REACHABILITY (a node runs
 // only if it's a root or an incoming edge is "satisfied"; branch nodes gate their

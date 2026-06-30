@@ -1,7 +1,7 @@
-// §M-USAGE — USAGE / METERED BILLING. A from-scratch re-implementation of the
+// §M-USAGE - USAGE / METERED BILLING. A from-scratch re-implementation of the
 // metered-billing aggregation that OpenMeter (openmeterio/openmeter) and Lago
 // (lago-org/lago) provide. Those projects are Apache-2.0 / AGPL, so NONE of their
-// code is copied — only the *concept* is ported: raw usage events are ingested
+// code is copied - only the *concept* is ported: raw usage events are ingested
 // idempotently into an event log (book_usage_events), then collapsed per billing
 // window with an aggregation function (SUM / COUNT / MAX / UNIQUE_COUNT). A metered
 // plan (book_subscription_plans.metric/unit_price/aggregation) turns those collapsed
@@ -13,7 +13,7 @@
 //   aggregate: collapse [from, to) for one (subscription, metric) under an aggregation.
 //   charge  : read the plan's metric/unit_price/aggregation, aggregate, price it.
 //
-// CommonJS. Money strictly through ./money (decimal.js) — never JS number math.
+// CommonJS. Money strictly through ./money (decimal.js) - never JS number math.
 // Event window is half-open [from, to): from inclusive, to exclusive, matching the
 // way subscriptions.js bills "the just-closed period" without double-counting the
 // boundary instant.
@@ -22,7 +22,7 @@ const { money, toDb, toRupees } = require("./money");
 const { PostError } = require("./posting-engine");
 
 // Supported aggregation functions (normalised upper-case). UNIQUE_COUNT counts the
-// number of DISTINCT event values in the window (OpenMeter's "unique count" — e.g.
+// number of DISTINCT event values in the window (OpenMeter's "unique count" - e.g.
 // number of distinct active users / distinct API keys), as opposed to COUNT which
 // counts rows. SUM/MAX operate on the numeric value column.
 const AGGREGATIONS = new Set(["SUM", "COUNT", "MAX", "UNIQUE_COUNT"]);
@@ -104,7 +104,7 @@ async function aggregateUsage(tenantId, { subscriptionId, metric, from, to, aggr
   }
 
   // Each aggregation maps to a single SQL reducer over the value column. COALESCE so
-  // an empty window yields 0 units (not NULL) — an unused metered plan bills nothing.
+  // an empty window yields 0 units (not NULL) - an unused metered plan bills nothing.
   const expr =
     agg === "SUM" ? "COALESCE(SUM(value),0)"
     : agg === "COUNT" ? "COUNT(*)"

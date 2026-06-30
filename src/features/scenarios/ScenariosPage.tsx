@@ -93,7 +93,7 @@ export default function ScenariosPage() {
 
   // Map the planner's events to the forecast engine's Scenario format (custom
   // recurring monthly impact), then run the REAL Monte-Carlo engine for both the
-  // base and the with-scenario projection — revenue, recurring series, invoice
+  // base and the with-scenario projection - revenue, recurring series, invoice
   // collections and volatility all included, instead of the old straight-line.
   const scenarios = useMemo<Scenario[]>(() => events.map(e => ({
     id: e.id,
@@ -109,7 +109,7 @@ export default function ScenariosPage() {
   })), [events]);
 
   // Pin the SAME seed on both runs so base vs scenario differ only by the
-  // scenario delta — not by RNG noise (runForecast otherwise derives its seed
+  // scenario delta - not by RNG noise (runForecast otherwise derives its seed
   // from the config, which changes when scenarios are present).
   const SEED = 1337;
   const base = useMemo(() => runForecast(store, { horizonDays: HORIZON, numSims: 600, seed: SEED }), [store]);
@@ -142,7 +142,7 @@ export default function ScenariosPage() {
   const scenarioHealthy = finalScenario > 0 && !breakeven;
 
   // The planner projects off live data (transactions + bank balances). With none,
-  // the base Monte-Carlo run is flat/zero — show a helpful empty state instead.
+  // the base Monte-Carlo run is flat/zero - show a helpful empty state instead.
   const hasLiveData = (store.transactions?.length ?? 0) > 0 || (store.bankAccounts?.length ?? 0) > 0;
 
   return (
@@ -153,7 +153,7 @@ export default function ScenariosPage() {
           Scenario Planner
         </h1>
         <p className="text-sm text-[var(--color-muted)] mt-1">
-          Model "what if" situations — hiring, new deals, loans, lost clients — and see the cash impact over the next 6 months, run through the same Monte-Carlo engine as your forecast.
+          Model "what if" situations - hiring, new deals, loans, lost clients - and see the cash impact over the next 6 months, run through the same Monte-Carlo engine as your forecast.
         </p>
       </div>
 
@@ -214,7 +214,7 @@ export default function ScenariosPage() {
         <EmptyState
           icon={Sliders}
           title="No scenarios yet"
-          description="Model best/worst-case cash outcomes from your live data. Connect a bank account and record a few transactions, then build a forecast — the planner runs your what-ifs through the same Monte-Carlo engine."
+          description="Model best/worst-case cash outcomes from your live data. Connect a bank account and record a few transactions, then build a forecast - the planner runs your what-ifs through the same Monte-Carlo engine."
           ctaText="Go to Forecast"
           ctaHref="/forecast"
         />
@@ -307,7 +307,7 @@ export default function ScenariosPage() {
                 <span className={`text-xs font-semibold tabular-nums ${ev.monthlyImpact >= 0 ? "text-green-400" : "text-red-400"}`}>
                   {ev.monthlyImpact >= 0 ? "+" : ""}{formatCurrency(ev.monthlyImpact)}/mo
                 </span>
-                <span className="text-xs text-[var(--color-muted)]">mo {ev.startMonth}–{ev.startMonth + ev.durationMonths}</span>
+                <span className="text-xs text-[var(--color-muted)]">mo {ev.startMonth}-{ev.startMonth + ev.durationMonths}</span>
                 <button onClick={() => removeEvent(ev.id)} className="text-[var(--color-muted)] hover:text-red-400 transition-colors shrink-0">
                   <Trash2 size={13} />
                 </button>
@@ -447,7 +447,7 @@ export default function ScenariosPage() {
           </div>
           <button
             onClick={() => {
-              navigator.clipboard.writeText(`Headroom scenario: ${events.map(e => e.label).join(", ")} — 12mo delta: ${scenDiff >= 0 ? "+" : ""}${formatCurrency(Math.abs(scenDiff))}`).catch(() => {});
+              navigator.clipboard.writeText(`Headroom scenario: ${events.map(e => e.label).join(", ")} - 12mo delta: ${scenDiff >= 0 ? "+" : ""}${formatCurrency(Math.abs(scenDiff))}`).catch(() => {});
               toast.success("Scenario summary copied");
             }}
             className="flex items-center gap-1.5 text-xs bg-green-900/40 text-green-300 border border-green-800/30 px-3 py-1.5 rounded-lg hover:bg-green-900/60 transition-colors shrink-0"
@@ -554,10 +554,10 @@ function PriceChangeSimulator() {
         <p className={`text-sm font-bold ${better ? "text-green-400" : "text-red-400"}`}>
           {better
             ? `✓ This price move lifts contribution profit by ${fc(Math.abs(Math.round(profitDiff)))} despite ${q > 0 ? `${Math.round(q - newUnits)} fewer units` : "volume shifts"}.`
-            : `⚠ This price move cuts contribution profit by ${fc(Math.abs(Math.round(profitDiff)))} — the volume loss outweighs the higher margin.`}
+            : `⚠ This price move cuts contribution profit by ${fc(Math.abs(Math.round(profitDiff)))} - the volume loss outweighs the higher margin.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Contribution profit = (price − unit cost) × units. Fixed costs are held constant. Elasticity is a simple linear assumption — validate against real demand data.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Contribution profit = (price − unit cost) × units. Fixed costs are held constant. Elasticity is a simple linear assumption - validate against real demand data.</p>
     </div>
   );
 }
@@ -655,9 +655,9 @@ function HeadcountScenario() {
       <div className={`rounded-lg p-4 border ${scenBurn <= 0 ? "border-green-800/40 bg-green-950/20" : scenRunway < 6 ? "border-red-800/40 bg-red-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
         <p className={`text-sm font-bold ${scenBurn <= 0 ? "text-green-400" : scenRunway < 6 ? "text-red-400" : "text-orange-400"}`}>
           {scenBurn <= 0
-            ? `✓ Even with ${n} hire(s) you stay cash-positive — this plan is fundable from operations.`
+            ? `✓ Even with ${n} hire(s) you stay cash-positive - this plan is fundable from operations.`
             : scenRunway < 6
-              ? `⚠ Hiring ${n} drops runway to ${runwayLabel(scenRunway)} — below the 6-month safety line. Secure revenue or funding first.`
+              ? `⚠ Hiring ${n} drops runway to ${runwayLabel(scenRunway)} - below the 6-month safety line. Secure revenue or funding first.`
               : `Hiring ${n} costs ${fc(Math.round(newMonthlyCost))}/mo${runwayDelta !== null ? ` and shortens runway by ~${Math.abs(runwayDelta).toFixed(1)} months` : ""}.`}
         </p>
       </div>
@@ -683,7 +683,7 @@ function DilutionScenario() {
 
   const post  = pre + raised;
   const investorPct = post > 0 ? raised / post : 0;
-  const pricePerShare = post; // notional — work in % ownership
+  const pricePerShare = post; // notional - work in % ownership
 
   // ESOP top-up is created from the pre-money (existing holders bear it),
   // so the new pool is esop% of post-money, funded out of the pre-money slice.
@@ -749,7 +749,7 @@ function DilutionScenario() {
         </div>
       </div>
 
-      <p className="text-[10px] text-[var(--color-muted)]">Single-round, single-class model in % ownership (price/share = post-money, {fc(Math.round(pricePerShare))} notional). Liquidation preferences, multiple classes and option exercise are not modelled — see Cap-Table tools for a full waterfall.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Single-round, single-class model in % ownership (price/share = post-money, {fc(Math.round(pricePerShare))} notional). Liquidation preferences, multiple classes and option exercise are not modelled - see Cap-Table tools for a full waterfall.</p>
     </div>
   );
 }
@@ -797,15 +797,15 @@ function BreakevenAnalyzer() {
 
       {!viable && (
         <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20">
-          <p className="text-sm font-bold text-red-400">⚠ Variable cost ≥ price — every unit loses money, so there is no break-even point. Raise price or cut unit cost.</p>
+          <p className="text-sm font-bold text-red-400">⚠ Variable cost ≥ price - every unit loses money, so there is no break-even point. Raise price or cut unit cost.</p>
         </div>
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Break-even units", value: beUnits === Infinity ? "—" : `${beUnits.toLocaleString("en-IN")} u`, color: "text-[var(--color-primary)]" },
-          { label: "Break-even revenue", value: beRevenue === Infinity ? "—" : fc(Math.round(beRevenue)), color: "text-[var(--color-primary)]" },
-          { label: "Margin of safety", value: beRevenue === Infinity ? "—" : `${mosPct.toFixed(1)}%`, color: mosPct >= 20 ? "text-green-400" : mosPct >= 0 ? "text-orange-400" : "text-red-400" },
+          { label: "Break-even units", value: beUnits === Infinity ? "-" : `${beUnits.toLocaleString("en-IN")} u`, color: "text-[var(--color-primary)]" },
+          { label: "Break-even revenue", value: beRevenue === Infinity ? "-" : fc(Math.round(beRevenue)), color: "text-[var(--color-primary)]" },
+          { label: "Margin of safety", value: beRevenue === Infinity ? "-" : `${mosPct.toFixed(1)}%`, color: mosPct >= 20 ? "text-green-400" : mosPct >= 0 ? "text-orange-400" : "text-red-400" },
           { label: "Profit at actual", value: fc(Math.round(profitAtActual)), color: profitAtActual >= 0 ? "text-green-400" : "text-red-400" },
         ].map(card => (
           <div key={card.label} className={CARD}>
@@ -840,7 +840,7 @@ function BreakevenAnalyzer() {
         <div className={`rounded-lg p-4 border ${aboveBE ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
           <p className={`text-sm font-bold ${aboveBE ? "text-green-400" : "text-red-400"}`}>
             {aboveBE
-              ? `✓ You break even at ${beUnits.toLocaleString("en-IN")} units / ${fc(Math.round(beRevenue))}. At ${A.toLocaleString("en-IN")} units you clear break-even by ${mosPct.toFixed(1)}% — sales can fall ${mosUnits.toLocaleString("en-IN")} units before you hit a loss.`
+              ? `✓ You break even at ${beUnits.toLocaleString("en-IN")} units / ${fc(Math.round(beRevenue))}. At ${A.toLocaleString("en-IN")} units you clear break-even by ${mosPct.toFixed(1)}% - sales can fall ${mosUnits.toLocaleString("en-IN")} units before you hit a loss.`
               : `⚠ At ${A.toLocaleString("en-IN")} units you are ${(beUnits - A).toLocaleString("en-IN")} units below break-even (${fc(Math.round(beRevenue))} needed). You lose ${fc(Math.abs(Math.round(profitAtActual)))}/mo until you sell more.`}
           </p>
         </div>
@@ -956,11 +956,11 @@ function RevenueShockStressTest() {
       <div className={`rounded-lg p-4 border ${survives ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
         <p className={`text-sm font-bold ${survives ? "text-green-400" : "text-red-400"}`}>
           {survives
-            ? `✓ A ${(drop * 100).toFixed(0)}% revenue drop still leaves ${label(shockRunway)} of runway — above your ${safety}-month safety line.`
+            ? `✓ A ${(drop * 100).toFixed(0)}% revenue drop still leaves ${label(shockRunway)} of runway - above your ${safety}-month safety line.`
             : `⚠ A ${(drop * 100).toFixed(0)}% drop cuts runway to ${label(shockRunway)}. Cut ${fc(Math.round(cutNeeded))}/mo of cost (or raise cash) to hold the ${safety}-month line.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A first-order stress test: variable cost scales linearly with revenue and fixed cost stays put. Real downturns also stretch receivables — pair this with the Payment-Terms tool.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A first-order stress test: variable cost scales linearly with revenue and fixed cost stays put. Real downturns also stretch receivables - pair this with the Payment-Terms tool.</p>
     </div>
   );
 }
@@ -968,7 +968,7 @@ function RevenueShockStressTest() {
 // ── #95 COST-CUT SAVINGS SIMULATOR ──────────────────────────────────────────
 // Toggle a checklist of common SMB expense lines (each a % of current monthly
 // cost) and watch monthly savings, annual savings, and the runway extension add
-// up — ranked by how painful each cut is.
+// up - ranked by how painful each cut is.
 function CostCutSimulator() {
   const fc = formatCurrency;
   const live = useLiveMonthly();
@@ -1015,7 +1015,7 @@ function CostCutSimulator() {
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly cost (₹)</label><input type="number" value={costInput} onChange={e => setCost(e.target.value)} placeholder={`Auto: ${fc(live.monthlyCost)}`} className={INP} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly revenue (₹)</label><input type="number" value={revInput} onChange={e => setRev(e.target.value)} placeholder={`Auto: ${fc(live.monthlyRevenue)}`} className={INP} /></div>
         </div>
-        <p className="text-[10px] text-[var(--color-muted)]">Tick the cuts you're willing to make — each is sized as a share of your current monthly cost. Cuts are ranked least to most painful.</p>
+        <p className="text-[10px] text-[var(--color-muted)]">Tick the cuts you're willing to make - each is sized as a share of your current monthly cost. Cuts are ranked least to most painful.</p>
       </div>
 
       <div className={`${CARD} space-y-2`}>
@@ -1057,7 +1057,7 @@ function CostCutSimulator() {
           </p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative percentages — replace with your real line items for an exact plan. High-pain cuts (payroll, rent) carry morale and continuity costs not shown here.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative percentages - replace with your real line items for an exact plan. High-pain cuts (payroll, rent) carry morale and continuity costs not shown here.</p>
     </div>
   );
 }
@@ -1155,7 +1155,7 @@ function ProductLaunchModel() {
         <p className={`text-sm font-bold ${profitable ? "text-green-400" : "text-red-400"}`}>
           {profitable
             ? `✓ The launch recovers its ${fc(F)} upfront${paybackMonth ? ` by month ${paybackMonth}` : ""} and contributes ${fc(Math.round(endCumulative))} net cash over ${H} months.`
-            : `⚠ Over ${H} months the launch is still ${fc(Math.abs(Math.round(endCumulative)))} underwater — slow the ramp assumptions or cut launch cost before committing.`}
+            : `⚠ Over ${H} months the launch is still ${fc(Math.abs(Math.round(endCumulative)))} underwater - slow the ramp assumptions or cut launch cost before committing.`}
         </p>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Contribution model: fixed overheads beyond the upfront spend are not re-charged here. Validate the ramp curve and cannibalization rate against a small pilot.</p>
@@ -1247,10 +1247,10 @@ function SupplierPriceRiseImpact() {
         <p className={`text-sm font-bold ${stillProfitable ? "text-orange-400" : "text-red-400"}`}>
           {stillProfitable
             ? `A ${(rise * 100).toFixed(0)}% supplier hike costs ${fc(Math.round(annualProfitHit))}/yr in profit. Raise price ${passThroughPct.toFixed(1)}% (to ${fc(Math.round(passThroughPrice))}) to fully recover it, or absorb the ${newMarginPct.toFixed(1)}% margin.`
-            : `⚠ At a ${(rise * 100).toFixed(0)}% hike your unit margin turns negative — you must raise price, re-source, or drop this line.`}
+            : `⚠ At a ${(rise * 100).toFixed(0)}% hike your unit margin turns negative - you must raise price, re-source, or drop this line.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Pass-through restores rupee margin per unit; it assumes demand holds at the higher price — stress that with the Price-Change Profit tool's elasticity.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Pass-through restores rupee margin per unit; it assumes demand holds at the higher price - stress that with the Price-Change Profit tool's elasticity.</p>
     </div>
   );
 }
@@ -1297,10 +1297,10 @@ function PaymentTermsCashImpact() {
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly cost (₹)</label><input type="number" value={costInput} onChange={e => setCost(e.target.value)} placeholder={`Auto: ${fc(live.monthlyCost)}`} className={INP} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">WC interest %</label><input type="number" value={wcRate} onChange={e => setRate(e.target.value)} className={INP} /></div>
           <div />
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Customer days (DSO) — now</label><input type="number" value={dsoOld} onChange={e => setDsoOld(e.target.value)} className={INP} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Customer days (DSO) — new</label><input type="number" value={dsoNew} onChange={e => setDsoNew(e.target.value)} className={INP} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Supplier days (DPO) — now</label><input type="number" value={dpoOld} onChange={e => setDpoOld(e.target.value)} className={INP} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Supplier days (DPO) — new</label><input type="number" value={dpoNew} onChange={e => setDpoNew(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Customer days (DSO) - now</label><input type="number" value={dsoOld} onChange={e => setDsoOld(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Customer days (DSO) - new</label><input type="number" value={dsoNew} onChange={e => setDsoNew(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Supplier days (DPO) - now</label><input type="number" value={dpoOld} onChange={e => setDpoOld(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Supplier days (DPO) - new</label><input type="number" value={dpoNew} onChange={e => setDpoNew(e.target.value)} className={INP} /></div>
         </div>
         <p className="text-[10px] text-[var(--color-muted)]">Collecting sooner (lower DSO) and paying later (higher DPO) both free one-time cash. Cash-conversion cycle = DSO − DPO.</p>
       </div>
@@ -1334,7 +1334,7 @@ function PaymentTermsCashImpact() {
       <div className={`rounded-lg p-4 border ${positive ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
         <p className={`text-sm font-bold ${positive ? "text-green-400" : "text-red-400"}`}>
           {positive
-            ? `✓ These terms free ${fc(Math.round(cashFreed))} of one-time cash and save ${fc(Math.round(interestSaved))}/yr in working-capital interest — CCC drops ${(oldCcc - newCcc).toFixed(0)} days.`
+            ? `✓ These terms free ${fc(Math.round(cashFreed))} of one-time cash and save ${fc(Math.round(interestSaved))}/yr in working-capital interest - CCC drops ${(oldCcc - newCcc).toFixed(0)} days.`
             : `⚠ These terms lock up ${fc(Math.abs(Math.round(cashFreed)))} more cash and lengthen your cash-conversion cycle. Re-check the DSO/DPO direction.`}
         </p>
       </div>
@@ -1431,11 +1431,11 @@ function MarketingRoiScenario() {
           {profitableFirst
             ? `✓ This spend pays back on the first order (${roasFirst.toFixed(2)}× ROAS) and nets ${fc(Math.round(netLtv))} over the customer lifetime.`
             : profitableLtv
-              ? `Loses ${fc(Math.abs(Math.round(netFirst)))} on first orders but turns ${fc(Math.round(netLtv))} profit once repeat orders land — viable only if retention holds (LTV:CAC ${ltvCacRatio.toFixed(1)}×).`
-              : `⚠ Even with lifetime value this spend loses ${fc(Math.abs(Math.round(netLtv)))} — lower CPL, lift conversion, or raise AOV before scaling.`}
+              ? `Loses ${fc(Math.abs(Math.round(netFirst)))} on first orders but turns ${fc(Math.round(netLtv))} profit once repeat orders land - viable only if retention holds (LTV:CAC ${ltvCacRatio.toFixed(1)}×).`
+              : `⚠ Even with lifetime value this spend loses ${fc(Math.abs(Math.round(netLtv)))} - lower CPL, lift conversion, or raise AOV before scaling.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">CPL and conversion are the most fragile inputs — small swings flip ROI. Test with a small budget before committing the full spend.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">CPL and conversion are the most fragile inputs - small swings flip ROI. Test with a small budget before committing the full spend.</p>
     </div>
   );
 }
@@ -1522,7 +1522,7 @@ function CapexBuyVsLease() {
             {[
               { label: "Gross cash out", buy: fc(Math.round(A)), loan: fc(Math.round(A + totalInterest)), lease: fc(Math.round(totalLease)) },
               { label: "Tax shield", buy: `−${fc(Math.round(deprShield))}`, loan: `−${fc(Math.round(deprShield + interestShield))}`, lease: `−${fc(Math.round(leaseShield))}` },
-              { label: "Less: salvage", buy: `−${fc(Math.round(salvage))}`, loan: `−${fc(Math.round(salvage))}`, lease: "—" },
+              { label: "Less: salvage", buy: `−${fc(Math.round(salvage))}`, loan: `−${fc(Math.round(salvage))}`, lease: "-" },
               { label: "Net cost", buy: fc(Math.round(buyNet)), loan: fc(Math.round(loanNet)), lease: fc(Math.round(leaseNet)), bold: true },
             ].map(r => (
               <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
@@ -1566,7 +1566,7 @@ function DebtVsEquityRaise() {
   const pre  = (parseFloat(preMoney) || 0) * 1e7;
   const exit = (parseFloat(exitVal) || 0) * 1e7;
 
-  // DEBT — reducing-balance EMI (standard term loan), interest is tax-deductible.
+  // DEBT - reducing-balance EMI (standard term loan), interest is tax-deductible.
   const monthlyRate = r / 12;
   const n = Math.round(yrs * 12);
   const emi = monthlyRate > 0
@@ -1577,7 +1577,7 @@ function DebtVsEquityRaise() {
   const interestShield = totalInterest * tax;
   const debtNetCost    = totalInterest - interestShield;  // principal nets out vs the capital received
 
-  // EQUITY — investor takes amount / post-money; founder keeps the rest. The
+  // EQUITY - investor takes amount / post-money; founder keeps the rest. The
   // "cost" of equity is the exit value of the slice given away.
   const post        = pre + A;
   const investorPct = post > 0 ? A / post : 0;
@@ -1621,7 +1621,7 @@ function DebtVsEquityRaise() {
           <tbody>
             {[
               { label: "Cash repaid / out", b: fc(Math.round(totalRepaid)), a: "₹0 (no repayment)" },
-              { label: "Tax shield", b: `−${fc(Math.round(interestShield))}`, a: "—" },
+              { label: "Tax shield", b: `−${fc(Math.round(interestShield))}`, a: "-" },
               { label: "Ownership kept", b: "100%", a: `${(founderKept * 100).toFixed(1)}%` },
               { label: "True cost", b: fc(Math.round(debtNetCost)), a: fc(Math.round(equityCostAtExit)), bold: true },
             ].map(row => (
@@ -1638,18 +1638,18 @@ function DebtVsEquityRaise() {
       <div className={`rounded-lg p-4 border ${debtCheaper ? "border-blue-800/40 bg-blue-950/20" : "border-purple-800/40 bg-purple-950/20"}`}>
         <p className={`text-sm font-bold ${debtCheaper ? "text-blue-400" : "text-purple-400"}`}>
           {debtCheaper
-            ? `✓ Debt is cheaper here: ${fc(Math.round(debtNetCost))} net interest vs ${fc(Math.round(equityCostAtExit))} of equity value at exit — if your cash flow can carry ${fc(Math.round(emi))}/mo EMIs.`
-            : `✓ Equity costs less long-run (${fc(Math.round(equityCostAtExit))} vs ${fc(Math.round(debtNetCost))} debt) — but only if you're comfortable diluting ${(investorPct * 100).toFixed(1)}% and the exit value materialises.`}
+            ? `✓ Debt is cheaper here: ${fc(Math.round(debtNetCost))} net interest vs ${fc(Math.round(equityCostAtExit))} of equity value at exit - if your cash flow can carry ${fc(Math.round(emi))}/mo EMIs.`
+            : `✓ Equity costs less long-run (${fc(Math.round(equityCostAtExit))} vs ${fc(Math.round(debtNetCost))} debt) - but only if you're comfortable diluting ${(investorPct * 100).toFixed(1)}% and the exit value materialises.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Equity "cost" is the exit value of the slice given away — it's only paid if you exit at the assumed valuation. Debt is a hard obligation regardless of outcome. Run the Funding-Dilution tool for the full cap table.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Equity "cost" is the exit value of the slice given away - it's only paid if you exit at the assumed valuation. Debt is a hard obligation regardless of outcome. Run the Funding-Dilution tool for the full cap table.</p>
     </div>
   );
 }
 
 // ── #102 TOP-CLIENT LOSS IMPACT (REVENUE CONCENTRATION) ─────────────────────
-// Quantifies the cash hit if your largest customer leaves — sized from your real
-// invoiced revenue per customer where available — and the runway and recovery
+// Quantifies the cash hit if your largest customer leaves - sized from your real
+// invoiced revenue per customer where available - and the runway and recovery
 // (new customers needed) implied by the loss.
 function TopClientLossImpact() {
   const { store } = useApp();
@@ -1709,7 +1709,7 @@ function TopClientLossImpact() {
         </div>
         {top
           ? <p className="text-[10px] text-[var(--color-muted)]">Top customer <span className="text-[var(--color-text)] font-medium">{top.name}</span> is {(topShare * 100).toFixed(0)}% of invoiced revenue ({fc(Math.round(top.total))}). Default loss = their share of live monthly revenue.</p>
-          : <p className="text-[10px] text-[var(--color-muted)]">No invoices found — enter the lost monthly revenue manually. Live monthly revenue ≈ {fc(live.monthlyRevenue)}.</p>}
+          : <p className="text-[10px] text-[var(--color-muted)]">No invoices found - enter the lost monthly revenue manually. Live monthly revenue ≈ {fc(live.monthlyRevenue)}.</p>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1717,7 +1717,7 @@ function TopClientLossImpact() {
           { label: "Revenue concentration", value: `${(topShare * 100).toFixed(0)}%`, color: concentrated ? "text-red-400" : "text-green-400" },
           { label: "Margin lost / mo", value: `−${fc(Math.round(marginLost))}`, color: "text-red-400" },
           { label: "Runway after loss", value: label(newRunway), color: newRunway === Infinity ? "text-green-400" : newRunway < 6 ? "text-red-400" : "text-[var(--color-text)]" },
-          { label: "Customers to replace", value: replacementsNeeded > 0 ? `~${replacementsNeeded}` : "—", color: "text-[var(--color-text)]" },
+          { label: "Customers to replace", value: replacementsNeeded > 0 ? `~${replacementsNeeded}` : "-", color: "text-[var(--color-text)]" },
         ].map(card => (
           <div key={card.label} className={CARD}>
             <p className="text-xs text-[var(--color-muted)] mb-1">{card.label}</p>
@@ -1750,7 +1750,7 @@ function TopClientLossImpact() {
         <p className={`text-sm font-bold ${concentrated || newRunway < 6 ? "text-red-400" : "text-green-400"}`}>
           {concentrated
             ? `⚠ ${(topShare * 100).toFixed(0)}% of revenue rides on one client. Losing them costs ${fc(Math.round(marginLost))}/mo of margin and ${newRunway === Infinity ? "keeps you cash-positive" : `drops runway to ${label(newRunway)}`}. Diversify before they hold pricing leverage.`
-            : `✓ No single client dominates (${(topShare * 100).toFixed(0)}% top share). Even losing the largest leaves ${newRunway === Infinity ? "you cash-positive" : `${label(newRunway)} of runway`} — healthy revenue diversification.`}
+            : `✓ No single client dominates (${(topShare * 100).toFixed(0)}% top share). Even losing the largest leaves ${newRunway === Infinity ? "you cash-positive" : `${label(newRunway)} of runway`} - healthy revenue diversification.`}
         </p>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Concentration above ~25% in one customer is a recognised risk flag. Replacement count assumes new clients average the size of your existing non-top accounts.</p>
@@ -1861,7 +1861,7 @@ function SalaryHikeAffordability() {
 // ── #104 INVENTORY BUILD-UP CASH IMPACT ─────────────────────────────────────
 // Stocking up (for a festival, a bulk discount, or longer lead times) locks cash
 // in inventory. Shows the cash tied up, the carrying cost, and any bulk-discount
-// saving — netting to whether the build-up pays for itself.
+// saving - netting to whether the build-up pays for itself.
 function InventoryBuildupImpact() {
   const fc = formatCurrency;
   const live = useLiveMonthly();
@@ -1896,8 +1896,8 @@ function InventoryBuildupImpact() {
         <h3 className="text-sm font-semibold flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Inventory Build-up Cash Impact</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly COGS (₹)</label><input type="number" value={monthlyCogsInput} onChange={e => setCogs(e.target.value)} placeholder={`Auto: ${fc(suggestedCogs)}`} className={INP} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Days inventory — now</label><input type="number" value={dioOld} onChange={e => setDioOld(e.target.value)} className={INP} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Days inventory — target</label><input type="number" value={dioNew} onChange={e => setDioNew(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Days inventory - now</label><input type="number" value={dioOld} onChange={e => setDioOld(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Days inventory - target</label><input type="number" value={dioNew} onChange={e => setDioNew(e.target.value)} className={INP} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Carrying cost % / yr</label><input type="number" value={carryPct} onChange={e => setCarry(e.target.value)} className={INP} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Bulk discount %</label><input type="number" value={discountPct} onChange={e => setDisc(e.target.value)} className={INP} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Cash on hand (₹)</label><input type="number" value={cashInput} onChange={e => setCash(e.target.value)} placeholder={`Auto: ${fc(live.cashOnHand)}`} className={INP} /></div>
@@ -1927,7 +1927,7 @@ function InventoryBuildupImpact() {
               { label: "Days of inventory", b: `${parseFloat(dioOld) || 0} d`, a: `${parseFloat(dioNew) || 0} d` },
               { label: "Inventory value", b: fc(Math.round((parseFloat(dioOld) || 0) * dailyCogs)), a: fc(Math.round((parseFloat(dioNew) || 0) * dailyCogs)) },
               { label: "Cash on hand", b: fc(Math.round(cash)), a: fc(Math.round(cashAfter)) },
-              { label: "Net annual benefit", b: "—", a: `${netAnnual >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(netAnnual)))}`, bold: true },
+              { label: "Net annual benefit", b: "-", a: `${netAnnual >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(netAnnual)))}`, bold: true },
             ].map(row => (
               <tr key={row.label} className={`border-b border-[var(--color-border)] last:border-0 ${row.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
                 <td className="px-4 py-2.5">{row.label}</td>
@@ -1942,9 +1942,9 @@ function InventoryBuildupImpact() {
       <div className={`rounded-lg p-4 border ${!affordsIt ? "border-red-800/40 bg-red-950/20" : worthwhile ? "border-green-800/40 bg-green-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
         <p className={`text-sm font-bold ${!affordsIt ? "text-red-400" : worthwhile ? "text-green-400" : "text-orange-400"}`}>
           {!affordsIt
-            ? `⚠ Building to ${parseFloat(dioNew) || 0} days locks ${fc(Math.round(cashLocked))} — more than your ${fc(Math.round(cash))} cash. Scale the build-up back or fund it with a working-capital line.`
+            ? `⚠ Building to ${parseFloat(dioNew) || 0} days locks ${fc(Math.round(cashLocked))} - more than your ${fc(Math.round(cash))} cash. Scale the build-up back or fund it with a working-capital line.`
             : worthwhile
-              ? `✓ The bulk discount (${fc(Math.round(bulkSaving))}/yr) beats the carrying cost (${fc(Math.round(carryingCost))}/yr) by ${fc(Math.round(netAnnual))} — the build-up pays for itself. ${fc(Math.round(cashLocked))} of cash is tied up.`
+              ? `✓ The bulk discount (${fc(Math.round(bulkSaving))}/yr) beats the carrying cost (${fc(Math.round(carryingCost))}/yr) by ${fc(Math.round(netAnnual))} - the build-up pays for itself. ${fc(Math.round(cashLocked))} of cash is tied up.`
               : `⚠ Carrying cost (${fc(Math.round(carryingCost))}/yr) exceeds the bulk saving (${fc(Math.round(bulkSaving))}/yr) by ${fc(Math.abs(Math.round(netAnnual)))}. Only build up if it's for demand/lead-time cover, not the discount.`}
         </p>
       </div>
@@ -1991,7 +1991,7 @@ function FxRateShock() {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">USD revenue / mo ($)</label><input type="number" value={usdRevenue} onChange={e => setUsdRev(e.target.value)} className={INP} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">USD cost / mo ($)</label><input type="number" value={usdCost} onChange={e => setUsdCost(e.target.value)} className={INP} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">INR per USD — now</label><input type="number" value={rateNow} onChange={e => setRateNow(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">INR per USD - now</label><input type="number" value={rateNow} onChange={e => setRateNow(e.target.value)} className={INP} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Rate move % (− = ₹ strengthens)</label><input type="number" value={shockPct} onChange={e => setShock(e.target.value)} className={INP} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Contribution margin %</label><input type="number" value={marginPct} onChange={e => setMargin(e.target.value)} className={INP} /></div>
         </div>
@@ -2020,7 +2020,7 @@ function FxRateShock() {
               { label: "USD revenue in ₹", b: fc(Math.round(usdRev * rate)), a: fc(Math.round(usdRev * newRate)) },
               { label: "USD cost in ₹",    b: fc(Math.round(usdC * rate)),   a: fc(Math.round(usdC * newRate)) },
               { label: "Net ₹ from FX",    b: fc(Math.round(inrNow)),        a: fc(Math.round(inrNew)) },
-              { label: "Margin impact / mo", b: "—", a: `${marginSwing >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(marginSwing)))}`, bold: true },
+              { label: "Margin impact / mo", b: "-", a: `${marginSwing >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(marginSwing)))}`, bold: true },
             ].map(row => (
               <tr key={row.label} className={`border-b border-[var(--color-border)] last:border-0 ${row.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
                 <td className="px-4 py-2.5">{row.label}</td>
@@ -2039,7 +2039,7 @@ function FxRateShock() {
             : `⚠ This ${Math.abs(shock * 100).toFixed(0)}% rate move costs ${fc(Math.abs(Math.round(annualSwing)))}/yr on your $${Math.round(netUsd).toLocaleString("en-IN")} net exposure (${fc(Math.round(exposureInr))} at risk). A forward or option hedge would cap this downside.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A single-rate sensitivity, not a hedge price. Forward/option premiums, settlement timing and GIFT-City routing aren't priced here — confirm cover with your banker.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A single-rate sensitivity, not a hedge price. Forward/option premiums, settlement timing and GIFT-City routing aren't priced here - confirm cover with your banker.</p>
     </div>
   );
 }
@@ -2119,8 +2119,8 @@ function AutomationRoiScenario() {
       <div className={`rounded-lg p-4 border ${worth ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
         <p className={`text-sm font-bold ${worth ? "text-green-400" : "text-red-400"}`}>
           {worth
-            ? `✓ This automation pays for itself in ${paybackLbl} and nets ${fc(Math.round(annualNet))}/yr — a clear win at these volumes.`
-            : `⚠ Net saving is ${fc(Math.round(netSaving))}/mo — the upkeep eats the gain. Increase hours saved or cut recurring cost before committing.`}
+            ? `✓ This automation pays for itself in ${paybackLbl} and nets ${fc(Math.round(annualNet))}/yr - a clear win at these volumes.`
+            : `⚠ Net saving is ${fc(Math.round(netSaving))}/mo - the upkeep eats the gain. Increase hours saved or cut recurring cost before committing.`}
         </p>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Assumes freed hours convert to real cost savings (redeployment or headcount avoidance). Ramp-up, training time and reliability risk aren't modelled.</p>
@@ -2209,10 +2209,10 @@ function ChurnIncreaseImpact() {
         <p className={`text-sm font-bold ${severe ? "text-red-400" : "text-orange-400"}`}>
           {severe
             ? `⚠ A ${(parseFloat(delta) || 0)}-point churn rise cuts avg lifetime to ${lifeLbl(life1)} and drains ${fc(Math.round(mrrGap12))} of MRR within a year. Retention is now your highest-leverage lever.`
-            : `A ${(parseFloat(delta) || 0)}-point churn rise trims lifetime to ${lifeLbl(life1)} — manageable, but watch the LTV/CAC ratio as it compounds.`}
+            : `A ${(parseFloat(delta) || 0)}-point churn rise trims lifetime to ${lifeLbl(life1)} - manageable, but watch the LTV/CAC ratio as it compounds.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Simple geometric-decay model with no new-customer acquisition or discounting. Cohort behaviour and seasonality aren't modelled — use as a directional sensitivity.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Simple geometric-decay model with no new-customer acquisition or discounting. Cohort behaviour and seasonality aren't modelled - use as a directional sensitivity.</p>
     </div>
   );
 }
@@ -2300,11 +2300,11 @@ function CapacityExpansionModel() {
       <div className={`rounded-lg p-4 border ${worth ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
         <p className={`text-sm font-bold ${worth ? "text-green-400" : "text-red-400"}`}>
           {worth
-            ? `✓ At ${(u * 100).toFixed(0)}% utilisation the expansion adds ${fc(Math.round(annualProfit))}/yr and pays back in ${paybackLbl}. Demand cover above ${breakEvenUtil === Infinity ? "—" : `${breakEvenUtil.toFixed(0)}%`} keeps it profitable.`
-            : `⚠ At ${(u * 100).toFixed(0)}% utilisation this expansion ${addProfit < 0 ? "loses money" : `pays back only in ${paybackLbl}`}. You need utilisation above ${breakEvenUtil === Infinity ? "—" : `${breakEvenUtil.toFixed(0)}%`} just to cover the added fixed cost.`}
+            ? `✓ At ${(u * 100).toFixed(0)}% utilisation the expansion adds ${fc(Math.round(annualProfit))}/yr and pays back in ${paybackLbl}. Demand cover above ${breakEvenUtil === Infinity ? "-" : `${breakEvenUtil.toFixed(0)}%`} keeps it profitable.`
+            : `⚠ At ${(u * 100).toFixed(0)}% utilisation this expansion ${addProfit < 0 ? "loses money" : `pays back only in ${paybackLbl}`}. You need utilisation above ${breakEvenUtil === Infinity ? "-" : `${breakEvenUtil.toFixed(0)}%`} just to cover the added fixed cost.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Steady-state model — ramp-up to full utilisation, financing cost on the capex and demand risk aren't included. Stress-test the utilisation assumption above.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Steady-state model - ramp-up to full utilisation, financing cost on the capex and demand risk aren't included. Stress-test the utilisation assumption above.</p>
     </div>
   );
 }
@@ -2396,11 +2396,11 @@ function CostInflationPassthrough() {
       <div className={`rounded-lg p-4 border ${protectsMargin ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
         <p className={`text-sm font-bold ${protectsMargin ? "text-green-400" : "text-red-400"}`}>
           {protectsMargin
-            ? `✓ Passing ${(pass * 100).toFixed(0)}% holds margin near ${newMarginPct.toFixed(1)}% with only a ${priceUpPct.toFixed(1)}% price rise — likely palatable to customers.`
-            : `⚠ Passing only ${(pass * 100).toFixed(0)}% drops margin to ${newMarginPct.toFixed(1)}% and cuts profit by ${fc(Math.abs(Math.round(profitDiff)))}/mo. Full recovery needs a ${fullHikePct.toFixed(1)}% hike — test price sensitivity first.`}
+            ? `✓ Passing ${(pass * 100).toFixed(0)}% holds margin near ${newMarginPct.toFixed(1)}% with only a ${priceUpPct.toFixed(1)}% price rise - likely palatable to customers.`
+            : `⚠ Passing only ${(pass * 100).toFixed(0)}% drops margin to ${newMarginPct.toFixed(1)}% and cuts profit by ${fc(Math.abs(Math.round(profitDiff)))}/mo. Full recovery needs a ${fullHikePct.toFixed(1)}% hike - test price sensitivity first.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Holds volume constant — a real price rise may reduce demand (see the Price-Change Profit tool for the elasticity trade-off). Models variable cost only.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Holds volume constant - a real price rise may reduce demand (see the Price-Change Profit tool for the elasticity trade-off). Models variable cost only.</p>
     </div>
   );
 }

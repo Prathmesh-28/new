@@ -177,9 +177,9 @@ export interface AgingBucket { label: string; amount: number; count: number }
 export function agingBuckets(invoices: Invoice[], today = new Date()): AgingBucket[] {
   const buckets: AgingBucket[] = [
     { label: "Not due", amount: 0, count: 0 },
-    { label: "1–30 days", amount: 0, count: 0 },
-    { label: "31–60 days", amount: 0, count: 0 },
-    { label: "61–90 days", amount: 0, count: 0 },
+    { label: "1-30 days", amount: 0, count: 0 },
+    { label: "31-60 days", amount: 0, count: 0 },
+    { label: "61-90 days", amount: 0, count: 0 },
     { label: "90+ days", amount: 0, count: 0 },
   ];
   const t = iso(today);
@@ -194,7 +194,7 @@ export function agingBuckets(invoices: Invoice[], today = new Date()): AgingBuck
 
 // ── Concentration risk ────────────────────────────────────────────────────────
 
-/** Herfindahl–Hirschman Index on revenue shares (0–10,000). >2,500 = concentrated. */
+/** Herfindahl-Hirschman Index on revenue shares (0-10,000). >2,500 = concentrated. */
 export function hhi(amounts: number[]): number {
   const total = amounts.reduce((a, b) => a + b, 0);
   if (total <= 0) return 0;
@@ -234,7 +234,7 @@ export interface AdvanceTaxInstallment {
 /** Indian advance-tax schedule (§208/211): 15% / 45% / 75% / 100% by Jun/Sep/Dec/Mar 15. Corporate rate 25%. */
 export function advanceTaxSchedule(estAnnualProfit: number, today = new Date(), taxRatePct = 25): AdvanceTaxInstallment[] {
   const tax = Math.max(0, estAnnualProfit) * (taxRatePct / 100);
-  // Financial year: Apr–Mar. FY start year:
+  // Financial year: Apr-Mar. FY start year:
   const fyStart = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
   const defs = [
     { label: "Q1 · 15 Jun", date: new Date(fyStart, 5, 15), pct: 15 },
@@ -302,7 +302,7 @@ export function dilution(preMoney: number, raiseAmount: number): { postMoney: nu
 export interface HealthComponent {
   key: string;
   label: string;
-  score: number;       // 0–100
+  score: number;       // 0-100
   weight: number;      // sums to 100
   detail: string;
   fixPath: string;     // deep link to the module that improves this
@@ -524,7 +524,7 @@ export function financingOptions(gap: number, accountsReceivable: number): Finan
       description: `Advance 80% of ₹${Math.round(accountsReceivable).toLocaleString("en-IN")} receivables · 1.4%/mo`,
       effectiveAnnualCostPct: effectiveAnnualRate(1.4 * 12, 12),
       monthlyCost: financeable * 0.014,
-      speed: "24–48 hrs", path: "/receivables", cta: "Finance receivables",
+      speed: "24-48 hrs", path: "/receivables", cta: "Finance receivables",
     });
   }
 
@@ -534,7 +534,7 @@ export function financingOptions(gap: number, accountsReceivable: number): Finan
     description: "12-month reducing-balance loan @ 18% p.a.",
     effectiveAnnualCostPct: effectiveAnnualRate(18, 12),
     monthlyCost: emi(gap, 18, 12) - gap / 12,
-    speed: "3–5 days", path: "/credit", cta: "Apply for credit",
+    speed: "3-5 days", path: "/credit", cta: "Apply for credit",
   });
 
   // Overdraft / credit line @16% on drawn amount (assume 60% utilization)
@@ -543,13 +543,13 @@ export function financingOptions(gap: number, accountsReceivable: number): Finan
     description: "Pay interest only on what you draw · 16% p.a. (60% avg utilisation)",
     effectiveAnnualCostPct: 16 * 0.6,
     monthlyCost: (gap * 0.6 * 0.16) / 12,
-    speed: "5–7 days", path: "/lenders", cta: "Get lender quotes",
+    speed: "5-7 days", path: "/lenders", cta: "Get lender quotes",
   });
 
   // Stretch payables via supplier early-pay marketplace (give up 2/10 discount = cost)
   opts.push({
     key: "stretch_payables", name: "Negotiate supplier terms",
-    description: "Extend DPO 15 days — forgo 2/10 early-pay discounts (implied cost)",
+    description: "Extend DPO 15 days - forgo 2/10 early-pay discounts (implied cost)",
     effectiveAnnualCostPct: earlyPayAnnualizedReturn(2, 20),
     monthlyCost: (gap * earlyPayAnnualizedReturn(2, 20)) / 100 / 12,
     speed: "Immediate", path: "/suppliers", cta: "Open supplier hub",
@@ -560,7 +560,7 @@ export function financingOptions(gap: number, accountsReceivable: number): Finan
 
 // ── Payment-terms negotiator ──────────────────────────────────────────────────
 // Concrete, named per-counterparty term changes with the cash impact quantified
-// against the business's own receivables/payables — turns the generic DSO/DPO
+// against the business's own receivables/payables - turns the generic DSO/DPO
 // levers into specific asks ("offer Customer X 2/10 net-30", "ask Vendor Y for
 // net-45"). All figures are estimates derived from real transactions/invoices.
 export interface TermSuggestion {
@@ -650,7 +650,7 @@ function formatINR(n: number): string {
 // Derived financial statements
 // Headroom is bank/cash-centric (no general ledger), so we derive the three
 // core statements from transaction data. The Cash Flow Statement uses the
-// DIRECT method — transactions ARE cash movements, so it reconciles exactly.
+// DIRECT method - transactions ARE cash movements, so it reconciles exactly.
 // The Income Statement and Balance Sheet carry a few clearly-labelled estimates
 // (depreciation, income tax, fixed assets) since those aren't captured as data.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -881,7 +881,7 @@ export interface GstLedgerRow {
   taxablePurchases: number;
 }
 
-/** Month-by-month GST position with input-credit carry-forward — a real ledger,
+/** Month-by-month GST position with input-credit carry-forward - a real ledger,
  *  not a single-month snapshot. Returns the most recent `months` entries. */
 export function gstLedger(store: AppStore, ratePct: number, months = 12, today = new Date()): GstLedgerRow[] {
   const rows: GstLedgerRow[] = [];
@@ -948,7 +948,7 @@ export function termSheetMath(input: TermSheetInput): TermSheetResult {
   if (roundType === "rev_share") {
     return {
       postMoney: 0, investorPct: 0, founderPctAfter: 100, optionPoolPct: 0,
-      effectivePreMoney: 0, pricePerShareNote: "No equity issued — revenue-share instrument.",
+      effectivePreMoney: 0, pricePerShareNote: "No equity issued - revenue-share instrument.",
       conversionNote: `Repaid as a fixed share of monthly revenue until ${revShareMultiple}× cap is met.`,
       repaymentTotal: Math.round(investment * revShareMultiple),
     };
@@ -959,7 +959,7 @@ export function termSheetMath(input: TermSheetInput): TermSheetResult {
   const effPre = roundType === "priced" ? preMoney : valuationCap;
   const post = effPre + investment;
   const rawInvestorPct = post > 0 ? (investment / post) * 100 : 0;
-  // Discount only matters for SAFE/convertible — it raises the investor's effective %.
+  // Discount only matters for SAFE/convertible - it raises the investor's effective %.
   const discAdj = (roundType === "safe" || roundType === "convertible") && discountPct > 0
     ? rawInvestorPct / (1 - discountPct / 100)
     : rawInvestorPct;

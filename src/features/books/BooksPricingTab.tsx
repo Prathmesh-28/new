@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES — response shapes mirror backend/src/modules/books/pricing.js
+// TYPES - response shapes mirror backend/src/modules/books/pricing.js
 // (rows come back snake_case; the create/redeem endpoints read camelCase keys).
 // ─────────────────────────────────────────────────────────────────────────────
 interface PricingRule {
@@ -426,7 +426,7 @@ function PricingRulesPanel({ canWrite }: { canWrite: boolean }) {
               {busy ? (
                 <tr><td colSpan={7} className="px-3 py-8 text-center text-[var(--color-muted)]">Loading…</td></tr>
               ) : rules.length === 0 ? (
-                <tr><td colSpan={7} className="px-3 py-8 text-center text-[var(--color-muted)]">No pricing rules yet — create one above.</td></tr>
+                <tr><td colSpan={7} className="px-3 py-8 text-center text-[var(--color-muted)]">No pricing rules yet - create one above.</td></tr>
               ) : (
                 rules.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--color-border)] last:border-b-0">
@@ -446,7 +446,7 @@ function PricingRulesPanel({ canWrite }: { canWrite: boolean }) {
                     <td className="px-3 py-2.5 text-xs">
                       {r.scheme === "bxgy" ? (
                         <span className="inline-flex items-center gap-1"><Gift size={12} /> BXGY</span>
-                      ) : "—"}
+                      ) : "-"}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{String(r.priority)}</td>
                     <td className="px-3 py-2.5 text-right">
@@ -573,7 +573,7 @@ function PricingTestPanel() {
               <tbody>
                 {result.lines.map((l, i) => (
                   <tr key={i} className="border-b border-[var(--color-border)] last:border-b-0">
-                    <td className="px-3 py-2 font-mono text-xs">{l.itemId || "—"}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{l.itemId || "-"}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{String(l.qty ?? "")}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{rupee(l.rate)}</td>
                     <td className="px-3 py-2 text-xs">
@@ -581,7 +581,7 @@ function PricingTestPanel() {
                         <span className="inline-flex items-center gap-1 text-green-400"><Gift size={12} /> Free good</span>
                       ) : l.appliedRuleId ? (
                         <span className="text-[var(--color-primary)]">Rule applied</span>
-                      ) : <span className="text-[var(--color-muted)]">—</span>}
+                      ) : <span className="text-[var(--color-muted)]">-</span>}
                     </td>
                   </tr>
                 ))}
@@ -723,7 +723,7 @@ function CouponRedeemTester() {
         <FlaskConical size={15} className="text-[var(--color-primary)]" /> Redeem tester
       </h3>
       <p className="text-[11px] text-[var(--color-muted)] mb-4">
-        Posts to <code>/coupons/redeem</code> — this counts a real redemption.
+        Posts to <code>/coupons/redeem</code> - this counts a real redemption.
       </p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
@@ -854,7 +854,7 @@ function ShippingPanel() {
         </div>
         {createdId && (
           <p className="text-[11px] text-[var(--color-muted)] mt-3">
-            Created rule id <code className="text-[var(--color-text)]">{createdId}</code> — paste it into the charge tester below.
+            Created rule id <code className="text-[var(--color-text)]">{createdId}</code> - paste it into the charge tester below.
           </p>
         )}
       </div>

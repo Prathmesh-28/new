@@ -5,7 +5,7 @@ import { formatCurrency } from "@/lib/utils";
 import { Gauge, TrendingUp, ArrowRight, Loader2, Sparkles, ShieldCheck } from "lucide-react";
 
 /**
- * Financing readiness — the embedded-working-capital wedge. Runs the same live
+ * Financing readiness - the embedded-working-capital wedge. Runs the same live
  * underwriting engine the lender uses (GET /api/credit/score: revenue, consistency,
  * runway, debt-service, payment behaviour) but PROACTIVELY, before any application,
  * so the owner sees "you're financing-ready for ₹X" + how to lift the score. Pairs
@@ -73,7 +73,7 @@ export default function FinancingReadiness({ onApply }: { onApply?: () => void }
   if (state === "forbidden") return null; // only owner/admin can see the readiness score
   if (state === "error" || !data) return (
     <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-xs text-[var(--color-muted)]">
-      Couldn't compute financing readiness right now — add a few months of transactions and bank balances, then refresh.
+      Couldn't compute financing readiness right now - add a few months of transactions and bank balances, then refresh.
     </div>
   );
 
@@ -125,7 +125,7 @@ export default function FinancingReadiness({ onApply }: { onApply?: () => void }
       <div className="grid grid-cols-3 gap-3 mt-4">
         {[
           { label: "Monthly revenue", value: formatCurrency(Math.round(data.breakdown?.monthly_revenue || 0)) },
-          { label: "Cash runway", value: `${data.breakdown?.runway_months ?? "—"} mo` },
+          { label: "Cash runway", value: `${data.breakdown?.runway_months ?? "-"} mo` },
           { label: "Debt-service ratio", value: `${Math.round((data.breakdown?.debt_service_ratio ?? 0) * 100)}%` },
         ].map(s => (
           <div key={s.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
@@ -162,7 +162,7 @@ export default function FinancingReadiness({ onApply }: { onApply?: () => void }
           </ul>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)] mt-3">Computed live from your cash flows, GST filings and receivables on the same engine lenders underwrite on — no document uploads. Indicative only; final terms depend on the lender.</p>
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Computed live from your cash flows, GST filings and receivables on the same engine lenders underwrite on - no document uploads. Indicative only; final terms depend on the lender.</p>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-// §13.3 (M10) — customer & vendor portals. PUBLIC (no login): access is via an
+// §13.3 (M10) - customer & vendor portals. PUBLIC (no login): access is via an
 // HMAC-signed link token. Customers view/pay an invoice; vendors submit a bill.
 // Also hosts the Razorpay webhook (confirms paid via the API, then posts a receipt).
 const router = require("express").Router();
@@ -71,7 +71,7 @@ router.post("/vendor-bill/:token", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Razorpay webhook — confirm via the API (never trust the raw payload), then post.
+// Razorpay webhook - confirm via the API (never trust the raw payload), then post.
 router.post("/webhook/razorpay", async (req, res) => {
   try {
     const ev = req.body || {};

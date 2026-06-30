@@ -24,7 +24,7 @@ function getToken() {
 }
 
 // Headers identical to what authFetch sends (auth + client id + impersonation), for
-// callers that need a raw fetch — e.g. streaming SSE responses that can't go through
+// callers that need a raw fetch - e.g. streaming SSE responses that can't go through
 // authFetch's JSON parsing.
 export function authHeaders(): Record<string, string> {
   const token = getToken();

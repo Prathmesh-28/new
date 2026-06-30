@@ -1,4 +1,4 @@
-// ERP API — /api/erp — manufacturing: BOMs (with operations + cost rollup +
+// ERP API - /api/erp - manufacturing: BOMs (with operations + cost rollup +
 // multi-level explosion), work orders (lifecycle: transfer → manufacture), job
 // cards (per-operation time logging), material requests + reorder report.
 // Reuses Headroom auth; stock + valuation truth stays in the books module.
@@ -28,7 +28,7 @@ router.get("/work-orders/:id", async (req, res) => { try { res.json(await erp.ge
 router.post("/work-orders", canWrite, async (req, res) => { try { res.status(201).json(await erp.createWorkOrder(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 // lifecycle: transfer materials into WIP (NOT_STARTED → IN_PROCESS)
 router.post("/work-orders/:id/transfer", canWrite, async (req, res) => { try { res.json(await erp.transferMaterials(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
-// lifecycle: manufacture — receive finished good at component+operating cost (→ COMPLETED)
+// lifecycle: manufacture - receive finished good at component+operating cost (→ COMPLETED)
 router.post("/work-orders/:id/manufacture", canWrite, async (req, res) => { try { res.json(await erp.manufacture(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
 // back-compat aliases for the older /start /complete verbs
 router.post("/work-orders/:id/start", canWrite, async (req, res) => { try { res.json(await erp.transferMaterials(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });

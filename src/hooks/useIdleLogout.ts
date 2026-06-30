@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
 
 /**
- * Auto sign-out after a stretch of no user interaction — standard hygiene for a
+ * Auto sign-out after a stretch of no user interaction - standard hygiene for a
  * finance app on a shared or unattended device. The timer resets on pointer,
  * key, touch, scroll, or tab-focus activity. Default: 2 hours (industry norm for
- * non-banking apps — owners often leave Headroom open on a second monitor).
+ * non-banking apps - owners often leave Headroom open on a second monitor).
  */
 export function useIdleLogout(onIdle: () => void, timeoutMs = 2 * 60 * 60 * 1000) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);

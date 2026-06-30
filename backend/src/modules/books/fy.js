@@ -1,4 +1,4 @@
-// §6.3 — Indian financial year runs 1 Apr → 31 Mar. A date in Jan–Mar belongs to
+// §6.3 - Indian financial year runs 1 Apr → 31 Mar. A date in Jan-Mar belongs to
 // the FY that started the previous calendar year. We read the date in UTC so a
 // date-only string ("2026-06-15") never shifts a day due to local timezone.
 function asDate(d) {

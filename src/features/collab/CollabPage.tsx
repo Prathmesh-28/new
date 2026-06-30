@@ -7,7 +7,7 @@ import { humanizeAiError } from "@/components/ai/aiError";
 import { MessageSquare, Hash, Plus, Send, Loader2, Users, X, AtSign, Search, Bell, SmilePlus, MessageCircle, Link2 } from "lucide-react";
 
 /**
- * Headroom Collab — Teams-style messaging.
+ * Headroom Collab - Teams-style messaging.
  *  Phase 1: REST + polling. Phase 2: SSE realtime (per-user fan-out). Phase 3:
  *  reactions, threads, @mentions → notifications, full-text search, pins, and
  *  contextual links to financial objects (the differentiator). Tenant-isolated (RLS)
@@ -123,7 +123,7 @@ export default function CollabPage() {
       return { ...m, reactions: rx.filter((r) => r.userIds.length) };
     });
 
-  // Realtime (SSE) — Phase 2/3 events. On error we recreate the connection reading a FRESH
+  // Realtime (SSE) - Phase 2/3 events. On error we recreate the connection reading a FRESH
   // token (EventSource would otherwise auto-retry the stale token captured in the URL, so a
   // token refresh would silently kill realtime until reload).
   useEffect(() => {
@@ -165,7 +165,7 @@ export default function CollabPage() {
     return () => { closed = true; if (retry) clearTimeout(retry); es?.close(); };
   }, [loadConvos, markTyping]);
 
-  // Slow backstop poll (SSE handles the fast path). Stable interval — reads latest
+  // Slow backstop poll (SSE handles the fast path). Stable interval - reads latest
   // activeId/messages from a ref so it isn't torn down + reset on every message.
   const pollRef = useRef({ activeId, msgsById });
   useEffect(() => { pollRef.current = { activeId, msgsById }; }, [activeId, msgsById]);
@@ -242,7 +242,7 @@ export default function CollabPage() {
     catch (e) { toast.error(humanizeAiError(e)); }
   };
   const linkInvoice = async () => {
-    const id = window.prompt("Link this conversation to an invoice — paste the invoice id:"); if (!id?.trim()) return;
+    const id = window.prompt("Link this conversation to an invoice - paste the invoice id:"); if (!id?.trim()) return;
     try { await api.post(`/api/collab/conversations/${activeId}/links`, { entityType: "invoice", entityId: id.trim() }); setLinks((l) => [{ entity_type: "invoice", entity_id: id.trim() }, ...l]); toast.success("Linked to invoice"); }
     catch (e) { toast.error(humanizeAiError(e)); }
   };
@@ -352,7 +352,7 @@ export default function CollabPage() {
                 </div>
               </div>
               <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
-                {msgs.length === 0 ? <p className="text-center text-xs text-[var(--color-muted)] py-8">No messages yet — say hello 👋</p> :
+                {msgs.length === 0 ? <p className="text-center text-xs text-[var(--color-muted)] py-8">No messages yet - say hello 👋</p> :
                   msgs.filter((m) => !m.parent_message_id).map((m) => (
                     <MessageRow key={m.id} m={m} mine={m.sender_id === myId} myId={myId} senderName={nameOf(m.sender_id)}
                       reactOpen={reactFor === m.id} onReactToggle={() => setReactFor((r) => (r === m.id ? null : m.id))}
@@ -366,7 +366,7 @@ export default function CollabPage() {
                     onChange={(e) => { setDraft(e.target.value); const now = Date.now(); if (activeId && now - lastTypingRef.current > 3000) { lastTypingRef.current = now; api.post(`/api/collab/conversations/${activeId}/typing`, { typing: true }).catch(() => {}); } }}
                     rows={1}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
-                    placeholder={`Message ${title(active)} — @mention a teammate`} className="flex-1 bg-transparent px-2 py-1.5 text-sm outline-none resize-none" />
+                    placeholder={`Message ${title(active)} - @mention a teammate`} className="flex-1 bg-transparent px-2 py-1.5 text-sm outline-none resize-none" />
                   <button onClick={() => void send()} disabled={sending || !draft.trim()} className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-3 py-1.5 hover:opacity-90 disabled:opacity-40">
                     {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                   </button>

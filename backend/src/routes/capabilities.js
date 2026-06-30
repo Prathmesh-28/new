@@ -3,11 +3,11 @@ const router = require("express").Router();
 // Which integrations are actually LIVE vs. running in preview/sample mode.
 // A capability is live only when its backing credential is configured; otherwise
 // the matching feature renders behind a "Preview" badge in the UI so that demos
-// and trials stay honest — no feature that silently returns fake data looks real.
+// and trials stay honest - no feature that silently returns fake data looks real.
 function capabilities() {
   const has = (k) => !!(process.env[k] && String(process.env[k]).trim());
   return {
-    // Core services — typically configured in production
+    // Core services - typically configured in production
     payments:            has("RAZORPAY_KEY_ID"),       // subscription + collections
     ai:                  has("OPENROUTER_API_KEY") || has("GEMINI_API_KEY"), // platform LLM engine (tenants may also BYO-key)
     aiFallback:          has("GEMINI_API_KEY"),         // Gemini safety net when OpenRouter is unset/out-of-credits
@@ -15,7 +15,7 @@ function capabilities() {
     push:                has("FCM_SERVICE_ACCOUNT"),    // mobile push delivery (FCM v1)
     email:               has("SMTP_USER"),
 
-    // Money-movement & data rails — each needs a partner contract + keys
+    // Money-movement & data rails - each needs a partner contract + keys
     bankSync:            has("FINBOX_API_KEY") || has("AA_CLIENT_ID"),
     creditDisbursement:  has("FINBOX_API_KEY"),         // actual loan fund transfer
     bnplPayout:          has("SETU_CLIENT_ID"),          // pay supplier on drawdown
@@ -23,7 +23,7 @@ function capabilities() {
     gstEInvoice:         has("MASTERS_INDIA_API_KEY"),   // real IRN via GSP
     kyc:                 has("KYC_API_KEY"),             // PAN/GSTIN verification
 
-    // Two-sided marketplaces — sample data until partners are onboarded
+    // Two-sided marketplaces - sample data until partners are onboarded
     lenderMarketplace:   false,
     supplierMarketplace: false,
     treasurySweep:       false,

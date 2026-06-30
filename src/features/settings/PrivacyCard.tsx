@@ -46,7 +46,7 @@ export default function PrivacyCard() {
       a.href = url; a.download = "headroom-data.json"; a.click();
       URL.revokeObjectURL(url);
       toast.success("Your data export has downloaded");
-    } catch { toast.error("Export failed — please try again"); }
+    } catch { toast.error("Export failed - please try again"); }
     finally { setBusy(false); }
   };
 
@@ -69,7 +69,7 @@ export default function PrivacyCard() {
         </div>
         <div>
           <h2 className="text-sm font-semibold">Privacy & Data</h2>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Your rights under India's DPDP Act — consent, access and erasure.</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Your rights under India's DPDP Act - consent, access and erasure.</p>
         </div>
       </div>
 

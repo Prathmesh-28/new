@@ -60,7 +60,7 @@ const TABS = [
   ["selfassess", "Control Self-Assessment", ClipboardCheck],
 ] as const;
 
-const DISCLAIMER = "These are heuristic flags — suspects, not verdicts. Confirm with source documents and the counterparty before acting.";
+const DISCLAIMER = "These are heuristic flags - suspects, not verdicts. Confirm with source documents and the counterparty before acting.";
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 type Txn = {
@@ -125,7 +125,7 @@ export default function SecurityPage() {
             <ShieldAlert size={18} className="text-[var(--color-primary)]" /> Fraud, Security &amp; Trust
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Self-checks on your ledger — anomaly, duplicate, round-trip and new-payee detection plus access &amp; hygiene reviews, all computed from live data.
+            Self-checks on your ledger - anomaly, duplicate, round-trip and new-payee detection plus access &amp; hygiene reviews, all computed from live data.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -158,13 +158,13 @@ export default function SecurityPage() {
           <div className={`${CARD} p-5`}>
             <h2 className="text-sm font-semibold mb-2 flex items-center gap-2"><ShieldCheck size={14} className="text-[var(--color-primary)]" /> What this module does</h2>
             <p className="text-xs text-[var(--color-muted)] mb-3">
-              A first line of defence against the payment fraud that hits Indian SMBs hardest: double-pays, business-email-compromise bank reroutes, ghost vendors and structured payments under approval limits. Every tool runs on the same transactions and invoices you already track — nothing leaves your device.
+              A first line of defence against the payment fraud that hits Indian SMBs hardest: double-pays, business-email-compromise bank reroutes, ghost vendors and structured payments under approval limits. Every tool runs on the same transactions and invoices you already track - nothing leaves your device.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {[
                 ["Anomaly Scanner", "Statistical outlier payments worth a second look."],
                 ["Duplicate Payments", "Same payee + amount paid twice in a short window."],
-                ["Round-Trip Detector", "Money out then back from the same party — circular flow."],
+                ["Round-Trip Detector", "Money out then back from the same party - circular flow."],
                 ["New-Payee Watch", "First-time counterparties getting real money."],
                 ["Vendor Bank Change", "Track payee bank details; confirm changes out-of-band."],
                 ["Monitoring Rules", "Your own no-code if-then flags on every transaction."],
@@ -175,7 +175,7 @@ export default function SecurityPage() {
               ].map(([t, d]) => (
                 <div key={t} className="flex items-start gap-2 text-xs py-1.5 border-b border-[var(--color-border)] last:border-0">
                   <CheckCircle2 size={12} className="text-[var(--color-primary)] shrink-0 mt-0.5" />
-                  <span><span className="font-medium text-[var(--color-text)]">{t}</span> — <span className="text-[var(--color-muted)]">{d}</span></span>
+                  <span><span className="font-medium text-[var(--color-text)]">{t}</span> - <span className="text-[var(--color-muted)]">{d}</span></span>
                 </div>
               ))}
             </div>
@@ -262,7 +262,7 @@ function AnomalyScanner({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Activity size={14} className="text-[var(--color-primary)]" /> Statistical Anomaly Scanner</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Flags outgoing payments whose size is far from your typical payment — a classic early signal of a fat-finger error, fraudulent transfer or unusual vendor demand.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Flags outgoing payments whose size is far from your typical payment - a classic early signal of a fat-finger error, fraudulent transfer or unusual vendor demand.</p>
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
             {[
@@ -282,7 +282,7 @@ function AnomalyScanner({ txns }: { txns: Txn[] }) {
       </div>
 
       {flagged.length === 0 ? (
-        <Empty icon={Activity} msg={stats ? "No payments breach the threshold — nothing unusual at this sensitivity." : "No outgoing payments to analyse yet."} />
+        <Empty icon={Activity} msg={stats ? "No payments breach the threshold - nothing unusual at this sensitivity." : "No outgoing payments to analyse yet."} />
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{flagged.length} outlier payment(s)</p></div>
@@ -294,7 +294,7 @@ function AnomalyScanner({ txns }: { txns: Txn[] }) {
                 {flagged.map(r => (
                   <tr key={r.t.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(r.t.date)}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{r.t.counterparty || "—"}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.t.counterparty || "-"}</td>
                     <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(r.t.amount)))}</td>
                     <td className="px-4 py-2.5 tabular-nums text-orange-400">{r.z > 0 ? "+" : ""}{r.z.toFixed(1)}σ</td>
                     <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{r.t.description}</td>
@@ -338,7 +338,7 @@ function DuplicatePaymentDetector({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Copy size={14} className="text-[var(--color-primary)]" /> Duplicate-Payment Detector</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Catches the same payee being paid the same amount more than once inside a short window — the signature of an accidental double-pay or a re-submitted invoice.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Catches the same payee being paid the same amount more than once inside a short window - the signature of an accidental double-pay or a re-submitted invoice.</p>
         <label className="text-xs text-[var(--color-muted)] block mb-1">Window: payments within <strong className="text-[var(--color-text)]">{windowDays} days</strong> count as duplicates</label>
         <input type="range" min={1} max={30} step={1} value={windowDays} onChange={e => setWindowDays(Number(e.target.value))} className="w-full max-w-md accent-[var(--color-primary)]" />
       </div>
@@ -348,7 +348,7 @@ function DuplicatePaymentDetector({ txns }: { txns: Txn[] }) {
       ) : (
         <>
           <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-4">
-            <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {groups.length} suspected duplicate group(s) — up to {formatCurrency(Math.round(exposure))} may be recoverable if these are genuine double-pays.</p>
+            <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {groups.length} suspected duplicate group(s) - up to {formatCurrency(Math.round(exposure))} may be recoverable if these are genuine double-pays.</p>
           </div>
           <div className="space-y-3">
             {groups.map((g, i) => (
@@ -401,7 +401,7 @@ function RoundTripDetector({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Repeat size={14} className="text-[var(--color-primary)]" /> Round-Trip Payment Detector</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Surfaces money paid out to a party and then received back from the same party shortly after — a pattern that can indicate circular billing, fund-parking or shell-entity activity.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Surfaces money paid out to a party and then received back from the same party shortly after - a pattern that can indicate circular billing, fund-parking or shell-entity activity.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Return window: <strong className="text-[var(--color-text)]">{windowDays} days</strong></label>
@@ -464,7 +464,7 @@ function NewPayeeWatch({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><UserPlus size={14} className="text-[var(--color-primary)]" /> New-Payee Watch</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Counterparties you paid for the first time recently. New payees deserve a quick verification — confirm the entity exists and the bank details are correct before the next payment.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Counterparties you paid for the first time recently. New payees deserve a quick verification - confirm the entity exists and the bank details are correct before the next payment.</p>
         <label className="text-xs text-[var(--color-muted)] block mb-1">Show payees first paid in the last <strong className="text-[var(--color-text)]">{lookback} days</strong></label>
         <input type="range" min={7} max={120} step={1} value={lookback} onChange={e => setLookback(Number(e.target.value))} className="w-full max-w-md accent-[var(--color-primary)]" />
       </div>
@@ -516,9 +516,9 @@ function VendorBankChangeFlag({ txns }: { txns: Txn[] }) {
     const key = vendor.trim().toLowerCase();
     const existing = records.find(r => r.vendor.trim().toLowerCase() === key);
     if (existing) {
-      if (existing.account === account.trim() && existing.ifsc === ifsc.trim()) { toast("No change — details already on file"); return; }
+      if (existing.account === account.trim() && existing.ifsc === ifsc.trim()) { toast("No change - details already on file"); return; }
       setRecords(records.map(r => r.id === existing.id ? { ...r, account: account.trim(), ifsc: ifsc.trim(), lastChangedAt: now } : r));
-      toast.warning(`Bank details changed for ${existing.vendor} — verify out-of-band before paying`);
+      toast.warning(`Bank details changed for ${existing.vendor} - verify out-of-band before paying`);
     } else {
       setRecords([...records, { id: crypto.randomUUID(), vendor: vendor.trim(), account: account.trim(), ifsc: ifsc.trim(), recordedAt: now }]);
       toast.success("Vendor bank details recorded");
@@ -532,7 +532,7 @@ function VendorBankChangeFlag({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Vendor Bank-Change Risk Flag</h2>
-        <p className="text-xs text-[var(--color-muted)]">Record each vendor's bank account on file. If you later enter different details for the same vendor, the change is flagged — the textbook sign of business-email-compromise where a fraudster reroutes a genuine vendor's payments.</p>
+        <p className="text-xs text-[var(--color-muted)]">Record each vendor's bank account on file. If you later enter different details for the same vendor, the change is flagged - the textbook sign of business-email-compromise where a fraudster reroutes a genuine vendor's payments.</p>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
           <div className="md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Vendor</label>
@@ -553,7 +553,7 @@ function VendorBankChangeFlag({ txns }: { txns: Txn[] }) {
 
       {changed.length > 0 && (
         <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-4">
-          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {changed.length} vendor(s) changed bank details since first recorded — confirm by phone using a known number, not one from the request.</p>
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {changed.length} vendor(s) changed bank details since first recorded - confirm by phone using a known number, not one from the request.</p>
         </div>
       )}
 
@@ -570,7 +570,7 @@ function VendorBankChangeFlag({ txns }: { txns: Txn[] }) {
                   <tr key={r.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 font-medium text-xs">{r.vendor}</td>
                     <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{r.account}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.ifsc || "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.ifsc || "-"}</td>
                     <td className="px-4 py-2.5">
                       {r.lastChangedAt
                         ? <span className="inline-flex items-center gap-1 text-xs text-red-400 font-semibold"><AlertTriangle size={11} /> Changed {safeFormatDate(r.lastChangedAt.slice(0, 10))}</span>
@@ -631,7 +631,7 @@ function MonitoringRules({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Transaction Monitoring Rules</h2>
-        <p className="text-xs text-[var(--color-muted)]">No-code if-then rules that flag any outgoing transaction crossing a limit or matching a keyword — your own watchlist on top of the automatic detectors.</p>
+        <p className="text-xs text-[var(--color-muted)]">No-code if-then rules that flag any outgoing transaction crossing a limit or matching a keyword - your own watchlist on top of the automatic detectors.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Rule name</label>
@@ -682,7 +682,7 @@ function MonitoringRules({ txns }: { txns: Txn[] }) {
       {rules.filter(r => r.enabled).length === 0 ? (
         <Empty icon={ListChecks} msg="Add a rule to start flagging transactions." />
       ) : hits.length === 0 ? (
-        <Empty icon={CheckCircle2} msg="No transactions match your active rules — all clear." />
+        <Empty icon={CheckCircle2} msg="No transactions match your active rules - all clear." />
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{hits.length} flagged transaction(s)</p></div>
@@ -694,7 +694,7 @@ function MonitoringRules({ txns }: { txns: Txn[] }) {
                 {hits.map(x => (
                   <tr key={x.t.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(x.t.date)}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{x.t.counterparty || "—"}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{x.t.counterparty || "-"}</td>
                     <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(x.t.amount)))}</td>
                     <td className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{x.matched.map(m => <span key={m.id} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{m.name}</span>)}</div></td>
                   </tr>
@@ -751,7 +751,7 @@ function AccessReviewLog() {
 
       {stale.length > 0 && (
         <div className="bg-yellow-950/20 border border-yellow-800/40 rounded-lg p-4">
-          <p className="text-sm font-bold text-yellow-400 flex items-center gap-2"><AlertTriangle size={14} /> {stale.length} access grant(s) not reviewed in over 90 days — re-confirm they are still needed.</p>
+          <p className="text-sm font-bold text-yellow-400 flex items-center gap-2"><AlertTriangle size={14} /> {stale.length} access grant(s) not reviewed in over 90 days - re-confirm they are still needed.</p>
         </div>
       )}
 
@@ -838,7 +838,7 @@ function FraudScorecard({ txns, invoices }: { txns: Txn[]; invoices: { amount: n
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Fraud-Risk Scorecard</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">A single weighted score rolling up every detector on this page. It is a relative health gauge, not an accusation — a high score means it is worth a closer look, not that fraud has occurred.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A single weighted score rolling up every detector on this page. It is a relative health gauge, not an accusation - a high score means it is worth a closer look, not that fraud has occurred.</p>
         <div className="flex items-end gap-4 flex-wrap">
           <div>
             <p className={`text-5xl font-bold tabular-nums ${result.color}`}>{result.score}</p>
@@ -917,7 +917,7 @@ function SuspiciousInvoices({ invoices }: { invoices: Inv[] }) {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {flags.map(f => (
                   <tr key={f.invoice.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 text-xs font-medium">{f.invoice.invoiceNumber || "—"}</td>
+                    <td className="px-4 py-2.5 text-xs font-medium">{f.invoice.invoiceNumber || "-"}</td>
                     <td className="px-4 py-2.5 text-xs">{f.invoice.customer}</td>
                     <td className="px-4 py-2.5 tabular-nums text-xs">{formatCurrency(Math.round(f.invoice.amount))}</td>
                     <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(f.invoice.invoiceDate)}</td>
@@ -939,13 +939,13 @@ const HYGIENE_ITEMS = [
   { id: "2fa", label: "Two-factor authentication enabled on banking & email", why: "Stops most account-takeover attempts cold." },
   { id: "maker-checker", label: "Second approver required for payments above a set limit", why: "A single compromised user can't move large sums alone." },
   { id: "vendor-verify", label: "Vendor bank details verified out-of-band before first payment", why: "Defeats business-email-compromise reroutes." },
-  { id: "access-review", label: "Quarterly access review — leavers removed promptly", why: "Closes the door on ex-staff and stale credentials." },
+  { id: "access-review", label: "Quarterly access review - leavers removed promptly", why: "Closes the door on ex-staff and stale credentials." },
   { id: "recon", label: "Monthly bank-to-ledger reconciliation completed", why: "Surfaces unexplained debits before they compound." },
   { id: "unique-pw", label: "Unique passwords / a password manager in use", why: "Credential reuse is the #1 breach vector." },
   { id: "device-lock", label: "Shared finance devices auto-lock when idle", why: "Prevents walk-up access on shared machines." },
   { id: "backups", label: "Encrypted, tested backups of financial data", why: "Recovery path against ransomware and loss." },
   { id: "least-priv", label: "Staff have least-privilege access (only what they need)", why: "Limits the blast radius of any one account." },
-  { id: "incident-plan", label: "A written who-to-call plan for suspected fraud", why: "Speed matters — recall windows are short." },
+  { id: "incident-plan", label: "A written who-to-call plan for suspected fraud", why: "Speed matters - recall windows are short." },
 ] as const;
 function SecurityChecklist() {
   const [done, setDone] = useFeatureState<Record<string, boolean>>("sec-hygiene", {});
@@ -1010,7 +1010,7 @@ function OffHoursPayments({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Off-Hours &amp; Weekend Payments</h2>
-        <p className="text-xs text-[var(--color-muted)]">Outgoing payments dated on a Saturday or Sunday — when oversight is thinnest. Insider and business-email-compromise fraud disproportionately happens outside business hours, so weekend disbursements are worth a deliberate second look.</p>
+        <p className="text-xs text-[var(--color-muted)]">Outgoing payments dated on a Saturday or Sunday - when oversight is thinnest. Insider and business-email-compromise fraud disproportionately happens outside business hours, so weekend disbursements are worth a deliberate second look.</p>
       </div>
 
       {flagged.length === 0 ? (
@@ -1018,7 +1018,7 @@ function OffHoursPayments({ txns }: { txns: Txn[] }) {
       ) : (
         <>
           <div className="bg-yellow-950/20 border border-yellow-800/40 rounded-lg p-4">
-            <p className="text-sm font-bold text-yellow-400 flex items-center gap-2"><AlertTriangle size={14} /> {flagged.length} weekend payment(s) totalling {formatCurrency(Math.round(total))} — suspects, confirm each was authorised before acting.</p>
+            <p className="text-sm font-bold text-yellow-400 flex items-center gap-2"><AlertTriangle size={14} /> {flagged.length} weekend payment(s) totalling {formatCurrency(Math.round(total))} - suspects, confirm each was authorised before acting.</p>
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
@@ -1030,7 +1030,7 @@ function OffHoursPayments({ txns }: { txns: Txn[] }) {
                     <tr key={r.t.id} className="hover:bg-white/2">
                       <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(r.t.date)}</td>
                       <td className="px-4 py-2.5 text-xs text-yellow-400 font-medium">{r.dow === 0 ? "Sunday" : "Saturday"}</td>
-                      <td className="px-4 py-2.5 font-medium text-xs">{r.t.counterparty || "—"}</td>
+                      <td className="px-4 py-2.5 font-medium text-xs">{r.t.counterparty || "-"}</td>
                       <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(r.t.amount)))}</td>
                       <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{r.t.description}</td>
                     </tr>
@@ -1077,9 +1077,9 @@ function BenfordAudit({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><BarChart3 size={14} className="text-[var(--color-primary)]" /> Benford's-Law Ledger Audit</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">In genuine spend the leading digit follows Benford's distribution — 1 appears about 30% of the time, 9 under 5%. Fabricated or padded numbers tend to break this. A large gap is a prompt to investigate, never proof on its own.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">In genuine spend the leading digit follows Benford's distribution - 1 appears about 30% of the time, 9 under 5%. Fabricated or padded numbers tend to break this. A large gap is a prompt to investigate, never proof on its own.</p>
         {result.n < 50 ? (
-          <p className="text-xs text-[var(--color-muted)]">Need at least 50 outgoing payments for a meaningful test — you have {result.n}.</p>
+          <p className="text-xs text-[var(--color-muted)]">Need at least 50 outgoing payments for a meaningful test - you have {result.n}.</p>
         ) : (
           <div className="flex items-end gap-4 flex-wrap">
             <div><p className={`text-3xl font-bold tabular-nums ${vColor}`}>{result.chi.toFixed(1)}</p><p className="text-xs text-[var(--color-muted)]">χ² statistic (8 d.o.f.)</p></div>
@@ -1152,7 +1152,7 @@ function PaymentVelocity({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Zap size={14} className="text-[var(--color-primary)]" /> Payment Velocity Burst</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Flags a single payee receiving an unusual flurry of payments in a short window — a pattern seen in mule activity, salami-style siphoning and runaway auto-mandates.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Flags a single payee receiving an unusual flurry of payments in a short window - a pattern seen in mule activity, salami-style siphoning and runaway auto-mandates.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Window: <strong className="text-[var(--color-text)]">{windowDays} days</strong></label>
@@ -1222,7 +1222,7 @@ function UnderLimitSplitting({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scissors size={14} className="text-[var(--color-primary)]" /> Under-Limit Splitting Detector</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Surfaces payments that sit just below your approval threshold — the signature of structuring, where a larger payment is split to dodge the second-approver check.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Surfaces payments that sit just below your approval threshold - the signature of structuring, where a larger payment is split to dodge the second-approver check.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Approval limit (₹)</label>
@@ -1237,7 +1237,7 @@ function UnderLimitSplitting({ txns }: { txns: Txn[] }) {
 
       {splits.length > 0 && (
         <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-4">
-          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {splits.length} payee(s) received multiple just-under-limit payments within a week — possible deliberate splitting.</p>
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {splits.length} payee(s) received multiple just-under-limit payments within a week - possible deliberate splitting.</p>
         </div>
       )}
 
@@ -1254,7 +1254,7 @@ function UnderLimitSplitting({ txns }: { txns: Txn[] }) {
                 {justUnder.map(t => (
                   <tr key={t.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "—"}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "-"}</td>
                     <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
                     <td className="px-4 py-2.5 tabular-nums text-orange-400 text-xs">{limit ? Math.round((Math.abs(t.amount) / limit) * 100) : 0}%</td>
                     <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[240px] truncate">{t.description}</td>
@@ -1295,7 +1295,7 @@ function DormantReactivation({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Moon size={14} className="text-[var(--color-primary)]" /> Dormant-Account Reactivation</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Counterparties that went quiet for a long stretch and then suddenly transacted again. Long-idle accounts that reawaken are a known hijack and ghost-vendor signal — verify the party is still who you think before transacting.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Counterparties that went quiet for a long stretch and then suddenly transacted again. Long-idle accounts that reawaken are a known hijack and ghost-vendor signal - verify the party is still who you think before transacting.</p>
         <label className="text-xs text-[var(--color-muted)] block mb-1">Treat a gap of <strong className="text-[var(--color-text)]">{dormantDays} days</strong> or more as dormancy</label>
         <input type="range" min={60} max={540} step={30} value={dormantDays} onChange={e => setDormantDays(Number(e.target.value))} className="w-full max-w-md accent-[var(--color-primary)]" />
       </div>
@@ -1312,7 +1312,7 @@ function DormantReactivation({ txns }: { txns: Txn[] }) {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {reactivated.map((r, i) => (
                   <tr key={i} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium text-xs">{r.party || "—"}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{r.party || "-"}</td>
                     <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(r.lastBefore.date)}</td>
                     <td className="px-4 py-2.5 text-xs text-yellow-400">{safeFormatDate(r.reactivation.date)}</td>
                     <td className="px-4 py-2.5 tabular-nums text-orange-400 text-xs">{r.gapDays} days</td>
@@ -1357,7 +1357,7 @@ function ExpensePolicyFlags({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> Expense-Policy Violation Detector</h2>
-        <p className="text-xs text-[var(--color-muted)]">Checks expense transactions against your own policy — a per-transaction cap, weekend spend, and restricted keywords. Matches are suspects to review against the receipt, not automatic violations.</p>
+        <p className="text-xs text-[var(--color-muted)]">Checks expense transactions against your own policy - a per-transaction cap, weekend spend, and restricted keywords. Matches are suspects to review against the receipt, not automatic violations.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Per-transaction cap (₹)</label>
@@ -1387,7 +1387,7 @@ function ExpensePolicyFlags({ txns }: { txns: Txn[] }) {
                 {flags.map(f => (
                   <tr key={f.t.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(f.t.date)}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{f.t.counterparty || "—"}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{f.t.counterparty || "-"}</td>
                     <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(f.t.amount)))}</td>
                     <td className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{f.reasons.map(r => <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{r}</span>)}</div></td>
                   </tr>
@@ -1428,7 +1428,7 @@ function DutiesSeparation({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> Segregation-of-Duties Checker</h2>
-        <p className="text-xs text-[var(--color-muted)]">Record who creates and who approves payments for each vendor. When the same person does both, no independent check exists — the classic gap that lets a single insider move money unchecked.</p>
+        <p className="text-xs text-[var(--color-muted)]">Record who creates and who approves payments for each vendor. When the same person does both, no independent check exists - the classic gap that lets a single insider move money unchecked.</p>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Vendor / payee</label>
@@ -1449,7 +1449,7 @@ function DutiesSeparation({ txns }: { txns: Txn[] }) {
 
       {conflicts.length > 0 && (
         <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-4">
-          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {conflicts.length} vendor(s) where one person both creates and approves — assign a separate approver.</p>
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {conflicts.length} vendor(s) where one person both creates and approves - assign a separate approver.</p>
         </div>
       )}
 
@@ -1525,7 +1525,7 @@ function VendorDedupe({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><GitMerge size={14} className="text-[var(--color-primary)]" /> Near-Duplicate Vendor Dedupe</h2>
-        <p className="text-xs text-[var(--color-muted)]">Finds vendor names that are suspiciously similar — typos, extra spaces or a swapped suffix. Twin vendor records let the same payee be paid twice or enable split-payment and ghost-vendor padding.</p>
+        <p className="text-xs text-[var(--color-muted)]">Finds vendor names that are suspiciously similar - typos, extra spaces or a swapped suffix. Twin vendor records let the same payee be paid twice or enable split-payment and ghost-vendor padding.</p>
       </div>
 
       {pairs.length === 0 ? (
@@ -1586,7 +1586,7 @@ function RefundAnomalies({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Undo2 size={14} className="text-[var(--color-primary)]" /> Refund-Anomaly Flags</h2>
-        <p className="text-xs text-[var(--color-muted)]">Surfaces refunds, reversals and chargebacks in your ledger and highlights the abuse patterns — the same party refunded repeatedly, round-number refunds and revenue reversals — which can mask skimming or collusion.</p>
+        <p className="text-xs text-[var(--color-muted)]">Surfaces refunds, reversals and chargebacks in your ledger and highlights the abuse patterns - the same party refunded repeatedly, round-number refunds and revenue reversals - which can mask skimming or collusion.</p>
       </div>
 
       {flags.length === 0 ? (
@@ -1594,7 +1594,7 @@ function RefundAnomalies({ txns }: { txns: Txn[] }) {
       ) : (
         <>
           <div className="bg-yellow-950/20 border border-yellow-800/40 rounded-lg p-4">
-            <p className="text-sm font-bold text-yellow-400 flex items-center gap-2"><AlertTriangle size={14} /> {flags.length} refund/reversal entr(ies) totalling {formatCurrency(Math.round(total))} — suspects, confirm against original transactions.</p>
+            <p className="text-sm font-bold text-yellow-400 flex items-center gap-2"><AlertTriangle size={14} /> {flags.length} refund/reversal entr(ies) totalling {formatCurrency(Math.round(total))} - suspects, confirm against original transactions.</p>
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
@@ -1605,7 +1605,7 @@ function RefundAnomalies({ txns }: { txns: Txn[] }) {
                   {flags.map(f => (
                     <tr key={f.t.id} className="hover:bg-white/2">
                       <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(f.t.date)}</td>
-                      <td className="px-4 py-2.5 font-medium text-xs">{f.t.counterparty || "—"}</td>
+                      <td className="px-4 py-2.5 font-medium text-xs">{f.t.counterparty || "-"}</td>
                       <td className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{formatCurrency(Math.round(Math.abs(f.t.amount)))}</td>
                       <td className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{f.reasons.map(r => <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{r}</span>)}</div></td>
                       <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[220px] truncate">{f.t.description}</td>
@@ -1652,7 +1652,7 @@ function RecurringChargeWatch({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><RefreshCw size={14} className="text-[var(--color-primary)]" /> Recurring-Charge Sentinel</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Tracks your recurring outflows — subscriptions and auto-mandates. New recurring debits and quiet price creep are how subscription leakage and unauthorised mandates drain cash unnoticed.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Tracks your recurring outflows - subscriptions and auto-mandates. New recurring debits and quiet price creep are how subscription leakage and unauthorised mandates drain cash unnoticed.</p>
         <div className="grid grid-cols-3 gap-3">
           {[
             { label: "Recurring payees", value: String(result.length), color: "text-[var(--color-text)]" },
@@ -1742,7 +1742,7 @@ function FakeItcRisk({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><FileSearch size={14} className="text-[var(--color-primary)]" /> GST Fake-ITC Risk Flags</h2>
-        <p className="text-xs text-[var(--color-muted)]">Record each supplier's GSTIN, then screen for the structural tells of bogus-firm ITC fraud: malformed GSTINs, impossible state codes, and one GSTIN reused across several "independent" vendors. These are leads to verify on the GST portal — never proof on their own.</p>
+        <p className="text-xs text-[var(--color-muted)]">Record each supplier's GSTIN, then screen for the structural tells of bogus-firm ITC fraud: malformed GSTINs, impossible state codes, and one GSTIN reused across several "independent" vendors. These are leads to verify on the GST portal - never proof on their own.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Supplier</label>
@@ -1759,7 +1759,7 @@ function FakeItcRisk({ txns }: { txns: Txn[] }) {
 
       {risky.length > 0 && (
         <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-4">
-          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {risky.length} supplier GSTIN(s) carry risk markers — verify validity and 2B match before claiming ITC.</p>
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {risky.length} supplier GSTIN(s) carry risk markers - verify validity and 2B match before claiming ITC.</p>
         </div>
       )}
 
@@ -1815,7 +1815,7 @@ function IpAllowlistRegister() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Network size={14} className="text-[var(--color-primary)]" /> IP / Device Allowlist Register</h2>
-        <p className="text-xs text-[var(--color-muted)]">Maintain the office IPs and known devices that should ever touch banking and payment functions. A short, deliberate allowlist shrinks the attack surface — anything outside it is worth a step-up check before it moves money.</p>
+        <p className="text-xs text-[var(--color-muted)]">Maintain the office IPs and known devices that should ever touch banking and payment functions. A short, deliberate allowlist shrinks the attack surface - anything outside it is worth a step-up check before it moves money.</p>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Label</label>
@@ -1895,7 +1895,7 @@ function DataExportAudit() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Download size={14} className="text-[var(--color-primary)]" /> Data-Export Audit Log</h2>
-        <p className="text-xs text-[var(--color-muted)]">Record every bulk export of financial or customer data — who pulled it, what, and why. A standing export log is the cheapest deterrent against insider data exfiltration and the evidence trail a DPDP audit expects.</p>
+        <p className="text-xs text-[var(--color-muted)]">Record every bulk export of financial or customer data - who pulled it, what, and why. A standing export log is the cheapest deterrent against insider data exfiltration and the evidence trail a DPDP audit expects.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Exported by</label>
@@ -1953,7 +1953,7 @@ function DataExportAudit() {
                     <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(l.at.slice(0, 10))}</td>
                     <td className="px-4 py-2.5 font-medium text-xs">{l.who}</td>
                     <td className="px-4 py-2.5 text-xs">{l.what}{l.containsPii && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">PII</span>}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{l.rows || "—"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-xs">{l.rows || "-"}</td>
                     <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[220px] truncate">{l.reason}</td>
                     <td className="px-4 py-2.5 text-right"><button onClick={() => setLogs(logs.filter(x => x.id !== l.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
@@ -1997,7 +1997,7 @@ function KeyRotationReminder() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><KeyRound size={14} className="text-[var(--color-primary)]" /> API-Key / Credential Rotation</h2>
-        <p className="text-xs text-[var(--color-muted)]">Track every API key, bank token and shared password against a rotation schedule. Stale, never-rotated credentials are a quiet liability — this tracker tells you what is overdue before an attacker does.</p>
+        <p className="text-xs text-[var(--color-muted)]">Track every API key, bank token and shared password against a rotation schedule. Stale, never-rotated credentials are a quiet liability - this tracker tells you what is overdue before an attacker does.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Credential</label>
@@ -2017,7 +2017,7 @@ function KeyRotationReminder() {
 
       {overdue > 0 && (
         <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-4">
-          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {overdue} credential(s) overdue for rotation — rotate them now and revoke the old values.</p>
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {overdue} credential(s) overdue for rotation - rotate them now and revoke the old values.</p>
         </div>
       )}
 
@@ -2136,7 +2136,7 @@ function CashSpikeMonitor({ txns }: { txns: Txn[] }) {
                     {result.bigSingles.map(t => (
                       <tr key={t.id} className="hover:bg-white/2">
                         <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
-                        <td className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "—"}</td>
+                        <td className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "-"}</td>
                         <td className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
                         <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{t.description}</td>
                       </tr>
@@ -2176,7 +2176,7 @@ function SensitiveActionLog() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><ScrollText size={14} className="text-[var(--color-primary)]" /> Sensitive-Action Log</h2>
-        <p className="text-xs text-[var(--color-muted)]">An append-style record of the privileged actions that move money or change controls — limit changes, bank-detail edits, access grants, key rotations. Logging them as they happen makes privilege abuse visible and gives auditors a clean trail.</p>
+        <p className="text-xs text-[var(--color-muted)]">An append-style record of the privileged actions that move money or change controls - limit changes, bank-detail edits, access grants, key rotations. Logging them as they happen makes privilege abuse visible and gives auditors a clean trail.</p>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Performed by</label>
@@ -2216,7 +2216,7 @@ function SensitiveActionLog() {
                     <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(l.at.slice(0, 10))}</td>
                     <td className="px-4 py-2.5 font-medium text-xs">{l.actor}</td>
                     <td className="px-4 py-2.5"><span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent)] text-[var(--color-text)] border border-[var(--color-border)]">{l.action}</span></td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[240px] truncate">{l.detail || "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[240px] truncate">{l.detail || "-"}</td>
                     <td className="px-4 py-2.5 text-right"><button onClick={() => setLogs(logs.filter(x => x.id !== l.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
@@ -2251,7 +2251,7 @@ function RoundAmountFlags({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CircleDollarSign size={14} className="text-[var(--color-primary)]" /> Round-Amount Payment Flags</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Genuine invoices rarely land on perfectly round figures. Large payments that are exact multiples of a round step are worth a second look — they correlate with estimates, kickbacks and fabricated bills.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Genuine invoices rarely land on perfectly round figures. Large payments that are exact multiples of a round step are worth a second look - they correlate with estimates, kickbacks and fabricated bills.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Round step: multiples of <strong className="text-[var(--color-text)]">{formatCurrency(step)}</strong></label>
@@ -2269,7 +2269,7 @@ function RoundAmountFlags({ txns }: { txns: Txn[] }) {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
-            <p className="text-sm font-semibold">{flagged.length} round-amount payment(s) — suspects, confirm</p>
+            <p className="text-sm font-semibold">{flagged.length} round-amount payment(s) - suspects, confirm</p>
             <p className="text-xs text-[var(--color-muted)] tabular-nums">{formatCurrency(Math.round(total))} total</p>
           </div>
           <div className="overflow-x-auto">
@@ -2280,7 +2280,7 @@ function RoundAmountFlags({ txns }: { txns: Txn[] }) {
                 {flagged.map(t => (
                   <tr key={t.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "—"}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "-"}</td>
                     <td className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
                     <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{t.description}</td>
                   </tr>
@@ -2335,7 +2335,7 @@ function PayrollVendorBankMatch({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Fingerprint size={14} className="text-[var(--color-primary)]" /> Payroll-vs-Vendor Bank Match</h2>
-        <p className="text-xs text-[var(--color-muted)]">Record your employees' salary bank accounts here. The tool then checks whether any vendor you pay shares an employee's name — a strong sign of a ghost vendor set up to divert funds to staff.</p>
+        <p className="text-xs text-[var(--color-muted)]">Record your employees' salary bank accounts here. The tool then checks whether any vendor you pay shares an employee's name - a strong sign of a ghost vendor set up to divert funds to staff.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Employee name</label>
@@ -2351,7 +2351,7 @@ function PayrollVendorBankMatch({ txns }: { txns: Txn[] }) {
 
       {collisions.length > 0 && (
         <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-4">
-          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {collisions.length} vendor(s) share an employee name — suspects, confirm these are not self-payments.</p>
+          <p className="text-sm font-bold text-red-400 flex items-center gap-2"><AlertTriangle size={14} /> {collisions.length} vendor(s) share an employee name - suspects, confirm these are not self-payments.</p>
           <div className="mt-2 space-y-1">
             {collisions.map((c, i) => (
               <p key={i} className="text-xs text-[var(--color-muted)]">Vendor <span className="text-[var(--color-text)] font-medium">{c.vendor}</span> matches employee <span className="text-[var(--color-text)] font-medium">{c.staff.name}</span></p>
@@ -2419,7 +2419,7 @@ function NewAccountOverLimit({ txns }: { txns: Txn[] }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ShieldQuestion size={14} className="text-[var(--color-primary)]" /> Large Payment to a Brand-New Account</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">A big payment to a counterparty you have only just started paying is the highest-risk combination — exactly how invoice-redirection and advance-fee scams play out. These deserve an out-of-band check before release.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A big payment to a counterparty you have only just started paying is the highest-risk combination - exactly how invoice-redirection and advance-fee scams play out. These deserve an out-of-band check before release.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Amount over <strong className="text-[var(--color-text)]">{formatCurrency(threshold)}</strong></label>
@@ -2436,7 +2436,7 @@ function NewAccountOverLimit({ txns }: { txns: Txn[] }) {
         <Empty icon={ShieldQuestion} msg="No large early-stage payments match these settings." />
       ) : (
         <div className={`${CARD} overflow-hidden`}>
-          <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{flagged.length} high-risk payment(s) — suspects, confirm</p></div>
+          <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{flagged.length} high-risk payment(s) - suspects, confirm</p></div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "New payee", "Amount", "Description"].map(h =>
@@ -2495,7 +2495,7 @@ function ControlSelfAssessment() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> Control Self-Assessment</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">A quick honesty check on the basic financial controls every SMB should have. Answer each one — the maturity score and gap list update live and stay on this device.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A quick honesty check on the basic financial controls every SMB should have. Answer each one - the maturity score and gap list update live and stay on this device.</p>
         <div className="flex items-end gap-4 flex-wrap">
           <div>
             <p className={`text-5xl font-bold tabular-nums ${color}`}>{score}</p>

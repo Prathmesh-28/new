@@ -14,8 +14,8 @@ const LS_KEY   = "hr_store";
 const DEBOUNCE = 400;
 const POLL_MS  = 5000;
 
-const RO_MSG    = "You're viewing a client's data — exit client view to make changes.";
-const VIEWER_MSG = "Your role has read-only access — ask a workspace owner for edit rights.";
+const RO_MSG    = "You're viewing a client's data - exit client view to make changes.";
+const VIEWER_MSG = "Your role has read-only access - ask a workspace owner for edit rights.";
 
 type SetStore = (fn: (s: AppStore) => AppStore) => void;
 
@@ -71,15 +71,15 @@ interface AppCtx {
   addConnector:            (x: AppStore["connectors"][0])          => void;
   updateConnector:         (x: AppStore["connectors"][0])          => void;
   deleteConnector:         (id: string)                            => void;
-  // Operations — Orders
+  // Operations - Orders
   addOrder:                (x: AppStore["orders"][0])              => void;
   updateOrder:             (x: AppStore["orders"][0])              => void;
   deleteOrder:             (id: string)                            => void;
-  // Operations — Inventory
+  // Operations - Inventory
   addInventoryItem:        (x: AppStore["inventory"][0])           => void;
   updateInventoryItem:     (x: AppStore["inventory"][0])           => void;
   deleteInventoryItem:     (id: string)                            => void;
-  // Operations — Procurement
+  // Operations - Procurement
   addProcurement:          (x: AppStore["procurement"][0])         => void;
   updateProcurement:       (x: AppStore["procurement"][0])         => void;
   deleteProcurement:       (id: string)                            => void;
@@ -120,7 +120,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const role = (user?.role ?? "owner") as UserRole;
 
   const [currentRole, setCurrentRole] = useState<UserRole>(role);
-  // "View as" preview — owner/super_admin can render the app as another role sees
+  // "View as" preview - owner/super_admin can render the app as another role sees
   // it. Purely presentational: it gates nav + canAccess but never changes which
   // data namespaces load/persist (those stay on the real role).
   const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
@@ -130,7 +130,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { roleRef.current = currentRole; }, [currentRole]);
   // Keep the acting role in sync with the authenticated user once it resolves. Without
   // this, a user whose auth loaded AFTER the provider's first render (so `role` was the
-  // "owner" fallback) stays stuck on the wrong role — locking a super_admin out of
+  // "owner" fallback) stays stuck on the wrong role - locking a super_admin out of
   // role-gated routes like /admin. ("View as" uses previewRole, so this never fights it.)
   useEffect(() => { if (user?.role) setCurrentRole(user.role); }, [user?.role]);
   const [store, _setStore] = useState<AppStore>(() => {
@@ -162,7 +162,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     _setClientTenantId(tenantId);
     setSelectedClientLabel(label);
     // Carry the opened tenant on every API call so the backend scopes ALL routes
-    // (not just the KV store) to it — full read/write for the super-admin ombudsman.
+    // (not just the KV store) to it - full read/write for the super-admin ombudsman.
     setApiTenant(tenantId);
     // When exiting client view, restore the CA's own data from localStorage
     if (!tenantId) {
@@ -178,7 +178,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [syncStatus, setSyncStatus] = useState<"saved" | "saving" | "error">("saved");
 
   // Celebrate when an invoice transitions to "paid" (e.g. a Razorpay webhook came
-  // through and the poll picked it up) — closes the "did the money land?" loop with
+  // through and the poll picked it up) - closes the "did the money land?" loop with
   // visible feedback. Seeds on first run so we don't toast historical paids on load.
   const paidSeenRef = useRef<Set<string>>(new Set());
   const paidInitRef = useRef(false);
@@ -192,13 +192,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     for (const inv of paidNow) {
       if (!paidSeenRef.current.has(inv.id)) {
         paidSeenRef.current.add(inv.id);
-        toast.success(`Payment received — ₹${Number(inv.amount ?? 0).toLocaleString("en-IN")}${inv.customer ? ` from ${inv.customer}` : ""}`);
+        toast.success(`Payment received - ₹${Number(inv.amount ?? 0).toLocaleString("en-IN")}${inv.customer ? ` from ${inv.customer}` : ""}`);
       }
     }
   }, [store.invoices]);
 
   const persist = useCallback(async (s: AppStore, clientId: string | null) => {
-    // Only cache OWN data locally — never clobber it with an inspected tenant's data.
+    // Only cache OWN data locally - never clobber it with an inspected tenant's data.
     if (!clientId) localStorage.setItem(LS_KEY, JSON.stringify(s));
     // When a super_admin is editing another tenant, write to that tenant's app+forecast.
     const namespaces = clientId ? ["app", "forecast"] : (ROLE_NAMESPACES[currentRole] ?? []);
@@ -249,7 +249,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const merged: Record<string, unknown> = {};
         results.forEach(r => {
           if (r.status === "fulfilled" && r.value) {
-            // Stored as { value: { ...fields } } — unwrap one level
+            // Stored as { value: { ...fields } } - unwrap one level
             const payload = r.value?.value;
             if (payload && typeof payload === "object") Object.assign(merged, payload);
           }
@@ -261,13 +261,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {
-        if (!clientId) toast.error("Failed to load your data. Working offline — changes will sync when reconnected.");
+        if (!clientId) toast.error("Failed to load your data. Working offline - changes will sync when reconnected.");
       })
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, currentRole, selectedClientTenantId]);
 
-  // Poll — uses ref so interval always reads latest clientId
+  // Poll - uses ref so interval always reads latest clientId
   useEffect(() => {
     if (!user) return;
     pollRef.current = setInterval(async () => {
@@ -288,7 +288,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [user, currentRole]);
 
-  // Live sync via Server-Sent Events — pushes cross-device changes instantly
+  // Live sync via Server-Sent Events - pushes cross-device changes instantly
   // (sub-second) instead of waiting for the 5s poll. Best-effort enhancement: if
   // the stream can't connect (e.g. native WebView CORS), the poll above still
   // keeps every device in sync. On an event from ANOTHER client we refetch only
@@ -319,7 +319,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       es.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data) as { ns?: string; clientId?: string; type?: string };
-          // Platform-wide broadcast (super-admin changed platform settings) — re-emit
+          // Platform-wide broadcast (super-admin changed platform settings) - re-emit
           // as a window event so usePlatformSettings refetches in real time everywhere.
           if (msg?.type === "platform") { window.dispatchEvent(new CustomEvent("headroom:platform")); return; }
           if (!msg?.ns) return;
@@ -355,15 +355,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const canAccess = (tab: string) => {
     if (effectiveRole === "super_admin") return true;
-    // Agent Studio is open to every member — anyone can build/run agents for their
+    // Agent Studio is open to every member - anyone can build/run agents for their
     // business (write-actions are still role-gated server-side at confirm time).
     if (tab === "agents") return true;
-    // App Builder (Headroom Studio) — open to every member, like Agent Studio.
+    // App Builder (Headroom Studio) - open to every member, like Agent Studio.
     // Writes are role-gated server-side (studio WRITE_ROLES).
     if (tab === "studio") return true;
-    // Collab (Messages) — open to every member; access is per-conversation membership.
+    // Collab (Messages) - open to every member; access is per-conversation membership.
     if (tab === "collab") return true;
-    // Flows (automation) — visible to all members; write/run is role-gated server-side.
+    // Flows (automation) - visible to all members; write/run is role-gated server-side.
     if (tab === "flows") return true;
     return getRoleConfig(effectiveRole)?.accessibleTabs.includes(tab) ?? false;
   };
@@ -374,7 +374,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // False when viewing a client's data (advisor) or when the (effective) role is read-only.
-  // Exception: a real super_admin edits inside a client/tenant view too — the banner
+  // Exception: a real super_admin edits inside a client/tenant view too - the banner
   // promises "changes save to this company" and setStore already persists for super_admin,
   // so the edit UI must not be hidden. (Previewing another role drops this exemption.)
   const canEdit = () => effectiveRole === "super_admin" || (!isReadOnly && !isReadOnlyRole(effectiveRole));
@@ -382,7 +382,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // The accessible-tab set shown in the role editor (effective config).
   const roleTabs = (roleId: UserRole): string[] => getRoleConfig(roleId)?.accessibleTabs ?? [];
 
-  // Owner edits which tabs a role can reach — persisted to store.roles (app namespace).
+  // Owner edits which tabs a role can reach - persisted to store.roles (app namespace).
   const setRoleTabs = (roleId: UserRole, tabs: string[]) => setStore(s => {
     const base = s.roles.find(r => r.id === roleId) ?? defaultConfig.roles.find(r => r.id === roleId);
     if (!base) return s;

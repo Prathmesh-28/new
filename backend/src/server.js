@@ -1,6 +1,6 @@
 require("dotenv").config();
 // Prefer IPv4 for all outbound DNS. Node 18+ defaults to IPv6-first ("verbatim"),
-// and many container hosts (Render free tier) lack working IPv6 egress — which
+// and many container hosts (Render free tier) lack working IPv6 egress - which
 // surfaces as persistent "connection error" to outbound APIs. Force IPv4.
 try { require("dns").setDefaultResultOrder("ipv4first"); } catch { /* older Node */ }
 // `dns` order only helps clients that use dns.lookup (e.g. Node's https module).
@@ -9,7 +9,7 @@ try { require("dns").setDefaultResultOrder("ipv4first"); } catch { /* older Node
 try { require("net").setDefaultAutoSelectFamily(true); } catch { /* Node < 18.13 */ }
 // Guarantee the internal-cron shared secret always exists so /send-digest can
 // fail CLOSED. In prod it's injected by render.yaml; locally we generate a
-// per-process random value — the in-process cron self-call and the route handler
+// per-process random value - the in-process cron self-call and the route handler
 // read the same process.env, so they stay in sync while the public can't guess it.
 if (!process.env.INTERNAL_CRON_SECRET) {
   process.env.INTERNAL_CRON_SECRET = require("crypto").randomBytes(32).toString("hex");
@@ -29,7 +29,7 @@ const app  = express();
 const PORT = process.env.PORT || 4000;
 
 // Behind Render/Vercel's proxy: trust exactly one hop so req.ip and the rate
-// limiter see the real client IP (X-Forwarded-For) rather than the proxy's —
+// limiter see the real client IP (X-Forwarded-For) rather than the proxy's -
 // otherwise every user shares one bucket and throttles each other.
 app.set("trust proxy", 1);
 
@@ -42,11 +42,11 @@ const ALLOWED_ORIGINS = new Set([
 
 app.use(cors({
   origin: (origin, cb) => {
-    // No origin = server-to-server (Vercel proxy, curl) — always allow
+    // No origin = server-to-server (Vercel proxy, curl) - always allow
     if (!origin) return cb(null, true);
     // Allow any *.vercel.app for preview deployments
     if (origin.endsWith(".vercel.app")) return cb(null, true);
-    // Capacitor native WebView origins — needed for the live-sync EventSource,
+    // Capacitor native WebView origins - needed for the live-sync EventSource,
     // which (unlike fetch) is NOT proxied through CapacitorHttp.
     if (origin === "capacitor://localhost" || origin === "https://localhost" || origin === "http://localhost") return cb(null, true);
     if (ALLOWED_ORIGINS.has(origin) || /^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
@@ -56,7 +56,7 @@ app.use(cors({
 }));
 app.use(securityHeaders);
 // Stash the raw request bytes so webhook HMAC checks (Razorpay) verify against
-// exactly what the sender signed — re-serialising the parsed JSON would change
+// exactly what the sender signed - re-serialising the parsed JSON would change
 // byte order/spacing and break signature validation.
 app.use(express.json({ limit: "10mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: false })); // Required for Twilio webhooks
@@ -64,18 +64,18 @@ app.use(express.urlencoded({ extended: false })); // Required for Twilio webhook
 // Rate limiting on auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: 60,                  // higher ceiling — covers normal app usage
+  max: 60,                  // higher ceiling - covers normal app usage
   message: { error: "Too many requests, please try again later" },
   standardHeaders: true,
   legacyHeaders: false,
-  // Don't rate-limit the endpoints the app calls automatically on every load —
+  // Don't rate-limit the endpoints the app calls automatically on every load -
   // /me and /refresh are token-validated and were what tripped the limit during
   // normal browsing. Brute-force protection on /login is handled separately by
   // the per-account 5-attempt lockout in routes/auth.js.
   skip: (req) => /\/(me|refresh)(\/|$)/.test(req.path),
 });
 
-// General ceiling for the whole API surface — guards every non-auth endpoint
+// General ceiling for the whole API surface - guards every non-auth endpoint
 // from scraping/abuse. Generous so normal use (incl. the 5s KV poll) never
 // trips it; the KV store + capability map are skipped since they're polled.
 const apiLimiter = rateLimit({
@@ -91,9 +91,9 @@ app.use("/api", apiLimiter);
 // Health check
 app.get("/health", (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
-// Capability map — which integrations are live vs. preview (public, no secrets)
+// Capability map - which integrations are live vs. preview (public, no secrets)
 app.use("/api/capabilities", require("./routes/capabilities"));
-// Platform settings — public social links (footer) + super-admin editor
+// Platform settings - public social links (footer) + super-admin editor
 app.use("/api/platform",     require("./routes/platform"));
 // Client error sink (structured logging / observability)
 app.use("/api/telemetry", require("./routes/telemetry"));
@@ -153,7 +153,7 @@ app.use("/api/lenders",            require("./routes/lenders"));
 app.use("/api/vendors",            require("./routes/vendors"));   // vendor master (profiles)
 
 // ── Platform admin endpoints (super_admin only) ─────────────────────────────
-// These are the PLATFORM owner's god-view across every tenant/company — distinct
+// These are the PLATFORM owner's god-view across every tenant/company - distinct
 // from an SMB owner, who only ever sees their own tenant.
 const { authenticate: _auth } = require("./middleware/auth");
 const { writeAudit } = require("./lib/audit");
@@ -179,7 +179,7 @@ function companyFinancials(app) {
   return { cash, revenue, expense, transactions: txns.length, accounts: accounts.length, openReceivables: openAr };
 }
 
-// GET /api/admin/companies — every tenant with live financials pulled from KV
+// GET /api/admin/companies - every tenant with live financials pulled from KV
 app.get("/api/admin/companies", _auth, requireSuper, async (_req, res) => {
   const { rows: tenants } = await pool.query(
     `SELECT u.tenant_id,
@@ -217,7 +217,7 @@ app.get("/api/admin/companies", _auth, requireSuper, async (_req, res) => {
   res.json(companies);
 });
 
-// POST /api/admin/tenants/:tid/plan — super-admin override of a tenant's plan
+// POST /api/admin/tenants/:tid/plan - super-admin override of a tenant's plan
 // (comp / test / manual upgrade). Syncs tenant_billing + every user in the tenant.
 app.post("/api/admin/tenants/:tid/plan", _auth, requireSuper, async (req, res) => {
   const plan = (req.body && req.body.plan) || "";
@@ -234,7 +234,7 @@ app.post("/api/admin/tenants/:tid/plan", _auth, requireSuper, async (req, res) =
   res.json({ ok: true, tenant_id: tid, plan });
 });
 
-// POST /api/admin/tenants/:tid/suspend — disable a whole company (blocks login)
+// POST /api/admin/tenants/:tid/suspend - disable a whole company (blocks login)
 app.post("/api/admin/tenants/:tid/suspend", _auth, requireSuper, async (req, res) => {
   const tid = req.params.tid;
   const reason = ((req.body && req.body.reason) || "").toString().slice(0, 280);
@@ -249,7 +249,7 @@ app.post("/api/admin/tenants/:tid/suspend", _auth, requireSuper, async (req, res
   res.json({ ok: true, tenant_id: tid, status: "suspended" });
 });
 
-// POST /api/admin/tenants/:tid/activate — re-enable a suspended company
+// POST /api/admin/tenants/:tid/activate - re-enable a suspended company
 app.post("/api/admin/tenants/:tid/activate", _auth, requireSuper, async (req, res) => {
   const tid = req.params.tid;
   await pool.query("UPDATE users SET status='active' WHERE tenant_id=$1", [tid]);
@@ -263,7 +263,7 @@ app.post("/api/admin/tenants/:tid/activate", _auth, requireSuper, async (req, re
   res.json({ ok: true, tenant_id: tid, status: "active" });
 });
 
-// GET /api/admin/metrics — real platform business metrics (MRR, plan mix, signups)
+// GET /api/admin/metrics - real platform business metrics (MRR, plan mix, signups)
 app.get("/api/admin/metrics", _auth, requireSuper, async (_req, res) => {
   // Plan per tenant (max plan held in the tenant), used for MRR + distribution.
   const { rows: planRows } = await pool.query(
@@ -298,7 +298,7 @@ app.get("/api/admin/metrics", _auth, requireSuper, async (_req, res) => {
   });
 });
 
-// GET /api/admin/tenants — lightweight tenant list (kept for back-compat)
+// GET /api/admin/tenants - lightweight tenant list (kept for back-compat)
 app.get("/api/admin/tenants", _auth, requireSuper, async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT tenant_id,
@@ -309,7 +309,7 @@ app.get("/api/admin/tenants", _auth, requireSuper, async (_req, res) => {
   res.json(rows.map(r => ({ tenant_id: r.tenant_id, user_count: Number(r.user_count), owner_email: r.owner_email })));
 });
 
-// GET /api/admin/stats — platform-wide totals across ALL companies
+// GET /api/admin/stats - platform-wide totals across ALL companies
 app.get("/api/admin/stats", _auth, requireSuper, async (_req, res) => {
   const { rows: roleRows } = await pool.query("SELECT role, COUNT(*)::int AS n FROM users GROUP BY role");
   const { rows: tenantRow } = await pool.query("SELECT COUNT(DISTINCT tenant_id)::int AS n FROM users");
@@ -331,7 +331,7 @@ app.get("/api/admin/stats", _auth, requireSuper, async (_req, res) => {
   });
 });
 
-// GET /api/admin/audit — recent admin/org actions (accountability trail, A4)
+// GET /api/admin/audit - recent admin/org actions (accountability trail, A4)
 app.get("/api/admin/audit", _auth, requireSuper, async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 200, 1000);
   const { rows } = await pool.query(
@@ -344,7 +344,7 @@ app.get("/api/admin/audit", _auth, requireSuper, async (req, res) => {
   res.json(rows);
 });
 
-// POST /api/admin/users/:id/reset — force a password reset for any user
+// POST /api/admin/users/:id/reset - force a password reset for any user
 app.post("/api/admin/users/:id/reset", _auth, requireSuper, async (req, res) => {
   const { rows } = await pool.query("SELECT id FROM users WHERE id=$1", [req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: "Not found" });
@@ -382,12 +382,12 @@ app.use((err, req, res, _next) => {
 //    ADMIN_PASSWORD; never auto-promotes an already-existing account (that would let
 //    anyone self-register the admin email and get promoted on the next deploy).
 //  - To promote YOUR existing account, run: node src/scripts/make-admin.js <email>
-//    (operator-only, requires shell/DB access — no network attack surface).
+//    (operator-only, requires shell/DB access - no network attack surface).
 async function seed() {
   const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
   const adminPass  = process.env.ADMIN_PASSWORD || "";
   if (!adminEmail) {
-    console.log("[seed] ADMIN_EMAIL not set — skipping super_admin seed. Promote an account with: node src/scripts/make-admin.js <email>");
+    console.log("[seed] ADMIN_EMAIL not set - skipping super_admin seed. Promote an account with: node src/scripts/make-admin.js <email>");
     return;
   }
 
@@ -399,7 +399,7 @@ async function seed() {
     return;
   }
   if (!adminPass || adminPass.length < 10) {
-    console.warn("[seed] ADMIN_PASSWORD missing or too short (min 10 chars) — not creating super_admin.");
+    console.warn("[seed] ADMIN_PASSWORD missing or too short (min 10 chars) - not creating super_admin.");
     return;
   }
   const hash = await bcrypt.hash(adminPass, 10);
@@ -407,14 +407,14 @@ async function seed() {
     "INSERT INTO users(email,password,role,tenant_id,first_login) VALUES($1,$2,'super_admin','admin',true)",
     [adminEmail, hash]
   );
-  console.log(`[seed] created super_admin: ${adminEmail} (first_login=true — must set a new password on first sign-in)`);
+  console.log(`[seed] created super_admin: ${adminEmail} (first_login=true - must set a new password on first sign-in)`);
 }
 
 initDb()
   .then(seed)
   .then(() => {
     app.listen(PORT, () => console.log(`[server] :${PORT}`));
-    // Daily digest at 7:00 AM IST (01:30 UTC) — email + WhatsApp
+    // Daily digest at 7:00 AM IST (01:30 UTC) - email + WhatsApp
     cron.schedule("30 1 * * *", async () => {
       sendDailyDigest().catch(err => console.error("[digest-email]", err.message));
       // Fire WhatsApp digest (self-call so it uses the same route logic)
@@ -435,7 +435,7 @@ initDb()
     }, { timezone: "UTC" });
     // Books: durable e-invoice worker (registers QUEUED vouchers with the GSP).
     require("./modules/books/einvoice").startWorker();
-    // SMB agents: run scheduled (daily/weekly) agents each hour — read-only autonomous runs.
+    // SMB agents: run scheduled (daily/weekly) agents each hour - read-only autonomous runs.
     cron.schedule("0 * * * *", () => {
       require("./modules/books").agents.runScheduledAgents(new Date())
         .then(r => { if (r && r.ran) console.log(`[agents] ran ${r.ran} scheduled agent(s)`); })
@@ -445,7 +445,7 @@ initDb()
         .then(r => { if (r && r.ran) console.log(`[flows] ran ${r.ran} scheduled flow(s)`); })
         .catch(err => console.error("[flows-scheduled]", err.message));
     }, { timezone: "UTC" });
-    // Overdue-invoice reminders daily at 08:30 IST (03:00 UTC) — raises in-app alerts.
+    // Overdue-invoice reminders daily at 08:30 IST (03:00 UTC) - raises in-app alerts.
     cron.schedule("0 3 * * *", () => {
       require("./lib/reminders").runOverdueReminders()
         .then(n => { if (n) console.log(`[reminders] raised ${n} overdue-invoice alert(s)`); })

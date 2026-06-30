@@ -133,7 +133,7 @@ const PLAN_PRICE: Record<PlanTier, number> = { free: 0, starter: 799, growth: 24
 const PLAN_ORDER: PlanTier[] = ["free", "starter", "growth", "pro"];
 
 function roleLabel(role: string): string {
-  return (role || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "—";
+  return (role || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "-";
 }
 
 function errMsg(err: unknown): string {
@@ -174,7 +174,7 @@ function RolePill({ role }: { role: string }) {
 
 function CopyId({ id, chars = 8 }: { id: string; chars?: number }) {
   const val = id || "";
-  const shown = val.length > chars ? `${val.slice(0, chars)}…` : val || "—";
+  const shown = val.length > chars ? `${val.slice(0, chars)}…` : val || "-";
   const onCopy = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -731,7 +731,7 @@ export default function AllDataPage() {
         {(tab === "companies" || tab === "users" || tab === "activity") && totalForTab > 0 && (
           <div className="flex items-center justify-between mt-3 text-xs text-[var(--color-muted)]">
             <span className="tabular-nums">
-              Showing {pageStart + 1}–{Math.min(pageEnd, totalForTab)} of {totalForTab}
+              Showing {pageStart + 1}-{Math.min(pageEnd, totalForTab)} of {totalForTab}
             </span>
             <div className="flex gap-2">
               <button
@@ -828,7 +828,7 @@ function CompaniesTable({
                   </div>
                 </div>
               </td>
-              <td className="px-3 py-2.5 text-[var(--color-muted)] truncate max-w-[180px]">{c.owner_email || "—"}</td>
+              <td className="px-3 py-2.5 text-[var(--color-muted)] truncate max-w-[180px]">{c.owner_email || "-"}</td>
               <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(c.user_count)}</td>
               <td className="px-3 py-2.5"><PlanPill plan={c.plan} /></td>
               <td className="px-3 py-2.5 text-right tabular-nums">{fmtINR(c.cash)}</td>
@@ -904,8 +904,8 @@ function UsersTable({
                 <div className="flex items-center gap-2">
                   <Avatar seed={u.email || u.id} label={label} />
                   <div className="min-w-0">
-                    <p className="truncate max-w-[160px] font-medium">{u.display_name || "—"}</p>
-                    <p className="truncate max-w-[160px] text-[11px] text-[var(--color-muted)]">{u.email || "—"}</p>
+                    <p className="truncate max-w-[160px] font-medium">{u.display_name || "-"}</p>
+                    <p className="truncate max-w-[160px] text-[11px] text-[var(--color-muted)]">{u.email || "-"}</p>
                   </div>
                 </div>
               </td>
@@ -1017,7 +1017,7 @@ function ActivityTable({
         ) : rows.map((r) => {
           const open = expanded === r.id;
           const d = new Date(r.created_at);
-          const timeText = Number.isNaN(d.getTime()) ? "—" : format(d, "dd MMM, HH:mm");
+          const timeText = Number.isNaN(d.getTime()) ? "-" : format(d, "dd MMM, HH:mm");
           let metaStr = "";
           try { metaStr = r.meta ? JSON.stringify(r.meta) : ""; } catch { metaStr = ""; }
           const metaShort = metaStr.length > 80 ? `${metaStr.slice(0, 80)}…` : metaStr;
@@ -1027,25 +1027,25 @@ function ActivityTable({
               <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] whitespace-nowrap" title={r.created_at}>{timeText}</td>
               <td className="px-3 py-2.5">
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs truncate max-w-[160px]">{r.actor_email || "—"}</span>
+                  <span className="text-xs truncate max-w-[160px]">{r.actor_email || "-"}</span>
                   <RolePill role={r.actor_role} />
                 </div>
               </td>
               <td className="px-3 py-2.5">
-                <span className={`font-mono text-[11px] px-2 py-0.5 rounded ${actionTone(r.action)}`}>{r.action || "—"}</span>
+                <span className={`font-mono text-[11px] px-2 py-0.5 rounded ${actionTone(r.action)}`}>{r.action || "-"}</span>
               </td>
               <td className="px-3 py-2.5">
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs">{r.entity || "—"}</span>
+                  <span className="text-xs">{r.entity || "-"}</span>
                   {r.entity_id && <CopyId id={r.entity_id} />}
                 </div>
               </td>
               <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">
                 {open ? (
                   <pre className="whitespace-pre-wrap break-all text-[11px] bg-[var(--color-bg)] p-2 rounded border border-[var(--color-border)] max-w-[360px]">
-                    {r.meta ? JSON.stringify(r.meta, null, 2) : "—"}
+                    {r.meta ? JSON.stringify(r.meta, null, 2) : "-"}
                   </pre>
-                ) : (metaShort || "—")}
+                ) : (metaShort || "-")}
               </td>
             </tr>
           );
@@ -1116,9 +1116,9 @@ function CompanyKVs({ c }: { c: Company }) {
   const st = companyStatus(c);
   return (
     <div>
-      <KV k="Company name" v={c.company_name || "—"} />
+      <KV k="Company name" v={c.company_name || "-"} />
       <KV k="Tenant id" v={<CopyId id={c.tenant_id} chars={20} />} />
-      <KV k="Owner email" v={c.owner_email || "—"} />
+      <KV k="Owner email" v={c.owner_email || "-"} />
       <KV k="Plan" v={<PlanPill plan={c.plan} />} />
       <KV k="Status" v={<StatusDot tone={st.tone} text={st.text} />} />
       <KV k="Users" v={<span className="tabular-nums">{fmtNum(c.user_count)}</span>} />
@@ -1128,7 +1128,7 @@ function CompanyKVs({ c }: { c: Company }) {
       <KV k="Transactions" v={<span className="tabular-nums">{fmtNum(c.transactions)}</span>} />
       <KV k="Open receivables" v={<span className="tabular-nums">{fmtINR(c.openReceivables)}</span>} />
       <KV k="MRR" v={<span className="tabular-nums">{fmtINR(PLAN_PRICE[c.plan] ?? 0)}</span>} />
-      <KV k="Created" v={c.created_at ? format(new Date(c.created_at), "dd MMM yyyy") : "—"} />
+      <KV k="Created" v={c.created_at ? format(new Date(c.created_at), "dd MMM yyyy") : "-"} />
       <KV k="Last login" v={relTime(c.last_login_at)} />
       <KV k="Last activity" v={relTime(c.last_activity)} />
     </div>
@@ -1139,8 +1139,8 @@ function UserKVs({ u }: { u: AdminUser }) {
   const st = userStatus(u);
   return (
     <div>
-      <KV k="Display name" v={u.display_name || "—"} />
-      <KV k="Email" v={u.email || "—"} />
+      <KV k="Display name" v={u.display_name || "-"} />
+      <KV k="Email" v={u.email || "-"} />
       <KV k="User id" v={<CopyId id={u.id} chars={20} />} />
       <KV k="Tenant id" v={<CopyId id={u.tenant_id} chars={20} />} />
       <KV k="Role" v={<RolePill role={u.role} />} />
@@ -1148,7 +1148,7 @@ function UserKVs({ u }: { u: AdminUser }) {
       <KV k="Status" v={<StatusDot tone={st.tone} text={st.text} />} />
       <KV k="Login count" v={<span className="tabular-nums">{fmtNum(u.login_count)}</span>} />
       <KV k="First login pending" v={u.first_login ? "Yes" : "No"} />
-      <KV k="Created" v={u.created_at ? format(new Date(u.created_at), "dd MMM yyyy") : "—"} />
+      <KV k="Created" v={u.created_at ? format(new Date(u.created_at), "dd MMM yyyy") : "-"} />
       <KV k="Last login" v={relTime(u.last_login_at)} />
       <KV k="Last active" v={relTime(u.last_active_at)} />
     </div>
@@ -1229,10 +1229,10 @@ function ResetModal({ data, onClose }: { data: { email: string; password: string
           <button type="button" onClick={onClose} className="p-1 rounded hover:bg-[var(--color-bg)] text-[var(--color-muted)]"><X size={16} /></button>
         </div>
         <p className="text-xs text-[var(--color-muted)] mb-3">
-          New password for <span className="text-[var(--color-text)]">{data.email}</span>. Share it securely — it is not emailed.
+          New password for <span className="text-[var(--color-text)]">{data.email}</span>. Share it securely - it is not emailed.
         </p>
         <div className="flex items-center gap-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md px-3 py-2">
-          <code className="flex-1 font-mono text-sm break-all">{data.password || "—"}</code>
+          <code className="flex-1 font-mono text-sm break-all">{data.password || "-"}</code>
           <button type="button" onClick={copy} disabled={!data.password}
             className="p-1.5 rounded-md hover:bg-[var(--color-surface)] text-[var(--color-muted)] disabled:opacity-40"><Copy size={14} /></button>
         </div>

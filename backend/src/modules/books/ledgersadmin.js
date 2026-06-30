@@ -1,4 +1,4 @@
-// Ledger master cleanup — merge duplicates and delete unused ledgers. Merging
+// Ledger master cleanup - merge duplicates and delete unused ledgers. Merging
 // repoints every voucher/party reference from the duplicate to the target AND
 // folds the duplicate's incremental balance snapshots + opening into the target,
 // so trial balance / reports stay correct. All in one transaction.
@@ -22,7 +22,7 @@ async function resolveGroupId(tenantId, group) {
   return rows[0].id;
 }
 
-// Create one ledger — same validation + INSERT as POST /api/books/ledgers, plus
+// Create one ledger - same validation + INSERT as POST /api/books/ledgers, plus
 // group-by-name resolution. opening_dir ('debit'/'credit'/'dr'/'cr') maps to
 // opening_is_debit (defaults to debit). Single INSERT, non-transactional.
 async function createOneLedger(tenantId, row) {
@@ -45,7 +45,7 @@ async function createOneLedger(tenantId, row) {
 // Bulk-create ledgers (Chart-of-Accounts + party bulk add). Each row reuses the
 // single-create logic above and runs in its own try/catch so one bad row never
 // aborts the rest. createOneLedger is a single INSERT (non-transactional), so
-// per-row error isolation is sufficient — no batch transaction needed.
+// per-row error isolation is sufficient - no batch transaction needed.
 async function bulkCreateLedgers(tenantId, actorId, rows) {
   if (!Array.isArray(rows)) throw new PostError("BAD_INPUT", "rows array required", 400);
   let created = 0, failed = 0; const errors = [];
@@ -102,7 +102,7 @@ async function mergeLedger(tenantId, fromId, toId) {
 // Delete an unused ledger (no postings, zero opening). Otherwise the caller must merge.
 async function deleteLedger(tenantId, id) {
   const { rows: e } = await pool.query("SELECT 1 FROM book_voucher_entries WHERE tenant_id=$1 AND ledger_id=$2 LIMIT 1", [tenantId, id]);
-  if (e[0]) throw new PostError("IN_USE", "Ledger has postings — merge it into another ledger instead of deleting", 409);
+  if (e[0]) throw new PostError("IN_USE", "Ledger has postings - merge it into another ledger instead of deleting", 409);
   const { rows: l } = await pool.query("SELECT opening_balance FROM book_ledgers WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
   if (!l[0]) throw new PostError("NOT_FOUND", "Ledger not found", 404);
   if (money(l[0].opening_balance || 0).greaterThan(0)) throw new PostError("HAS_OPENING", "Clear the opening balance before deleting", 409);

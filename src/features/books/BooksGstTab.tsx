@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES — response shapes mirror backend/src/modules/books/{gst,tds}.js
+// TYPES - response shapes mirror backend/src/modules/books/{gst,tds}.js
 // ─────────────────────────────────────────────────────────────────────────────
 interface SectionRec {
   voucherId: string;
@@ -255,7 +255,7 @@ function SectionTable({
                 return (
                   <tr key={i} className="border-b border-[var(--color-border)] last:border-b-0">
                     <td className="px-3 py-2.5">
-                      <span className="font-mono text-xs">{gstin || r.pos || "—"}</span>
+                      <span className="font-mono text-xs">{gstin || r.pos || "-"}</span>
                       {"noteType" in r && r.noteType && (
                         <span className="ml-2 text-[10px] text-[var(--color-muted)]">{r.noteType}</span>
                       )}
@@ -497,7 +497,7 @@ export default function BooksGstTab() {
               ) : (
                 hsn!.rows.map((r, i) => (
                   <tr key={i} className="border-b border-[var(--color-border)] last:border-b-0">
-                    <td className="px-3 py-2.5 font-mono text-xs">{r.hsn || "—"}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs">{r.hsn || "-"}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{r.rate}%</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{rupee(r.taxable)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{rupee(r.cgst)}</td>
@@ -601,7 +601,7 @@ function TdsCalculator() {
             <option value="">Select section…</option>
             {sectionList.map((s) => (
               <option key={s.section} value={s.section}>
-                {s.section} — {s.description} ({s.rate}%)
+                {s.section} - {s.description} ({s.rate}%)
               </option>
             ))}
           </select>
@@ -747,7 +747,7 @@ function RcmBillForm({ vendors }: { vendors: Ledger[] }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LIABILITY vs PAID — electronic-cash-ledger net-to-pay for the period
+// LIABILITY vs PAID - electronic-cash-ledger net-to-pay for the period
 // ─────────────────────────────────────────────────────────────────────────────
 const HEADS = ["CGST", "SGST", "IGST", "CESS"] as const;
 
@@ -816,7 +816,7 @@ function LiabilityVsPaidCard({ period }: { period: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BLOCKED ITC (s.17(5)) — input credit that cannot be claimed
+// BLOCKED ITC (s.17(5)) - input credit that cannot be claimed
 // ─────────────────────────────────────────────────────────────────────────────
 function BlockedItcCard({ period }: { period: string }) {
   const [data, setData] = useState<BlockedItc | null>(null);
@@ -841,7 +841,7 @@ function BlockedItcCard({ period }: { period: string }) {
   }, [period]);
 
   return (
-    <Card title="Blocked ITC — s.17(5)" icon={<ShieldAlert size={15} />}>
+    <Card title="Blocked ITC - s.17(5)" icon={<ShieldAlert size={15} />}>
       <div className="space-y-3">
         <div className="flex flex-wrap gap-3">
           {HEADS.map((h) => (
@@ -863,7 +863,7 @@ function BlockedItcCard({ period }: { period: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GST CHALLAN (PMT-06) REGISTER — record a challan + list for the period
+// GST CHALLAN (PMT-06) REGISTER - record a challan + list for the period
 // ─────────────────────────────────────────────────────────────────────────────
 function GstChallanCard({ period }: { period: string }) {
   const [rows, setRows] = useState<ChallanRow[]>([]);
@@ -979,10 +979,10 @@ function GstChallanCard({ period }: { period: string }) {
               rows.map((c) => (
                 <tr key={c.id} className="border-b border-[var(--color-border)] last:border-b-0">
                   <td className="px-3 py-2.5">
-                    <span className="font-mono text-xs">{c.cin || "—"}</span>
+                    <span className="font-mono text-xs">{c.cin || "-"}</span>
                     {c.bankRef && <span className="ml-2 text-[10px] text-[var(--color-muted)]">{c.bankRef}</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{c.paidOn || "—"}</td>
+                  <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{c.paidOn || "-"}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{rupee(c.cgst)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{rupee(c.sgst)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{rupee(c.igst)}</td>
@@ -1005,7 +1005,7 @@ function GstChallanCard({ period }: { period: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GST RATE MASTER — HSN/SAC ↔ GST rate + cess (upsert + list)
+// GST RATE MASTER - HSN/SAC ↔ GST rate + cess (upsert + list)
 // ─────────────────────────────────────────────────────────────────────────────
 function GstRateMaster() {
   const [rows, setRows] = useState<GstRateRow[]>([]);
@@ -1100,8 +1100,8 @@ function GstRateMaster() {
                 <tr key={r.hsn} className="border-b border-[var(--color-border)] last:border-b-0">
                   <td className="px-3 py-2.5 font-mono text-xs">{r.hsn}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{r.rate}%</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{Number(r.cessRate) ? `${r.cessRate}%` : "—"}</td>
-                  <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.description || "—"}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{Number(r.cessRate) ? `${r.cessRate}%` : "-"}</td>
+                  <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.description || "-"}</td>
                 </tr>
               ))
             )}
@@ -1113,7 +1113,7 @@ function GstRateMaster() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GSTR-2B ITC MATCH (invoice-level) — paste portal 2B CSV, reconcile vs books
+// GSTR-2B ITC MATCH (invoice-level) - paste portal 2B CSV, reconcile vs books
 // ─────────────────────────────────────────────────────────────────────────────
 const GSTR2B_PLACEHOLDER =
   "gstin,invoiceNo,invoiceDate,taxable,tax\n29AABCT1234A1Z5,INV-001,2026-05-03,10000,1800\n27AAACX5678B1Z2,INV-014,2026-05-11,5000,900";
@@ -1185,12 +1185,12 @@ function Gstr2bBucketTable({ title, rows, tint }: { title: string; rows: Gstr2bM
             ) : (
               rows.map((r, i) => (
                 <tr key={i} className="border-b border-[var(--color-border)] last:border-b-0">
-                  <td className="px-3 py-2.5 font-mono text-xs">{r.gstin || "—"}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs">{r.gstin || "-"}</td>
                   <td className="px-3 py-2.5">
-                    <span className="font-mono text-xs">{r.invoiceNo || "—"}</span>
+                    <span className="font-mono text-xs">{r.invoiceNo || "-"}</span>
                     {r.reason && <span className="ml-2 text-[10px] text-[var(--color-muted)]">{r.reason}</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{r.invoiceDate || "—"}</td>
+                  <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{r.invoiceDate || "-"}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{rupee(r.taxable as string)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{rupee(r.tax as string)}</td>
                 </tr>
@@ -1274,13 +1274,13 @@ function Gstr2bMatchCard({ period }: { period: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// E-INVOICE CANCEL — cancel an IRN within the 24h GSP window
+// E-INVOICE CANCEL - cancel an IRN within the 24h GSP window
 // ─────────────────────────────────────────────────────────────────────────────
 const CANCEL_REASONS = [
-  { code: "1", label: "1 — Duplicate" },
-  { code: "2", label: "2 — Data entry mistake" },
-  { code: "3", label: "3 — Order cancelled" },
-  { code: "4", label: "4 — Other" },
+  { code: "1", label: "1 - Duplicate" },
+  { code: "2", label: "2 - Data entry mistake" },
+  { code: "3", label: "3 - Order cancelled" },
+  { code: "4", label: "4 - Other" },
 ] as const;
 
 function EinvoiceCancelCard() {
@@ -1302,7 +1302,7 @@ function EinvoiceCancelCard() {
         { reason, remarks: remarks.trim() || undefined },
       );
       if (res?.configured === false) {
-        toast.error(res.reason || "GSP not configured — cannot cancel");
+        toast.error(res.reason || "GSP not configured - cannot cancel");
       } else {
         toast.success(res?.status === "CANCELLED" ? "E-invoice cancelled" : "Cancellation submitted");
         setVoucherId(""); setRemarks("");

@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Vendor master record — REAL persistence via /api/vendors (GET/POST/PATCH/DELETE).
+   Vendor master record - REAL persistence via /api/vendors (GET/POST/PATCH/DELETE).
    This is the single source of truth for a vendor's profile (GSTIN, PAN, bank/UPI,
    payment terms, MSME/Udyam, category). The MSME/TDS/KYC/terms tabs read this saved
    profile instead of re-typing. Spend analytics stay derived from transactions and
@@ -69,7 +69,7 @@ function useVendorMaster() {
       });
       return saved;
     } catch (e) {
-      toast.error(`Could not save vendor — ${(e as Error).message || "offline"}`);
+      toast.error(`Could not save vendor - ${(e as Error).message || "offline"}`);
       return null;
     }
   }, []);
@@ -80,7 +80,7 @@ function useVendorMaster() {
       setVendors(prev => prev.filter(v => v.id !== id));
       return true;
     } catch (e) {
-      toast.error(`Could not delete vendor — ${(e as Error).message || "offline"}`);
+      toast.error(`Could not delete vendor - ${(e as Error).message || "offline"}`);
       return false;
     }
   }, []);
@@ -185,7 +185,7 @@ function VendorProfileModal({
           </h2>
           <button onClick={onClose}><X size={16} className="text-[var(--color-muted)]" /></button>
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Master record — saved to the server and shared across the MSME, TDS, terms and KYC tabs.</p>
+        <p className="text-xs text-[var(--color-muted)]">Master record - saved to the server and shared across the MSME, TDS, terms and KYC tabs.</p>
 
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -314,16 +314,16 @@ function ScheduleModal({ vendor, onClose }: { vendor: Vendor; onClose: () => voi
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) { toast.error("Enter a valid amount"); return; }
     // Record a real upcoming cash obligation so the scheduled payment flows into
-    // the forecast / cash-runway math (no fake disbursement — actual payout needs
+    // the forecast / cash-runway math (no fake disbursement - actual payout needs
     // a payout rail, which is gated).
     addObligation({
       id: crypto.randomUUID(),
-      name: `Pay ${vendor.name}${note ? ` — ${note}` : ""}`,
+      name: `Pay ${vendor.name}${note ? ` - ${note}` : ""}`,
       amount: amt,
       dueDate: date,
       type: "other",
     });
-    toast.success(`₹${amt.toLocaleString("en-IN")} to ${vendor.name} scheduled for ${new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} — added to your cash forecast`);
+    toast.success(`₹${amt.toLocaleString("en-IN")} to ${vendor.name} scheduled for ${new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} - added to your cash forecast`);
     onClose();
   };
 
@@ -367,8 +367,8 @@ type AgingBucket = "current" | "1_30" | "31_60" | "61_plus";
 
 const AGING_META: Record<AgingBucket, { label: string; color: string; chipCls: string }> = {
   current:  { label: "Current (not yet due)",    color: "text-green-400",  chipCls: "bg-green-950/30 text-green-400 border-green-800/30" },
-  "1_30":   { label: "1–30 days overdue",        color: "text-yellow-400", chipCls: "bg-yellow-950/30 text-yellow-400 border-yellow-800/30" },
-  "31_60":  { label: "31–60 days overdue",       color: "text-orange-400", chipCls: "bg-orange-950/30 text-orange-400 border-orange-800/30" },
+  "1_30":   { label: "1-30 days overdue",        color: "text-yellow-400", chipCls: "bg-yellow-950/30 text-yellow-400 border-yellow-800/30" },
+  "31_60":  { label: "31-60 days overdue",       color: "text-orange-400", chipCls: "bg-orange-950/30 text-orange-400 border-orange-800/30" },
   "61_plus":{ label: "60+ days overdue",         color: "text-red-400",    chipCls: "bg-red-950/30 text-red-400 border-red-800/30" },
 };
 
@@ -394,7 +394,7 @@ export default function VendorsPage() {
   // Profile editor: null = closed; { name, record } = open (record null for create).
   const [profileEdit, setProfileEdit] = useState<{ record: VendorMaster | null; presetName?: string } | null>(null);
 
-  // Bulk edit — multi-select over directory rows that have a saved master profile
+  // Bulk edit - multi-select over directory rows that have a saved master profile
   // (PATCH /vendors/:id needs a persisted record). Keyed by vendor master id.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMsme, setBulkMsme] = useState<"" | "yes" | "no">("");
@@ -609,7 +609,7 @@ export default function VendorsPage() {
       <AiInsight
         collapsed
         className="w-full"
-        title="AI insight — vendors"
+        title="AI insight - vendors"
         question="Which vendors should I prioritise paying or renegotiating, and where is my spend concentrated? Flag any single-vendor concentration risk and overdue AP."
         context={{
           totalVendors: vendors.length,
@@ -674,7 +674,7 @@ export default function VendorsPage() {
             </button>
           </div>
 
-          {/* Bulk edit bar — only the controls you change are applied to the selected vendors */}
+          {/* Bulk edit bar - only the controls you change are applied to the selected vendors */}
           {selectedIds.size > 0 && (
             <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/40 rounded-lg p-3 flex flex-wrap items-end gap-3">
               <div className="flex items-center gap-2 mr-1">
@@ -727,7 +727,7 @@ export default function VendorsPage() {
               <EmptyState
                 icon={Building2}
                 title="No vendors yet"
-                description="Add your first vendor to track spend, payment terms, GSTIN and MSME status — or import your expense transactions to auto-build the directory."
+                description="Add your first vendor to track spend, payment terms, GSTIN and MSME status - or import your expense transactions to auto-build the directory."
                 ctaText="Add a vendor"
                 onCta={() => setProfileEdit({ record: null })}
               />
@@ -798,15 +798,15 @@ export default function VendorsPage() {
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums font-semibold text-red-400">{formatAmount(v.totalSpend)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)] hidden lg:table-cell">
-                        {v.thisMonth > 0 ? formatAmount(v.thisMonth) : "—"}
+                        {v.thisMonth > 0 ? formatAmount(v.thisMonth) : "-"}
                       </td>
                       <td className="px-4 py-3 text-center hidden lg:table-cell">
                         {v.trend === "up" ? <span title="Spend up vs last month"><TrendingUp size={13} className="text-red-400 mx-auto" /></span>
                           : v.trend === "down" ? <span title="Spend down vs last month"><TrendingDown size={13} className="text-green-400 mx-auto" /></span>
-                          : <span className="text-[var(--color-muted)] text-xs">—</span>}
+                          : <span className="text-[var(--color-muted)] text-xs">-</span>}
                       </td>
                       <td className="px-4 py-3 text-right text-xs text-[var(--color-muted)] hidden md:table-cell">
-                        {v.lastPayment ? new Date(v.lastPayment).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}
+                        {v.lastPayment ? new Date(v.lastPayment).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "-"}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center gap-1.5 justify-end">
@@ -894,7 +894,7 @@ export default function VendorsPage() {
                         <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(o.amount)}</td>
                         <td className="px-4 py-3 text-right">
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${meta.chipCls}`}>
-                            {o.bucket === "current" ? "Current" : o.bucket === "1_30" ? "1–30d" : o.bucket === "31_60" ? "31–60d" : "60d+"}
+                            {o.bucket === "current" ? "Current" : o.bucket === "1_30" ? "1-30d" : o.bucket === "31_60" ? "31-60d" : "60d+"}
                           </span>
                         </td>
                       </tr>
@@ -935,7 +935,7 @@ export default function VendorsPage() {
             <div className="bg-red-950/20 border border-red-800/30 rounded-lg px-4 py-3 flex items-start gap-3">
               <ShieldAlert size={16} className="text-red-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-red-300">MSME Samadhan — 45-Day Payment Rule</p>
+                <p className="text-sm font-semibold text-red-300">MSME Samadhan - 45-Day Payment Rule</p>
                 <p className="text-xs text-[var(--color-muted)] mt-0.5">Under MSMED Act 2006, payments to MSME vendors must be made within 45 days of acceptance. Delays attract 3× bank rate compound interest and mandatory disclosure in ITR. Mark vendor obligations as "expense" type to track here.</p>
               </div>
             </div>
@@ -943,8 +943,8 @@ export default function VendorsPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { label: "In Breach (>45d)",  value: breach.length.toString(),    color: "text-red-400",    sub: formatCurrency(breachAmt) },
-                { label: "At Risk (31–45d)",   value: warning.length.toString(),   color: "text-orange-400", sub: formatCurrency(warningAmt) },
-                { label: "Safe (1–30d)",       value: safe.length.toString(),      color: "text-yellow-400", sub: formatCurrency(safe.reduce((s,o) => s + o.amount, 0)) },
+                { label: "At Risk (31-45d)",   value: warning.length.toString(),   color: "text-orange-400", sub: formatCurrency(warningAmt) },
+                { label: "Safe (1-30d)",       value: safe.length.toString(),      color: "text-yellow-400", sub: formatCurrency(safe.reduce((s,o) => s + o.amount, 0)) },
                 { label: "Upcoming",           value: upcoming.length.toString(),  color: "text-green-400",  sub: formatCurrency(upcoming.reduce((s,o) => s + o.amount, 0)) },
               ].map(c => (
                 <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -986,7 +986,7 @@ export default function VendorsPage() {
                           <td className="px-4 py-3">
                             {isBreached ? (
                               <span className="text-xs font-bold px-2 py-0.5 rounded border bg-red-950/30 text-red-400 border-red-800/30 flex items-center gap-1 w-fit">
-                                <ShieldAlert size={10} /> Breach — ITR disclosure
+                                <ShieldAlert size={10} /> Breach - ITR disclosure
                               </span>
                             ) : isWarning ? (
                               <span className="text-xs font-semibold px-2 py-0.5 rounded border bg-orange-950/30 text-orange-400 border-orange-800/30 w-fit flex items-center gap-1">
@@ -1056,7 +1056,7 @@ export default function VendorsPage() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #60 Purchase Order Manager — raise a PO, track its lifecycle.
+   #60 Purchase Order Manager - raise a PO, track its lifecycle.
    ───────────────────────────────────────────────────────────────────────── */
 type PoStatus = "draft" | "sent" | "received" | "closed" | "cancelled";
 interface PoLine { id: string; desc: string; qty: number; rate: number; }
@@ -1235,7 +1235,7 @@ function PurchaseOrderManager() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #61 3-Way Match — PO vs GRN vs Invoice, flag quantity & price variances.
+   #61 3-Way Match - PO vs GRN vs Invoice, flag quantity & price variances.
    ───────────────────────────────────────────────────────────────────────── */
 interface MatchRow {
   id: string;
@@ -1344,7 +1344,7 @@ function ThreeWayMatch() {
                   <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={14} /></button>
                 </div>
                 {e.ok ? (
-                  <p className="text-xs text-green-400 mt-2">Matched — safe to approve for payment.</p>
+                  <p className="text-xs text-green-400 mt-2">Matched - safe to approve for payment.</p>
                 ) : (
                   <ul className="mt-2 space-y-1">
                     {e.flags.map((f, i) => <li key={i} className="text-xs text-red-400 flex items-center gap-1.5"><AlertTriangle size={11} /> {f}</li>)}
@@ -1361,17 +1361,17 @@ function ThreeWayMatch() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #62 Vendor TDS Ledger — per-vendor TDS deducted/deposited (194C/194J/194Q).
+   #62 Vendor TDS Ledger - per-vendor TDS deducted/deposited (194C/194J/194Q).
    ───────────────────────────────────────────────────────────────────────── */
 const TDS_SECTIONS = [
-  { code: "194C", label: "194C — Contractors (company/firm)", rate: 2 },
-  { code: "194C-ind", label: "194C — Contractors (individual/HUF)", rate: 1 },
-  { code: "194J", label: "194J — Professional / technical fees", rate: 10 },
-  { code: "194J-tech", label: "194J — Technical services", rate: 2 },
-  { code: "194Q", label: "194Q — Purchase of goods >₹50L", rate: 0.1 },
-  { code: "194I-rent", label: "194I — Rent of plant/machinery", rate: 2 },
-  { code: "194I-land", label: "194I — Rent of land/building", rate: 10 },
-  { code: "194H", label: "194H — Commission / brokerage", rate: 5 },
+  { code: "194C", label: "194C - Contractors (company/firm)", rate: 2 },
+  { code: "194C-ind", label: "194C - Contractors (individual/HUF)", rate: 1 },
+  { code: "194J", label: "194J - Professional / technical fees", rate: 10 },
+  { code: "194J-tech", label: "194J - Technical services", rate: 2 },
+  { code: "194Q", label: "194Q - Purchase of goods >₹50L", rate: 0.1 },
+  { code: "194I-rent", label: "194I - Rent of plant/machinery", rate: 2 },
+  { code: "194I-land", label: "194I - Rent of land/building", rate: 10 },
+  { code: "194H", label: "194H - Commission / brokerage", rate: 5 },
 ] as const;
 
 interface TdsEntry {
@@ -1419,7 +1419,7 @@ function VendorTdsLedger() {
   const deposited = entries.filter(e => e.deposited).reduce((s, e) => s + tdsOf(e), 0);
   const pending = totalTds - deposited;
 
-  const sectionLabel = (code: string) => TDS_SECTIONS.find(s => s.code === code)?.label.split(" — ")[0] ?? code;
+  const sectionLabel = (code: string) => TDS_SECTIONS.find(s => s.code === code)?.label.split(" - ")[0] ?? code;
 
   return (
     <div className="space-y-4">
@@ -1455,8 +1455,8 @@ function VendorTdsLedger() {
           const prof = masterByName[vendor.trim().toLowerCase()];
           if (!vendor.trim()) return null;
           return prof
-            ? <p className="text-xs text-[var(--color-muted)]">From master: PAN <span className="font-mono">{prof.pan || "— (no PAN, 20% rate applies)"}</span>{prof.gstin ? ` · GSTIN ${prof.gstin}` : ""}</p>
-            : <p className="text-[11px] text-orange-400">No saved profile for "{vendor.trim()}" — add one in the Directory to capture PAN for 26Q.</p>;
+            ? <p className="text-xs text-[var(--color-muted)]">From master: PAN <span className="font-mono">{prof.pan || "- (no PAN, 20% rate applies)"}</span>{prof.gstin ? ` · GSTIN ${prof.gstin}` : ""}</p>
+            : <p className="text-[11px] text-orange-400">No saved profile for "{vendor.trim()}" - add one in the Directory to capture PAN for 26Q.</p>;
         })()}
         {gross && <p className="text-xs text-[var(--color-muted)]">TDS @ {curRate}% = <span className="font-semibold text-[var(--color-primary)]">{formatCurrency(previewTds)}</span> · Net payable: {formatCurrency((parseFloat(gross) || 0) - previewTds)}</p>}
         <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Record</button>
@@ -1503,7 +1503,7 @@ function VendorTdsLedger() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #63 Vendor Onboarding & KYC Vault — PAN/GSTIN/MSME/bank, with validation.
+   #63 Vendor Onboarding & KYC Vault - PAN/GSTIN/MSME/bank, with validation.
    ───────────────────────────────────────────────────────────────────────── */
 interface VendorKyc {
   id: string;
@@ -1539,7 +1539,7 @@ function masterToKyc(v: VendorMaster): VendorKyc {
 }
 
 function VendorKycVault() {
-  // Now backed by the persisted vendor master — the same records the Directory edits.
+  // Now backed by the persisted vendor master - the same records the Directory edits.
   const { vendors: master, upsert, remove: removeMaster } = useVendorMaster();
   const vault = useMemo(() => master.map(masterToKyc), [master]);
   const blank: Omit<VendorKyc, "id"> = { name: "", pan: "", gstin: "", msmeUdyam: "", bankAcc: "", ifsc: "", email: "" };
@@ -1569,7 +1569,7 @@ function VendorKycVault() {
     });
     if (saved) {
       setForm(blank);
-      toast.success(`${saved.name} onboarded${kycComplete(masterToKyc(saved)) ? " — KYC complete" : " — KYC incomplete"}`);
+      toast.success(`${saved.name} onboarded${kycComplete(masterToKyc(saved)) ? " - KYC complete" : " - KYC incomplete"}`);
     }
   };
   const remove = (id: string) => { void removeMaster(id); };
@@ -1581,7 +1581,7 @@ function VendorKycVault() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Onboard vendors with validated PAN, GSTIN, MSME (Udyam) and bank details — saved as the persisted vendor master and shared with the Directory, MSME and TDS tabs. Format-validated on save.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Onboard vendors with validated PAN, GSTIN, MSME (Udyam) and bank details - saved as the persisted vendor master and shared with the Directory, MSME and TDS tabs. Format-validated on save.</p>
 
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -1658,11 +1658,11 @@ function VendorKycVault() {
                   <button onClick={() => remove(v.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={14} /></button>
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-3 text-[11px]">
-                  <div><span className="text-[var(--color-muted)]">PAN: </span><span className="font-mono">{v.pan || "—"}</span></div>
-                  <div><span className="text-[var(--color-muted)]">GSTIN: </span><span className="font-mono">{v.gstin || "—"}</span></div>
-                  <div><span className="text-[var(--color-muted)]">MSME: </span><span className="font-mono">{v.msmeUdyam || "—"}</span></div>
-                  <div><span className="text-[var(--color-muted)]">A/C: </span><span className="font-mono">{v.bankAcc ? `••••${v.bankAcc.slice(-4)}` : "—"}</span></div>
-                  <div><span className="text-[var(--color-muted)]">IFSC: </span><span className="font-mono">{v.ifsc || "—"}</span></div>
+                  <div><span className="text-[var(--color-muted)]">PAN: </span><span className="font-mono">{v.pan || "-"}</span></div>
+                  <div><span className="text-[var(--color-muted)]">GSTIN: </span><span className="font-mono">{v.gstin || "-"}</span></div>
+                  <div><span className="text-[var(--color-muted)]">MSME: </span><span className="font-mono">{v.msmeUdyam || "-"}</span></div>
+                  <div><span className="text-[var(--color-muted)]">A/C: </span><span className="font-mono">{v.bankAcc ? `••••${v.bankAcc.slice(-4)}` : "-"}</span></div>
+                  <div><span className="text-[var(--color-muted)]">IFSC: </span><span className="font-mono">{v.ifsc || "-"}</span></div>
                 </div>
               </div>
             );
@@ -1674,7 +1674,7 @@ function VendorKycVault() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #64 Early-Payment Discount Optimizer — 2/10-net-30 vs cost of capital.
+   #64 Early-Payment Discount Optimizer - 2/10-net-30 vs cost of capital.
    ───────────────────────────────────────────────────────────────────────── */
 interface DiscountOffer {
   id: string;
@@ -1730,7 +1730,7 @@ function EarlyPaymentOptimizer() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Should you pay early to grab the discount, or hold your cash? A 2/10-net-30 offer is an effective ~37% annualised return — usually beats your cost of capital. This compares each offer against your hurdle rate.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Should you pay early to grab the discount, or hold your cash? A 2/10-net-30 offer is an effective ~37% annualised return - usually beats your cost of capital. This compares each offer against your hurdle rate.</p>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center gap-3 flex-wrap">
         <Banknote size={16} className="text-[var(--color-primary)]" />
@@ -1789,7 +1789,7 @@ function EarlyPaymentOptimizer() {
                   <div><p className="text-[10px] text-[var(--color-muted)]">Net benefit</p><p className={`text-sm font-semibold tabular-nums ${m.netBenefit > 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(m.netBenefit)}</p></div>
                 </div>
                 <div className={`mt-3 text-xs font-medium flex items-center gap-1.5 ${m.worthIt ? "text-green-400" : "text-[var(--color-muted)]"}`}>
-                  {m.worthIt ? <><CheckCircle2 size={13} /> Pay early — beats your hurdle rate by {(m.effAnnual - coc).toFixed(1)} pts</> : <><AlertTriangle size={13} /> Hold cash — discount yield is below your cost of capital</>}
+                  {m.worthIt ? <><CheckCircle2 size={13} /> Pay early - beats your hurdle rate by {(m.effAnnual - coc).toFixed(1)} pts</> : <><AlertTriangle size={13} /> Hold cash - discount yield is below your cost of capital</>}
                 </div>
               </div>
             );
@@ -1801,7 +1801,7 @@ function EarlyPaymentOptimizer() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #65 Pay-Run Scheduler — batch open obligations into a dated pay run.
+   #65 Pay-Run Scheduler - batch open obligations into a dated pay run.
    Builds a real cash obligation per included line is not needed (they already
    exist); instead it groups due payables into a run with a chosen settlement
    date and shows the cash needed. No payout rail is invoked (gated).
@@ -1844,7 +1844,7 @@ function PayRunScheduler() {
     if (shortfall > 0) {
       toast.warning(`Pay run of ${formatCurrency(runTotal)} on ${format(new Date(runDate), "dd MMM")} exceeds available balance by ${formatCurrency(shortfall)}`);
     } else {
-      toast.success(`Pay run scheduled — ${n} payable${n !== 1 ? "s" : ""} totalling ${formatCurrency(runTotal)} on ${format(new Date(runDate), "dd MMM")}`);
+      toast.success(`Pay run scheduled - ${n} payable${n !== 1 ? "s" : ""} totalling ${formatCurrency(runTotal)} on ${format(new Date(runDate), "dd MMM")}`);
     }
   };
 
@@ -1917,7 +1917,7 @@ function PayRunScheduler() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #66 Spend Analysis — concentration & consolidation from live transactions.
+   #66 Spend Analysis - concentration & consolidation from live transactions.
    Flags single-vendor dependency risk and top-N share of total spend.
    ───────────────────────────────────────────────────────────────────────── */
 function SpendAnalysis() {
@@ -1967,7 +1967,7 @@ function SpendAnalysis() {
       {concentrated.length > 0 && (
         <div className="bg-red-950/20 border border-red-800/30 rounded-lg px-4 py-3 flex items-start gap-3">
           <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
-          <p className="text-xs text-[var(--color-muted)]"><span className="text-red-300 font-semibold">{concentrated.map(c => c.vendor).join(", ")}</span> each take ≥{threshold}% of your spend. Heavy reliance on one supplier is a continuity risk — line up a backup vendor or split volume.</p>
+          <p className="text-xs text-[var(--color-muted)]"><span className="text-red-300 font-semibold">{concentrated.map(c => c.vendor).join(", ")}</span> each take ≥{threshold}% of your spend. Heavy reliance on one supplier is a continuity risk - line up a backup vendor or split volume.</p>
         </div>
       )}
       {tail.length >= 3 && (
@@ -2015,7 +2015,7 @@ function SpendAnalysis() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #67 Duplicate Vendor Detector — fuzzy-match names in live transactions.
+   #67 Duplicate Vendor Detector - fuzzy-match names in live transactions.
    ───────────────────────────────────────────────────────────────────────── */
 function normVendor(s: string): string {
   return s.toLowerCase()
@@ -2091,7 +2091,7 @@ function DuplicateVendorDetector() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #68 Purchase Requisition → PO — internal request, approve, convert to PO.
+   #68 Purchase Requisition → PO - internal request, approve, convert to PO.
    ───────────────────────────────────────────────────────────────────────── */
 type ReqStatus = "pending" | "approved" | "rejected" | "converted";
 interface Requisition {
@@ -2135,8 +2135,8 @@ function RequisitionToPo() {
   };
   const setStatus = (id: string, status: ReqStatus) => {
     setReqs(prev => prev.map(r => r.id === id ? { ...r, status } : r));
-    if (status === "approved") toast.success("Requisition approved — ready to convert to PO");
-    if (status === "converted") toast.success("Converted to PO — raise it formally in the Purchase Orders tab");
+    if (status === "approved") toast.success("Requisition approved - ready to convert to PO");
+    if (status === "converted") toast.success("Converted to PO - raise it formally in the Purchase Orders tab");
   };
   const remove = (id: string) => setReqs(prev => prev.filter(r => r.id !== id));
 
@@ -2145,7 +2145,7 @@ function RequisitionToPo() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Anyone on the team can raise a purchase requisition — what they need, why, and by when. The owner approves or rejects, and approved requests convert into a PO. This adds the spend-control step SMBs usually skip.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Anyone on the team can raise a purchase requisition - what they need, why, and by when. The owner approves or rejects, and approved requests convert into a PO. This adds the spend-control step SMBs usually skip.</p>
 
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -2219,7 +2219,7 @@ function RequisitionToPo() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #69 Vendor Performance Review — score on delivery, quality, price, support.
+   #69 Vendor Performance Review - score on delivery, quality, price, support.
    ───────────────────────────────────────────────────────────────────────── */
 interface VendorReview {
   id: string;
@@ -2346,7 +2346,7 @@ function VendorPerformanceReview() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #70 RFQ Comparison — quote one item to N vendors, rank price/lead/terms.
+   #70 RFQ Comparison - quote one item to N vendors, rank price/lead/terms.
    ───────────────────────────────────────────────────────────────────────── */
 interface Quote {
   id: string;
@@ -2432,7 +2432,7 @@ function RfqComparison() {
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          {best && <div className="px-4 py-2.5 bg-green-950/15 border-b border-green-800/30 text-xs">Recommended: <span className="font-semibold text-green-400">{best.vendor}</span> — best blended value at {formatCurrency(best.total)} for {qty} {item || "units"}</div>}
+          {best && <div className="px-4 py-2.5 bg-green-950/15 border-b border-green-800/30 text-xs">Recommended: <span className="font-semibold text-green-400">{best.vendor}</span> - best blended value at {formatCurrency(best.total)} for {qty} {item || "units"}</div>}
           <table className="w-full text-sm min-w-[560px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
@@ -2463,7 +2463,7 @@ function RfqComparison() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #71 Advances Tracker — advances paid to vendors, adjusted vs future bills.
+   #71 Advances Tracker - advances paid to vendors, adjusted vs future bills.
    ───────────────────────────────────────────────────────────────────────── */
 interface Advance {
   id: string;
@@ -2516,7 +2516,7 @@ function AdvancesTracker() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Advances paid to vendors are real cash out that's easy to lose track of. Record each advance, then knock it down as you adjust it against incoming bills — so the unrecovered balance never surprises you at year-end.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Advances paid to vendors are real cash out that's easy to lose track of. Record each advance, then knock it down as you adjust it against incoming bills - so the unrecovered balance never surprises you at year-end.</p>
 
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -2584,7 +2584,7 @@ function AdvancesTracker() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #72 Debit Note / Return-to-Vendor — raise debit notes, net vs open bills.
+   #72 Debit Note / Return-to-Vendor - raise debit notes, net vs open bills.
    ───────────────────────────────────────────────────────────────────────── */
 type DnReason = "return" | "rate-diff" | "shortage" | "damage" | "discount";
 interface DebitNote {
@@ -2625,7 +2625,7 @@ function DebitNoteTracker() {
     };
     setNotes(prev => [dn, ...prev]);
     setVendor(""); setAmount("");
-    toast.success(`${dn.dnNo} raised — reduces what you owe ${dn.vendor}`);
+    toast.success(`${dn.dnNo} raised - reduces what you owe ${dn.vendor}`);
   };
   const remove = (id: string) => setNotes(prev => prev.filter(n => n.id !== id));
   const toggleAdjust = (id: string) => setNotes(prev => prev.map(n => n.id === id ? { ...n, status: n.status === "open" ? "adjusted" : "open" } : n));
@@ -2639,7 +2639,7 @@ function DebitNoteTracker() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">When you return goods, get short-supplied, or claim a rate difference, raise a debit note — it reduces what you owe the vendor. Track open debit notes here and net them against the next bill so credits never lapse unclaimed.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">When you return goods, get short-supplied, or claim a rate difference, raise a debit note - it reduces what you owe the vendor. Track open debit notes here and net them against the next bill so credits never lapse unclaimed.</p>
 
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -2714,7 +2714,7 @@ function DebitNoteTracker() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #82 Payables Forecast — project the next 30/60/90 days of vendor outflows
+   #82 Payables Forecast - project the next 30/60/90 days of vendor outflows
    from scheduled obligations plus the run-rate of recurring vendor spend.
    ───────────────────────────────────────────────────────────────────────── */
 function PayablesForecast() {
@@ -2726,8 +2726,8 @@ function PayablesForecast() {
     const day0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const windows = [
       { key: "0_30",  label: "Next 30 days", from: 0,  to: 30 },
-      { key: "31_60", label: "31–60 days",   from: 31, to: 60 },
-      { key: "61_90", label: "61–90 days",   from: 61, to: 90 },
+      { key: "31_60", label: "31-60 days",   from: 31, to: 60 },
+      { key: "61_90", label: "61-90 days",   from: 61, to: 90 },
     ];
     // Scheduled payables = obligations payable to vendors / statutory dues.
     const payable = obligations.filter(o => o.type === "other" || o.type === "payroll" || o.type === "tax");
@@ -2771,7 +2771,7 @@ function PayablesForecast() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-sm text-[var(--color-muted)] max-w-2xl">Projected vendor cash outflow over the next 90 days — combining your scheduled obligations with the run-rate of recurring vendor spend (vendors paid 2+ times in the last quarter). Use it to spot a cash crunch before it lands.</p>
+        <p className="text-sm text-[var(--color-muted)] max-w-2xl">Projected vendor cash outflow over the next 90 days - combining your scheduled obligations with the run-rate of recurring vendor spend (vendors paid 2+ times in the last quarter). Use it to spot a cash crunch before it lands.</p>
         <button onClick={exportCsv} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 px-3 py-2 rounded-lg shrink-0">
           <FileInput size={13} /> Export CSV
         </button>
@@ -2819,7 +2819,7 @@ function PayablesForecast() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #52 Blanket PO Drawdown — set an umbrella PO value and draw releases
+   #52 Blanket PO Drawdown - set an umbrella PO value and draw releases
    against it; track committed vs remaining headroom.
    ───────────────────────────────────────────────────────────────────────── */
 interface BlanketRelease { id: string; date: string; amount: number; note: string; }
@@ -2846,7 +2846,7 @@ function BlanketPoDrawdown() {
     const bpo: BlanketPo = { id: crypto.randomUUID(), vendor: vendor.trim(), totalValue: tv, validTill, releases: [] };
     setBpos(prev => [bpo, ...prev]);
     setVendor(""); setTotalValue("");
-    toast.success(`Blanket PO for ${bpo.vendor} created — ${formatCurrency(tv)} headroom`);
+    toast.success(`Blanket PO for ${bpo.vendor} created - ${formatCurrency(tv)} headroom`);
   };
 
   const release = (id: string) => {
@@ -2869,7 +2869,7 @@ function BlanketPoDrawdown() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">For repeat purchasing, agree an annual umbrella value with a vendor and draw smaller releases against it — no fresh PO each time. Track how much of each blanket PO you've consumed and how much headroom is left.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">For repeat purchasing, agree an annual umbrella value with a vendor and draw smaller releases against it - no fresh PO each time. Track how much of each blanket PO you've consumed and how much headroom is left.</p>
 
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -2957,7 +2957,7 @@ function BlanketPoDrawdown() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #44 Vendor Spend Concentration / Single-Source Risk — flag vendors that
+   #44 Vendor Spend Concentration / Single-Source Risk - flag vendors that
    take a risky share of category or total spend (dependency risk).
    ───────────────────────────────────────────────────────────────────────── */
 function ConcentrationRisk() {
@@ -2989,7 +2989,7 @@ function ConcentrationRisk() {
       };
     }).sort((a, b) => b.spend - a.spend);
 
-    // Herfindahl-Hirschman Index on total-share fractions (0–10000).
+    // Herfindahl-Hirschman Index on total-share fractions (0-10000).
     const hhi = vendors.reduce((s, v) => s + Math.pow(v.totalShare, 2), 0);
     return { total, vendors, hhi };
   }, [transactions]);
@@ -3068,7 +3068,7 @@ function ConcentrationRisk() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #63 Vendor Statement Reconciliation — paste a vendor's statement lines and
+   #63 Vendor Statement Reconciliation - paste a vendor's statement lines and
    match them against your ledger (transactions) to surface gaps fast.
    ───────────────────────────────────────────────────────────────────────── */
 function StatementReconciliation() {
@@ -3120,7 +3120,7 @@ function StatementReconciliation() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Paste the line items off a vendor's statement of account, pick the vendor, and we'll match each amount against your own ledger — surfacing entries on their statement you haven't booked (and bills you've recorded that they've missed). This is the month-end reconciliation that eats hours by hand.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Paste the line items off a vendor's statement of account, pick the vendor, and we'll match each amount against your own ledger - surfacing entries on their statement you haven't booked (and bills you've recorded that they've missed). This is the month-end reconciliation that eats hours by hand.</p>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-2">
@@ -3128,7 +3128,7 @@ function StatementReconciliation() {
           <datalist id="recon-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
           <input type="number" value={tolerance} onChange={e => setTolerance(e.target.value)} placeholder="Match tolerance ₹" className={inpCls} />
         </div>
-        <textarea value={raw} onChange={e => setRaw(e.target.value)} rows={5} placeholder={"Paste statement lines — one per row. We read the last number on each line as the amount.\ne.g.  12 Apr  Invoice INV-204   45,000"} className={`${inpCls} font-mono text-xs resize-y`} />
+        <textarea value={raw} onChange={e => setRaw(e.target.value)} rows={5} placeholder={"Paste statement lines - one per row. We read the last number on each line as the amount.\ne.g.  12 Apr  Invoice INV-204   45,000"} className={`${inpCls} font-mono text-xs resize-y`} />
         <p className="text-[11px] text-[var(--color-muted)]">{statementAmounts.length} statement line{statementAmounts.length !== 1 ? "s" : ""} parsed · {ledgerAmounts.length} ledger entr{ledgerAmounts.length !== 1 ? "ies" : "y"} for this vendor</p>
       </div>
 
@@ -3157,7 +3157,7 @@ function StatementReconciliation() {
             <div className="bg-[var(--color-surface)] border border-orange-800/30 rounded-lg p-4">
               <p className="text-sm font-semibold text-orange-400 mb-2">On their statement, not in your books</p>
               {result.unmatchedStmt.length === 0 ? (
-                <p className="text-xs text-[var(--color-muted)]">Nothing — every statement line is booked.</p>
+                <p className="text-xs text-[var(--color-muted)]">Nothing - every statement line is booked.</p>
               ) : (
                 <ul className="space-y-1">
                   {result.unmatchedStmt.map((a, i) => <li key={i} className="text-xs flex justify-between"><span className="text-[var(--color-muted)]">Unbooked entry</span><span className="tabular-nums font-medium">{formatCurrency(a)}</span></li>)}
@@ -3167,7 +3167,7 @@ function StatementReconciliation() {
             <div className="bg-[var(--color-surface)] border border-blue-800/30 rounded-lg p-4">
               <p className="text-sm font-semibold text-blue-400 mb-2">In your books, not on their statement</p>
               {result.unmatchedLedger.length === 0 ? (
-                <p className="text-xs text-[var(--color-muted)]">Nothing — they've captured every payment.</p>
+                <p className="text-xs text-[var(--color-muted)]">Nothing - they've captured every payment.</p>
               ) : (
                 <ul className="space-y-1">
                   {result.unmatchedLedger.map(l => <li key={l.id} className="text-xs flex justify-between gap-2"><span className="text-[var(--color-muted)] truncate">{format(new Date(l.date), "dd MMM")} · {l.desc}</span><span className="tabular-nums font-medium shrink-0">{formatCurrency(l.amount)}</span></li>)}
@@ -3182,7 +3182,7 @@ function StatementReconciliation() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #8 / #11 MSME Interest Liability (43B(h)) — estimate the compound interest
+   #8 / #11 MSME Interest Liability (43B(h)) - estimate the compound interest
    owed on MSME dues paid beyond the 45-day limit at 3× the RBI bank rate.
    ───────────────────────────────────────────────────────────────────────── */
 interface MsmeDue { id: string; vendor: string; amount: string; acceptedOn: string; }
@@ -3221,7 +3221,7 @@ function MsmeInterestLiability() {
   // Each unpaid bill to an MSME vendor runs against ITS OWN clock: 15 days with no
   // written agreement, up to 45 with one (we read the vendor's agreed payment terms,
   // capped at 45). Past the deadline the expense is disallowed (added back to taxable
-  // income, ~25% tax) AND attracts the 3× penal interest above — both real cash.
+  // income, ~25% tax) AND attracts the 3× penal interest above - both real cash.
   const TAX_RATE = 0.25;
   const auto = useMemo(() => {
     const idx: Record<string, VendorMaster> = {};
@@ -3257,24 +3257,24 @@ function MsmeInterestLiability() {
       <div className="bg-red-950/20 border border-red-800/30 rounded-lg px-4 py-3 flex items-start gap-3">
         <Gavel size={16} className="text-red-400 shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-semibold text-red-300">Section 16 MSMED Act — Interest on Delayed Payment</p>
+          <p className="text-sm font-semibold text-red-300">Section 16 MSMED Act - Interest on Delayed Payment</p>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">Dues to a Micro/Small vendor unpaid beyond 45 days attract compound interest at 3× the RBI bank rate, compounded monthly. This interest is <span className="font-medium">not</span> tax-deductible (Sec 23). Estimate the running liability per vendor below.</p>
         </div>
       </div>
 
-      {/* Live 43B(h) radar — auto-detected from real unpaid MSME bills */}
+      {/* Live 43B(h) radar - auto-detected from real unpaid MSME bills */}
       {auto.length > 0 ? (
         <div className="bg-[var(--color-surface)] border border-[var(--color-primary)]/30 rounded-lg p-4 space-y-3">
           <div className="flex items-center gap-2">
             <ShieldAlert size={15} className="text-[var(--color-primary)]" />
-            <h3 className="text-sm font-semibold">Live 43B(h) exposure — from your unpaid MSME bills</h3>
+            <h3 className="text-sm font-semibold">Live 43B(h) exposure - from your unpaid MSME bills</h3>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: "Cash at risk", value: formatCurrency(Math.round(autoCashAtRisk)), color: autoCashAtRisk > 0 ? "text-red-400" : "text-green-400", sub: "disallowance tax + interest" },
               { label: "Disallowed expense", value: formatCurrency(Math.round(autoDisallow)), color: autoDisallow > 0 ? "text-orange-400" : "text-green-400", sub: `${autoBreached.length} bill(s) past deadline` },
               { label: "Non-deductible interest", value: formatCurrency(Math.round(autoInterest)), color: autoInterest > 0 ? "text-orange-400" : "text-green-400", sub: `@ ${annualRate.toFixed(1)}% p.a.` },
-              { label: "Next deadline", value: nextDeadline ? `${nextDeadline.daysToDeadline}d` : "—", color: nextDeadline && nextDeadline.daysToDeadline <= 7 ? "text-red-400" : "text-[var(--color-text)]", sub: nextDeadline ? nextDeadline.vendor : "all clear" },
+              { label: "Next deadline", value: nextDeadline ? `${nextDeadline.daysToDeadline}d` : "-", color: nextDeadline && nextDeadline.daysToDeadline <= 7 ? "text-red-400" : "text-[var(--color-text)]", sub: nextDeadline ? nextDeadline.vendor : "all clear" },
             ].map(c => (
               <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
                 <p className="text-[11px] text-[var(--color-muted)]">{c.label}</p>
@@ -3298,12 +3298,12 @@ function MsmeInterestLiability() {
                     <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(r.amount)}</td>
                     <td className="px-3 py-2 text-right">
                       {r.daysToDeadline < 0
-                        ? <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-red-950/30 text-red-400 border-red-800/40">{r.overdueDays}d overdue — disallowed</span>
+                        ? <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-red-950/30 text-red-400 border-red-800/40">{r.overdueDays}d overdue - disallowed</span>
                         : r.daysToDeadline <= 7
                         ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded border bg-orange-950/30 text-orange-400 border-orange-800/40">pay in {r.daysToDeadline}d</span>
                         : <span className="text-[10px] px-2 py-0.5 rounded border bg-green-950/20 text-green-400 border-green-800/30">{r.daysToDeadline}d left</span>}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-orange-400">{r.interest > 0 ? formatCurrency(Math.round(r.interest)) : "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-orange-400">{r.interest > 0 ? formatCurrency(Math.round(r.interest)) : "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -3381,7 +3381,7 @@ function MsmeInterestLiability() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #42 / #76 Procurement Savings Tracker — log realised savings (negotiated
+   #42 / #76 Procurement Savings Tracker - log realised savings (negotiated
    discounts, avoided spend, early-pay capture) and total the impact.
    ───────────────────────────────────────────────────────────────────────── */
 type SavingType = "negotiation" | "early-pay" | "consolidation" | "avoided" | "rebate";
@@ -3431,7 +3431,7 @@ function SavingsTracker() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Procurement saves money in ways that never show on the P&L — a negotiated rate cut, an early-pay discount, a consolidated contract. Log each win against its baseline cost here so you can prove the function pays for itself.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Procurement saves money in ways that never show on the P&L - a negotiated rate cut, an early-pay discount, a consolidated contract. Log each win against its baseline cost here so you can prove the function pays for itself.</p>
 
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -3506,7 +3506,7 @@ function SavingsTracker() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   TDS Form-16A Issuance Tracker — track quarterly TDS certificates owed to vendors.
+   TDS Form-16A Issuance Tracker - track quarterly TDS certificates owed to vendors.
    ───────────────────────────────────────────────────────────────────────── */
 type F16Status = "pending" | "downloaded" | "issued";
 interface F16Cert { id: string; vendor: string; pan: string; quarter: string; fy: string; tdsAmount: number; status: F16Status; }
@@ -3516,7 +3516,7 @@ const F16_STATUS_META: Record<F16Status, { label: string; cls: string }> = {
   downloaded: { label: "Downloaded", cls: "bg-blue-950/30 text-blue-400 border-blue-800/30" },
   issued:     { label: "Issued",     cls: "bg-green-950/30 text-green-400 border-green-800/30" },
 };
-const F16_QUARTERS = ["Q1 (Apr–Jun)", "Q2 (Jul–Sep)", "Q3 (Oct–Dec)", "Q4 (Jan–Mar)"] as const;
+const F16_QUARTERS = ["Q1 (Apr-Jun)", "Q2 (Jul-Sep)", "Q3 (Oct-Dec)", "Q4 (Jan-Mar)"] as const;
 
 function Form16ATracker() {
   const { store } = useApp();
@@ -3619,7 +3619,7 @@ function Form16ATracker() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Vendor Rebate / Volume-Discount Tracker — accrue rebates earned against slabs.
+   Vendor Rebate / Volume-Discount Tracker - accrue rebates earned against slabs.
    ───────────────────────────────────────────────────────────────────────── */
 interface RebateDeal { id: string; vendor: string; threshold: number; ratePct: number; ytdPurchase: number; }
 
@@ -3654,7 +3654,7 @@ function RebateTracker() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Many suppliers offer a year-end rebate once you cross a purchase slab — money that's easy to forget to claim. Define each slab and track how close you are; rebate accrues once YTD purchases clear the threshold.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Many suppliers offer a year-end rebate once you cross a purchase slab - money that's easy to forget to claim. Define each slab and track how close you are; rebate accrues once YTD purchases clear the threshold.</p>
 
       <div className="grid grid-cols-2 gap-3">
         {[
@@ -3697,7 +3697,7 @@ function RebateTracker() {
                     <p className="text-[11px] text-[var(--color-muted)]">{d.ratePct}% above {formatCurrency(Math.round(d.threshold))} · YTD {formatCurrency(d.ytdPurchase)}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`text-sm font-bold tabular-nums ${hit ? "text-green-400" : "text-[var(--color-muted)]"}`}>{hit ? formatCurrency(Math.round(earned(d))) : "—"}</span>
+                    <span className={`text-sm font-bold tabular-nums ${hit ? "text-green-400" : "text-[var(--color-muted)]"}`}>{hit ? formatCurrency(Math.round(earned(d))) : "-"}</span>
                     <button onClick={() => refresh(d.id, d.vendor)} className="text-[10px] text-[var(--color-primary)] hover:underline">Refresh</button>
                     <button onClick={() => remove(d.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
                   </div>
@@ -3705,7 +3705,7 @@ function RebateTracker() {
                 <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
                   <div className={`h-full ${hit ? "bg-green-400" : "bg-[var(--color-primary)]"}`} style={{ width: `${pct}%` }} />
                 </div>
-                <p className="text-[10px] text-[var(--color-muted)] mt-1">{hit ? "Slab reached — rebate accruing" : `${(100 - pct).toFixed(0)}% to go (${formatCurrency(Math.round(d.threshold - d.ytdPurchase))} more)`}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-1">{hit ? "Slab reached - rebate accruing" : `${(100 - pct).toFixed(0)}% to go (${formatCurrency(Math.round(d.threshold - d.ytdPurchase))} more)`}</p>
               </div>
             );
           })}
@@ -3716,7 +3716,7 @@ function RebateTracker() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Vendor Watchlist / Blacklist — flag risky vendors and warn before new POs.
+   Vendor Watchlist / Blacklist - flag risky vendors and warn before new POs.
    ───────────────────────────────────────────────────────────────────────── */
 type FlagLevel = "watch" | "hold" | "blacklist";
 interface VendorFlag { id: string; vendor: string; level: FlagLevel; reason: string; date: string; }
@@ -3751,7 +3751,7 @@ function VendorWatchlist() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Keep a living record of vendors you're cautious about — quality slips, compliance gaps, disputes. Flag them Watch, On Hold, or Blacklist so anyone raising a PO sees the risk before they commit spend.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Keep a living record of vendors you're cautious about - quality slips, compliance gaps, disputes. Flag them Watch, On Hold, or Blacklist so anyone raising a PO sees the risk before they commit spend.</p>
 
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -3806,7 +3806,7 @@ function VendorWatchlist() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Payment-Mode Mix — breakdown of how vendor payments leave the business.
+   Payment-Mode Mix - breakdown of how vendor payments leave the business.
    ───────────────────────────────────────────────────────────────────────── */
 const PAY_MODE_META: Record<string, { label: string; cls: string; bar: string }> = {
   upi:    { label: "UPI",          cls: "text-purple-400", bar: "bg-purple-400" },
@@ -3848,7 +3848,7 @@ function PaymentModeMix() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">How your vendor money actually leaves the business — inferred from transaction descriptions. A high cash share is a red flag for both fraud control and the ₹10,000/payment cash-expense disallowance under Section 40A(3).</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">How your vendor money actually leaves the business - inferred from transaction descriptions. A high cash share is a red flag for both fraud control and the ₹10,000/payment cash-expense disallowance under Section 40A(3).</p>
 
       {breakdown.length === 0 ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
@@ -3860,7 +3860,7 @@ function PaymentModeMix() {
           {cashPct > 15 && (
             <div className="bg-red-950/20 border border-red-800/30 rounded-lg p-3 flex items-start gap-2">
               <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
-              <p className="text-xs text-red-400">{cashPct.toFixed(0)}% of vendor payments look like cash — review against the Section 40A(3) ₹10,000 per-payment limit to avoid disallowed expenses.</p>
+              <p className="text-xs text-red-400">{cashPct.toFixed(0)}% of vendor payments look like cash - review against the Section 40A(3) ₹10,000 per-payment limit to avoid disallowed expenses.</p>
             </div>
           )}
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
@@ -3890,7 +3890,7 @@ function PaymentModeMix() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #53 / #54 Recurring Bill & Subscription Tracker — detect vendors charged on
+   #53 / #54 Recurring Bill & Subscription Tracker - detect vendors charged on
    a regular cadence (rent, utilities, SaaS), project the monthly & annual
    run-rate, and flag tools that look dormant (no charge in 60+ days).
    ───────────────────────────────────────────────────────────────────────── */
@@ -3917,7 +3917,7 @@ function RecurringBillTracker() {
           gapSum += (new Date(sorted[i]).getTime() - new Date(sorted[i - 1]).getTime()) / 86400000;
         }
         const avgGap = gapSum / (n - 1);
-        // treat 25–95 day cadence (monthly-ish/quarterly) as recurring
+        // treat 25-95 day cadence (monthly-ish/quarterly) as recurring
         if (avgGap < 25 || avgGap > 95) return null;
         const avgAmt = amounts.reduce((s, a) => s + a, 0) / n;
         const monthly = avgAmt * (30 / avgGap);
@@ -3937,7 +3937,7 @@ function RecurringBillTracker() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Detects vendors you pay on a regular cadence — rent, utilities, SaaS — from your transaction history, and projects the committed run-rate. Subscriptions with no charge in months are flagged as possibly dormant so you can cancel the dead ones.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Detects vendors you pay on a regular cadence - rent, utilities, SaaS - from your transaction history, and projects the committed run-rate. Subscriptions with no charge in months are flagged as possibly dormant so you can cancel the dead ones.</p>
 
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -3996,7 +3996,7 @@ function RecurringBillTracker() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #65 Landed Cost Allocation — spread freight, customs duty, insurance and
+   #65 Landed Cost Allocation - spread freight, customs duty, insurance and
    other charges across received line items (by value or by quantity) to get
    the true per-unit landed cost for inventory valuation.
    ───────────────────────────────────────────────────────────────────────── */
@@ -4033,7 +4033,7 @@ function LandedCostCalculator() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Freight, customs duty and insurance are real costs of your goods, but they arrive on separate bills. Allocate those charges across the received items — by value or by quantity — to book inventory at its true landed cost instead of the bare invoice price.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Freight, customs duty and insurance are real costs of your goods, but they arrive on separate bills. Allocate those charges across the received items - by value or by quantity - to book inventory at its true landed cost instead of the bare invoice price.</p>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
         <h3 className="text-sm font-semibold">Received Items</h3>
@@ -4112,7 +4112,7 @@ function LandedCostCalculator() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #87 Duplicate Invoice Detector — log bills as you receive them; the moment
+   #87 Duplicate Invoice Detector - log bills as you receive them; the moment
    the same vendor + invoice number, or the same vendor + amount + date,
    repeats, it is flagged so you never pay it twice.
    ───────────────────────────────────────────────────────────────────────── */
@@ -4141,7 +4141,7 @@ function DuplicateInvoiceDetector() {
        (Math.abs(b.amount - e.amount) < 0.01 && b.date === e.date)));
     setBills(prev => [e, ...prev]);
     setVendor(""); setInvoiceNo(""); setAmount("");
-    if (collides) toast.error(`Possible duplicate for ${e.vendor} — flagged in the register`);
+    if (collides) toast.error(`Possible duplicate for ${e.vendor} - flagged in the register`);
     else toast.success(`Bill logged for ${e.vendor}`);
   };
   const remove = (id: string) => setBills(prev => prev.filter(b => b.id !== id));
@@ -4164,7 +4164,7 @@ function DuplicateInvoiceDetector() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">The single most common AP leak is paying the same invoice twice — once from email, once from a chase. Log each bill in this register and any repeat of a vendor + invoice number (or vendor + amount + date) is flagged before it gets paid.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">The single most common AP leak is paying the same invoice twice - once from email, once from a chase. Log each bill in this register and any repeat of a vendor + invoice number (or vendor + amount + date) is flagged before it gets paid.</p>
 
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -4214,7 +4214,7 @@ function DuplicateInvoiceDetector() {
                 return (
                   <tr key={b.id} className={`hover:bg-white/2 ${dup ? "bg-red-950/10" : ""}`}>
                     <td className="px-4 py-3 font-medium">{b.vendor}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-[var(--color-muted)]">{b.invoiceNo || "—"}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-[var(--color-muted)]">{b.invoiceNo || "-"}</td>
                     <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(b.date), "dd MMM yyyy")}</td>
                     <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(b.amount)}</td>
                     <td className="px-4 py-3">
@@ -4237,7 +4237,7 @@ function DuplicateInvoiceDetector() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #74 Approval SLA Tracker — log invoice/PO approvals, measure the cycle time
+   #74 Approval SLA Tracker - log invoice/PO approvals, measure the cycle time
    from request to decision per approver, and surface who is the bottleneck.
    ───────────────────────────────────────────────────────────────────────── */
 interface ApprovalEntry { id: string; item: string; approver: string; requested: string; decided: string; outcome: "approved" | "rejected"; }
@@ -4373,7 +4373,7 @@ function ApprovalSlaTracker() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #83 Working-Capital / DPO Simulator — model how lengthening or shortening
+   #83 Working-Capital / DPO Simulator - model how lengthening or shortening
    the days-payable-outstanding on your annual vendor spend frees up (or ties
    up) cash, and what that one-time swing is worth at your cost of capital.
    ───────────────────────────────────────────────────────────────────────── */
@@ -4407,7 +4407,7 @@ function WorkingCapitalSimulator() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Every extra day you take to pay vendors keeps cash in your account a little longer. This models how moving your average payment terms (Days Payable Outstanding) up or down changes the cash tied up in payables — and what that swing is worth at your borrowing rate. Stretch responsibly: MSME vendors are capped at 45 days.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Every extra day you take to pay vendors keeps cash in your account a little longer. This models how moving your average payment terms (Days Payable Outstanding) up or down changes the cash tied up in payables - and what that swing is worth at your borrowing rate. Stretch responsibly: MSME vendors are capped at 45 days.</p>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 grid grid-cols-1 md:grid-cols-4 gap-3">
         <div>
@@ -4449,8 +4449,8 @@ function WorkingCapitalSimulator() {
           {tgt === cur
             ? "Set a target DPO different from your current to model the cash impact."
             : cashFreed >= 0
-              ? <>Stretching terms from {cur} to {tgt} days releases a one-time <span className="font-semibold text-green-400">{formatCurrency(Math.round(cashFreed))}</span> of working capital — worth about <span className="font-semibold text-green-400">{formatCurrency(Math.round(annualValue))}</span> a year at {rate}% cost of capital. Keep MSME vendors inside 45 days to avoid 43B(h) interest.</>
-              : <>Shortening terms from {cur} to {tgt} days consumes a one-time <span className="font-semibold text-red-400">{formatCurrency(Math.abs(Math.round(cashFreed)))}</span> of cash, costing roughly <span className="font-semibold text-red-400">{formatCurrency(Math.abs(Math.round(annualValue)))}</span> a year in carry — justify it with early-pay discounts.</>}
+              ? <>Stretching terms from {cur} to {tgt} days releases a one-time <span className="font-semibold text-green-400">{formatCurrency(Math.round(cashFreed))}</span> of working capital - worth about <span className="font-semibold text-green-400">{formatCurrency(Math.round(annualValue))}</span> a year at {rate}% cost of capital. Keep MSME vendors inside 45 days to avoid 43B(h) interest.</>
+              : <>Shortening terms from {cur} to {tgt} days consumes a one-time <span className="font-semibold text-red-400">{formatCurrency(Math.abs(Math.round(cashFreed)))}</span> of cash, costing roughly <span className="font-semibold text-red-400">{formatCurrency(Math.abs(Math.round(annualValue)))}</span> a year in carry - justify it with early-pay discounts.</>}
         </p>
       </div>
     </div>
@@ -4458,7 +4458,7 @@ function WorkingCapitalSimulator() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Bills / Payables — the missing core Accounts Payable register. Record vendor
+   Bills / Payables - the missing core Accounts Payable register. Record vendor
    bills (against a saved vendor master profile or a free-typed name), track the
    open balance by aging bucket, and mark them paid. Frontend-only durable
    records via useFeatureState ("payables-bills"); due date defaults from the
@@ -4480,9 +4480,9 @@ interface Bill {
 type BillBucket = "not-due" | "0-30" | "31-60" | "61-90" | "90+";
 const BILL_BUCKET_LABEL: Record<BillBucket, string> = {
   "not-due": "Not due",
-  "0-30": "0–30 days",
-  "31-60": "31–60 days",
-  "61-90": "61–90 days",
+  "0-30": "0-30 days",
+  "31-60": "31-60 days",
+  "61-90": "61-90 days",
   "90+": "90+ days",
 };
 const BILL_BUCKET_COLOR: Record<BillBucket, string> = {
@@ -4612,7 +4612,7 @@ function BillsPayables() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Record what you owe each vendor and track it to its due date. The AP Aging tab is derived from your bank transactions; this is your explicit bill register — every open payable, bucketed by how overdue it is, so nothing slips past its due date.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Record what you owe each vendor and track it to its due date. The AP Aging tab is derived from your bank transactions; this is your explicit bill register - every open payable, bucketed by how overdue it is, so nothing slips past its due date.</p>
 
       {/* KPI strip */}
       <div className="grid grid-cols-3 gap-3">

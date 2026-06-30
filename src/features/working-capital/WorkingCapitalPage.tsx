@@ -27,9 +27,9 @@ export default function WorkingCapitalPage() {
   const totalTermsImpact = termSuggestions.reduce((s, t) => s + t.cashImpact, 0);
 
   const cycleSegments = [
-    { label: "DSO — money stuck with customers", days: snap.dsoDays, color: "bg-yellow-500", path: "/receivables", icon: Receipt, hint: "Collect faster: auto-reminders, early-pay discounts" },
-    { label: "DIO — money stuck in inventory", days: snap.dioDays, color: "bg-orange-500", path: "/operations", icon: Package, hint: "Clear slow stock, order tighter against demand" },
-    { label: "DPO — free credit from suppliers", days: snap.dpoDays, color: "bg-green-500", path: "/vendors", icon: Building2, hint: "Longer DPO shortens your cycle (negotiate terms)" },
+    { label: "DSO - money stuck with customers", days: snap.dsoDays, color: "bg-yellow-500", path: "/receivables", icon: Receipt, hint: "Collect faster: auto-reminders, early-pay discounts" },
+    { label: "DIO - money stuck in inventory", days: snap.dioDays, color: "bg-orange-500", path: "/operations", icon: Package, hint: "Clear slow stock, order tighter against demand" },
+    { label: "DPO - free credit from suppliers", days: snap.dpoDays, color: "bg-green-500", path: "/vendors", icon: Building2, hint: "Longer DPO shortens your cycle (negotiate terms)" },
   ];
   const maxDays = Math.max(snap.dsoDays, snap.dioDays, snap.dpoDays, 1);
 
@@ -147,7 +147,7 @@ export default function WorkingCapitalPage() {
             <button onClick={() => navigate("/receivables")} className="text-[10px] text-[var(--color-primary)] hover:underline">Kanban view →</button>
           </div>
           {snap.accountsReceivable === 0 ? (
-            <p className="text-sm text-[var(--color-muted)] py-8 text-center">No open invoices — create them under Invoices.</p>
+            <p className="text-sm text-[var(--color-muted)] py-8 text-center">No open invoices - create them under Invoices.</p>
           ) : (
             <>
               <ResponsiveContainer width="100%" height={170}>
@@ -170,7 +170,7 @@ export default function WorkingCapitalPage() {
         {/* Early-pay economics */}
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
           <p className="text-sm font-semibold mb-1">Early-Payment Discount Economics</p>
-          <p className="text-xs text-[var(--color-muted)] mb-4">Annualised return of common discount terms — offer these to customers (or grab them from suppliers).</p>
+          <p className="text-xs text-[var(--color-muted)] mb-4">Annualised return of common discount terms - offer these to customers (or grab them from suppliers).</p>
           <table className="w-full text-sm">
             <thead className="border-b border-[var(--color-border)]">
               <tr>{["Terms", "Days Early", "Annualised %", "Verdict"].map(h => <th key={h} className="py-2 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr>
@@ -189,7 +189,7 @@ export default function WorkingCapitalPage() {
                     <td className="py-2.5 font-mono text-xs">{r.terms}</td>
                     <td className="py-2.5 tabular-nums text-xs">{r.days}d</td>
                     <td className={`py-2.5 tabular-nums font-semibold ${worth ? "text-green-400" : "text-yellow-400"}`}>{apr.toFixed(0)}%</td>
-                    <td className="py-2.5 text-[10px] text-[var(--color-muted)]">{worth ? "Take it — beats borrowing at 18%" : "Marginal vs credit line"}</td>
+                    <td className="py-2.5 text-[10px] text-[var(--color-muted)]">{worth ? "Take it - beats borrowing at 18%" : "Marginal vs credit line"}</td>
                   </tr>
                 );
               })}
@@ -205,7 +205,7 @@ export default function WorkingCapitalPage() {
       {options.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
           <div className="px-5 py-3 border-b border-[var(--color-border)]">
-            <p className="text-sm font-semibold">Funding the {formatAmount(snap.workingCapitalGap)} gap — ranked by effective annual cost</p>
+            <p className="text-sm font-semibold">Funding the {formatAmount(snap.workingCapitalGap)} gap - ranked by effective annual cost</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -253,7 +253,7 @@ export default function WorkingCapitalPage() {
             : (Number.isFinite(snap.monthlyExpense) ? snap.monthlyExpense : 0);
           const dsoCut = Math.max(0, Math.min(15, snap.dsoDays || 0));
           const dioCut = Math.max(0, Math.min(10, snap.dioDays || 0));
-          // DPO is an extension — bounded by a sensible 10-day target, valued on COGS outflow.
+          // DPO is an extension - bounded by a sensible 10-day target, valued on COGS outflow.
           const dpoExt = 10;
           const dsoRelease = Math.round((dsoCut / 30) * monthlyRevenue);
           const dioRelease = Math.round((dioCut / 30) * monthlyCogs);
@@ -327,7 +327,7 @@ export default function WorkingCapitalPage() {
           <div className="border border-dashed border-[var(--color-border)] rounded-lg p-8 text-center">
             <Handshake size={22} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
             <p className="text-sm text-[var(--color-muted)]">
-              Add invoices and vendor payments and we'll surface concrete term changes — early-pay discounts to pull cash in, longer payables to hold it.
+              Add invoices and vendor payments and we'll surface concrete term changes - early-pay discounts to pull cash in, longer payables to hold it.
             </p>
           </div>
         ) : (
@@ -340,7 +340,7 @@ export default function WorkingCapitalPage() {
                       {t.side === "customer" ? "Pull in" : "Hold"}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold">{t.party} — <span className="font-normal">{t.action}</span></p>
+                      <p className="text-sm font-semibold">{t.party} - <span className="font-normal">{t.action}</span></p>
                       <p className="text-xs text-[var(--color-muted)] mt-0.5">{t.rationale}</p>
                       {t.costNote && <p className="text-[11px] text-[var(--color-muted)] mt-1">{t.costNote}</p>}
                     </div>
@@ -367,14 +367,14 @@ export default function WorkingCapitalPage() {
           {[
             {
               label: "Current Ratio",
-              value: snap.currentRatio !== null ? `${snap.currentRatio.toFixed(2)}x` : "—",
+              value: snap.currentRatio !== null ? `${snap.currentRatio.toFixed(2)}x` : "-",
               target: "≥ 1.5x",
               ok: (snap.currentRatio ?? 2) >= 1.5,
               note: "Current assets ÷ current liabilities",
             },
             {
               label: "Quick Ratio",
-              value: snap.quickRatio !== null ? `${snap.quickRatio.toFixed(2)}x` : "—",
+              value: snap.quickRatio !== null ? `${snap.quickRatio.toFixed(2)}x` : "-",
               target: "≥ 1.0x",
               ok: (snap.quickRatio ?? 1.5) >= 1.0,
               note: "(Cash + AR) ÷ current liabilities",
@@ -439,9 +439,9 @@ export default function WorkingCapitalPage() {
 const WC_INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] tabular-nums";
 const WC_CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg";
 
-// ── #81 Cash Conversion Cycle Dashboard — DIO+DSO−DPO trend + peer benchmark ────
+// ── #81 Cash Conversion Cycle Dashboard - DIO+DSO−DPO trend + peer benchmark ────
 function CccDashboard({ snap }: { snap: FinancialSnapshot }) {
-  // Industry CCC benchmarks (days) — directional medians used for peer comparison.
+  // Industry CCC benchmarks (days) - directional medians used for peer comparison.
   const PEERS = [
     { key: "retail", label: "Retail / FMCG", ccc: 30, dso: 12, dio: 40, dpo: 22 },
     { key: "manufacturing", label: "Manufacturing", ccc: 75, dso: 55, dio: 65, dpo: 45 },
@@ -453,7 +453,7 @@ function CccDashboard({ snap }: { snap: FinancialSnapshot }) {
   const peer = PEERS.find(p => p.key === peerKey) ?? PEERS[3];
 
   // Synthesise a 6-month CCC trend by walking the current legs back along the
-  // run-rate gradient — a deterministic, reproducible projection (no random noise).
+  // run-rate gradient - a deterministic, reproducible projection (no random noise).
   const trend = useMemo(() => {
     const months = ["5mo ago", "4mo ago", "3mo ago", "2mo ago", "Last mo", "Now"];
     return months.map((m, i) => {
@@ -482,7 +482,7 @@ function CccDashboard({ snap }: { snap: FinancialSnapshot }) {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2">
             <Activity size={16} className="text-[var(--color-primary)]" />
-            <h3 className="text-sm font-semibold">Cash Conversion Cycle — Trend & Peer Benchmark</h3>
+            <h3 className="text-sm font-semibold">Cash Conversion Cycle - Trend & Peer Benchmark</h3>
           </div>
           <select value={peerKey} onChange={e => setPeerKey(e.target.value as typeof peerKey)}
             className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]">
@@ -557,7 +557,7 @@ function CccDashboard({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #82 Inventory Days Optimizer — release-cash-by-cutting-stock simulator ──────
+// ── #82 Inventory Days Optimizer - release-cash-by-cutting-stock simulator ──────
 function InventoryDaysOptimizer({ snap }: { snap: FinancialSnapshot }) {
   const [targetDio, setTargetDio] = useState(String(Math.max(0, snap.dioDays - 10)));
   const target = Math.max(0, Math.min(snap.dioDays, parseFloat(targetDio) || 0));
@@ -585,7 +585,7 @@ function InventoryDaysOptimizer({ snap }: { snap: FinancialSnapshot }) {
       <div className={`${WC_CARD} p-4 space-y-4`}>
         <div className="flex items-center gap-2">
           <Boxes size={16} className="text-[var(--color-primary)]" />
-          <h3 className="text-sm font-semibold">Inventory Days Optimizer — Release-Cash Simulator</h3>
+          <h3 className="text-sm font-semibold">Inventory Days Optimizer - Release-Cash Simulator</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
@@ -659,17 +659,17 @@ function PayablesStretchTradeoff({ snap }: { snap: FinancialSnapshot }) {
   // Early-pay annualised return: discount / (1 − discount) × 365 / (net − disc days).
   const earlyApr = dDays < nDays && disc > 0 ? earlyPayAnnualizedReturn(parseFloat(discPct) || 0, nDays - dDays) : 0;
 
-  // Option A — take discount: pay early, lose use of cash for (net−disc) days.
+  // Option A - take discount: pay early, lose use of cash for (net−disc) days.
   const discountSaved = Math.round(monthlySpend * disc);
-  // Option B — stretch payables: hold cash longer, free working capital.
+  // Option B - stretch payables: hold cash longer, free working capital.
   const extraDays = Math.max(0, stretch - nDays);
   const cashHeld = Math.round((monthlySpend / 30) * extraDays);
   const stretchValue = Math.round(cashHeld * borrow * (extraDays / 365) * 12); // approx annual benefit of holding
 
   const takeDiscount = earlyApr > parseFloat(borrowPct);
   const verdict = takeDiscount
-    ? `Take the ${discPct}% discount — its ${earlyApr.toFixed(0)}% annualised return beats your ${borrowPct}% cost of capital.`
-    : `Stretch payables to day ${stretchTo} — the discount's ${earlyApr.toFixed(0)}% return is below your ${borrowPct}% borrowing cost, so holding cash wins.`;
+    ? `Take the ${discPct}% discount - its ${earlyApr.toFixed(0)}% annualised return beats your ${borrowPct}% cost of capital.`
+    : `Stretch payables to day ${stretchTo} - the discount's ${earlyApr.toFixed(0)}% return is below your ${borrowPct}% borrowing cost, so holding cash wins.`;
 
   return (
     <div className="space-y-4">
@@ -698,7 +698,7 @@ function PayablesStretchTradeoff({ snap }: { snap: FinancialSnapshot }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className={`${WC_CARD} p-5 ${takeDiscount ? "ring-1 ring-green-700/40" : ""}`}>
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-semibold">Option A — Take Early-Pay Discount</p>
+            <p className="text-sm font-semibold">Option A - Take Early-Pay Discount</p>
             {takeDiscount && <span className="text-[9px] bg-green-900/40 text-green-400 border border-green-800/40 px-1.5 py-0.5 rounded-full">BETTER</span>}
           </div>
           <p className="text-2xl font-bold tabular-nums text-green-400">{earlyApr.toFixed(0)}%</p>
@@ -712,7 +712,7 @@ function PayablesStretchTradeoff({ snap }: { snap: FinancialSnapshot }) {
 
         <div className={`${WC_CARD} p-5 ${!takeDiscount ? "ring-1 ring-green-700/40" : ""}`}>
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-semibold">Option B — Stretch Payables</p>
+            <p className="text-sm font-semibold">Option B - Stretch Payables</p>
             {!takeDiscount && <span className="text-[9px] bg-green-900/40 text-green-400 border border-green-800/40 px-1.5 py-0.5 rounded-full">BETTER</span>}
           </div>
           <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">+{extraDays}d</p>
@@ -728,7 +728,7 @@ function PayablesStretchTradeoff({ snap }: { snap: FinancialSnapshot }) {
       <div className={`rounded-lg p-4 border ${takeDiscount ? "border-green-800/40 bg-green-950/20" : "border-blue-800/40 bg-blue-950/20"}`}>
         <p className={`text-sm font-bold ${takeDiscount ? "text-green-400" : "text-blue-400"}`}>{takeDiscount ? "✓" : "→"} {verdict}</p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Rule of thumb: take the discount when its annualised return ({earlyApr.toFixed(0)}%) exceeds your cost of capital ({borrowPct}%). Stretching beyond agreed terms can sour vendor relationships and trigger MSME Sec 43B(h) interest — negotiate, don't default.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Rule of thumb: take the discount when its annualised return ({earlyApr.toFixed(0)}%) exceeds your cost of capital ({borrowPct}%). Stretching beyond agreed terms can sour vendor relationships and trigger MSME Sec 43B(h) interest - negotiate, don't default.</p>
     </div>
   );
 }
@@ -750,7 +750,7 @@ function OdCcUtilisationTracker({ snap }: { snap: FinancialSnapshot }) {
   const eligibleDebtors = Math.round(snap.accountsReceivable * (1 - dMargin));
   const drawingPower = eligibleStock + eligibleDebtors;
 
-  // Sanctioned limit may exceed drawing power — the binding cap is the lower of the two.
+  // Sanctioned limit may exceed drawing power - the binding cap is the lower of the two.
   const effectiveLimit = sanctioned > 0 ? Math.min(sanctioned, drawingPower) : drawingPower;
   const utilisationPct = effectiveLimit > 0 ? Math.round((used / effectiveLimit) * 100) : 0;
   const headroom = Math.max(0, effectiveLimit - used);
@@ -810,7 +810,7 @@ function OdCcUtilisationTracker({ snap }: { snap: FinancialSnapshot }) {
           <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(100, utilisationPct)}%` }} />
         </div>
         <p className="text-[10px] text-[var(--color-muted)] mt-2">
-          {overdrawn ? "Drawn above effective limit — risk of cheque return / penal interest." : `${formatAmount(headroom)} of headroom remaining against the binding cap.`}
+          {overdrawn ? "Drawn above effective limit - risk of cheque return / penal interest." : `${formatAmount(headroom)} of headroom remaining against the binding cap.`}
         </p>
       </div>
 
@@ -851,7 +851,7 @@ function OdCcUtilisationTracker({ snap }: { snap: FinancialSnapshot }) {
       {dpShortfall && (
         <div className="rounded-lg p-4 border border-orange-800/40 bg-orange-950/20 flex items-start gap-3">
           <AlertTriangle size={16} className="text-orange-400 shrink-0 mt-0.5" />
-          <p className="text-sm text-orange-400">Drawing power ({formatAmount(drawingPower)}) is below your sanctioned limit ({formatAmount(sanctioned)}). You can only draw up to drawing power — build stock or debtors to unlock the full line.</p>
+          <p className="text-sm text-orange-400">Drawing power ({formatAmount(drawingPower)}) is below your sanctioned limit ({formatAmount(sanctioned)}). You can only draw up to drawing power - build stock or debtors to unlock the full line.</p>
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Drawing power = (eligible stock + eligible debtors) after bank margins. You can draw only up to the lower of sanctioned limit and drawing power. Banks typically apply 25% margin on stock and 40% on debtors; over-90-day debtors are usually excluded entirely.</p>
@@ -939,7 +939,7 @@ function WorkingCapitalGapFunding({ snap }: { snap: FinancialSnapshot }) {
         <div className={`${WC_CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
             <Wallet size={14} className="text-[var(--color-primary)]" />
-            <p className="text-sm font-semibold">Ways to fund the {formatAmount(permissibleBankFinance)} need — ranked by effective annual cost</p>
+            <p className="text-sm font-semibold">Ways to fund the {formatAmount(permissibleBankFinance)} need - ranked by effective annual cost</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -972,7 +972,7 @@ function WorkingCapitalGapFunding({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #86 Trade-Cycle Optimizer — set target legs, see CCC & cash impact ───────────
+// ── #86 Trade-Cycle Optimizer - set target legs, see CCC & cash impact ───────────
 function TradeCycleOptimizer({ snap }: { snap: FinancialSnapshot }) {
   const [tDso, setTDso] = useState(String(Math.max(0, snap.dsoDays - 10)));
   const [tDio, setTDio] = useState(String(Math.max(0, snap.dioDays - 5)));
@@ -988,9 +988,9 @@ function TradeCycleOptimizer({ snap }: { snap: FinancialSnapshot }) {
   const cashFreed = Math.round(daysSaved * dailyOpex);
 
   const legs = [
-    { label: "DSO — collect faster", cur: snap.dsoDays, tgt: dso, set: setTDso, val: tDso, max: 120, good: dso <= snap.dsoDays },
-    { label: "DIO — leaner stock", cur: snap.dioDays, tgt: dio, set: setTDio, val: tDio, max: 120, good: dio <= snap.dioDays },
-    { label: "DPO — hold cash longer", cur: snap.dpoDays, tgt: dpo, set: setTDpo, val: tDpo, max: 120, good: dpo >= snap.dpoDays },
+    { label: "DSO - collect faster", cur: snap.dsoDays, tgt: dso, set: setTDso, val: tDso, max: 120, good: dso <= snap.dsoDays },
+    { label: "DIO - leaner stock", cur: snap.dioDays, tgt: dio, set: setTDio, val: tDio, max: 120, good: dio <= snap.dioDays },
+    { label: "DPO - hold cash longer", cur: snap.dpoDays, tgt: dpo, set: setTDpo, val: tDpo, max: 120, good: dpo >= snap.dpoDays },
   ];
 
   return (
@@ -998,7 +998,7 @@ function TradeCycleOptimizer({ snap }: { snap: FinancialSnapshot }) {
       <div className={`${WC_CARD} p-4 space-y-4`}>
         <div className="flex items-center gap-2">
           <Target size={16} className="text-[var(--color-primary)]" />
-          <h3 className="text-sm font-semibold">Trade-Cycle Optimizer — Target Each Leg</h3>
+          <h3 className="text-sm font-semibold">Trade-Cycle Optimizer - Target Each Leg</h3>
         </div>
         <p className="text-xs text-[var(--color-muted)]">Move the sliders to set realistic targets for each cycle leg. We recompute your cash conversion cycle and the cash it frees at your {formatAmount(Math.round(dailyOpex))}/day run rate.</p>
         <div className="space-y-4">
@@ -1032,7 +1032,7 @@ function TradeCycleOptimizer({ snap }: { snap: FinancialSnapshot }) {
         <p className={`text-sm font-bold ${daysSaved >= 0 ? "text-green-400" : "text-orange-400"}`}>
           {daysSaved >= 0
             ? `Hitting these targets trims your cycle by ${daysSaved} days and frees ${formatAmount(cashFreed)} of trapped cash.`
-            : `These targets lengthen your cycle by ${-daysSaved} days and consume ${formatAmount(-cashFreed)} more cash — tighten DSO/DIO or extend DPO.`}
+            : `These targets lengthen your cycle by ${-daysSaved} days and consume ${formatAmount(-cashFreed)} more cash - tighten DSO/DIO or extend DPO.`}
         </p>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">CCC = DSO + DIO − DPO. Cash freed = (current CCC − target CCC) × daily operating spend. Lower DSO/DIO and higher DPO all shorten the cycle.</p>
@@ -1064,7 +1064,7 @@ function DynamicDiscountVsBorrow({ snap }: { snap: FinancialSnapshot }) {
       <div className={`${WC_CARD} p-4 space-y-4`}>
         <div className="flex items-center gap-2">
           <Percent size={16} className="text-[var(--color-primary)]" />
-          <h3 className="text-sm font-semibold">Dynamic Discounting vs Borrow — Should You Pay Early?</h3>
+          <h3 className="text-sm font-semibold">Dynamic Discounting vs Borrow - Should You Pay Early?</h3>
         </div>
         <p className="text-xs text-[var(--color-muted)]">If you're cash-short, paying early means borrowing. This compares the discount captured against the interest cost of funding that early payment.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1099,10 +1099,10 @@ function DynamicDiscountVsBorrow({ snap }: { snap: FinancialSnapshot }) {
       <div className={`rounded-lg p-4 border ${takeIt ? "border-green-800/40 bg-green-950/20" : "border-blue-800/40 bg-blue-950/20"}`}>
         <p className={`text-sm font-bold ${takeIt ? "text-green-400" : "text-blue-400"}`}>
           {takeIt
-            ? `Take it — the ${disc}% discount is worth ${apr.toFixed(0)}% annualised, beating your ${borrowPct}% borrowing cost. Net ${formatAmount(netBenefit)} gain.`
-            : `Skip it — ${apr.toFixed(0)}% annualised is below your ${borrowPct}% cost of funds. Pay on normal terms.`}
+            ? `Take it - the ${disc}% discount is worth ${apr.toFixed(0)}% annualised, beating your ${borrowPct}% borrowing cost. Net ${formatAmount(netBenefit)} gain.`
+            : `Skip it - ${apr.toFixed(0)}% annualised is below your ${borrowPct}% cost of funds. Pay on normal terms.`}
         </p>
-        {cashShort && takeIt && <p className="text-[11px] text-[var(--color-muted)] mt-1">Even funded from your OD line, this clears a net profit — prioritise it within available headroom.</p>}
+        {cashShort && takeIt && <p className="text-[11px] text-[var(--color-muted)] mt-1">Even funded from your OD line, this clears a net profit - prioritise it within available headroom.</p>}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Annualised discount return = discount/(1−discount) × 365/days-early. Fund-early cost = amount × borrow rate × days-early/365. Take the discount whenever its annualised return exceeds your marginal cost of capital.</p>
     </div>
@@ -1137,7 +1137,7 @@ function SeasonalWcPlanner({ snap }: { snap: FinancialSnapshot }) {
           <Snowflake size={16} className="text-[var(--color-primary)]" />
           <h3 className="text-sm font-semibold">Seasonal Working-Capital Planner</h3>
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Your working capital isn't flat — it swells before festivals and quarter-end. This scales your base WC need ({formatAmount(Math.round(baseWc))}) by a typical Indian demand curve so you can pre-arrange the peak line.</p>
+        <p className="text-xs text-[var(--color-muted)]">Your working capital isn't flat - it swells before festivals and quarter-end. This scales your base WC need ({formatAmount(Math.round(baseWc))}) by a typical Indian demand curve so you can pre-arrange the peak line.</p>
         <div className="max-w-xs">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Extra uplift you expect at peak (%)</label>
           <input type="number" value={peakLift} onChange={e => setPeakLift(e.target.value)} className={WC_INP} />
@@ -1173,7 +1173,7 @@ function SeasonalWcPlanner({ snap }: { snap: FinancialSnapshot }) {
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Demand index is directional (Oct–Nov festival peak, Mar quarter-end). Pre-arrange the {formatAmount(peakExtra)} top-up well before {peak.month} — banks are slow when everyone needs cash at once.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Demand index is directional (Oct-Nov festival peak, Mar quarter-end). Pre-arrange the {formatAmount(peakExtra)} top-up well before {peak.month} - banks are slow when everyone needs cash at once.</p>
     </div>
   );
 }
@@ -1204,7 +1204,7 @@ function NetWorkingCapitalTrend({ snap }: { snap: FinancialSnapshot }) {
           <LineChartIcon size={16} className="text-[var(--color-primary)]" />
           <h3 className="text-sm font-semibold">Net Operating Working-Capital Trend</h3>
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Net operating WC = receivables + inventory − payables. Rising NWC silently absorbs cash even when you're profitable — watch the slope, not just the level.</p>
+        <p className="text-xs text-[var(--color-muted)]">Net operating WC = receivables + inventory − payables. Rising NWC silently absorbs cash even when you're profitable - watch the slope, not just the level.</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1236,15 +1236,15 @@ function NetWorkingCapitalTrend({ snap }: { snap: FinancialSnapshot }) {
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Trend is projected from current balances along the run-rate gradient. If NWC grows faster than revenue, growth is eating your cash — tighten collections or stock before scaling further.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Trend is projected from current balances along the run-rate gradient. If NWC grows faster than revenue, growth is eating your cash - tighten collections or stock before scaling further.</p>
     </div>
   );
 }
 
-// ── #90 Cash Locked in Working Capital — breakdown & release plan ────────────────
+// ── #90 Cash Locked in Working Capital - breakdown & release plan ────────────────
 function CashLockedInWc({ snap }: { snap: FinancialSnapshot }) {
   const components = [
-    { label: "Receivables (AR)", value: snap.accountsReceivable, color: "bg-yellow-500", textColor: "text-yellow-400", lever: "Collect faster — auto-reminders, early-pay discounts", releasable: Math.round(snap.overdueReceivable) },
+    { label: "Receivables (AR)", value: snap.accountsReceivable, color: "bg-yellow-500", textColor: "text-yellow-400", lever: "Collect faster - auto-reminders, early-pay discounts", releasable: Math.round(snap.overdueReceivable) },
     { label: "Inventory", value: snap.inventoryValue, color: "bg-orange-500", textColor: "text-orange-400", lever: "Clear slow stock, tighten reorder quantities", releasable: Math.round(snap.inventoryValue * 0.2) },
   ];
   const offset = { label: "Payables (free credit)", value: snap.accountsPayable, color: "bg-green-500", textColor: "text-green-400", lever: "Negotiate longer terms with top suppliers", releasable: Math.round(snap.accountsPayable * 0.15) };
@@ -1302,7 +1302,7 @@ function CashLockedInWc({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #91 Receivables Acceleration Planner — aging-based collection plan ───────────
+// ── #91 Receivables Acceleration Planner - aging-based collection plan ───────────
 function ReceivablesAcceleration({ snap, aging }: { snap: FinancialSnapshot; aging: AgingBucket[] }) {
   const [discPct, setDiscPct] = useState("2");
   const [uptakePct, setUptakePct] = useState("40"); // % of customers expected to take early-pay
@@ -1313,7 +1313,7 @@ function ReceivablesAcceleration({ snap, aging }: { snap: FinancialSnapshot; agi
   const plan = aging.map((b, i) => {
     const recoverPct = [0.95, 0.85, 0.7, 0.5, 0.3][i] ?? 0.3;
     const pullForward = Math.round(b.amount * recoverPct);
-    const lever = ["On track — light touch", "Reminder at day 7", "Call + WhatsApp follow-up", "Early-pay discount offer", "Escalate / consider factoring"][i] ?? "Escalate";
+    const lever = ["On track - light touch", "Reminder at day 7", "Call + WhatsApp follow-up", "Early-pay discount offer", "Escalate / consider factoring"][i] ?? "Escalate";
     return { ...b, recoverPct, pullForward, lever };
   });
 
@@ -1345,7 +1345,7 @@ function ReceivablesAcceleration({ snap, aging }: { snap: FinancialSnapshot; agi
 
       {snap.accountsReceivable === 0 ? (
         <div className={`${WC_CARD} p-8 text-center`}>
-          <p className="text-sm text-[var(--color-muted)]">No open receivables — create invoices to plan collections.</p>
+          <p className="text-sm text-[var(--color-muted)]">No open receivables - create invoices to plan collections.</p>
         </div>
       ) : (
         <>
@@ -1392,7 +1392,7 @@ function ReceivablesAcceleration({ snap, aging }: { snap: FinancialSnapshot; agi
   );
 }
 
-// ── #92 Liquidity Ratios Tracker — current / quick / cash ratio ──────────────────
+// ── #92 Liquidity Ratios Tracker - current / quick / cash ratio ──────────────────
 function LiquidityRatiosTracker({ snap }: { snap: FinancialSnapshot }) {
   const currentAssets = snap.cash + snap.accountsReceivable + snap.inventoryValue;
   const currentLiabilities = snap.accountsPayable + snap.obligationsDue90;
@@ -1405,7 +1405,7 @@ function LiquidityRatiosTracker({ snap }: { snap: FinancialSnapshot }) {
   const ratios = [
     { label: "Current Ratio", value: currentRatio, target: 1.5, formula: "(Cash + AR + Inventory) ÷ current liabilities", note: "Can you cover short-term dues from all current assets?" },
     { label: "Quick Ratio (Acid-Test)", value: quickRatio, target: 1.0, formula: "(Cash + AR) ÷ current liabilities", note: "Coverage excluding hard-to-sell inventory." },
-    { label: "Cash Ratio", value: cashRatio, target: 0.5, formula: "Cash ÷ current liabilities", note: "The most conservative — pure cash on hand." },
+    { label: "Cash Ratio", value: cashRatio, target: 0.5, formula: "Cash ÷ current liabilities", note: "The most conservative - pure cash on hand." },
   ];
 
   return (
@@ -1415,7 +1415,7 @@ function LiquidityRatiosTracker({ snap }: { snap: FinancialSnapshot }) {
           <PiggyBank size={16} className="text-[var(--color-primary)]" />
           <h3 className="text-sm font-semibold">Liquidity Ratios Tracker</h3>
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Three lenses on the same question — can you meet short-term obligations? Computed live from your cash ({formatAmount(snap.cash)}), receivables, inventory and dues within 90 days.</p>
+        <p className="text-xs text-[var(--color-muted)]">Three lenses on the same question - can you meet short-term obligations? Computed live from your cash ({formatAmount(snap.cash)}), receivables, inventory and dues within 90 days.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1467,7 +1467,7 @@ function LiquidityRatiosTracker({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #93 MPBF (Tandon Committee) Limit Calculator — Method I vs II ────────────────
+// ── #93 MPBF (Tandon Committee) Limit Calculator - Method I vs II ────────────────
 function MpbfTandonCalculator({ snap }: { snap: FinancialSnapshot }) {
   // Other current assets (e.g. advances, prepaid) the bank counts beyond stock+debtors.
   const [otherCa, setOtherCa] = useFeatureState<string>("wc-mpbf-other-ca", "0");
@@ -1501,10 +1501,10 @@ function MpbfTandonCalculator({ snap }: { snap: FinancialSnapshot }) {
       <div className={`${WC_CARD} p-4 space-y-4`}>
         <div className="flex items-center gap-2">
           <Calculator size={16} className="text-[var(--color-primary)]" />
-          <h3 className="text-sm font-semibold">MPBF Calculator — Tandon Committee Method I vs II</h3>
+          <h3 className="text-sm font-semibold">MPBF Calculator - Tandon Committee Method I vs II</h3>
         </div>
         <p className="text-xs text-[var(--color-muted)]">
-          Maximum Permissible Bank Finance is how banks cap your cash-credit limit. Method II (the RBI norm for larger limits) makes you fund 25% of all current assets from long-term sources — a stricter current ratio of ~1.33. Computed live from your stock ({formatAmount(snap.inventoryValue)}) and debtors ({formatAmount(snap.accountsReceivable)}).
+          Maximum Permissible Bank Finance is how banks cap your cash-credit limit. Method II (the RBI norm for larger limits) makes you fund 25% of all current assets from long-term sources - a stricter current ratio of ~1.33. Computed live from your stock ({formatAmount(snap.inventoryValue)}) and debtors ({formatAmount(snap.accountsReceivable)}).
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-lg">
           <div>
@@ -1564,7 +1564,7 @@ function MpbfTandonCalculator({ snap }: { snap: FinancialSnapshot }) {
 
       <div className="rounded-lg p-4 border border-blue-800/40 bg-blue-950/20">
         <p className="text-sm text-blue-400">
-          Banks now sanction the lower, more conservative <strong>Method II</strong> figure ({formatAmount(mpbf2)}) for limits above ₹6 crore. The {formatAmount(mpbf1 - mpbf2)} extra you'd get under Method I must come from your own NWC — plan that long-term funding before the limit review.
+          Banks now sanction the lower, more conservative <strong>Method II</strong> figure ({formatAmount(mpbf2)}) for limits above ₹6 crore. The {formatAmount(mpbf1 - mpbf2)} extra you'd get under Method I must come from your own NWC - plan that long-term funding before the limit review.
         </p>
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Method I: MPBF = WC gap − 25% of WC gap (current ratio ~1.17). Method II: MPBF = current assets − other current liabilities − 25% of current assets (current ratio ~1.33). WC gap = current assets − current liabilities other than bank borrowing.</p>
@@ -1596,15 +1596,15 @@ function StockStatementGenerator({ snap }: { snap: FinancialSnapshot }) {
   const statementMonth = format(new Date(), "MMMM yyyy");
 
   const rows = [
-    { particular: "A. Stock / inventory (as per books)", gross: snap.inventoryValue, margin: "—", net: snap.inventoryValue },
-    { particular: "Less: creditors for paid stock", gross: -creditorsForStock, margin: "—", net: -creditorsForStock },
+    { particular: "A. Stock / inventory (as per books)", gross: snap.inventoryValue, margin: "-", net: snap.inventoryValue },
+    { particular: "Less: creditors for paid stock", gross: -creditorsForStock, margin: "-", net: -creditorsForStock },
     { particular: "Paid-for stock", gross: paidStock, margin: `${stockMargin}%`, net: eligibleStock },
     { particular: `B. Book debts ${excl90 ? "(≤90 days only)" : "(all ages)"}`, gross: eligibleDebtorsBase, margin: `${debtorMargin}%`, net: eligibleDebtors },
   ];
 
   const copyStatement = () => {
     const text = [
-      `STOCK & BOOK-DEBT STATEMENT — ${statementMonth}`,
+      `STOCK & BOOK-DEBT STATEMENT - ${statementMonth}`,
       `Stock (books): ${formatCurrency(snap.inventoryValue)}`,
       `Less creditors for stock: ${formatCurrency(creditorsForStock)}`,
       `Paid-for stock after ${stockMargin}% margin: ${formatCurrency(eligibleStock)}`,
@@ -1613,7 +1613,7 @@ function StockStatementGenerator({ snap }: { snap: FinancialSnapshot }) {
     ].join("\n");
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(text).then(
-        () => toast.success("Stock statement copied — paste into your bank's format"),
+        () => toast.success("Stock statement copied - paste into your bank's format"),
         () => toast.error("Could not copy to clipboard"),
       );
     } else {
@@ -1627,7 +1627,7 @@ function StockStatementGenerator({ snap }: { snap: FinancialSnapshot }) {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2">
             <FileSpreadsheet size={16} className="text-[var(--color-primary)]" />
-            <h3 className="text-sm font-semibold">Stock & Book-Debt Statement — {statementMonth}</h3>
+            <h3 className="text-sm font-semibold">Stock & Book-Debt Statement - {statementMonth}</h3>
           </div>
           <button onClick={copyStatement} className="text-xs bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-1.5 rounded-lg hover:bg-[var(--color-primary)]/25">
             Copy for bank
@@ -1674,7 +1674,7 @@ function StockStatementGenerator({ snap }: { snap: FinancialSnapshot }) {
                 <td className="px-4 py-2.5">{r.particular}</td>
                 <td className="px-4 py-2.5 tabular-nums">{formatAmount(r.gross)}</td>
                 <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.margin}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.net === r.gross ? "—" : formatAmount(r.net)}</td>
+                <td className="px-4 py-2.5 tabular-nums">{r.net === r.gross ? "-" : formatAmount(r.net)}</td>
               </tr>
             ))}
             <tr className="bg-[var(--color-accent)] font-semibold">
@@ -1684,7 +1684,7 @@ function StockStatementGenerator({ snap }: { snap: FinancialSnapshot }) {
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Drawing power = (paid-for stock × (1 − stock margin)) + (eligible debtors × (1 − debtor margin)). Paid-for stock excludes creditors so the bank doesn't fund supplier-funded inventory twice. Debtors over 90 days are excluded per standard sanction terms. File this by the 7th–10th of each month.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Drawing power = (paid-for stock × (1 − stock margin)) + (eligible debtors × (1 − debtor margin)). Paid-for stock excludes creditors so the bank doesn't fund supplier-funded inventory twice. Debtors over 90 days are excluded per standard sanction terms. File this by the 7th-10th of each month.</p>
     </div>
   );
 }
@@ -1776,16 +1776,16 @@ function DebtorFinancingEligibility({ snap }: { snap: FinancialSnapshot }) {
         </div>
         <p className="text-[10px] text-[var(--color-muted)] mt-3">
           {eligible === 0
-            ? "No current receivables to finance — overdue invoices are excluded as financiers won't fund them."
-            : `This advance buys roughly ${daysOfRunway} days of operating runway at your ${formatAmount(Math.round(dailyOpex))}/day burn — compare against OD before committing.`}
+            ? "No current receivables to finance - overdue invoices are excluded as financiers won't fund them."
+            : `This advance buys roughly ${daysOfRunway} days of operating runway at your ${formatAmount(Math.round(dailyOpex))}/day burn - compare against OD before committing.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Eligible = receivables minus overdue (financiers fund current invoices only). Effective annual cost = total cost ÷ advance × 365 ÷ tenor. On TReDS this is typically 9–14% for buyers with good ratings; weigh it against your CC line rate.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Eligible = receivables minus overdue (financiers fund current invoices only). Effective annual cost = total cost ÷ advance × 365 ÷ tenor. On TReDS this is typically 9-14% for buyers with good ratings; weigh it against your CC line rate.</p>
     </div>
   );
 }
 
-// ── #96 Creditor-Stretch Impact — DPO extension, cash freed & MSME risk ─────────
+// ── #96 Creditor-Stretch Impact - DPO extension, cash freed & MSME risk ─────────
 function CreditorStretchImpact({ snap }: { snap: FinancialSnapshot }) {
   const [extraDays, setExtraDays] = useState("15");
   const [msmeSharePct, setMsmeSharePct] = useState("30"); // % of payables owed to MSME vendors
@@ -1800,7 +1800,7 @@ function CreditorStretchImpact({ snap }: { snap: FinancialSnapshot }) {
   const dailyOpex = snap.monthlyExpense / 30;
 
   // Sec 43B(h): payments to MSME vendors beyond 45 days are disallowed as expense
-  // until paid — stretching MSME creditors carries a tax cost, not just relationship risk.
+  // until paid - stretching MSME creditors carries a tax cost, not just relationship risk.
   const msmePayables = Math.round(snap.accountsPayable * msmeShare);
   const exposedToMsmeRule = newDpo > 45 && msmeShare > 0;
   const msmeAtRisk = exposedToMsmeRule ? msmePayables : 0;
@@ -1813,10 +1813,10 @@ function CreditorStretchImpact({ snap }: { snap: FinancialSnapshot }) {
       <div className={`${WC_CARD} p-4 space-y-4`}>
         <div className="flex items-center gap-2">
           <Repeat size={16} className="text-[var(--color-primary)]" />
-          <h3 className="text-sm font-semibold">Creditor-Stretch Impact — DPO, Cash Freed & MSME Risk</h3>
+          <h3 className="text-sm font-semibold">Creditor-Stretch Impact - DPO, Cash Freed & MSME Risk</h3>
         </div>
         <p className="text-xs text-[var(--color-muted)]">
-          Holding supplier payments longer is the cheapest funding there is — but stretch MSME vendors past 45 days and Sec 43B(h) disallows the expense until paid. Model the cash freed against the tax exposure.
+          Holding supplier payments longer is the cheapest funding there is - but stretch MSME vendors past 45 days and Sec 43B(h) disallows the expense until paid. Model the cash freed against the tax exposure.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-lg">
           <div>
@@ -1857,12 +1857,12 @@ function CreditorStretchImpact({ snap }: { snap: FinancialSnapshot }) {
         <div className="rounded-lg p-4 border border-red-800/40 bg-red-950/20 flex items-start gap-3">
           <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
           <p className="text-sm text-red-400">
-            New DPO of {newDpo} days breaches the 45-day MSME limit. ~{formatAmount(msmeAtRisk)} owed to MSME vendors would be <strong>disallowed under Sec 43B(h)</strong> until actually paid — inflating this year's taxable profit. Pay MSME vendors within 45 days; stretch only non-MSME creditors.
+            New DPO of {newDpo} days breaches the 45-day MSME limit. ~{formatAmount(msmeAtRisk)} owed to MSME vendors would be <strong>disallowed under Sec 43B(h)</strong> until actually paid - inflating this year's taxable profit. Pay MSME vendors within 45 days; stretch only non-MSME creditors.
           </p>
         </div>
       ) : (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-          <p className="text-sm text-green-400">New DPO of {newDpo} days stays within the 45-day MSME limit — no Sec 43B(h) disallowance. Safe to negotiate.</p>
+          <p className="text-sm text-green-400">New DPO of {newDpo} days stays within the 45-day MSME limit - no Sec 43B(h) disallowance. Safe to negotiate.</p>
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Daily purchases = payables ÷ current DPO. Cash freed = daily purchases × extra days. Sec 43B(h) of the Income-tax Act disallows expenses to micro/small (registered MSME) suppliers paid beyond 45 days until the year they're actually settled.</p>
@@ -1870,7 +1870,7 @@ function CreditorStretchImpact({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #97 Working-Capital Turnover Ratio — sales generated per rupee of WC ─────────
+// ── #97 Working-Capital Turnover Ratio - sales generated per rupee of WC ─────────
 function WorkingCapitalTurnover({ snap }: { snap: FinancialSnapshot }) {
   const annualRevenue = snap.monthlyRevenue * 12;
   const nwc = snap.accountsReceivable + snap.inventoryValue - snap.accountsPayable;
@@ -1900,13 +1900,13 @@ function WorkingCapitalTurnover({ snap }: { snap: FinancialSnapshot }) {
           <h3 className="text-sm font-semibold">Working-Capital Turnover Ratio</h3>
         </div>
         <p className="text-xs text-[var(--color-muted)]">
-          How many rupees of annual sales each rupee of working capital supports. Higher is leaner — you're sweating your capital harder. Computed from your annualised revenue ({formatAmount(annualRevenue)}) and net WC ({formatAmount(nwc)}).
+          How many rupees of annual sales each rupee of working capital supports. Higher is leaner - you're sweating your capital harder. Computed from your annualised revenue ({formatAmount(annualRevenue)}) and net WC ({formatAmount(nwc)}).
         </p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "WC Turnover", value: nwc > 0 ? `${turnover.toFixed(1)}x` : "—", color: turnover >= 4 ? "text-green-400" : turnover >= 2.5 ? "text-yellow-400" : "text-orange-400" },
+          { label: "WC Turnover", value: nwc > 0 ? `${turnover.toFixed(1)}x` : "-", color: turnover >= 4 ? "text-green-400" : turnover >= 2.5 ? "text-yellow-400" : "text-orange-400" },
           { label: "WC per ₹ of Sales", value: `${(wcPerRupeeSales * 100).toFixed(0)} paise`, color: "text-[var(--color-text)]" },
           { label: "Efficiency Band", value: band.label, color: turnover >= 4 ? "text-green-400" : "text-orange-400" },
           { label: "Net Working Capital", value: formatAmount(nwc), color: "text-[var(--color-primary)]" },
@@ -1925,7 +1925,7 @@ function WorkingCapitalTurnover({ snap }: { snap: FinancialSnapshot }) {
           return (
             <div key={b.label} className={`flex items-center justify-between px-4 py-2.5 rounded-lg border ${active ? "border-[var(--color-primary)]/40 bg-[var(--color-primary)]/10" : "border-[var(--color-border)] bg-[var(--color-bg)]"}`}>
               <span className={`text-sm ${active ? "font-semibold text-[var(--color-primary)]" : ""}`}>{b.label}</span>
-              <span className="text-xs tabular-nums text-[var(--color-muted)]">{b.min > 0 ? `≥ ${b.min}x` : `< 2.5x`}{active ? " — you" : ""}</span>
+              <span className="text-xs tabular-nums text-[var(--color-muted)]">{b.min > 0 ? `≥ ${b.min}x` : `< 2.5x`}{active ? " - you" : ""}</span>
             </div>
           );
         })}
@@ -1934,7 +1934,7 @@ function WorkingCapitalTurnover({ snap }: { snap: FinancialSnapshot }) {
       {nwc > 0 && (
         <div className="rounded-lg p-4 border border-blue-800/40 bg-blue-950/20">
           <p className="text-sm text-blue-400">
-            Freeing just 10 days of WC ({formatAmount(Math.round(dailyOpex * 10))}) would lift your turnover from {turnover.toFixed(1)}x to <strong>{leanerTurnover.toFixed(1)}x</strong> — the same sales on less trapped cash.
+            Freeing just 10 days of WC ({formatAmount(Math.round(dailyOpex * 10))}) would lift your turnover from {turnover.toFixed(1)}x to <strong>{leanerTurnover.toFixed(1)}x</strong> - the same sales on less trapped cash.
           </p>
         </div>
       )}
@@ -1943,7 +1943,7 @@ function WorkingCapitalTurnover({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #98 Factoring vs Overdraft — funding-cost decision ──────────────────────────
+// ── #98 Factoring vs Overdraft - funding-cost decision ──────────────────────────
 function FactoringVsOdDecision({ snap }: { snap: FinancialSnapshot }) {
   const [need, setNeed] = useState(String(Math.round(snap.workingCapitalGap) || 500000));
   const [tenorDays, setTenorDays] = useState("60");
@@ -1976,7 +1976,7 @@ function FactoringVsOdDecision({ snap }: { snap: FinancialSnapshot }) {
       <div className={`${WC_CARD} p-4 space-y-4`}>
         <div className="flex items-center gap-2">
           <Split size={16} className="text-[var(--color-primary)]" />
-          <h3 className="text-sm font-semibold">Factoring vs Overdraft — Which Costs Less?</h3>
+          <h3 className="text-sm font-semibold">Factoring vs Overdraft - Which Costs Less?</h3>
         </div>
         <p className="text-xs text-[var(--color-muted)]">
           Both bridge a {formatAmount(amount)} gap, but they price differently: an OD charges interest only on what you draw, while factoring adds a service fee but can transfer bad-debt risk (non-recourse). Compare the true cost for your tenor.
@@ -2026,8 +2026,8 @@ function FactoringVsOdDecision({ snap }: { snap: FinancialSnapshot }) {
           <p className="text-2xl font-bold tabular-nums">{formatAmount(factorCost)}</p>
           <p className="text-[10px] text-[var(--color-muted)]">interest {formatAmount(factorInterest)} + fee {formatAmount(factorFeeAmt)} · {factorEff.toFixed(1)}% effective/yr</p>
           <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-1 text-xs text-[var(--color-muted)]">
-            <p>{nonRecourse ? "Non-recourse: factor absorbs buyer default — worth the premium for risky debtors." : "With recourse: you still carry the bad-debt risk."}</p>
-            <p>Factor manages collection — frees up your team.</p>
+            <p>{nonRecourse ? "Non-recourse: factor absorbs buyer default - worth the premium for risky debtors." : "With recourse: you still carry the bad-debt risk."}</p>
+            <p>Factor manages collection - frees up your team.</p>
           </div>
         </div>
       </div>
@@ -2035,16 +2035,16 @@ function FactoringVsOdDecision({ snap }: { snap: FinancialSnapshot }) {
       <div className={`rounded-lg p-4 border ${factoringWins ? "border-blue-800/40 bg-blue-950/20" : "border-green-800/40 bg-green-950/20"}`}>
         <p className={`text-sm font-bold ${factoringWins ? "text-blue-400" : "text-green-400"}`}>
           {factoringWins
-            ? `Factoring is ${formatAmount(odCost - factorCost)} cheaper here${nonRecourse ? " and offloads bad-debt risk" : ""} — but only if you have clean invoices to assign.`
+            ? `Factoring is ${formatAmount(odCost - factorCost)} cheaper here${nonRecourse ? " and offloads bad-debt risk" : ""} - but only if you have clean invoices to assign.`
             : `The overdraft is ${formatAmount(factorCost - odCost)} cheaper for this tenor. Use factoring only when you also want collection support or ${nonRecourse ? "non-recourse" : "default"} protection.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">OD cost = amount × OD rate × days/365. Factoring cost = amount × factoring rate × days/365 + one-off fee. Effective annual cost annualises each over the tenor. Non-recourse factoring costs more but transfers buyer-default risk — value that against your debtor quality.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">OD cost = amount × OD rate × days/365. Factoring cost = amount × factoring rate × days/365 + one-off fee. Effective annual cost annualises each over the tenor. Non-recourse factoring costs more but transfers buyer-default risk - value that against your debtor quality.</p>
     </div>
   );
 }
 
-// ── #99 Operating Cycle Breakdown — gross vs net cycle ──────────────────────────
+// ── #99 Operating Cycle Breakdown - gross vs net cycle ──────────────────────────
 function OperatingCycleBreakdown({ snap }: { snap: FinancialSnapshot }) {
   // Operating cycle = DSO + DIO (cash-to-cash before supplier credit). CCC nets out DPO.
   const operatingCycle = snap.dsoDays + snap.dioDays;
@@ -2055,8 +2055,8 @@ function OperatingCycleBreakdown({ snap }: { snap: FinancialSnapshot }) {
   const selfFundedCash = Math.round(dailyOpex * selfFunded);
 
   const segs = [
-    { label: "DSO — customers hold cash", days: snap.dsoDays, color: "bg-yellow-500" },
-    { label: "DIO — cash sits in stock", days: snap.dioDays, color: "bg-orange-500" },
+    { label: "DSO - customers hold cash", days: snap.dsoDays, color: "bg-yellow-500" },
+    { label: "DIO - cash sits in stock", days: snap.dioDays, color: "bg-orange-500" },
   ];
   const maxSeg = Math.max(operatingCycle, 1);
 
@@ -2068,7 +2068,7 @@ function OperatingCycleBreakdown({ snap }: { snap: FinancialSnapshot }) {
           <h3 className="text-sm font-semibold">Operating Cycle Breakdown</h3>
         </div>
         <p className="text-xs text-[var(--color-muted)]">
-          The operating cycle (DSO + DIO = {operatingCycle} days) is how long cash is locked from buying stock to collecting the sale. Supplier credit (DPO) funds part of it for free — what's left is the self-funded gap you carry.
+          The operating cycle (DSO + DIO = {operatingCycle} days) is how long cash is locked from buying stock to collecting the sale. Supplier credit (DPO) funds part of it for free - what's left is the self-funded gap you carry.
         </p>
       </div>
 
@@ -2113,7 +2113,7 @@ function OperatingCycleBreakdown({ snap }: { snap: FinancialSnapshot }) {
       <div className={`rounded-lg p-4 border ${selfFunded <= 30 ? "border-green-800/40 bg-green-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
         <p className={`text-sm ${selfFunded <= 30 ? "text-green-400" : "text-orange-400"}`}>
           {selfFunded <= 0
-            ? "Your suppliers fund the entire operating cycle — you run on negative working capital. Excellent."
+            ? "Your suppliers fund the entire operating cycle - you run on negative working capital. Excellent."
             : `Suppliers cover ${supplierCoverPct}% of your ${operatingCycle}-day cycle; you self-fund the remaining ${selfFunded} days (${formatAmount(selfFundedCash)}). Stretching DPO or cutting DSO closes this directly.`}
         </p>
       </div>
@@ -2122,7 +2122,7 @@ function OperatingCycleBreakdown({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #100 Current-Ratio Target Planner — what moves the ratio ────────────────────
+// ── #100 Current-Ratio Target Planner - what moves the ratio ────────────────────
 function CurrentRatioTargetPlanner({ snap }: { snap: FinancialSnapshot }) {
   const [targetRatio, setTargetRatio] = useState("1.5");
   // Approximate current assets / liabilities from snapshot components.
@@ -2157,7 +2157,7 @@ function CurrentRatioTargetPlanner({ snap }: { snap: FinancialSnapshot }) {
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
-          { label: "Current Ratio", value: currentLiabilities > 0 ? `${ratio.toFixed(2)}x` : "—", color: ratio >= 1.5 ? "text-green-400" : ratio >= 1 ? "text-yellow-400" : "text-red-400" },
+          { label: "Current Ratio", value: currentLiabilities > 0 ? `${ratio.toFixed(2)}x` : "-", color: ratio >= 1.5 ? "text-green-400" : ratio >= 1 ? "text-yellow-400" : "text-red-400" },
           { label: "Current Assets", value: formatAmount(currentAssets), color: "text-[var(--color-text)]" },
           { label: "Short-Term Dues", value: formatAmount(currentLiabilities), color: "text-[var(--color-text)]" },
         ].map(c => (
@@ -2175,12 +2175,12 @@ function CurrentRatioTargetPlanner({ snap }: { snap: FinancialSnapshot }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className={`${WC_CARD} p-5`}>
-            <p className="text-sm font-semibold mb-1">Lever A — add current assets</p>
+            <p className="text-sm font-semibold mb-1">Lever A - add current assets</p>
             <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">{formatAmount(extraAssetsNeeded)}</p>
             <p className="text-xs text-[var(--color-muted)] mt-2">Raise cash, collect receivables faster, or inject capital so current assets reach {target.toFixed(2)}× your dues.</p>
           </div>
           <div className={`${WC_CARD} p-5`}>
-            <p className="text-sm font-semibold mb-1">Lever B — clear short-term dues</p>
+            <p className="text-sm font-semibold mb-1">Lever B - clear short-term dues</p>
             <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">{formatAmount(liabPaydownNeeded)}</p>
             <p className="text-xs text-[var(--color-muted)] mt-2">Pay down payables or near-term obligations (or term them out) to shrink the denominator to the target.</p>
           </div>
@@ -2191,7 +2191,7 @@ function CurrentRatioTargetPlanner({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #101 Supplier vs Customer Terms Gap — the credit mismatch ───────────────────
+// ── #101 Supplier vs Customer Terms Gap - the credit mismatch ───────────────────
 function TermsGapAnalyzer({ snap }: { snap: FinancialSnapshot }) {
   // The squeeze: if you collect (DSO) slower than you pay (DPO), you bankroll the gap.
   const termsGap = snap.dsoDays - snap.dpoDays;
@@ -2245,7 +2245,7 @@ function TermsGapAnalyzer({ snap }: { snap: FinancialSnapshot }) {
       <div className={`rounded-lg p-4 border ${favourable ? "border-green-800/40 bg-green-950/20" : "border-orange-800/40 bg-orange-950/20"}`}>
         <p className={`text-sm ${favourable ? "text-green-400" : "text-orange-400"}`}>
           {favourable
-            ? `You collect ${Math.abs(termsGap)} days before you pay suppliers — a ${formatAmount(gapCash)} free float. Protect it: don't let customer terms drift longer than supplier terms.`
+            ? `You collect ${Math.abs(termsGap)} days before you pay suppliers - a ${formatAmount(gapCash)} free float. Protect it: don't let customer terms drift longer than supplier terms.`
             : `You wait ${termsGap} extra days to collect after paying suppliers, bridging ${formatAmount(gapCash)} yourself. Closing the gap means tightening customer terms (deposits, shorter credit) or negotiating longer supplier terms.`}
         </p>
       </div>
@@ -2254,7 +2254,7 @@ function TermsGapAnalyzer({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #102 WC Efficiency Score — composite 0-100 ─────────────────────────────────
+// ── #102 WC Efficiency Score - composite 0-100 ─────────────────────────────────
 function WcEfficiencyScore({ snap }: { snap: FinancialSnapshot }) {
   // Composite of four working-capital signals, each scored 0-25 and summed.
   const clamp = (n: number) => Math.max(0, Math.min(25, n));
@@ -2319,12 +2319,12 @@ function WcEfficiencyScore({ snap }: { snap: FinancialSnapshot }) {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Score = sum of four 0-25 sub-scores: CCC (0d→25, 90d→0), receivables quality (0% overdue→25, 40%→0), supplier-credit cover (DPO ÷ operating cycle), and current ratio (1.5x→25, 0.5x→0). Weights are equal and directional — a planning lens, not a credit rating.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Score = sum of four 0-25 sub-scores: CCC (0d→25, 90d→0), receivables quality (0% overdue→25, 40%→0), supplier-credit cover (DPO ÷ operating cycle), and current ratio (1.5x→25, 0.5x→0). Weights are equal and directional - a planning lens, not a credit rating.</p>
     </div>
   );
 }
 
-// ── #103 Working-Capital Loan Sizer — bridge amount, tenor & EMI ────────────────
+// ── #103 Working-Capital Loan Sizer - bridge amount, tenor & EMI ────────────────
 function WcLoanSizer({ snap }: { snap: FinancialSnapshot }) {
   // Size a working-capital term loan to bridge the cash tied up in the cycle.
   const [gap, setGap] = useState(String(Math.round(snap.workingCapitalGap) || 0));
@@ -2354,7 +2354,7 @@ function WcLoanSizer({ snap }: { snap: FinancialSnapshot }) {
       <div className={`${WC_CARD} p-4 space-y-4`}>
         <div className="flex items-center gap-2">
           <Banknote size={16} className="text-[var(--color-primary)]" />
-          <h3 className="text-sm font-semibold">Working-Capital Loan Sizer — Bridge Amount, Tenor & EMI</h3>
+          <h3 className="text-sm font-semibold">Working-Capital Loan Sizer - Bridge Amount, Tenor & EMI</h3>
         </div>
         <p className="text-xs text-[var(--color-muted)]">
           Your cycle ties up <strong>{formatCurrency(snap.workingCapitalGap)}</strong>. Size a term loan to bridge it, then check the EMI against your monthly net.
@@ -2415,14 +2415,14 @@ function WcLoanSizer({ snap }: { snap: FinancialSnapshot }) {
               : `Tight: your monthly net (${formatCurrency(snap.monthlyNet)}) covers the EMI only ${coverage.toFixed(1)}×. Lengthen tenor, fund a smaller slice, or fix the cycle first.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">EMI uses the standard reducing-balance formula P·r·(1+r)ⁿ / ((1+r)ⁿ−1) at a monthly rate. Affordability flagged green when monthly net ≥ 1.25× EMI. Indicative only — lender sanction depends on drawing power, security and credit history.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">EMI uses the standard reducing-balance formula P·r·(1+r)ⁿ / ((1+r)ⁿ−1) at a monthly rate. Affordability flagged green when monthly net ≥ 1.25× EMI. Indicative only - lender sanction depends on drawing power, security and credit history.</p>
     </div>
   );
 }
 
-// ── #104 DSCR Forecast — debt-service coverage vs lender covenant ────────────────
+// ── #104 DSCR Forecast - debt-service coverage vs lender covenant ────────────────
 function DscrForecast({ snap }: { snap: FinancialSnapshot }) {
-  // DSCR = cash available for debt service ÷ total debt service. Lenders want ≥ 1.25–1.5x.
+  // DSCR = cash available for debt service ÷ total debt service. Lenders want ≥ 1.25-1.5x.
   const [covenant, setCovenant] = useState("1.25");
   const [extraDebtService, setExtraDebtService] = useState("0"); // proposed new EMI to stress
   const [growthPct, setGrowthPct] = useState("0");               // forward profit growth %
@@ -2454,7 +2454,7 @@ function DscrForecast({ snap }: { snap: FinancialSnapshot }) {
           <h3 className="text-sm font-semibold">Debt-Service Coverage (DSCR) Forecast</h3>
         </div>
         <p className="text-xs text-[var(--color-muted)]">
-          DSCR = cash available for debt service ÷ debt service due. Lenders covenant a floor (typically 1.25–1.5×). Stress a new EMI and forward growth to see if you stay compliant.
+          DSCR = cash available for debt service ÷ debt service due. Lenders covenant a floor (typically 1.25-1.5×). Stress a new EMI and forward growth to see if you stay compliant.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {[
@@ -2472,8 +2472,8 @@ function DscrForecast({ snap }: { snap: FinancialSnapshot }) {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Current DSCR", value: currentDscr !== null ? `${currentDscr.toFixed(2)}x` : "—", color: dscrColor(currentDscr) },
-          { label: "Projected DSCR", value: projDscr !== null ? `${projDscr.toFixed(2)}x` : "—", color: dscrColor(projDscr) },
+          { label: "Current DSCR", value: currentDscr !== null ? `${currentDscr.toFixed(2)}x` : "-", color: dscrColor(currentDscr) },
+          { label: "Projected DSCR", value: projDscr !== null ? `${projDscr.toFixed(2)}x` : "-", color: dscrColor(projDscr) },
           { label: "Cash for Debt Service", value: formatCurrency(projCads) + "/mo", color: "text-[var(--color-text)]" },
           { label: "Debt Service Due", value: formatCurrency(totalDebtService) + "/mo", color: "text-[var(--color-text)]" },
         ].map(c => (
@@ -2493,18 +2493,18 @@ function DscrForecast({ snap }: { snap: FinancialSnapshot }) {
       <div className={`rounded-lg p-4 border ${meets ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
         <p className={`text-sm ${meets ? "text-green-400" : "text-red-400"}`}>
           {projDscr === null
-            ? "No debt service modelled — add an existing or proposed EMI to test coverage."
+            ? "No debt service modelled - add an existing or proposed EMI to test coverage."
             : meets
               ? `Compliant: projected DSCR of ${projDscr.toFixed(2)}× clears the ${cov.toFixed(2)}× floor. You can absorb up to ${formatCurrency(headroomEmi)}/mo more.`
               : `Breach risk: projected DSCR of ${projDscr.toFixed(2)}× is below the ${cov.toFixed(2)}× covenant. Cut the proposed EMI, grow profit, or term debt out before drawing.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Cash available for debt service ≈ monthly net profit + interest (added back). Current DSCR uses existing debt service; projected applies growth and any new EMI. This is a directional read from your ledger — lenders compute DSCR on audited annual EBITDA and full repayment schedules.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Cash available for debt service ≈ monthly net profit + interest (added back). Current DSCR uses existing debt service; projected applies growth and any new EMI. This is a directional read from your ledger - lenders compute DSCR on audited annual EBITDA and full repayment schedules.</p>
     </div>
   );
 }
 
-// ── #105 Liquidity Stress Test — survival weeks under shock ─────────────────────
+// ── #105 Liquidity Stress Test - survival weeks under shock ─────────────────────
 function LiquidityStressTest({ snap }: { snap: FinancialSnapshot }) {
   // Stress the cash position against a revenue shock and the loss of a top customer.
   const [revDropPct, setRevDropPct] = useState("30");
@@ -2539,7 +2539,7 @@ function LiquidityStressTest({ snap }: { snap: FinancialSnapshot }) {
       <div className={`${WC_CARD} p-4 space-y-4`}>
         <div className="flex items-center gap-2">
           <Siren size={16} className="text-[var(--color-primary)]" />
-          <h3 className="text-sm font-semibold">Liquidity Stress Test — Survival Under Shock</h3>
+          <h3 className="text-sm font-semibold">Liquidity Stress Test - Survival Under Shock</h3>
         </div>
         <p className="text-xs text-[var(--color-muted)]">
           Simulate a demand shock and the loss of your largest customer ({snap.topCustomerPct.toFixed(0)}% of revenue), then see how many weeks your cash plus collectable receivables last.
@@ -2598,9 +2598,9 @@ function LiquidityStressTest({ snap }: { snap: FinancialSnapshot }) {
       <div className={`rounded-lg p-4 border ${danger ? "border-red-800/40 bg-red-950/20" : "border-green-800/40 bg-green-950/20"}`}>
         <p className={`text-sm ${danger ? "text-red-400" : "text-green-400"}`}>
           {survivalWeeks >= 999
-            ? "Even under this shock you stay cash-flow positive — strong resilience. Keep a buffer for slower receivables."
+            ? "Even under this shock you stay cash-flow positive - strong resilience. Keep a buffer for slower receivables."
             : danger
-              ? `Fragile: only ${survivalWeeks} weeks of cash under shock — below the 13-week safety line. Pre-arrange a credit line, diversify customers, and hold a larger buffer.`
+              ? `Fragile: only ${survivalWeeks} weeks of cash under shock - below the 13-week safety line. Pre-arrange a credit line, diversify customers, and hold a larger buffer.`
               : `Resilient: ${survivalWeeks} weeks of runway under shock clears the 13-week line. Watch customer concentration (${snap.topCustomerPct.toFixed(0)}%).`}
         </p>
       </div>
@@ -2609,7 +2609,7 @@ function LiquidityStressTest({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #106 Overdraft Interest Minimiser — draw/repay timing ───────────────────────
+// ── #106 Overdraft Interest Minimiser - draw/repay timing ───────────────────────
 function OdInterestMinimiser({ snap }: { snap: FinancialSnapshot }) {
   // OD/CC interest is charged on the daily drawn balance. Sweeping idle cash to repay,
   // and drawing only when needed, cuts the average balance and the interest bill.
@@ -2637,10 +2637,10 @@ function OdInterestMinimiser({ snap }: { snap: FinancialSnapshot }) {
       <div className={`${WC_CARD} p-4 space-y-4`}>
         <div className="flex items-center gap-2">
           <HandCoins size={16} className="text-[var(--color-primary)]" />
-          <h3 className="text-sm font-semibold">Overdraft Interest Minimiser — Sweep & Repay</h3>
+          <h3 className="text-sm font-semibold">Overdraft Interest Minimiser - Sweep & Repay</h3>
         </div>
         <p className="text-xs text-[var(--color-muted)]">
-          OD/CC interest accrues on the daily drawn balance. Sweeping idle cash against the line — and drawing only when you must — cuts the average balance and the interest bill, with same-day redraw if you need it.
+          OD/CC interest accrues on the daily drawn balance. Sweeping idle cash against the line - and drawing only when you must - cuts the average balance and the interest bill, with same-day redraw if you need it.
         </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
@@ -2675,8 +2675,8 @@ function OdInterestMinimiser({ snap }: { snap: FinancialSnapshot }) {
         <p className="text-sm font-semibold mb-3">Before vs After Sweep</p>
         <div className="space-y-3">
           {[
-            { label: "Today — interest on full drawn balance", amt: currentInterest, base: drawn, color: "bg-orange-500" },
-            { label: "After sweep — interest on reduced balance", amt: optimisedInterest, base: newAvgDrawn, color: "bg-green-500" },
+            { label: "Today - interest on full drawn balance", amt: currentInterest, base: drawn, color: "bg-orange-500" },
+            { label: "After sweep - interest on reduced balance", amt: optimisedInterest, base: newAvgDrawn, color: "bg-green-500" },
           ].map(row => (
             <div key={row.label}>
               <div className="flex items-center justify-between mb-1.5 text-sm">
@@ -2694,16 +2694,16 @@ function OdInterestMinimiser({ snap }: { snap: FinancialSnapshot }) {
       <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
         <p className="text-sm text-green-400">
           {saved > 0
-            ? `Sweeping ${formatCurrency(sweepAmt)} of idle cash against the line saves ${formatCurrency(saved)}/yr (${formatCurrency(savedMonthly)}/mo) in interest — redraw same-day when cash dips.`
+            ? `Sweeping ${formatCurrency(sweepAmt)} of idle cash against the line saves ${formatCurrency(saved)}/yr (${formatCurrency(savedMonthly)}/mo) in interest - redraw same-day when cash dips.`
             : "No idle cash to sweep against the line yet. Once collections arrive, park surplus against the OD to cut daily interest."}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">OD interest ≈ average drawn balance × annual rate (charged on daily balances). Sweeping reduces the average; assumes same-day redraw availability and no minimum-utilisation charge. Keep an operating float — don't sweep cash you need for imminent outflows.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">OD interest ≈ average drawn balance × annual rate (charged on daily balances). Sweeping reduces the average; assumes same-day redraw availability and no minimum-utilisation charge. Keep an operating float - don't sweep cash you need for imminent outflows.</p>
     </div>
   );
 }
 
-// ── #107 Bill Discounting / LC Margin Calculator — net proceeds & cost ──────────
+// ── #107 Bill Discounting / LC Margin Calculator - net proceeds & cost ──────────
 function BillDiscountMargin({ snap }: { snap: FinancialSnapshot }) {
   // Discount a sales bill (or open an inland LC) to convert a receivable into cash today.
   const [billAmount, setBillAmount] = useState(String(Math.round(snap.accountsReceivable) || 0));
@@ -2789,11 +2789,11 @@ function BillDiscountMargin({ snap }: { snap: FinancialSnapshot }) {
           {bill <= 0
             ? "Enter a bill value to compute discounting proceeds and cost."
             : effAnnualPct <= 16
-              ? `Cheap funding: discounting this bill costs ${effAnnualPct.toFixed(1)}% annualised — below typical OD/term rates. ${formatCurrency(netProceeds)} lands today; the ${formatCurrency(bill - advance)} margin releases at maturity.`
-              : `Pricey: ${effAnnualPct.toFixed(1)}% annualised is steep — compare against your OD line before discounting. The held-back margin (${formatCurrency(bill - advance)}) releases when the buyer pays.`}
+              ? `Cheap funding: discounting this bill costs ${effAnnualPct.toFixed(1)}% annualised - below typical OD/term rates. ${formatCurrency(netProceeds)} lands today; the ${formatCurrency(bill - advance)} margin releases at maturity.`
+              : `Pricey: ${effAnnualPct.toFixed(1)}% annualised is steep - compare against your OD line before discounting. The held-back margin (${formatCurrency(bill - advance)}) releases when the buyer pays.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Advance = bill × (1 − margin). Discount charge = advance × rate × tenor/365. Effective annual cost = total cost ÷ advance × 365/tenor. The margin is held back and released on buyer payment. Indicative — actual terms vary by bank, buyer rating and whether the bill is LC-backed (lower rate) or clean.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Advance = bill × (1 − margin). Discount charge = advance × rate × tenor/365. Effective annual cost = total cost ÷ advance × 365/tenor. The margin is held back and released on buyer payment. Indicative - actual terms vary by bank, buyer rating and whether the bill is LC-backed (lower rate) or clean.</p>
     </div>
   );
 }

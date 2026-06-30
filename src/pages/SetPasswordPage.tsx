@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { toast } from "sonner";
 import Logo from "@/components/Logo";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function SetPasswordPage() {
   const { user } = useAuth();
@@ -23,7 +24,7 @@ export default function SetPasswordPage() {
         body:    JSON.stringify({ password }),
       });
       if (!res.ok) throw new Error("Failed to set password");
-      toast.success("Password set — welcome!");
+      toast.success("Password set - welcome!");
       const home = user?.role === "investor" ? "/capital" : "/dashboard";
       navigate(home, { replace: true });
     } catch {
@@ -50,8 +51,8 @@ export default function SetPasswordPage() {
               <label className="block text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1.5">
                 New Password
               </label>
-              <input
-                type="password" value={password} onChange={e => setPassword(e.target.value)}
+              <PasswordInput
+                value={password} onChange={e => setPassword(e.target.value)}
                 required minLength={8} autoFocus placeholder="At least 8 characters"
                 className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm outline-none focus:border-[var(--color-primary)] transition-colors"
               />
@@ -60,8 +61,8 @@ export default function SetPasswordPage() {
               <label className="block text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1.5">
                 Confirm Password
               </label>
-              <input
-                type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+              <PasswordInput
+                value={confirm} onChange={e => setConfirm(e.target.value)}
                 required placeholder="Repeat password"
                 className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm outline-none focus:border-[var(--color-primary)] transition-colors"
               />

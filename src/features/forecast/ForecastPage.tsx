@@ -61,7 +61,7 @@ export default function ForecastPage() {
   const activeScenario = scenarios.find(s => s.active);
   const { hidden, toggle } = useSeriesToggle();
 
-  // Live probabilistic forecast — scenarios + slow-month baked into BOTH bands
+  // Live probabilistic forecast - scenarios + slow-month baked into BOTH bands
   // (honest), via the Monte-Carlo engine. Risk metrics come from the same paths.
   const result = useMemo(
     () => runForecast(store, { scenarios: scenarios.filter(s => s.active), revenueFactor: slowPct / 100, burnFactor: burnFactor / 100 }),
@@ -106,7 +106,7 @@ export default function ForecastPage() {
 
   const handleGenerate = async () => {
     if (transactions.length === 0) {
-      toast.error("Add some transactions first — the forecast engine needs transaction history.");
+      toast.error("Add some transactions first - the forecast engine needs transaction history.");
       return;
     }
     setGenerating(true);
@@ -162,7 +162,7 @@ export default function ForecastPage() {
       });
       setAiText(res.content ?? "No response from AI.");
     } catch {
-      setAiText("AI unavailable — check that ANTHROPIC_API_KEY is set on the backend.");
+      setAiText("AI unavailable - check that ANTHROPIC_API_KEY is set on the backend.");
     } finally {
       setAiLoading(false);
     }
@@ -194,7 +194,7 @@ export default function ForecastPage() {
         </div>
       </div>
 
-      {/* Dated-obligations runway — first shortfall + the lever to fix it */}
+      {/* Dated-obligations runway - first shortfall + the lever to fix it */}
       <ObligationsShortfall />
 
       {/* Tool tab selector */}
@@ -289,13 +289,13 @@ export default function ForecastPage() {
         </div>
       )}
 
-      {/* Empty state — no forecast generated yet */}
+      {/* Empty state - no forecast generated yet */}
       {forecast.length === 0 ? (
         transactions.length === 0 ? (
           <EmptyState
             icon={TrendingUp}
             title="No forecast yet"
-            description="Connect a bank account and record a few transactions — we'll project your cash 13 weeks out with P10/P50/P90 bands."
+            description="Connect a bank account and record a few transactions - we'll project your cash 13 weeks out with P10/P50/P90 bands."
             ctaText="Add transactions"
             ctaHref="/transactions"
           />
@@ -310,7 +310,7 @@ export default function ForecastPage() {
         )
       ) : (
         <>
-          {/* Risk strip — calibrated probabilities from the Monte-Carlo paths */}
+          {/* Risk strip - calibrated probabilities from the Monte-Carlo paths */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: "Breach probability", value: `${Math.round(risk.probBreach * 100)}%`, sub: `of dipping below your ${firm.safetyThresholdDays}-day buffer`, danger: risk.probBreach >= 0.3 },
@@ -326,7 +326,7 @@ export default function ForecastPage() {
             ))}
           </div>
 
-          {/* AI reads the forecast — grounded in the same Monte-Carlo risk metrics */}
+          {/* AI reads the forecast - grounded in the same Monte-Carlo risk metrics */}
           <AiInsight
             collapsed
             className="w-full"
@@ -346,14 +346,14 @@ export default function ForecastPage() {
             }}
           />
 
-          {/* Pressure alert — fires 45-day-early when the hazard says so */}
+          {/* Pressure alert - fires 45-day-early when the hazard says so */}
           {risk.probBreachByDay[Math.min(44, risk.probBreachByDay.length - 1)] >= 0.5 && (
             <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <TrendingUp size={16} className="text-red-400 shrink-0" />
                 <p className="text-sm">
                   <strong className="text-red-400">{Math.round(risk.probBreach * 100)}% chance</strong> you breach your safety buffer{pressureDay != null ? <> in ~<strong className="text-red-400">{pressureDay} days</strong></> : ""}.
-                  {risk.expectedShortfall < risk.thresholdCash ? <> A <strong>₹{Math.round((risk.thresholdCash - risk.expectedShortfall) / 100000)}L</strong> buffer covers the likely shortfall — {result.capital.recommendedTrack.replace(/_/g, " ")} fits.</> : null}
+                  {risk.expectedShortfall < risk.thresholdCash ? <> A <strong>₹{Math.round((risk.thresholdCash - risk.expectedShortfall) / 100000)}L</strong> buffer covers the likely shortfall - {result.capital.recommendedTrack.replace(/_/g, " ")} fits.</> : null}
                 </p>
               </div>
               <button onClick={() => navigate("/credit")}
@@ -399,7 +399,7 @@ export default function ForecastPage() {
 
           {/* Slow month slider */}
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-            <h2 className="text-sm font-semibold mb-1">Slow month — what's the worst case?</h2>
+            <h2 className="text-sm font-semibold mb-1">Slow month - what's the worst case?</h2>
             <p className="text-xs text-[var(--color-muted)] mb-3">Drag revenue down and see your P10 impact immediately.</p>
             <div className="flex items-center gap-4">
               <input type="range" min="0" max="100" step="5" value={slowPct}
@@ -411,7 +411,7 @@ export default function ForecastPage() {
             </div>
             <div className="flex justify-between text-xs text-[var(--color-muted)] mt-1">
               <span>0% revenue</span>
-              <span>{slowPct === 100 ? "Normal month — no adjustment" : `Revenue at ${slowPct}% — chart updated`}</span>
+              <span>{slowPct === 100 ? "Normal month - no adjustment" : `Revenue at ${slowPct}% - chart updated`}</span>
               <span>100% (base)</span>
             </div>
             {slowPct < 70 && (
@@ -423,7 +423,7 @@ export default function ForecastPage() {
 
           {/* Burn rate inflation slider */}
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-            <h2 className="text-sm font-semibold mb-1">Burn rate inflation — what if costs rise?</h2>
+            <h2 className="text-sm font-semibold mb-1">Burn rate inflation - what if costs rise?</h2>
             <p className="text-xs text-[var(--color-muted)] mb-3">Drag to simulate higher or lower outflows and see the impact on your forecast.</p>
             <div className="flex items-center gap-4">
               <input type="range" min="80" max="150" step="5" value={burnFactor}
@@ -435,7 +435,7 @@ export default function ForecastPage() {
             </div>
             <div className="flex justify-between text-xs text-[var(--color-muted)] mt-1">
               <span>80% (leaner)</span>
-              <span>{burnFactor === 100 ? "Normal burn — no adjustment" : `Burn at ${burnFactor}% — chart updated`}</span>
+              <span>{burnFactor === 100 ? "Normal burn - no adjustment" : `Burn at ${burnFactor}% - chart updated`}</span>
               <span>150% (higher burn)</span>
             </div>
             {burnFactor > 120 && (
@@ -557,8 +557,8 @@ export default function ForecastPage() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #76 — 13-Week Rolling Cash Forecast
-// Weekly inflow/outflow table — the standard lenders ask for. Inflows from open
+// #76 - 13-Week Rolling Cash Forecast
+// Weekly inflow/outflow table - the standard lenders ask for. Inflows from open
 // invoices (collected on/after due date) + recurring revenue run-rate; outflows
 // from recurring expense run-rate + dated cash obligations + active-loan EMIs.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -656,7 +656,7 @@ function ThirteenWeekForecast() {
           <CalendarRange size={14} className="text-[var(--color-primary)]" /> 13-Week Rolling Cash Forecast
         </h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Weekly inflow/outflow projection — the standard format lenders and CFOs use. Built live from your invoices, recurring run-rate, obligations and EMIs.
+          Weekly inflow/outflow projection - the standard format lenders and CFOs use. Built live from your invoices, recurring run-rate, obligations and EMIs.
         </p>
       </div>
 
@@ -719,7 +719,7 @@ function ThirteenWeekForecast() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #77 — Receivables-Driven Inflow Projection
+// #77 - Receivables-Driven Inflow Projection
 // Forecasts collections from open invoices: each invoice's expected collection
 // date (due-date + status-based slip) × a pay-probability (lower if overdue),
 // bucketed by month, with an expected-value inflow line.
@@ -805,7 +805,7 @@ function ReceivablesInflowProjection() {
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1">
           <Coins size={14} className="text-[var(--color-primary)]" /> Receivables-Driven Inflow Projection
         </h2>
-        <p className="text-xs text-[var(--color-muted)]">Each open invoice's collection date (due-date + slip) × pay-probability — overdue invoices are discounted automatically.</p>
+        <p className="text-xs text-[var(--color-muted)]">Each open invoice's collection date (due-date + slip) × pay-probability - overdue invoices are discounted automatically.</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -822,7 +822,7 @@ function ReceivablesInflowProjection() {
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-        <h3 className="text-sm font-semibold mb-3">Projected inflow by month (₹L) — gross vs probability-weighted</h3>
+        <h3 className="text-sm font-semibold mb-3">Projected inflow by month (₹L) - gross vs probability-weighted</h3>
         <ResponsiveContainer width="100%" height={200}>
           <ComposedChart data={chartData}>
             <XAxis dataKey="bucket" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} />
@@ -862,7 +862,7 @@ function ReceivablesInflowProjection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #78 — Seasonality Detector
+// #78 - Seasonality Detector
 // Auto-detects month-of-year revenue/expense patterns from transaction history:
 // per-month index (vs the annual average = 100), flagging peak & trough months.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -942,8 +942,8 @@ function SeasonalityDetector() {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
           { label: "Seasonality strength", value: strength, color: strength === "Strong" ? "text-orange-400" : strength === "Moderate" ? "text-yellow-400" : "text-green-400", sub: `CV ${(cv * 100).toFixed(0)}%` },
-          { label: "Peak revenue month", value: peak ? `${peak.label}` : "—", color: "text-green-400", sub: peak ? `${peak.revenueIndex} index` : "" },
-          { label: "Trough revenue month", value: trough ? `${trough.label}` : "—", color: "text-red-400", sub: trough ? `${trough.revenueIndex} index` : "" },
+          { label: "Peak revenue month", value: peak ? `${peak.label}` : "-", color: "text-green-400", sub: peak ? `${peak.revenueIndex} index` : "" },
+          { label: "Trough revenue month", value: trough ? `${trough.label}` : "-", color: "text-red-400", sub: trough ? `${trough.revenueIndex} index` : "" },
         ].map(c => (
           <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3">
             <p className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]">{c.label}</p>
@@ -980,10 +980,10 @@ function SeasonalityDetector() {
             {stats.map(s => (
               <tr key={s.month} className={s.count === 0 ? "opacity-30" : "hover:bg-white/2"}>
                 <td className="px-3 py-2 text-xs font-medium">{s.label}</td>
-                <td className="px-3 py-2 text-xs tabular-nums text-green-400">{s.count ? formatCurrency(s.revenue) : "—"}</td>
-                <td className={`px-3 py-2 text-xs tabular-nums ${s.revenueIndex > 110 ? "text-green-400" : s.revenueIndex < 90 && s.revenueIndex > 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{s.count ? s.revenueIndex : "—"}</td>
-                <td className="px-3 py-2 text-xs tabular-nums text-red-400">{s.count ? formatCurrency(s.expense) : "—"}</td>
-                <td className={`px-3 py-2 text-xs tabular-nums ${s.expenseIndex > 110 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{s.count ? s.expenseIndex : "—"}</td>
+                <td className="px-3 py-2 text-xs tabular-nums text-green-400">{s.count ? formatCurrency(s.revenue) : "-"}</td>
+                <td className={`px-3 py-2 text-xs tabular-nums ${s.revenueIndex > 110 ? "text-green-400" : s.revenueIndex < 90 && s.revenueIndex > 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{s.count ? s.revenueIndex : "-"}</td>
+                <td className="px-3 py-2 text-xs tabular-nums text-red-400">{s.count ? formatCurrency(s.expense) : "-"}</td>
+                <td className={`px-3 py-2 text-xs tabular-nums ${s.expenseIndex > 110 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{s.count ? s.expenseIndex : "-"}</td>
               </tr>
             ))}
           </tbody>
@@ -995,7 +995,7 @@ function SeasonalityDetector() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #79 — Scenario-Linked Forecast (best / base / worst)
+// #79 - Scenario-Linked Forecast (best / base / worst)
 // Three-line 90-day cash projection: re-runs the Monte-Carlo engine at three
 // revenue/burn settings, plotting P50 of each as best/base/worst. Editable
 // optimism/pessimism via sliders so the spread reflects this firm's volatility.
@@ -1085,7 +1085,7 @@ function ThreeLineProjection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #80 — Cash Buffer / Minimum-Balance Alert
+// #80 - Cash Buffer / Minimum-Balance Alert
 // Projects whether the worst-case (P10) path breaches a user-set minimum-balance
 // floor and on which day, with a configurable safety target and a clear verdict.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1121,13 +1121,13 @@ function CashBufferAlert() {
         <h2 className="text-sm font-semibold flex items-center gap-2 mb-1">
           <ShieldAlert size={14} className="text-[var(--color-primary)]" /> Cash Buffer / Minimum-Balance Alert
         </h2>
-        <p className="text-xs text-[var(--color-muted)]">Set a minimum cash floor — we project whether your worst-case (P10) and expected (P50) paths breach it, and on which day.</p>
+        <p className="text-xs text-[var(--color-muted)]">Set a minimum cash floor - we project whether your worst-case (P10) and expected (P50) paths breach it, and on which day.</p>
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <div className="flex items-end gap-3 flex-wrap">
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs text-[var(--color-muted)] mb-1">Minimum-balance floor (₹) — leave 0 to use suggested {formatCurrency(suggestedFloor)}</label>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Minimum-balance floor (₹) - leave 0 to use suggested {formatCurrency(suggestedFloor)}</label>
             <input type="number" min={0} value={floor || ""} onChange={e => setFloor(Number(e.target.value) || 0)} placeholder={String(suggestedFloor)}
               className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
           </div>
@@ -1158,7 +1158,7 @@ function CashBufferAlert() {
             <p className="text-sm font-semibold text-red-400">Projected breach of your minimum-balance floor</p>
             <p className="text-xs text-[var(--color-muted)] mt-0.5">
               Worst-case (P10) dips below {formatCurrency(effectiveFloor)} on <strong className="text-red-300">{format(new Date(breach.worst!.date), "d MMM")}</strong> (~day {breach.worst!.day}), reaching {formatCurrency(Math.round(breach.worst!.balance))}.
-              {expectedBreach ? <> Even the expected path breaches on <strong className="text-red-300">{format(new Date(breach.expected!.date), "d MMM")}</strong> — arrange a buffer now.</> : <> The expected (P50) path stays above the floor.</>}
+              {expectedBreach ? <> Even the expected path breaches on <strong className="text-red-300">{format(new Date(breach.expected!.date), "d MMM")}</strong> - arrange a buffer now.</> : <> The expected (P50) path stays above the floor.</>}
             </p>
           </div>
         </div>
@@ -1189,7 +1189,7 @@ function CashBufferAlert() {
   );
 }
 
-// Shared chrome for the tool cards below — header block with title + blurb.
+// Shared chrome for the tool cards below - header block with title + blurb.
 function ToolHeader({ icon: Icon, title, blurb }: { icon: typeof TrendingUp; title: string; blurb: string }) {
   return (
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
@@ -1218,7 +1218,7 @@ function StatGrid({ cols, cards }: { cols: string; cards: { label: string; value
 const tooltipStyle = { background: "#161B22", border: "1px solid #21262D", borderRadius: 8, fontSize: 11 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #81 — Revenue Forecast (growth-rate driven)
+// #81 - Revenue Forecast (growth-rate driven)
 // Projects monthly revenue forward 12 months from the trailing run-rate, using a
 // growth rate seeded from the firm's own compound-monthly-growth and overridable.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1262,7 +1262,7 @@ function RevenueForecast() {
 
   return (
     <div className="space-y-4">
-      <ToolHeader icon={LineChart} title="Revenue Forecast" blurb="Projects monthly revenue forward from your trailing 3-month run-rate at a growth rate seeded from your own history — override it to test plans." />
+      <ToolHeader icon={LineChart} title="Revenue Forecast" blurb="Projects monthly revenue forward from your trailing 3-month run-rate at a growth rate seeded from your own history - override it to test plans." />
       <StatGrid cols="md:grid-cols-3" cards={[
         { label: "Base monthly run-rate", value: formatCurrency(Math.round(lastRev)), color: "text-[var(--color-text)]" },
         { label: `Growth rate (MoM)`, value: `${effGrowth > 0 ? "+" : ""}${effGrowth}%`, color: effGrowth >= 0 ? "text-green-400" : "text-red-400", sub: growth !== 0 ? "your override" : "from history" },
@@ -1296,7 +1296,7 @@ function RevenueForecast() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #82 — Expense Forecast (category run-rate × inflation)
+// #82 - Expense Forecast (category run-rate × inflation)
 // Projects monthly expense forward by category using each category's trailing
 // run-rate, with a single inflation dial that compounds across the horizon.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1386,7 +1386,7 @@ function ExpenseForecast() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #83 — Headcount-Cost Forecast
+// #83 - Headcount-Cost Forecast
 // Build a roster of roles (salary × count, optional start month) on top of the
 // current payroll run-rate and project total monthly people-cost forward.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1484,9 +1484,9 @@ function HeadcountCostForecast() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #84 — Burn-Rate & Zero-Cash Date
+// #84 - Burn-Rate & Zero-Cash Date
 // Net monthly burn from trailing history, current cash, and a straight-line
-// zero-cash date if burn continues — with an adjustable burn-change dial.
+// zero-cash date if burn continues - with an adjustable burn-change dial.
 // ─────────────────────────────────────────────────────────────────────────────
 function BurnRateZeroCash() {
   const { store } = useApp();
@@ -1520,12 +1520,12 @@ function BurnRateZeroCash() {
 
   return (
     <div className="space-y-4">
-      <ToolHeader icon={Flame} title="Burn-Rate & Zero-Cash Date" blurb="Net monthly burn from your trailing 6-month history projected straight-line against current cash — adjust the burn to see how the zero-cash date moves." />
+      <ToolHeader icon={Flame} title="Burn-Rate & Zero-Cash Date" blurb="Net monthly burn from your trailing 6-month history projected straight-line against current cash - adjust the burn to see how the zero-cash date moves." />
       <StatGrid cols="md:grid-cols-4" cards={[
         { label: "Current cash", value: formatCurrency(cash), color: "text-[var(--color-text)]" },
         { label: "Net monthly burn", value: effBurn > 0 ? formatCurrency(Math.round(effBurn)) : "Cash-positive", color: effBurn > 0 ? "text-red-400" : "text-green-400" },
         { label: "Months of runway", value: monthsLeft === Infinity ? "∞" : monthsLeft.toFixed(1), color: monthsLeft < 6 ? "text-red-400" : monthsLeft < 12 ? "text-yellow-400" : "text-green-400" },
-        { label: "Zero-cash date", value: zeroDate ? format(zeroDate, "MMM yyyy") : "—", color: zeroDate && monthsLeft < 6 ? "text-red-400" : "text-[var(--color-text)]" },
+        { label: "Zero-cash date", value: zeroDate ? format(zeroDate, "MMM yyyy") : "-", color: zeroDate && monthsLeft < 6 ? "text-red-400" : "text-[var(--color-text)]" },
       ]} />
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Burn change</span><span className={`font-semibold ${burnAdj > 0 ? "text-red-400" : burnAdj < 0 ? "text-green-400" : ""}`}>{burnAdj > 0 ? "+" : ""}{burnAdj}%</span></label>
@@ -1534,7 +1534,7 @@ function BurnRateZeroCash() {
       {effBurn > 0 && monthsLeft < 6 && (
         <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 flex items-center gap-3">
           <Flame size={16} className="text-red-400 shrink-0" />
-          <p className="text-sm">At this burn you run out of cash by <strong className="text-red-400">{zeroDate ? format(zeroDate, "MMM yyyy") : "—"}</strong> — under 6 months. Cut burn or arrange a buffer now.</p>
+          <p className="text-sm">At this burn you run out of cash by <strong className="text-red-400">{zeroDate ? format(zeroDate, "MMM yyyy") : "-"}</strong> - under 6 months. Cut burn or arrange a buffer now.</p>
         </div>
       )}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -1554,7 +1554,7 @@ function BurnRateZeroCash() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #85 — Monthly Cash-Bridge Waterfall
+// #85 - Monthly Cash-Bridge Waterfall
 // Opening → operating → financing → closing for the most recent month, as a
 // waterfall, built from the direct-method monthlyCashFlow ledger in finance.ts.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1610,7 +1610,7 @@ function CashBridgeWaterfall() {
         { label: "Closing", value: formatCurrency(Math.round(row.closing)), color: row.closing >= row.opening ? "text-green-400" : "text-red-400" },
       ]} />
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-        <h3 className="text-sm font-semibold mb-3">Cash bridge — {row.label} (₹L)</h3>
+        <h3 className="text-sm font-semibold mb-3">Cash bridge - {row.label} (₹L)</h3>
         <ResponsiveContainer width="100%" height={240}>
           <ComposedChart data={bars}>
             <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#8a8060" }} tickLine={false} />
@@ -1631,10 +1631,10 @@ function CashBridgeWaterfall() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #86 — AR / AP Timing Forecast
+// #86 - AR / AP Timing Forecast
 // Buckets expected receivable collections (open invoices, due-date based) against
 // scheduled payables (obligations + EMIs) by week, surfacing weeks where outflows
-// outrun inflows — the classic timing-mismatch view.
+// outrun inflows - the classic timing-mismatch view.
 // ─────────────────────────────────────────────────────────────────────────────
 function ArApTimingForecast() {
   const { store } = useApp();
@@ -1666,7 +1666,7 @@ function ArApTimingForecast() {
 
   return (
     <div className="space-y-4">
-      <ToolHeader icon={ArrowLeftRight} title="AR / AP Timing Forecast" blurb="Expected receivable collections vs scheduled payables (obligations + EMIs) bucketed by week — surfaces the weeks where money out outruns money in." />
+      <ToolHeader icon={ArrowLeftRight} title="AR / AP Timing Forecast" blurb="Expected receivable collections vs scheduled payables (obligations + EMIs) bucketed by week - surfaces the weeks where money out outruns money in." />
       <StatGrid cols="md:grid-cols-3" cards={[
         { label: "13-week receivables", value: formatCurrency(totalAr), color: "text-green-400" },
         { label: "13-week payables", value: formatCurrency(totalAp), color: "text-red-400" },
@@ -1710,10 +1710,10 @@ function ArApTimingForecast() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #87 — Fixed-vs-Variable Cost Projection
+// #87 - Fixed-vs-Variable Cost Projection
 // Splits trailing outflows into fixed (recurring: payroll, loan, recurring-flagged
-// expenses) and variable, then projects each forward — fixed flat, variable scaled
-// by a revenue-activity dial — so you see your operating-leverage exposure.
+// expenses) and variable, then projects each forward - fixed flat, variable scaled
+// by a revenue-activity dial - so you see your operating-leverage exposure.
 // ─────────────────────────────────────────────────────────────────────────────
 function FixedVariableProjection() {
   const { store } = useApp();
@@ -1752,7 +1752,7 @@ function FixedVariableProjection() {
 
   return (
     <div className="space-y-4">
-      <ToolHeader icon={Scale} title="Fixed vs Variable Cost Projection" blurb="Splits your trailing outflows into fixed (payroll, loans, tax, recurring) and variable, then projects each forward — slide activity to test your operating leverage." />
+      <ToolHeader icon={Scale} title="Fixed vs Variable Cost Projection" blurb="Splits your trailing outflows into fixed (payroll, loans, tax, recurring) and variable, then projects each forward - slide activity to test your operating leverage." />
       <StatGrid cols="md:grid-cols-4" cards={[
         { label: "Fixed / month", value: formatCurrency(split.fixed), color: "text-[var(--color-text)]" },
         { label: "Variable / month", value: formatCurrency(effVariable), color: "text-[var(--color-text)]", sub: activity !== 100 ? `at ${activity}% activity` : undefined },
@@ -1784,7 +1784,7 @@ function FixedVariableProjection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #88 — Break-Even Cash Date
+// #88 - Break-Even Cash Date
 // Projects cumulative monthly net cash forward from the trailing run-rate plus an
 // editable monthly revenue growth, and pinpoints the month cumulative net turns
 // positive (cash-flow break-even).
@@ -1862,7 +1862,7 @@ function BreakEvenForecast() {
 function clampNum(x: number, lo: number, hi: number) { return Math.min(hi, Math.max(lo, x)); }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #89 — Rolling 12-Month P&L Forecast
+// #89 - Rolling 12-Month P&L Forecast
 // Blends trailing actuals (revenue + expense run-rate, grown by your own CMGR) into
 // a forward 12-month P&L: revenue, expense, net profit and a cumulative-profit line.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1910,7 +1910,7 @@ function RollingPLForecast() {
 
   return (
     <div className="space-y-4">
-      <ToolHeader icon={Wallet} title="Rolling 12-Month P&L Forecast" blurb="Projects revenue, expense and net profit forward 12 months from your trailing 3-month run-rate — revenue grows at your own CMGR (overridable), expenses at a separate dial." />
+      <ToolHeader icon={Wallet} title="Rolling 12-Month P&L Forecast" blurb="Projects revenue, expense and net profit forward 12 months from your trailing 3-month run-rate - revenue grows at your own CMGR (overridable), expenses at a separate dial." />
       <StatGrid cols="md:grid-cols-4" cards={[
         { label: "12-mo revenue", value: formatCurrency(totalRev), color: "text-green-400" },
         { label: "12-mo expense", value: formatCurrency(totalExp), color: "text-red-400" },
@@ -1969,7 +1969,7 @@ function RollingPLForecast() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #90 — Capex / Funding Plan
+// #90 - Capex / Funding Plan
 // Plan one-off capital purchases (amount + month + optional loan-funded share);
 // projects current cash forward against the trailing net run-rate and the planned
 // outlays, flagging the cash-safest month and any month that breaches zero.
@@ -2023,12 +2023,12 @@ function CapexFundingPlan() {
 
   return (
     <div className="space-y-4">
-      <ToolHeader icon={CalendarClock} title="Capex / Funding Plan" blurb="Plan capital purchases (amount, month, loan-funded share) and project cash forward against your trailing net run-rate — see the cash-safest month and any month that goes negative." />
+      <ToolHeader icon={CalendarClock} title="Capex / Funding Plan" blurb="Plan capital purchases (amount, month, loan-funded share) and project cash forward against your trailing net run-rate - see the cash-safest month and any month that goes negative." />
       <StatGrid cols="md:grid-cols-4" cards={[
         { label: "Total planned capex", value: formatCurrency(Math.round(totalCapex)), color: "text-[var(--color-text)]" },
         { label: "Self-funded outlay", value: formatCurrency(Math.round(ownFunded)), color: "text-red-400" },
         { label: "Lowest projected cash", value: formatCurrency(lowest?.cash ?? 0), color: (lowest?.cash ?? 0) < 0 ? "text-red-400" : "text-green-400" },
-        { label: "Cash-safest month", value: items.length ? (safest?.label ?? "—") : "—", color: "text-[var(--color-text)]" },
+        { label: "Cash-safest month", value: items.length ? (safest?.label ?? "-") : "-", color: "text-[var(--color-text)]" },
       ]} />
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <h3 className="text-sm font-semibold mb-3">Add a capex item</h3>
@@ -2076,9 +2076,9 @@ function CapexFundingPlan() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #91 — Owner Draw / Dividend Planner
+// #91 - Owner Draw / Dividend Planner
 // Computes a safe monthly proprietor withdrawal: trailing net cash run-rate minus
-// a buffer reserve, with a draw-% dial — projects the buffer over 12 months and
+// a buffer reserve, with a draw-% dial - projects the buffer over 12 months and
 // flags if the chosen draw erodes the safety floor.
 // ─────────────────────────────────────────────────────────────────────────────
 function OwnerDrawPlanner() {
@@ -2124,7 +2124,7 @@ function OwnerDrawPlanner() {
 
   return (
     <div className="space-y-4">
-      <ToolHeader icon={HandCoins} title="Owner Draw / Dividend Planner" blurb="Works out a safe monthly proprietor withdrawal from your trailing net cash run-rate, keeping a days-of-burn reserve intact — slide the draw and watch the buffer over 12 months." />
+      <ToolHeader icon={HandCoins} title="Owner Draw / Dividend Planner" blurb="Works out a safe monthly proprietor withdrawal from your trailing net cash run-rate, keeping a days-of-burn reserve intact - slide the draw and watch the buffer over 12 months." />
       <StatGrid cols="md:grid-cols-4" cards={[
         { label: "Monthly net run-rate", value: monthlyNet >= 0 ? formatCurrency(Math.round(monthlyNet)) : `−${formatCurrency(Math.round(-monthlyNet))}`, color: monthlyNet >= 0 ? "text-green-400" : "text-red-400" },
         { label: "Safe monthly draw", value: formatCurrency(safeDraw), color: "text-[var(--color-text)]" },
@@ -2134,7 +2134,7 @@ function OwnerDrawPlanner() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <label className="flex justify-between text-xs text-[var(--color-muted)] mb-1"><span>Draw % of monthly surplus</span><span className="font-semibold">{drawPct}%</span></label>
         <input type="range" min={0} max={100} step={5} value={drawPct} onChange={e => setDrawPct(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
-        <p className="text-[10px] text-[var(--color-muted)] mt-1">Draws are taken only from a positive net run-rate — never from a loss month.</p>
+        <p className="text-[10px] text-[var(--color-muted)] mt-1">Draws are taken only from a positive net run-rate - never from a loss month.</p>
       </div>
       {breachesFloor ? (
         <div className="bg-red-950/20 border border-red-800/40 rounded-lg px-4 py-3 flex items-center gap-3">
@@ -2144,7 +2144,7 @@ function OwnerDrawPlanner() {
       ) : (
         <div className="bg-green-950/20 border border-green-800/40 rounded-lg px-4 py-3 flex items-center gap-3">
           <CheckCircle2 size={16} className="text-green-400 shrink-0" />
-          <p className="text-sm">A {formatCurrency(safeDraw)}/month draw keeps you above the {formatCurrency(floor)} reserve all year — projected closing cash {formatCurrency(endBal)}.</p>
+          <p className="text-sm">A {formatCurrency(safeDraw)}/month draw keeps you above the {formatCurrency(floor)} reserve all year - projected closing cash {formatCurrency(endBal)}.</p>
         </div>
       )}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -2164,7 +2164,7 @@ function OwnerDrawPlanner() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #92 — Credit-Sale Aging Forecast
+// #92 - Credit-Sale Aging Forecast
 // Buckets open invoices by how overdue they are (current, 1-30, 31-60, 61-90, 90+)
 // and projects when each ageing bucket is likely to convert to cash, using a
 // bucket-based collection-probability curve.
@@ -2179,9 +2179,9 @@ function CreditSaleAgingForecast() {
     const today = new Date();
     const defs = [
       { key: "current", label: "Current", lo: -Infinity, hi: 0, prob: 0.92 },
-      { key: "1-30", label: "1–30 days", lo: 1, hi: 30, prob: 0.8 },
-      { key: "31-60", label: "31–60 days", lo: 31, hi: 60, prob: 0.6 },
-      { key: "61-90", label: "61–90 days", lo: 61, hi: 90, prob: 0.42 },
+      { key: "1-30", label: "1-30 days", lo: 1, hi: 30, prob: 0.8 },
+      { key: "31-60", label: "31-60 days", lo: 31, hi: 60, prob: 0.6 },
+      { key: "61-90", label: "61-90 days", lo: 61, hi: 90, prob: 0.42 },
       { key: "90+", label: "90+ days", lo: 91, hi: Infinity, prob: 0.25 },
     ];
     const acc = defs.map(d => ({ key: d.key, label: d.label, gross: 0, count: 0, collectProb: d.prob, expected: 0 }));
@@ -2252,13 +2252,13 @@ function CreditSaleAgingForecast() {
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Collection probabilities decay with age (current 92% → 90+ days 25%) — the standard ageing-bucket discount lenders apply to a debtor book.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Collection probabilities decay with age (current 92% → 90+ days 25%) - the standard ageing-bucket discount lenders apply to a debtor book.</p>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #93 — Forecast Accuracy Tracker
+// #93 - Forecast Accuracy Tracker
 // Grades the run-rate model's historical accuracy: for each of the last N months,
 // the prediction (trailing 3-month average revenue made before that month) vs the
 // actual, reporting MAPE, bias and a 0-100 accuracy score so users trust the range.
@@ -2299,7 +2299,7 @@ function ForecastAccuracyTracker() {
 
   return (
     <div className="space-y-4">
-      <ToolHeader icon={Gauge} title="Forecast Accuracy Tracker" blurb="Back-tests the run-rate model month by month — each prediction (trailing 3-month average) against what actually happened — and reports MAPE, bias and a 0-100 accuracy score." />
+      <ToolHeader icon={Gauge} title="Forecast Accuracy Tracker" blurb="Back-tests the run-rate model month by month - each prediction (trailing 3-month average) against what actually happened - and reports MAPE, bias and a 0-100 accuracy score." />
       <StatGrid cols="md:grid-cols-4" cards={[
         { label: "Accuracy score", value: `${accuracy} (${grade})`, color: accuracy >= 70 ? "text-green-400" : accuracy >= 55 ? "text-yellow-400" : "text-red-400" },
         { label: "MAPE", value: `${mape.toFixed(1)}%`, color: mape <= 15 ? "text-green-400" : mape <= 30 ? "text-yellow-400" : "text-red-400", sub: "mean abs. % error" },
@@ -2348,9 +2348,9 @@ function ForecastAccuracyTracker() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #94 — Product / Service Mix Forecast (driver-based: units × price)
+// #94 - Product / Service Mix Forecast (driver-based: units × price)
 // Build a line of products (units/month × unit price × MoM unit growth) and project
-// total revenue forward 12 months — a bottom-up, driver-based revenue model.
+// total revenue forward 12 months - a bottom-up, driver-based revenue model.
 // ─────────────────────────────────────────────────────────────────────────────
 interface ProductLine { id: string; name: string; units: number; price: number; growth: number }
 
@@ -2390,12 +2390,12 @@ function ProductMixForecast() {
 
   return (
     <div className="space-y-4">
-      <ToolHeader icon={Boxes} title="Product / Service Mix Forecast" blurb="A bottom-up, driver-based revenue model — define each product's units/month, unit price and growth, and project total revenue across the mix for 12 months." />
+      <ToolHeader icon={Boxes} title="Product / Service Mix Forecast" blurb="A bottom-up, driver-based revenue model - define each product's units/month, unit price and growth, and project total revenue across the mix for 12 months." />
       <StatGrid cols="md:grid-cols-4" cards={[
         { label: "Product lines", value: `${lines.length}`, color: "text-[var(--color-text)]" },
         { label: "Month-1 revenue", value: formatCurrency(Math.round(month1)), color: "text-green-400" },
         { label: "12-mo revenue", value: formatCurrency(totalRev), color: "text-green-400" },
-        { label: "Top-line concentration", value: mix.length ? `${topShare}%` : "—", color: topShare > 60 ? "text-red-400" : "text-[var(--color-text)]", sub: mix.length ? mix[0].name : undefined },
+        { label: "Top-line concentration", value: mix.length ? `${topShare}%` : "-", color: topShare > 60 ? "text-red-400" : "text-[var(--color-text)]", sub: mix.length ? mix[0].name : undefined },
       ]} />
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <h3 className="text-sm font-semibold mb-3">Add a product / service line</h3>
@@ -2416,7 +2416,7 @@ function ProductMixForecast() {
               <button onClick={() => setLines(prev => prev.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
             </div>
           ))}
-          {lines.length === 0 && <p className="text-sm text-[var(--color-muted)] py-3 text-center">No product lines yet — add one to model revenue bottom-up</p>}
+          {lines.length === 0 && <p className="text-sm text-[var(--color-muted)] py-3 text-center">No product lines yet - add one to model revenue bottom-up</p>}
         </div>
       </div>
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -2435,7 +2435,7 @@ function ProductMixForecast() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Weekly Cash Calendar — week-by-week expected inflows (due invoices) minus
+// Weekly Cash Calendar - week-by-week expected inflows (due invoices) minus
 // outflows (recurring expense run-rate) over the next 8 weeks, with running balance.
 // ─────────────────────────────────────────────────────────────────────────────
 function WeeklyCashCalendar() {
@@ -2478,7 +2478,7 @@ function WeeklyCashCalendar() {
           className="w-full md:w-64 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
       </div>
       <StatGrid cols="md:grid-cols-3" cards={[
-        { label: "Lowest weekly balance", value: lowest === Infinity ? "—" : formatCurrency(lowest), color: lowest < 0 ? "text-red-400" : "text-[var(--color-text)]" },
+        { label: "Lowest weekly balance", value: lowest === Infinity ? "-" : formatCurrency(lowest), color: lowest < 0 ? "text-red-400" : "text-[var(--color-text)]" },
         { label: "Weeks in deficit", value: `${negWeeks} / 8`, color: negWeeks > 0 ? "text-red-400" : "text-green-400" },
         { label: "8-week net swing", value: formatCurrency(weeks.reduce((s, w) => s + w.net, 0)), color: "text-[var(--color-text)]" },
       ]} />
@@ -2511,7 +2511,7 @@ function WeeklyCashCalendar() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Vendor Payment-Timing Forecast — schedule planned vendor payments and see when
+// Vendor Payment-Timing Forecast - schedule planned vendor payments and see when
 // each lands, the monthly outflow profile and the single heaviest payment month.
 // ─────────────────────────────────────────────────────────────────────────────
 interface VendorPayment { id: string; vendor: string; amount: number; offsetDays: number }
@@ -2545,7 +2545,7 @@ function VendorPaymentTiming() {
   }, [items]);
 
   const total = items.reduce((s, i) => s + i.amount, 0);
-  const peak = months.reduce((m, b) => b.amount > m.amount ? b : m, { label: "—", amount: 0 });
+  const peak = months.reduce((m, b) => b.amount > m.amount ? b : m, { label: "-", amount: 0 });
 
   return (
     <div className="space-y-4">
@@ -2553,7 +2553,7 @@ function VendorPaymentTiming() {
       <StatGrid cols="md:grid-cols-3" cards={[
         { label: "Scheduled payments", value: `${items.length}`, color: "text-[var(--color-text)]" },
         { label: "Total committed", value: formatCurrency(total), color: "text-red-400" },
-        { label: "Heaviest month", value: peak.amount > 0 ? formatCurrency(peak.amount) : "—", color: "text-red-400", sub: peak.amount > 0 ? peak.label : undefined },
+        { label: "Heaviest month", value: peak.amount > 0 ? formatCurrency(peak.amount) : "-", color: "text-red-400", sub: peak.amount > 0 ? peak.label : undefined },
       ]} />
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <h3 className="text-sm font-semibold mb-3">Schedule a vendor payment</h3>
@@ -2592,7 +2592,7 @@ function VendorPaymentTiming() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GST Payment Forecast — projects upcoming monthly GST cash outflow from the
+// GST Payment Forecast - projects upcoming monthly GST cash outflow from the
 // trailing taxable-revenue run-rate and the firm's GST rate.
 // ─────────────────────────────────────────────────────────────────────────────
 function GstPaymentForecast() {
@@ -2661,7 +2661,7 @@ function GstPaymentForecast() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Runway with Pipeline — extends the base cash runway by layering risk-weighted
+// Runway with Pipeline - extends the base cash runway by layering risk-weighted
 // pipeline deals (value × win-probability) into the inflow, showing the uplift.
 // ─────────────────────────────────────────────────────────────────────────────
 interface PipelineDeal { id: string; name: string; value: number; winPct: number }
@@ -2700,7 +2700,7 @@ function RunwayWithPipeline() {
       <ToolHeader icon={Rocket} title="Runway with Pipeline" blurb="Extends your base cash runway by layering in risk-weighted pipeline deals (value × win-probability) as expected inflow, so you see how much closing the funnel buys you." />
       <StatGrid cols="md:grid-cols-4" cards={[
         { label: "Cash on hand", value: formatCurrency(Math.round(cash)), color: "text-[var(--color-text)]" },
-        { label: "Monthly burn", value: burn > 0 ? formatCurrency(Math.round(burn)) : "—", color: burn > 0 ? "text-red-400" : "text-green-400" },
+        { label: "Monthly burn", value: burn > 0 ? formatCurrency(Math.round(burn)) : "-", color: burn > 0 ? "text-red-400" : "text-green-400" },
         { label: "Base runway", value: fmtMonths(baseRunway), color: baseRunway < 6 && baseRunway !== Infinity ? "text-red-400" : "text-[var(--color-text)]" },
         { label: "With pipeline", value: fmtMonths(pipelineRunway), color: "text-green-400", sub: weighted > 0 ? `+${formatCurrency(Math.round(weighted))} weighted` : undefined },
       ]} />
@@ -2722,7 +2722,7 @@ function RunwayWithPipeline() {
               <button onClick={() => setDeals(prev => prev.filter(x => x.id !== d.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
             </div>
           ))}
-          {deals.length === 0 && <p className="text-sm text-[var(--color-muted)] py-3 text-center">No pipeline deals yet — add one to extend runway</p>}
+          {deals.length === 0 && <p className="text-sm text-[var(--color-muted)] py-3 text-center">No pipeline deals yet - add one to extend runway</p>}
         </div>
       </div>
     </div>
@@ -2730,9 +2730,9 @@ function RunwayWithPipeline() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #6 — Cash-Conversion-Cycle Tracker
+// #6 - Cash-Conversion-Cycle Tracker
 // CCC = DSO + DIO − DPO. Computed live from invoices, inventory and procurement.
-// A lower (or negative) cycle means cash is tied up for fewer days — the single
+// A lower (or negative) cycle means cash is tied up for fewer days - the single
 // best lever an SMB has on working capital. Shows each leg and a plain reading.
 // ─────────────────────────────────────────────────────────────────────────────
 function CashConversionCycle() {
@@ -2759,12 +2759,12 @@ function CashConversionCycle() {
 
   return (
     <div className="space-y-4">
-      <ToolHeader icon={Repeat} title="Cash-Conversion-Cycle Tracker" blurb="CCC = DSO + DIO − DPO. The number of days your cash is locked up between paying suppliers and collecting from customers. Lower (or negative) is better — it's the strongest working-capital lever you have." />
+      <ToolHeader icon={Repeat} title="Cash-Conversion-Cycle Tracker" blurb="CCC = DSO + DIO − DPO. The number of days your cash is locked up between paying suppliers and collecting from customers. Lower (or negative) is better - it's the strongest working-capital lever you have." />
       <StatGrid cols="md:grid-cols-4" cards={[
         { label: "DSO (receivables)", value: `${dsoD}d`, color: "text-[var(--color-text)]" },
         { label: "DIO (inventory)", value: `${dioD}d`, color: "text-[var(--color-text)]" },
         { label: "DPO (payables)", value: `${dpoD}d`, color: "text-[var(--color-text)]" },
-        { label: "Cash-conversion cycle", value: `${ccc}d`, color: ccc <= 0 ? "text-green-400" : ccc > 60 ? "text-red-400" : "text-[var(--color-text)]", sub: ccc <= 0 ? "negative — suppliers fund your growth" : "days cash is tied up" },
+        { label: "Cash-conversion cycle", value: `${ccc}d`, color: ccc <= 0 ? "text-green-400" : ccc > 60 ? "text-red-400" : "text-[var(--color-text)]", sub: ccc <= 0 ? "negative - suppliers fund your growth" : "days cash is tied up" },
       ]} />
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <h3 className="text-sm font-semibold mb-3">Cycle composition (days)</h3>
@@ -2797,10 +2797,10 @@ function CashConversionCycle() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #11 — Liquidity Stress Test
+// #11 - Liquidity Stress Test
 // Simulates two shocks against the trailing run-rate: a revenue drop (%) and the
 // loss of the top customer's monthly contribution. Reports how many months of
-// runway survive each shock — the concentration-risk question lenders ask.
+// runway survive each shock - the concentration-risk question lenders ask.
 // ─────────────────────────────────────────────────────────────────────────────
 function LiquidityStressTest() {
   const { store } = useApp();
@@ -2836,7 +2836,7 @@ function LiquidityStressTest() {
 
   return (
     <div className="space-y-4">
-      <ToolHeader icon={ShieldHalf} title="Liquidity Stress Test" blurb="Shocks your trailing run-rate by a revenue drop and (optionally) losing your biggest customer, then reports the surviving runway — the concentration-risk question every lender and prudent owner asks." />
+      <ToolHeader icon={ShieldHalf} title="Liquidity Stress Test" blurb="Shocks your trailing run-rate by a revenue drop and (optionally) losing your biggest customer, then reports the surviving runway - the concentration-risk question every lender and prudent owner asks." />
       <StatGrid cols="md:grid-cols-3" cards={[
         { label: "Cash on hand", value: formatCurrency(Math.round(cash)), color: "text-[var(--color-text)]" },
         { label: "Base runway", value: fmtMonths(baseRunway), color: "text-[var(--color-text)]" },
@@ -2849,7 +2849,7 @@ function LiquidityStressTest() {
         </div>
         <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input type="checkbox" checked={loseTop} onChange={e => setLoseTop(e.target.checked)} className="accent-[var(--color-primary)]" />
-          Also lose top customer{topCustomer ? <span className="text-[var(--color-muted)]">— {topCustomer} ({Math.round(topShare * 100)}% of billings)</span> : <span className="text-[var(--color-muted)]">— no invoice data</span>}
+          Also lose top customer{topCustomer ? <span className="text-[var(--color-muted)]">- {topCustomer} ({Math.round(topShare * 100)}% of billings)</span> : <span className="text-[var(--color-muted)]">- no invoice data</span>}
         </label>
       </div>
       {!survives && monthsToShortfall !== Infinity && (
@@ -2862,7 +2862,7 @@ function LiquidityStressTest() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #42 — Debt Service Coverage Forecast
+// #42 - Debt Service Coverage Forecast
 // Projects DSCR = operating cash flow ÷ annual debt service forward, against the
 // trailing operating run-rate with an adjustable growth assumption. Warns before
 // the ratio slips below the 1.25× covenant most lenders require.
@@ -2944,7 +2944,7 @@ function DscrForecast() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #73 — Smart Reserve Tiers
+// #73 - Smart Reserve Tiers
 // Splits the recommended cash buffer into three purpose-tagged tiers: operating
 // (N days of burn), tax (next GST + advance-tax due), and emergency (volatility
 // cushion). Shows how today's balance covers each tier, in priority order.
@@ -2991,7 +2991,7 @@ function SmartReserveTiers() {
 
   return (
     <div className="space-y-4">
-      <ToolHeader icon={PiggyBank} title="Smart Reserve Tiers" blurb="Splits your buffer into purpose-tagged tiers — operating, tax, and emergency — and shows how today's balance funds each in priority order, so payroll and GST cash are never raided for something else." />
+      <ToolHeader icon={PiggyBank} title="Smart Reserve Tiers" blurb="Splits your buffer into purpose-tagged tiers - operating, tax, and emergency - and shows how today's balance funds each in priority order, so payroll and GST cash are never raided for something else." />
       <StatGrid cols="md:grid-cols-4" cards={[
         { label: "Cash on hand", value: formatCurrency(Math.round(cash)), color: "text-[var(--color-text)]" },
         { label: "Total reserve target", value: formatCurrency(Math.round(totalTarget)), color: "text-[var(--color-text)]" },
@@ -3030,13 +3030,13 @@ function SmartReserveTiers() {
           );
         })}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Daily burn ≈ {formatCurrency(Math.round(dailyBurn))} (trailing 3-month average expense ÷ 30). Tiers fill in priority order — operating first, then tax, then emergency.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Daily burn ≈ {formatCurrency(Math.round(dailyBurn))} (trailing 3-month average expense ÷ 30). Tiers fill in priority order - operating first, then tax, then emergency.</p>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #17 — Advance-Tax Calendar
+// #17 - Advance-Tax Calendar
 // Folds India's quarterly advance-tax installments (15 Jun/Sep/Dec/Mar at
 // 15/45/75/100% cumulative) into the cash plan, from an estimated annual profit
 // seeded by the trailing run-rate and overridable.
@@ -3064,7 +3064,7 @@ function AdvanceTaxCalendar() {
 
   return (
     <div className="space-y-4">
-      <ToolHeader icon={Hourglass} title="Advance-Tax Calendar" blurb="Folds India's quarterly advance-tax installments (due 15 Jun / Sep / Dec / Mar at 15 / 45 / 75 / 100% cumulative) into your cash plan, sized from estimated annual profit — so the deposits never blindside your balance." />
+      <ToolHeader icon={Hourglass} title="Advance-Tax Calendar" blurb="Folds India's quarterly advance-tax installments (due 15 Jun / Sep / Dec / Mar at 15 / 45 / 75 / 100% cumulative) into your cash plan, sized from estimated annual profit - so the deposits never blindside your balance." />
       <StatGrid cols="md:grid-cols-3" cards={[
         { label: "Estimated annual tax", value: formatCurrency(annualTax), color: "text-red-400" },
         { label: "Next installment", value: nextDue ? formatCurrency(nextDue.installment) : "All paid", color: "text-red-400", sub: nextDue ? `due ${format(new Date(nextDue.dueDate), "d MMM")}` : undefined },

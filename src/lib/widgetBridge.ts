@@ -6,7 +6,7 @@ import { Preferences } from "@capacitor/preferences";
 // On iOS a small native shim mirrors this into the App Group suite the WidgetKit
 // extension reads (see WIDGET_SETUP.md). No-op on web.
 //
-// NOTE: we deliberately do NOT call Preferences.configure({group}) — that is a
+// NOTE: we deliberately do NOT call Preferences.configure({group}) - that is a
 // GLOBAL switch and would relocate the app-lock PIN / all other stored keys.
 export const WIDGET_KEY = "hr_widget";
 

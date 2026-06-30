@@ -1,4 +1,4 @@
-// §11 — Year-end closing. Until now FY carry-forward was faked at read-time in
+// §11 - Year-end closing. Until now FY carry-forward was faked at read-time in
 // reports._ledgerClosings (P&L ledgers reset every FY, permanent ledgers carry
 // their net movement forward). There was no actual CLOSING VOUCHER on the books.
 //
@@ -65,7 +65,7 @@ async function _reservesLedgerId(tenantId) {
 }
 
 // Per-P&L-ledger net movement for the FY (debit-positive signed balance). P&L
-// ledgers reset every FY so we use this-FY movement only — no carry-forward.
+// ledgers reset every FY so we use this-FY movement only - no carry-forward.
 async function _plLedgerBalances(tenantId, fy) {
   const { rows } = await pool.query(
     `SELECT l.id, l.name, g.nature,
@@ -93,7 +93,7 @@ async function yearEndClose(tenantId, actorId, fy) {
   if (!tenantId || !fy) throw new PostError("BAD_INPUT", "tenantId and fy required", 400);
   const endDate = fyEndDate(fy); // validates fy format
 
-  // Idempotency — refuse to re-close an FY that already has a closing voucher.
+  // Idempotency - refuse to re-close an FY that already has a closing voucher.
   const existing = await _findClosingVoucher(tenantId, fy);
   if (existing) {
     throw new PostError("ALREADY_CLOSED", `FY ${fy} is already closed (closing JOURNAL #${existing.voucher_number})`, 409);
@@ -136,7 +136,7 @@ async function yearEndClose(tenantId, actorId, fy) {
   // Balancing line: the net result lands in Reserves & Surplus (equity).
   //  net profit (>0): the P&L lines net to a credit → balance with a Cr to Reserves.
   //    (Σ entries: Dr income + Cr expense; Dr total − Cr total = expense − income = −netProfit.
-  //     For profit, Dr<Cr by netProfit, so we Dr Reserves... — compute precisely:)
+  //     For profit, Dr<Cr by netProfit, so we Dr Reserves... - compute precisely:)
   // Compute the running imbalance from the P&L lines, then plug Reserves with it.
   let drTotal = ZERO, crTotal = ZERO;
   for (const e of entries) { drTotal = drTotal.plus(money(e.debit)); crTotal = crTotal.plus(money(e.credit)); }

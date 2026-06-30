@@ -119,7 +119,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 // Every routable feature tab. Anything in here that the current role can't access
-// is bounced to their landing page — so a scoped team member (e.g. Sales) can't
+// is bounced to their landing page - so a scoped team member (e.g. Sales) can't
 // reach /payroll by typing the URL. Routes NOT in this set (e.g. /profile, unknown
 // paths) fall through untouched so universal pages and the 404 still work.
 const GUARDED_TABS = new Set([
@@ -147,7 +147,7 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
   if (GUARDED_TABS.has(tab) && !canAccess(tab)) {
     return <Navigate to={landingFor(effectiveRole)} replace />;
   }
-  // Plan entitlement gate — show the upsell instead of the feature when the
+  // Plan entitlement gate - show the upsell instead of the feature when the
   // tenant's plan can't reach it. super_admin (platform owner) bypasses everything.
   const required = FEATURE_ENTITLEMENTS[tab] as Exclude<PlanTier, "free"> | undefined;
   if (required && effectiveRole !== "super_admin" &&
@@ -164,7 +164,7 @@ function PreviewBanner() {
   return (
     <div className="sticky top-0 z-30 bg-purple-900/40 border-b border-purple-700/50 backdrop-blur px-4 py-2 flex items-center justify-between gap-3">
       <p className="text-xs text-purple-200">
-        Previewing the app as <strong className="capitalize">{label}</strong> — this is exactly what they see.
+        Previewing the app as <strong className="capitalize">{label}</strong> - this is exactly what they see.
       </p>
       <button onClick={() => setPreviewRole(null)}
         className="text-xs font-semibold bg-purple-800/60 text-purple-100 border border-purple-600/50 px-3 py-1 rounded-md hover:bg-purple-800/90 whitespace-nowrap">
@@ -181,7 +181,7 @@ function AppShell() {
   const { refreshUser, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Register for push notifications (native only) — store the token server-side
+  // Register for push notifications (native only) - store the token server-side
   // and route taps to the right screen.
   useEffect(() => {
     registerPush({

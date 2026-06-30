@@ -1,7 +1,7 @@
-// §TaxFiling — TDS/TCS filing artifacts off book_tax_entries (tax_kind 'TDS'/'TCS').
+// §TaxFiling - TDS/TCS filing artifacts off book_tax_entries (tax_kind 'TDS'/'TCS').
 //
 // These functions produce the FILE / CERTIFICATE that the user then uploads to the
-// TRACES / NSDL e-filing portal themselves — we never claim a "filed" status, we
+// TRACES / NSDL e-filing portal themselves - we never claim a "filed" status, we
 // only build the artifact (a download). The withholding numbers are captured at
 // posting time in book_tax_entries (taxable_value = base amount paid/received,
 // tax_amount = tax deducted/collected, tax_kind 'TDS' for purchases/payments where
@@ -14,14 +14,14 @@ const { pool } = require("../../db");
 const { money, toRupees, sum } = require("./money");
 const { PostError } = require("./posting-engine");
 
-// ── Quarter → date range. Indian FY quarters: Q1 Apr–Jun, Q2 Jul–Sep, Q3 Oct–Dec,
-// Q4 Jan–Mar. `fy` is "2026-27" (the FY that starts in 2026). Returns inclusive
+// ── Quarter → date range. Indian FY quarters: Q1 Apr-Jun, Q2 Jul-Sep, Q3 Oct-Dec,
+// Q4 Jan-Mar. `fy` is "2026-27" (the FY that starts in 2026). Returns inclusive
 // from/to date strings (UTC-safe, date-only) for filtering voucher_date.
 function quarterRange(quarter, fy) {
   const q = String(quarter || "").toUpperCase().replace(/[^Q1-4]/g, "");
   const startYear = parseInt(String(fy).slice(0, 4), 10);
   if (!startYear || !["Q1", "Q2", "Q3", "Q4"].includes(q)) {
-    throw new PostError("BAD_QUARTER", `quarter must be Q1–Q4 and fy "YYYY-YY", got ${quarter}/${fy}`, 422);
+    throw new PostError("BAD_QUARTER", `quarter must be Q1-Q4 and fy "YYYY-YY", got ${quarter}/${fy}`, 422);
   }
   // [startMonth(1-based calendar), monthsSpanYear+1 boundary]
   const spans = {
@@ -42,7 +42,7 @@ function esc(s) {
 }
 
 // Pull the deductor (tenant) identity once. TAN/PAN may be blank if the profile
-// isn't filled in — we surface placeholders so the user knows what to complete,
+// isn't filled in - we surface placeholders so the user knows what to complete,
 // rather than fabricating a number. TAN is now a first-class tenant_profile column
 // (the deductor's Tax Deduction & Collection Account Number); the e-TDS statement
 // and Form 16A are invalid without it.
@@ -93,30 +93,30 @@ async function _withholdingRows(tenantId, kind, from, to, partyLedgerId) {
 // (1) NSDL e-TDS/TCS quarterly statement TEXT (RPU/FVU flat-file).
 //
 // A correctly STRUCTURED, MULTI-CHALLAN flat file ported from the NSDL e-TDS/TCS
-// File Validation Utility (FVU) record layout — written from the schema, not copied.
+// File Validation Utility (FVU) record layout - written from the schema, not copied.
 // It is a caret(^)-delimited, line-feed-terminated file of fixed record types, each
 // numbered by its 1-based line position (NSDL's "Line No." is the first field of
 // every record and the FVU validates it strictly). Record types, in order:
 //
-//   FH  File Header        — 1 per file: line#, "FH", count of BATCHES in the file,
+//   FH  File Header        - 1 per file: line#, "FH", count of BATCHES in the file,
 //                            file type (NS1 = regular), upload type "R", FY, form,
 //                            file-creation date, count of total records.
-//   BH  Batch Header        — 1 per batch (one batch per statement): line#, "BH",
+//   BH  Batch Header        - 1 per batch (one batch per statement): line#, "BH",
 //                            batch number, count of CHALLAN records in this batch,
 //                            form, TAN, deductor PAN, deductor name, FY, quarter.
-//   CD  Challan Detail       — 1 per DEPOSIT CHALLAN: line#, "CD", batch#, challan#,
+//   CD  Challan Detail       - 1 per DEPOSIT CHALLAN: line#, "CD", batch#, challan#,
 //                            section, TDS/TCS, surcharge, cess, interest, others,
 //                            total deposited, BSR code, deposit date, challan serial,
 //                            count of DEDUCTEE records under this challan.
-//   DD  Deductee Detail      — 1 per withholding row, NESTED under its challan:
+//   DD  Deductee Detail      - 1 per withholding row, NESTED under its challan:
 //                            line#, "DD", batch#, challan#, deductee#, PAN, name,
 //                            section, amount paid/credited, tax deducted/collected,
 //                            rate, date of payment/credit, reference.
-//   FT  File Total           — 1 per file: line#, "FT", total record count, batch
+//   FT  File Total           - 1 per file: line#, "FT", total record count, batch
 //                            count, challan count, deductee count.
 //
 // Challans are grouped the way a deductor actually deposits: ONE challan per
-// (section, deposit-month) — i.e. the monthly remittance for a given section. Each
+// (section, deposit-month) - i.e. the monthly remittance for a given section. Each
 // challan then carries exactly its own deductee rows, and we VALIDATE that the
 // emitted deductee-record count equals the input row count and that each challan's
 // declared deductee count matches the rows nested under it (throwing FVU_COUNT_MISMATCH
@@ -131,7 +131,7 @@ async function tdsReturnFile(tenantId, { quarter, fy, form } = {}) {
   const kind = f === "27EQ" ? "TCS" : "TDS";
   const { q, from, to } = quarterRange(quarter, fy);
   const ded = await _deductor(tenantId);
-  if (!ded.tan) throw new PostError("TAN_NOT_SET", "Deductor TAN is not set on the company profile — set it before generating an e-TDS statement", 422);
+  if (!ded.tan) throw new PostError("TAN_NOT_SET", "Deductor TAN is not set on the company profile - set it before generating an e-TDS statement", 422);
   const rows = await _withholdingRows(tenantId, kind, from, to);
 
   const SEP = "^";
@@ -158,29 +158,29 @@ async function tdsReturnFile(tenantId, { quarter, fy, form } = {}) {
   const lines = [];
   const push = (fields) => { lines.push([String(lines.length + 1)].concat(fields).join(SEP)); };
 
-  // Placeholder for FH (needs the final record count) — patched after the body.
+  // Placeholder for FH (needs the final record count) - patched after the body.
   lines.push(""); // reserve line 1 for FH
 
-  // BH — Batch Header (single batch covering this statement)
+  // BH - Batch Header (single batch covering this statement)
   push(["BH", "1", String(challans.length), f, ded.tan, ded.pan || "PANNOTAVBL", ded.name, fy, q]);
 
   let emittedDeductees = 0;
   challans.forEach((c, ci) => {
     const challanNo = String(ci + 1);
     const challanTax = sum(c.deductees.map((d) => d.tax_amount));
-    // Deposit date = 7th of the month following the deposit month (CBDT due date) —
+    // Deposit date = 7th of the month following the deposit month (CBDT due date) -
     // the deductor edits this to the actual challan date in the RPU before validating.
     const [yy, mm] = c.month.split("-").map(Number);
     const dueDate = new Date(Date.UTC(mm === 12 ? yy + 1 : yy, mm === 12 ? 0 : mm, 7));
     const challanDate = dueDate.toISOString().slice(0, 10).replace(/-/g, "");
-    // CD — Challan Detail: section, TDS/TCS, surcharge, cess, interest, others, total,
+    // CD - Challan Detail: section, TDS/TCS, surcharge, cess, interest, others, total,
     // BSR code, deposit date, challan serial, deductee count.
     push([
       "CD", "1", challanNo, c.section, toRupees(challanTax), "0.00", "0.00",
       "0.00", "0.00", toRupees(challanTax), "0000000", challanDate, "00000",
       String(c.deductees.length),
     ]);
-    // DD — Deductee Detail rows nested under this challan.
+    // DD - Deductee Detail rows nested under this challan.
     c.deductees.forEach((r, di) => {
       emittedDeductees += 1;
       push([
@@ -197,12 +197,12 @@ async function tdsReturnFile(tenantId, { quarter, fy, form } = {}) {
     });
   });
 
-  // FT — File Total: total record count, batch count, challan count, deductee count.
+  // FT - File Total: total record count, batch count, challan count, deductee count.
   // Record count INCLUDES the FH line we reserved at index 0.
   const totalRecords = lines.length + 1;
   push(["FT", String(totalRecords), "1", String(challans.length), String(emittedDeductees)]);
 
-  // FH — File Header, now that we know the total record count. Patch line 1.
+  // FH - File Header, now that we know the total record count. Patch line 1.
   lines[0] = ["1", "FH", "1", "NS1", "R", fy, f, today, String(totalRecords)].join(SEP);
 
   // ── Validate record counts: every deductee row must be emitted exactly once, and
@@ -248,7 +248,7 @@ async function tdsReturnFile(tenantId, { quarter, fy, form } = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// (2) Form-16A — non-salary TDS certificate (HTML for the deductee). Renders the
+// (2) Form-16A - non-salary TDS certificate (HTML for the deductee). Renders the
 // deductor + deductee header, a table of TDS transactions for the quarter, totals
 // and a verification block. (Form 16A is a quarterly certificate; we scope it to
 // the requested quarter for one party.)
@@ -261,7 +261,7 @@ async function form16A(tenantId, { partyLedgerId, quarter, fy } = {}) {
   const totalBase = sum(rows.map((r) => r.taxable_value));
   const totalTax = sum(rows.map((r) => r.tax_amount));
 
-  const partyName = party.party_name || "—";
+  const partyName = party.party_name || "-";
   const partyPan = party.party_pan || "PAN not available";
 
   const trs = rows.map((r) => `
@@ -275,7 +275,7 @@ async function form16A(tenantId, { partyLedgerId, quarter, fy } = {}) {
         <tr><td colspan="5" style="text-align:center;color:#888">No TDS transactions for ${esc(q)} ${esc(fy)}</td></tr>`;
 
   return `<!doctype html>
-<html><head><meta charset="utf-8"><title>Form 16A — ${esc(partyName)} (${esc(q)} ${esc(fy)})</title>
+<html><head><meta charset="utf-8"><title>Form 16A - ${esc(partyName)} (${esc(q)} ${esc(fy)})</title>
 <style>
   body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;max-width:820px;margin:24px auto;padding:0 16px;font-size:13px}
   h1{font-size:18px;text-align:center;margin:4px 0}
@@ -294,15 +294,15 @@ async function form16A(tenantId, { partyLedgerId, quarter, fy } = {}) {
   .note{margin-top:14px;font-size:11px;color:#888}
 </style></head><body>
   <h1>FORM NO. 16A</h1>
-  <div class="sub">[See rule 31(1)(b)] — Certificate under section 203 of the Income-tax Act, 1961<br>for tax deducted at source — ${esc(q)} of FY ${esc(fy)}</div>
+  <div class="sub">[See rule 31(1)(b)] - Certificate under section 203 of the Income-tax Act, 1961<br>for tax deducted at source - ${esc(q)} of FY ${esc(fy)}</div>
 
   <div class="box">
     <h2>Deductor</h2>
     <div class="grid">
       <div><div class="k">Name</div><div class="v">${esc(ded.name)}</div>
-           <div class="k" style="margin-top:6px">Address</div><div>${esc(ded.address) || "—"}</div></div>
-      <div><div class="k">TAN</div><div class="v">${esc(ded.tan) || "—"}</div>
-           <div class="k" style="margin-top:6px">PAN</div><div class="v">${esc(ded.pan) || "—"}</div></div>
+           <div class="k" style="margin-top:6px">Address</div><div>${esc(ded.address) || "-"}</div></div>
+      <div><div class="k">TAN</div><div class="v">${esc(ded.tan) || "-"}</div>
+           <div class="k" style="margin-top:6px">PAN</div><div class="v">${esc(ded.pan) || "-"}</div></div>
     </div>
   </div>
 
@@ -386,7 +386,7 @@ async function listTdsCertificates(tenantId, partyLedgerId) {
 // Resolve the rate to actually deduct at: if a §197 certificate for this party +
 // section is valid on `onDate`, return its (lower) rate as a string; else the
 // caller's defaultRate. A certificate validity window is inclusive; a null bound
-// means open-ended. We never return a rate HIGHER than the default — a 197 cert
+// means open-ended. We never return a rate HIGHER than the default - a 197 cert
 // only ever reduces. `onDate` defaults to today.
 async function effectiveTdsRate(tenantId, partyLedgerId, section, defaultRate, onDate) {
   const dflt = toRupees(money(defaultRate || 0));
@@ -409,9 +409,9 @@ async function effectiveTdsRate(tenantId, partyLedgerId, section, defaultRate, o
 
 // ─────────────────────────────────────────────────────────────────────────────
 // (4) 26AS / AIS reconciliation. The tenant feeds in rows parsed from their 26AS
-// or AIS (TDS that OTHERS deducted on the tenant's income — i.e. TDS the tenant
+// or AIS (TDS that OTHERS deducted on the tenant's income - i.e. TDS the tenant
 // SUFFERED, a receivable/asset). We persist them, then match each against the
-// tenant's own books: TDS-receivable rows are 'TCS'? No — when the tenant suffers
+// tenant's own books: TDS-receivable rows are 'TCS'? No - when the tenant suffers
 // TDS, the counterparty is the DEDUCTOR. In the books this is captured as a TDS
 // tax row where is_input=true (input credit of tax suffered). We match by the
 // deductor's TAN→party gstin/pan is not TAN... so we match best-effort on section +
@@ -486,7 +486,7 @@ async function reconcile26AS(tenantId, { rows } = {}) {
     }
   }
 
-  // Book rows nobody in the portal claimed — TDS the tenant booked but 26AS hasn't
+  // Book rows nobody in the portal claimed - TDS the tenant booked but 26AS hasn't
   // reflected yet (deductor hasn't filed / mismatch to chase).
   const unmatchedInBooks = bookPool.filter((b) => !b.used).map((b) => ({
     voucherId: b.voucher_id, party: b.party_name || null, pan: b.party_pan || null,

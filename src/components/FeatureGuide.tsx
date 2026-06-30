@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { HelpCircle, X, Lightbulb, ListChecks, Info } from "lucide-react";
 import { FEATURE_GUIDES } from "@/data/featureGuides";
 
-// "How to use this" — a compact dropdown in the page header. Reads the current
+// "How to use this" - a compact dropdown in the page header. Reads the current
 // route, looks up its guide, and explains what the feature is for, how to use it,
 // and how to get maximum value. Renders nothing on pages without a guide.
 export default function FeatureGuide() {

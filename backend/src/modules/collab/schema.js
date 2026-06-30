@@ -1,12 +1,12 @@
-// Headroom Collab — Phase 0 data model (Teams-style real-time collaboration).
+// Headroom Collab - Phase 0 data model (Teams-style real-time collaboration).
 //
 // Adapted to Headroom reality vs. the build spec:
 //  • The spec's `org_id UUID REFERENCES organizations(id)` becomes `tenant_id TEXT`
-//    — Headroom's tenancy unit is the TEXT tenant id (e.g. "acme-3f2a"), there is
+//    - Headroom's tenancy unit is the TEXT tenant id (e.g. "acme-3f2a"), there is
 //    no `organizations` table. user refs stay UUID (users.id).
 //  • All tables are prefixed `collab_` to match Headroom's module convention
 //    (book_*, crm_*…) and avoid any name collision. The wire/REST contract keeps
-//    the clean names (teams, conversations, messages) — see ./contract.js.
+//    the clean names (teams, conversations, messages) - see ./contract.js.
 //  • Spec enums (conversation_type, member_role, …) are modelled as TEXT + CHECK,
 //    matching the rest of the Headroom schema and keeping the whole file
 //    re-runnable with plain IF NOT EXISTS on every boot.
@@ -19,7 +19,7 @@
 // Row-Level Security (defense-in-depth, spec §2/§8): every table has RLS ENABLED
 // and FORCED, isolated on the `app.current_tenant` session GUC. All reads/writes
 // MUST go through tenantContext.withTenant() (which sets that GUC inside a
-// transaction) — the authoritative conversation-membership check still lives in
+// transaction) - the authoritative conversation-membership check still lives in
 // the app layer; RLS is the backstop that stops a query bug leaking across
 // tenants. FORCE means even the table owner is subject to the policy, so the
 // backstop is real and not silently bypassed.

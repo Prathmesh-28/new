@@ -13,11 +13,11 @@ import {
 import { toast } from "sonner";
 import { format, differenceInCalendarDays } from "date-fns";
 
-// shared styles — reused TaxPage/DebtPage input class string
+// shared styles - reused TaxPage/DebtPage input class string
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg";
 
-// Manual reference rates (INR per 1 unit) — owner edits these to today's rate.
+// Manual reference rates (INR per 1 unit) - owner edits these to today's rate.
 const DEFAULT_RATES: Record<string, number> = { USD: 86.5, EUR: 93.2, GBP: 109.4, AED: 23.5, SGD: 64.1, AUD: 56.8, JPY: 0.57 };
 const CURRENCIES = Object.keys(DEFAULT_RATES);
 const fmtUSD = (n: number) => `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
@@ -41,7 +41,7 @@ export default function GlobalPage() {
             <Globe size={18} className="text-[var(--color-primary)]" /> Global &amp; Cross-Border
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            FX, exports &amp; FEMA toolkit — multi-currency maths, LUT invoicing, FIRC/BRC tracking, customs &amp; export-incentive estimators.
+            FX, exports &amp; FEMA toolkit - multi-currency maths, LUT invoicing, FIRC/BRC tracking, customs &amp; export-incentive estimators.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -132,14 +132,14 @@ function Overview({ onJump }: { onJump: (t: TabId) => void }) {
   const openLcValue = lcs.reduce((s, l) => s + (l.amount || 0), 0);
 
   const cards = [
-    { label: "Reference USD rate", value: `₹${DEFAULT_RATES.USD}`, color: "text-[var(--color-text)]", sub: "Manual — set in converter" },
+    { label: "Reference USD rate", value: `₹${DEFAULT_RATES.USD}`, color: "text-[var(--color-text)]", sub: "Manual - set in converter" },
     { label: "FIRCs awaiting BRC", value: String(pendingBrc), color: pendingBrc > 0 ? "text-yellow-400" : "text-green-400", sub: `${fircs.length} remittance(s) tracked` },
-    { label: "Open LC value", value: openLcValue > 0 ? fmtUSD(openLcValue) : "—", color: "text-blue-400", sub: `${lcs.length} letter(s) of credit` },
-    { label: "FEMA realisation window", value: "9 months", color: "text-orange-400", sub: "From export date — track per shipment" },
+    { label: "Open LC value", value: openLcValue > 0 ? fmtUSD(openLcValue) : "-", color: "text-blue-400", sub: `${lcs.length} letter(s) of credit` },
+    { label: "FEMA realisation window", value: "9 months", color: "text-orange-400", sub: "From export date - track per shipment" },
   ];
 
   const tools: { id: TabId; title: string; desc: string }[] = [
-    { id: "fx-convert", title: "Multi-Currency Converter", desc: "Convert with your own manual reference rates — no stale hardcoded numbers." },
+    { id: "fx-convert", title: "Multi-Currency Converter", desc: "Convert with your own manual reference rates - no stale hardcoded numbers." },
     { id: "fx-gainloss", title: "FX Gain / Loss Calculator", desc: "Realised forex gain/loss between invoice rate and settlement rate." },
     { id: "export-invoice", title: "Export Invoice Builder", desc: "Zero-rated invoice with or without LUT, INR equivalent and FEMA notes." },
     { id: "firc-brc", title: "FIRC / BRC Tracker", desc: "Track inward remittances and realisation against the 9-month FEMA window." },
@@ -147,7 +147,7 @@ function Overview({ onJump }: { onJump: (t: TabId) => void }) {
     { id: "customs", title: "Customs Duty Estimator", desc: "BCD + Social Welfare Surcharge + IGST landed-cost on imports." },
     { id: "payment-fees", title: "Payment Fee Comparator", desc: "Compare SWIFT wire vs fintech rails on fee + FX markup per corridor." },
     { id: "transfer-pricing", title: "Transfer Pricing Markup", desc: "Cost-plus / resale-minus arm's-length price for related-party deals." },
-    { id: "gst-export", title: "GST Export Refund", desc: "Refund under LUT (unutilised ITC) or with IGST paid — estimate either route." },
+    { id: "gst-export", title: "GST Export Refund", desc: "Refund under LUT (unutilised ITC) or with IGST paid - estimate either route." },
     { id: "rodtep", title: "RoDTEP / Duty Drawback", desc: "Estimate remission scrip value and drawback on exported goods." },
     { id: "fx-forward", title: "FX Forward Cover Calculator", desc: "Price a forward contract from spot + forward points and see your locked-in INR." },
     { id: "bank-consolidate", title: "FCY Balance Consolidator", desc: "Add foreign-currency balances across banks and see one INR-normalised total." },
@@ -176,7 +176,7 @@ function Overview({ onJump }: { onJump: (t: TabId) => void }) {
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1">Built for the Indian exporter / importer</h2>
         <p className="text-xs text-[var(--color-muted)] mb-4">
-          Everything here runs on your inputs — no live bank feed required. Designed around India&apos;s export framework:
+          Everything here runs on your inputs - no live bank feed required. Designed around India&apos;s export framework:
           LUT zero-rating, FIRC/eBRC realisation, customs landed cost, and the RoDTEP / drawback incentive schemes.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -220,7 +220,7 @@ function CurrencyConverter() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /> Multi-Currency Converter</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Set your own reference rate (INR per 1 unit of currency) — usually the RBI reference or your bank&apos;s card rate for the day.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Set your own reference rate (INR per 1 unit of currency) - usually the RBI reference or your bank&apos;s card rate for the day.</p>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Amount</label>
@@ -336,8 +336,8 @@ function FxGainLoss() {
           </div>
           <p className="text-[11px] text-[var(--color-muted)] mt-3">
             {gain >= 0
-              ? `The ${direction} settled in your favour — book a forex gain to P&L.`
-              : `The rate moved against you — book a forex loss to P&L.`}
+              ? `The ${direction} settled in your favour - book a forex gain to P&L.`
+              : `The rate moved against you - book a forex loss to P&L.`}
           </p>
         </div>
       )}
@@ -399,7 +399,7 @@ function ExportInvoiceBuilder() {
         </div>
         <label className="flex items-center gap-2 text-xs cursor-pointer">
           <input type="checkbox" checked={withLut} onChange={e => setWithLut(e.target.checked)} className="accent-[var(--color-primary)]" />
-          Supplying under LUT (zero-rated, no IGST charged) — uncheck to pay IGST and claim refund
+          Supplying under LUT (zero-rated, no IGST charged) - uncheck to pay IGST and claim refund
         </label>
       </div>
 
@@ -421,7 +421,7 @@ function ExportInvoiceBuilder() {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-[var(--color-muted)]">Invoice value</span><span className="tabular-nums font-semibold">{fcTotal.toLocaleString("en-US", { maximumFractionDigits: 2 })} {ccy}</span></div>
             <div className="flex justify-between"><span className="text-[var(--color-muted)]">INR equivalent (@ ₹{rate})</span><span className="tabular-nums">{formatCurrency(Math.round(inrTotal))}</span></div>
-            <div className="flex justify-between"><span className="text-[var(--color-muted)]">IGST {withLut ? "(under LUT — zero-rated)" : `@ ${gst}%`}</span><span className={`tabular-nums ${withLut ? "text-green-400" : "text-orange-400"}`}>{withLut ? "₹0" : formatCurrency(igst)}</span></div>
+            <div className="flex justify-between"><span className="text-[var(--color-muted)]">IGST {withLut ? "(under LUT - zero-rated)" : `@ ${gst}%`}</span><span className={`tabular-nums ${withLut ? "text-green-400" : "text-orange-400"}`}>{withLut ? "₹0" : formatCurrency(igst)}</span></div>
             <div className="flex justify-between pt-2 border-t border-[var(--color-border)]">
               <span className="font-semibold">Total payable by buyer</span>
               <span className="font-bold tabular-nums">{withLut ? `${fcTotal.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${ccy}` : `${fcTotal.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${ccy} + ${formatCurrency(igst)} IGST`}</span>
@@ -429,12 +429,12 @@ function ExportInvoiceBuilder() {
           </div>
           <p className="text-[11px] text-[var(--color-muted)] mt-3">
             {withLut
-              ? `Add to invoice: "Supply meant for export under LUT — Bond No. ___, without payment of IGST (Sec 16, IGST Act)."${buyer ? ` Bill to ${buyer}${country ? `, ${country}` : ""}.` : ""}`
+              ? `Add to invoice: "Supply meant for export under LUT - Bond No. ___, without payment of IGST (Sec 16, IGST Act)."${buyer ? ` Bill to ${buyer}${country ? `, ${country}` : ""}.` : ""}`
               : `IGST of ${formatCurrency(igst)} is paid now and refundable on furnishing shipping bill + FIRC/BRC.`}
           </p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">{store.firm?.gstRegistered === false ? "Your firm is marked GST-unregistered — LUT/zero-rating needs an active GSTIN. " : ""}A valid LUT must be filed each financial year (Form GST RFD-11).</p>
+      <p className="text-[10px] text-[var(--color-muted)]">{store.firm?.gstRegistered === false ? "Your firm is marked GST-unregistered - LUT/zero-rating needs an active GSTIN. " : ""}A valid LUT must be filed each financial year (Form GST RFD-11).</p>
     </div>
   );
 }
@@ -562,7 +562,7 @@ function LetterOfCreditTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Letter of Credit Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)]">Track each LC and tick off the UCP 600 document set — missing or discrepant docs are the #1 cause of payment delay.</p>
+        <p className="text-xs text-[var(--color-muted)]">Track each LC and tick off the UCP 600 document set - missing or discrepant docs are the #1 cause of payment delay.</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">LC number</label>
@@ -598,7 +598,7 @@ function LetterOfCreditTracker() {
           <div key={r.id} className={`${CARD} p-5`}>
             <div className="flex items-start justify-between flex-wrap gap-2 mb-3">
               <div>
-                <p className="text-sm font-semibold">{r.lcNo} <span className="text-[var(--color-muted)] font-normal">· {r.bank || "—"}</span></p>
+                <p className="text-sm font-semibold">{r.lcNo} <span className="text-[var(--color-muted)] font-normal">· {r.bank || "-"}</span></p>
                 <p className="text-xs text-[var(--color-muted)]">{r.amount.toLocaleString()} {r.ccy} · expires {format(new Date(r.expiry), "d MMM yyyy")} ({days < 0 ? `${Math.abs(days)}d ago` : `${days}d left`})</p>
               </div>
               <div className="flex items-center gap-2">
@@ -614,11 +614,11 @@ function LetterOfCreditTracker() {
                 </label>
               ))}
             </div>
-            {ready && <p className="text-xs text-green-400 mt-3 flex items-center gap-1.5"><CheckCircle2 size={13} /> All documents ready — present to your negotiating bank before LC expiry.</p>}
+            {ready && <p className="text-xs text-green-400 mt-3 flex items-center gap-1.5"><CheckCircle2 size={13} /> All documents ready - present to your negotiating bank before LC expiry.</p>}
           </div>
         );
       })}
-      <p className="text-[10px] text-[var(--color-muted)]">Generic UCP 600 checklist — your specific LC may require additional or different documents. Present documents within the LC&apos;s stipulated period (typically 21 days of shipment).</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Generic UCP 600 checklist - your specific LC may require additional or different documents. Present documents within the LC&apos;s stipulated period (typically 21 days of shipment).</p>
     </div>
   );
 }
@@ -814,7 +814,7 @@ function PaymentFeeComparator() {
       {best && fAmt > 0 && evaluated.length > 1 && (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
           <p className="text-sm font-bold text-green-400 flex items-center gap-2">
-            <CheckCircle2 size={14} /> {best.name} is cheapest — saving {formatCurrency(Math.round(evaluated[evaluated.length - 1].totalCost - best.totalCost))} vs the most expensive option on this transfer.
+            <CheckCircle2 size={14} /> {best.name} is cheapest - saving {formatCurrency(Math.round(evaluated[evaluated.length - 1].totalCost - best.totalCost))} vs the most expensive option on this transfer.
           </p>
         </div>
       )}
@@ -932,7 +932,7 @@ function GstExportRefund() {
         <div className={`${CARD} p-5`}>
           {route === "lut" ? (
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-[var(--color-muted)]">Export / total turnover ratio</span><span className="tabular-nums">{totT > 0 ? `${((expT / totT) * 100).toFixed(1)}%` : "—"}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--color-muted)]">Export / total turnover ratio</span><span className="tabular-nums">{totT > 0 ? `${((expT / totT) * 100).toFixed(1)}%` : "-"}</span></div>
               <div className="flex justify-between"><span className="text-[var(--color-muted)]">Net ITC</span><span className="tabular-nums">{formatCurrency(Math.round(itc))}</span></div>
               <div className="flex justify-between pt-2 border-t border-[var(--color-border)]">
                 <span className="font-semibold">Refund of unutilised ITC (Rule 89(4))</span>
@@ -945,7 +945,7 @@ function GstExportRefund() {
                 <span className="font-semibold">IGST refund claimable</span>
                 <span className="font-bold tabular-nums text-green-400">{formatCurrency(Math.round(igst))}</span>
               </div>
-              <p className="text-[11px] text-[var(--color-muted)]">Refunded automatically once the shipping bill and GSTR-3B/GSTR-1 match on the ICEGATE–GSTN system — no separate RFD-01 needed.</p>
+              <p className="text-[11px] text-[var(--color-muted)]">Refunded automatically once the shipping bill and GSTR-3B/GSTR-1 match on the ICEGATE-GSTN system - no separate RFD-01 needed.</p>
             </div>
           )}
           <p className="text-[11px] text-[var(--color-muted)] mt-3">File via RFD-01 (LUT route) with realisation proof (FIRC/BRC). The Rule 89(4) formula caps the ITC refund by the export-turnover ratio.</p>
@@ -1011,12 +1011,12 @@ function RodtepDrawbackEstimator() {
           </div>
           <p className="text-[11px] text-[var(--color-muted)] mt-3">
             {scheme === "rodtep"
-              ? "RoDTEP is credited as a transferable duty-credit scrip in your ICEGATE ledger — usable for BCD or sellable. Rates are notified per HSN (Appendix 4R)."
+              ? "RoDTEP is credited as a transferable duty-credit scrip in your ICEGATE ledger - usable for BCD or sellable. Rates are notified per HSN (Appendix 4R)."
               : "Drawback is credited to your bank account against the shipping bill. You cannot claim both RoDTEP and drawback on the same export item where overlapping."}
           </p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Rates vary by HSN and change with each notification — verify the current rate against the official RoDTEP / All-Industry Drawback schedule for your product.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Rates vary by HSN and change with each notification - verify the current rate against the official RoDTEP / All-Industry Drawback schedule for your product.</p>
     </div>
   );
 }
@@ -1034,7 +1034,7 @@ function FxForwardCover() {
   const sp = parseFloat(spot) || 0;
   const pts = parseFloat(points) || 0;
   const m = parseFloat(months) || 0;
-  // Indian forwards usually trade at a premium for USD (INR depreciates) — exporter sells fwd, importer buys fwd.
+  // Indian forwards usually trade at a premium for USD (INR depreciates) - exporter sells fwd, importer buys fwd.
   const forwardRate = sp + pts;
   const spotInr = amt * sp;
   const forwardInr = amt * forwardRate;
@@ -1050,7 +1050,7 @@ function FxForwardCover() {
           {(["sell", "buy"] as const).map(d => (
             <button key={d} onClick={() => setDirection(d)}
               className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all ${direction === d ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
-              {d === "sell" ? "Sell forward (exporter — locking inflow)" : "Buy forward (importer — locking outflow)"}
+              {d === "sell" ? "Sell forward (exporter - locking inflow)" : "Buy forward (importer - locking outflow)"}
             </button>
           ))}
         </div>
@@ -1092,7 +1092,7 @@ function FxForwardCover() {
               <span className={`font-bold tabular-nums ${gainVsSpot >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(gainVsSpot))}</span>
             </div>
           </div>
-          <p className="text-[11px] text-[var(--color-muted)] mt-3">A forward booked against an underlying export/import order needs no separate margin documentation. Cancel/roll if the order changes — premium is non-refundable on cancellation.</p>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">A forward booked against an underlying export/import order needs no separate margin documentation. Cancel/roll if the order changes - premium is non-refundable on cancellation.</p>
         </div>
       )}
     </div>
@@ -1280,7 +1280,7 @@ function SwiftVsUpiCompare() {
             <div className="px-4 py-3 text-xs border-t border-[var(--color-border)]">
               {saving > 0
                 ? <span className="text-green-400 font-semibold flex items-center gap-1.5"><CheckCircle2 size={13} /> UPI-intl / fintech saves {formatCurrency(Math.round(saving))} on this inbound payment.</span>
-                : <span className="text-[var(--color-muted)]">SWIFT is cheaper here by {formatCurrency(Math.round(-saving))} — usually only at larger ticket sizes.</span>}
+                : <span className="text-[var(--color-muted)]">SWIFT is cheaper here by {formatCurrency(Math.round(-saving))} - usually only at larger ticket sizes.</span>}
             </div>
           )}
         </div>
@@ -1380,7 +1380,7 @@ function EefcAccountTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> EEFC Account Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)]">An Exchange Earners&apos; Foreign Currency account lets you hold export earnings in FCY and pay overseas without re-converting — but unconverted balances must be sold to INR by month-end of the next month.</p>
+        <p className="text-xs text-[var(--color-muted)]">An Exchange Earners&apos; Foreign Currency account lets you hold export earnings in FCY and pay overseas without re-converting - but unconverted balances must be sold to INR by month-end of the next month.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Ref</label>
@@ -1433,7 +1433,7 @@ function EefcAccountTracker() {
                       <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{format(new Date(r.date), "d MMM yyyy")}</td>
                       <td className="px-3 py-2.5 tabular-nums">{format(cb, "d MMM yyyy")}</td>
                       <td className={`px-3 py-2.5 tabular-nums font-semibold ${r.converted ? "text-green-400" : days < 0 ? "text-red-400" : days < 7 ? "text-yellow-400" : "text-[var(--color-text)]"}`}>
-                        {r.converted ? "—" : days < 0 ? `${Math.abs(days)}d over` : `${days}d`}
+                        {r.converted ? "-" : days < 0 ? `${Math.abs(days)}d over` : `${days}d`}
                       </td>
                       <td className="px-3 py-2.5">
                         <button onClick={() => toggle(r.id)} className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${r.converted ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{r.converted ? "Converted" : "Held in FCY"}</button>
@@ -1506,7 +1506,7 @@ function DtaaWithholdingLookup() {
         </div>
         <label className="flex items-center gap-2 text-xs cursor-pointer">
           <input type="checkbox" checked={grossUp} onChange={e => setGrossUp(e.target.checked)} className="accent-[var(--color-primary)]" />
-          Gross-up — you bear the tax so the vendor receives the full amount net
+          Gross-up - you bear the tax so the vendor receives the full amount net
         </label>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-1">
           {(Object.keys(treaty) as Array<keyof typeof treaty>).map(k => (
@@ -1535,7 +1535,7 @@ function DtaaWithholdingLookup() {
               </>
             )}
           </div>
-          <p className="text-[11px] text-[var(--color-muted)] mt-3">Indicative treaty rates only — actual articles, surcharge/cess, MFN clauses and s.206AA (PAN absence → 20%) can change this. File Form 15CA/15CB before remitting.</p>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">Indicative treaty rates only - actual articles, surcharge/cess, MFN clauses and s.206AA (PAN absence → 20%) can change this. File Form 15CA/15CB before remitting.</p>
         </div>
       )}
     </div>
@@ -1738,7 +1738,7 @@ function IecAdCodeTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><BadgeCheck size={14} className="text-[var(--color-primary)]" /> IEC / AD-Code Register</h2>
-        <p className="text-xs text-[var(--color-muted)]">One home for the registrations every exporter needs: IEC, AD code (per bank), port registrations, RCMC and the annual LUT — with renewal reminders.</p>
+        <p className="text-xs text-[var(--color-muted)]">One home for the registrations every exporter needs: IEC, AD code (per bank), port registrations, RCMC and the annual LUT - with renewal reminders.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Type</label>
@@ -1780,8 +1780,8 @@ function IecAdCodeTracker() {
                     <tr key={r.id} className="hover:bg-white/2">
                       <td className="px-3 py-2.5"><span className="text-[10px] px-2 py-0.5 rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] font-medium">{r.type}</span></td>
                       <td className="px-3 py-2.5 font-medium tabular-nums">{r.code}</td>
-                      <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.issuer || "—"}</td>
-                      <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{r.renewal ? format(new Date(r.renewal), "d MMM yyyy") : "—"}</td>
+                      <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.issuer || "-"}</td>
+                      <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{r.renewal ? format(new Date(r.renewal), "d MMM yyyy") : "-"}</td>
                       <td className="px-3 py-2.5">
                         {days === null ? <span className="text-[var(--color-muted)] text-xs">No date</span>
                           : days < 0 ? <span className="text-red-400 text-xs font-semibold">Expired</span>
@@ -1821,8 +1821,8 @@ function LrsTcsCalculator() {
 
   const LABELS = {
     general: "Other purposes (travel, investment, gifts)",
-    education_loan: "Education — funded by a loan",
-    education_other: "Education — self-funded",
+    education_loan: "Education - funded by a loan",
+    education_other: "Education - self-funded",
     medical: "Medical treatment",
   } as const;
 
@@ -1862,7 +1862,7 @@ function LrsTcsCalculator() {
             </div>
             <div className="flex justify-between"><span className="text-[var(--color-muted)]">Total debited from you</span><span className="tabular-nums">{formatCurrency(Math.round(amt + tcs))}</span></div>
           </div>
-          <p className="text-[11px] text-[var(--color-muted)] mt-3">TCS is not an extra tax — claim it as credit against your income-tax liability (or refund) when filing your return. Education-loan remittances enjoy the concessional 0.5% rate above the threshold.</p>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">TCS is not an extra tax - claim it as credit against your income-tax liability (or refund) when filing your return. Education-loan remittances enjoy the concessional 0.5% rate above the threshold.</p>
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Rates and the ₹10L threshold reflect the post-Oct-2023 LRS framework; overseas tour packages follow separate slabs. Confirm the current Finance-Act rates with your CA before remitting.</p>
@@ -1942,7 +1942,7 @@ function SoftexTracker() {
                   return (
                     <tr key={r.id} className={`hover:bg-white/2 ${overdue ? "bg-red-950/20" : ""}`}>
                       <td className="px-3 py-2.5 font-medium">{r.invoice}</td>
-                      <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.client || "—"}</td>
+                      <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.client || "-"}</td>
                       <td className="px-3 py-2.5 tabular-nums">{r.amount.toLocaleString()} {r.ccy}</td>
                       <td className="px-3 py-2.5 tabular-nums">{format(due, "d MMM yyyy")}</td>
                       <td className="px-3 py-2.5">
@@ -1970,7 +1970,7 @@ function LutRenewalTracker() {
   const [filedFor, setFiledFor] = useFeatureState<string>("glb-lut-fy", "");
   const today = new Date();
 
-  // Indian FY runs 1 Apr – 31 Mar. LUT (RFD-11) is filed per FY and expires 31 Mar of that FY.
+  // Indian FY runs 1 Apr - 31 Mar. LUT (RFD-11) is filed per FY and expires 31 Mar of that FY.
   const fyStartYear = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
   const currentFy = `${fyStartYear}-${String((fyStartYear + 1) % 100).padStart(2, "0")}`;
   const fyEnd = new Date(fyStartYear + 1, 2, 31);
@@ -1981,7 +1981,7 @@ function LutRenewalTracker() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarCheck size={14} className="text-[var(--color-primary)]" /> LUT Renewal Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)]">A Letter of Undertaking (Form GST RFD-11) lets you export without paying IGST. It must be filed afresh for each financial year — a lapsed LUT can trigger an IGST demand on your exports.</p>
+        <p className="text-xs text-[var(--color-muted)]">A Letter of Undertaking (Form GST RFD-11) lets you export without paying IGST. It must be filed afresh for each financial year - a lapsed LUT can trigger an IGST demand on your exports.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">LUT / ARN reference</label>
@@ -1997,7 +1997,7 @@ function LutRenewalTracker() {
       <div className={`${CARD} p-5`}>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between"><span className="text-[var(--color-muted)]">Current financial year</span><span className="tabular-nums font-semibold">FY {currentFy}</span></div>
-          <div className="flex justify-between"><span className="text-[var(--color-muted)]">LUT on record</span><span className="tabular-nums">{lutNo || "—"}{filedFor ? ` (FY ${filedFor})` : ""}</span></div>
+          <div className="flex justify-between"><span className="text-[var(--color-muted)]">LUT on record</span><span className="tabular-nums">{lutNo || "-"}{filedFor ? ` (FY ${filedFor})` : ""}</span></div>
           <div className="flex justify-between"><span className="text-[var(--color-muted)]">Validity ends</span><span className="tabular-nums">{format(fyEnd, "d MMM yyyy")} ({daysToExpiry < 0 ? `${Math.abs(daysToExpiry)}d ago` : `${daysToExpiry}d left`})</span></div>
         </div>
         <div className={`mt-3 rounded-lg px-3 py-2.5 text-xs flex items-start gap-2 border ${covered ? "border-green-800/40 bg-green-950/20 text-green-400" : "border-yellow-800/40 bg-yellow-950/20 text-yellow-400"}`}>
@@ -2015,7 +2015,7 @@ function LutRenewalTracker() {
 // ── #24 FEMA Compliance Calendar ────────────────────────────────────────────────
 type FemaTaskRow = { id: string; form: string; about: string; dueDate: string; done: boolean };
 const FEMA_TEMPLATES = [
-  { form: "FLA Return", about: "Foreign Liabilities & Assets — annual, by 15 Jul" },
+  { form: "FLA Return", about: "Foreign Liabilities & Assets - annual, by 15 Jul" },
   { form: "APR (ODI)", about: "Annual Performance Report for overseas JV/WOS, by 31 Dec" },
   { form: "FC-GPR", about: "Allotment of shares to a non-resident, within 30 days" },
   { form: "FC-TRS", about: "Transfer of shares resident↔non-resident, within 60 days" },
@@ -2046,7 +2046,7 @@ function FemaComplianceCalendar() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> FEMA Compliance Calendar</h2>
-        <p className="text-xs text-[var(--color-muted)]">Track recurring RBI / FEMA filing deadlines — FLA, APR, FC-GPR, FC-TRS, ODI and ECB returns — so none slip past their due date.</p>
+        <p className="text-xs text-[var(--color-muted)]">Track recurring RBI / FEMA filing deadlines - FLA, APR, FC-GPR, FC-TRS, ODI and ECB returns - so none slip past their due date.</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <div className="col-span-2">
             <label className="block text-xs text-[var(--color-muted)] mb-1">Form</label>
@@ -2096,7 +2096,7 @@ function FemaComplianceCalendar() {
           })}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Templated due-dates are typical statutory deadlines — adjust per your facts. Late FEMA filing can attract compounding penalties; confirm dates with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Templated due-dates are typical statutory deadlines - adjust per your facts. Late FEMA filing can attract compounding penalties; confirm dates with your CA.</p>
     </div>
   );
 }
@@ -2127,7 +2127,7 @@ function OdiFdiTracker() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Building2 size={14} className="text-[var(--color-primary)]" /> ODI / FDI Reporting Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)]">Log outbound investments (ODI — into overseas JV/WOS) and inbound foreign investment (FDI — FC-GPR on share allotment), and track the RBI reporting deadline for each.</p>
+        <p className="text-xs text-[var(--color-muted)]">Log outbound investments (ODI - into overseas JV/WOS) and inbound foreign investment (FDI - FC-GPR on share allotment), and track the RBI reporting deadline for each.</p>
         <div className="flex gap-2 mb-1">
           {([["odi", "ODI (money out)"], ["fdi", "FDI (money in)"]] as const).map(([id, label]) => (
             <button key={id} onClick={() => setKind(id)}
@@ -2195,7 +2195,7 @@ function OdiFdiTracker() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">FDI share allotment is reported on Form FC-GPR within 30 days; ODI is reported via Form ODI at remittance, with an annual APR thereafter. Timelines are indicative — confirm with your AD bank / CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">FDI share allotment is reported on Form FC-GPR within 30 days; ODI is reported via Form ODI at remittance, with an annual APR thereafter. Timelines are indicative - confirm with your AD bank / CA.</p>
     </div>
   );
 }
@@ -2264,7 +2264,7 @@ function CountryRiskScorecard() {
           </div>
         );
       })}
-      <p className="text-[10px] text-[var(--color-muted)]">A subjective scorecard for your own due diligence — not a credit rating. For high-risk destinations consider ECGC cover, an LC, or advance payment.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A subjective scorecard for your own due diligence - not a credit rating. For high-risk destinations consider ECGC cover, an LC, or advance payment.</p>
     </div>
   );
 }
@@ -2366,7 +2366,7 @@ function IncotermsSplitter() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Freight / Incoterms Cost Splitter</h2>
-        <p className="text-xs text-[var(--color-muted)]">Enter each shipping cost leg (₹), pick the Incoterm, and see who bears what. Higher terms (CIF, DDP) push more cost onto the seller — price them into your quote.</p>
+        <p className="text-xs text-[var(--color-muted)]">Enter each shipping cost leg (₹), pick the Incoterm, and see who bears what. Higher terms (CIF, DDP) push more cost onto the seller - price them into your quote.</p>
         <div>
           <label className="block text-xs text-[var(--color-muted)] mb-1">Incoterm 2020</label>
           <select value={term} onChange={e => setTerm(e.target.value as Incoterm)} className={INP}>
@@ -2395,7 +2395,7 @@ function IncotermsSplitter() {
             <p className="text-2xl font-bold tabular-nums text-blue-400">{formatCurrency(Math.round(buyerCost))}</p>
           </div>
         </div>
-        <p className="text-[11px] text-[var(--color-muted)] mt-3">Risk transfers to the buyer at the named point for each term (e.g. on board the vessel under FOB/CFR/CIF). Cost allocation here follows Incoterms 2020 norms — your contract terms prevail. Insurance is mandatory only under CIF and CIP.</p>
+        <p className="text-[11px] text-[var(--color-muted)] mt-3">Risk transfers to the buyer at the named point for each term (e.g. on board the vessel under FOB/CFR/CIF). Cost allocation here follows Incoterms 2020 norms - your contract terms prevail. Insurance is mandatory only under CIF and CIP.</p>
       </div>
     </div>
   );
@@ -2460,7 +2460,7 @@ function MultiCurrencyPnl() {
               <span className={`font-bold tabular-nums ${profit >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(profit))} <span className="text-[var(--color-muted)] font-normal">({margin.toFixed(1)}%)</span></span>
             </div>
           </div>
-          <p className="text-[11px] text-[var(--color-muted)] mt-3">INR figures are translated at your manual reference rates — actual booked values depend on the rate on each transaction date (AS 11 / Ind-AS 21).</p>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">INR figures are translated at your manual reference rates - actual booked values depend on the rate on each transaction date (AS 11 / Ind-AS 21).</p>
         </div>
       )}
     </div>
@@ -2552,7 +2552,7 @@ function WhtRecoveryTracker() {
                   return (
                     <tr key={r.id} className="hover:bg-white/2">
                       <td className="px-3 py-2.5 font-medium">{r.payer}</td>
-                      <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.country || "—"}</td>
+                      <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.country || "-"}</td>
                       <td className="px-3 py-2.5 tabular-nums">{r.gross.toLocaleString()} {r.ccy}</td>
                       <td className="px-3 py-2.5 tabular-nums">{r.whtPct}%</td>
                       <td className="px-3 py-2.5 tabular-nums text-green-400">{formatCurrency(Math.round(whtInr))}</td>
@@ -2594,9 +2594,9 @@ function ExportRealisationAging() {
 
   const open = rows.filter(r => !r.realised);
   const buckets = [
-    { label: "0–90 days", test: (d: number) => d <= 90 },
-    { label: "91–180 days", test: (d: number) => d > 90 && d <= 180 },
-    { label: "181–270 days", test: (d: number) => d > 180 && d <= 270 },
+    { label: "0-90 days", test: (d: number) => d <= 90 },
+    { label: "91-180 days", test: (d: number) => d > 90 && d <= 180 },
+    { label: "181-270 days", test: (d: number) => d > 180 && d <= 270 },
     { label: "Over 270 days (FEMA breach)", test: (d: number) => d > 270 },
   ].map(b => ({
     ...b,
@@ -2607,7 +2607,7 @@ function ExportRealisationAging() {
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Hourglass size={14} className="text-[var(--color-primary)]" /> Export Realisation Aging</h2>
-        <p className="text-xs text-[var(--color-muted)]">Age your unrealised shipping bills into buckets against the 9-month (270-day) FEMA window — the same way EDPMS flags overdue exports.</p>
+        <p className="text-xs text-[var(--color-muted)]">Age your unrealised shipping bills into buckets against the 9-month (270-day) FEMA window - the same way EDPMS flags overdue exports.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Shipping bill ref</label>
@@ -2660,7 +2660,7 @@ function ExportRealisationAging() {
                       <td className="px-3 py-2.5 font-medium">{r.ref}</td>
                       <td className="px-3 py-2.5 tabular-nums">{r.amount.toLocaleString()} {r.ccy}</td>
                       <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{format(new Date(r.exportDate), "d MMM yyyy")}</td>
-                      <td className={`px-3 py-2.5 tabular-nums font-semibold ${r.realised ? "text-green-400" : breach ? "text-red-400" : age > 180 ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{r.realised ? "—" : `${age}d`}</td>
+                      <td className={`px-3 py-2.5 tabular-nums font-semibold ${r.realised ? "text-green-400" : breach ? "text-red-400" : age > 180 ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{r.realised ? "-" : `${age}d`}</td>
                       <td className="px-3 py-2.5">
                         <button onClick={() => toggle(r.id)} className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${r.realised ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{r.realised ? "Realised" : "Open"}</button>
                       </td>
@@ -2734,7 +2734,7 @@ function ForeignBankChargeRecon() {
           <p className="text-[11px] text-[var(--color-muted)] mt-3 flex items-start gap-1.5">
             {flagged ? <AlertTriangle size={12} className="shrink-0 mt-px text-red-400" /> : <CheckCircle2 size={12} className="shrink-0 mt-px text-green-400" />}
             {flagged
-              ? `${pct.toFixed(2)}% deducted is high — ask your buyer to remit under "OUR" charges (sender bears all fees) and check for intermediary-bank deductions.`
+              ? `${pct.toFixed(2)}% deducted is high - ask your buyer to remit under "OUR" charges (sender bears all fees) and check for intermediary-bank deductions.`
               : `${pct.toFixed(2)}% deducted is within a normal correspondent-bank range. For FIRC/realisation, the gross invoice value still applies.`}
           </p>
         </div>

@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES — mirror backend/src/modules/books/assets.js (loose; columns are snake_case)
+// TYPES - mirror backend/src/modules/books/assets.js (loose; columns are snake_case)
 // ─────────────────────────────────────────────────────────────────────────────
 interface AssetRow {
   id: string;
@@ -83,8 +83,8 @@ function asArray<T>(v: unknown): T[] {
 }
 
 const DEP_METHODS = [
-  { id: "SLM", label: "SLM — straight line (on cost)" },
-  { id: "WDV", label: "WDV — written-down value" },
+  { id: "SLM", label: "SLM - straight line (on cost)" },
+  { id: "WDV", label: "WDV - written-down value" },
 ] as const;
 
 const STATUS_FILTERS = [
@@ -178,7 +178,7 @@ export default function BooksAssetsTab() {
         const list = asArray<Ledger>(l).filter((x) => x.is_bank || x.isBank);
         setLedgers(list);
       } catch {
-        /* bank ledger list optional — only needed when disposing for proceeds */
+        /* bank ledger list optional - only needed when disposing for proceeds */
       }
     })();
   }, []);
@@ -193,7 +193,7 @@ export default function BooksAssetsTab() {
       const res = await api.post<DepResult>("/api/books/assets/depreciation/run", { asOf });
       setLastRun(res);
       const n = res?.posted?.length ?? 0;
-      toast.success(n ? `Posted ${n} depreciation entr${n === 1 ? "y" : "ies"}` : "Nothing to depreciate — already up to date");
+      toast.success(n ? `Posted ${n} depreciation entr${n === 1 ? "y" : "ies"}` : "Nothing to depreciate - already up to date");
       await load(status);
     } catch (e) {
       toast.error(errMsg(e));
@@ -212,7 +212,7 @@ export default function BooksAssetsTab() {
         <p className="text-sm text-[var(--color-muted)] mt-1 max-w-3xl">
           How to use: register each capitalised asset with its cost, acquisition date and an annual depreciation
           rate (SLM on cost, or WDV on the written-down value). Run depreciation to post a monthly Dr Depreciation /
-          Cr Accumulated Depreciation journal — it catches up month-by-month to the as-of date. Group assets for the
+          Cr Accumulated Depreciation journal - it catches up month-by-month to the as-of date. Group assets for the
           register subtotals, and dispose an asset to book the gain/loss and remove it from the net block.
         </p>
       </div>
@@ -250,7 +250,7 @@ export default function BooksAssetsTab() {
                   As of {lastRun.asOf} · {lastRun.posted.length} entr{lastRun.posted.length === 1 ? "y" : "ies"} posted
                 </p>
                 {lastRun.posted.length === 0 ? (
-                  <p className="text-[var(--color-muted)]">No depreciation due — all assets are up to date.</p>
+                  <p className="text-[var(--color-muted)]">No depreciation due - all assets are up to date.</p>
                 ) : (
                   <ul className="space-y-1">
                     {lastRun.posted.map((p, i) => (
@@ -269,7 +269,7 @@ export default function BooksAssetsTab() {
 
       {/* DEPRECIATION BOARD / REGISTER */}
       <Card
-        title="Depreciation board — asset register"
+        title="Depreciation board - asset register"
         icon={<FolderTree size={15} />}
         action={
           <div className="flex items-center gap-2">
@@ -299,7 +299,7 @@ export default function BooksAssetsTab() {
           <p className="text-sm text-[var(--color-muted)] py-8 text-center">Loading register…</p>
         ) : (register?.groups?.length ?? 0) === 0 ? (
           <p className="text-sm text-[var(--color-muted)] py-8 text-center border border-dashed border-[var(--color-border)] rounded-lg">
-            No assets yet — register one above.
+            No assets yet - register one above.
           </p>
         ) : (
           <div className="space-y-6">
@@ -350,7 +350,7 @@ export default function BooksAssetsTab() {
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2 border-[var(--color-border)] font-semibold bg-[var(--color-bg)]/40">
-                        <td className="px-3 py-2.5" colSpan={4}>Subtotal — {g.group}</td>
+                        <td className="px-3 py-2.5" colSpan={4}>Subtotal - {g.group}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums">{rupee(g.subtotal.cost)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-red-400">{rupee(g.subtotal.accumulatedDep)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-primary)]">{rupee(g.subtotal.wdv)}</td>
@@ -374,7 +374,7 @@ export default function BooksAssetsTab() {
       </Card>
 
       {/* MANAGE: SET GROUP + DISPOSE (per-asset) */}
-      <Card title="Manage assets — group & dispose" icon={<Tag size={15} />}>
+      <Card title="Manage assets - group & dispose" icon={<Tag size={15} />}>
         {busy ? (
           <p className="text-sm text-[var(--color-muted)] py-6 text-center">Loading…</p>
         ) : assets.length === 0 ? (
@@ -418,12 +418,12 @@ function AddAssetForm({ onCreated }: { onCreated: () => Promise<void> | void }) 
         method,
         rate: Number(rate) || 0,
       });
-      // asset_group is not a create field on the backend — set it after creation if provided.
+      // asset_group is not a create field on the backend - set it after creation if provided.
       if (assetGroup.trim() && created?.id) {
         try {
           await api.patch(`/api/books/assets/${created.id}/group`, { group: assetGroup.trim() });
         } catch {
-          /* group is optional — asset is already created */
+          /* group is optional - asset is already created */
         }
       }
       toast.success(`Asset "${name.trim()}" registered`);
@@ -485,7 +485,7 @@ function AddAssetForm({ onCreated }: { onCreated: () => Promise<void> | void }) 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MANAGE ASSET ROW — inline set-group + dispose
+// MANAGE ASSET ROW - inline set-group + dispose
 // ─────────────────────────────────────────────────────────────────────────────
 function ManageAssetRow({
   asset, ledgers, onChanged,

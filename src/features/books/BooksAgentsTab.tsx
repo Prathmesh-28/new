@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES (loose — backend response shapes inlined)
+// TYPES (loose - backend response shapes inlined)
 // ─────────────────────────────────────────────────────────────────────────────
 interface LlmConfig {
   baseUrl?: string;
@@ -121,7 +121,7 @@ function scheduleSummary(a: Agent): string | null {
 }
 
 function pretty(v: unknown): string {
-  if (v == null) return "—";
+  if (v == null) return "-";
   if (typeof v === "string") return v;
   try {
     return JSON.stringify(v, null, 2);
@@ -193,7 +193,7 @@ export default function BooksAgentsTab({ autoRunAgentId }: { autoRunAgentId?: st
         </p>
       </div>
 
-      {/* How to use — collapsible guide */}
+      {/* How to use - collapsible guide */}
       <div className="rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/5">
         <button onClick={() => setShowHelp(v => !v)} className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left">
           <span className="flex items-center gap-2 text-sm font-semibold"><BookOpen size={15} className="text-[var(--color-primary)]" /> How to use AI Agents</span>
@@ -201,15 +201,15 @@ export default function BooksAgentsTab({ autoRunAgentId }: { autoRunAgentId?: st
         </button>
         {showHelp && (
           <div className="space-y-2.5 border-t border-[var(--color-border)] px-4 py-3 text-xs leading-relaxed text-[var(--color-muted)]">
-            <p><strong className="text-[var(--color-text)]">What this is:</strong> build your own AI assistants that read your live books (and, with approval, take actions) — no code.</p>
+            <p><strong className="text-[var(--color-text)]">What this is:</strong> build your own AI assistants that read your live books (and, with approval, take actions) - no code.</p>
             <ol className="space-y-2">
-              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">1</span><span><strong className="text-[var(--color-text)]">Connect a model</strong> (Engine card below): if your workspace key is already set you're ready to go — the default is a <strong>free model</strong> (no credits needed). To use your own, paste an <strong>OpenRouter API key</strong>, pick a model, then <strong>Save → Test connection</strong>. (Self-hosted later: switch the preset to point at your own Pi/Ollama URL.)</span></li>
-              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">2</span><span><strong className="text-[var(--color-text)]">Add an agent</strong>: pick a <strong>Template</strong> (Collections Chaser, Cash-flow Watchdog, GST Filing Helper…) and click <em>Use template</em> — or <strong>New agent</strong>: name it, write instructions in plain English, and tick the <strong>tools</strong> it may use.</span></li>
+              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">1</span><span><strong className="text-[var(--color-text)]">Connect a model</strong> (Engine card below): if your workspace key is already set you're ready to go - the default is a <strong>free model</strong> (no credits needed). To use your own, paste an <strong>OpenRouter API key</strong>, pick a model, then <strong>Save → Test connection</strong>. (Self-hosted later: switch the preset to point at your own Pi/Ollama URL.)</span></li>
+              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">2</span><span><strong className="text-[var(--color-text)]">Add an agent</strong>: pick a <strong>Template</strong> (Collections Chaser, Cash-flow Watchdog, GST Filing Helper…) and click <em>Use template</em> - or <strong>New agent</strong>: name it, write instructions in plain English, and tick the <strong>tools</strong> it may use.</span></li>
               <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">3</span><span><strong className="text-[var(--color-text)]">(Optional) Add knowledge</strong>: upload your price list / policies in the agent's Knowledge panel so it answers from your own data.</span></li>
-              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">4</span><span><strong className="text-[var(--color-text)]">Test in the Playground</strong>: chat with it. If it proposes a <strong>write</strong> (create invoice/ledger), you get <strong>Approve / Reject</strong> cards — nothing posts to your books without your click.</span></li>
-              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">5</span><span><strong className="text-[var(--color-text)]">(Optional) Schedule it</strong>: set Daily/Weekly + an hour so it runs itself (e.g. a 9am cash brief). Scheduled runs are <strong>read-only</strong> — proposed writes wait for your approval.</span></li>
+              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">4</span><span><strong className="text-[var(--color-text)]">Test in the Playground</strong>: chat with it. If it proposes a <strong>write</strong> (create invoice/ledger), you get <strong>Approve / Reject</strong> cards - nothing posts to your books without your click.</span></li>
+              <li className="flex gap-2"><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/15 text-[9px] font-semibold text-[var(--color-primary)]">5</span><span><strong className="text-[var(--color-text)]">(Optional) Schedule it</strong>: set Daily/Weekly + an hour so it runs itself (e.g. a 9am cash brief). Scheduled runs are <strong>read-only</strong> - proposed writes wait for your approval.</span></li>
             </ol>
-            <p className="flex items-center gap-1.5 text-[11px]"><ShieldAlert size={12} className="text-[var(--color-warning,#d97706)]" /> Runs on your own engine (free model by default — no credits needed). Writes always need approval and are role-checked + audited.</p>
+            <p className="flex items-center gap-1.5 text-[11px]"><ShieldAlert size={12} className="text-[var(--color-warning,#d97706)]" /> Runs on your own engine (free model by default - no credits needed). Writes always need approval and are role-checked + audited.</p>
           </div>
         )}
       </div>
@@ -329,7 +329,7 @@ function EngineCard({ cfg, onChange }: { cfg: LlmConfig | null; onChange: (c: Ll
         </div>
       </div>
 
-      {/* Provider preset toggle — prefills the base URL */}
+      {/* Provider preset toggle - prefills the base URL */}
       <div className="mb-4">
         <label className={labelCls}>Provider</label>
         <div className="inline-flex rounded-lg border border-[var(--color-border)] overflow-hidden">
@@ -369,7 +369,7 @@ function EngineCard({ cfg, onChange }: { cfg: LlmConfig | null; onChange: (c: Ll
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder={connected ? "•••••••••• (set — leave blank to keep)" : "sk-or-…"}
+            placeholder={connected ? "•••••••••• (set - leave blank to keep)" : "sk-or-…"}
             autoComplete="off"
             className={`${inputCls} font-mono`}
           />
@@ -406,8 +406,8 @@ function EngineCard({ cfg, onChange }: { cfg: LlmConfig | null; onChange: (c: Ll
       </div>
 
       <p className="text-xs text-[var(--color-muted)] mt-3">
-        Any OpenAI-compatible endpoint works. You can later point the base URL at your own server — e.g. a Raspberry Pi
-        running Ollama at <code className="font-mono text-[var(--color-text)]">http://&lt;pi&gt;:11434/v1</code> — and keep the key blank.
+        Any OpenAI-compatible endpoint works. You can later point the base URL at your own server - e.g. a Raspberry Pi
+        running Ollama at <code className="font-mono text-[var(--color-text)]">http://&lt;pi&gt;:11434/v1</code> - and keep the key blank.
         The embedding model powers each agent's Knowledge search.
       </p>
 
@@ -507,7 +507,7 @@ function AgentsManager({
         {busy ? (
           <div className="px-4 py-8 text-center text-[var(--color-muted)]">Loading…</div>
         ) : agents.length === 0 ? (
-          <div className="px-4 py-8 text-center text-[var(--color-muted)]">No agents yet — create one above.</div>
+          <div className="px-4 py-8 text-center text-[var(--color-muted)]">No agents yet - create one above.</div>
         ) : (
           agents.map((a) => (
             <AgentRow key={a.id} agent={a} onEdit={() => setEditing(a)} reload={reload} engineReady={engineReady} autoRun={a.id === autoRunAgentId} />
@@ -519,7 +519,7 @@ function AgentsManager({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TEMPLATES GALLERY — curated starting points; clone -> open in editor
+// TEMPLATES GALLERY - curated starting points; clone -> open in editor
 // ─────────────────────────────────────────────────────────────────────────────
 function TemplatesGallery({ onCloned }: { onCloned: (created: Agent) => Promise<void> }) {
   const [templates, setTemplates] = useState<AgentTemplate[]>([]);
@@ -719,7 +719,7 @@ function AgentRow({ agent: a, onEdit, reload, engineReady, autoRun }: { agent: A
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AGENT CHAT — an inline live runner scoped to ONE agent. Used both in the
+// AGENT CHAT - an inline live runner scoped to ONE agent. Used both in the
 // per-agent "Run" panel (in the list) and as the body of the standalone
 // Playground. Sends to /run, shows the tool steps it took, and renders any
 // write the agent proposes as an approval-gated PendingActionCard.
@@ -771,7 +771,7 @@ function AgentChat({ agentId, agentName, engineReady, autoFocus }: { agentId: st
       <div className="px-3 py-3 space-y-3 max-h-[24rem] overflow-y-auto">
         {turns.length === 0 ? (
           <div className="text-center text-[var(--color-muted)] py-5 text-xs">
-            Ask <span className="font-medium text-[var(--color-text)]">{agentName}</span> something to test it live — e.g. "Run your task now and show me the result."
+            Ask <span className="font-medium text-[var(--color-text)]">{agentName}</span> something to test it live - e.g. "Run your task now and show me the result."
           </div>
         ) : (
           turns.map((t, i) =>
@@ -822,7 +822,7 @@ function AgentChat({ agentId, agentName, engineReady, autoFocus }: { agentId: st
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// KNOWLEDGE PANEL (per agent) — upload/paste docs for retrieval (RAG)
+// KNOWLEDGE PANEL (per agent) - upload/paste docs for retrieval (RAG)
 // ─────────────────────────────────────────────────────────────────────────────
 function KnowledgePanel({ agentId }: { agentId: string }) {
   const [docs, setDocs] = useState<AgentDoc[]>([]);
@@ -921,7 +921,7 @@ function KnowledgePanel({ agentId }: { agentId: string }) {
           value={content}
           onChange={(e) => setContent(e.target.value)}
           rows={4}
-          placeholder="Paste content the agent should know — policies, FAQs, product notes… It gets chunked, embedded and searched at chat time."
+          placeholder="Paste content the agent should know - policies, FAQs, product notes… It gets chunked, embedded and searched at chat time."
           className={`${inputCls} resize-y leading-relaxed`}
         />
         <div className="flex justify-end">
@@ -1132,7 +1132,7 @@ function AgentEditor({
         )}
       </div>
 
-      {/* Schedule — autonomous, read-only runs */}
+      {/* Schedule - autonomous, read-only runs */}
       <div className="border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-surface)] space-y-3">
         <div className="text-xs font-semibold flex items-center gap-1.5 text-[var(--color-muted)]">
           <Clock size={12} className="text-[var(--color-primary)]" /> Schedule
@@ -1193,7 +1193,7 @@ function AgentEditor({
             </div>
             <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5">
               <ShieldAlert size={12} className="text-amber-400 shrink-0 mt-0.5" />
-              Scheduled runs are read-only — any actions that change data are saved as pending approvals for you to review later, not executed automatically.
+              Scheduled runs are read-only - any actions that change data are saved as pending approvals for you to review later, not executed automatically.
             </p>
           </>
         )}
@@ -1291,7 +1291,7 @@ function Playground({ agents, engineReady }: { agents: Agent[]; engineReady: boo
         {turns.length === 0 ? (
           <div className="text-center text-[var(--color-muted)] py-8 text-sm">
             {selected ? (
-              <>Ask <span className="font-medium text-[var(--color-text)]">{selected.name || "this agent"}</span> something — e.g. "Who owes us the most right now?"</>
+              <>Ask <span className="font-medium text-[var(--color-text)]">{selected.name || "this agent"}</span> something - e.g. "Who owes us the most right now?"</>
             ) : (
               <>Pick an agent and start chatting.</>
             )}
@@ -1391,7 +1391,7 @@ function StepRow({ step }: { step: RunStep }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PENDING ACTION CARD — a write the agent wants to perform, gated on approval
+// PENDING ACTION CARD - a write the agent wants to perform, gated on approval
 // ─────────────────────────────────────────────────────────────────────────────
 type ActionState = "pending" | "approving" | "done" | "rejected";
 

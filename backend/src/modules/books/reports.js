@@ -1,4 +1,4 @@
-// §10 — Reporting layer. Everything reads from book_voucher_entries (cancelled
+// §10 - Reporting layer. Everything reads from book_voucher_entries (cancelled
 // vouchers excluded) so reports always reconcile to the ledger. Signed balances
 // are debit-positive (§10.1): >0 = net debit, <0 = net credit.
 const { pool } = require("../../db");
@@ -37,7 +37,7 @@ async function _ledgerClosings(tenantId, fy, asOf) {
   });
 }
 
-// §10.3 — Trial Balance. The correctness oracle: total debit MUST equal total credit.
+// §10.3 - Trial Balance. The correctness oracle: total debit MUST equal total credit.
 async function trialBalance(tenantId, fy, asOf) {
   const cls = await _ledgerClosings(tenantId, fy, asOf);
   let td = money(0), tc = money(0);
@@ -50,7 +50,7 @@ async function trialBalance(tenantId, fy, asOf) {
   return { financialYear: fy, asOf: asOf || null, ledgers, totalDebit: toRupees(td), totalCredit: toRupees(tc), balanced: eq(td, tc) };
 }
 
-// §10.4 — Profit & Loss (affects_pl ledgers only).
+// §10.4 - Profit & Loss (affects_pl ledgers only).
 async function profitLoss(tenantId, fy, asOf) {
   const cls = (await _ledgerClosings(tenantId, fy, asOf)).filter((c) => c.affectsPl);
   let income = money(0), expense = money(0);
@@ -63,7 +63,7 @@ async function profitLoss(tenantId, fy, asOf) {
   return { financialYear: fy, asOf: asOf || null, income: incomeRows, expense: expenseRows, totalIncome: toRupees(income), totalExpense: toRupees(expense), netProfit: toRupees(net) };
 }
 
-// §10.5 — Balance Sheet (non-P&L ledgers + net profit into equity).
+// §10.5 - Balance Sheet (non-P&L ledgers + net profit into equity).
 async function balanceSheet(tenantId, fy, asOf) {
   const all = await _ledgerClosings(tenantId, fy, asOf);
   const bs = all.filter((c) => !c.affectsPl);
@@ -89,7 +89,7 @@ async function balanceSheet(tenantId, fy, asOf) {
   };
 }
 
-// §10.6 — Day Book: vouchers in a date range, newest first, with their lines.
+// §10.6 - Day Book: vouchers in a date range, newest first, with their lines.
 async function dayBook(tenantId, from, to) {
   const { rows: vs } = await pool.query(
     `SELECT v.id, v.voucher_type, v.voucher_number, v.voucher_date, v.narration, v.reference, v.is_cancelled
@@ -115,7 +115,7 @@ async function dayBook(tenantId, from, to) {
   }));
 }
 
-// §10.6 — Ledger Statement: all entries hitting one ledger with a running signed balance.
+// §10.6 - Ledger Statement: all entries hitting one ledger with a running signed balance.
 async function ledgerStatement(tenantId, ledgerId, fy) {
   const { rows: lg } = await pool.query("SELECT name, opening_balance, opening_is_debit FROM book_ledgers WHERE tenant_id=$1 AND id=$2", [tenantId, ledgerId]);
   if (!lg[0]) return null;
@@ -135,10 +135,10 @@ async function ledgerStatement(tenantId, ledgerId, fy) {
   return { ledger: lg[0].name, financialYear: fy, openingBalance: toRupees(lg[0].opening_is_debit ? money(lg[0].opening_balance) : money(lg[0].opening_balance).neg()), entries: out, closingBalance: toRupees(running) };
 }
 
-// §10 (M6) — Cash Flow Statement (TRUE indirect method). Ported from the logic in
+// §10 (M6) - Cash Flow Statement (TRUE indirect method). Ported from the logic in
 // ERPNext's Cash Flow report and Tryton's account_statement: rather than guessing each
 // voucher's activity from hardcoded group names, we reconstruct the statement the way
-// an accountant does — start from net profit, reverse non-cash charges, then explain the
+// an accountant does - start from net profit, reverse non-cash charges, then explain the
 // rest of the period's cash movement through the actual MOVEMENT of every balance-sheet
 // account between two dates, each account routed to Operating / Investing / Financing by
 // its ROOT TYPE + nature (not by a hardcoded leaf-group name, so it survives renames).
@@ -174,8 +174,8 @@ function _bsActivity(nature, rootName) {
 }
 
 // Legacy name-based classifier kept for callers/selftest that map a single group name to
-// an activity. The indirect statement above does NOT depend on this — it uses root type +
-// nature — but the mapping is preserved so existing behaviour and tests are unchanged.
+// an activity. The indirect statement above does NOT depend on this - it uses root type +
+// nature - but the mapping is preserved so existing behaviour and tests are unchanged.
 const INVESTING_GROUPS = new Set(["Fixed Assets", "Investments"]);
 const FINANCING_GROUPS = new Set(["Capital Account", "Reserves & Surplus", "Loans (Liability)", "Secured Loans", "Unsecured Loans", "Bank OD A/c"]);
 function cashFlowActivity(groupName) {
@@ -214,14 +214,14 @@ async function _ledgerMovements(tenantId, from, to) {
     ledgerId: r.id, name: r.name, nature: r.nature, affectsPl: r.affects_pl,
     rootName: r.root_name,
     // Cash & cash-equivalents: any bank ledger, or a ledger rooted in the Cash-in-hand
-    // family. Bank OD is intentionally NOT cash here — it's a borrowing (financing).
+    // family. Bank OD is intentionally NOT cash here - it's a borrowing (financing).
     isCash: r.is_bank || r.root_name === "Cash-in-hand" || r.name === "Cash-in-hand",
     delta: money(r.dr).minus(money(r.cr)), // debit-positive movement in the window
   }));
 }
 
 // Heuristic to recognise non-cash P&L charges to add back (depreciation, amortisation,
-// provision/impairment write-offs). Driven by ledger/root NAME keywords — robust to the
+// provision/impairment write-offs). Driven by ledger/root NAME keywords - robust to the
 // account sitting under any expense group. Only EXPENSE-nature ledgers are considered.
 function _isNonCashCharge(name, rootName) {
   const s = `${name} ${rootName}`.toLowerCase();
@@ -231,7 +231,7 @@ function _isNonCashCharge(name, rootName) {
 async function cashFlow(tenantId, from, to) {
   const moves = await _ledgerMovements(tenantId, from, to);
 
-  // (0) Oracle — actual net change in cash & cash-equivalents over the window.
+  // (0) Oracle - actual net change in cash & cash-equivalents over the window.
   let netCash = money(0);
   for (const m of moves) if (m.isCash) netCash = netCash.plus(m.delta);
 
@@ -272,7 +272,7 @@ async function cashFlow(tenantId, from, to) {
       financeLines.push({ name: m.name, root: m.rootName, amount: toRupees(cashEffect) });
     } else {
       // Operating working capital. A current asset rising (delta>0) consumes cash; a
-      // current liability rising (delta<0) provides cash — both captured by −delta.
+      // current liability rising (delta<0) provides cash - both captured by −delta.
       const cashEffect = m.delta.neg();
       wcChange = wcChange.plus(cashEffect);
       wcLines.push({ name: m.name, root: m.rootName, nature: m.nature, amount: toRupees(cashEffect) });
@@ -307,9 +307,9 @@ async function cashFlow(tenantId, from, to) {
   };
 }
 
-// §10.7 — Branch-scoped closings. Same shape as _ledgerClosings but every movement
+// §10.7 - Branch-scoped closings. Same shape as _ledgerClosings but every movement
 // is filtered to vouchers whose branch_id matches `branchId` (book_vouchers.branch_id,
-// added in schema §M7). Used for per-branch / per-GSTIN P&L and Trial Balance — today
+// added in schema §M7). Used for per-branch / per-GSTIN P&L and Trial Balance - today
 // no other report filters by branch. The prior-FY carry-forward column is also scoped
 // to the branch so a branch's permanent ledgers carry only that branch's history.
 async function _branchLedgerClosings(tenantId, fy, branchId, asOf) {
@@ -343,7 +343,7 @@ async function _branchLedgerClosings(tenantId, fy, branchId, asOf) {
   });
 }
 
-// §10.7 — Per-branch Trial Balance. Same return shape as trialBalance, scoped to one
+// §10.7 - Per-branch Trial Balance. Same return shape as trialBalance, scoped to one
 // branch_id (per-GSTIN if branches map to GSTINs). Total debit MUST equal total credit
 // for the branch only if the branch's books self-balance; we still report `balanced`.
 async function branchTrialBalance(tenantId, fy, branchId, asOf) {
@@ -360,7 +360,7 @@ async function branchTrialBalance(tenantId, fy, branchId, asOf) {
   return { financialYear: fy, branchId, asOf: asOf || null, ledgers, totalDebit: toRupees(td), totalCredit: toRupees(tc), balanced: eq(td, tc) };
 }
 
-// §10.7 — Per-branch Profit & Loss. Same return shape as profitLoss, scoped to branch_id.
+// §10.7 - Per-branch Profit & Loss. Same return shape as profitLoss, scoped to branch_id.
 async function branchPL(tenantId, fy, branchId, asOf) {
   const cls = (await _branchLedgerClosings(tenantId, fy, branchId, asOf)).filter((c) => c.affectsPl);
   let income = money(0), expense = money(0);
@@ -373,7 +373,7 @@ async function branchPL(tenantId, fy, branchId, asOf) {
   return { financialYear: fy, branchId, asOf: asOf || null, income: incomeRows, expense: expenseRows, totalIncome: toRupees(income), totalExpense: toRupees(expense), netProfit: toRupees(net) };
 }
 
-// §10.8 — Companies Act, 2013 Schedule III financial statements. Ported from ERPNext's
+// §10.8 - Companies Act, 2013 Schedule III financial statements. Ported from ERPNext's
 // Schedule-III layout: the Balance Sheet is presented as Equity & Liabilities
 // (Shareholders' funds, Non-current liabilities, Current liabilities) and Assets
 // (Non-current assets, Current assets), and the Statement of Profit & Loss as
@@ -387,7 +387,7 @@ async function branchPL(tenantId, fy, branchId, asOf) {
 // its group up to a head we recognise; unmatched balance-sheet groups fall to a sensible
 // default by nature so nothing is silently dropped.
 const SCH3_BS_HEAD = {
-  // Equity & Liabilities — Shareholders' funds
+  // Equity & Liabilities - Shareholders' funds
   "Capital Account": ["equityAndLiabilities", "shareholdersFunds"],
   "Reserves & Surplus": ["equityAndLiabilities", "shareholdersFunds"],
   // Non-current liabilities
@@ -401,12 +401,12 @@ const SCH3_BS_HEAD = {
   "Provisions": ["equityAndLiabilities", "currentLiabilities"],
   "Bank OD A/c": ["equityAndLiabilities", "currentLiabilities"],
   "Suspense Account": ["equityAndLiabilities", "currentLiabilities"],
-  // Assets — Non-current
+  // Assets - Non-current
   "Fixed Assets": ["assets", "nonCurrentAssets"],
   "Investments": ["assets", "nonCurrentAssets"],
   "Misc. Expenses (Asset)": ["assets", "nonCurrentAssets"],
   "Branch / Divisions": ["assets", "nonCurrentAssets"],
-  // Assets — Current
+  // Assets - Current
   "Current Assets": ["assets", "currentAssets"],
   "Bank Accounts": ["assets", "currentAssets"],
   "Cash-in-hand": ["assets", "currentAssets"],
@@ -481,7 +481,7 @@ function _sch3Rupees(rows) { return rows.map((r) => ({ name: r.name, group: r.gr
 async function scheduleIII(tenantId, fy, asOf) {
   const cur = await _scheduleIIIPeriod(tenantId, fy, asOf);
   const prevFy = prevFyOf(fy);
-  // Comparative column: prior FY closing (no asOf — full prior year). Reuses the same
+  // Comparative column: prior FY closing (no asOf - full prior year). Reuses the same
   // carry-forward already in _ledgerClosings via _scheduleIIIPeriod.
   const prev = await _scheduleIIIPeriod(tenantId, prevFy).catch(() => null);
 
@@ -563,7 +563,7 @@ async function comparativePL(tenantId, fy) {
   };
 }
 
-// Reporting tags / dimensions — net profit grouped by a tag dimension (project/location/class).
+// Reporting tags / dimensions - net profit grouped by a tag dimension (project/location/class).
 async function byTag(tenantId, fy, dimension) {
   const { rows } = await pool.query(
     `SELECT COALESCE(e.tags->>$3,'(untagged)') AS tag,
@@ -607,7 +607,7 @@ async function budgetVsActual(tenantId, fy) {
   };
 }
 
-// §10 (M9) — Receivables / Payables aging. Outstanding per open invoice/bill is the
+// §10 (M9) - Receivables / Payables aging. Outstanding per open invoice/bill is the
 // gross movement against the PARTY ledger on its own voucher minus allocations booked
 // against that voucher (same shape as automation.overdue). We bucket the OUTSTANDING
 // (not the gross) by age computed from the due date (voucher_date + credit_period_days)
@@ -671,7 +671,7 @@ async function _aging(tenantId, asOf, voucherType, groupName, partySide) {
 async function arAging(tenantId, asOf) { return _aging(tenantId, asOf, "SALES", "Sundry Debtors", "debit"); }
 async function apAging(tenantId, asOf) { return _aging(tenantId, asOf, "PURCHASE", "Sundry Creditors", "credit"); }
 
-// §10 (M9) — Party statement: date-range ledger statement for one party. Opening is the
+// §10 (M9) - Party statement: date-range ledger statement for one party. Opening is the
 // signed balance (debit-positive) as of the day before `from`; lines are every voucher
 // entry hitting this ledger within from..to with a running balance; closing is the final
 // running balance. Modeled on ledgerStatement but bounded by date range, not FY.
@@ -704,7 +704,7 @@ async function partyStatement(tenantId, ledgerId, from, to) {
   return { ledger: { id: lg[0].id, name: lg[0].name }, from, to, opening: toRupees(opening), lines, closing: toRupees(running) };
 }
 
-// §10 (M3) — Stock Summary: item-wise stock movement & valuation over [from,to].
+// §10 (M3) - Stock Summary: item-wise stock movement & valuation over [from,to].
 // Ported from ERPNext's Stock Balance report logic: per item we compute opening
 // (item master opening_qty/value + all movements strictly before `from`), inward /
 // outward within the window, and closing = opening + inward − outward. Effective
@@ -800,7 +800,7 @@ async function stockSummary(tenantId, fromDate, toDate) {
   };
 }
 
-// §10 (M11) — Profitability analytics. Three complementary cuts of gross margin:
+// §10 (M11) - Profitability analytics. Three complementary cuts of gross margin:
 // by customer (party), by stock item, and by project. All read the same posted
 // ledger/stock data the rest of the reporting layer uses (cancelled vouchers
 // excluded) so the numbers reconcile to the P&L. Every cut is tolerant of a
@@ -860,7 +860,7 @@ async function profitabilityByParty(tenantId, fy) {
 // into those vouchers (book_documents.lines: per-line qty × rate − discount,
 // matched by itemId). Items that sold but have no convertible document line keep
 // salesValue = 0 (not derivable) while still reporting qty + cost; gross profit is
-// then negative-of-cost — flagged via salesDerivable so callers can present it
+// then negative-of-cost - flagged via salesDerivable so callers can present it
 // honestly. Ranked by gross profit (desc).
 async function profitabilityByItem(tenantId, fy) {
   const effDate = "COALESCE(v.voucher_date, m.created_at::date)";
@@ -926,7 +926,7 @@ async function profitabilityByProject(tenantId, fy) {
     [tenantId]
   );
   // Billable timesheet cost per project (FY-scoped by work_date's financial year is
-  // approximated by the FY's Apr–Mar window via the fy module's convention; we filter
+  // approximated by the FY's Apr-Mar window via the fy module's convention; we filter
   // in JS using the project's rows fetched once).
   const { rows: ts } = await pool.query(
     `SELECT project_id, COALESCE(SUM(hours*rate),0) AS cost

@@ -6,7 +6,7 @@ const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
 
-// GET /api/gst/liability — compute current GSTR-3B fields from transactions
+// GET /api/gst/liability - compute current GSTR-3B fields from transactions
 router.get("/liability", authenticate, async (req, res) => {
   const { month, year } = req.query;
   const now  = new Date();
@@ -50,7 +50,7 @@ router.get("/liability", authenticate, async (req, res) => {
   res.json({ month: m, year: y, output_tax, input_tax_credit, net_liability, breakdown });
 });
 
-// GET /api/gst/returns — list all GST returns for tenant
+// GET /api/gst/returns - list all GST returns for tenant
 router.get("/returns", authenticate, async (req, res) => {
   const { rows } = await pool.query(
     "SELECT * FROM gst_returns WHERE tenant_id=$1 ORDER BY period_year DESC, period_month DESC",
@@ -59,7 +59,7 @@ router.get("/returns", authenticate, async (req, res) => {
   res.json(rows);
 });
 
-// POST /api/gst/returns — create/compute a GST return for a month
+// POST /api/gst/returns - create/compute a GST return for a month
 router.post("/returns", authenticate, canWrite, async (req, res) => {
   const { return_type = "GSTR-3B", period_month, period_year } = req.body;
   if (!period_month || !period_year) return res.status(400).json({ error: "period_month and period_year required" });
@@ -93,7 +93,7 @@ router.post("/returns", authenticate, canWrite, async (req, res) => {
   res.status(201).json(ret);
 });
 
-// POST /api/gst/irn — generate IRN stub (delegates to Masters India GSP in production)
+// POST /api/gst/irn - generate IRN stub (delegates to Masters India GSP in production)
 router.post("/irn", authenticate, canWrite, async (req, res) => {
   const { invoice_id } = req.body;
   if (!invoice_id) return res.status(400).json({ error: "invoice_id required" });
@@ -116,7 +116,7 @@ router.post("/irn", authenticate, canWrite, async (req, res) => {
   res.json({ irn, qr_code_url: null, demo: !process.env.MASTERS_INDIA_API_KEY });
 });
 
-// GET /api/gst/calendar — next 4 statutory due dates
+// GET /api/gst/calendar - next 4 statutory due dates
 router.get("/calendar", authenticate, async (_req, res) => {
   const now   = new Date();
   const dates = [];
@@ -155,7 +155,7 @@ const GST_STATE = {
   "38": "Ladakh", "97": "Other Territory",
 };
 
-// Verify a GSTIN's structure + check digit. This is fully offline and real — the
+// Verify a GSTIN's structure + check digit. This is fully offline and real - the
 // 15th character is a modulo-36 checksum over the first 14, so a typo is caught
 // deterministically. Returns the embedded state + PAN. We do NOT invent a trade
 // name; a live registry lookup only happens when a verification provider is set.
@@ -171,7 +171,7 @@ function gstinChecksumValid(gstin) {
   return checkChar === gstin[14];
 }
 
-// GET /api/gst/verify?gstin=… — structural/checksum validation (always), plus a
+// GET /api/gst/verify?gstin=… - structural/checksum validation (always), plus a
 // live registry lookup when KYC_API_KEY is configured.
 router.get("/verify", authenticate, async (req, res) => {
   const gstin = String(req.query.gstin || "").toUpperCase().trim();
@@ -180,7 +180,7 @@ router.get("/verify", authenticate, async (req, res) => {
     return res.status(400).json({ valid: false, status: "invalid", reason: "format", message: "Not a valid GSTIN format." });
   }
   if (!gstinChecksumValid(gstin)) {
-    return res.status(200).json({ valid: false, status: "invalid", reason: "checksum", message: "GSTIN check digit failed — likely a typo." });
+    return res.status(200).json({ valid: false, status: "invalid", reason: "checksum", message: "GSTIN check digit failed - likely a typo." });
   }
   const stateCode = gstin.slice(0, 2);
   const base = {
@@ -193,7 +193,7 @@ router.get("/verify", authenticate, async (req, res) => {
   };
 
   // Live GSTN registry lookup (trade name, status, registration date) only when a
-  // provider key is set — otherwise we honestly return the format result, never a
+  // provider key is set - otherwise we honestly return the format result, never a
   // fabricated company name/status.
   if (!process.env.KYC_API_KEY) {
     return res.json({ ...base, status: "format_ok", message: "Format & check digit valid. Live registry lookup not configured." });

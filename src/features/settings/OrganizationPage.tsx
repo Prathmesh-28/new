@@ -17,7 +17,7 @@ import {
 } from "./SettingsPage";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Organization console (/organization) — the company-admin surface, split out of
+// Organization console (/organization) - the company-admin surface, split out of
 // personal Settings (Claude-style). Left sub-nav: Members · Roles & Access ·
 // Billing · Company · Controls & Audit. Owner / super_admin only.
 // Most cards are reused from SettingsPage; the team list, access editor and
@@ -145,7 +145,7 @@ export default function OrganizationPage() {
   const startPreview = (role: UserRole) => {
     setPreviewRole(role);
     navigate(role === "investor" ? "/investor" : role === "accountant" ? "/advisor" : "/dashboard");
-    toast.success(`Previewing as ${roleLabel(role)} — exit from the banner up top`);
+    toast.success(`Previewing as ${roleLabel(role)} - exit from the banner up top`);
   };
   const toggleTab = (role: UserRole, t: string) => {
     const current = roleTabs(role);
@@ -198,7 +198,7 @@ export default function OrganizationPage() {
                     </div>
                     <div>
                       <h2 className="text-sm font-semibold">Your Team{users.length > 0 ? ` · ${users.length}` : ""}</h2>
-                      <p className="text-xs text-[var(--color-muted)] mt-0.5">Bring your finance person, CA, sales and ops staff in — each sees only their part of Headroom.</p>
+                      <p className="text-xs text-[var(--color-muted)] mt-0.5">Bring your finance person, CA, sales and ops staff in - each sees only their part of Headroom.</p>
                     </div>
                   </div>
                   {user.role !== "super_admin" && (
@@ -271,7 +271,7 @@ export default function OrganizationPage() {
                       );
                     })}
                     {users.length === 0 && (
-                      <p className="py-8 text-center text-sm text-[var(--color-muted)]">No team members yet — invite your finance person, accountant or sales staff above.</p>
+                      <p className="py-8 text-center text-sm text-[var(--color-muted)]">No team members yet - invite your finance person, accountant or sales staff above.</p>
                     )}
                   </div>
                 )}
@@ -428,7 +428,7 @@ export default function OrganizationPage() {
                   </div>
                   <div className="md:col-span-2">
                     <label className="text-xs text-[var(--color-muted)] block mb-1">
-                      Safety threshold — alert when runway drops below <span className="text-[var(--color-text)] font-semibold">{safetyDays} days</span>
+                      Safety threshold - alert when runway drops below <span className="text-[var(--color-text)] font-semibold">{safetyDays} days</span>
                     </label>
                     <input type="range" min="7" max="60" step="1" value={safetyDays}
                       onChange={e => setSafetyDays(Number(e.target.value))}
@@ -486,7 +486,7 @@ export default function OrganizationPage() {
                   {gstRegistered && (
                     <div className="p-3 bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-muted)]">
                       Headroom will estimate your monthly GSTR-3B output tax as <strong className="text-[var(--color-text)]">revenue × {gstRate}%</strong> and
-                      show it in your tax calendar and forecast obligations. Actual liability is lower after input tax credit — this is a planning estimate.
+                      show it in your tax calendar and forecast obligations. Actual liability is lower after input tax credit - this is a planning estimate.
                     </div>
                   )}
                 </div>

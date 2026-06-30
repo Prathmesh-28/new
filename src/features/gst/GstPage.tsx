@@ -11,7 +11,7 @@ import * as XLSX from "xlsx";
 import { parse2BJson, parseRegisterRows, reconcile, type ReconResult, type ReconSummary } from "@/lib/gstReconcile";
 import { addDays, format } from "date-fns";
 
-// GST 2.0 (effective 2025-26) rationalised the slabs to 0 / 5 / 18 / 40% — most 12%
+// GST 2.0 (effective 2025-26) rationalised the slabs to 0 / 5 / 18 / 40% - most 12%
 // goods moved to 18% and 28% to 40%. Current-rate pickers use these; the rate-change
 // simulator's "old rate" keeps the full historical set so transitions can be modelled.
 const GST_RATES = [0, 5, 18, 40];
@@ -72,12 +72,12 @@ export default function GstPage() {
     { code: "1701", desc: "Cane or beet sugar (granulated, raw)", rate: 5, type: "goods" },
     { code: "2101", desc: "Coffee/tea extracts, instant coffee, chicory", rate: 18, type: "goods" },
     { code: "2106", desc: "Food preparations NEC (protein powders, health drinks)", rate: 18, type: "goods" },
-    { code: "3004", desc: "Medicaments — packed for retail sale", rate: 12, type: "goods" },
-    { code: "3006", desc: "Pharmaceutical goods — bandages, dental cements", rate: 12, type: "goods" },
+    { code: "3004", desc: "Medicaments - packed for retail sale", rate: 12, type: "goods" },
+    { code: "3006", desc: "Pharmaceutical goods - bandages, dental cements", rate: 12, type: "goods" },
     { code: "3401", desc: "Soap, surface-active products for washing", rate: 18, type: "goods" },
     { code: "3402", desc: "Detergents, surface-active agents (non-soap)", rate: 18, type: "goods" },
     { code: "3808", desc: "Insecticides, disinfectants, fungicides, herbicides", rate: 18, type: "goods" },
-    { code: "3923", desc: "Plastic packing articles — boxes, bags, bottles", rate: 18, type: "goods" },
+    { code: "3923", desc: "Plastic packing articles - boxes, bags, bottles", rate: 18, type: "goods" },
     { code: "4011", desc: "New pneumatic tyres of rubber", rate: 28, type: "goods" },
     { code: "4802", desc: "Uncoated paper and paperboard for writing/printing", rate: 12, type: "goods" },
     { code: "4819", desc: "Cartons, boxes, bags of paper (packing material)", rate: 18, type: "goods" },
@@ -85,33 +85,33 @@ export default function GstPage() {
     { code: "6109", desc: "T-shirts, singlets and other knitted vests", rate: 5, type: "goods" },
     { code: "6203", desc: "Men's suits, ensembles, jackets, trousers", rate: 12, type: "goods" },
     { code: "7108", desc: "Gold (including gold plated with platinum)", rate: 3, type: "goods" },
-    { code: "7113", desc: "Articles of jewellery and parts — gold, silver", rate: 3, type: "goods" },
+    { code: "7113", desc: "Articles of jewellery and parts - gold, silver", rate: 3, type: "goods" },
     { code: "8413", desc: "Pumps for liquids (hand pumps, power pumps)", rate: 18, type: "goods" },
     { code: "8418", desc: "Refrigerators, freezers, A/C units, heat pumps", rate: 28, type: "goods" },
     { code: "8471", desc: "Computers, laptops, desktops and peripherals", rate: 18, type: "goods" },
     { code: "8517", desc: "Telephones, smartphones, feature phones", rate: 18, type: "goods" },
     { code: "8528", desc: "Monitors, projectors, televisions", rate: 28, type: "goods" },
     { code: "8544", desc: "Insulated wire and cable (electric)", rate: 18, type: "goods" },
-    { code: "8704", desc: "Motor vehicles for goods transport — trucks, lorries", rate: 28, type: "goods" },
+    { code: "8704", desc: "Motor vehicles for goods transport - trucks, lorries", rate: 28, type: "goods" },
     { code: "8708", desc: "Parts and accessories for motor vehicles", rate: 28, type: "goods" },
-    { code: "9401", desc: "Seats — chairs, sofas, car seats", rate: 18, type: "goods" },
-    { code: "9403", desc: "Furniture — tables, shelves, office furniture", rate: 18, type: "goods" },
+    { code: "9401", desc: "Seats - chairs, sofas, car seats", rate: 18, type: "goods" },
+    { code: "9403", desc: "Furniture - tables, shelves, office furniture", rate: 18, type: "goods" },
     { code: "9405", desc: "Lamps, lighting fittings, illuminated signs", rate: 18, type: "goods" },
-    { code: "9954", desc: "Construction services — works contracts, civil", rate: 18, type: "service" },
-    { code: "9963", desc: "Food and beverage services — restaurants, hotels", rate: 5, type: "service" },
-    { code: "9971", desc: "Financial and related services — banking, insurance", rate: 18, type: "service" },
-    { code: "9972", desc: "Real estate services — renting, property management", rate: 18, type: "service" },
-    { code: "9983", desc: "IT and computer services — software, consulting", rate: 18, type: "service" },
+    { code: "9954", desc: "Construction services - works contracts, civil", rate: 18, type: "service" },
+    { code: "9963", desc: "Food and beverage services - restaurants, hotels", rate: 5, type: "service" },
+    { code: "9971", desc: "Financial and related services - banking, insurance", rate: 18, type: "service" },
+    { code: "9972", desc: "Real estate services - renting, property management", rate: 18, type: "service" },
+    { code: "9983", desc: "IT and computer services - software, consulting", rate: 18, type: "service" },
     { code: "9984", desc: "Telecommunications and related services", rate: 18, type: "service" },
-    { code: "9985", desc: "Business support services — BPO, KPO, call centres", rate: 18, type: "service" },
+    { code: "9985", desc: "Business support services - BPO, KPO, call centres", rate: 18, type: "service" },
     { code: "9986", desc: "Agriculture, forestry and fishing support services", rate: 0, type: "service" },
     { code: "9987", desc: "Maintenance, repair and installation services", rate: 18, type: "service" },
     { code: "9988", desc: "Manufacturing services on physical inputs (job work)", rate: 18, type: "service" },
     { code: "9992", desc: "Education services", rate: 0, type: "service" },
     { code: "9993", desc: "Human health and social care services", rate: 0, type: "service" },
     { code: "9997", desc: "Other miscellaneous services NEC", rate: 18, type: "service" },
-    { code: "9961", desc: "Wholesale trade services — commission agents", rate: 18, type: "service" },
-    { code: "9973", desc: "Leasing and rental services — machinery, equipment", rate: 18, type: "service" },
+    { code: "9961", desc: "Wholesale trade services - commission agents", rate: 18, type: "service" },
+    { code: "9973", desc: "Leasing and rental services - machinery, equipment", rate: 18, type: "service" },
   ];
 
   // ── GSTR-2B reconciliation state ──
@@ -143,7 +143,7 @@ export default function GstPage() {
         const lines = parseRegisterRows(rows);
         if (!lines.length) { setReconErr("No rows with a GSTIN + invoice number found. Check the column headers."); setRegCount(null); return; }
         setRegLines(lines); setRegCount(lines.length); setReconErr("");
-      } catch { setReconErr("Couldn't parse the register — upload an .xlsx or .csv export."); setRegCount(null); }
+      } catch { setReconErr("Couldn't parse the register - upload an .xlsx or .csv export."); setRegCount(null); }
     };
     reader.readAsArrayBuffer(file);
   };
@@ -236,7 +236,7 @@ export default function GstPage() {
       <div>
         <h1 className="text-xl font-bold">GST</h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
-          {firm.gstRegistered ? `GSTIN: ${firm.gstNumber || "—"} · GST rate: ${firm.gstRate ?? 18}%` : "Not GST registered — update in Settings"}
+          {firm.gstRegistered ? `GSTIN: ${firm.gstNumber || "-"} · GST rate: ${firm.gstRate ?? 18}%` : "Not GST registered - update in Settings"}
         </p>
       </div>
 
@@ -300,7 +300,7 @@ export default function GstPage() {
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
             <div className="px-5 py-3 border-b border-[var(--color-border)]">
               <p className="text-sm font-semibold">GST Ledger · last 12 months</p>
-              <p className="text-xs text-[var(--color-muted)] mt-0.5">Output tax minus input credit, with unused ITC carried forward each month — at {firm.gstRate ?? 18}% on operating transactions.</p>
+              <p className="text-xs text-[var(--color-muted)] mt-0.5">Output tax minus input credit, with unused ITC carried forward each month - at {firm.gstRate ?? 18}% on operating transactions.</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -329,7 +329,7 @@ export default function GstPage() {
           </div>
           <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
             <AlertTriangle size={12} className="text-[var(--color-muted)] shrink-0 mt-px" />
-            A surplus month (input &gt; output) adds to your ITC carry-forward, which automatically offsets cash payable in later months — just like the GST portal's electronic credit ledger.
+            A surplus month (input &gt; output) adds to your ITC carry-forward, which automatically offsets cash payable in later months - just like the GST portal's electronic credit ledger.
           </div>
         </div>
       )}
@@ -434,7 +434,7 @@ export default function GstPage() {
                           {r.status === "filed" ? <CheckCircle2 size={9} /> : <Clock size={9} />}{r.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.gstn_arn ?? "—"}</td>
+                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.gstn_arn ?? "-"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -474,7 +474,7 @@ export default function GstPage() {
           <div>
             <h2 className="text-base font-bold mb-1">GSTR-2B Reconciliation</h2>
             <p className="text-sm text-[var(--color-muted)]">
-              Match your purchase register against the GSTN-auto-drafted 2B to catch ITC that's blocked (supplier hasn't filed) or unclaimed — before you file GSTR-3B.
+              Match your purchase register against the GSTN-auto-drafted 2B to catch ITC that's blocked (supplier hasn't filed) or unclaimed - before you file GSTR-3B.
             </p>
           </div>
 
@@ -553,18 +553,18 @@ export default function GstPage() {
                         return (
                           <tr key={l.key} className="border-t border-[var(--color-border)]">
                             <td className="px-3 py-2"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${m.cls}`}>{m.label}</span></td>
-                            <td className="px-3 py-2"><span className="text-[var(--color-text)]">{l.party || "—"}</span><br /><span className="text-[10px] text-[var(--color-muted)] font-mono">{l.gstin}</span></td>
+                            <td className="px-3 py-2"><span className="text-[var(--color-text)]">{l.party || "-"}</span><br /><span className="text-[10px] text-[var(--color-muted)] font-mono">{l.gstin}</span></td>
                             <td className="px-3 py-2 font-mono">{l.invoiceNo}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{l.registerTax ? formatCurrency(l.registerTax) : "—"}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{l.twoBTax ? formatCurrency(l.twoBTax) : "—"}</td>
-                            <td className={`px-3 py-2 text-right tabular-nums ${Math.abs(l.delta) > 1 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{l.delta ? formatCurrency(l.delta) : "—"}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{l.registerTax ? formatCurrency(l.registerTax) : "-"}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{l.twoBTax ? formatCurrency(l.twoBTax) : "-"}</td>
+                            <td className={`px-3 py-2 text-right tabular-nums ${Math.abs(l.delta) > 1 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{l.delta ? formatCurrency(l.delta) : "-"}</td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
                 </div>
-                {recon.lines.length > 200 && <p className="text-[10px] text-[var(--color-muted)] px-3 py-2">Showing first 200 of {recon.lines.length} — download the CSV for the full report.</p>}
+                {recon.lines.length > 200 && <p className="text-[10px] text-[var(--color-muted)] px-3 py-2">Showing first 200 of {recon.lines.length} - download the CSV for the full report.</p>}
               </div>
             </>
           )}
@@ -576,7 +576,7 @@ export default function GstPage() {
         <div className="space-y-5">
           <div className="flex items-center gap-3 flex-wrap">
             <div>
-              <h2 className="text-base font-bold">GSTR-1 — Outward Supplies</h2>
+              <h2 className="text-base font-bold">GSTR-1 - Outward Supplies</h2>
               <p className="text-sm text-[var(--color-muted)]">
                 B2C/B2B outward supply summary from your invoice register. Select a month, verify figures, then export CSV for portal upload.
               </p>
@@ -631,7 +631,7 @@ export default function GstPage() {
                   <tbody>
                     {gstr1Data.lines.map(l => (
                       <tr key={l.id} className="border-t border-[var(--color-border)] hover:bg-white/2">
-                        <td className="px-3 py-2 font-mono text-[var(--color-muted)]">{l.invoiceNumber ?? "—"}</td>
+                        <td className="px-3 py-2 font-mono text-[var(--color-muted)]">{l.invoiceNumber ?? "-"}</td>
                         <td className="px-3 py-2">{new Date(l.invoiceDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</td>
                         <td className="px-3 py-2 max-w-[140px] truncate">{l.customer}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{formatAmount(l.taxable)}</td>
@@ -752,7 +752,7 @@ export default function GstPage() {
                   <p className="text-xs text-[var(--color-muted)]">Invoice value ₹{ewayValue.toLocaleString("en-IN")} is at or below the ₹50,000 threshold.</p>
                 )}
                 {!ewayResult.required && ewayCancelled && (
-                  <p className="text-xs text-[var(--color-muted)]">Goods are in an exempted category — no e-way bill needed.</p>
+                  <p className="text-xs text-[var(--color-muted)]">Goods are in an exempted category - no e-way bill needed.</p>
                 )}
               </div>
             </div>
@@ -769,7 +769,7 @@ export default function GstPage() {
       {tab === "rcm" && (() => {
         const RCM_SERVICES = [
           { desc: "Legal services from advocate", rate: 18 },
-          { desc: "Goods Transport Agency (GTA) — road freight", rate: 5 },
+          { desc: "Goods Transport Agency (GTA) - road freight", rate: 5 },
           { desc: "Sponsorship services", rate: 18 },
           { desc: "Security services (unregistered supplier)", rate: 18 },
           { desc: "Renting of motor vehicle", rate: 5 },
@@ -785,7 +785,7 @@ export default function GstPage() {
           const tax = Math.round(parseFloat(rcmAmount) * rcmRate / 100);
           setRcmEntries(e => [...e, { id: crypto.randomUUID(), desc: rcmDesc, supplier: rcmSupplier, amount: parseFloat(rcmAmount), rate: rcmRate, date: rcmDate }]);
           setRcmDesc(""); setRcmSupplier(""); setRcmAmount("");
-          toast.success(`RCM entry added — ₹${tax.toLocaleString("en-IN")} tax liability`);
+          toast.success(`RCM entry added - ₹${tax.toLocaleString("en-IN")} tax liability`);
         };
 
         const totalRcmTax = rcmEntries.reduce((s, e) => s + Math.round(e.amount * e.rate / 100), 0);
@@ -804,12 +804,12 @@ export default function GstPage() {
         return (
           <div className="space-y-4">
             <div className="bg-orange-950/20 border border-orange-800/30 rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
-              <strong className="text-orange-300">Reverse Charge Mechanism (RCM)</strong> — You (the recipient) pay GST on behalf of the unregistered/exempt supplier directly to the government. RCM tax paid is eligible for ITC in the same month (for business use).
+              <strong className="text-orange-300">Reverse Charge Mechanism (RCM)</strong> - You (the recipient) pay GST on behalf of the unregistered/exempt supplier directly to the government. RCM tax paid is eligible for ITC in the same month (for business use).
             </div>
 
             {/* Common RCM services quick-fill */}
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-              <p className="text-xs font-semibold text-[var(--color-muted)] mb-2 uppercase tracking-wide">Common RCM Categories — click to fill</p>
+              <p className="text-xs font-semibold text-[var(--color-muted)] mb-2 uppercase tracking-wide">Common RCM Categories - click to fill</p>
               <div className="flex flex-wrap gap-2">
                 {RCM_SERVICES.map(s => (
                   <button key={s.desc} onClick={() => { setRcmDesc(s.desc); setRcmRate(s.rate); }}
@@ -874,7 +874,7 @@ export default function GstPage() {
                       <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
                         <td className="px-3 py-2.5 text-[var(--color-muted)]">{e.date}</td>
                         <td className="px-3 py-2.5 font-medium max-w-[180px] truncate">{e.desc}</td>
-                        <td className="px-3 py-2.5 text-[var(--color-muted)]">{e.supplier || "—"}</td>
+                        <td className="px-3 py-2.5 text-[var(--color-muted)]">{e.supplier || "-"}</td>
                         <td className="px-3 py-2.5 tabular-nums">{formatCurrency(e.amount)}</td>
                         <td className="px-3 py-2.5">{e.rate}%</td>
                         <td className="px-3 py-2.5 tabular-nums text-orange-400 font-semibold">{formatCurrency(Math.round(e.amount * e.rate / 100))}</td>
@@ -910,7 +910,7 @@ export default function GstPage() {
           <div className="space-y-4">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <h2 className="text-sm font-semibold mb-1">HSN / SAC Code Lookup</h2>
-              <p className="text-xs text-[var(--color-muted)] mb-3">Search by code number or description. HSN = goods, SAC = services. GST rates shown are standard rates — verify on GST portal for exceptions.</p>
+              <p className="text-xs text-[var(--color-muted)] mb-3">Search by code number or description. HSN = goods, SAC = services. GST rates shown are standard rates - verify on GST portal for exceptions.</p>
               <div className="relative">
                 <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
                 <input
@@ -979,7 +979,7 @@ export default function GstPage() {
                     setVerifyResult(res);
                     setVerifyHistory(h => [{ gstin, state: res.state, status: res.status }, ...h.filter(x => x.gstin !== gstin).slice(0, 9)]);
                   } catch (e) {
-                    // Honest failure — never fabricate a trade name / status.
+                    // Honest failure - never fabricate a trade name / status.
                     const msg = String((e as Error)?.message || "");
                     toast.error(msg.startsWith("400") ? "Not a valid GSTIN format." : "Couldn't verify GSTIN. Please try again.");
                   } finally { setVerifying(false); }
@@ -1050,7 +1050,7 @@ export default function GstPage() {
             <div className="space-y-2 text-xs text-[var(--color-muted)]">
               {[
                 "ITC claims on invoices from cancelled/suspended GSTINs are disallowed and may trigger notices",
-                "Fake GSTIN vendors charge GST but don't deposit it — you lose the credit and face scrutiny",
+                "Fake GSTIN vendors charge GST but don't deposit it - you lose the credit and face scrutiny",
                 "GSTN reconciliation mismatches (GSTR-2A vs 2B) can block refunds for months",
               ].map(t => (
                 <div key={t} className="flex items-start gap-2">
@@ -1087,7 +1087,7 @@ export default function GstPage() {
         const itcAging = months.map(m => {
           const key = Object.keys(monthMap).find(k => monthMap[k].month === m.month)!;
           const ageMonths = (now.getFullYear() - 2000) * 12 + now.getMonth() - (parseInt(key.slice(2,4)) * 12 + parseInt(key.slice(5,7)) - 1);
-          const bucket = ageMonths === 0 ? "Current" : ageMonths <= 3 ? "1–3 months" : ageMonths <= 24 ? ">3 months" : "Lapsed (>2yr)";
+          const bucket = ageMonths === 0 ? "Current" : ageMonths <= 3 ? "1-3 months" : ageMonths <= 24 ? ">3 months" : "Lapsed (>2yr)";
           return { ...m, ageMonths, bucket };
         });
 
@@ -1098,7 +1098,7 @@ export default function GstPage() {
           <div className="space-y-5">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
               <h2 className="text-sm font-semibold mb-1">ITC Optimizer</h2>
-              <p className="text-xs text-[var(--color-muted)] mb-4">Estimated ITC available from your purchase transactions (assumes avg 18% GST). Claim within 2 years of invoice date — after that, ITC lapses under Sec 16(4).</p>
+              <p className="text-xs text-[var(--color-muted)] mb-4">Estimated ITC available from your purchase transactions (assumes avg 18% GST). Claim within 2 years of invoice date - after that, ITC lapses under Sec 16(4).</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
                   { label: "Total purchases (all time)", value: formatAmount(totalPurchase), color: "text-[var(--color-text)]" },
@@ -1117,7 +1117,7 @@ export default function GstPage() {
             {urgentItc > 0 && (
               <div className="bg-orange-950/30 border border-orange-800/40 rounded-lg px-4 py-3 flex items-center gap-3">
                 <AlertTriangle size={15} className="text-orange-400 shrink-0" />
-                <p className="text-sm">{formatAmount(urgentItc)} in estimated ITC is older than 3 months — claim it in your next GSTR-3B before the 2-year limit expires.</p>
+                <p className="text-sm">{formatAmount(urgentItc)} in estimated ITC is older than 3 months - claim it in your next GSTR-3B before the 2-year limit expires.</p>
               </div>
             )}
 
@@ -1154,7 +1154,7 @@ export default function GstPage() {
                           <td className="px-4 py-3">
                             <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${
                               m.bucket === "Current" ? "bg-green-900/30 text-green-400 border-green-800/40" :
-                              m.bucket === "1–3 months" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" :
+                              m.bucket === "1-3 months" ? "bg-yellow-900/30 text-yellow-400 border-yellow-800/40" :
                               m.bucket === ">3 months" ? "bg-orange-900/30 text-orange-400 border-orange-800/40" :
                               "bg-red-900/30 text-red-400 border-red-800/40"
                             }`}>{m.bucket}</span>
@@ -1216,7 +1216,7 @@ export default function GstPage() {
 
         const downloadCsv = () => {
           const rows = [
-            ["GSTR-9 Annual Return — Draft", `FY ${fy}-${fy+1}`],
+            ["GSTR-9 Annual Return - Draft", `FY ${fy}-${fy+1}`],
             [],
             ["Table", "Description", "Amount (₹)"],
             ["4A", "Outward taxable supplies (excl. zero-rated)", outwardTaxable],
@@ -1237,7 +1237,7 @@ export default function GstPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-semibold">GSTR-9 Annual Return Builder</h2>
-                <p className="text-xs text-[var(--color-muted)] mt-0.5">Draft annual summary for FY {fy}–{fy+1} (Apr–Mar). Figures are estimates based on your transactions at 18% avg GST — verify against filed GSTR-1/3B before submission.</p>
+                <p className="text-xs text-[var(--color-muted)] mt-0.5">Draft annual summary for FY {fy}-{fy+1} (Apr-Mar). Figures are estimates based on your transactions at 18% avg GST - verify against filed GSTR-1/3B before submission.</p>
               </div>
               <button onClick={downloadCsv} className="flex items-center gap-1.5 text-xs text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-1.5 rounded-lg hover:bg-[var(--color-primary)]/10">
                 <Download size={11} /> Export CSV
@@ -1247,7 +1247,7 @@ export default function GstPage() {
             {/* Summary tables */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)] mb-3">Part II — Outward Supplies (Table 4)</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)] mb-3">Part II - Outward Supplies (Table 4)</p>
                 <div className="space-y-2.5">
                   {[
                     { ref: "4A", label: "Taxable outward supplies",          value: outwardTaxable, color: "text-green-400" },
@@ -1263,7 +1263,7 @@ export default function GstPage() {
               </div>
 
               <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)] mb-3">Part III — ITC (Table 6 & 7)</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)] mb-3">Part III - ITC (Table 6 & 7)</p>
                 <div className="space-y-2.5">
                   {[
                     { ref: "6B",  label: "ITC on inward supplies",              value: itcAvailable, color: "text-green-400" },
@@ -1296,7 +1296,7 @@ export default function GstPage() {
             {/* Monthly table */}
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
               <div className="px-5 py-3 border-b border-[var(--color-border)]">
-                <p className="text-sm font-semibold">Monthly Breakdown — FY {fy}–{fy+1}</p>
+                <p className="text-sm font-semibold">Monthly Breakdown - FY {fy}-{fy+1}</p>
               </div>
               {months.length === 0 ? (
                 <p className="p-6 text-sm text-[var(--color-muted)] text-center">No transactions found for this financial year.</p>
@@ -1334,7 +1334,7 @@ export default function GstPage() {
             </div>
 
             <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-              GSTR-9 is due by Dec 31 for the preceding FY. These are estimated figures — actual figures must match your filed GSTR-1 and GSTR-3B returns. A CA must sign the audit report (GSTR-9C) if turnover exceeds ₹5 crore.
+              GSTR-9 is due by Dec 31 for the preceding FY. These are estimated figures - actual figures must match your filed GSTR-1 and GSTR-3B returns. A CA must sign the audit report (GSTR-9C) if turnover exceeds ₹5 crore.
             </div>
           </div>
         );
@@ -1366,13 +1366,13 @@ export default function GstPage() {
         return (
           <div className="space-y-4 max-w-xl">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-              <h2 className="text-sm font-semibold mb-1">LUT Tracker — Letter of Undertaking</h2>
+              <h2 className="text-sm font-semibold mb-1">LUT Tracker - Letter of Undertaking</h2>
               <p className="text-xs text-[var(--color-muted)] mb-4">Exporters must file LUT (Form GST RFD-11) on GST portal every financial year to export without paying IGST. LUT is valid for the FY it is filed in.</p>
 
               <div className={`rounded-lg border p-4 mb-4 ${activeLut ? "bg-green-950/20 border-green-800/40" : "bg-red-950/20 border-red-800/40"}`}>
                 <div className="flex items-center gap-2 mb-1">
                   <ShieldCheck size={14} className={activeLut ? "text-green-400" : "text-red-400"} />
-                  <p className="text-sm font-semibold">{activeLut ? `LUT Active — FY ${currentFy}` : `No LUT for FY ${currentFy}`}</p>
+                  <p className="text-sm font-semibold">{activeLut ? `LUT Active - FY ${currentFy}` : `No LUT for FY ${currentFy}`}</p>
                 </div>
                 {activeLut ? (
                   <p className="text-xs text-[var(--color-muted)]">Ref: {activeLut.refNo} · Expires Mar 31 · {daysToExpiry > 0 ? `${daysToExpiry} days remaining` : "Expired"}</p>
@@ -1425,11 +1425,11 @@ export default function GstPage() {
             )}
 
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 text-xs space-y-2">
-              <p className="font-semibold">LUT vs Bond — When to use what?</p>
+              <p className="font-semibold">LUT vs Bond - When to use what?</p>
               {[
                 { label: "LUT (RFD-11)", desc: "For exporters with no GST prosecution in preceding 5 years. No financial security needed. File online on GST portal." },
                 { label: "Bond (RFD-11)", desc: "For new exporters or those with prior prosecution. Requires bank guarantee or surety. More compliance burden." },
-                { label: "IGST Payment", desc: "Pay IGST on export invoice and claim refund later. Ties up working capital — avoid if LUT is available." },
+                { label: "IGST Payment", desc: "Pay IGST on export invoice and claim refund later. Ties up working capital - avoid if LUT is available." },
               ].map(r => (
                 <div key={r.label} className="flex gap-2">
                   <span className="font-semibold shrink-0 text-[var(--color-primary)]">{r.label}:</span>
@@ -1618,7 +1618,7 @@ function GstRefundTracker() {
                     <td className="px-4 py-3 text-xs">{e.type}</td>
                     <td className="px-4 py-3">{e.period}</td>
                     <td className="px-4 py-3 tabular-nums font-semibold">{fc(e.claimed)}</td>
-                    <td className="px-4 py-3 text-[var(--color-muted)]">{e.filedDate || "—"}</td>
+                    <td className="px-4 py-3 text-[var(--color-muted)]">{e.filedDate || "-"}</td>
                     <td className="px-4 py-3">
                       <select value={e.status} onChange={ev => updateStatus(e.id, ev.target.value as RefundStatus)}
                         className={`text-xs font-semibold bg-transparent border-0 outline-none cursor-pointer ${STATUS_COLOR[e.status]}`}>
@@ -1685,7 +1685,7 @@ function CompositionChecker() {
   const saving      = regularGst - compGst;
 
   const pros = ["No invoice-level GST compliance", "Quarterly tax payment (PMT-08)", "Lower tax rate", "No input tax credit complexity"];
-  const cons = ["Cannot claim ITC", "Cannot make inter-state supplies", "Cannot supply exempt goods or services (not in list)", "B2B buyers cannot claim ITC from you — lose competitiveness", "Cannot issue tax invoice"];
+  const cons = ["Cannot claim ITC", "Cannot make inter-state supplies", "Cannot supply exempt goods or services (not in list)", "B2B buyers cannot claim ITC from you - lose competitiveness", "Cannot issue tax invoice"];
 
   return (
     <div className="space-y-4">
@@ -1693,7 +1693,7 @@ function CompositionChecker() {
         <h3 className="text-sm font-semibold">Composition Scheme Eligibility Check</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual Turnover (₹) — auto from transactions</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Annual Turnover (₹) - auto from transactions</label>
             <input type="number" value={customTurnover} onChange={e => setCustomTurnover(e.target.value)}
               placeholder={`Auto: ${fc(annualSales)}`}
               className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
@@ -1714,7 +1714,7 @@ function CompositionChecker() {
         <div className={`rounded-lg p-4 border ${eligible ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
           <div className="flex items-center gap-2 mb-2">
             <span className={`text-sm font-bold ${eligible ? "text-green-400" : "text-red-400"}`}>
-              {eligible ? "✓ Eligible for Composition Scheme" : "✗ Not Eligible — Turnover exceeds ₹1.5 Crore"}
+              {eligible ? "✓ Eligible for Composition Scheme" : "✗ Not Eligible - Turnover exceeds ₹1.5 Crore"}
             </span>
           </div>
           {eligible && (
@@ -1730,7 +1730,7 @@ function CompositionChecker() {
             <p className="text-2xl font-bold text-[var(--color-primary)]">{r.rate}%</p>
             <p className="text-xs text-[var(--color-muted)] mt-1">{r.note}</p>
             <p className={`text-xs mt-2 font-semibold ${turnover <= r.limit ? "text-green-400" : "text-red-400"}`}>
-              Limit: {fc(r.limit)} — {turnover <= r.limit ? "Eligible" : "Exceeds"}
+              Limit: {fc(r.limit)} - {turnover <= r.limit ? "Eligible" : "Exceeds"}
             </p>
           </div>
         ))}
@@ -1770,7 +1770,7 @@ function QrmpChecker() {
   const qrmpEligible = turnover <= 50000000; // ₹5 crore
   const fc = formatCurrency;
 
-  const QUARTERS = ["Q1 (Apr–Jun)", "Q2 (Jul–Sep)", "Q3 (Oct–Dec)", "Q4 (Jan–Mar)"];
+  const QUARTERS = ["Q1 (Apr-Jun)", "Q2 (Jul-Sep)", "Q3 (Oct-Dec)", "Q4 (Jan-Mar)"];
   const MONTHLY_DUE  = { gstr1: "11th", gstr3b: "20th" };
   const QRMP_DUE     = { iff: "13th of M2", pmt06: "25th of M1 & M2", gstr3b_q: "22nd/24th of M3" };
 
@@ -1786,7 +1786,7 @@ function QrmpChecker() {
         </div>
         <div className={`mt-4 rounded-lg p-4 border ${qrmpEligible ? "border-green-800/40 bg-green-950/20" : "border-red-800/40 bg-red-950/20"}`}>
           <p className={`text-sm font-bold ${qrmpEligible ? "text-green-400" : "text-red-400"}`}>
-            {qrmpEligible ? "✓ Eligible for QRMP Scheme" : "✗ Not Eligible — Turnover exceeds ₹5 Crore"}
+            {qrmpEligible ? "✓ Eligible for QRMP Scheme" : "✗ Not Eligible - Turnover exceeds ₹5 Crore"}
           </p>
           <p className="text-xs text-[var(--color-muted)] mt-1">
             {qrmpEligible
@@ -1835,7 +1835,7 @@ function QrmpChecker() {
           ))}
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">QRMP opt-in via GST portal between 1st–31st of first month of each quarter. Category I taxpayers: 20th; Category II: 22nd/24th for GSTR-3B.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">QRMP opt-in via GST portal between 1st-31st of first month of each quarter. Category I taxpayers: 20th; Category II: 22nd/24th for GSTR-3B.</p>
     </div>
   );
 }
@@ -1920,8 +1920,8 @@ function TdsUnderGst() {
                 {entries.map(e => (
                   <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
                     <td className="px-4 py-3 font-semibold">{e.deductor}</td>
-                    <td className="px-4 py-3 text-[var(--color-muted)]">{e.contract || "—"}</td>
-                    <td className="px-4 py-3 text-[var(--color-muted)]">{e.month || "—"}</td>
+                    <td className="px-4 py-3 text-[var(--color-muted)]">{e.contract || "-"}</td>
+                    <td className="px-4 py-3 text-[var(--color-muted)]">{e.month || "-"}</td>
                     <td className="px-4 py-3 tabular-nums">{fc(e.amount)}</td>
                     <td className="px-4 py-3 tabular-nums font-semibold text-orange-400">{fc(e.tdsAmt)}</td>
                     <td className="px-4 py-3">
@@ -1944,7 +1944,7 @@ function TdsUnderGst() {
         <p className="font-semibold text-[var(--color-muted)]">Who deducts? When does it apply?</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {[
-            { title: "Who must deduct",  body: "Govt departments, PSUs, local authorities, Panchayats, Municipalities — when total contract value > ₹2.5 lakh" },
+            { title: "Who must deduct",  body: "Govt departments, PSUs, local authorities, Panchayats, Municipalities - when total contract value > ₹2.5 lakh" },
             { title: "Rate",             body: "2% of taxable value (1% CGST + 1% SGST for intra-state; 2% IGST for inter-state)" },
             { title: "GSTR-7",          body: "Deductor files GSTR-7 by 10th of next month. TDS reflected in your GSTR-2B." },
             { title: "Claim credit",     body: "Claim TDS credit in GSTR-3B (Table 8C). If unaccepted in 2B, follow up with deductor." },
@@ -1956,7 +1956,7 @@ function TdsUnderGst() {
           ))}
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Sec 51 CGST Act. TDS not applicable on exempt supplies, transactions between govt entities, or if supplier's GSTIN is not furnished. TDS ≠ TCS — TCS under Sec 52 is by e-commerce operators.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Sec 51 CGST Act. TDS not applicable on exempt supplies, transactions between govt entities, or if supplier's GSTIN is not furnished. TDS ≠ TCS - TCS under Sec 52 is by e-commerce operators.</p>
     </div>
   );
 }
@@ -1973,7 +1973,7 @@ function EInvoiceReadiness() {
   }, [store.transactions]);
 
   const turnover = parseFloat(customTurnover) || annualRevenue;
-  const threshold = 50000000; // ₹5 Cr — current mandatory threshold
+  const threshold = 50000000; // ₹5 Cr - current mandatory threshold
   const mandatory = turnover >= threshold;
   const fc = formatCurrency;
 
@@ -1983,7 +1983,7 @@ function EInvoiceReadiness() {
     { id: "qr",      label: "QR code printing on invoice",                               critical: true },
     { id: "irn",     label: "IRN (Invoice Reference Number) generated before supply",    critical: true },
     { id: "cancel",  label: "Cancellation process within 24 hours of IRN generation",    critical: true },
-    { id: "b2b",     label: "e-Invoice required only for B2B, exports, and SEZ — not B2C", critical: false },
+    { id: "b2b",     label: "e-Invoice required only for B2B, exports, and SEZ - not B2C", critical: false },
     { id: "eway",    label: "e-Way Bill auto-generated from e-Invoice for consignments > ₹50K", critical: false },
     { id: "archive", label: "IRN records archived for 8 years (CGST Rule 56)",           critical: false },
     { id: "test",    label: "Tested on sandbox IRP before go-live",                      critical: false },
@@ -2012,11 +2012,11 @@ function EInvoiceReadiness() {
         <div className={`rounded-lg p-4 border ${mandatory ? "border-orange-800/40 bg-orange-950/20" : "border-green-800/40 bg-green-950/20"}`}>
           <p className={`text-sm font-bold ${mandatory ? "text-orange-400" : "text-green-400"}`}>
             {mandatory
-              ? `⚠ e-Invoice is MANDATORY — turnover ${fc(turnover)} ≥ ₹5 Cr threshold`
-              : `✓ e-Invoice not yet mandatory — turnover ${fc(turnover)} below ₹5 Cr threshold`}
+              ? `⚠ e-Invoice is MANDATORY - turnover ${fc(turnover)} ≥ ₹5 Cr threshold`
+              : `✓ e-Invoice not yet mandatory - turnover ${fc(turnover)} below ₹5 Cr threshold`}
           </p>
           {!mandatory && (
-            <p className="text-xs text-[var(--color-muted)] mt-1">Prepare anyway — threshold has been dropping every 2 years (₹500Cr → ₹100Cr → ₹50Cr → ₹20Cr → ₹10Cr → ₹5Cr).</p>
+            <p className="text-xs text-[var(--color-muted)] mt-1">Prepare anyway - threshold has been dropping every 2 years (₹500Cr → ₹100Cr → ₹50Cr → ₹20Cr → ₹10Cr → ₹5Cr).</p>
           )}
         </div>
       </div>
@@ -2051,7 +2051,7 @@ function EInvoiceReadiness() {
         </div>
         {ready && (
           <div className="px-4 py-3 bg-green-950/20 border-t border-green-800/40 text-sm text-green-400 flex items-center gap-2">
-            <CheckCircle2 size={14} /> All critical items complete — your system is e-Invoice ready!
+            <CheckCircle2 size={14} /> All critical items complete - your system is e-Invoice ready!
           </div>
         )}
       </div>
@@ -2076,22 +2076,22 @@ function GstNoticeTemplates() {
 
   const TEMPLATES = [
     {
-      title: "SCN — GSTR-1 vs GSTR-3B Mismatch",
+      title: "SCN - GSTR-1 vs GSTR-3B Mismatch",
       section: "Sec 61 / Rule 99",
-      body: (g: string, p: string, a: string) => `GSTIN: ${g||"[GSTIN]"}   Period: ${p||"[Period]"}\n\nSub: Reply to SCN for discrepancy of ₹${a||"[Amount]"} between GSTR-1 and GSTR-3B\n\nDear Sir/Madam,\n\nThe discrepancy arose due to [reason — clerical error / amendment pending / debit note not captured].\n\nRelevant invoices are enclosed. We propose to rectify via [amendment / payment of differential tax with interest].\n\nWe request closure of this matter.\n\nYours faithfully,\n[Authorised Signatory] | [Company Name] | GSTIN: ${g||"[GSTIN]"}`,
+      body: (g: string, p: string, a: string) => `GSTIN: ${g||"[GSTIN]"}   Period: ${p||"[Period]"}\n\nSub: Reply to SCN for discrepancy of ₹${a||"[Amount]"} between GSTR-1 and GSTR-3B\n\nDear Sir/Madam,\n\nThe discrepancy arose due to [reason - clerical error / amendment pending / debit note not captured].\n\nRelevant invoices are enclosed. We propose to rectify via [amendment / payment of differential tax with interest].\n\nWe request closure of this matter.\n\nYours faithfully,\n[Authorised Signatory] | [Company Name] | GSTIN: ${g||"[GSTIN]"}`,
     },
     {
-      title: "Reply — Non-filing of GSTR-3B",
+      title: "Reply - Non-filing of GSTR-3B",
       section: "Sec 46 / Sec 122",
-      body: (g: string, p: string, _: string) => `GSTIN: ${g||"[GSTIN]"}   Period: ${p||"[Period]"}\n\nSub: Reply to notice for non-filing of GSTR-3B for ${p||"[Period]"}\n\nDear Sir/Madam,\n\nWe acknowledge the notice. The delay was caused due to [reason — portal issues / illness / delayed data].\n\nThe return has now been filed on [Date], ARN: [ARN]. Late fee and interest have been paid. Proof of filing enclosed.\n\nWe assure compliance going forward.\n\nYours faithfully,\n[Authorised Signatory] | [Company Name] | GSTIN: ${g||"[GSTIN]"}`,
+      body: (g: string, p: string, _: string) => `GSTIN: ${g||"[GSTIN]"}   Period: ${p||"[Period]"}\n\nSub: Reply to notice for non-filing of GSTR-3B for ${p||"[Period]"}\n\nDear Sir/Madam,\n\nWe acknowledge the notice. The delay was caused due to [reason - portal issues / illness / delayed data].\n\nThe return has now been filed on [Date], ARN: [ARN]. Late fee and interest have been paid. Proof of filing enclosed.\n\nWe assure compliance going forward.\n\nYours faithfully,\n[Authorised Signatory] | [Company Name] | GSTIN: ${g||"[GSTIN]"}`,
     },
     {
-      title: "Reply — Demand (Sec 73 Short Payment)",
+      title: "Reply - Demand (Sec 73 Short Payment)",
       section: "Sec 73 CGST Act",
-      body: (g: string, p: string, a: string) => `GSTIN: ${g||"[GSTIN]"}   Period: ${p||"[Period]"}\n\nSub: Reply to demand for short payment of ₹${a||"[Amount]"} u/s 73 for ${p||"[Period]"}\n\nDear Sir/Madam,\n\nThe demand is disputed on the following grounds:\n1. [Ground 1 — supply is exempt / zero-rated / classified differently]\n2. Supporting invoices and contracts enclosed as Annexure A.\n\nWithout prejudice, we are willing to pay ₹[Undisputed Amount] as undisputed liability.\n\nWe request a personal hearing before the final order u/s 73(9).\n\nYours faithfully,\n[Authorised Signatory] | [Company Name] | GSTIN: ${g||"[GSTIN]"}`,
+      body: (g: string, p: string, a: string) => `GSTIN: ${g||"[GSTIN]"}   Period: ${p||"[Period]"}\n\nSub: Reply to demand for short payment of ₹${a||"[Amount]"} u/s 73 for ${p||"[Period]"}\n\nDear Sir/Madam,\n\nThe demand is disputed on the following grounds:\n1. [Ground 1 - supply is exempt / zero-rated / classified differently]\n2. Supporting invoices and contracts enclosed as Annexure A.\n\nWithout prejudice, we are willing to pay ₹[Undisputed Amount] as undisputed liability.\n\nWe request a personal hearing before the final order u/s 73(9).\n\nYours faithfully,\n[Authorised Signatory] | [Company Name] | GSTIN: ${g||"[GSTIN]"}`,
     },
     {
-      title: "Reply — Excess ITC / Blocked Credit",
+      title: "Reply - Excess ITC / Blocked Credit",
       section: "Sec 16(2) / Rule 36",
       body: (g: string, p: string, a: string) => `GSTIN: ${g||"[GSTIN]"}   Period: ${p||"[Period]"}\n\nSub: Reply to notice for excess ITC of ₹${a||"[Amount]"} for ${p||"[Period]"}\n\nDear Sir/Madam,\n\nThe ITC of ₹${a||"[Amount]"} was claimed on valid tax invoices from registered suppliers. Payment was made within 180 days (Rule 37). The credit does not fall under Sec 17(5) blocked list.\n\nSupporting invoices, GSTR-2B reconciliation, and payment proofs are enclosed.\n\nWe request withdrawal of the notice.\n\nYours faithfully,\n[Authorised Signatory] | [Company Name] | GSTIN: ${g||"[GSTIN]"}`,
     },
@@ -2131,7 +2131,7 @@ function GstNoticeTemplates() {
         </div>
         <pre className="p-4 text-xs font-mono text-[var(--color-muted)] whitespace-pre-wrap leading-relaxed">{text}</pre>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Templates are starting points — always review with your CA before submitting. Replace all [bracketed] fields. Attach supporting documents as annexures.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Templates are starting points - always review with your CA before submitting. Replace all [bracketed] fields. Attach supporting documents as annexures.</p>
     </div>
   );
 }
@@ -2167,7 +2167,7 @@ function Gstr3bAutoPrep() {
       [],
       ["Table", "Particulars", "Taxable Value", "CGST", "SGST", "IGST", "Total Tax"],
       ["3.1(a)", "Outward taxable supplies", data.outwardTaxable, data.half(data.outputTax), data.sgstOf(data.outputTax), 0, data.outputTax],
-      ["4(A)(5)", "ITC — all other ITC", data.inwardTaxable, data.half(data.itc), data.sgstOf(data.itc), 0, data.itc],
+      ["4(A)(5)", "ITC - all other ITC", data.inwardTaxable, data.half(data.itc), data.sgstOf(data.itc), 0, data.itc],
       ["5.1", "Net tax payable (in cash)", "", data.half(data.net), data.sgstOf(data.net), 0, data.net],
       ["", "ITC carried forward", "", "", "", "", data.itcCarry],
     ];
@@ -2243,10 +2243,10 @@ function ItcBooksReconciliation() {
   };
 
   const verdict = (r: Row): { label: string; cls: string; advice: string } => {
-    if (r.portalTax === 0 || !r.supplierFiled) return { label: "Chase vendor", cls: "bg-red-950/40 text-red-400 border-red-800/30", advice: "Not in 2B — supplier hasn't filed. ITC blocked under Rule 36(4). Withhold payment / chase." };
-    if (Math.abs(r.booksTax - r.portalTax) <= 1) return { label: "Claim now", cls: "bg-green-950/40 text-green-400 border-green-800/30", advice: "Matched in 2B — eligible to claim this period." };
-    if (r.portalTax < r.booksTax) return { label: "Defer", cls: "bg-orange-950/40 text-orange-400 border-orange-800/30", advice: "Portal value lower — claim only the 2B amount; defer the balance till supplier amends." };
-    return { label: "Claim (book ↑)", cls: "bg-yellow-950/40 text-yellow-400 border-yellow-800/30", advice: "Portal value higher than books — verify your booking, you may be under-claiming." };
+    if (r.portalTax === 0 || !r.supplierFiled) return { label: "Chase vendor", cls: "bg-red-950/40 text-red-400 border-red-800/30", advice: "Not in 2B - supplier hasn't filed. ITC blocked under Rule 36(4). Withhold payment / chase." };
+    if (Math.abs(r.booksTax - r.portalTax) <= 1) return { label: "Claim now", cls: "bg-green-950/40 text-green-400 border-green-800/30", advice: "Matched in 2B - eligible to claim this period." };
+    if (r.portalTax < r.booksTax) return { label: "Defer", cls: "bg-orange-950/40 text-orange-400 border-orange-800/30", advice: "Portal value lower - claim only the 2B amount; defer the balance till supplier amends." };
+    return { label: "Claim (book ↑)", cls: "bg-yellow-950/40 text-yellow-400 border-yellow-800/30", advice: "Portal value higher than books - verify your booking, you may be under-claiming." };
   };
 
   const claimNow = rows.filter(r => verdict(r).label === "Claim now").reduce((s, r) => s + r.booksTax, 0);
@@ -2293,7 +2293,7 @@ function ItcBooksReconciliation() {
                 {rows.map(r => { const v = verdict(r); return (
                   <tr key={r.id} className="border-t border-[var(--color-border)]">
                     <td className="px-3 py-2"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${v.cls}`}>{v.label}</span></td>
-                    <td className="px-3 py-2"><span>{r.party || "—"}</span><br /><span className="text-[10px] text-[var(--color-muted)] font-mono">{r.gstin}</span></td>
+                    <td className="px-3 py-2"><span>{r.party || "-"}</span><br /><span className="text-[10px] text-[var(--color-muted)] font-mono">{r.gstin}</span></td>
                     <td className="px-3 py-2 font-mono">{r.invoiceNo}</td>
                     <td className="px-3 py-2 tabular-nums">{fc(r.booksTax)}</td>
                     <td className="px-3 py-2 tabular-nums">{fc(r.portalTax)}</td>
@@ -2436,7 +2436,7 @@ function PlaceOfSupplyDeterminer() {
     <div>
       <label className="text-xs text-[var(--color-muted)] block mb-1">{label}</label>
       <select value={v} onChange={e => set(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
-        {STATE_CODES.map(s => <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
+        {STATE_CODES.map(s => <option key={s.code} value={s.code}>{s.code} - {s.name}</option>)}
       </select>
     </div>
   );
@@ -2445,7 +2445,7 @@ function PlaceOfSupplyDeterminer() {
     <div className="space-y-4 max-w-2xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
         <h2 className="text-sm font-semibold">Place-of-Supply Determiner</h2>
-        <p className="text-xs text-[var(--color-muted)]">Determines inter vs intra-state supply and the CGST/SGST vs IGST split — including SEZ and bill-to/ship-to (Sec 10–12 IGST Act).</p>
+        <p className="text-xs text-[var(--color-muted)]">Determines inter vs intra-state supply and the CGST/SGST vs IGST split - including SEZ and bill-to/ship-to (Sec 10-12 IGST Act).</p>
         <div className="flex gap-2">
           {(["goods", "services"] as const).map(t => (
             <button key={t} onClick={() => setSupplyType(t)} className={`flex-1 py-2 text-xs font-semibold rounded-lg border capitalize transition-colors ${supplyType === t ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{t}</button>
@@ -2469,12 +2469,12 @@ function PlaceOfSupplyDeterminer() {
       <div className={`rounded-lg border p-5 ${interState ? "bg-blue-950/20 border-blue-800/40" : "bg-green-950/20 border-green-800/40"}`}>
         <div className="flex items-center gap-2 mb-2">
           <MapPin size={15} className={interState ? "text-blue-400" : "text-green-400"} />
-          <p className="text-sm font-bold">{sez ? "Inter-State — Zero-rated (SEZ / Export)" : interState ? "Inter-State Supply → IGST" : "Intra-State Supply → CGST + SGST"}</p>
+          <p className="text-sm font-bold">{sez ? "Inter-State - Zero-rated (SEZ / Export)" : interState ? "Inter-State Supply → IGST" : "Intra-State Supply → CGST + SGST"}</p>
         </div>
         <p className="text-xs text-[var(--color-muted)] mb-3">Place of supply: <strong className="text-[var(--color-text)]">{name(pos)}</strong> · Supplier: <strong className="text-[var(--color-text)]">{name(supplier)}</strong>{supplyType === "goods" && billShipDiff && <> · POS = bill-to location per Sec 10(1)(b)</>}</p>
         <div className="grid grid-cols-3 gap-3">
           {sez ? (
-            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-center col-span-3"><p className="text-[10px] text-[var(--color-muted)] mb-1">Tax (zero-rated — LUT or refund)</p><p className="text-lg font-bold tabular-nums text-green-400">{fc(0)}</p></div>
+            <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-center col-span-3"><p className="text-[10px] text-[var(--color-muted)] mb-1">Tax (zero-rated - LUT or refund)</p><p className="text-lg font-bold tabular-nums text-green-400">{fc(0)}</p></div>
           ) : interState ? (
             <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-center col-span-3"><p className="text-[10px] text-[var(--color-muted)] mb-1">IGST @ {rate}%</p><p className="text-lg font-bold tabular-nums text-blue-400">{fc(tax)}</p></div>
           ) : (
@@ -2486,7 +2486,7 @@ function PlaceOfSupplyDeterminer() {
           )}
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Sec 7–8 (inter/intra) &amp; Sec 10–13 IGST Act (place of supply). SEZ/export = zero-rated inter-state. For goods with bill-to ≠ ship-to, POS is the bill-to (third party) location.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Sec 7-8 (inter/intra) &amp; Sec 10-13 IGST Act (place of supply). SEZ/export = zero-rated inter-state. For goods with bill-to ≠ ship-to, POS is the bill-to (third party) location.</p>
     </div>
   );
 }
@@ -2517,7 +2517,7 @@ function MultiGstinConsolidator() {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
         <h2 className="text-sm font-semibold">Multi-GSTIN Consolidator</h2>
-        <p className="text-xs text-[var(--color-muted)]">Single dashboard across all your state GST registrations under one PAN. ITC cannot cross GSTINs — each unit settles separately.</p>
+        <p className="text-xs text-[var(--color-muted)]">Single dashboard across all your state GST registrations under one PAN. ITC cannot cross GSTINs - each unit settles separately.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <input value={gstin} onChange={e => setGstin(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15))} placeholder="GSTIN *" className={`${inp} font-mono`} maxLength={15} />
           <input value={state} onChange={e => setState(e.target.value)} placeholder="State (auto)" className={inp} />
@@ -2561,7 +2561,7 @@ function MultiGstinConsolidator() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Each GSTIN is a distinct registration — output, ITC and electronic cash/credit ledgers are state-specific. Cross-utilisation of ITC between GSTINs is not permitted (except via ISD distribution).</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Each GSTIN is a distinct registration - output, ITC and electronic cash/credit ledgers are state-specific. Cross-utilisation of ITC between GSTINs is not permitted (except via ISD distribution).</p>
     </div>
   );
 }
@@ -2643,7 +2643,7 @@ function RateChangeSimulator() {
 function BlockedCreditChecker() {
   type Entry = { id: string; head: string; amount: number; blocked: boolean; reason: string };
   const HEADS: { key: string; label: string; blocked: boolean; reason: string }[] = [
-    { key: "motor", label: "Motor vehicles (≤13 seats) — not for resale/transport/training", blocked: true, reason: "17(5)(a)" },
+    { key: "motor", label: "Motor vehicles (≤13 seats) - not for resale/transport/training", blocked: true, reason: "17(5)(a)" },
     { key: "food", label: "Food, beverages, outdoor catering", blocked: true, reason: "17(5)(b)(i)" },
     { key: "health", label: "Health services, cosmetic surgery, club membership", blocked: true, reason: "17(5)(b)(ii)" },
     { key: "rentcab", label: "Rent-a-cab, life/health insurance (non-mandatory)", blocked: true, reason: "17(5)(b)(iii)" },
@@ -2674,7 +2674,7 @@ function BlockedCreditChecker() {
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
-        <h2 className="text-sm font-semibold">Blocked Credit Checker — Sec 17(5)</h2>
+        <h2 className="text-sm font-semibold">Blocked Credit Checker - Sec 17(5)</h2>
         <p className="text-xs text-[var(--color-muted)]">Flag ineligible ITC before you file 3B. Claiming blocked credit attracts reversal + interest @18% + penalty.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <select value={head} onChange={e => setHead(e.target.value)} className="md:col-span-2 w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
@@ -2737,7 +2737,7 @@ function ItcReversalCalculator() {
   const D2 = Math.round(C2 * 0.05);              // 5% deemed personal/non-business
   const eligibleCommon = C2 - D1 - D2;
 
-  // Rule 43 (capital goods) — reversal over 60 months
+  // Rule 43 (capital goods) - reversal over 60 months
   const Tc = parseFloat(capital) || 0;
   const monthlyCap = Tc / 60;
   const capReversalMonthly = Math.round(monthlyCap * ratio);
@@ -2747,13 +2747,13 @@ function ItcReversalCalculator() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
-        <h2 className="text-sm font-semibold">ITC Reversal — Rule 42 / 43</h2>
+        <h2 className="text-sm font-semibold">ITC Reversal - Rule 42 / 43</h2>
         <p className="text-xs text-[var(--color-muted)]">Proportionate reversal of common ITC for exempt + non-business use. Rule 42 = inputs/services (monthly), Rule 43 = capital goods (over 60 months).</p>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Total ITC on common inputs/services — T (₹)</label><input type="number" value={common} onChange={e => setCommon(e.target.value)} className={inp} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">ITC exclusively for taxable — T2 (₹)</label><input type="number" value={exclTaxable} onChange={e => setExclTaxable(e.target.value)} className={inp} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">ITC exclusively for exempt — T3 (₹)</label><input type="number" value={exclExempt} onChange={e => setExclExempt(e.target.value)} className={inp} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Common capital-goods ITC — Tc (₹)</label><input type="number" value={capital} onChange={e => setCapital(e.target.value)} className={inp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Total ITC on common inputs/services - T (₹)</label><input type="number" value={common} onChange={e => setCommon(e.target.value)} className={inp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">ITC exclusively for taxable - T2 (₹)</label><input type="number" value={exclTaxable} onChange={e => setExclTaxable(e.target.value)} className={inp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">ITC exclusively for exempt - T3 (₹)</label><input type="number" value={exclExempt} onChange={e => setExclExempt(e.target.value)} className={inp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Common capital-goods ITC - Tc (₹)</label><input type="number" value={capital} onChange={e => setCapital(e.target.value)} className={inp} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Taxable turnover (₹)</label><input type="number" value={taxableSupply} onChange={e => setTaxableSupply(e.target.value)} className={inp} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Exempt turnover (₹)</label><input type="number" value={exemptSupply} onChange={e => setExemptSupply(e.target.value)} className={inp} /></div>
         </div>
@@ -2764,9 +2764,9 @@ function ItcReversalCalculator() {
         {[
           ["Common credit C2 = T − T2 − T3", C2],
           [`Exempt ratio (E/F) = ${(ratio * 100).toFixed(2)}%`, null],
-          ["D1 — reversal for exempt supplies (C2 × ratio)", D1],
-          ["D2 — deemed 5% non-business use", D2],
-          ["Rule 43 — capital goods reversal this month (Tc/60 × ratio)", capReversalMonthly],
+          ["D1 - reversal for exempt supplies (C2 × ratio)", D1],
+          ["D2 - deemed 5% non-business use", D2],
+          ["Rule 43 - capital goods reversal this month (Tc/60 × ratio)", capReversalMonthly],
           ["Eligible common credit C3 = C2 − D1 − D2", eligibleCommon],
         ].map(([label, val]) => (
           <div key={String(label)} className="flex justify-between text-xs py-1.5 border-b border-[var(--color-border)] last:border-0">
@@ -2821,7 +2821,7 @@ function VendorComplianceScore() {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
         <h2 className="text-sm font-semibold">Vendor GST Compliance Score</h2>
-        <p className="text-xs text-[var(--color-muted)]">Ranks suppliers by filing regularity. A non-filing vendor blocks your ITC under Rule 36(4) — score them before you place orders.</p>
+        <p className="text-xs text-[var(--color-muted)]">Ranks suppliers by filing regularity. A non-filing vendor blocks your ITC under Rule 36(4) - score them before you place orders.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Vendor name *" className={inp} />
           <input value={gstin} onChange={e => setGstin(e.target.value)} placeholder="GSTIN" className={`${inp} font-mono`} />
@@ -2847,9 +2847,9 @@ function VendorComplianceScore() {
                   <td className="px-3 py-2"><span className={`font-bold ${g.cls}`}>{s}</span><span className="text-[var(--color-muted)]">/100</span></td>
                   <td className="px-3 py-2"><span className={`text-[10px] font-bold ${g.cls}`}>{g.label}</span></td>
                   <td className="px-3 py-2"><span className="font-medium">{v.name}</span><br /><span className="text-[10px] text-[var(--color-muted)] font-mono">{v.gstin}</span></td>
-                  <td className="px-3 py-2">{v.totalReturns > 0 ? `${Math.round(v.filedOnTime / v.totalReturns * 100)}%` : "—"}</td>
+                  <td className="px-3 py-2">{v.totalReturns > 0 ? `${Math.round(v.filedOnTime / v.totalReturns * 100)}%` : "-"}</td>
                   <td className="px-3 py-2 tabular-nums">{fc(v.itcAtRisk)}</td>
-                  <td className="px-3 py-2 text-[var(--color-muted)]">{v.lastFiled || "—"}</td>
+                  <td className="px-3 py-2 text-[var(--color-muted)]">{v.lastFiled || "-"}</td>
                   <td className="px-3 py-2"><button onClick={() => setVendors(prev => prev.filter(x => x.id !== v.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
                 </tr>
               ); })}
@@ -2879,7 +2879,7 @@ function Drc03Helper() {
   const penalty = cause === "voluntary" ? 0 : Math.round(t * 0.15);
   const total = t + interest + penalty;
 
-  const challan = `FORM GST DRC-03 — Voluntary Payment\n\nCause of payment: ${cause}\nTax (CGST+SGST/IGST): ${fc(t)}\nInterest @18% p.a. for ${days} day(s) u/s 50: ${fc(interest)}\nPenalty u/s 73(5)/74(5): ${fc(penalty)}\nTotal payable: ${fc(total)}\n\nDeclared and paid voluntarily before issuance of notice/order. Reference DRC-03 ARN to be quoted in subsequent correspondence.`;
+  const challan = `FORM GST DRC-03 - Voluntary Payment\n\nCause of payment: ${cause}\nTax (CGST+SGST/IGST): ${fc(t)}\nInterest @18% p.a. for ${days} day(s) u/s 50: ${fc(interest)}\nPenalty u/s 73(5)/74(5): ${fc(penalty)}\nTotal payable: ${fc(total)}\n\nDeclared and paid voluntarily before issuance of notice/order. Reference DRC-03 ARN to be quoted in subsequent correspondence.`;
   const copy = () => navigator.clipboard.writeText(challan).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
 
   return (
@@ -3064,11 +3064,11 @@ function ZeroRatedInvoiceKit() {
                 {rows.map(r => (
                   <tr key={r.id} className="border-t border-[var(--color-border)]">
                     <td className="px-3 py-2 font-mono">{r.invoiceNo}</td>
-                    <td className="px-3 py-2">{r.buyer || "—"}</td>
+                    <td className="px-3 py-2">{r.buyer || "-"}</td>
                     <td className="px-3 py-2 text-[var(--color-muted)]">{r.type.replace("-", " ")}</td>
                     <td className="px-3 py-2">{r.method === "lut" ? "LUT" : "With IGST"}</td>
                     <td className="px-3 py-2 tabular-nums">{fc(r.value)}</td>
-                    <td className="px-3 py-2 tabular-nums text-green-400">{r.igst ? fc(r.igst) : "—"}</td>
+                    <td className="px-3 py-2 tabular-nums text-green-400">{r.igst ? fc(r.igst) : "-"}</td>
                     <td className="px-3 py-2"><button onClick={() => toggleFirc(r.id)} className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${r.fircReceived ? "bg-green-950/30 text-green-400" : "bg-yellow-950/30 text-yellow-400"}`}>{r.fircReceived ? "Received" : "Pending"}</button></td>
                     <td className="px-3 py-2"><button onClick={() => setRows(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
                   </tr>
@@ -3104,7 +3104,7 @@ function GstHealthScore() {
     const gstinScore = store.firm.gstNumber && store.firm.gstNumber.length === 15 ? 15 : 0;
     // Registered & rate set (10 pts)
     const regScore = store.firm.gstRegistered ? 10 : 0;
-    // Recent activity (25 pts) — has a filing in the last 60 days
+    // Recent activity (25 pts) - has a filing in the last 60 days
     const recent = filings.some(f => { const d = new Date(f.period + "-01"); return (Date.now() - d.getTime()) / 86400000 <= 75; });
     const recencyScore = recent ? 25 : (total > 0 ? 5 : 0);
     return Math.round(filingScore + gstinScore + regScore + recencyScore);
@@ -3123,9 +3123,9 @@ function GstHealthScore() {
   const nudges: string[] = [];
   if (!store.firm.gstRegistered) nudges.push("Mark your firm GST-registered and set the rate in Settings.");
   if (!store.firm.gstNumber || store.firm.gstNumber.length !== 15) nudges.push("Add your 15-character GSTIN in Settings.");
-  if (filings.some(f => !f.onTime)) nudges.push("Late filings detected — late fee ₹50/day (₹20 nil) + 18% interest applies. File before the 11th (GSTR-1) / 20th (3B).");
+  if (filings.some(f => !f.onTime)) nudges.push("Late filings detected - late fee ₹50/day (₹20 nil) + 18% interest applies. File before the 11th (GSTR-1) / 20th (3B).");
   if (filings.length === 0) nudges.push("Log your GSTR-1 & 3B filings to start building your streak.");
-  if (streak >= 6) nudges.push(`On-time streak of ${streak} — eligible for a smoother refund/credit experience. Keep it up!`);
+  if (streak >= 6) nudges.push(`On-time streak of ${streak} - eligible for a smoother refund/credit experience. Keep it up!`);
 
   return (
     <div className="space-y-4">
@@ -3260,7 +3260,7 @@ function GstInterestLateFee() {
               </div>
             ))}
           </div>
-          <p className="text-[11px] text-[var(--color-muted)] mt-3">Interest = tax × 18% × days ÷ 365 (simple). Late fee split equally between CGST &amp; SGST. Caps simplified — confirm current notification before paying.</p>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">Interest = tax × 18% × days ÷ 365 (simple). Late fee split equally between CGST &amp; SGST. Caps simplified - confirm current notification before paying.</p>
         </div>
       )}
     </div>
@@ -3312,7 +3312,7 @@ function RegistrationThresholdAdvisor() {
             <span>Special-category state (NE / hill states)</span>
           </label>
           <div className="col-span-2">
-            <label className="block text-xs text-[var(--color-muted)] mb-1">Aggregate turnover (₹) — leave blank to use last-12-month inflows ({formatAmount(autoTurnover)})</label>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">Aggregate turnover (₹) - leave blank to use last-12-month inflows ({formatAmount(autoTurnover)})</label>
             <input type="number" min={0} value={manual} onChange={e => setManual(e.target.value)} placeholder={String(Math.round(autoTurnover))} className={GST_INPUT} />
           </div>
         </div>
@@ -3324,7 +3324,7 @@ function RegistrationThresholdAdvisor() {
           <p className="text-sm tabular-nums text-[var(--color-muted)]">{formatCurrency(turnover)} / {formatCurrency(regThreshold)}</p>
         </div>
         <div className="h-2 w-full bg-[var(--color-bg)] rounded-full overflow-hidden"><div className={`h-full ${mustRegister ? "bg-red-400" : pct > 80 ? "bg-orange-400" : "bg-green-400"}`} style={{ width: `${pct}%` }} /></div>
-        <p className="text-[11px] text-[var(--color-muted)] mt-2">{mustRegister ? "You have crossed the limit — register within 30 days of crossing." : pct > 80 ? "Approaching the threshold — plan registration ahead of crossing." : "Voluntary registration still allowed to claim ITC and sell B2B."}</p>
+        <p className="text-[11px] text-[var(--color-muted)] mt-2">{mustRegister ? "You have crossed the limit - register within 30 days of crossing." : pct > 80 ? "Approaching the threshold - plan registration ahead of crossing." : "Voluntary registration still allowed to claim ITC and sell B2B."}</p>
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
@@ -3412,7 +3412,7 @@ function Gstr1Vs3bReconciler() {
 
       <div className={`rounded-lg border px-4 py-3 text-sm flex items-center gap-3 ${ok ? "bg-green-950/20 border-green-800/40" : "bg-orange-950/20 border-orange-800/40"}`}>
         {ok ? <CheckCircle2 size={16} className="text-green-400 shrink-0" /> : <AlertTriangle size={16} className="text-orange-400 shrink-0" />}
-        <p>{ok ? "GSTR-1 and GSTR-3B reconcile — no liability mismatch." : "Mismatch detected. Reconcile before filing: under-reported 3B liability attracts interest; over-reported needs amendment in the next period."}</p>
+        <p>{ok ? "GSTR-1 and GSTR-3B reconcile - no liability mismatch." : "Mismatch detected. Reconcile before filing: under-reported 3B liability attracts interest; over-reported needs amendment in the next period."}</p>
       </div>
     </div>
   );
@@ -3450,7 +3450,7 @@ function Rule180ReversalTracker() {
   return (
     <div className="space-y-4">
       <div className="bg-orange-950/20 border border-orange-800/30 rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
-        <strong className="text-orange-300">180-Day Payment Rule (Rule 37)</strong> — If you don't pay a supplier within 180 days of the invoice date, the ITC claimed must be reversed (with interest) and can be re-claimed only after payment.
+        <strong className="text-orange-300">180-Day Payment Rule (Rule 37)</strong> - If you don't pay a supplier within 180 days of the invoice date, the ITC claimed must be reversed (with interest) and can be re-claimed only after payment.
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
@@ -3467,7 +3467,7 @@ function Rule180ReversalTracker() {
 
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-[var(--color-surface)] border border-red-800/30 rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">ITC to reverse (overdue &gt;180d)</p><p className="text-lg font-bold tabular-nums text-red-400">{formatCurrency(atRisk)}</p></div>
-        <div className="bg-[var(--color-surface)] border border-orange-800/30 rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Due soon (151–180 days)</p><p className="text-lg font-bold tabular-nums text-orange-400">{formatCurrency(dueSoon)}</p></div>
+        <div className="bg-[var(--color-surface)] border border-orange-800/30 rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Due soon (151-180 days)</p><p className="text-lg font-bold tabular-nums text-orange-400">{formatCurrency(dueSoon)}</p></div>
       </div>
 
       {rows.length > 0 && (
@@ -3478,10 +3478,10 @@ function Rule180ReversalTracker() {
               {rows.map(r => (
                 <tr key={r.id} className={`border-t border-[var(--color-border)] ${r.overdue ? "bg-red-950/10" : r.due ? "bg-orange-950/10" : ""}`}>
                   <td className="px-3 py-2 font-medium">{r.supplier}</td>
-                  <td className="px-3 py-2 font-mono text-[var(--color-muted)]">{r.invoiceNo || "—"}</td>
+                  <td className="px-3 py-2 font-mono text-[var(--color-muted)]">{r.invoiceNo || "-"}</td>
                   <td className="px-3 py-2 text-[var(--color-muted)]">{r.invoiceDate}</td>
                   <td className="px-3 py-2 tabular-nums">{formatCurrency(r.itc)}</td>
-                  <td className={`px-3 py-2 tabular-nums ${r.overdue ? "text-red-400 font-semibold" : ""}`}>{r.paid ? "—" : r.daysSince}</td>
+                  <td className={`px-3 py-2 tabular-nums ${r.overdue ? "text-red-400 font-semibold" : ""}`}>{r.paid ? "-" : r.daysSince}</td>
                   <td className="px-3 py-2">{r.paid ? "Paid" : r.deadline}</td>
                   <td className="px-3 py-2"><button onClick={() => togglePaid(r.id)} className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${r.paid ? "bg-green-950/30 text-green-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{r.paid ? "Paid" : "Mark paid"}</button></td>
                   <td className="px-3 py-2"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
@@ -3526,7 +3526,7 @@ function EInvoice30DayTracker() {
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
-        <strong className="text-[var(--color-text)]">30-Day IRP Reporting Rule</strong> — Invoices must be reported to the Invoice Registration Portal within 30 days of the invoice date. After that the IRP rejects the IRN, blocking e-invoicing and the buyer's ITC. Track every invoice here.
+        <strong className="text-[var(--color-text)]">30-Day IRP Reporting Rule</strong> - Invoices must be reported to the Invoice Registration Portal within 30 days of the invoice date. After that the IRP rejects the IRN, blocking e-invoicing and the buyer's ITC. Track every invoice here.
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
@@ -3553,9 +3553,9 @@ function EInvoice30DayTracker() {
                 <tr key={r.id} className={`border-t border-[var(--color-border)] ${r.locked ? "bg-red-950/10" : r.urgent ? "bg-orange-950/10" : ""}`}>
                   <td className="px-3 py-2 font-mono">{r.invoiceNo}</td>
                   <td className="px-3 py-2 text-[var(--color-muted)]">{r.invoiceDate}</td>
-                  <td className="px-3 py-2 tabular-nums">{r.value ? formatCurrency(r.value) : "—"}</td>
-                  <td className="px-3 py-2">{r.reported ? "—" : r.deadline}</td>
-                  <td className={`px-3 py-2 tabular-nums font-semibold ${r.locked ? "text-red-400" : r.urgent ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{r.reported ? "—" : r.locked ? `${Math.abs(r.daysLeft)}d over` : `${r.daysLeft}d`}</td>
+                  <td className="px-3 py-2 tabular-nums">{r.value ? formatCurrency(r.value) : "-"}</td>
+                  <td className="px-3 py-2">{r.reported ? "-" : r.deadline}</td>
+                  <td className={`px-3 py-2 tabular-nums font-semibold ${r.locked ? "text-red-400" : r.urgent ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{r.reported ? "-" : r.locked ? `${Math.abs(r.daysLeft)}d over` : `${r.daysLeft}d`}</td>
                   <td className="px-3 py-2"><button onClick={() => toggle(r.id)} className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${r.reported ? "bg-green-950/30 text-green-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{r.reported ? "Reported" : "Mark reported"}</button></td>
                   <td className="px-3 py-2"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
                 </tr>
@@ -3593,10 +3593,10 @@ function InvertedDutyRefundCalculator() {
     <div className="space-y-4 max-w-2xl">
       <div className={GST_CARD}>
         <div className="flex items-center gap-2 mb-1"><Coins size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Inverted-Duty Refund Calculator</h2></div>
-        <p className="text-xs text-[var(--color-muted)] mb-4">When inputs are taxed higher than outputs, accumulated ITC can be refunded under Rule 89(5). Only ITC on input <em>goods</em> counts as Net ITC — services &amp; capital goods are excluded.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">When inputs are taxed higher than outputs, accumulated ITC can be refunded under Rule 89(5). Only ITC on input <em>goods</em> counts as Net ITC - services &amp; capital goods are excluded.</p>
         <div className="grid grid-cols-2 gap-3">
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Total ITC availed (₹)</label><input type="number" min={0} value={inwardItc} onChange={e => setInwardItc(e.target.value)} placeholder="all inputs + services + cap goods" className={GST_INPUT} /></div>
-          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Net ITC — input goods only (₹)</label><input type="number" min={0} value={inputItc} onChange={e => setInputItc(e.target.value)} placeholder="goods inputs only" className={GST_INPUT} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Net ITC - input goods only (₹)</label><input type="number" min={0} value={inputItc} onChange={e => setInputItc(e.target.value)} placeholder="goods inputs only" className={GST_INPUT} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Turnover of inverted-rated supply (₹)</label><input type="number" min={0} value={outwardTurnover} onChange={e => setOutwardTurnover(e.target.value)} className={GST_INPUT} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Adjusted total turnover (₹)</label><input type="number" min={0} value={totalTurnover} onChange={e => setTotalTurnover(e.target.value)} className={GST_INPUT} /></div>
           <div className="col-span-2"><label className="block text-xs text-[var(--color-muted)] mb-1">Output tax payable on inverted supply (₹)</label><input type="number" min={0} value={outputTaxPaid} onChange={e => setOutputTaxPaid(e.target.value)} className={GST_INPUT} /></div>
@@ -3649,7 +3649,7 @@ function CreditDebitNoteRegister() {
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
-        <strong className="text-[var(--color-text)]">Credit / Debit Notes (Sec 34)</strong> — Credit notes reduce your output GST liability (returns, discounts, overcharge); debit notes increase it (undercharge). Both must be reported in GSTR-1 and linked to the original invoice.
+        <strong className="text-[var(--color-text)]">Credit / Debit Notes (Sec 34)</strong> - Credit notes reduce your output GST liability (returns, discounts, overcharge); debit notes increase it (undercharge). Both must be reported in GSTR-1 and linked to the original invoice.
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
@@ -3681,8 +3681,8 @@ function CreditDebitNoteRegister() {
                 <tr key={n.id} className="border-t border-[var(--color-border)]">
                   <td className="px-3 py-2 font-mono">{n.noteNo}</td>
                   <td className="px-3 py-2"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${n.kind === "credit" ? "bg-green-950/30 text-green-400" : "bg-red-950/30 text-red-400"}`}>{n.kind === "credit" ? "Credit" : "Debit"}</span></td>
-                  <td className="px-3 py-2">{n.party || "—"}</td>
-                  <td className="px-3 py-2 font-mono text-[var(--color-muted)]">{n.origInvoice || "—"}</td>
+                  <td className="px-3 py-2">{n.party || "-"}</td>
+                  <td className="px-3 py-2 font-mono text-[var(--color-muted)]">{n.origInvoice || "-"}</td>
                   <td className="px-3 py-2 text-[var(--color-muted)]">{n.date}</td>
                   <td className="px-3 py-2 tabular-nums">{formatCurrency(n.taxable)}</td>
                   <td className={`px-3 py-2 tabular-nums font-semibold ${n.kind === "credit" ? "text-green-400" : "text-red-400"}`}>{formatCurrency(taxOf(n))}</td>
@@ -3729,7 +3729,7 @@ function CompensationCessCalculator() {
           <div className="col-span-2">
             <label className="block text-xs text-[var(--color-muted)] mb-1">Category</label>
             <select value={idx} onChange={e => setIdx(Number(e.target.value))} className={GST_INPUT}>
-              {ITEMS.map((it, i) => <option key={it.label} value={i}>{it.label} — {it.gst}% GST + {it.cess} cess</option>)}
+              {ITEMS.map((it, i) => <option key={it.label} value={i}>{it.label} - {it.gst}% GST + {it.cess} cess</option>)}
             </select>
           </div>
           <div className="col-span-2">
@@ -3754,8 +3754,8 @@ function CompensationCessCalculator() {
               </div>
             ))}
           </div>
-          {item.cessPct === 0 && <p className="text-[11px] text-[var(--color-muted)] mt-3">This item carries a specific (per-quantity) cess, not ad-valorem — the cess figure above is shown as ₹0; apply ₹400/tonne on quantity instead.</p>}
-          <p className="text-[11px] text-[var(--color-muted)] mt-3">Cess is collected over and above GST and credited to the compensation fund. Rates are indicative — verify the current cess notification for your exact HSN.</p>
+          {item.cessPct === 0 && <p className="text-[11px] text-[var(--color-muted)] mt-3">This item carries a specific (per-quantity) cess, not ad-valorem - the cess figure above is shown as ₹0; apply ₹400/tonne on quantity instead.</p>}
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">Cess is collected over and above GST and credited to the compensation fund. Rates are indicative - verify the current cess notification for your exact HSN.</p>
         </div>
       )}
     </div>
@@ -3788,7 +3788,7 @@ function Gstr9cReconciliation() {
   return (
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
-        <strong className="text-[var(--color-text)]">GSTR-9C Reconciliation (turnover &gt; ₹5 cr)</strong> — Links your audited books to the annual return (GSTR-9). Enter the figure as per books and as per the filed return for each head; any gap must be explained and any tax shortfall paid via DRC-03.
+        <strong className="text-[var(--color-text)]">GSTR-9C Reconciliation (turnover &gt; ₹5 cr)</strong> - Links your audited books to the annual return (GSTR-9). Enter the figure as per books and as per the filed return for each head; any gap must be explained and any tax shortfall paid via DRC-03.
       </div>
 
       <div className={GST_CARD}>
@@ -3812,7 +3812,7 @@ function Gstr9cReconciliation() {
                 <td className="px-3 py-2 font-medium">{row.label}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(parseFloat(row.book) || 0)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(parseFloat(row.ret) || 0)}</td>
-                <td className={`px-3 py-2 text-right tabular-nums font-semibold ${Math.abs(row.diff) > 1 ? "text-orange-400" : "text-green-400"}`}>{row.diff === 0 ? "—" : (row.diff > 0 ? formatCurrency(row.diff) : `(${formatCurrency(Math.abs(row.diff))})`)}</td>
+                <td className={`px-3 py-2 text-right tabular-nums font-semibold ${Math.abs(row.diff) > 1 ? "text-orange-400" : "text-green-400"}`}>{row.diff === 0 ? "-" : (row.diff > 0 ? formatCurrency(row.diff) : `(${formatCurrency(Math.abs(row.diff))})`)}</td>
                 <td className="px-3 py-2 text-[var(--color-muted)]">{Math.abs(row.diff) > 1 ? row.note : "Reconciled"}</td>
               </tr>
             ))}
@@ -3823,7 +3823,7 @@ function Gstr9cReconciliation() {
       <div className={`rounded-lg px-4 py-3 text-xs border ${r.anyGap ? "bg-orange-950/20 border-orange-800/40 text-orange-300" : "bg-green-950/20 border-green-800/40 text-green-300"}`}>
         {r.anyGap
           ? "Differences detected. Provide reasons for each un-reconciled amount in Part II/IV of the 9C, and pay any net tax shortfall through DRC-03 before submitting."
-          : "All heads reconcile within tolerance — your GSTR-9C should sail through with no additional liability."}
+          : "All heads reconcile within tolerance - your GSTR-9C should sail through with no additional liability."}
       </div>
     </div>
   );
@@ -3857,7 +3857,7 @@ function JobWorkItc04Tracker() {
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
-        <strong className="text-[var(--color-text)]">Job-Work Tracker (ITC-04)</strong> — Goods sent to a job worker must return within <strong>1 year (inputs)</strong> or <strong>3 years (capital goods)</strong>, else it is treated as a deemed supply and GST becomes payable. File ITC-04 against delivery challans each period.
+        <strong className="text-[var(--color-text)]">Job-Work Tracker (ITC-04)</strong> - Goods sent to a job worker must return within <strong>1 year (inputs)</strong> or <strong>3 years (capital goods)</strong>, else it is treated as a deemed supply and GST becomes payable. File ITC-04 against delivery challans each period.
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
@@ -3890,10 +3890,10 @@ function JobWorkItc04Tracker() {
                   <tr key={l.id} className="border-t border-[var(--color-border)]">
                     <td className="px-3 py-2 font-mono">{l.challanNo}</td>
                     <td className="px-3 py-2">{l.jobWorker}</td>
-                    <td className="px-3 py-2 max-w-[140px] truncate">{l.goods || "—"}</td>
+                    <td className="px-3 py-2 max-w-[140px] truncate">{l.goods || "-"}</td>
                     <td className="px-3 py-2 text-[var(--color-muted)]">{l.sentDate}</td>
                     <td className="px-3 py-2">{l.type === "inputs" ? "Inputs" : "Capital"}</td>
-                    <td className={`px-3 py-2 tabular-nums ${od ? "text-red-400 font-semibold" : "text-[var(--color-muted)]"}`}>{l.received ? "—" : `${daysOut(l)}d`}</td>
+                    <td className={`px-3 py-2 tabular-nums ${od ? "text-red-400 font-semibold" : "text-[var(--color-muted)]"}`}>{l.received ? "-" : `${daysOut(l)}d`}</td>
                     <td className="px-3 py-2 tabular-nums">{formatCurrency(l.value)}</td>
                     <td className="px-3 py-2"><button onClick={() => toggleReceived(l.id)} className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${l.received ? "bg-green-950/30 text-green-400" : od ? "bg-red-950/30 text-red-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{l.received ? "Received" : od ? "Overdue" : "Pending"}</button></td>
                     <td className="px-3 py-2"><button onClick={() => remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
@@ -3937,7 +3937,7 @@ function IsdCreditDistributor() {
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
-        <strong className="text-[var(--color-text)]">ISD Credit Distributor (Rule 39)</strong> — An Input Service Distributor allocates common input-service ITC (audit, software, head-office costs) to each branch GSTIN in the ratio of that branch's turnover to total turnover, reported via GSTR-6.
+        <strong className="text-[var(--color-text)]">ISD Credit Distributor (Rule 39)</strong> - An Input Service Distributor allocates common input-service ITC (audit, software, head-office costs) to each branch GSTIN in the ratio of that branch's turnover to total turnover, reported via GSTR-6.
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
@@ -4006,7 +4006,7 @@ function BranchTransferInvoicer() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
-        <strong className="text-[var(--color-text)]">Branch-Transfer Invoicing (Sch. I)</strong> — A stock transfer between two GSTINs of the same PAN in <strong>different states</strong> is a taxable supply even without consideration. Raise a tax invoice; under Rule 28 the invoice value is accepted if the receiving branch can claim full ITC (tax-neutral).
+        <strong className="text-[var(--color-text)]">Branch-Transfer Invoicing (Sch. I)</strong> - A stock transfer between two GSTINs of the same PAN in <strong>different states</strong> is a taxable supply even without consideration. Raise a tax invoice; under Rule 28 the invoice value is accepted if the receiving branch can claim full ITC (tax-neutral).
       </div>
 
       <div className={GST_CARD}>
@@ -4023,7 +4023,7 @@ function BranchTransferInvoicer() {
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs text-[var(--color-muted)]">Supply type</span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.interState ? "bg-blue-950/30 text-blue-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{r.interState ? "Inter-state — IGST" : fromState && toState ? "Intra-state — CGST+SGST" : "Enter both states"}</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.interState ? "bg-blue-950/30 text-blue-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{r.interState ? "Inter-state - IGST" : fromState && toState ? "Intra-state - CGST+SGST" : "Enter both states"}</span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
@@ -4037,7 +4037,7 @@ function BranchTransferInvoicer() {
               </div>
             ))}
           </div>
-          <p className="text-[11px] text-[var(--color-muted)] mt-3">If the receiving branch claims full ITC, the GST here is fully creditable — the transfer is cash-neutral overall but still requires a compliant tax invoice and e-way bill (value &gt; ₹50,000).</p>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3">If the receiving branch claims full ITC, the GST here is fully creditable - the transfer is cash-neutral overall but still requires a compliant tax invoice and e-way bill (value &gt; ₹50,000).</p>
         </div>
       )}
     </div>
@@ -4071,7 +4071,7 @@ function Pmt09FundTransfer() {
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
-        <strong className="text-[var(--color-text)]">PMT-09 Fund Transfer</strong> — Form PMT-09 moves an amount wrongly deposited under one head of the <strong>electronic cash ledger</strong> to the correct head (e.g. CGST → IGST), so you don't have to claim a refund. It only reshuffles cash already paid; it cannot touch the credit ledger.
+        <strong className="text-[var(--color-text)]">PMT-09 Fund Transfer</strong> - Form PMT-09 moves an amount wrongly deposited under one head of the <strong>electronic cash ledger</strong> to the correct head (e.g. CGST → IGST), so you don't have to claim a refund. It only reshuffles cash already paid; it cannot touch the credit ledger.
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
@@ -4089,7 +4089,7 @@ function Pmt09FundTransfer() {
         {HEADS.map(h => (
           <div key={h} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{h} cash net change</p>
-            <p className={`text-lg font-bold tabular-nums ${net[h] > 0 ? "text-green-400" : net[h] < 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{net[h] === 0 ? "—" : net[h] > 0 ? `+${formatCurrency(net[h])}` : `(${formatCurrency(Math.abs(net[h]))})`}</p>
+            <p className={`text-lg font-bold tabular-nums ${net[h] > 0 ? "text-green-400" : net[h] < 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{net[h] === 0 ? "-" : net[h] > 0 ? `+${formatCurrency(net[h])}` : `(${formatCurrency(Math.abs(net[h]))})`}</p>
           </div>
         ))}
       </div>
@@ -4117,7 +4117,7 @@ function Pmt09FundTransfer() {
   );
 }
 
-// ── CROSS-CHARGE (distinct persons, Sch. I) — value HO/common costs charged to branches ──
+// ── CROSS-CHARGE (distinct persons, Sch. I) - value HO/common costs charged to branches ──
 function CrossChargeCalculator() {
   type Branch = { id: string; name: string; state: string; turnoverShare: number };
   const [branches, setBranches] = useFeatureState<Branch[]>("gst-crosscharge-branches", []);
@@ -4157,7 +4157,7 @@ function CrossChargeCalculator() {
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
-        <strong className="text-[var(--color-text)]">Cross-Charge (distinct persons, Sch. I)</strong> — When a head office incurs a common cost (rent, software, in-house staff effort) that benefits its branches in other states, those branches are <strong>distinct persons</strong>. HO must raise a tax invoice cross-charging each branch (Circular 199/2023). Allocate by turnover share; if the branch claims full ITC it is tax-neutral.
+        <strong className="text-[var(--color-text)]">Cross-Charge (distinct persons, Sch. I)</strong> - When a head office incurs a common cost (rent, software, in-house staff effort) that benefits its branches in other states, those branches are <strong>distinct persons</strong>. HO must raise a tax invoice cross-charging each branch (Circular 199/2023). Allocate by turnover share; if the branch claims full ITC it is tax-neutral.
       </div>
 
       <div className={GST_CARD}>
@@ -4196,9 +4196,9 @@ function CrossChargeCalculator() {
                     <td className="px-3 py-2 text-[var(--color-muted)]">{l.state}</td>
                     <td className="px-3 py-2"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${l.interState ? "bg-blue-950/30 text-blue-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{l.interState ? "IGST" : "CGST+SGST"}</span></td>
                     <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(l.taxableValue)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-blue-400">{l.igst ? formatCurrency(l.igst) : "—"}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-orange-400">{l.cgst ? formatCurrency(l.cgst) : "—"}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-orange-400">{l.sgst ? formatCurrency(l.sgst) : "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-blue-400">{l.igst ? formatCurrency(l.igst) : "-"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-orange-400">{l.cgst ? formatCurrency(l.cgst) : "-"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-orange-400">{l.sgst ? formatCurrency(l.sgst) : "-"}</td>
                     <td className="px-3 py-2 text-right"><button onClick={() => removeBranch(l.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
                   </tr>
                 ))}
@@ -4212,7 +4212,7 @@ function CrossChargeCalculator() {
   );
 }
 
-// ── FREE SAMPLES / GIFTS — Sec 17(5)(h) ITC reversal ──
+// ── FREE SAMPLES / GIFTS - Sec 17(5)(h) ITC reversal ──
 function FreeSamplesItcReversal() {
   type Item = { id: string; desc: string; kind: "Free sample" | "Gift / promo" | "Buy-one-get-one"; costPerUnit: number; qty: number; rate: number };
   const [items, setItems] = useFeatureState<Item[]>("gst-freesample-items", []);
@@ -4242,7 +4242,7 @@ function FreeSamplesItcReversal() {
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
-        <strong className="text-[var(--color-text)]">Free Samples & Gifts — ITC reversal (Sec 17(5)(h))</strong> — Goods given away as free samples or gifts are not a taxable supply, but the input tax credit on those goods must be <strong>reversed</strong>. Exception: a genuine "buy-one-get-one" is a single composite supply (Circular 92/2018) — the extra unit is not free, so no reversal.
+        <strong className="text-[var(--color-text)]">Free Samples & Gifts - ITC reversal (Sec 17(5)(h))</strong> - Goods given away as free samples or gifts are not a taxable supply, but the input tax credit on those goods must be <strong>reversed</strong>. Exception: a genuine "buy-one-get-one" is a single composite supply (Circular 92/2018) - the extra unit is not free, so no reversal.
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
@@ -4287,12 +4287,12 @@ function FreeSamplesItcReversal() {
           </table>
         </div>
       )}
-      <p className="text-[11px] text-[var(--color-muted)]">Report the reversal in GSTR-3B Table 4(B)(1). Keep proof of cost so the reversal is defensible. Promotional schemes structured as discounts on a taxable supply may avoid reversal — review each scheme's invoicing.</p>
+      <p className="text-[11px] text-[var(--color-muted)]">Report the reversal in GSTR-3B Table 4(B)(1). Keep proof of cost so the reversal is defensible. Promotional schemes structured as discounts on a taxable supply may avoid reversal - review each scheme's invoicing.</p>
     </div>
   );
 }
 
-// ── PURE-AGENT EXPENSE TAGGER — Rule 33 exclusion from taxable value ──
+// ── PURE-AGENT EXPENSE TAGGER - Rule 33 exclusion from taxable value ──
 function PureAgentTagger() {
   const RULE33 = [
     { q: "You pay the third party only as authorised by the recipient.", k: "authorised" },
@@ -4319,7 +4319,7 @@ function PureAgentTagger() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
-        <strong className="text-[var(--color-text)]">Pure-Agent Expenses (Rule 33)</strong> — Costs you incur purely as an agent on behalf of your client (e.g. ROC fees, government stamp duty, port charges) are <strong>excluded from your taxable value</strong> if all five conditions are met. Otherwise the reimbursement is taxed along with your fee.
+        <strong className="text-[var(--color-text)]">Pure-Agent Expenses (Rule 33)</strong> - Costs you incur purely as an agent on behalf of your client (e.g. ROC fees, government stamp duty, port charges) are <strong>excluded from your taxable value</strong> if all five conditions are met. Otherwise the reimbursement is taxed along with your fee.
       </div>
 
       <div className={GST_CARD}>
@@ -4332,7 +4332,7 @@ function PureAgentTagger() {
             </label>
           ))}
         </div>
-        <div className={`mt-3 text-[11px] font-semibold ${allMet ? "text-green-400" : "text-yellow-400"}`}>{allMet ? "Qualifies as pure agent — reimbursement excluded from taxable value." : "Not all conditions met — reimbursement is part of the taxable value."}</div>
+        <div className={`mt-3 text-[11px] font-semibold ${allMet ? "text-green-400" : "text-yellow-400"}`}>{allMet ? "Qualifies as pure agent - reimbursement excluded from taxable value." : "Not all conditions met - reimbursement is part of the taxable value."}</div>
       </div>
 
       <div className={GST_CARD}>
@@ -4392,7 +4392,7 @@ function AuditReadinessChecklist() {
   return (
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
-        <strong className="text-[var(--color-text)]">Audit-Readiness Checklist</strong> — A departmental audit (Sec 65) or scrutiny (Sec 61) can land with little notice. Keep these reconciliations and documents perpetually ready so a visit needs zero scramble. Your progress is saved locally.
+        <strong className="text-[var(--color-text)]">Audit-Readiness Checklist</strong> - A departmental audit (Sec 65) or scrutiny (Sec 61) can land with little notice. Keep these reconciliations and documents perpetually ready so a visit needs zero scramble. Your progress is saved locally.
       </div>
 
       <div className={GST_CARD}>
@@ -4453,10 +4453,10 @@ function ImsCockpit({ lines }: { lines: ReconResult[] }) {
       <div className="flex items-start gap-2">
         <ShieldCheck size={15} className="text-[var(--color-primary)] mt-0.5 shrink-0" />
         <div>
-          <h3 className="text-sm font-semibold">IMS — accept / reject before you file</h3>
+          <h3 className="text-sm font-semibold">IMS - accept / reject before you file</h3>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
             Every inward invoice must be actioned in the portal's IMS before GSTR-3B.{" "}
-            <span className="text-orange-400 font-medium">Unactioned invoices are deemed accepted</span> on filing — due{" "}
+            <span className="text-orange-400 font-medium">Unactioned invoices are deemed accepted</span> on filing - due{" "}
             <span className="text-[var(--color-text)] font-medium">{due.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span> ({daysToDue}d). Decide here, then mirror on the portal.
           </p>
         </div>
@@ -4475,7 +4475,7 @@ function ImsCockpit({ lines }: { lines: ReconResult[] }) {
               <div key={l.key} className="flex items-center gap-2 px-3 py-2 text-xs">
                 <span className="flex-1 min-w-0 truncate">
                   <span className="font-medium">{l.party || l.gstin}</span> · <span className="font-mono">{l.invoiceNo}</span>
-                  <span className="text-[var(--color-muted)]"> · {l.status === "missing_in_2b" ? "not in 2B (ITC blocked — chase vendor)" : l.status === "missing_in_books" ? "only in 2B (record it)" : "tax mismatch"}</span>
+                  <span className="text-[var(--color-muted)]"> · {l.status === "missing_in_2b" ? "not in 2B (ITC blocked - chase vendor)" : l.status === "missing_in_books" ? "only in 2B (record it)" : "tax mismatch"}</span>
                 </span>
                 <button onClick={() => setD(l.key, "accept")} className={`px-2 py-0.5 rounded border text-[10px] ${decisions[l.key] === "accept" ? "bg-green-900/40 text-green-300 border-green-700/50" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-green-400"}`}>Accept</button>
                 <button onClick={() => setD(l.key, "reject")} className={`px-2 py-0.5 rounded border text-[10px] ${decisions[l.key] === "reject" ? "bg-red-900/40 text-red-300 border-red-700/50" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-400"}`}>Reject</button>

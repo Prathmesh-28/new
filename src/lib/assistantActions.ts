@@ -1,5 +1,5 @@
 // Turns a free-text request into a concrete in-app ACTION the assistant can offer
-// as a one-tap button — navigate to the right screen, pre-filling where we can
+// as a one-tap button - navigate to the right screen, pre-filling where we can
 // parse it (e.g. "create an invoice for ₹50,000 to Mehta Traders"). Deterministic
 // (works even when AI is off); the AI can also emit a [[go:/route|Label]] directive
 // which the assistant prefers over this when present.
@@ -17,7 +17,7 @@ function parseAmount(t: string): string | null {
 }
 
 function parseParty(t: string): string | null {
-  // "...to Mehta Traders", "...for Reddy Industries" — capture a Capitalised name.
+  // "...to Mehta Traders", "...for Reddy Industries" - capture a Capitalised name.
   const m = t.match(/\b(?:to|for|from|of)\s+([A-Z][A-Za-z0-9&.\-]*(?:\s+[A-Z][A-Za-z0-9&.\-]*){0,4})/);
   if (!m) return null;
   return m[1].replace(/\s+(for|worth|amount|rs|inr|₹|of|with|gst).*$/i, "").trim() || null;

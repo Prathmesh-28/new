@@ -11,9 +11,9 @@ export default function NotificationsCard() {
     setBusy(true);
     try {
       const r = await api.post<{ sent: number; mock?: boolean }>("/api/push/test", {});
-      if (r.mock) toast.message("Push isn't enabled on the server yet — set FCM_SERVER_KEY to turn it on.");
+      if (r.mock) toast.message("Push isn't enabled on the server yet - set FCM_SERVER_KEY to turn it on.");
       else if (r.sent > 0) toast.success(`Test notification sent to ${r.sent} device${r.sent > 1 ? "s" : ""}.`);
-      else toast.message("No devices registered yet — open the app on your phone and allow notifications first.");
+      else toast.message("No devices registered yet - open the app on your phone and allow notifications first.");
     } catch { toast.error("Couldn't send the test notification."); }
     finally { setBusy(false); }
   };

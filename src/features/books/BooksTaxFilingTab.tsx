@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES — loose response shapes (mirror backend/src/modules/books/tax.js)
+// TYPES - loose response shapes (mirror backend/src/modules/books/tax.js)
 // ─────────────────────────────────────────────────────────────────────────────
 interface Ledger {
   id: string;
@@ -127,7 +127,7 @@ function downloadText(content: string, fileName: string, mime = "text/plain") {
   URL.revokeObjectURL(url);
 }
 
-// Open an authenticated GET (HTML/PDF) in a new tab — the endpoint can't read the
+// Open an authenticated GET (HTML/PDF) in a new tab - the endpoint can't read the
 // Authorization header on window.open, so the bearer token rides as a query param.
 function openAuthed(path: string) {
   const token = localStorage.getItem("hr_access");
@@ -239,7 +239,7 @@ export default function BooksTaxFilingTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1 — TDS RETURNS
+// 1 - TDS RETURNS
 // ─────────────────────────────────────────────────────────────────────────────
 function TdsReturnsSub() {
   const [quarter, setQuarter] = useState<(typeof QUARTERS)[number]>("Q1");
@@ -308,7 +308,7 @@ function TdsReturnsSub() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2 — FORM 16A
+// 2 - FORM 16A
 // ─────────────────────────────────────────────────────────────────────────────
 function Form16aSub({ parties }: { parties: Ledger[] }) {
   const [partyLedgerId, setPartyLedgerId] = useState("");
@@ -325,7 +325,7 @@ function Form16aSub({ parties }: { parties: Ledger[] }) {
   };
 
   return (
-    <Card title="Form 16A — TDS certificate (HTML)" icon={<FileCheck2 size={15} />}>
+    <Card title="Form 16A - TDS certificate (HTML)" icon={<FileCheck2 size={15} />}>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <label className={labelCls}>Party (deductee)</label>
@@ -353,14 +353,14 @@ function Form16aSub({ parties }: { parties: Ledger[] }) {
         <ExternalLink size={14} /> Open Form 16A
       </button>
       {parties.length === 0 && (
-        <p className="text-[11px] text-[var(--color-muted)] mt-3">No party ledgers found — create one in Chart of Accounts.</p>
+        <p className="text-[11px] text-[var(--color-muted)] mt-3">No party ledgers found - create one in Chart of Accounts.</p>
       )}
     </Card>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3 — LOWER-DEDUCTION CERTIFICATES
+// 3 - LOWER-DEDUCTION CERTIFICATES
 // ─────────────────────────────────────────────────────────────────────────────
 function LowerDeductionSub({ parties }: { parties: Ledger[] }) {
   const [certs, setCerts] = useState<TdsCertificate[]>([]);
@@ -379,7 +379,7 @@ function LowerDeductionSub({ parties }: { parties: Ledger[] }) {
     (c: TdsCertificate) => {
       if (c.partyName) return c.partyName;
       const id = c.partyLedgerId ?? c.party_ledger_id;
-      return parties.find((p) => p.id === id)?.name ?? "—";
+      return parties.find((p) => p.id === id)?.name ?? "-";
     },
     [parties],
   );
@@ -497,13 +497,13 @@ function LowerDeductionSub({ parties }: { parties: Ledger[] }) {
                 <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--color-muted)]">No certificates yet.</td></tr>
               ) : (
                 certs.map((c) => {
-                  const from = c.validFrom ?? c.valid_from ?? "—";
-                  const to = c.validTo ?? c.valid_to ?? "—";
+                  const from = c.validFrom ?? c.valid_from ?? "-";
+                  const to = c.validTo ?? c.valid_to ?? "-";
                   return (
                     <tr key={c.id} className="border-b border-[var(--color-border)] last:border-b-0">
                       <td className="px-3 py-2.5 font-medium">{partyName(c)}</td>
                       <td className="px-3 py-2.5">{c.section}</td>
-                      <td className="px-3 py-2.5 font-mono text-xs">{c.certificateNo ?? c.certificate_no ?? "—"}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs">{c.certificateNo ?? c.certificate_no ?? "-"}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{String(c.rate ?? "0")}%</td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{rupee(c.thresholdLimit ?? c.threshold_limit)}</td>
                       <td className="px-3 py-2.5 text-[var(--color-muted)] text-xs whitespace-nowrap">{from} → {to}</td>
@@ -520,7 +520,7 @@ function LowerDeductionSub({ parties }: { parties: Ledger[] }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4 — 26AS RECONCILE
+// 4 - 26AS RECONCILE
 // ─────────────────────────────────────────────────────────────────────────────
 // Parse pasted CSV into objects keyed by the header row.
 function parseCsv(text: string): Record<string, string>[] {
@@ -535,7 +535,7 @@ function parseCsv(text: string): Record<string, string>[] {
   });
 }
 
-// Minimal CSV cell splitter — handles double-quoted fields with embedded commas.
+// Minimal CSV cell splitter - handles double-quoted fields with embedded commas.
 function splitCsvLine(line: string): string[] {
   const out: string[] = [];
   let cur = "";
@@ -618,7 +618,7 @@ function Recon26asSub() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5 — ADVANCE TAX
+// 5 - ADVANCE TAX
 // ─────────────────────────────────────────────────────────────────────────────
 function AdvanceTaxSub() {
   const [projectedIncome, setProjectedIncome] = useState("");
@@ -703,8 +703,8 @@ function AdvanceTaxSub() {
                   instalments.map((it, i) => (
                     <tr key={i} className="border-b border-[var(--color-border)] last:border-b-0">
                       <td className="px-3 py-2.5">{it.label ?? `Instalment ${i + 1}`}</td>
-                      <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{it.dueDate ?? it.due_date ?? "—"}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{String(it.cumulativePercent ?? it.percent ?? "—")}%</td>
+                      <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{it.dueDate ?? it.due_date ?? "-"}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{String(it.cumulativePercent ?? it.percent ?? "-")}%</td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{rupee(it.cumulativeTax)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{rupee(it.instalment ?? it.amount)}</td>
                     </tr>
@@ -720,7 +720,7 @@ function AdvanceTaxSub() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6 — INCOME TAX / ITR
+// 6 - INCOME TAX / ITR
 // ─────────────────────────────────────────────────────────────────────────────
 function IncomeTaxSub() {
   const [fy, setFy] = useState(currentFy());
@@ -768,7 +768,7 @@ function IncomeTaxSub() {
 
   return (
     <div className="space-y-5">
-      <Card title="ITR summary — head-wise computation" icon={<Calculator size={15} />}>
+      <Card title="ITR summary - head-wise computation" icon={<Calculator size={15} />}>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className={labelCls}>Financial year</label>
@@ -804,7 +804,7 @@ function IncomeTaxSub() {
                   ) : (
                     heads.map((h, i) => (
                       <tr key={i} className="border-b border-[var(--color-border)] last:border-b-0">
-                        <td className="px-3 py-2.5">{h.head ?? h.name ?? "—"}</td>
+                        <td className="px-3 py-2.5">{h.head ?? h.name ?? "-"}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums">{rupee(h.amount)}</td>
                       </tr>
                     ))

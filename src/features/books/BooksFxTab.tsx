@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES — shapes mirror backend/src/modules/books/fx.js
+// TYPES - shapes mirror backend/src/modules/books/fx.js
 // ─────────────────────────────────────────────────────────────────────────────
 interface Ledger {
   id: string;
@@ -225,7 +225,7 @@ export default function BooksFxTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RATE MASTER — dated exchange-rate per currency (GET/POST /fx/rates)
+// RATE MASTER - dated exchange-rate per currency (GET/POST /fx/rates)
 // ─────────────────────────────────────────────────────────────────────────────
 function FxRateMaster() {
   const [currency, setCurrency] = useState("USD");
@@ -353,7 +353,7 @@ function FxRateMaster() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CONVERTER — foreign → base (GET /fx/convert?amount=&rate=)
+// CONVERTER - foreign → base (GET /fx/convert?amount=&rate=)
 // ─────────────────────────────────────────────────────────────────────────────
 function FxConverter() {
   const [currency, setCurrency] = useState("USD");
@@ -461,7 +461,7 @@ function FxConverter() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OPEN POSITION — net open FC per party/currency (GET /fx/open-position)
+// OPEN POSITION - net open FC per party/currency (GET /fx/open-position)
 // ─────────────────────────────────────────────────────────────────────────────
 function OpenPositionCard({ parties }: { parties: Ledger[] }) {
   const [partyLedgerId, setPartyLedgerId] = useState("");
@@ -532,7 +532,7 @@ function OpenPositionCard({ parties }: { parties: Ledger[] }) {
             ) : (
               rows.map((r, i) => (
                 <tr key={`${r.partyLedgerId}-${r.currency}-${r.kind}-${i}`} className="border-b border-[var(--color-border)] last:border-b-0">
-                  <td className="px-3 py-2.5 font-medium">{r.partyName || "—"}</td>
+                  <td className="px-3 py-2.5 font-medium">{r.partyName || "-"}</td>
                   <td className="px-3 py-2.5 font-mono text-xs">{r.currency}</td>
                   <td className="px-3 py-2.5"><KindBadge kind={r.kind} /></td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{fc(r.openFc, r.currency)}</td>
@@ -561,7 +561,7 @@ function OpenPositionCard({ parties }: { parties: Ledger[] }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REVALUE ALL — period-end mark-to-market (POST /fx/revalue-all {asOf})
+// REVALUE ALL - period-end mark-to-market (POST /fx/revalue-all {asOf})
 // ─────────────────────────────────────────────────────────────────────────────
 function RevalueAllCard() {
   const [asOf, setAsOf] = useState(todayIso());
@@ -631,9 +631,9 @@ function RevalueAllCard() {
                       const g = num(l.gainLoss);
                       return (
                         <tr key={`${l.partyLedgerId}-${l.currency}-${i}`} className="border-b border-[var(--color-border)] last:border-b-0">
-                          <td className="px-3 py-2.5 font-medium">{l.partyName || "—"}</td>
+                          <td className="px-3 py-2.5 font-medium">{l.partyName || "-"}</td>
                           <td className="px-3 py-2.5 font-mono text-xs">{l.currency}</td>
-                          <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{l.currentRate ?? "—"}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{l.currentRate ?? "-"}</td>
                           <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${g >= 0 ? "text-green-400" : "text-red-400"}`}>
                             {rupee(l.gainLoss)}
                           </td>
@@ -643,7 +643,7 @@ function RevalueAllCard() {
                             ) : l.posted ? (
                               <span className="text-[10px] font-semibold text-green-300">Posted</span>
                             ) : (
-                              <span className="text-[10px] text-[var(--color-muted)]">—</span>
+                              <span className="text-[10px] text-[var(--color-muted)]">-</span>
                             )}
                           </td>
                         </tr>
@@ -664,7 +664,7 @@ function RevalueAllCard() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FX SETTLEMENT — post a realised gain/loss against a party (POST /fx/settlement)
+// FX SETTLEMENT - post a realised gain/loss against a party (POST /fx/settlement)
 // ─────────────────────────────────────────────────────────────────────────────
 function FxSettlementCard({ parties }: { parties: Ledger[] }) {
   const [partyLedgerId, setPartyLedgerId] = useState("");
@@ -736,7 +736,7 @@ function FxSettlementCard({ parties }: { parties: Ledger[] }) {
             <span className="text-[var(--color-muted)]">Effect</span>
             <span className={`inline-flex items-center gap-1 font-semibold ${g >= 0 ? "text-green-400" : "text-red-400"}`}>
               {g >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-              {g >= 0 ? "Forex gain — party debited" : "Forex loss — party credited"}
+              {g >= 0 ? "Forex gain - party debited" : "Forex loss - party credited"}
             </span>
           </div>
           <p className="text-[var(--color-muted)] pt-1">

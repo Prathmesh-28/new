@@ -1,9 +1,9 @@
 @import "tailwindcss";
 /* Fonts (Inter + Space Grotesk) are loaded via a non-blocking <link> in index.html
-   with preconnect — NOT a render-blocking CSS @import. */
+   with preconnect - NOT a render-blocking CSS @import. */
 
 @theme {
-  /* App dashboard — navy + green finance palette (dark) */
+  /* App dashboard - navy + green finance palette (dark) */
   --color-primary:       #5FBE7C;
   --color-primary-light: #7BD194;
   --color-accent:        #1C2942;
@@ -41,7 +41,7 @@ body {
   font-feature-settings: "kern" 1;
 }
 
-/* Display font for headings — Space Grotesk (matches brand) */
+/* Display font for headings - Space Grotesk (matches brand) */
 h1, h2, h3, h4 { font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif; letter-spacing: -0.01em; }
 
 /* Never let a stray wide element create horizontal scroll / widen the webview
@@ -169,7 +169,7 @@ p, span, h1, h2, h3, h4, label, a, button, li, td, th, dd, dt {
 @media (max-width: 768px) {
   html, body, #root { max-width: 100%; overflow-x: hidden; }
   main { overflow-x: hidden; }
-  /* Any table — wrapped or not — scrolls sideways rather than overflowing the
+  /* Any table - wrapped or not - scrolls sideways rather than overflowing the
      viewport. Children keep their table display roles, so the grid still renders. */
   main table { display: block; width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   /* Tab/segment strips wrap to multiple rows instead of overflowing. */

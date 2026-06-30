@@ -41,7 +41,7 @@ const SECTOR_DATA: Record<string, BenchmarkMetric[]> = {
     { key: "ar_days",        label: "AR Days",              unit: "days",description: "Average days to collect from customers",            yours: null, p25: 62, p50: 42, p75: 28, higherIsBetter: false },
     { key: "payroll_ratio",  label: "Payroll / Revenue",    unit: "%",   description: "Monthly payroll as % of revenue",                   yours: null, p25: 45, p50: 32, p75: 22, higherIsBetter: false },
     { key: "revenue_growth", label: "Revenue Growth (MoM)", unit: "%",   description: "Month-over-month revenue growth rate",              yours: null, p25: 2,  p50: 5,  p75: 10, higherIsBetter: true  },
-    { key: "burn_multiple",  label: "Burn Multiple",        unit: "x",   description: "Burn / Net New Revenue — efficiency of spending",   yours: null, p25: 2.8, p50: 1.8, p75: 1.1, higherIsBetter: false },
+    { key: "burn_multiple",  label: "Burn Multiple",        unit: "x",   description: "Burn / Net New Revenue - efficiency of spending",   yours: null, p25: 2.8, p50: 1.8, p75: 1.1, higherIsBetter: false },
   ],
   "Manufacturing (SMB)": [
     { key: "gross_margin",   label: "Gross Margin",        unit: "%",   description: "Revenue minus COGS",                                yours: null, p25: 18, p50: 26, p75: 36, higherIsBetter: true  },
@@ -116,7 +116,7 @@ export default function BenchmarksPage() {
 
   // ── Real self-benchmarks: the tenant's OWN trailing-12-month quartiles ────────
   // For metrics with a monthly series we compute genuine P25/P50/P75 from history,
-  // so "your position" is measured against your own typical months — not invented
+  // so "your position" is measured against your own typical months - not invented
   // peer data. Metrics without a clean monthly series keep the sector reference.
   const r1 = (n: number) => Math.round(n * 10) / 10;
   const selfRanges = (() => {
@@ -383,7 +383,7 @@ export default function BenchmarksPage() {
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-lg font-bold tabular-nums">
-                    {m.yours !== null ? `${m.yours}${m.unit}` : <span className="text-[var(--color-muted)] text-sm">—</span>}
+                    {m.yours !== null ? `${m.yours}${m.unit}` : <span className="text-[var(--color-muted)] text-sm">-</span>}
                   </p>
                   {status && <p className={`text-xs font-medium ${status.color}`}>{status.label}</p>}
                 </div>
@@ -418,7 +418,7 @@ export default function BenchmarksPage() {
                   <AlertTriangle size={11} className="text-yellow-400 shrink-0" />
                   <p className="text-[var(--color-muted)]">
                     <span className="text-yellow-400 font-semibold">{gap}{m.unit}</span>
-                    {" "}behind median — {m.key === "ar_days" ? "chase overdue invoices faster"
+                    {" "}behind median - {m.key === "ar_days" ? "chase overdue invoices faster"
                      : m.key === "gross_margin" ? "review pricing or reduce direct costs"
                      : m.key === "payroll_ratio" ? "consider revenue growth before next hire"
                      : m.key === "runway" ? "reduce burn or extend credit line"
@@ -445,7 +445,7 @@ export default function BenchmarksPage() {
 // Shared helpers for the four benchmark tools below
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Where `value` sits given a sector low/median/high band. Returns 0–100 percentile. */
+/** Where `value` sits given a sector low/median/high band. Returns 0-100 percentile. */
 function bandPercentile(value: number, low: number, _mid: number, high: number, higherIsBetter: boolean): number {
   // Treat the band as a monotone scale and linearly interpolate the rank.
   const lo = Math.min(low, high), hi = Math.max(low, high);
@@ -481,7 +481,7 @@ function useMonthlyRevenue() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #143 Industry Ratio Benchmarking — your financial ratios vs sector medians
+// #143 Industry Ratio Benchmarking - your financial ratios vs sector medians
 // ─────────────────────────────────────────────────────────────────────────────
 type RatioRef = { key: string; label: string; unit: string; low: number; mid: number; high: number; higherIsBetter: boolean; desc: string };
 
@@ -495,14 +495,14 @@ const RATIO_REFS: Record<string, RatioRef[]> = {
   ],
   "Manufacturing (SMB)": [
     { key: "current",   label: "Current Ratio",         unit: "x", low: 1.0, mid: 1.6, high: 2.6, higherIsBetter: true,  desc: "Liquidity buffer for working-capital intensive ops." },
-    { key: "netmargin", label: "Net Margin",            unit: "%", low: 1,   mid: 6,   high: 14,  higherIsBetter: true,  desc: "Net profit % — thin in manufacturing." },
+    { key: "netmargin", label: "Net Margin",            unit: "%", low: 1,   mid: 6,   high: 14,  higherIsBetter: true,  desc: "Net profit % - thin in manufacturing." },
     { key: "opex",      label: "Opex / Revenue",        unit: "%", low: 80,  mid: 66,  high: 50,  higherIsBetter: false, desc: "Non-payroll operating spend % of revenue." },
     { key: "interest",  label: "Interest Coverage",     unit: "x", low: 1.1, mid: 2.5, high: 5,   higherIsBetter: true,  desc: "EBIT ÷ interest; lenders watch this." },
     { key: "assetturn", label: "Revenue / Cash Assets", unit: "x", low: 1.2, mid: 3,   high: 6,   higherIsBetter: true,  desc: "Capital efficiency of cash deployed." },
   ],
   "IT Services": [
     { key: "current",   label: "Current Ratio",         unit: "x", low: 1.2, mid: 2.0, high: 3.2, higherIsBetter: true,  desc: "Asset-light, typically higher liquidity." },
-    { key: "netmargin", label: "Net Margin",            unit: "%", low: 6,   mid: 16,  high: 28,  higherIsBetter: true,  desc: "Net profit % — high for services." },
+    { key: "netmargin", label: "Net Margin",            unit: "%", low: 6,   mid: 16,  high: 28,  higherIsBetter: true,  desc: "Net profit % - high for services." },
     { key: "opex",      label: "Opex / Revenue",        unit: "%", low: 55,  mid: 40,  high: 28,  higherIsBetter: false, desc: "Non-payroll spend; bulk of cost is payroll." },
     { key: "interest",  label: "Interest Coverage",     unit: "x", low: 2,   mid: 6,   high: 12,  higherIsBetter: true,  desc: "Usually low debt → high coverage." },
     { key: "assetturn", label: "Revenue / Cash Assets", unit: "x", low: 2,   mid: 5,   high: 10,  higherIsBetter: true,  desc: "Revenue turned per rupee of cash." },
@@ -551,8 +551,8 @@ function IndustryRatioBenchmark({ sector }: { sector: string }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Industry Ratio Benchmarking</h2>
-        <p className="text-xs text-[var(--color-muted)]">Your key financial ratios — computed live from the last 12 months of transactions, bank balances, open invoices and loans — placed against typical <span className="text-[var(--color-text)]">{sector}</span> reference bands.</p>
-        {ttmRev <= 0 && <p className="text-xs text-yellow-400 mt-2">No revenue transactions found in the last 12 months — add data to compute your ratios.</p>}
+        <p className="text-xs text-[var(--color-muted)]">Your key financial ratios - computed live from the last 12 months of transactions, bank balances, open invoices and loans - placed against typical <span className="text-[var(--color-text)]">{sector}</span> reference bands.</p>
+        {ttmRev <= 0 && <p className="text-xs text-yellow-400 mt-2">No revenue transactions found in the last 12 months - add data to compute your ratios.</p>}
       </div>
 
       {overall !== null && (
@@ -588,7 +588,7 @@ function IndustryRatioBenchmark({ sector }: { sector: string }) {
                     <p className="text-xs font-medium">{r.label}</p>
                     <p className="text-[10px] text-[var(--color-muted)]">{r.desc}</p>
                   </td>
-                  <td className="px-3 py-2.5 text-sm font-bold tabular-nums">{r.yours !== null ? `${r.yours}${r.unit}` : <span className="text-[var(--color-muted)]">—</span>}</td>
+                  <td className="px-3 py-2.5 text-sm font-bold tabular-nums">{r.yours !== null ? `${r.yours}${r.unit}` : <span className="text-[var(--color-muted)]">-</span>}</td>
                   <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.low}{r.unit}</td>
                   <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.mid}{r.unit}</td>
                   <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.high}{r.unit}</td>
@@ -614,7 +614,7 @@ function IndustryRatioBenchmark({ sector }: { sector: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #144 Peer Salary / Cost Benchmark — your opex structure vs comparable firms
+// #144 Peer Salary / Cost Benchmark - your opex structure vs comparable firms
 // ─────────────────────────────────────────────────────────────────────────────
 // Each value is the typical % of revenue a comparable firm in the sector spends.
 type CostMix = { key: string; label: string; pct: number };
@@ -651,7 +651,7 @@ function CostStructureBenchmark({ sector }: { sector: string }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Peer Cost-Structure Benchmark</h2>
-        <p className="text-xs text-[var(--color-muted)]">How your cost base — as a % of revenue — compares to a typical <span className="text-[var(--color-text)]">{sector}</span> firm. Your payroll and operating-spend ratios are computed live from the last 12 months; the peer breakdown is a sector reference mix.</p>
+        <p className="text-xs text-[var(--color-muted)]">How your cost base - as a % of revenue - compares to a typical <span className="text-[var(--color-text)]">{sector}</span> firm. Your payroll and operating-spend ratios are computed live from the last 12 months; the peer breakdown is a sector reference mix.</p>
       </div>
 
       {/* Your vs peer headline bars */}
@@ -667,7 +667,7 @@ function CostStructureBenchmark({ sector }: { sector: string }) {
               <div className="flex items-center justify-between text-xs mb-1">
                 <span className="font-medium">{c.label}</span>
                 <span className="tabular-nums">
-                  {c.yours !== null ? <span className={over ? "text-yellow-400 font-semibold" : "text-green-400 font-semibold"}>{c.yours}%</span> : <span className="text-[var(--color-muted)]">—</span>}
+                  {c.yours !== null ? <span className={over ? "text-yellow-400 font-semibold" : "text-green-400 font-semibold"}>{c.yours}%</span> : <span className="text-[var(--color-muted)]">-</span>}
                   <span className="text-[var(--color-muted)]"> vs peer {c.peer}%</span>
                 </span>
               </div>
@@ -675,7 +675,7 @@ function CostStructureBenchmark({ sector }: { sector: string }) {
                 <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${(yours / max) * 100}%`, background: over ? "#eab308" : "#1A6B55" }} />
                 <div className="absolute inset-y-0 w-0.5 bg-[var(--color-text)]" style={{ left: `${(c.peer / max) * 100}%` }} title={`Peer ${c.peer}%`} />
               </div>
-              {over && <p className="text-[10px] text-yellow-400 mt-0.5">{(yours - c.peer).toFixed(1)}pp above the peer benchmark — a cost-efficiency opportunity.</p>}
+              {over && <p className="text-[10px] text-yellow-400 mt-0.5">{(yours - c.peer).toFixed(1)}pp above the peer benchmark - a cost-efficiency opportunity.</p>}
             </div>
           );
         })}
@@ -705,7 +705,7 @@ function CostStructureBenchmark({ sector }: { sector: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #145 Growth-Rate Percentile — where you rank on growth in your segment
+// #145 Growth-Rate Percentile - where you rank on growth in your segment
 // ─────────────────────────────────────────────────────────────────────────────
 // Distribution of monthly revenue growth (MoM %) across firms in the segment.
 const GROWTH_DIST: Record<string, { p10: number; p25: number; p50: number; p75: number; p90: number }> = {
@@ -756,15 +756,15 @@ function GrowthRatePercentile({ sector }: { sector: string }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Your CMGR (12-mo)</p>
-          <p className={`text-2xl font-bold tabular-nums ${cmgrVal === null ? "text-[var(--color-muted)]" : cmgrVal >= 0 ? "text-green-400" : "text-red-400"}`}>{cmgrVal !== null ? `${cmgrVal.toFixed(1)}%` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${cmgrVal === null ? "text-[var(--color-muted)]" : cmgrVal >= 0 ? "text-green-400" : "text-red-400"}`}>{cmgrVal !== null ? `${cmgrVal.toFixed(1)}%` : "-"}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Latest MoM</p>
-          <p className={`text-2xl font-bold tabular-nums ${momLatest === null ? "text-[var(--color-muted)]" : momLatest >= 0 ? "text-green-400" : "text-red-400"}`}>{momLatest !== null ? `${momLatest}%` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${momLatest === null ? "text-[var(--color-muted)]" : momLatest >= 0 ? "text-green-400" : "text-red-400"}`}>{momLatest !== null ? `${momLatest}%` : "-"}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Segment percentile</p>
-          <p className={`text-2xl font-bold tabular-nums ${lbl ? lbl.color : "text-[var(--color-muted)]"}`}>{pct !== null ? `${pct}th` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${lbl ? lbl.color : "text-[var(--color-muted)]"}`}>{pct !== null ? `${pct}th` : "-"}</p>
           {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
         </div>
       </div>
@@ -786,7 +786,7 @@ function GrowthRatePercentile({ sector }: { sector: string }) {
           <p className="text-xs text-[var(--color-muted)] mt-2">
             Your {cmgrVal.toFixed(1)}% CMGR is{" "}
             <span className={lbl?.color}>{cmgrVal >= dist.p50 ? "ahead of" : "behind"} the segment median of {dist.p50}%</span>
-            {cmgrVal >= dist.p90 ? " — top-decile growth." : cmgrVal < dist.p25 ? " — lagging the bottom quartile." : "."}
+            {cmgrVal >= dist.p90 ? " - top-decile growth." : cmgrVal < dist.p25 ? " - lagging the bottom quartile." : "."}
           </p>
         )}
       </div>
@@ -796,7 +796,7 @@ function GrowthRatePercentile({ sector }: { sector: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// #146 Working-Capital Benchmark — your CCC vs industry norms
+// #146 Working-Capital Benchmark - your CCC vs industry norms
 // ─────────────────────────────────────────────────────────────────────────────
 // Sector norms for the cash-conversion cycle components (days). CCC = DIO+DSO−DPO.
 const CCC_NORMS: Record<string, { dio: number; dso: number; dpo: number }> = {
@@ -833,7 +833,7 @@ function WorkingCapitalBenchmark({ sector }: { sector: string }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Recycle size={14} className="text-[var(--color-primary)]" /> Working-Capital Benchmark (CCC)</h2>
-        <p className="text-xs text-[var(--color-muted)]">Your cash-conversion cycle — DIO + DSO − DPO — computed live from invoices, inventory and procurement, against typical <span className="text-[var(--color-text)]">{sector}</span> norms. A shorter CCC frees up cash.</p>
+        <p className="text-xs text-[var(--color-muted)]">Your cash-conversion cycle - DIO + DSO − DPO - computed live from invoices, inventory and procurement, against typical <span className="text-[var(--color-text)]">{sector}</span> norms. A shorter CCC frees up cash.</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -875,7 +875,7 @@ function WorkingCapitalBenchmark({ sector }: { sector: string }) {
               </div>
               {worse && (
                 <p className="mt-0.5 flex items-center gap-1 text-[10px] text-yellow-400">
-                  <AlertTriangle size={9} className="shrink-0" /> {c.higherIsBetter ? `${c.norm - c.yours}d shorter than norm` : `${c.yours - c.norm}d longer than norm`} — {c.hint}.
+                  <AlertTriangle size={9} className="shrink-0" /> {c.higherIsBetter ? `${c.norm - c.yours}d shorter than norm` : `${c.yours - c.norm}d longer than norm`} - {c.hint}.
                 </p>
               )}
             </div>
@@ -913,7 +913,7 @@ function BandRow({ label, desc, yours, unit, low, mid, high, higherIsBetter }: {
       <div className="flex items-center justify-between text-xs mb-1 gap-2">
         <span className="font-medium">{label}</span>
         <span className="tabular-nums">
-          {yours !== null ? <span className={lbl?.color ?? ""}>{yours}{unit}</span> : <span className="text-[var(--color-muted)]">—</span>}
+          {yours !== null ? <span className={lbl?.color ?? ""}>{yours}{unit}</span> : <span className="text-[var(--color-muted)]">-</span>}
           <span className="text-[var(--color-muted)]"> · median {mid}{unit}</span>
         </span>
       </div>
@@ -927,7 +927,7 @@ function BandRow({ label, desc, yours, unit, low, mid, high, higherIsBetter }: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Profitability Percentile — gross-margin distribution vs sector (feature #18/#26)
+// Profitability Percentile - gross-margin distribution vs sector (feature #18/#26)
 // ─────────────────────────────────────────────────────────────────────────────
 const GM_DIST: Record<string, { p10: number; p25: number; p50: number; p75: number; p90: number }> = {
   default:               { p10: 12, p25: 22, p50: 31, p75: 42, p90: 55 },
@@ -964,17 +964,17 @@ function ProfitabilityPercentile({ sector }: { sector: string }) {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> Profitability Percentile</h2>
         <p className="text-xs text-[var(--color-muted)]">Your trailing-12-month gross margin ranked against the gross-margin distribution of typical <span className="text-[var(--color-text)]">{sector}</span> firms. Computed live from revenue and direct costs.</p>
-        {!hasRev && <p className="text-xs text-yellow-400 mt-2">No revenue in the last 12 months — add transactions to rank your margin.</p>}
+        {!hasRev && <p className="text-xs text-yellow-400 mt-2">No revenue in the last 12 months - add transactions to rank your margin.</p>}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Your gross margin</p>
-          <p className={`text-2xl font-bold tabular-nums ${gm === null ? "text-[var(--color-muted)]" : gm >= dist.p50 ? "text-green-400" : "text-yellow-400"}`}>{gm !== null ? `${gm}%` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${gm === null ? "text-[var(--color-muted)]" : gm >= dist.p50 ? "text-green-400" : "text-yellow-400"}`}>{gm !== null ? `${gm}%` : "-"}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Sector percentile</p>
-          <p className={`text-2xl font-bold tabular-nums ${lbl ? lbl.color : "text-[var(--color-muted)]"}`}>{pct !== null ? `${pct}th` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${lbl ? lbl.color : "text-[var(--color-muted)]"}`}>{pct !== null ? `${pct}th` : "-"}</p>
           {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -1003,7 +1003,7 @@ function ProfitabilityPercentile({ sector }: { sector: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Expense-Ratio Benchmark — each major cost line as % of revenue (feature #54/#75)
+// Expense-Ratio Benchmark - each major cost line as % of revenue (feature #54/#75)
 // ─────────────────────────────────────────────────────────────────────────────
 type ExpRef = { key: Transaction["category"] | "interest"; label: string; low: number; mid: number; high: number; desc: string };
 const EXP_REFS: Record<string, ExpRef[]> = {
@@ -1067,7 +1067,7 @@ function ExpenseRatioBenchmark({ sector }: { sector: string }) {
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Spend above median lines</p>
-          <p className={`text-xl font-bold tabular-nums ${overspend > 0 ? "text-yellow-400" : "text-green-400"}`}>{overspend > 0 ? formatCurrency(overspend) : "—"}</p>
+          <p className={`text-xl font-bold tabular-nums ${overspend > 0 ? "text-yellow-400" : "text-green-400"}`}>{overspend > 0 ? formatCurrency(overspend) : "-"}</p>
         </div>
       </div>
 
@@ -1083,7 +1083,7 @@ function ExpenseRatioBenchmark({ sector }: { sector: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Productivity Benchmark — revenue & profit per employee (feature #76)
+// Productivity Benchmark - revenue & profit per employee (feature #76)
 // ─────────────────────────────────────────────────────────────────────────────
 // Sector reference bands for annual revenue-per-employee (₹ lakh).
 const RPE_BANDS: Record<string, { low: number; mid: number; high: number }> = {
@@ -1131,17 +1131,17 @@ function ProductivityBenchmark({ sector }: { sector: string }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <p className="text-xs text-[var(--color-muted)] mb-1">Revenue / employee</p>
-              <p className="text-2xl font-bold tabular-nums">{rpeLakh !== null ? `₹${rpeLakh}L` : "—"}</p>
+              <p className="text-2xl font-bold tabular-nums">{rpeLakh !== null ? `₹${rpeLakh}L` : "-"}</p>
               <p className="text-[10px] text-[var(--color-muted)]">per year</p>
             </div>
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <p className="text-xs text-[var(--color-muted)] mb-1">Profit / employee</p>
-              <p className={`text-2xl font-bold tabular-nums ${ppe !== null && ppe >= 0 ? "text-green-400" : "text-red-400"}`}>{ppe !== null ? formatCurrency(ppe) : "—"}</p>
+              <p className={`text-2xl font-bold tabular-nums ${ppe !== null && ppe >= 0 ? "text-green-400" : "text-red-400"}`}>{ppe !== null ? formatCurrency(ppe) : "-"}</p>
               <p className="text-[10px] text-[var(--color-muted)]">per year</p>
             </div>
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <p className="text-xs text-[var(--color-muted)] mb-1">Avg payroll / head</p>
-              <p className="text-2xl font-bold tabular-nums">{payrollPerHead !== null ? formatCurrency(payrollPerHead) : "—"}</p>
+              <p className="text-2xl font-bold tabular-nums">{payrollPerHead !== null ? formatCurrency(payrollPerHead) : "-"}</p>
               <p className="text-[10px] text-[var(--color-muted)]">per year</p>
             </div>
           </div>
@@ -1159,7 +1159,7 @@ function ProductivityBenchmark({ sector }: { sector: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Digital-Maturity Scorecard — how digitised your finance stack is (feature #99)
+// Digital-Maturity Scorecard - how digitised your finance stack is (feature #99)
 // ─────────────────────────────────────────────────────────────────────────────
 function DigitalMaturityScorecard({ sector }: { sector: string }) {
   const { store } = useApp();
@@ -1188,7 +1188,7 @@ function DigitalMaturityScorecard({ sector }: { sector: string }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Activity size={14} className="text-[var(--color-primary)]" /> Digital-Maturity Scorecard</h2>
-        <p className="text-xs text-[var(--color-muted)]">How digitised your finance operations are — scored live from what you actually run on the platform. A higher score also strengthens your credit-readiness story with lenders in <span className="text-[var(--color-text)]">{sector}</span>.</p>
+        <p className="text-xs text-[var(--color-muted)]">How digitised your finance operations are - scored live from what you actually run on the platform. A higher score also strengthens your credit-readiness story with lenders in <span className="text-[var(--color-text)]">{sector}</span>.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1212,7 +1212,7 @@ function DigitalMaturityScorecard({ sector }: { sector: string }) {
           {next ? (
             <p className="text-sm font-semibold flex items-start gap-2"><AlertTriangle size={13} className="text-yellow-400 mt-0.5 shrink-0" /> Turn on: {next.label} <span className="text-[var(--color-muted)] font-normal">(+{next.weight} pts)</span></p>
           ) : (
-            <p className="text-sm font-semibold text-green-400 flex items-center gap-2"><Award size={14} /> Fully digitised — every signal is live.</p>
+            <p className="text-sm font-semibold text-green-400 flex items-center gap-2"><Award size={14} /> Fully digitised - every signal is live.</p>
           )}
         </div>
       </div>
@@ -1228,13 +1228,13 @@ function DigitalMaturityScorecard({ sector }: { sector: string }) {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Scored entirely from your own usage signals — no peer data involved. Weights are indicative of how much each capability typically improves analytics quality and lender confidence.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Scored entirely from your own usage signals - no peer data involved. Weights are indicative of how much each capability typically improves analytics quality and lender confidence.</p>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Valuation-Multiple Benchmark — implied value from sector revenue multiples (#26)
+// Valuation-Multiple Benchmark - implied value from sector revenue multiples (#26)
 // ─────────────────────────────────────────────────────────────────────────────
 // Sector EV/Revenue multiple bands (x annual revenue) for small private firms.
 const VAL_MULT: Record<string, { low: number; mid: number; high: number }> = {
@@ -1277,16 +1277,16 @@ function ValuationMultipleBenchmark({ sector }: { sector: string }) {
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">EBITDA margin</p>
-          <p className={`text-xl font-bold tabular-nums ${ebitdaMarginPct === null ? "text-[var(--color-muted)]" : ebitdaMarginPct >= 0 ? "text-green-400" : "text-red-400"}`}>{ebitdaMarginPct !== null ? `${ebitdaMarginPct}%` : "—"}</p>
+          <p className={`text-xl font-bold tabular-nums ${ebitdaMarginPct === null ? "text-[var(--color-muted)]" : ebitdaMarginPct >= 0 ? "text-green-400" : "text-red-400"}`}>{ebitdaMarginPct !== null ? `${ebitdaMarginPct}%` : "-"}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Applied multiple</p>
-          <p className="text-xl font-bold tabular-nums">{hasRev ? `${appliedMult}x` : "—"}</p>
-          <p className="text-[10px] text-[var(--color-muted)]">range {mult.low}x–{mult.high}x</p>
+          <p className="text-xl font-bold tabular-nums">{hasRev ? `${appliedMult}x` : "-"}</p>
+          <p className="text-[10px] text-[var(--color-muted)]">range {mult.low}x-{mult.high}x</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Indicative EV</p>
-          <p className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{hasRev ? formatCurrency(valApplied) : "—"}</p>
+          <p className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{hasRev ? formatCurrency(valApplied) : "-"}</p>
         </div>
       </div>
 
@@ -1304,13 +1304,13 @@ function ValuationMultipleBenchmark({ sector }: { sector: string }) {
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A rough revenue-multiple estimate only — real valuations weigh growth, margins, customer concentration, defensibility and diligence. Multiple bands are indicative for typical Indian SMBs, not live transaction comps. Confirm with an advisor.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A rough revenue-multiple estimate only - real valuations weigh growth, margins, customer concentration, defensibility and diligence. Multiple bands are indicative for typical Indian SMBs, not live transaction comps. Confirm with an advisor.</p>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stock-Turn Benchmark — inventory turns/year & dead stock vs sector (feature #69)
+// Stock-Turn Benchmark - inventory turns/year & dead stock vs sector (feature #69)
 // ─────────────────────────────────────────────────────────────────────────────
 // Sector reference annual inventory turns (higher = leaner inventory).
 const TURN_NORMS: Record<string, { low: number; mid: number; high: number }> = {
@@ -1343,13 +1343,13 @@ function StockTurnBenchmark({ sector }: { sector: string }) {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Stock-Turn Benchmark</h2>
         <p className="text-xs text-[var(--color-muted)]">How many times you sell through inventory a year, against typical <span className="text-[var(--color-text)]">{sector}</span> turns. Higher turns free up working capital. Computed live from inventory value and goods received.</p>
-        {invValue <= 0 && <p className="text-xs text-yellow-400 mt-2">No inventory on record — this benchmark suits stock-holding businesses.</p>}
+        {invValue <= 0 && <p className="text-xs text-yellow-400 mt-2">No inventory on record - this benchmark suits stock-holding businesses.</p>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Your turns / yr</p>
-          <p className={`text-2xl font-bold tabular-nums ${turns === null ? "text-[var(--color-muted)]" : turns >= norm.mid ? "text-green-400" : "text-yellow-400"}`}>{turns !== null ? `${turns}x` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${turns === null ? "text-[var(--color-muted)]" : turns >= norm.mid ? "text-green-400" : "text-yellow-400"}`}>{turns !== null ? `${turns}x` : "-"}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Sector median</p>
@@ -1361,7 +1361,7 @@ function StockTurnBenchmark({ sector }: { sector: string }) {
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Slow / dead stock</p>
-          <p className={`text-2xl font-bold tabular-nums ${deadValue > 0 ? "text-red-400" : "text-green-400"}`}>{deadValue > 0 ? formatCurrency(deadValue) : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${deadValue > 0 ? "text-red-400" : "text-green-400"}`}>{deadValue > 0 ? formatCurrency(deadValue) : "-"}</p>
           <p className="text-[10px] text-[var(--color-muted)]">{deadStock.length} SKU(s) at/below reorder</p>
         </div>
       </div>
@@ -1382,7 +1382,7 @@ function StockTurnBenchmark({ sector }: { sector: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tax-Burden Benchmark — effective GST + direct-tax outgo vs sector (feature #62)
+// Tax-Burden Benchmark - effective GST + direct-tax outgo vs sector (feature #62)
 // ─────────────────────────────────────────────────────────────────────────────
 // Sector reference total-tax-outgo bands as % of revenue (GST net + direct tax).
 const TAX_BANDS: Record<string, { low: number; mid: number; high: number }> = {
@@ -1418,25 +1418,25 @@ function TaxBurdenBenchmark({ sector }: { sector: string }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Coins size={14} className="text-[var(--color-primary)]" /> Tax-Burden Benchmark</h2>
-        <p className="text-xs text-[var(--color-muted)]">Your effective tax outgo — net GST plus direct tax paid — as a % of TTM revenue, against typical <span className="text-[var(--color-text)]">{sector}</span> bands. Net GST is computed at your {rate}% rate after input credit; direct tax is cash actually paid.</p>
+        <p className="text-xs text-[var(--color-muted)]">Your effective tax outgo - net GST plus direct tax paid - as a % of TTM revenue, against typical <span className="text-[var(--color-text)]">{sector}</span> bands. Net GST is computed at your {rate}% rate after input credit; direct tax is cash actually paid.</p>
         {!hasRev && <p className="text-xs text-yellow-400 mt-2">Add 12 months of revenue and tax transactions to compute your burden.</p>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Total tax burden</p>
-          <p className={`text-2xl font-bold tabular-nums ${burden === null ? "text-[var(--color-muted)]" : (pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{burden !== null ? `${burden}%` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${burden === null ? "text-[var(--color-muted)]" : (pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{burden !== null ? `${burden}%` : "-"}</p>
           {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Net GST (TTM)</p>
           <p className="text-2xl font-bold tabular-nums">{formatCurrency(gstNet)}</p>
-          <p className="text-[10px] text-[var(--color-muted)]">{gstPctOfRev !== null ? `${gstPctOfRev}% of revenue` : "—"}</p>
+          <p className="text-[10px] text-[var(--color-muted)]">{gstPctOfRev !== null ? `${gstPctOfRev}% of revenue` : "-"}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Direct tax paid</p>
           <p className="text-2xl font-bold tabular-nums">{formatCurrency(directTax)}</p>
-          <p className="text-[10px] text-[var(--color-muted)]">{directPctOfRev !== null ? `${directPctOfRev}% of revenue` : "—"}</p>
+          <p className="text-[10px] text-[var(--color-muted)]">{directPctOfRev !== null ? `${directPctOfRev}% of revenue` : "-"}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Sector median</p>
@@ -1448,7 +1448,7 @@ function TaxBurdenBenchmark({ sector }: { sector: string }) {
         <h3 className="text-sm font-semibold">Tax burden vs sector</h3>
         <BandRow label="Total tax / revenue" desc="Lower can mean better input-credit capture or a leaner mix." yours={burden} unit="%" low={band.low} mid={band.mid} high={band.high} higherIsBetter={false} />
         {burden !== null && burden > band.low && (
-          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Your burden is above the typical range — check input-tax-credit capture and vendor GST uploads for leakage.</p>
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Your burden is above the typical range - check input-tax-credit capture and vendor GST uploads for leakage.</p>
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Net GST uses your output rate after input credit on expense transactions; it is an estimate, not a filed return. Direct tax reflects cash tagged to the tax category. Sector bands are indicative guides for typical Indian SMBs, not live peer data. Confirm with your CA.</p>
@@ -1457,7 +1457,7 @@ function TaxBurdenBenchmark({ sector }: { sector: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EBITDA-Margin Benchmark — operating profitability band vs sector (feature #18/#62)
+// EBITDA-Margin Benchmark - operating profitability band vs sector (feature #18/#62)
 // ─────────────────────────────────────────────────────────────────────────────
 // Sector reference EBITDA-margin bands (% of revenue; higher is better).
 const EBITDA_BANDS: Record<string, { low: number; mid: number; high: number }> = {
@@ -1480,19 +1480,19 @@ function EbitdaMarginBenchmark({ sector }: { sector: string }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> EBITDA-Margin Benchmark</h2>
-        <p className="text-xs text-[var(--color-muted)]">Your operating profitability — revenue minus direct costs and payroll, as a % of revenue — over the trailing 12 months, against typical <span className="text-[var(--color-text)]">{sector}</span> reference bands.</p>
+        <p className="text-xs text-[var(--color-muted)]">Your operating profitability - revenue minus direct costs and payroll, as a % of revenue - over the trailing 12 months, against typical <span className="text-[var(--color-text)]">{sector}</span> reference bands.</p>
         {!hasRev && <p className="text-xs text-yellow-400 mt-2">Add 12 months of revenue transactions to compute your EBITDA margin.</p>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">EBITDA margin</p>
-          <p className={`text-2xl font-bold tabular-nums ${margin === null ? "text-[var(--color-muted)]" : margin >= band.mid ? "text-green-400" : "text-yellow-400"}`}>{margin !== null ? `${margin}%` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${margin === null ? "text-[var(--color-muted)]" : margin >= band.mid ? "text-green-400" : "text-yellow-400"}`}>{margin !== null ? `${margin}%` : "-"}</p>
           {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">EBITDA (TTM)</p>
-          <p className={`text-2xl font-bold tabular-nums ${ebitda >= 0 ? "text-green-400" : "text-red-400"}`}>{hasRev ? formatCurrency(ebitda) : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${ebitda >= 0 ? "text-green-400" : "text-red-400"}`}>{hasRev ? formatCurrency(ebitda) : "-"}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Sector median</p>
@@ -1508,7 +1508,7 @@ function EbitdaMarginBenchmark({ sector }: { sector: string }) {
         <h3 className="text-sm font-semibold">EBITDA margin vs sector</h3>
         <BandRow label="EBITDA margin" desc="Revenue minus direct costs and payroll, ÷ revenue." yours={margin} unit="%" low={band.low} mid={band.mid} high={band.high} higherIsBetter />
         {margin !== null && margin < band.low && (
-          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Operating margin is below the typical range — review pricing, direct-cost leakage and payroll efficiency.</p>
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Operating margin is below the typical range - review pricing, direct-cost leakage and payroll efficiency.</p>
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">A pre-interest, pre-tax, pre-depreciation operating-margin proxy: depreciation and one-offs aren't separated out. Upside multiplies the margin gap by TTM revenue. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
@@ -1517,9 +1517,9 @@ function EbitdaMarginBenchmark({ sector }: { sector: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Revenue-Volatility Benchmark — month-to-month stability vs sector (feature #44)
+// Revenue-Volatility Benchmark - month-to-month stability vs sector (feature #44)
 // ─────────────────────────────────────────────────────────────────────────────
-// Sector reference coefficient-of-variation bands (% — lower means steadier revenue).
+// Sector reference coefficient-of-variation bands (% - lower means steadier revenue).
 const VOLATILITY_BANDS: Record<string, { low: number; mid: number; high: number }> = {
   default:               { low: 45, mid: 26, high: 14 },
   "Manufacturing (SMB)": { low: 52, mid: 30, high: 16 },
@@ -1545,23 +1545,23 @@ function RevenueVolatilityBenchmark({ sector }: { sector: string }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Waves size={14} className="text-[var(--color-primary)]" /> Revenue-Stability Benchmark</h2>
-        <p className="text-xs text-[var(--color-muted)]">How steady your monthly revenue is — measured as the coefficient of variation over the trailing 12 months — against typical <span className="text-[var(--color-text)]">{sector}</span> bands. Steadier revenue is easier to plan and finance.</p>
+        <p className="text-xs text-[var(--color-muted)]">How steady your monthly revenue is - measured as the coefficient of variation over the trailing 12 months - against typical <span className="text-[var(--color-text)]">{sector}</span> bands. Steadier revenue is easier to plan and finance.</p>
         {cv === null && <p className="text-xs text-yellow-400 mt-2">Needs at least 3 months of revenue to measure stability.</p>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Volatility (CV)</p>
-          <p className={`text-2xl font-bold tabular-nums ${cv === null ? "text-[var(--color-muted)]" : (pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{cv !== null ? `${cv}%` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${cv === null ? "text-[var(--color-muted)]" : (pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{cv !== null ? `${cv}%` : "-"}</p>
           {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Avg monthly revenue</p>
-          <p className="text-2xl font-bold tabular-nums">{mean > 0 ? formatCurrency(Math.round(mean)) : "—"}</p>
+          <p className="text-2xl font-bold tabular-nums">{mean > 0 ? formatCurrency(Math.round(mean)) : "-"}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Std deviation</p>
-          <p className="text-2xl font-bold tabular-nums">{cv !== null ? formatCurrency(Math.round(std)) : "—"}</p>
+          <p className="text-2xl font-bold tabular-nums">{cv !== null ? formatCurrency(Math.round(std)) : "-"}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Sector median CV</p>
@@ -1590,7 +1590,7 @@ function RevenueVolatilityBenchmark({ sector }: { sector: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Liquidity-Buffer Benchmark — months of opex held in cash vs sector (feature #4)
+// Liquidity-Buffer Benchmark - months of opex held in cash vs sector (feature #4)
 // ─────────────────────────────────────────────────────────────────────────────
 // Sector reference bands for cash runway in months (higher = safer buffer).
 const BUFFER_BANDS: Record<string, { low: number; mid: number; high: number }> = {
@@ -1623,7 +1623,7 @@ function LiquidityBufferBenchmark({ sector }: { sector: string }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Months of buffer</p>
-          <p className={`text-2xl font-bold tabular-nums ${monthsBuffer === null ? "text-[var(--color-muted)]" : monthsBuffer >= band.mid ? "text-green-400" : "text-yellow-400"}`}>{monthsBuffer !== null ? `${monthsBuffer}` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${monthsBuffer === null ? "text-[var(--color-muted)]" : monthsBuffer >= band.mid ? "text-green-400" : "text-yellow-400"}`}>{monthsBuffer !== null ? `${monthsBuffer}` : "-"}</p>
           {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -1632,7 +1632,7 @@ function LiquidityBufferBenchmark({ sector }: { sector: string }) {
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Monthly burn</p>
-          <p className="text-2xl font-bold tabular-nums">{burn > 0 ? formatCurrency(Math.round(burn)) : "—"}</p>
+          <p className="text-2xl font-bold tabular-nums">{burn > 0 ? formatCurrency(Math.round(burn)) : "-"}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">{shortfall > 0 ? "To reach median" : "Sector median"}</p>
@@ -1644,7 +1644,7 @@ function LiquidityBufferBenchmark({ sector }: { sector: string }) {
         <h3 className="text-sm font-semibold">Cash buffer vs sector</h3>
         <BandRow label="Months of opex in cash" desc="Cash balance ÷ monthly burn. Higher is safer." yours={monthsBuffer} unit=" mo" low={band.low} mid={band.mid} high={band.high} higherIsBetter />
         {monthsBuffer !== null && monthsBuffer < band.low && (
-          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Buffer is below the typical floor — consider a working-capital line, faster collections or trimming non-essential spend.</p>
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Buffer is below the typical floor - consider a working-capital line, faster collections or trimming non-essential spend.</p>
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Buffer = total linked cash ÷ average monthly burn (net cash outflow). It ignores undrawn credit lines and committed receivables. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
@@ -1653,7 +1653,7 @@ function LiquidityBufferBenchmark({ sector }: { sector: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Debt-Leverage Benchmark — outstanding debt as a multiple of revenue (feature #80)
+// Debt-Leverage Benchmark - outstanding debt as a multiple of revenue (feature #80)
 // ─────────────────────────────────────────────────────────────────────────────
 // Sector reference debt/revenue bands (x of annual revenue; lower is safer).
 const LEVERAGE_BANDS: Record<string, { low: number; mid: number; high: number }> = {
@@ -1681,13 +1681,13 @@ function DebtLeverageBenchmark({ sector }: { sector: string }) {
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> Debt-Leverage Benchmark</h2>
         <p className="text-xs text-[var(--color-muted)]">Your outstanding borrowings as a multiple of trailing-12-month revenue, against typical <span className="text-[var(--color-text)]">{sector}</span> bands. Lower leverage means more borrowing headroom and lower default risk.</p>
         {!hasRev && <p className="text-xs text-yellow-400 mt-2">Add 12 months of revenue to compute your leverage.</p>}
-        {hasRev && totalDebt === 0 && <p className="text-xs text-green-400 mt-2">No active loans on record — you are unlevered.</p>}
+        {hasRev && totalDebt === 0 && <p className="text-xs text-green-400 mt-2">No active loans on record - you are unlevered.</p>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Debt / revenue</p>
-          <p className={`text-2xl font-bold tabular-nums ${ratio === null ? "text-[var(--color-muted)]" : (pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{ratio !== null ? `${ratio}x` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${ratio === null ? "text-[var(--color-muted)]" : (pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{ratio !== null ? `${ratio}x` : "-"}</p>
           {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -1697,7 +1697,7 @@ function DebtLeverageBenchmark({ sector }: { sector: string }) {
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Debt service / rev</p>
-          <p className={`text-2xl font-bold tabular-nums ${dsRatio === null ? "text-[var(--color-muted)]" : dsRatio <= 20 ? "text-green-400" : "text-yellow-400"}`}>{dsRatio !== null ? `${dsRatio}%` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${dsRatio === null ? "text-[var(--color-muted)]" : dsRatio <= 20 ? "text-green-400" : "text-yellow-400"}`}>{dsRatio !== null ? `${dsRatio}%` : "-"}</p>
           <p className="text-[10px] text-[var(--color-muted)]">annual EMI ÷ revenue</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -1710,7 +1710,7 @@ function DebtLeverageBenchmark({ sector }: { sector: string }) {
         <h3 className="text-sm font-semibold">Leverage vs sector</h3>
         <BandRow label="Debt / annual revenue" desc="Total outstanding borrowings ÷ TTM revenue. Lower is safer." yours={ratio} unit="x" low={band.low} mid={band.mid} high={band.high} higherIsBetter={false} />
         {ratio !== null && ratio > band.low && (
-          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Leverage is above the typical range — prioritise deleveraging or refinancing before taking on new debt.</p>
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Leverage is above the typical range - prioritise deleveraging or refinancing before taking on new debt.</p>
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Uses outstanding principal across active loans ÷ TTM revenue; it excludes trade payables and undrawn limits. Debt service is the annual EMI run-rate. Reference bands are indicative for typical Indian SMBs, not live peer data. Confirm with your lender or CA.</p>
@@ -1719,9 +1719,9 @@ function DebtLeverageBenchmark({ sector }: { sector: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Opex-Efficiency Benchmark — operating spend (ex-payroll) as % of revenue (#54)
+// Opex-Efficiency Benchmark - operating spend (ex-payroll) as % of revenue (#54)
 // ─────────────────────────────────────────────────────────────────────────────
-// Sector reference opex/revenue bands (% — lower is leaner).
+// Sector reference opex/revenue bands (% - lower is leaner).
 const OPEX_EFF_BANDS: Record<string, { low: number; mid: number; high: number }> = {
   default:               { low: 78, mid: 60, high: 42 },
   "Manufacturing (SMB)": { low: 84, mid: 68, high: 52 },
@@ -1749,12 +1749,12 @@ function OpexEfficiencyBenchmark({ sector }: { sector: string }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Opex / revenue</p>
-          <p className={`text-2xl font-bold tabular-nums ${opexRatio === null ? "text-[var(--color-muted)]" : (pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{opexRatio !== null ? `${opexRatio}%` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${opexRatio === null ? "text-[var(--color-muted)]" : (pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{opexRatio !== null ? `${opexRatio}%` : "-"}</p>
           {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Operating spend (TTM)</p>
-          <p className="text-2xl font-bold tabular-nums">{hasRev ? formatCurrency(cost) : "—"}</p>
+          <p className="text-2xl font-bold tabular-nums">{hasRev ? formatCurrency(cost) : "-"}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Sector median</p>
@@ -1770,16 +1770,16 @@ function OpexEfficiencyBenchmark({ sector }: { sector: string }) {
         <h3 className="text-sm font-semibold">Opex ratio vs sector</h3>
         <BandRow label="Operating spend / revenue" desc="Non-payroll operating costs ÷ TTM revenue. Lower is leaner." yours={opexRatio} unit="%" low={band.low} mid={band.mid} high={band.high} higherIsBetter={false} />
         {opexRatio !== null && opexRatio > band.low && (
-          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Opex is above the typical range — review vendor spend, subscriptions and discretionary costs for savings.</p>
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Opex is above the typical range - review vendor spend, subscriptions and discretionary costs for savings.</p>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Operating spend excludes payroll (benchmarked separately) and is taken net of nothing — it includes all non-payroll cash outflows tagged as costs. Saving multiplies the ratio gap by TTM revenue. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Operating spend excludes payroll (benchmarked separately) and is taken net of nothing - it includes all non-payroll cash outflows tagged as costs. Saving multiplies the ratio gap by TTM revenue. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Net-Margin Band — TTM net margin (after payroll + estimated interest) vs sector
+// Net-Margin Band - TTM net margin (after payroll + estimated interest) vs sector
 // ─────────────────────────────────────────────────────────────────────────────
 const NET_MARGIN_BANDS: Record<string, { low: number; mid: number; high: number }> = {
   default:               { low: 2, mid: 8,  high: 18 },
@@ -1804,19 +1804,19 @@ function NetMarginBandBenchmark({ sector }: { sector: string }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> Net-Margin Band</h2>
-        <p className="text-xs text-[var(--color-muted)]">Your trailing-12-month net margin — revenue less direct costs, payroll and estimated loan interest — placed against indicative <span className="text-[var(--color-text)]">{sector}</span> bands.</p>
+        <p className="text-xs text-[var(--color-muted)]">Your trailing-12-month net margin - revenue less direct costs, payroll and estimated loan interest - placed against indicative <span className="text-[var(--color-text)]">{sector}</span> bands.</p>
         {!hasRev && <p className="text-xs text-yellow-400 mt-2">Add 12 months of revenue and expense transactions to compute your net margin.</p>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Net margin</p>
-          <p className={`text-2xl font-bold tabular-nums ${netMargin === null ? "text-[var(--color-muted)]" : netMargin >= band.mid ? "text-green-400" : "text-yellow-400"}`}>{netMargin !== null ? `${netMargin}%` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${netMargin === null ? "text-[var(--color-muted)]" : netMargin >= band.mid ? "text-green-400" : "text-yellow-400"}`}>{netMargin !== null ? `${netMargin}%` : "-"}</p>
           {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">TTM net profit</p>
-          <p className={`text-2xl font-bold tabular-nums ${netProfit >= 0 ? "text-green-400" : "text-red-400"}`}>{hasRev ? formatCurrency(netProfit) : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${netProfit >= 0 ? "text-green-400" : "text-red-400"}`}>{hasRev ? formatCurrency(netProfit) : "-"}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Sector median</p>
@@ -1832,7 +1832,7 @@ function NetMarginBandBenchmark({ sector }: { sector: string }) {
         <h3 className="text-sm font-semibold">Net margin vs sector</h3>
         <BandRow label="Net margin (after payroll & interest)" desc="TTM net profit ÷ TTM revenue. Higher is healthier." yours={netMargin} unit="%" low={band.low} mid={band.mid} high={band.high} higherIsBetter={true} />
         {netMargin !== null && netMargin < band.low && (
-          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Net margin is below the typical range — review pricing, direct costs and overhead to widen the gap.</p>
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Net margin is below the typical range - review pricing, direct costs and overhead to widen the gap.</p>
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Interest is estimated at ~40% of total EMI; tax is not deducted, so this is a pre-tax operating net margin. Upside multiplies the margin gap by TTM revenue. Reference bands are indicative for typical Indian SMBs, not live peer data. Confirm with your CA before acting.</p>
@@ -1841,7 +1841,7 @@ function NetMarginBandBenchmark({ sector }: { sector: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Cash-Runway Band — months of burn covered by current cash vs sector
+// Cash-Runway Band - months of burn covered by current cash vs sector
 // ─────────────────────────────────────────────────────────────────────────────
 const RUNWAY_BANDS: Record<string, { low: number; mid: number; high: number }> = {
   default:               { low: 1.5, mid: 2.6, high: 4.0 },
@@ -1865,13 +1865,13 @@ function CashRunwayBandBenchmark({ sector }: { sector: string }) {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> Cash-Runway Band</h2>
         <p className="text-xs text-[var(--color-muted)]">How many months of net burn your current cash balance covers, against indicative <span className="text-[var(--color-text)]">{sector}</span> runway bands. A longer runway is a stronger safety buffer.</p>
-        {months === null && <p className="text-xs text-yellow-400 mt-2">No net monthly burn detected — add expense transactions to compute your runway.</p>}
+        {months === null && <p className="text-xs text-yellow-400 mt-2">No net monthly burn detected - add expense transactions to compute your runway.</p>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Runway</p>
-          <p className={`text-2xl font-bold tabular-nums ${months === null ? "text-[var(--color-muted)]" : (pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{months !== null ? `${months} mo` : "—"}</p>
+          <p className={`text-2xl font-bold tabular-nums ${months === null ? "text-[var(--color-muted)]" : (pct ?? 0) >= 50 ? "text-green-400" : "text-yellow-400"}`}>{months !== null ? `${months} mo` : "-"}</p>
           {lbl && <p className={`text-[11px] font-medium ${lbl.color}`}>{lbl.label}</p>}
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -1880,7 +1880,7 @@ function CashRunwayBandBenchmark({ sector }: { sector: string }) {
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Monthly burn</p>
-          <p className="text-2xl font-bold tabular-nums">{burn > 0 ? formatCurrency(burn) : "—"}</p>
+          <p className="text-2xl font-bold tabular-nums">{burn > 0 ? formatCurrency(burn) : "-"}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs text-[var(--color-muted)] mb-1">Cash to median runway</p>
@@ -1892,7 +1892,7 @@ function CashRunwayBandBenchmark({ sector }: { sector: string }) {
         <h3 className="text-sm font-semibold">Runway vs sector</h3>
         <BandRow label="Months of burn covered" desc="Cash balance ÷ net monthly burn. Higher is safer." yours={months} unit=" mo" low={band.low} mid={band.mid} high={band.high} higherIsBetter={true} />
         {months !== null && months < band.low && (
-          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Runway is below the typical range — accelerate collections, trim burn or secure a credit line before cash tightens.</p>
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Runway is below the typical range - accelerate collections, trim burn or secure a credit line before cash tightens.</p>
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Burn is net monthly outflow from recent transactions; a single lumpy month can distort it. Cash-to-median multiplies the runway gap by monthly burn. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
@@ -1901,7 +1901,7 @@ function CashRunwayBandBenchmark({ sector }: { sector: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Customer-Retention Band — % of prior customers who reordered, vs sector
+// Customer-Retention Band - % of prior customers who reordered, vs sector
 // ─────────────────────────────────────────────────────────────────────────────
 const RETENTION_BANDS: Record<string, { low: number; mid: number; high: number }> = {
   default:               { low: 45, mid: 62, high: 80 },
@@ -1973,7 +1973,7 @@ function CustomerRetentionBandBenchmark({ sector }: { sector: string }) {
         <h3 className="text-sm font-semibold">Retention vs sector</h3>
         <BandRow label="Repeat-customer rate" desc="Prior customers who reordered ÷ all prior customers. Higher is stickier." yours={retention} unit="%" low={band.low} mid={band.mid} high={band.high} higherIsBetter={true} />
         {retention !== null && retention < band.low && (
-          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Retention is below the typical range — {lapsed} prior customer(s) haven't reordered; a win-back outreach could recover revenue.</p>
+          <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Retention is below the typical range - {lapsed} prior customer(s) haven't reordered; a win-back outreach could recover revenue.</p>
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">Customers are matched by name (case-insensitive); naming inconsistencies can understate retention. Windows are split at 6 months before today. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>

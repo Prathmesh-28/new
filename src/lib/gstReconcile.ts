@@ -1,14 +1,14 @@
 // ── GSTR-2B ITC reconciliation ────────────────────────────────────────────────
 // Matches a business's purchase register against the GSTN-auto-drafted GSTR-2B to
-// surface where input-tax-credit (ITC) is at risk. Fully offline + deterministic —
+// surface where input-tax-credit (ITC) is at risk. Fully offline + deterministic -
 // the user downloads their 2B JSON from the GST portal and uploads their purchase
 // register (Excel/CSV); we reconcile by supplier GSTIN + invoice number.
 //
 // Buckets:
-//   matched          — in both, tax agrees → ITC safe to claim
-//   mismatch         — in both, tax differs → fix before claiming
-//   missing_in_2b    — in your books, NOT in 2B → supplier hasn't filed; ITC blocked
-//   missing_in_books — in 2B, NOT in your books → record it / claim available ITC
+//   matched          - in both, tax agrees → ITC safe to claim
+//   mismatch         - in both, tax differs → fix before claiming
+//   missing_in_2b    - in your books, NOT in 2B → supplier hasn't filed; ITC blocked
+//   missing_in_books - in 2B, NOT in your books → record it / claim available ITC
 
 export interface ReconLine {
   gstin: string;
@@ -54,13 +54,13 @@ const keyOf = (gstin: string, inv: string) =>
 // living either at invoice level (igst/cgst/sgst/cess) or inside an items array.
 export function parse2BJson(raw: string): ReconLine[] {
   let json: unknown;
-  try { json = JSON.parse(raw); } catch { throw new Error("Not valid JSON — download the 2B as JSON from the GST portal."); }
+  try { json = JSON.parse(raw); } catch { throw new Error("Not valid JSON - download the 2B as JSON from the GST portal."); }
   // Find the b2b array wherever it sits (data.docdata.b2b is the canonical path).
   const root = json as Record<string, unknown>;
   const data = (root.data ?? root) as Record<string, unknown>;
   const docdata = (data.docdata ?? data) as Record<string, unknown>;
   const b2b = (docdata.b2b ?? (data as Record<string, unknown>).b2b) as unknown[] | undefined;
-  if (!Array.isArray(b2b)) throw new Error("Couldn't find B2B invoices in this file — is it a GSTR-2B JSON?");
+  if (!Array.isArray(b2b)) throw new Error("Couldn't find B2B invoices in this file - is it a GSTR-2B JSON?");
 
   const out: ReconLine[] = [];
   for (const sup of b2b as Record<string, unknown>[]) {

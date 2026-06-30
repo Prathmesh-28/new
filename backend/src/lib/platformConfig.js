@@ -1,6 +1,6 @@
 // Central reader for super-admin-controlled platform settings (the platform_settings
 // table written by routes/platform.js). Lets ANY route pull a tunable value the
-// super-admin set in the console — with the old hardcoded value as the fallback, so
+// super-admin set in the console - with the old hardcoded value as the fallback, so
 // nothing breaks if a setting is unset. Cached ~60s; routes/platform.js calls bust()
 // on save so edits take effect immediately.
 //

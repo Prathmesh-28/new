@@ -64,7 +64,7 @@ async function deletePricingRule(tenantId, id) {
 function ruleMatchesLine(rule, line, party, dateStr) {
   if (rule.is_active === false) return false;
 
-  // Validity window (inclusive). Compare as YYYY-MM-DD strings — DATE columns.
+  // Validity window (inclusive). Compare as YYYY-MM-DD strings - DATE columns.
   const d = (dateStr || new Date().toISOString().slice(0, 10)).slice(0, 10);
   const from = rule.valid_from ? String(rule.valid_from).slice(0, 10) : null;
   const to = rule.valid_to ? String(rule.valid_to).slice(0, 10) : null;
@@ -270,7 +270,7 @@ async function createShippingRule(tenantId, s) {
   const basis = s.basis || "amount";                  // amount | weight | qty
   if (!["amount", "weight", "qty"].includes(basis))
     throw new PostError("BAD_INPUT", "basis must be amount/weight/qty", 400);
-  // slabs: [{ from, to?, charge }] — normalize money to strings.
+  // slabs: [{ from, to?, charge }] - normalize money to strings.
   const slabs = (s.slabs || []).map((sl) => ({
     from: toDb(sl.from || 0),
     to: sl.to != null ? toDb(sl.to) : null,
@@ -329,7 +329,7 @@ async function bulkUpsertPrices(tenantId, actorId, rows) {
       if (r.price == null || String(r.price).trim() === "")
         throw new PostError("BAD_INPUT", "price required", 400);
 
-      // Resolve (or create) the named price list — mirrors inventory.createPriceList.
+      // Resolve (or create) the named price list - mirrors inventory.createPriceList.
       const plName = r.priceList || "Standard";
       const currency = r.currency || "INR";
       let pl = (await pool.query(
@@ -355,7 +355,7 @@ async function bulkUpsertPrices(tenantId, actorId, rows) {
         itemId = ir.rows[0].id;
       }
 
-      // Upsert the price — mirrors inventory.setPrice.
+      // Upsert the price - mirrors inventory.setPrice.
       await pool.query(
         "INSERT INTO book_price_list_items(tenant_id,price_list_id,item_id,price) VALUES($1,$2,$3,$4) ON CONFLICT(price_list_id,item_id) DO UPDATE SET price=EXCLUDED.price RETURNING *",
         [tenantId, pl.id, itemId, toDb(r.price)]

@@ -4,7 +4,7 @@ const { authenticate } = require("../middleware/auth");
 const { verifyAccess } = require("../lib/jwt");
 const { subscribe, publish } = require("../lib/realtime");
 
-// Must stay in sync with src/data/types.ts ROLE_NAMESPACES — otherwise a role
+// Must stay in sync with src/data/types.ts ROLE_NAMESPACES - otherwise a role
 // gets 403 on its own data and the app silently fails to load/save for them.
 const ROLE_NAMESPACES = {
   super_admin:        ["app", "forecast", "credit", "capital", "operations"],
@@ -47,7 +47,7 @@ async function resolveTenantId(req) {
   return rows[0] ? requested : null;
 }
 
-// GET /api/kv/stream — live updates (Server-Sent Events).
+// GET /api/kv/stream - live updates (Server-Sent Events).
 // Must be declared BEFORE "/:ns" or Express matches "stream" as a namespace.
 // EventSource cannot send Authorization headers, so the access token arrives as
 // a query param; we verify it the same way as the authenticate middleware.
@@ -88,7 +88,7 @@ router.get("/stream", async (req, res) => {
   req.on("close", () => { clearInterval(heartbeat); unsubscribe(); });
 });
 
-// GET /api/kv/:ns — get all keys in namespace
+// GET /api/kv/:ns - get all keys in namespace
 router.get("/:ns", authenticate, async (req, res) => {
   const { ns } = req.params;
   if (!canAccess(req.user.role, ns)) return res.status(403).json({ error: "Forbidden" });

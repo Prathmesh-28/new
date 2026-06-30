@@ -1,4 +1,4 @@
-// CRM module schema — accounts, contacts, leads, deals (pipeline), tasks, notes,
+// CRM module schema - accounts, contacts, leads, deals (pipeline), tasks, notes,
 // activities, SLAs. Tenant-scoped TEXT ids (Headroom convention); links to the
 // books customer ledger. Domain logic ported from Frappe CRM (fcrm).
 //
@@ -199,7 +199,7 @@ const CRM_SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_crm_notes ON crm_notes(tenant_id, reference_type, reference_id);
 
-  -- Status change log (ported from CRM Status Change Log) — feeds the timeline.
+  -- Status change log (ported from CRM Status Change Log) - feeds the timeline.
   CREATE TABLE IF NOT EXISTS crm_status_change_log (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id      TEXT NOT NULL,

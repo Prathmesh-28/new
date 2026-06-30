@@ -1,4 +1,4 @@
-// ERP manufacturing domain logic — a faithful port of ERPNext's BOM / Work Order
+// ERP manufacturing domain logic - a faithful port of ERPNext's BOM / Work Order
 // / Job Card / Material Request algorithms onto Headroom's Postgres + books stack.
 //
 // The pure functions at the top are the real ported algorithms (multi-level BOM
@@ -7,7 +7,7 @@
 // The DB-backed functions below orchestrate stock + valuation through `books`
 // (books.receive / books.issue) so the ledger and stock truth never leave books.
 //
-// Decimal math reuses books' decimal.js wrapper — never raw JS number for money.
+// Decimal math reuses books' decimal.js wrapper - never raw JS number for money.
 const { pool } = require("../../db");
 const books = require("../books");
 const fx = require("../books/fx");
@@ -16,7 +16,7 @@ const { money, toDb } = require("../books/money");
 class ErpError extends Error { constructor(msg, http) { super(msg); this.http = http || 400; } }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PURE ALGORITHMS (no DB) — ported from ERPNext
+// PURE ALGORITHMS (no DB) - ported from ERPNext
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Multi-level BOM explosion (port of bom/services/exploded_items.py).
@@ -177,7 +177,7 @@ async function itemRate(client, tenantId, itemId) {
 
 // Build the in-memory BOM graph for a root BOM + all reachable sub-BOMs.
 // A component references a sub-BOM either explicitly (sub_bom_id) or implicitly
-// (its item has a default active BOM) — matching ERPNext's `use_multi_level_bom`.
+// (its item has a default active BOM) - matching ERPNext's `use_multi_level_bom`.
 async function loadBomGraph(client, tenantId, rootBomId) {
   const graph = {};
   const queue = [rootBomId];
@@ -343,7 +343,7 @@ async function createWorkOrder(tenantId, actorId, w) {
     if (!finishedItemId) throw new ErpError("Work order needs a finished item (BOM has none)", 422);
     const useMulti = w.useMultiLevel !== false;
 
-    // 1) required items — explode the BOM × qty (multi-level if requested).
+    // 1) required items - explode the BOM × qty (multi-level if requested).
     const graph = await loadBomGraph(client, tenantId, w.bomId);
     let required;
     if (useMulti) {
@@ -408,14 +408,14 @@ async function listWorkOrders(tenantId) {
 // NULL, so we must post a balanced JOURNAL voucher and thread its id through.
 // The WIP ledger is created lazily under the Stock-in-hand group (idempotent).
 const MFG_ACTOR = null; // these flows are system-initiated; created_by may be null
-// NOTE: uses `pool` (auto-commit), NOT the caller's open transaction — books.postVoucher
+// NOTE: uses `pool` (auto-commit), NOT the caller's open transaction - books.postVoucher
 // runs on its own connection and must be able to SELECT this ledger, so it has to be
 // committed before we post the backing journal.
 async function ensureWipLedger(tenantId) {
   const { rows: ex } = await pool.query("SELECT id FROM book_ledgers WHERE tenant_id=$1 AND name=$2", [tenantId, "Work-in-Progress"]);
   if (ex[0]) return ex[0].id;
   const { rows: grp } = await pool.query("SELECT id FROM book_account_groups WHERE tenant_id=$1 AND name=$2", [tenantId, "Stock-in-hand"]);
-  if (!grp[0]) throw new ErpError("Stock-in-hand group missing — seed books first", 422);
+  if (!grp[0]) throw new ErpError("Stock-in-hand group missing - seed books first", 422);
   const { rows } = await pool.query(
     "INSERT INTO book_ledgers(tenant_id,name,group_id) VALUES($1,$2,$3) ON CONFLICT(tenant_id,name) DO UPDATE SET name=EXCLUDED.name RETURNING id",
     [tenantId, "Work-in-Progress", grp[0].id]
@@ -466,7 +466,7 @@ async function transferMaterials(tenantId, id) {
     for (const it of items) {
       const pending = money(it.required_qty).minus(it.transferred_qty);
       if (!pending.gt(0)) continue;
-      // books.issue guards negative stock unless item.allow_negative — never bypass.
+      // books.issue guards negative stock unless item.allow_negative - never bypass.
       const out = await books.issue(tenantId, it.item_id, Number(pending.toFixed(6)), { warehouseId: wo.warehouse_id, voucherId: journalId });
       rmCost = rmCost.plus(out.cogs || 0);
       await client.query("UPDATE erp_work_order_items SET transferred_qty=required_qty WHERE id=$1", [it.id]);
@@ -679,7 +679,7 @@ async function markOrdered(tenantId, id, body = {}) {
 // Reorder report: items whose on-hand qty is at/below reorder level. Suggested
 // order qty uses ERPNext's max(reorder_qty, level - projected). reorder_qty here
 // defaults to the reorder level (so stock is topped up to 2× level) when no
-// explicit per-item reorder qty is stored — books only tracks reorder_level.
+// explicit per-item reorder qty is stored - books only tracks reorder_level.
 async function reorderReport(tenantId) {
   const { rows } = await pool.query(
     "SELECT id, name, unit, current_qty, reorder_level FROM book_stock_items WHERE tenant_id=$1 AND is_active=true AND reorder_level > 0 ORDER BY name",
@@ -994,7 +994,7 @@ function planPutaway(bins, qty) {
 // Resolve a putaway plan for receiving `qty` of an item: gather active rules
 // (item-specific first, then generic), compute current occupancy per target bin
 // from books' per-warehouse balance, and split the qty by free capacity. This is
-// a PLAN only — the caller still posts the receipt(s) through books.receive.
+// a PLAN only - the caller still posts the receipt(s) through books.receive.
 async function resolvePutaway(tenantId, itemId, qty) {
   const { rows: rules } = await pool.query(
     `SELECT pr.*, w.book_warehouse_id FROM erp_putaway_rules pr
@@ -1071,7 +1071,7 @@ async function recomputeItemValuation(tenantId, itemId) {
     supMax = supMax == null || base.gt(supMax) ? base : supMax;
   }
 
-  // 3) purchase history — inward movements with a positive rate
+  // 3) purchase history - inward movements with a positive rate
   const { rows: pmm } = await pool.query(
     "SELECT MIN(rate) AS mn, MAX(rate) AS mx FROM book_stock_movements WHERE tenant_id=$1 AND item_id=$2 AND qty_in > 0 AND rate > 0",
     [tenantId, itemId]
@@ -1079,7 +1079,7 @@ async function recomputeItemValuation(tenantId, itemId) {
   const purMin = pmm[0] && pmm[0].mn != null ? money(pmm[0].mn) : null;
   const purMax = pmm[0] && pmm[0].mx != null ? money(pmm[0].mx) : null;
 
-  // 4) BOM rollup — default active BOM for this item
+  // 4) BOM rollup - default active BOM for this item
   const { rows: bom } = await pool.query(
     "SELECT total_cost, output_qty FROM erp_boms WHERE tenant_id=$1 AND item_id=$2 AND is_active=true ORDER BY is_default DESC, created_at LIMIT 1",
     [tenantId, itemId]

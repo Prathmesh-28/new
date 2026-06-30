@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 /**
- * Headroom Flows — native, n8n-independent workflow builder. List flows · edit a flow
+ * Headroom Flows - native, n8n-independent workflow builder. List flows · edit a flow
  * (trigger + node graph) · run it · read the per-node execution log + history.
  * Backed by /api/flows (the engine is in modules/flows/runner.js).
  */
@@ -64,7 +64,7 @@ export default function FlowsPage() {
     try {
       const f = await api.post<FullFlow>("/api/flows/flows", { name: t.name, trigger: t.trigger, graph: t.graph });
       await loadFlows(); setActiveId(f.id);
-      toast.success(`Created "${t.name}" — review and run it`);
+      toast.success(`Created "${t.name}" - review and run it`);
     } catch (e) { toast.error(humanizeAiError(e)); }
   };
 
@@ -74,9 +74,9 @@ export default function FlowsPage() {
     <div className="space-y-5">
       <div className="flex items-center gap-2">
         <h1 className="text-2xl font-bold flex items-center gap-2 mr-auto"><Workflow className="text-[var(--color-primary)]" size={24} /> Flows</h1>
-        <span className="text-[11px] px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]">Your automation engine — no n8n</span>
+        <span className="text-[11px] px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]">Your automation engine - no n8n</span>
       </div>
-      <p className="text-sm text-[var(--color-muted)] max-w-3xl">Build automations from triggers and nodes — read/write your business data, ask AI, branch on conditions, call APIs, raise alerts. Runs on Headroom; nothing leaves to a third party.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-3xl">Build automations from triggers and nodes - read/write your business data, ask AI, branch on conditions, call APIs, raise alerts. Runs on Headroom; nothing leaves to a third party.</p>
 
       <div className="flex h-[calc(100vh-15rem)] min-h-[30rem] rounded-xl border border-[var(--color-border)] overflow-hidden bg-[var(--color-bg)]">
         <aside className="w-56 shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col">
@@ -89,7 +89,7 @@ export default function FlowsPage() {
           </div>
           <div className="flex-1 overflow-y-auto p-2">
             {loading ? <p className="px-2 py-2 text-xs text-[var(--color-muted)]">Loading…</p> :
-              filtered.length === 0 ? <p className="px-2 py-2 text-xs text-[var(--color-muted)]">No flows yet — create one.</p> :
+              filtered.length === 0 ? <p className="px-2 py-2 text-xs text-[var(--color-muted)]">No flows yet - create one.</p> :
               filtered.map((f) => {
                 const I = TRIGGER_ICON[f.trigger?.type] || Zap;
                 return (
@@ -108,7 +108,7 @@ export default function FlowsPage() {
             <div className="h-full overflow-y-auto px-6 py-6">
               <div className="text-center mb-5">
                 <Workflow size={30} className="text-[var(--color-primary)] mb-2 mx-auto" />
-                <p className="text-sm font-semibold">Start from a template — or build your own</p>
+                <p className="text-sm font-semibold">Start from a template - or build your own</p>
                 <p className="text-xs text-[var(--color-muted)] mt-1 max-w-md mx-auto">One click installs a working automation you can review and run. Or hit “New flow” for a blank canvas.</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-2xl mx-auto">
@@ -183,7 +183,7 @@ function FlowEditor({ flowId, catalog, onSaved, onDeleted }: { flowId: string; c
       if (!Object.values(jsonErr).some(Boolean)) await api.patch(`/api/flows/flows/${flowId}`, { name, enabled, trigger, graph: { nodes, edges } });
       const run = await api.post<FlowRun>(`/api/flows/flows/${flowId}/run`, { input: {} });
       setLastRun(run);
-      run.status === "success" ? toast.success("Flow ran successfully") : toast.error("Flow run failed — see the log");
+      run.status === "success" ? toast.success("Flow ran successfully") : toast.error("Flow run failed - see the log");
       onSaved();
     } catch (e) { toast.error(humanizeAiError(e)); }
     finally { setRunning(false); }
@@ -226,7 +226,7 @@ function FlowEditor({ flowId, catalog, onSaved, onDeleted }: { flowId: string; c
           })}
           {trigger.type === "event" && (
             <select value={trigger.config?.event || ""} onChange={(e) => setTrigger({ type: "event", config: { ...trigger.config, event: e.target.value } })} className="text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-1.5 py-1 outline-none">
-              <option value="">— pick an event —</option>
+              <option value="">- pick an event -</option>
               {(catalog.events || []).map((ev) => <option key={ev.event} value={ev.event}>{ev.label}</option>)}
             </select>
           )}
@@ -259,7 +259,7 @@ function FlowEditor({ flowId, catalog, onSaved, onDeleted }: { flowId: string; c
             )}
           </div>
         </div>
-        {nodes.length === 0 ? <p className="text-xs text-[var(--color-muted)] py-3 text-center border border-dashed border-[var(--color-border)] rounded-lg">No nodes — add one. Root nodes (no incoming connection) run first.</p> :
+        {nodes.length === 0 ? <p className="text-xs text-[var(--color-muted)] py-3 text-center border border-dashed border-[var(--color-border)] rounded-lg">No nodes - add one. Root nodes (no incoming connection) run first.</p> :
           nodes.map((n) => (
             <NodeCard key={n.id} node={n} def={catFor(n.type)} catalog={catalog} allNodes={nodes} edges={edges} nodeName={nodeName}
               result={lastRun?.results?.[n.id]} jsonErr={jsonErr} setJsonErr={setJsonErr}
@@ -336,8 +336,8 @@ function NodeCard({ node, def, catalog, allNodes, edges, nodeName, result, jsonE
     const v = node.config[f.key];
     if (f.type === "textarea") return <textarea value={(v as string) ?? ""} onChange={(e) => onConfig(f.key, e.target.value)} rows={2} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none resize-y" />;
     if (f.type === "select") return <select value={(v as string) ?? f.options?.[0] ?? ""} onChange={(e) => onConfig(f.key, e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none">{f.options?.map((o) => <option key={o} value={o}>{o}</option>)}</select>;
-    if (f.type === "toolselect") return <select value={(v as string) ?? ""} onChange={(e) => onConfig(f.key, e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none"><option value="">— pick a tool —</option>{catalog.tools.map((t) => <option key={t.name} value={t.name}>{t.name}{t.scope === "write" ? " (write)" : ""}</option>)}</select>;
-    if (f.type === "agentselect") return <select value={(v as string) ?? ""} onChange={(e) => onConfig(f.key, e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none"><option value="">— pick an agent —</option>{catalog.agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select>;
+    if (f.type === "toolselect") return <select value={(v as string) ?? ""} onChange={(e) => onConfig(f.key, e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none"><option value="">- pick a tool -</option>{catalog.tools.map((t) => <option key={t.name} value={t.name}>{t.name}{t.scope === "write" ? " (write)" : ""}</option>)}</select>;
+    if (f.type === "agentselect") return <select value={(v as string) ?? ""} onChange={(e) => onConfig(f.key, e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none"><option value="">- pick an agent -</option>{catalog.agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select>;
     if (f.type === "json") {
       const ek = `${node.id}.${f.key}`;
       return <div>

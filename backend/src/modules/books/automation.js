@@ -1,4 +1,4 @@
-// §M8 — automation: approval rules + queue, configurable document numbering,
+// §M8 - automation: approval rules + queue, configurable document numbering,
 // late-fee / overdue reminders. Pure helpers are exported for testing.
 const { pool } = require("../../db");
 const { money, toDb, toRupees, gt } = require("./money");
@@ -77,20 +77,20 @@ async function overdue(tenantId, asOf, ratePerAnnum) {
     const creditDays = Number(r.credit_period_days) || 0;
     const dueMs = new Date(r.voucher_date).getTime() + creditDays * 86400000;
     const days = Math.max(0, Math.round((todayMs - dueMs) / 86400000));
-    if (days <= 0) continue; // not yet due / due today — exclude from overdue list
+    if (days <= 0) continue; // not yet due / due today - exclude from overdue list
     invoices.push({ voucherId: r.id, number: r.voucher_number, reference: r.reference, partyLedgerId: r.party_ledger_id, outstanding: toRupees(outstanding), daysOverdue: days, suggestedLateFee: toRupees(computeLateFee(outstanding, days, ratePerAnnum || 0)) });
   }
   return { asOf: today, ratePerAnnum: ratePerAnnum || 0, invoices };
 }
 async function postLateFee(tenantId, actorId, { partyLedgerId, amount, date }) {
   const lf = await ledgerIdByName(tenantId, "Late Fee Income");
-  if (!lf) throw new PostError("NOT_SEEDED", "Late Fee Income ledger missing — seed first", 422);
+  if (!lf) throw new PostError("NOT_SEEDED", "Late Fee Income ledger missing - seed first", 422);
   if (!partyLedgerId || amount == null) throw new PostError("BAD_INPUT", "partyLedgerId and amount required", 400);
   return postVoucher(tenantId, actorId, { voucherType: "JOURNAL", voucherDate: date || new Date().toISOString().slice(0, 10), narration: "Late fee", source: "api", partyLedgerId },
     [{ ledgerId: partyLedgerId, debit: toDb(amount), credit: "0" }, { ledgerId: lf, debit: "0", credit: toDb(amount) }]);
 }
 
-// Dunning — reads the book_reminders cadence (which was previously dead config) and
+// Dunning - reads the book_reminders cadence (which was previously dead config) and
 // returns the overdue invoices that have crossed a reminder stage, with the stage name
 // and the suggested late fee. The owner-facing "who to chase" list; channel delivery
 // (email/WhatsApp to the customer) is layered on top where contact + transport exist.

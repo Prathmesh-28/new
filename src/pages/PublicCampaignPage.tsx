@@ -4,7 +4,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { formatCurrency } from "@/lib/utils";
 import { Loader2, Megaphone } from "lucide-react";
 
-// PUBLIC, token-gated backer page — no login, no app shell. Mirrors the invoice
+// PUBLIC, token-gated backer page - no login, no app shell. Mirrors the invoice
 // portal pattern. Served by GET/POST /api/campaigns/public/:token.
 interface PublicPerk { id: string; name: string; description?: string; unit_price: number; delivery_date?: string; sold_out: boolean }
 interface PublicCampaign { name: string; description?: string; hero_image_url?: string; target_amount: number; raised_amount: number; status: string; days_left: number | null; perks: PublicPerk[] }
@@ -34,7 +34,7 @@ export default function PublicCampaignPage() {
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Pledge failed");
       if (d.payUrl) { window.location.href = d.payUrl; return; }   // gateway → hosted checkout
-      setDone("Your pledge is recorded — the creator will reach out to collect payment.");
+      setDone("Your pledge is recorded - the creator will reach out to collect payment.");
     } catch (e) { setDone((e as Error).message); }
     finally { setBusy(false); }
   };
@@ -58,7 +58,7 @@ export default function PublicCampaignPage() {
       </div>
       <div className="h-2.5 rounded-full bg-[var(--color-surface)] overflow-hidden mb-6"><div className="h-full bg-[var(--color-primary)]" style={{ width: `${pct}%` }} /></div>
 
-      {!live && <p className="mb-4 text-xs text-amber-400 border border-amber-700/40 rounded-lg px-3 py-2">This campaign is in preview — pledges aren't open for payment yet.</p>}
+      {!live && <p className="mb-4 text-xs text-amber-400 border border-amber-700/40 rounded-lg px-3 py-2">This campaign is in preview - pledges aren't open for payment yet.</p>}
 
       <p className="text-[11px] uppercase tracking-wide text-[var(--color-muted)] mb-2">Choose a reward</p>
       <div className="space-y-2 mb-5">

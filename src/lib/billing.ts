@@ -28,7 +28,7 @@ export async function fetchBilling(): Promise<BillingState> {
   return api.get<BillingState>("/api/billing/current");
 }
 
-// Unified upgrade entry point — Razorpay Standard Checkout.
+// Unified upgrade entry point - Razorpay Standard Checkout.
 export async function upgradePlan(
   plan: Exclude<PlanTier, "free">,
   opts: { email?: string; name?: string; onComplete?: () => void } = {},
@@ -94,14 +94,14 @@ export async function startRazorpayCheckout(
             razorpay_payment_id: resp.razorpay_payment_id,
             razorpay_signature: resp.razorpay_signature,
           });
-          if (v.ok) { haptic("success"); toast.success("You're upgraded — welcome aboard! 🎉"); opts.onComplete?.(); }
+          if (v.ok) { haptic("success"); toast.success("You're upgraded - welcome aboard! 🎉"); opts.onComplete?.(); }
           else { haptic("error"); toast.error("Payment couldn't be verified."); }
         } catch (e) {
           haptic("error");
           toast.error(apiMessage(e) || "Payment verification failed.");
         }
       },
-      modal: { ondismiss: () => { /* user closed the modal — no charge */ } },
+      modal: { ondismiss: () => { /* user closed the modal - no charge */ } },
     });
     rzp.on("payment.failed", (resp) => {
       haptic("error");
@@ -113,7 +113,7 @@ export async function startRazorpayCheckout(
   }
 }
 
-// The api client throws Error("<status>: <body>") — pull out the JSON .error field.
+// The api client throws Error("<status>: <body>") - pull out the JSON .error field.
 function apiMessage(e: unknown): string {
   if (!(e instanceof Error)) return "";
   const m = e.message.match(/^\d+:\s*(.+)$/s);

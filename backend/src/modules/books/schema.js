@@ -1,4 +1,4 @@
-// §5 — The books data model. Adapted to Headroom reality: tenant_id is TEXT
+// §5 - The books data model. Adapted to Headroom reality: tenant_id is TEXT
 // (Headroom tenant ids look like "acme-3f2a", not UUIDs); user refs are UUID
 // (users.id). Applied by db.js initDb() after the core schema. All CREATE/ALTER
 // are IF NOT EXISTS so it's safe to run on every boot.
@@ -248,7 +248,7 @@ const BOOKS_SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_book_recurring_due ON book_recurring(tenant_id, active, next_run);
 
-  -- M2: allocations — how an advance/credit voucher is applied across invoices/bills
+  -- M2: allocations - how an advance/credit voucher is applied across invoices/bills
   -- (a reporting/aging link; the ledger movement itself is already posted).
   CREATE TABLE IF NOT EXISTS book_allocations (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),

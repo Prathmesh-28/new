@@ -1,6 +1,6 @@
 // Tiny dependency-free request-body validator. Define a spec per field and get
 // an Express middleware that rejects malformed input with 400 before the route
-// handler runs — closing the "routes accept any JSON shape" gap without pulling
+// handler runs - closing the "routes accept any JSON shape" gap without pulling
 // in a schema library.
 //
 // Spec example:

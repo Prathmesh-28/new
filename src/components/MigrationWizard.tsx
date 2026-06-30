@@ -51,7 +51,7 @@ export default function MigrationWizard({ onClose, onDone }: { onClose: () => vo
         setParsed(res);
         setResult(null);
         if (res.ledgers.length === 0 && res.items.length === 0)
-          toast.warning("No ledgers or stock items found — is this a Tally Masters export?");
+          toast.warning("No ledgers or stock items found - is this a Tally Masters export?");
         else toast.success(`Found ${res.ledgers.length} ledgers, ${res.items.length} items`);
       } catch { toast.error("Could not read that Tally export"); }
     };
@@ -68,7 +68,7 @@ export default function MigrationWizard({ onClose, onDone }: { onClose: () => vo
       setResult(out);
       const created = (out.ledgers?.created ?? 0) + (out.items?.created ?? 0);
       const failed = (out.ledgers?.failed ?? 0) + (out.items?.failed ?? 0);
-      if (failed) toast.warning(`${created} imported, ${failed} skipped — see details`);
+      if (failed) toast.warning(`${created} imported, ${failed} skipped - see details`);
       else toast.success(`Imported ${created} records from Tally`);
       onDone?.();
     } catch (e: any) {
@@ -86,7 +86,7 @@ export default function MigrationWizard({ onClose, onDone }: { onClose: () => vo
         <div className="mb-4 flex items-start justify-between">
           <div>
             <h3 className="flex items-center gap-2 text-base font-semibold"><ArrowRightLeft size={16} className="text-[var(--color-primary)]" /> Bring your data in</h3>
-            <p className="mt-0.5 text-xs text-[var(--color-muted)]">Switch from Tally in one file, or upload CSVs. Everything posts through the same validated bulk import — bad rows are skipped with reasons, good rows go through.</p>
+            <p className="mt-0.5 text-xs text-[var(--color-muted)]">Switch from Tally in one file, or upload CSVs. Everything posts through the same validated bulk import - bad rows are skipped with reasons, good rows go through.</p>
           </div>
           <button onClick={onClose} className="rounded-md p-1 hover:bg-[var(--color-surface-2)]"><X size={16} /></button>
         </div>
@@ -101,7 +101,7 @@ export default function MigrationWizard({ onClose, onDone }: { onClose: () => vo
             <button onClick={() => setMode("csv")} className="rounded-lg border border-[var(--color-border)] p-4 text-left hover:border-[var(--color-primary)]">
               <FileUp size={18} className="text-[var(--color-primary)]" />
               <p className="mt-2 text-sm font-medium">Upload CSVs</p>
-              <p className="text-[11px] text-[var(--color-muted)]">Download a template for ledgers, items, opening balances or invoices, fill it in, and upload — with a live preview.</p>
+              <p className="text-[11px] text-[var(--color-muted)]">Download a template for ledgers, items, opening balances or invoices, fill it in, and upload - with a live preview.</p>
             </button>
           </div>
         )}
@@ -163,7 +163,7 @@ export default function MigrationWizard({ onClose, onDone }: { onClose: () => vo
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Card><p className="mb-2 text-sm font-medium">1 · Chart of accounts & parties</p><BulkUpload title="Bulk upload ledgers" templateName="ledgers-template" columns={LEDGER_COLS} endpoint="/api/books/ledgers/bulk" onDone={onDone} /></Card>
               <Card><p className="mb-2 text-sm font-medium">2 · Stock items</p><BulkUpload title="Bulk upload items" templateName="items-template" columns={ITEM_COLS} endpoint="/api/books/inventory/items/bulk" onDone={onDone} /></Card>
-              <Card><p className="mb-2 text-sm font-medium">3 · Opening invoices</p><BulkUpload title="Bulk upload invoices" templateName="invoices-template" columns={INVOICE_COLS} endpoint="/api/books/documents/bulk" hint="SALES or PURCHASE per row — each posts a balanced GST voucher." onDone={onDone} /></Card>
+              <Card><p className="mb-2 text-sm font-medium">3 · Opening invoices</p><BulkUpload title="Bulk upload invoices" templateName="invoices-template" columns={INVOICE_COLS} endpoint="/api/books/documents/bulk" hint="SALES or PURCHASE per row - each posts a balanced GST voucher." onDone={onDone} /></Card>
               <Card><p className="mb-2 text-sm font-medium">Opening balances</p><p className="text-[11px] text-[var(--color-muted)]">Use the Books → Closing tab to import a trial-balance CSV of opening balances.</p></Card>
             </div>
           </div>

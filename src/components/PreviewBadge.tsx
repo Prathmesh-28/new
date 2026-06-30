@@ -2,14 +2,14 @@ import { Plug } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCapabilities, type CapabilityKey } from "@/context/CapabilitiesContext";
 
-// Per-capability explanation — framed as "live data switches on when you connect",
+// Per-capability explanation - framed as "live data switches on when you connect",
 // not "this is fake". Leads with what already works, then the one-time setup.
 const COPY: Partial<Record<CapabilityKey, string>> = {
-  bankSync:            "Add accounts manually now — or switch on automatic bank sync (Account Aggregator) anytime. One-time connect in Connectors.",
+  bankSync:            "Add accounts manually now - or switch on automatic bank sync (Account Aggregator) anytime. One-time connect in Connectors.",
   creditDisbursement:  "Eligibility, offers and underwriting are live. Connect a lending partner to enable actual loan disbursement.",
   bnplPayout:          "Drawdowns are tracked live. Connect a payout partner to enable supplier payouts.",
   ewaPayout:           "Earned-wage amounts are live. Connect a payout partner to enable disbursement.",
-  gstEInvoice:         "Generates a sample IRN now. Connect your GST Suvidha Provider to issue real IRNs — a one-time setup in Connectors.",
+  gstEInvoice:         "Generates a sample IRN now. Connect your GST Suvidha Provider to issue real IRNs - a one-time setup in Connectors.",
   lenderMarketplace:   "Showing sample lenders. The live two-sided marketplace switches on as lending partners onboard.",
   supplierMarketplace: "Showing sample early-pay offers. The live marketplace switches on as partners onboard.",
   treasurySweep:       "Idle-cash analysis is live. Connect a treasury partner to enable automated sweep enrolment.",

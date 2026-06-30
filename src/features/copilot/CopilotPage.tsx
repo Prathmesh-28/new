@@ -118,7 +118,7 @@ export default function CopilotPage() {
             <Bot size={18} className="text-[var(--color-primary)]" /> AI CFO Copilot
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            An assistive layer over your live numbers — daily briefs, recommended actions and plain-language answers, all computed from your own data.
+            An assistive layer over your live numbers - daily briefs, recommended actions and plain-language answers, all computed from your own data.
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -134,7 +134,7 @@ export default function CopilotPage() {
       <div className="flex items-start gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-accent)]/40 px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
         <Info size={13} className="shrink-0 mt-px text-[var(--color-primary)]" />
         <span>
-          The copilot is <strong className="text-[var(--color-text)]">assistive, not autonomous</strong>. Every suggestion is a rule-based read of your live data and every "action" is a preview that links you to the right page — nothing moves money or files anything on its own.
+          The copilot is <strong className="text-[var(--color-text)]">assistive, not autonomous</strong>. Every suggestion is a rule-based read of your live data and every "action" is a preview that links you to the right page - nothing moves money or files anything on its own.
         </span>
       </div>
 
@@ -192,7 +192,7 @@ function Overview({ signals, navigate }: { signals: Signals; navigate: Nav }) {
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Sparkles size={14} className="text-[var(--color-primary)]" /> What the copilot does</h2>
         <p className="text-xs text-[var(--color-muted)] mb-4">
-          Think of it as a finance analyst that has read every number in your workspace. It summarises, ranks, and answers — then hands you to the page that does the real work.
+          Think of it as a finance analyst that has read every number in your workspace. It summarises, ranks, and answers - then hands you to the page that does the real work.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {[
@@ -237,12 +237,12 @@ function DailyBrief({ signals, navigate }: { signals: Signals; navigate: Nav }) 
 
   lines.push({ tone: "info", text: `You're holding ${formatCurrency(Math.round(signals.cash))} in cash with ${runwayLabel(signals.runwayDays)} of runway at the current burn.` });
   if (signals.monthlyNet >= 0) lines.push({ tone: "good", text: `Operations are net cash positive (~${formatCurrency(Math.round(signals.monthlyNet))}/month).` });
-  else lines.push({ tone: signals.runwayDays < 90 ? "bad" : "warn", text: `You're burning ~${formatCurrency(Math.round(-signals.monthlyNet))}/month. ${signals.runwayDays < 90 ? "Runway is under 3 months — act on the planner." : "Watch the burn."}` });
-  if (signals.overdueReceivable > 0) lines.push({ tone: "warn", text: `${formatCurrency(Math.round(signals.overdueReceivable))} across ${signals.overdueInvoiceCount} invoice(s) is overdue — chasing it is the fastest cash you can raise.` });
-  else lines.push({ tone: "good", text: "No overdue receivables — collections are clean." });
+  else lines.push({ tone: signals.runwayDays < 90 ? "bad" : "warn", text: `You're burning ~${formatCurrency(Math.round(-signals.monthlyNet))}/month. ${signals.runwayDays < 90 ? "Runway is under 3 months - act on the planner." : "Watch the burn."}` });
+  if (signals.overdueReceivable > 0) lines.push({ tone: "warn", text: `${formatCurrency(Math.round(signals.overdueReceivable))} across ${signals.overdueInvoiceCount} invoice(s) is overdue - chasing it is the fastest cash you can raise.` });
+  else lines.push({ tone: "good", text: "No overdue receivables - collections are clean." });
   if (signals.dueTodayCount > 0) lines.push({ tone: "warn", text: `${signals.dueTodayCount} item(s) worth ${formatCurrency(Math.round(signals.dueToday))} fall due today.` });
-  if (signals.obligationsDue90 > 0) lines.push({ tone: "info", text: `${formatCurrency(Math.round(signals.obligationsDue90))} of obligations are due within 90 days — make sure the forecast covers them.` });
-  if (signals.topCustomerPct >= 30) lines.push({ tone: "warn", text: `Your top customer is ${signals.topCustomerPct.toFixed(0)}% of revenue — concentration risk worth diversifying.` });
+  if (signals.obligationsDue90 > 0) lines.push({ tone: "info", text: `${formatCurrency(Math.round(signals.obligationsDue90))} of obligations are due within 90 days - make sure the forecast covers them.` });
+  if (signals.topCustomerPct >= 30) lines.push({ tone: "warn", text: `Your top customer is ${signals.topCustomerPct.toFixed(0)}% of revenue - concentration risk worth diversifying.` });
 
   const toneClass: Record<string, string> = {
     good: "text-green-400", warn: "text-yellow-400", bad: "text-red-400", info: "text-[var(--color-text)]",
@@ -285,9 +285,9 @@ function buildRecs(s: Signals): ActionRec[] {
   const recs: ActionRec[] = [];
   if (s.overdueReceivable > 0) recs.push({ id: "collect", title: "Chase overdue invoices", why: `${formatCurrency(Math.round(s.overdueReceivable))} across ${s.overdueInvoiceCount} invoice(s) is past due.`, impact: s.overdueReceivable, severity: "high", path: "/collections", cta: "Open Collections" });
   if (s.runwayDays < 120 && s.monthlyNet < 0) recs.push({ id: "runway", title: "Extend runway", why: `Only ${runwayLabel(s.runwayDays)} left at the current burn.`, impact: Math.round(-s.monthlyNet * 3), severity: s.runwayDays < 60 ? "high" : "med", path: "/credit", cta: "Arrange working capital" });
-  if (s.monthlyExpense > 0 && s.monthlyNet < 0) recs.push({ id: "spend", title: "Review spend for cuts", why: "You're burning cash — trimming non-essential spend buys runway with no financing cost.", impact: Math.round(s.monthlyExpense * 0.1), severity: "med", path: "/spend", cta: "Open Spend" });
+  if (s.monthlyExpense > 0 && s.monthlyNet < 0) recs.push({ id: "spend", title: "Review spend for cuts", why: "You're burning cash - trimming non-essential spend buys runway with no financing cost.", impact: Math.round(s.monthlyExpense * 0.1), severity: "med", path: "/spend", cta: "Open Spend" });
   if (s.obligationsDue90 > s.cash) recs.push({ id: "forecast", title: "Stress-test the forecast", why: `Obligations due in 90 days (${formatCurrency(Math.round(s.obligationsDue90))}) exceed current cash.`, impact: s.obligationsDue90, severity: "high", path: "/forecast", cta: "Open Forecast" });
-  if (s.topCustomerPct >= 30) recs.push({ id: "concentration", title: "Diversify customer base", why: `Top customer is ${s.topCustomerPct.toFixed(0)}% of revenue — losing them would hurt.`, impact: 0, severity: "low", path: "/analytics", cta: "View concentration" });
+  if (s.topCustomerPct >= 30) recs.push({ id: "concentration", title: "Diversify customer base", why: `Top customer is ${s.topCustomerPct.toFixed(0)}% of revenue - losing them would hurt.`, impact: 0, severity: "low", path: "/analytics", cta: "View concentration" });
   if (s.dscr !== null && s.dscr < 1.25) recs.push({ id: "debt", title: "Improve debt coverage", why: `DSCR is ${s.dscr.toFixed(2)}x, below the typical 1.25x lender bar.`, impact: 0, severity: "med", path: "/debt", cta: "Open Debt Manager" });
   if (recs.length === 0) recs.push({ id: "clear", title: "Nothing urgent", why: "No high-priority actions from your current data. Keep collections tight and the forecast fresh.", impact: 0, severity: "low", path: "/dashboard", cta: "Open Dashboard" });
   const order = { high: 0, med: 1, low: 2 };
@@ -304,7 +304,7 @@ function RecommendedActions({ signals, navigate }: { signals: Signals; navigate:
   };
   return (
     <div className="space-y-3">
-      <p className="text-xs text-[var(--color-muted)] px-1">Heuristic next-best-steps, ranked by urgency and cash impact. Acting on one opens the page that actually does it — the copilot never executes by itself.</p>
+      <p className="text-xs text-[var(--color-muted)] px-1">Heuristic next-best-steps, ranked by urgency and cash impact. Acting on one opens the page that actually does it - the copilot never executes by itself.</p>
       {recs.map(r => {
         const isDone = done.includes(r.id);
         return (
@@ -366,7 +366,7 @@ function QuickActionLauncher({ navigate }: { navigate: Nav }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Send size={14} className="text-[var(--color-primary)]" /> Quick-Action Launcher</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Type what you want to do in plain words — the launcher matches keywords and takes you straight to the right module. It only navigates; it doesn't perform the task for you.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Type what you want to do in plain words - the launcher matches keywords and takes you straight to the right module. It only navigates; it doesn't perform the task for you.</p>
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
           <input value={q} onChange={e => setQ(e.target.value)} autoFocus placeholder="e.g. chase overdue, run a what-if, file GST…" className={`${INP} pl-9`} />
@@ -393,16 +393,16 @@ function QuickActionLauncher({ navigate }: { navigate: Nav }) {
 function answerQuestion(q: string, s: Signals): string {
   const t = q.toLowerCase();
   if (/runway|how long|last/.test(t)) return `At your current burn you have ${runwayLabel(s.runwayDays)} of runway on ${formatCurrency(Math.round(s.cash))} of cash. ${s.monthlyNet >= 0 ? "You're net cash positive, so runway is effectively indefinite." : `You're burning ${formatCurrency(Math.round(-s.monthlyNet))}/month.`}`;
-  if (/cash down|why.*cash|burn|losing/.test(t)) return s.monthlyNet < 0 ? `Cash is falling because monthly outflows (${formatCurrency(Math.round(s.monthlyExpense))}) exceed inflows — a net burn of ${formatCurrency(Math.round(-s.monthlyNet))}. The fastest lever is the ${formatCurrency(Math.round(s.overdueReceivable))} in overdue receivables.` : `Cash isn't falling on an operating basis — you're net positive by ${formatCurrency(Math.round(s.monthlyNet))}/month. Any dip is timing of one-off items.`;
+  if (/cash down|why.*cash|burn|losing/.test(t)) return s.monthlyNet < 0 ? `Cash is falling because monthly outflows (${formatCurrency(Math.round(s.monthlyExpense))}) exceed inflows - a net burn of ${formatCurrency(Math.round(-s.monthlyNet))}. The fastest lever is the ${formatCurrency(Math.round(s.overdueReceivable))} in overdue receivables.` : `Cash isn't falling on an operating basis - you're net positive by ${formatCurrency(Math.round(s.monthlyNet))}/month. Any dip is timing of one-off items.`;
   if (/overdue|collect|owe|receivable/.test(t)) return `${formatCurrency(Math.round(s.overdueReceivable))} is overdue across ${s.overdueInvoiceCount} invoice(s), out of ${formatCurrency(Math.round(s.accountsReceivable))} total open receivables. Chasing it is your cheapest source of cash.`;
   if (/health|score|how.*doing/.test(t)) return `Your composite financial health is ${Math.round(s.healthScore)}/100 (grade ${s.healthGrade}). Open the Health page to see the per-driver breakdown.`;
-  if (/debt|loan|emi|dscr|coverage/.test(t)) return s.dscr === null ? "You have no active debt on record, so debt-coverage isn't a concern right now." : `Your DSCR is ${s.dscr.toFixed(2)}x ${s.dscr >= 1.25 ? "— comfortably above the usual 1.25x lender bar." : "— below the 1.25x lender bar, which can limit refinancing."}`;
-  if (/customer|concentration|biggest/.test(t)) return `Your largest customer is about ${s.topCustomerPct.toFixed(0)}% of revenue. ${s.topCustomerPct >= 30 ? "That's meaningful concentration — worth diversifying." : "Concentration looks healthy."}`;
+  if (/debt|loan|emi|dscr|coverage/.test(t)) return s.dscr === null ? "You have no active debt on record, so debt-coverage isn't a concern right now." : `Your DSCR is ${s.dscr.toFixed(2)}x ${s.dscr >= 1.25 ? "- comfortably above the usual 1.25x lender bar." : "- below the 1.25x lender bar, which can limit refinancing."}`;
+  if (/customer|concentration|biggest/.test(t)) return `Your largest customer is about ${s.topCustomerPct.toFixed(0)}% of revenue. ${s.topCustomerPct >= 30 ? "That's meaningful concentration - worth diversifying." : "Concentration looks healthy."}`;
   if (/due today|today|pay/.test(t)) return s.dueTodayCount > 0 ? `${s.dueTodayCount} item(s) worth ${formatCurrency(Math.round(s.dueToday))} fall due today.` : "Nothing falls due today.";
   return `I answer from your live metrics. Try: “what's my runway?”, “why is cash down?”, “how much is overdue?”, “what's my health score?” or “how's my debt coverage?”.`;
 }
 
-// A compact, grounding snapshot the LLM must reason over — no outside data.
+// A compact, grounding snapshot the LLM must reason over - no outside data.
 function buildSnapshotBlock(s: Signals): string {
   return [
     `Cash on hand: ${formatCurrency(Math.round(s.cash))}`,
@@ -426,8 +426,8 @@ function CopilotQA({ signals }: { signals: Signals }) {
   const [log, setLog] = useState<QaEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Calls the grounded backend (POST /api/ai/ask). On any failure — offline,
-  // AI not configured, API error — falls back to the local rule-based answer so
+  // Calls the grounded backend (POST /api/ai/ask). On any failure - offline,
+  // AI not configured, API error - falls back to the local rule-based answer so
   // the box always returns something useful and never crashes.
   const ask = async (raw?: string) => {
     const question = (raw ?? q).trim();
@@ -438,15 +438,15 @@ function CopilotQA({ signals }: { signals: Signals }) {
       const result = await api.post<{ content: string }>("/api/ai/ask", {
         messages: [{
           role: "user",
-          content: `Here is the business's current financial snapshot (the only data you may use — do not invent numbers):\n\n${buildSnapshotBlock(signals)}\n\nQuestion: ${question}`,
+          content: `Here is the business's current financial snapshot (the only data you may use - do not invent numbers):\n\n${buildSnapshotBlock(signals)}\n\nQuestion: ${question}`,
         }],
-        system: "You are an AI CFO copilot for an Indian SMB owner. Answer ONLY from the financial snapshot provided — never invent figures. Be concise (2-4 sentences), specific, and actionable. Use Indian rupee formatting (₹, L for lakhs, Cr for crores). If the snapshot can't answer the question, say so plainly.",
+        system: "You are an AI CFO copilot for an Indian SMB owner. Answer ONLY from the financial snapshot provided - never invent figures. Be concise (2-4 sentences), specific, and actionable. Use Indian rupee formatting (₹, L for lakhs, Cr for crores). If the snapshot can't answer the question, say so plainly.",
       });
       const answer = (result.content || "").trim();
       setLog(prev => [{ q: question, a: answer || answerQuestion(question, signals), source: answer ? "ai" : "offline" }, ...prev]);
     } catch (err) {
       // Graceful degradation to the deterministic, rule-based answer.
-      toast.error(err instanceof Error && err.message.startsWith("503") ? "AI not configured — using offline answer" : "Couldn't reach the AI — using offline answer");
+      toast.error(err instanceof Error && err.message.startsWith("503") ? "AI not configured - using offline answer" : "Couldn't reach the AI - using offline answer");
       setLog(prev => [{ q: question, a: answerQuestion(question, signals), source: "offline" }, ...prev]);
     } finally {
       setLoading(false);
@@ -458,7 +458,7 @@ function CopilotQA({ signals }: { signals: Signals }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><MessageSquareText size={14} className="text-[var(--color-primary)]" /> Ask the Copilot</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Ask anything in plain language. The AI reasons over <strong className="text-[var(--color-text)]">only your live financial snapshot</strong> — cash, runway, receivables, debt and health. If the AI is unavailable, you'll get an instant offline answer from the same numbers.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Ask anything in plain language. The AI reasons over <strong className="text-[var(--color-text)]">only your live financial snapshot</strong> - cash, runway, receivables, debt and health. If the AI is unavailable, you'll get an instant offline answer from the same numbers.</p>
         <div className="flex gap-2">
           <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && ask()} disabled={loading} placeholder="Ask about your finances…" className={INP} />
           <button onClick={() => ask()} disabled={loading} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium shrink-0 disabled:opacity-60">
@@ -486,7 +486,7 @@ function CopilotQA({ signals }: { signals: Signals }) {
               <p className="text-sm font-medium flex items-start gap-2"><MessageSquareText size={13} className="text-[var(--color-primary)] mt-0.5 shrink-0" /> {entry.q}</p>
               <p className="text-sm text-[var(--color-muted)] mt-2 pl-5 whitespace-pre-wrap">{entry.a}</p>
               {entry.source === "offline" && (
-                <p className="text-[10px] text-[var(--color-muted)] mt-2 pl-5 flex items-center gap-1"><Info size={10} /> Offline answer — computed from your metrics without the AI.</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-2 pl-5 flex items-center gap-1"><Info size={10} /> Offline answer - computed from your metrics without the AI.</p>
               )}
             </div>
           ))}
@@ -518,7 +518,7 @@ function RunwayGoalPlanner({ signals, navigate }: { signals: Signals; navigate: 
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Target size={14} className="text-[var(--color-primary)]" /> Runway Goal Planner</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Set a runway target and the planner proposes a heuristic mix of collecting, cutting and borrowing to close the gap. It's a suggestion to act on — not an instruction to anything.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Set a runway target and the planner proposes a heuristic mix of collecting, cutting and borrowing to close the gap. It's a suggestion to act on - not an instruction to anything.</p>
         <label className="text-xs text-[var(--color-muted)] block mb-1">Target runway: <strong className="text-[var(--color-text)]">{targetMonths} months</strong></label>
         <input type="range" min={3} max={24} step={1} value={targetMonths} onChange={e => setTargetMonths(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
         <p className="text-[11px] text-[var(--color-muted)] mt-2">Today: {currentMonths >= 999 ? "cash-flow positive" : `${currentMonths.toFixed(1)} months`} of runway on {formatCurrency(Math.round(signals.cash))}.</p>
@@ -526,11 +526,11 @@ function RunwayGoalPlanner({ signals, navigate }: { signals: Signals; navigate: 
 
       {monthlyBurn <= 0 ? (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> You're net cash positive — runway is effectively unlimited. No funding gap to plan for.</p>
+          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> You're net cash positive - runway is effectively unlimited. No funding gap to plan for.</p>
         </div>
       ) : plan && plan.gap === 0 ? (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> Your current cash already covers {targetMonths} months of burn — no gap to close.</p>
+          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> Your current cash already covers {targetMonths} months of burn - no gap to close.</p>
         </div>
       ) : plan && (
         <>
@@ -599,7 +599,7 @@ function AttentionFeed({ signals, navigate }: { signals: Signals; navigate: Nav 
   };
   return (
     <div className="space-y-3">
-      <p className="text-xs text-[var(--color-muted)] px-1">Things the copilot flagged from your data, most urgent first. These are heuristic detections — review before acting.</p>
+      <p className="text-xs text-[var(--color-muted)] px-1">Things the copilot flagged from your data, most urgent first. These are heuristic detections - review before acting.</p>
       {items.length === 0 ? (
         <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
           <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
@@ -637,7 +637,7 @@ function GuardrailsConfig() {
     <div className="space-y-4">
       <div className="flex items-start gap-2 rounded-lg border border-yellow-800/40 bg-yellow-950/20 px-4 py-2.5 text-[11px] text-yellow-300">
         <Info size={13} className="shrink-0 mt-px" />
-        These limits are saved as <strong>your stated policy</strong>. Because the copilot is assistive only, nothing enforces them automatically yet — they document the boundaries any future automation must respect.
+        These limits are saved as <strong>your stated policy</strong>. Because the copilot is assistive only, nothing enforces them automatically yet - they document the boundaries any future automation must respect.
       </div>
       <div className={`${CARD} p-5 space-y-4`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><ShieldCheck size={14} className="text-[var(--color-primary)]" /> Guardrails & Spending Limits</h2>
@@ -701,7 +701,7 @@ function AutopilotToggles() {
     <div className="space-y-4">
       <div className="flex items-start gap-2 rounded-lg border border-yellow-800/40 bg-yellow-950/20 px-4 py-2.5 text-[11px] text-yellow-300">
         <Info size={13} className="shrink-0 mt-px" />
-        <span><strong>Simulated preview.</strong> These toggles record which assists you'd want on. They only control which suggestions and feeds the copilot prepares — none of them move money, send messages, or file anything automatically.</span>
+        <span><strong>Simulated preview.</strong> These toggles record which assists you'd want on. They only control which suggestions and feeds the copilot prepares - none of them move money, send messages, or file anything automatically.</span>
       </div>
       <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
         {AUTOPILOT_META.map(m => (
@@ -736,7 +736,7 @@ function ActionLog() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ScrollText size={14} className="text-[var(--color-primary)]" /> Action Log</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">A manual record of actions you took on the copilot's advice — your own assistive audit trail. Useful for CA review and for tracking what worked.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A manual record of actions you took on the copilot's advice - your own assistive audit trail. Useful for CA review and for tracking what worked.</p>
         <div className="flex gap-2">
           <input value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="e.g. Chased 3 overdue invoices after the daily brief" className={INP} />
           <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium shrink-0"><Plus size={13} /> Log</button>
@@ -767,7 +767,7 @@ function WeeklyReview({ signals }: { signals: Signals }) {
   const today = new Date();
   const review = useMemo(() => {
     const lines: string[] = [];
-    lines.push(`Weekly Review — ${format(today, "d MMM yyyy")}`);
+    lines.push(`Weekly Review - ${format(today, "d MMM yyyy")}`);
     lines.push("");
     lines.push(`Cash: ${formatCurrency(Math.round(signals.cash))} · Runway: ${runwayLabel(signals.runwayDays)} · Health: ${Math.round(signals.healthScore)}/100 (${signals.healthGrade})`);
     lines.push(`Monthly net: ${signals.monthlyNet >= 0 ? "+" : ""}${formatCurrency(Math.round(signals.monthlyNet))}`);
@@ -806,7 +806,7 @@ function WeeklyReview({ signals }: { signals: Signals }) {
 
 // ── Month-End Close Checklist (auto-status from store) ─────────────────────────
 // A pre-close checklist whose status is read from your live data where the data
-// can answer it, and manually tickable where only you can. Assistive only — it
+// can answer it, and manually tickable where only you can. Assistive only - it
 // tells you what looks done vs. open; it doesn't post or file anything.
 function MonthEndClose({ snap, navigate }: { snap: FinancialSnapshot; navigate: Nav }) {
   const { store } = useApp();
@@ -820,12 +820,12 @@ function MonthEndClose({ snap, navigate }: { snap: FinancialSnapshot; navigate: 
     const items: { id: string; label: string; detail: string; status: "done" | "open" | "review"; path?: string }[] = [
       {
         id: "txns", label: "All transactions categorised",
-        detail: unflagged === 0 ? "Every transaction this month has a counterparty." : `${unflagged} transaction(s) this month have no counterparty — label them.`,
+        detail: unflagged === 0 ? "Every transaction this month has a counterparty." : `${unflagged} transaction(s) this month have no counterparty - label them.`,
         status: unflagged === 0 ? "done" : "review", path: "/transactions",
       },
       {
         id: "ar", label: "Receivables reviewed",
-        detail: snap.overdueReceivable === 0 ? "No overdue invoices outstanding." : `${formatCurrency(Math.round(snap.overdueReceivable))} overdue — chase or write-off before close.`,
+        detail: snap.overdueReceivable === 0 ? "No overdue invoices outstanding." : `${formatCurrency(Math.round(snap.overdueReceivable))} overdue - chase or write-off before close.`,
         status: snap.overdueReceivable === 0 ? "done" : "review", path: "/receivables",
       },
       {
@@ -872,7 +872,7 @@ function MonthEndClose({ snap, navigate }: { snap: FinancialSnapshot; navigate: 
           <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> Month-End Close · {monthLabel}</h2>
           <span className="text-[10px] text-[var(--color-muted)]">{done}/{total} steps · {pct}%</span>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Status is auto-read from your data where possible and tickable where only you can confirm. This is a checklist, not an automation — nothing closes the books for you.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Status is auto-read from your data where possible and tickable where only you can confirm. This is a checklist, not an automation - nothing closes the books for you.</p>
         <div className="h-1.5 w-full rounded-full bg-[var(--color-border)] overflow-hidden">
           <div className="h-full bg-[var(--color-primary)] transition-all" style={{ width: `${pct}%` }} />
         </div>
@@ -910,7 +910,7 @@ function MonthEndClose({ snap, navigate }: { snap: FinancialSnapshot; navigate: 
 }
 
 // ── Explain a Number (drill-down helper) ──────────────────────────────────────
-// Pick a headline metric and the copilot shows how it was built from your data —
+// Pick a headline metric and the copilot shows how it was built from your data -
 // the inputs, the formula in words, and where to dig further. Read-only.
 function ExplainNumber({ snap, signals, navigate }: { snap: FinancialSnapshot; signals: Signals; navigate: Nav }) {
   type Metric = { id: string; label: string; value: string; formula: string; rows: { k: string; v: string }[]; path: string };
@@ -923,7 +923,7 @@ function ExplainNumber({ snap, signals, navigate }: { snap: FinancialSnapshot; s
         { k: "Avg monthly revenue (3mo)", v: formatCurrency(Math.round(snap.monthlyRevenue)) },
         { k: "Avg monthly expense (3mo)", v: formatCurrency(Math.round(snap.monthlyExpense)) },
         { k: "Monthly net", v: `${signals.monthlyNet >= 0 ? "+" : ""}${formatCurrency(Math.round(signals.monthlyNet))}` },
-        { k: "Daily burn", v: signals.monthlyNet < 0 ? formatCurrency(Math.round(-signals.monthlyNet / 30)) : "—" },
+        { k: "Daily burn", v: signals.monthlyNet < 0 ? formatCurrency(Math.round(-signals.monthlyNet / 30)) : "-" },
       ],
     },
     {
@@ -967,7 +967,7 @@ function ExplainNumber({ snap, signals, navigate }: { snap: FinancialSnapshot; s
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> Explain a Number</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Pick a headline figure and see exactly how it was computed from your data — the inputs, the formula in plain words, and where to dig in. Nothing here changes a value.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Pick a headline figure and see exactly how it was computed from your data - the inputs, the formula in plain words, and where to dig in. Nothing here changes a value.</p>
         <div className="flex flex-wrap gap-1.5">
           {metrics.map(x => (
             <button key={x.id} onClick={() => setSel(x.id)}
@@ -1002,7 +1002,7 @@ function ExplainNumber({ snap, signals, navigate }: { snap: FinancialSnapshot; s
 
 // ── Payment Prioritizer (which to pay first within available cash) ─────────────
 // Ranks upcoming obligations and approved POs by urgency, then walks down the
-// list spending only the cash you have — a suggestion to triage, never a payment.
+// list spending only the cash you have - a suggestion to triage, never a payment.
 function PaymentPrioritizer({ signals, navigate }: { signals: Signals; navigate: Nav }) {
   const { store } = useApp();
   const [reserve, setReserve] = useFeatureState<number>("cop-pay-reserve", 0);
@@ -1010,7 +1010,7 @@ function PaymentPrioritizer({ signals, navigate }: { signals: Signals; navigate:
   const ranked = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
     const horizon = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
-    // Urgency weight per obligation type — statutory first, then payroll, loans, other.
+    // Urgency weight per obligation type - statutory first, then payroll, loans, other.
     const typeRank: Record<string, number> = { tax: 0, payroll: 1, loan: 2, other: 3 };
     type Bill = { id: string; name: string; amount: number; dueDate: string; kind: string; rank: number };
     const bills: Bill[] = [];
@@ -1044,7 +1044,7 @@ function PaymentPrioritizer({ signals, navigate }: { signals: Signals; navigate:
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Payment Prioritizer</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">When cash is tight, this ranks what's due in the next 30 days — statutory dues and payroll first — and walks down the list spending only the cash you have. It's triage advice; it never releases a payment.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">When cash is tight, this ranks what's due in the next 30 days - statutory dues and payroll first - and walks down the list spending only the cash you have. It's triage advice; it never releases a payment.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             { label: "Cash on hand", value: formatAmount(signals.cash), color: "text-[var(--color-text)]" },
@@ -1089,7 +1089,7 @@ function PaymentPrioritizer({ signals, navigate }: { signals: Signals; navigate:
       )}
       {shortfall > 0 && (
         <button onClick={() => navigate("/credit")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">
-          {formatCurrency(Math.round(shortfall))} short — explore working capital <ArrowRight size={11} />
+          {formatCurrency(Math.round(shortfall))} short - explore working capital <ArrowRight size={11} />
         </button>
       )}
     </div>
@@ -1120,7 +1120,7 @@ function ComplianceDigest({ snap, navigate }: { snap: FinancialSnapshot; navigat
   const total = items.reduce((s, i) => s + i.amount, 0);
   const copy = () => {
     const txt = `Due in the next ${horizon} days (total ${formatCurrency(Math.round(total))}):\n` +
-      items.map(i => `• ${format(new Date(i.dueDate), "d MMM")} — ${i.name}: ${formatCurrency(Math.round(i.amount))}${i.overdue ? " (OVERDUE)" : ""}`).join("\n");
+      items.map(i => `• ${format(new Date(i.dueDate), "d MMM")} - ${i.name}: ${formatCurrency(Math.round(i.amount))}${i.overdue ? " (OVERDUE)" : ""}`).join("\n");
     navigator.clipboard?.writeText(txt);
     toast.success("Digest copied");
   };
@@ -1136,7 +1136,7 @@ function ComplianceDigest({ snap, navigate }: { snap: FinancialSnapshot; navigat
             ))}
           </div>
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Tax, statutory and obligation deadlines landing in your chosen window, soonest first — plus the advance-tax installments from your schedule. It reminds you; the actual filing/payment happens on its own page.</p>
+        <p className="text-xs text-[var(--color-muted)]">Tax, statutory and obligation deadlines landing in your chosen window, soonest first - plus the advance-tax installments from your schedule. It reminds you; the actual filing/payment happens on its own page.</p>
         {items.length > 0 && <p className="text-sm font-semibold mt-3">Total due: <span className="tabular-nums">{formatCurrency(Math.round(total))}</span></p>}
       </div>
 
@@ -1191,7 +1191,7 @@ function TopRisks({ snap, signals, navigate }: { snap: FinancialSnapshot; signal
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-[var(--color-muted)] px-1">The three issues that most drag on your financial health right now, ranked by how much they cost your score and cash. A focusing aid — review before acting.</p>
+      <p className="text-xs text-[var(--color-muted)] px-1">The three issues that most drag on your financial health right now, ranked by how much they cost your score and cash. A focusing aid - review before acting.</p>
       {risks.length === 0 ? (
         <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
           <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
@@ -1252,7 +1252,7 @@ function SavingsFinder({ navigate }: { navigate: Nav }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scissors size={14} className="text-[var(--color-primary)]" /> Savings Finder</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Recurring and frequently-repeated outflows over the last 90 days, ranked by monthly cost — the usual place to find subscriptions and duplicate spend to trim. Tick what you'd cut to tally the saving; it doesn't cancel anything.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Recurring and frequently-repeated outflows over the last 90 days, ranked by monthly cost - the usual place to find subscriptions and duplicate spend to trim. Tick what you'd cut to tally the saving; it doesn't cancel anything.</p>
         {targetedMonthly > 0 && (
           <p className="text-sm font-semibold text-green-400">Earmarked to cut: {formatCurrency(Math.round(targetedMonthly))}/mo <span className="text-[var(--color-muted)] font-normal">(≈ {formatCurrency(Math.round(targetedMonthly * 12))}/yr)</span></p>
         )}
@@ -1316,7 +1316,7 @@ function KpiTargets({ snap, signals }: { snap: FinancialSnapshot; signals: Signa
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> KPI Targets</h2>
-        <p className="text-xs text-[var(--color-muted)]">Set a target for each core KPI; the tracker compares it to the live value and nudges you on the gap. Targets are saved with your workspace — the actuals are read straight from your data.</p>
+        <p className="text-xs text-[var(--color-muted)]">Set a target for each core KPI; the tracker compares it to the live value and nudges you on the gap. Targets are saved with your workspace - the actuals are read straight from your data.</p>
       </div>
 
       <div className="space-y-3">
@@ -1371,7 +1371,7 @@ function EndOfDayBrief({ snap, signals }: { snap: FinancialSnapshot; signals: Si
     const inToday = todays.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
     const outToday = Math.abs(todays.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
     const L: string[] = [];
-    L.push(`End-of-Day Brief — ${format(today, "EEEE, d MMM yyyy")}`);
+    L.push(`End-of-Day Brief - ${format(today, "EEEE, d MMM yyyy")}`);
     L.push("");
     L.push("Position:");
     L.push(`• Cash ${formatCurrency(Math.round(signals.cash))} · runway ${runwayLabel(signals.runwayDays)} · health ${Math.round(signals.healthScore)}/100 (${signals.healthGrade})`);
@@ -1385,8 +1385,8 @@ function EndOfDayBrief({ snap, signals }: { snap: FinancialSnapshot; signals: Si
     if (signals.overdueReceivable > 0) L.push(`• ${formatCurrency(Math.round(signals.overdueReceivable))} overdue across ${signals.overdueInvoiceCount} invoice(s)`);
     if (signals.dueTodayCount > 0) L.push(`• ${signals.dueTodayCount} item(s) worth ${formatCurrency(Math.round(signals.dueToday))} due today`);
     if (snap.gstThisMonth.netPayable > 0) L.push(`• GST payable this month ≈ ${formatCurrency(snap.gstThisMonth.netPayable)}`);
-    if (signals.runwayDays < 120 && signals.monthlyNet < 0) L.push(`• Runway under 4 months — watch the burn`);
-    if (L[L.length - 1] === "Open items:") L.push("• Nothing outstanding — clean slate.");
+    if (signals.runwayDays < 120 && signals.monthlyNet < 0) L.push(`• Runway under 4 months - watch the burn`);
+    if (L[L.length - 1] === "Open items:") L.push("• Nothing outstanding - clean slate.");
     return L.join("\n");
   }, [store.transactions, snap, signals, today]);
 
@@ -1400,7 +1400,7 @@ function EndOfDayBrief({ snap, signals }: { snap: FinancialSnapshot; signals: Si
             Copy
           </button>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-4">A copy-ready wrap of where the business stands, what moved today and what's still open — paste it into a standup, a WhatsApp update or your meeting notes. Built from your live numbers.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A copy-ready wrap of where the business stands, what moved today and what's still open - paste it into a standup, a WhatsApp update or your meeting notes. Built from your live numbers.</p>
         <pre className="text-xs whitespace-pre-wrap bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 leading-relaxed text-[var(--color-text)] font-sans">{brief}</pre>
       </div>
     </div>
@@ -1410,7 +1410,7 @@ function EndOfDayBrief({ snap, signals }: { snap: FinancialSnapshot; signals: Si
 // ── Cash-Shortfall Early-Warning ───────────────────────────────────────────────
 // Projects cash forward week-by-week: starting balance, minus dated obligations
 // and open invoices due, plus the operating run-rate. Flags the first week cash
-// would dip below your safety buffer. Read-only forecast — moves nothing.
+// would dip below your safety buffer. Read-only forecast - moves nothing.
 function CashEarlyWarning({ snap, signals, navigate }: { snap: FinancialSnapshot; signals: Signals; navigate: Nav }) {
   const { store } = useApp();
   const buffer = Math.round(snap.monthlyExpense * 0.5); // ~2 weeks of expense as a safety floor
@@ -1444,7 +1444,7 @@ function CashEarlyWarning({ snap, signals, navigate }: { snap: FinancialSnapshot
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><LineChart size={14} className="text-[var(--color-primary)]" /> Cash Early-Warning</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-3">An 8-week projection of your closing cash — opening balance plus operating run-rate, expected collections and dated obligations. It warns when cash would dip below a ~2-week expense buffer. A preview, not a guarantee; nothing here moves money.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">An 8-week projection of your closing cash - opening balance plus operating run-rate, expected collections and dated obligations. It warns when cash would dip below a ~2-week expense buffer. A preview, not a guarantee; nothing here moves money.</p>
         {firstBreach ? (
           <div className="rounded-lg p-3 border border-red-800/40 bg-red-950/20 text-sm text-red-300 flex items-start gap-2">
             <AlertTriangle size={15} className="shrink-0 mt-0.5" />
@@ -1461,7 +1461,7 @@ function CashEarlyWarning({ snap, signals, navigate }: { snap: FinancialSnapshot
       <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
         {weeks.map(w => (
           <div key={w.idx} className={`flex items-center gap-3 p-3.5 ${w.breach ? "bg-red-950/10" : ""}`}>
-            <span className="text-[11px] text-[var(--color-muted)] w-24 shrink-0">{format(new Date(w.start), "d MMM")}–{format(new Date(w.end), "d MMM")}</span>
+            <span className="text-[11px] text-[var(--color-muted)] w-24 shrink-0">{format(new Date(w.start), "d MMM")}-{format(new Date(w.end), "d MMM")}</span>
             <div className="flex-1 min-w-0 text-[11px] text-[var(--color-muted)]">
               <span className="text-green-400">+{formatCurrency(Math.round(w.inflow))}</span> in · <span className="text-red-400">−{formatCurrency(Math.round(w.outflow))}</span> due
             </div>
@@ -1481,8 +1481,8 @@ function CashEarlyWarning({ snap, signals, navigate }: { snap: FinancialSnapshot
 }
 
 // ── Collect-First Worklist ─────────────────────────────────────────────────────
-// Ranks open invoices by collection priority — amount weighted by how overdue
-// they are — so you chase the biggest, oldest balances first. Suggests an order;
+// Ranks open invoices by collection priority - amount weighted by how overdue
+// they are - so you chase the biggest, oldest balances first. Suggests an order;
 // the actual chasing happens in Collections.
 function CollectFirstWorklist({ navigate }: { navigate: Nav }) {
   const { store } = useApp();
@@ -1512,7 +1512,7 @@ function CollectFirstWorklist({ navigate }: { navigate: Nav }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><HandCoins size={14} className="text-[var(--color-primary)]" /> Collect-First Worklist</h2>
-        <p className="text-xs text-[var(--color-muted)]">Your open invoices ranked by collection priority — bigger balances and the longest-overdue ones rise to the top, so a morning of chasing recovers the most cash. Tick as you work through them; the copilot never contacts anyone for you.</p>
+        <p className="text-xs text-[var(--color-muted)]">Your open invoices ranked by collection priority - bigger balances and the longest-overdue ones rise to the top, so a morning of chasing recovers the most cash. Tick as you work through them; the copilot never contacts anyone for you.</p>
         {outstanding > 0 && <p className="text-sm font-semibold mt-3">Still to chase: <span className="tabular-nums">{formatCurrency(Math.round(outstanding))}</span></p>}
       </div>
 
@@ -1520,7 +1520,7 @@ function CollectFirstWorklist({ navigate }: { navigate: Nav }) {
         <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
           <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
           <p className="text-sm font-medium">No open invoices to chase</p>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Everything is paid — collections are clean.</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Everything is paid - collections are clean.</p>
         </div>
       ) : (
         <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
@@ -1551,7 +1551,7 @@ function CollectFirstWorklist({ navigate }: { navigate: Nav }) {
 }
 
 // ── Invoice-Now Candidates ─────────────────────────────────────────────────────
-// Delivered/dispatched orders that have no matching invoice yet — revenue you've
+// Delivered/dispatched orders that have no matching invoice yet - revenue you've
 // earned but haven't billed. Surfaces the gap; raising the invoice happens on the
 // Receivables page.
 function InvoiceNowCandidates({ navigate }: { navigate: Nav }) {
@@ -1581,7 +1581,7 @@ function InvoiceNowCandidates({ navigate }: { navigate: Nav }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FilePlus2 size={14} className="text-[var(--color-primary)]" /> Invoice-Now Candidates</h2>
-        <p className="text-xs text-[var(--color-muted)]">Delivered and dispatched orders matched against your invoice list — anything fulfilled but seemingly unbilled is revenue waiting to be raised. It points out the gap; you raise the invoice on Receivables.</p>
+        <p className="text-xs text-[var(--color-muted)]">Delivered and dispatched orders matched against your invoice list - anything fulfilled but seemingly unbilled is revenue waiting to be raised. It points out the gap; you raise the invoice on Receivables.</p>
         {unbilledTotal > 0 && <p className="text-sm font-semibold mt-3 text-yellow-400">Likely unbilled: <span className="tabular-nums">{formatCurrency(Math.round(unbilledTotal))}</span></p>}
       </div>
 
@@ -1616,7 +1616,7 @@ function InvoiceNowCandidates({ navigate }: { navigate: Nav }) {
 // ── Vendor Pay-Now-vs-Later ────────────────────────────────────────────────────
 // Splits upcoming obligations into "pay now" (due within a few days or overdue)
 // and "can wait", given your spendable cash. A timing suggestion to preserve
-// cash — it never schedules or releases a payment.
+// cash - it never schedules or releases a payment.
 function PayNowVsLater({ signals, navigate }: { signals: Signals; navigate: Nav }) {
   const { store } = useApp();
   const [windowDays, setWindowDays] = useState(7);
@@ -1666,7 +1666,7 @@ function PayNowVsLater({ signals, navigate }: { signals: Signals; navigate: Nav 
             ))}
           </div>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Splits upcoming obligations into what genuinely needs paying within {windowDays} days — statutory dues, payroll, loans and anything overdue — versus what can safely wait, so you hold onto cash without missing a deadline. Timing advice only; it releases nothing.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Splits upcoming obligations into what genuinely needs paying within {windowDays} days - statutory dues, payroll, loans and anything overdue - versus what can safely wait, so you hold onto cash without missing a deadline. Timing advice only; it releases nothing.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {[
             { label: "Pay now", value: formatAmount(payNowTotal), color: "text-red-400" },
@@ -1680,7 +1680,7 @@ function PayNowVsLater({ signals, navigate }: { signals: Signals; navigate: Nav 
           ))}
         </div>
         {!coversNow && payNowTotal > 0 && (
-          <p className="text-[11px] text-yellow-400 mt-3">Pay-now total exceeds cash on hand — open the Payment Prioritizer to sequence within available funds.</p>
+          <p className="text-[11px] text-yellow-400 mt-3">Pay-now total exceeds cash on hand - open the Payment Prioritizer to sequence within available funds.</p>
         )}
       </div>
 
@@ -1738,15 +1738,15 @@ function ThisWeekFocus({ snap, signals, navigate }: { snap: FinancialSnapshot; s
     });
     const unbilled = store.orders.filter(o => o.status === "delivered" || o.status === "dispatched").length;
     if (unbilled > 0) out.push({ id: "tw-invoice", text: `Review ${unbilled} fulfilled order(s) for unbilled revenue to invoice.`, rank: 70, path: "/receivables" });
-    if (signals.runwayDays < 120 && signals.monthlyNet < 0) out.push({ id: "tw-runway", text: `Runway is ${runwayLabel(signals.runwayDays)} — trim spend or line up working capital.`, rank: 80, path: "/spend" });
-    if (signals.dscr !== null && signals.dscr < 1.25) out.push({ id: "tw-dscr", text: `DSCR is ${signals.dscr.toFixed(2)}x — review debt before any new borrowing.`, rank: 50, path: "/debt" });
-    if (out.length === 0) out.push({ id: "tw-clear", text: "Nothing pressing — keep the forecast fresh and collections tight.", rank: 0, path: "/dashboard" });
+    if (signals.runwayDays < 120 && signals.monthlyNet < 0) out.push({ id: "tw-runway", text: `Runway is ${runwayLabel(signals.runwayDays)} - trim spend or line up working capital.`, rank: 80, path: "/spend" });
+    if (signals.dscr !== null && signals.dscr < 1.25) out.push({ id: "tw-dscr", text: `DSCR is ${signals.dscr.toFixed(2)}x - review debt before any new borrowing.`, rank: 50, path: "/debt" });
+    if (out.length === 0) out.push({ id: "tw-clear", text: "Nothing pressing - keep the forecast fresh and collections tight.", rank: 0, path: "/dashboard" });
     return out.sort((a, b) => b.rank - a.rank).slice(0, 6);
   }, [store, snap, signals]);
 
   const toggle = (id: string) => setDone(done.includes(id) ? done.filter(x => x !== id) : [...done, id]);
   const copy = () => {
-    const txt = `This week's focus — ${format(new Date(), "d MMM yyyy")}\n` + tasks.map(t => `• ${t.text}`).join("\n");
+    const txt = `This week's focus - ${format(new Date(), "d MMM yyyy")}\n` + tasks.map(t => `• ${t.text}`).join("\n");
     navigator.clipboard?.writeText(txt);
     toast.success("Focus list copied");
   };
@@ -1759,7 +1759,7 @@ function ThisWeekFocus({ snap, signals, navigate }: { snap: FinancialSnapshot; s
           <h2 className="text-sm font-semibold flex items-center gap-2"><ListTodo size={14} className="text-[var(--color-primary)]" /> This Week's Focus</h2>
           <button onClick={copy} className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40">Copy list</button>
         </div>
-        <p className="text-xs text-[var(--color-muted)]">The handful of moves most worth your time this week, ranked by impact and read straight from your numbers. Tick them off as you go — it's a to-do list, not an executor.</p>
+        <p className="text-xs text-[var(--color-muted)]">The handful of moves most worth your time this week, ranked by impact and read straight from your numbers. Tick them off as you go - it's a to-do list, not an executor.</p>
         <p className="text-[11px] text-[var(--color-muted)] mt-2">{remaining} of {tasks.length} remaining</p>
       </div>
 
@@ -1802,19 +1802,19 @@ function KpiOffTrackExplainer({ snap, signals, navigate }: { snap: FinancialSnap
       {
         id: "margin", label: "Gross margin (%)", actual: margin, target: targets.marginPct, higherBetter: true,
         gapPct: targets.marginPct > 0 ? ((targets.marginPct - margin) / targets.marginPct) * 100 : 0,
-        why: "Expenses are consuming too much of revenue over the trailing 6 months — either pricing is low or costs have crept up.",
+        why: "Expenses are consuming too much of revenue over the trailing 6 months - either pricing is low or costs have crept up.",
         levers: [{ text: "Find recurring spend to cut", path: "/spend" }, { text: "Review pricing & sales mix", path: "/analytics" }],
       },
       {
         id: "dso", label: "DSO (days)", actual: snap.dsoDays, target: targets.dsoDays, higherBetter: false,
         gapPct: snap.dsoDays > 0 ? ((snap.dsoDays - targets.dsoDays) / snap.dsoDays) * 100 : 0,
-        why: `Customers are taking ~${snap.dsoDays} days to pay against your ${targets.dsoDays}-day target — cash is stuck in receivables.`,
+        why: `Customers are taking ~${snap.dsoDays} days to pay against your ${targets.dsoDays}-day target - cash is stuck in receivables.`,
         levers: [{ text: "Chase overdue invoices", path: "/collections" }, { text: "Tighten invoice terms", path: "/receivables" }],
       },
       {
         id: "health", label: "Health score", actual: signals.healthScore, target: targets.healthScore, higherBetter: true,
         gapPct: targets.healthScore > 0 ? ((targets.healthScore - signals.healthScore) / targets.healthScore) * 100 : 0,
-        why: "Your composite score is dragged down by its weakest drivers — see the breakdown for which ones.",
+        why: "Your composite score is dragged down by its weakest drivers - see the breakdown for which ones.",
         levers: [{ text: "See health driver breakdown", path: "/health" }],
       },
     ];
@@ -1833,7 +1833,7 @@ function KpiOffTrackExplainer({ snap, signals, navigate }: { snap: FinancialSnap
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Lightbulb size={14} className="text-[var(--color-primary)]" /> Off-Track KPI Explainer</h2>
-        <p className="text-xs text-[var(--color-muted)]">Compares your saved KPI targets to live values, picks the one furthest off, and explains in plain words why it's off and which levers move it. Diagnosis only — set targets on the KPI Targets tab; act via the linked pages.</p>
+        <p className="text-xs text-[var(--color-muted)]">Compares your saved KPI targets to live values, picks the one furthest off, and explains in plain words why it's off and which levers move it. Diagnosis only - set targets on the KPI Targets tab; act via the linked pages.</p>
       </div>
 
       {!analysis.worst ? (

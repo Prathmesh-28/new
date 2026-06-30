@@ -84,7 +84,7 @@ interface AuditRow {
   action: string;
   entity: string;
   entity_id: string;
-  // audit meta is intentionally untyped — server-emitted, shape varies per action.
+  // audit meta is intentionally untyped - server-emitted, shape varies per action.
   meta: unknown;
   created_at: string;
   actor_email: string;
@@ -168,7 +168,7 @@ function initials(u: AdminUser): string {
 }
 
 // A user's displayed status is derived purely from its own fields (no per-user
-// status write exists — suspend/activate is a tenant-level operation).
+// status write exists - suspend/activate is a tenant-level operation).
 function userStatus(u: AdminUser): "active" | "pending" | "suspended" {
   if (u.status === "suspended") return "suspended";
   if (u.first_login) return "pending";
@@ -319,7 +319,7 @@ function EmptyState({ icon, message }: { icon: ReactNode; message: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
-// Super-admin editor for all super-admin-editable platform settings — social links,
+// Super-admin editor for all super-admin-editable platform settings - social links,
 // brand/contact, footer legal links, and the site-wide announcement banner. Each card
 // PUTs its own group to /api/platform/settings/:group and goes live immediately.
 type FieldType = "text" | "number" | "bool" | "url" | "email" | "textarea" | "select";
@@ -330,22 +330,22 @@ const PLATFORM_GROUPS: Record<string, PlatformGroup> = {
   social: { title: "Social links (footer icons)", hint: "Full https:// URLs. Blank hides that icon.", fields: [{ key: "linkedin", label: "LinkedIn", type: "url" }, { key: "instagram", label: "Instagram", type: "url" }, { key: "twitter", label: "X / Twitter", type: "url" }, { key: "youtube", label: "YouTube", type: "url" }, { key: "facebook", label: "Facebook", type: "url" }] },
   links: { title: "Footer legal links", hint: "Privacy / Terms / Security URLs shown in the footer.", fields: [{ key: "privacyUrl", label: "Privacy URL", type: "url" }, { key: "termsUrl", label: "Terms URL", type: "url" }, { key: "securityUrl", label: "Security URL", type: "url" }] },
   banner: { title: "Announcement banner", hint: "A site-wide banner (shown in-app). Off by default.", fields: [{ key: "enabled", label: "Show banner", type: "bool" }, { key: "text", label: "Banner text" }, { key: "linkUrl", label: "Link URL", type: "url" }, { key: "linkLabel", label: "Link label" }] },
-  payments: { title: "Payments & collections", hint: "Default UPI ID used on invoice payment links when a business hasn't set its own. Shown to customers — use a real VPA you control.", fields: [{ key: "upiId", label: "UPI ID (VPA)" }, { key: "payeeName", label: "Payee name" }, { key: "paymentNote", label: "Payment note", type: "textarea" }] },
-  features: { title: "Feature switches", hint: "Turn whole modules on or off across the app — instantly.", fields: [{ key: "enableAgents", label: "AI Agents", type: "bool" }, { key: "enableWhatsapp", label: "WhatsApp", type: "bool" }, { key: "enableMarketplace", label: "Marketplace", type: "bool" }, { key: "enableInvestor", label: "Investor portal", type: "bool" }, { key: "enableEsg", label: "ESG", type: "bool" }, { key: "enableGlobal", label: "Global", type: "bool" }, { key: "enableTokens", label: "Tokens", type: "bool" }] },
+  payments: { title: "Payments & collections", hint: "Default UPI ID used on invoice payment links when a business hasn't set its own. Shown to customers - use a real VPA you control.", fields: [{ key: "upiId", label: "UPI ID (VPA)" }, { key: "payeeName", label: "Payee name" }, { key: "paymentNote", label: "Payment note", type: "textarea" }] },
+  features: { title: "Feature switches", hint: "Turn whole modules on or off across the app - instantly.", fields: [{ key: "enableAgents", label: "AI Agents", type: "bool" }, { key: "enableWhatsapp", label: "WhatsApp", type: "bool" }, { key: "enableMarketplace", label: "Marketplace", type: "bool" }, { key: "enableInvestor", label: "Investor portal", type: "bool" }, { key: "enableEsg", label: "ESG", type: "bool" }, { key: "enableGlobal", label: "Global", type: "bool" }, { key: "enableTokens", label: "Tokens", type: "bool" }] },
   localization: { title: "Localization", hint: "Currency, locale, timezone and fiscal year used across the app.", fields: [{ key: "currency", label: "Currency" }, { key: "locale", label: "Locale" }, { key: "timezone", label: "Timezone" }, { key: "fiscalYearStart", label: "FY start (MM-DD)" }, { key: "dateFormat", label: "Date format" }] },
   support: { title: "Support & help", hint: "Help / docs / status links and support contact shown in-app.", fields: [{ key: "helpUrl", label: "Help URL", type: "url" }, { key: "docsUrl", label: "Docs URL", type: "url" }, { key: "statusUrl", label: "Status URL", type: "url" }, { key: "whatsappNumber", label: "WhatsApp number" }, { key: "hours", label: "Support hours" }] },
   seo: { title: "SEO / meta", hint: "Default page title, description and social share image.", fields: [{ key: "title", label: "Meta title" }, { key: "description", label: "Meta description", type: "textarea" }, { key: "ogImageUrl", label: "OG image URL", type: "url" }, { key: "keywords", label: "Keywords" }] },
   maintenance: { title: "Maintenance mode", hint: "Show a site-wide maintenance message. Off by default.", fields: [{ key: "enabled", label: "Maintenance mode on", type: "bool" }, { key: "message", label: "Message", type: "textarea" }] },
   ai: { title: "AI engine defaults", hint: "Default models used when a tenant hasn't picked their own. Runs on your OpenRouter key.", fields: [{ key: "defaultModel", label: "Default chat model" }, { key: "visionModel", label: "Vision model" }, { key: "embedModel", label: "Embedding model" }, { key: "allowByoKey", label: "Allow tenant's own key", type: "bool" }, { key: "engineNote", label: "Engine note", type: "textarea" }] },
-  limits: { title: "Limits & quotas", hint: "Platform caps & thresholds — changes take effect immediately. 0 means unlimited.", fields: [{ key: "maxAgentsPerTenant", label: "Max agents / tenant", type: "number" }, { key: "monthlyTokenCap", label: "Monthly token cap", type: "number" }, { key: "maxUploadMb", label: "Max upload (MB)", type: "number" }, { key: "maxBulkRows", label: "Max bulk rows", type: "number" }, { key: "trialDays", label: "Trial days", type: "number" }, { key: "reminderMaxPer7d", label: "Max reminders / invoice / 7d", type: "number" }, { key: "creditMinScore", label: "Credit pre-qual min score", type: "number" }] },
+  limits: { title: "Limits & quotas", hint: "Platform caps & thresholds - changes take effect immediately. 0 means unlimited.", fields: [{ key: "maxAgentsPerTenant", label: "Max agents / tenant", type: "number" }, { key: "monthlyTokenCap", label: "Monthly token cap", type: "number" }, { key: "maxUploadMb", label: "Max upload (MB)", type: "number" }, { key: "maxBulkRows", label: "Max bulk rows", type: "number" }, { key: "trialDays", label: "Trial days", type: "number" }, { key: "reminderMaxPer7d", label: "Max reminders / invoice / 7d", type: "number" }, { key: "creditMinScore", label: "Credit pre-qual min score", type: "number" }] },
   signup: { title: "Signup", hint: "How new accounts are created and what they default to.", fields: [{ key: "mode", label: "Signup mode", type: "select", options: ["open", "invite-only", "closed"] }, { key: "defaultPlan", label: "Default plan", type: "select", options: ["free", "starter", "growth", "pro"] }, { key: "defaultRole", label: "Default role" }, { key: "allowAdvisorSignup", label: "Allow advisor signup", type: "bool" }] },
   pricing: { title: "Pricing", hint: "Plan labels and prices shown on the pricing page.", fields: [{ key: "freeLabel", label: "Free label" }, { key: "starterPrice", label: "Starter price", type: "number" }, { key: "growthPrice", label: "Growth price", type: "number" }, { key: "proPrice", label: "Pro price", type: "number" }, { key: "currencySymbol", label: "Currency symbol" }] },
-  custom: { title: "Custom settings", hint: "Add ANY key/value you need — now or in future. Read it anywhere via the platform settings API. Your zero-code escape hatch.", fields: [], custom: true },
+  custom: { title: "Custom settings", hint: "Add ANY key/value you need - now or in future. Read it anywhere via the platform settings API. Your zero-code escape hatch.", fields: [], custom: true },
 };
 
 const SETTING_INPUT = "flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]";
 
-// Dynamic key/value editor for the `custom` group — add/edit/remove arbitrary settings.
+// Dynamic key/value editor for the `custom` group - add/edit/remove arbitrary settings.
 function CustomSettingsEditor({ value, onChange }: { value: Record<string, any>; onChange: (v: Record<string, any>) => void }) {
   const [newKey, setNewKey] = useState("");
   const entries = Object.entries(value || {});
@@ -359,7 +359,7 @@ function CustomSettingsEditor({ value, onChange }: { value: Record<string, any>;
   };
   return (
     <div className="space-y-2.5">
-      {entries.length === 0 && <p className="text-xs text-[var(--color-muted)]">No custom settings yet — add one below.</p>}
+      {entries.length === 0 && <p className="text-xs text-[var(--color-muted)]">No custom settings yet - add one below.</p>}
       {entries.map(([k, v]) => (
         <div key={k} className="flex items-center gap-3">
           <label className="w-40 shrink-0 text-xs font-mono text-[var(--color-muted)] truncate" title={k}>{k}</label>
@@ -388,7 +388,7 @@ function PlatformSettingsAdmin() {
   const set = (g: string, k: string, v: any) => setData(s => ({ ...s, [g]: { ...(s[g] || {}), [k]: v } }));
   const save = async (g: string) => {
     setSaving(g);
-    try { const res = await api.put<Record<string, any>>(`/api/platform/settings/${g}`, data[g] || {}); setData(s => ({ ...s, [g]: res })); toast.success("Saved — live now"); }
+    try { const res = await api.put<Record<string, any>>(`/api/platform/settings/${g}`, data[g] || {}); setData(s => ({ ...s, [g]: res })); toast.success("Saved - live now"); }
     catch (err) { toast.error(errMsg(err)); }
     finally { setSaving(null); }
   };
@@ -425,7 +425,7 @@ function PlatformSettingsAdmin() {
   if (!loaded) return <div className="text-xs text-[var(--color-muted)]">Loading platform settings…</div>;
   return (
     <div className="space-y-4">
-      <p className="text-xs text-[var(--color-muted)]">Everything below is editable here and goes live immediately — no redeploy.</p>
+      <p className="text-xs text-[var(--color-muted)]">Everything below is editable here and goes live immediately - no redeploy.</p>
       {Object.entries(PLATFORM_GROUPS).map(([g, cfg]) => (
         <div key={g} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
           <h3 className="text-sm font-semibold mb-1">{cfg.title}</h3>
@@ -557,7 +557,7 @@ export default function AdminPage() {
   }, [openSection]);
 
   // ── Mutations shared across sections ──
-  // Plan changes are TENANT-level — they apply to the whole org.
+  // Plan changes are TENANT-level - they apply to the whole org.
   const setTenantPlan = useCallback(async (tenantId: string, plan: PlanTier) => {
     const prevCompanies = companies;
     const prevUsers = users;
@@ -594,7 +594,7 @@ export default function AdminPage() {
   }, [setSelectedClient, navigate]);
 
   // ── Guard (declared AFTER all hooks so hook order stays stable) ──
-  // While `user` is still resolving, render nothing rather than bouncing — a transient
+  // While `user` is still resolving, render nothing rather than bouncing - a transient
   // null must not kick the real super_admin to /dashboard. Only a CONFIRMED non-admin redirects.
   if (!user) return null;
   if (user.role !== "super_admin") return <Navigate to="/dashboard" replace />;
@@ -693,7 +693,7 @@ export default function AdminPage() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECTION 1 — OVERVIEW
+// SECTION 1 - OVERVIEW
 // ─────────────────────────────────────────────────────────────────────────────
 function OverviewSection({ stats, metrics, loading }: { stats: Stats | null; metrics: Metrics | null; loading: boolean }) {
   if (loading || !stats || !metrics) {
@@ -784,7 +784,7 @@ function OverviewSection({ stats, metrics, loading }: { stats: Stats | null; met
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECTION 2 — COMPANIES
+// SECTION 2 - COMPANIES
 // ─────────────────────────────────────────────────────────────────────────────
 type CompanySort = "newest" | "users" | "cash" | "active";
 
@@ -912,10 +912,10 @@ function CompaniesSection({
                 return (
                   <tr key={c.tenant_id} className="group hover:bg-white/5">
                     <td className="px-4 py-2.5">
-                      <p className="font-semibold">{c.company_name || c.owner_email || "—"}</p>
+                      <p className="font-semibold">{c.company_name || c.owner_email || "-"}</p>
                       <CopyId id={c.tenant_id} chars={10} />
                     </td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)] truncate max-w-[170px]">{c.owner_email || "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--color-muted)] truncate max-w-[170px]">{c.owner_email || "-"}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{c.user_count}</td>
                     <td className="px-4 py-2.5"><PlanPill plan={c.plan} /></td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{fmtINR(c.cash)}</td>
@@ -961,14 +961,14 @@ function CompaniesSection({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECTION 3 — USERS
+// SECTION 3 - USERS
 // ─────────────────────────────────────────────────────────────────────────────
 const USER_ROLES: UserRole[] = ["super_admin", "owner", "finance_manager", "accountant", "sales", "operations_manager", "viewer", "investor"];
 const PAGE_SIZE = 25;
 
 // Short, human "what can this role reach" summary for the access-levels legend.
 const ROLE_SCOPE: Record<string, string> = {
-  super_admin: "Everything — platform-wide, all companies",
+  super_admin: "Everything - platform-wide, all companies",
   owner: "Full access to their own organisation",
   finance_manager: "Cash, invoices, GST, payroll, forecasts",
   accountant: "Books, GST, compliance, statements",
@@ -1066,7 +1066,7 @@ function UsersSection({
     setUsers((us) => us.map((x) => (x.id === u.id ? { ...x, display_name: displayName, role } : x)));
     try {
       await Promise.all(calls);
-      // Plan is tenant-level — routed through the shared mutation.
+      // Plan is tenant-level - routed through the shared mutation.
       if (plan !== (u.subscription_plan ?? "free")) onSetPlan(u.tenant_id, plan);
       toast.success("User updated");
       setEditUser(null);
@@ -1190,7 +1190,7 @@ function UsersSection({
 
   return (
     <div className="space-y-4">
-      {/* WHERE CHANGES APPEAR — what this section actually controls */}
+      {/* WHERE CHANGES APPEAR - what this section actually controls */}
       <div className="rounded-lg border border-amber-700/40 bg-amber-900/15 px-4 py-3">
         <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300 mb-1.5">Where changes appear</p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 text-xs text-amber-200/90">
@@ -1344,7 +1344,7 @@ function UsersSection({
             })}
           </div>
           <div className="flex items-center justify-between text-xs text-[var(--color-muted)]">
-            <span>Showing {from}–{to} of {filtered.length}</span>
+            <span>Showing {from}-{to} of {filtered.length}</span>
             <div className="flex items-center gap-2">
               <button disabled={pageClamped === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} className="px-2.5 py-1 rounded border border-[var(--color-border)] disabled:opacity-30 hover:border-[var(--color-primary)]">Prev</button>
               <span>{pageClamped + 1} / {totalPages}</span>
@@ -1358,7 +1358,7 @@ function UsersSection({
               {USER_ROLES.map((r) => (
                 <div key={r} className="flex items-start gap-2 text-xs">
                   <RolePill role={r} />
-                  <span className="text-[var(--color-muted)] mt-0.5">{ROLE_SCOPE[r] ?? "—"}</span>
+                  <span className="text-[var(--color-muted)] mt-0.5">{ROLE_SCOPE[r] ?? "-"}</span>
                 </div>
               ))}
             </div>
@@ -1402,7 +1402,7 @@ function EditUserModal({ user, onClose, onSave }: { user: AdminUser; onClose: ()
           </select>
         </div>
         <div>
-          <label className="text-xs text-[var(--color-muted)] block mb-1">Plan <span className="text-[10px]">(tenant-level — applies to the whole org)</span></label>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Plan <span className="text-[10px]">(tenant-level - applies to the whole org)</span></label>
           <select value={plan} onChange={(e) => setPlan(e.target.value as PlanTier)} className={`w-full ${selectCls}`}>
             {PLAN_ORDER.map((p) => <option key={p} value={p}>{PLAN_STYLE[p].label} · {PLAN_PRICE[p] ? fmtINR(PLAN_PRICE[p]) + "/mo" : "Free"}</option>)}
           </select>
@@ -1421,7 +1421,7 @@ function ResetPasswordModal({ info, onClose }: { info: { email: string; password
   return (
     <Modal title="Temporary password" onClose={onClose}>
       <div className="space-y-3">
-        <p className="text-sm">Temp password for <strong>{info.email}</strong>. Shown once — share it securely.</p>
+        <p className="text-sm">Temp password for <strong>{info.email}</strong>. Shown once - share it securely.</p>
         <div className="flex items-center gap-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
           <code className="font-mono text-sm flex-1 break-all">{info.password}</code>
           <button onClick={() => { navigator.clipboard.writeText(info.password); toast.success("Copied!"); }} className="text-[var(--color-primary)] hover:opacity-80 shrink-0"><Copy size={15} /></button>
@@ -1471,7 +1471,7 @@ function InviteUserModal({ onClose, onInvited }: { onClose: () => void; onInvite
           </select>
         </div>
         <div>
-          <label className="text-xs text-[var(--color-muted)] block mb-1">Tenant ID <span className="text-[10px]">(optional — blank creates a new org)</span></label>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">Tenant ID <span className="text-[10px]">(optional - blank creates a new org)</span></label>
           <input value={tenant} onChange={(e) => setTenant(e.target.value)} placeholder="leave blank for new" className={`w-full font-mono ${inputCls}`} />
         </div>
         <div className="flex justify-end gap-2 pt-1">
@@ -1483,7 +1483,7 @@ function InviteUserModal({ onClose, onInvited }: { onClose: () => void; onInvite
   );
 }
 
-// Full 360° detail for one user — every field, super-admin only.
+// Full 360° detail for one user - every field, super-admin only.
 function UserDetailModal({ user, company, isSelf, onClose, onEdit, onReset }: {
   user: AdminUser; company: Company | null; isSelf: boolean;
   onClose: () => void; onEdit: (u: AdminUser) => void; onReset: (u: AdminUser) => void;
@@ -1492,12 +1492,12 @@ function UserDetailModal({ user, company, isSelf, onClose, onEdit, onReset }: {
   const rows: [string, ReactNode][] = [
     ["User ID", <CopyId id={user.id} chars={36} />],
     ["Email", user.email],
-    ["Display name", user.display_name || "—"],
+    ["Display name", user.display_name || "-"],
     ["Role", <RolePill role={user.role} />],
     ["Plan", <PlanPill plan={user.subscription_plan ?? "free"} />],
     ["Status", st === "active" ? "Active" : st === "pending" ? "Pending setup" : "Suspended"],
     ["Workspace / Org ID", <CopyId id={user.tenant_id} chars={36} />],
-    ["Company", company?.company_name || "—"],
+    ["Company", company?.company_name || "-"],
     ["First login pending", user.first_login ? "Yes" : "No"],
     ["Total logins", String(user.login_count ?? 0)],
     ["Joined", safeFmt(user.created_at)],
@@ -1622,7 +1622,7 @@ function ImportUsersModal({ onClose, onSetPlan, onDone }: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECTION 4 — PLANS & BILLING
+// SECTION 4 - PLANS & BILLING
 // ─────────────────────────────────────────────────────────────────────────────
 const FEATURE_ROWS = ["Forecast", "Analytics", "Payroll", "Credit", "AI CFO", "Connectors", "Automation", "Scenarios", "Priority Support"] as const;
 type FeatureRow = (typeof FEATURE_ROWS)[number];
@@ -1689,7 +1689,7 @@ function PlansSection({ companies, users, onViewCompanies }: { companies: Compan
                 <td className="px-4 py-2.5 font-medium">{f}</td>
                 {PLAN_ORDER.map((p) => (
                   <td key={p} className="px-4 py-2.5 text-center">
-                    {planHasFeature(p, f) ? <Check size={15} className="inline text-green-400" /> : <span className="text-[var(--color-muted)]">—</span>}
+                    {planHasFeature(p, f) ? <Check size={15} className="inline text-green-400" /> : <span className="text-[var(--color-muted)]">-</span>}
                   </td>
                 ))}
               </tr>
@@ -1738,7 +1738,7 @@ function PlansSection({ companies, users, onViewCompanies }: { companies: Compan
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECTION 5 — AUDIT LOG
+// SECTION 5 - AUDIT LOG
 // ─────────────────────────────────────────────────────────────────────────────
 const AUDIT_PAGE = 50;
 type DateRange = "today" | "7d" | "30d" | "all";
@@ -1754,20 +1754,20 @@ function actionPillClass(action: string): string {
 }
 
 function metaToString(meta: unknown): string {
-  if (meta == null) return "—";
+  if (meta == null) return "-";
   try { return typeof meta === "string" ? meta : JSON.stringify(meta); } catch { return String(meta); }
 }
 
 function metaToPre(meta: unknown): string {
-  if (meta == null) return "—";
-  try { return JSON.stringify(meta, null, 2) ?? "—"; } catch { return String(meta); }
+  if (meta == null) return "-";
+  try { return JSON.stringify(meta, null, 2) ?? "-"; } catch { return String(meta); }
 }
 
-// Date guards — server timestamps can be null/invalid; never let date-fns throw.
+// Date guards - server timestamps can be null/invalid; never let date-fns throw.
 function safeFmt(iso?: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : format(d, "dd MMM, HH:mm");
+  return Number.isNaN(d.getTime()) ? "-" : format(d, "dd MMM, HH:mm");
 }
 function safeIso(iso?: string | null): string {
   if (!iso) return "";
@@ -1874,7 +1874,7 @@ function AuditSection({ rows, loading }: { rows: AuditRow[]; loading: boolean })
             </table>
           </div>
           <div className="flex items-center justify-between text-xs text-[var(--color-muted)]">
-            <span>Showing {start + 1}–{Math.min(start + AUDIT_PAGE, filtered.length)} of {filtered.length}</span>
+            <span>Showing {start + 1}-{Math.min(start + AUDIT_PAGE, filtered.length)} of {filtered.length}</span>
             <div className="flex items-center gap-2">
               <button disabled={pageClamped === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} className="px-2.5 py-1 rounded border border-[var(--color-border)] disabled:opacity-30 hover:border-[var(--color-primary)]">Prev</button>
               <span>{pageClamped + 1} / {totalPages}</span>
@@ -1898,7 +1898,7 @@ function AuditRowView({ row, open, onToggle }: { row: AuditRow; open: boolean; o
         <td className="px-4 py-2.5 text-xs whitespace-nowrap text-[var(--color-muted)]" title={safeIso(row.created_at)}>{safeFmt(row.created_at)}</td>
         <td className="px-4 py-2.5">
           <div className="flex flex-col gap-1">
-            <span className="text-xs">{row.actor_email || "—"}</span>
+            <span className="text-xs">{row.actor_email || "-"}</span>
             <RolePill role={row.actor_role} />
           </div>
         </td>
@@ -1921,7 +1921,7 @@ function AuditRowView({ row, open, onToggle }: { row: AuditRow; open: boolean; o
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECTION 6 — PLATFORM
+// SECTION 6 - PLATFORM
 // ─────────────────────────────────────────────────────────────────────────────
 function downloadJSON(filename: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -1957,11 +1957,11 @@ function PlatformSection({
   const activeWindow = Date.now() - 30 * 86400000;
   const activeCompanies = companies.filter((c) => c.last_login_at && new Date(c.last_login_at).getTime() >= activeWindow).length;
   const avgUsers = stats && stats.companies > 0 ? (stats.users / stats.companies).toFixed(1) : "0.0";
-  const conversion = metrics && stats && stats.companies > 0 ? `${((metrics.paidTenants / stats.companies) * 100).toFixed(0)}%` : "—";
+  const conversion = metrics && stats && stats.companies > 0 ? `${((metrics.paidTenants / stats.companies) * 100).toFixed(0)}%` : "-";
 
   return (
     <div className="space-y-5">
-      {/* Card A — Quick Actions */}
+      {/* Card A - Quick Actions */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
         <p className="text-sm font-semibold">Quick Actions</p>
         <div className="grid md:grid-cols-3 gap-4">
@@ -1995,7 +1995,7 @@ function PlatformSection({
         </div>
       </div>
 
-      {/* Card B — Platform Health */}
+      {/* Card B - Platform Health */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
         <p className="text-sm font-semibold">Platform Health</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -2006,7 +2006,7 @@ function PlatformSection({
         </div>
       </div>
 
-      {/* Card C — Danger Zone */}
+      {/* Card C - Danger Zone */}
       <div className="bg-[var(--color-surface)] border border-red-700/40 rounded-lg p-5 space-y-4">
         <p className="text-sm font-semibold text-red-300">Danger Zone</p>
         <div className="flex flex-wrap gap-3">

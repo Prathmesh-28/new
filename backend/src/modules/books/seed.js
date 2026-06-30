@@ -1,4 +1,4 @@
-// §5.1 — seed Tally's 28 predefined groups (15 primary + 13 sub) per tenant, plus
+// §5.1 - seed Tally's 28 predefined groups (15 primary + 13 sub) per tenant, plus
 // the default ledgers the sales/receipt mappers need. Idempotent.
 const { pool } = require("../../db");
 
@@ -23,7 +23,7 @@ const SUB_GROUPS = [
   ["Unsecured Loans", "Loans (Liability)", "LIABILITY", false],
 ];
 
-// [ledger name, group name] — the everyday set + tax ledgers the mappers reference.
+// [ledger name, group name] - the everyday set + tax ledgers the mappers reference.
 const DEFAULT_LEDGERS = [
   ["Cash", "Cash-in-hand"], ["Sales", "Sales Accounts"], ["Purchases", "Purchase Accounts"],
   ["CGST Output", "Duties & Taxes"], ["SGST Output", "Duties & Taxes"], ["IGST Output", "Duties & Taxes"],

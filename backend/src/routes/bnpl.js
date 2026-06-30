@@ -26,7 +26,7 @@ router.get("/facility", authenticate, async (req, res) => {
   res.json(rows[0]);
 });
 
-// POST /api/bnpl/drawdown — initiate BNPL payment to supplier
+// POST /api/bnpl/drawdown - initiate BNPL payment to supplier
 router.post("/drawdown", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { po_id, supplier_name, amount, repayment_days = 30 } = req.body;
   if (!supplier_name || !amount) return res.status(400).json({ error: "supplier_name and amount required" });
@@ -71,7 +71,7 @@ router.get("/drawdowns", authenticate, async (req, res) => {
   res.json(rows);
 });
 
-// POST /api/bnpl/repay/:id — record repayment
+// POST /api/bnpl/repay/:id - record repayment
 router.post("/repay/:id", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { rows: [dd] } = await pool.query(
     "SELECT * FROM bnpl_drawdowns WHERE id=$1 AND tenant_id=$2",

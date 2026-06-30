@@ -7,7 +7,7 @@ const isProd = process.env.NODE_ENV === "production";
 const SECRET = process.env.JWT_SECRET || DEV_SECRET;
 // Refresh tokens MUST use a secret distinct from access tokens. If JWT_REFRESH
 // isn't set, derive a strong, non-public one from JWT_SECRET (never fall back to
-// a hardcoded constant — that allowed forged refresh tokens).
+// a hardcoded constant - that allowed forged refresh tokens).
 const REFRESH = process.env.JWT_REFRESH
   || (process.env.JWT_SECRET ? crypto.createHash("sha256").update("hr-refresh:" + process.env.JWT_SECRET).digest("hex") : "dev-refresh-change-in-prod");
 

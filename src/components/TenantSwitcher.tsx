@@ -26,7 +26,7 @@ const PLAN_STYLE: Record<string, string> = {
 };
 const PLANS: PlanTier[] = ["free", "starter", "growth", "pro"];
 
-/* Platform super_admin only — switch the whole app to view/manage any company's
+/* Platform super_admin only - switch the whole app to view/manage any company's
    data, filter by plan, and change a plan inline. Renders nothing for other roles. */
 export default function TenantSwitcher() {
   const { user } = useAuth();
@@ -74,7 +74,7 @@ export default function TenantSwitcher() {
   if (!isSuper) return null;
 
   const label = (c: Company) => c.company_name || c.owner_email || c.tenant_id;
-  const current = selectedClientTenantId ? (selectedClientLabel || "Selected company") : "Platform view — all companies";
+  const current = selectedClientTenantId ? (selectedClientLabel || "Selected company") : "Platform view - all companies";
 
   const pick = (c: Company | null) => {
     if (c) setSelectedClient(c.tenant_id, label(c)); else setSelectedClient(null);
@@ -171,8 +171,8 @@ export default function TenantSwitcher() {
 
       {selectedClientTenantId && (
         <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold text-amber-200 bg-amber-900/40 border border-amber-700/50 px-2 py-1 rounded-md whitespace-nowrap shrink-0"
-          title="Full edit access — every change you make here saves to this company's live account (and is recorded in the audit log).">
-          <Pencil size={11} /> Editing live — saves to {selectedClientLabel || "this company"}
+          title="Full edit access - every change you make here saves to this company's live account (and is recorded in the audit log).">
+          <Pencil size={11} /> Editing live - saves to {selectedClientLabel || "this company"}
         </span>
       )}
       {selectedClientTenantId && (

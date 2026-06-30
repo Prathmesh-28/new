@@ -1,8 +1,8 @@
-// FinBox enrichment client — bureau + bank-statement-analysis (BSA) data that augments
+// FinBox enrichment client - bureau + bank-statement-analysis (BSA) data that augments
 // Headroom's own scorecard. API-first, dev-friendly (vs enterprise-only Perfios).
 //
 // HONEST by design: it makes REAL calls only when FINBOX_API_KEY is set, and returns
-// { configured:false } otherwise — it never fabricates a bureau score. The exact paths/
+// { configured:false } otherwise - it never fabricates a bureau score. The exact paths/
 // payloads follow FinBox's documented shape; confirm against your contract before going live.
 
 const KEY = () => process.env.FINBOX_API_KEY;
@@ -30,7 +30,7 @@ async function enrich({ pan, gstin, mobile, name } = {}) {
       return { configured: true, error: `FinBox error ${resp.status}: ${text.slice(0, 200)}` };
     }
     const d = await resp.json();
-    // Map FinBox's response to our normalized shape (nulls where absent — never invented).
+    // Map FinBox's response to our normalized shape (nulls where absent - never invented).
     return {
       configured: true,
       fetched_at: new Date().toISOString(),

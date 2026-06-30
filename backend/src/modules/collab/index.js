@@ -1,4 +1,4 @@
-// Headroom Collab — Phase 1 data layer (REST messaging).
+// Headroom Collab - Phase 1 data layer (REST messaging).
 //
 // Every function goes through withTenant() (see ./tenantContext.js): it opens a
 // transaction with the app.current_tenant GUC set, so FORCE row-level security
@@ -20,7 +20,7 @@ async function memberIds(c, conversationId) {
   return rows.map((r) => r.user_id);
 }
 
-// Teammates in the tenant (for member pickers / DMs). Available to every member —
+// Teammates in the tenant (for member pickers / DMs). Available to every member -
 // collaboration needs to know who's in the org. The users table isn't RLS'd, so this
 // is a plain tenant-scoped read (not a collab_ table → no withTenant needed).
 async function listTeammates(tenantId, selfId) {
@@ -169,7 +169,7 @@ async function getConversation(tenantId, userId, id) {
 async function updateConversation(tenantId, userId, id, patch = {}) {
   return withTenant(tenantId, async (c) => {
     await requireMember(c, id, userId);
-    // Archiving is destructive for everyone — restrict it to owners/admins. Rename/topic
+    // Archiving is destructive for everyone - restrict it to owners/admins. Rename/topic
     // stay open to any member (light-touch collaboration, not enterprise RBAC).
     if (typeof patch.archived === "boolean") {
       const { rows: r } = await c.query("SELECT role FROM collab_conversation_members WHERE conversation_id=$1 AND user_id=$2", [id, userId]);
@@ -230,7 +230,7 @@ async function postMessage(tenantId, userId, conversationId, { body, richContent
   if (!text.trim() && !richContent) throw new CollabError("BAD_INPUT", "Message body is required", 400);
   return withTenant(tenantId, async (c) => {
     await requireMember(c, conversationId, userId);
-    // A thread reply's parent must live in THIS conversation — otherwise a reply could
+    // A thread reply's parent must live in THIS conversation - otherwise a reply could
     // be parented to a message in a conversation the sender isn't in, leaking it into
     // that conversation's thread view.
     if (parentMessageId) {
@@ -363,7 +363,7 @@ async function unreads(tenantId, userId) {
   });
 }
 
-// ── Typing indicator (ephemeral — never persisted) ──────────────────────────
+// ── Typing indicator (ephemeral - never persisted) ──────────────────────────
 async function typing(tenantId, userId, conversationId, isTyping) {
   return withTenant(tenantId, async (c) => {
     await requireMember(c, conversationId, userId);

@@ -1,5 +1,5 @@
 "use strict";
-// Rewards crowdfunding REST — mounted at /api/campaigns. Mirrors the studio/books
+// Rewards crowdfunding REST - mounted at /api/campaigns. Mirrors the studio/books
 // conventions: public token routes declared BEFORE authenticate (like flows/webhook),
 // then authenticate, tenantOf(), per-domain WRITE_ROLES, fail() for typed errors.
 const router = require("express").Router();
@@ -15,7 +15,7 @@ const fail = (res, e) => {
 };
 const paymentsLive = () => { try { return razorpay.isConfigured(); } catch { return false; } };
 
-// ── PUBLIC (token-gated, no auth) — backer-facing campaign page + pledge ──────────
+// ── PUBLIC (token-gated, no auth) - backer-facing campaign page + pledge ──────────
 router.get("/public/:token", async (req, res) => {
   try { res.json(await crowd.publicCampaign(req.params.token)); } catch (e) { fail(res, e); }
 });
@@ -46,7 +46,7 @@ const tenantOf = (req) => (req.user.role === "super_admin" && req.query.tenant_i
 const WRITE_ROLES = ["super_admin", "owner", "finance_manager", "accountant", "sales", "operations_manager"];
 const VET_ROLES = ["super_admin", "accountant"]; // compliance / CA
 const canWrite = (req, res, next) => (WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" }));
-const canVet = (req, res, next) => (VET_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden — vetting is for super_admin / accountant" }));
+const canVet = (req, res, next) => (VET_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden - vetting is for super_admin / accountant" }));
 
 // ── Campaigns ──────────────────────────────────────────────────────────────────
 router.get("/", async (req, res) => {
@@ -88,7 +88,7 @@ router.delete("/:id/perks/:perkId", canWrite, async (req, res) => {
 router.get("/:id/backers", async (req, res) => {
   try { res.json(await crowd.listBackers(tenantOf(req), req.params.id, { status: req.query.status, fulfillment: req.query.fulfillment })); } catch (e) { fail(res, e); }
 });
-// Manual mark-paid — for preview/cash pledges, or when no gateway is configured.
+// Manual mark-paid - for preview/cash pledges, or when no gateway is configured.
 router.post("/:id/backers/:backerId/mark-paid", canWrite, async (req, res) => {
   try { res.json(await crowd.markPledgePaid(tenantOf(req), { backerId: req.params.backerId, paymentRef: req.body?.paymentRef, actorId: req.user.id })); } catch (e) { fail(res, e); }
 });

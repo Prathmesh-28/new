@@ -1,7 +1,7 @@
-// §M2 — BILL-WISE SETTLEMENT. Turns book_allocations from an advisory link into
+// §M2 - BILL-WISE SETTLEMENT. Turns book_allocations from an advisory link into
 // a validated open-bill settlement layer. The ledger movement is already posted
 // by the posting-engine; this layer answers "which advance/credit/payment offsets
-// which invoice/bill, and by how much" — and refuses to over-allocate, cross
+// which invoice/bill, and by how much" - and refuses to over-allocate, cross
 // parties, or apply more than a source actually carries.
 //
 // Approach ported from ERPNext Payment Entry reference allocation + AR/AP aging
@@ -24,7 +24,7 @@ function grossSideExpr(alias) {
           END`;
 }
 
-// (1) Open bills for a party — SALES/PURCHASE vouchers with outstanding>0, oldest first.
+// (1) Open bills for a party - SALES/PURCHASE vouchers with outstanding>0, oldest first.
 async function openBills(tenantId, partyLedgerId) {
   if (!tenantId || !partyLedgerId) throw new PostError("BAD_INPUT", "tenantId and partyLedgerId required", 400);
   const { rows } = await pool.query(
@@ -65,7 +65,7 @@ async function openBills(tenantId, partyLedgerId) {
   return out;
 }
 
-// (2) Validated allocation — settle `amount` of a source advance/credit/payment
+// (2) Validated allocation - settle `amount` of a source advance/credit/payment
 // against a target invoice/bill, inside a serialized transaction.
 async function allocateBill(tenantId, { sourceVoucherId, targetVoucherId, amount } = {}) {
   if (!tenantId) throw new PostError("BAD_INPUT", "tenantId required", 400);
@@ -150,7 +150,7 @@ async function allocateBill(tenantId, { sourceVoucherId, targetVoucherId, amount
   }
 }
 
-// (3) AUTO-FIFO — apply ONE receipt/payment (or credit/debit-note) to a party's
+// (3) AUTO-FIFO - apply ONE receipt/payment (or credit/debit-note) to a party's
 // OLDEST open bills first, until the source's unapplied amount is exhausted or no
 // open bills remain. Each match writes the SAME book_allocations link the manual
 // allocateBill path uses, with identical invariants (same party, never over a

@@ -69,28 +69,28 @@ export default function FinancialHealthPage() {
   const monthlyEbitda = snap.monthlyNet + snap.monthlyInterest + monthlyDepreciation;
   const ebitdaMgnPct  = snap.monthlyRevenue > 0 ? Math.round((monthlyEbitda / snap.monthlyRevenue) * 100) : null;
   // Operating cash flow = net profit + interest add-back (principal repayment is a real
-  // cash outflow, so add back interest only — not full debt service).
+  // cash outflow, so add back interest only - not full debt service).
   const opCashFlow    = snap.monthlyNet + snap.monthlyInterest;
   const fcfRatioPct   = snap.monthlyRevenue > 0 ? Math.round((opCashFlow / snap.monthlyRevenue) * 100) : null;
 
   const ratios: { label: string; value: string; target: string; ok: boolean; path: string }[] = [
-    { label: "Current Ratio", value: snap.currentRatio !== null ? `${snap.currentRatio.toFixed(2)}x` : "—", target: "≥ 1.5x", ok: (snap.currentRatio ?? 2) >= 1.5, path: "/working-capital" },
-    { label: "Quick Ratio", value: snap.quickRatio !== null ? `${snap.quickRatio.toFixed(2)}x` : "—", target: "≥ 1.0x", ok: (snap.quickRatio ?? 1.5) >= 1, path: "/working-capital" },
+    { label: "Current Ratio", value: snap.currentRatio !== null ? `${snap.currentRatio.toFixed(2)}x` : "-", target: "≥ 1.5x", ok: (snap.currentRatio ?? 2) >= 1.5, path: "/working-capital" },
+    { label: "Quick Ratio", value: snap.quickRatio !== null ? `${snap.quickRatio.toFixed(2)}x` : "-", target: "≥ 1.0x", ok: (snap.quickRatio ?? 1.5) >= 1, path: "/working-capital" },
     { label: "DSCR", value: snap.dscr !== null ? `${snap.dscr.toFixed(2)}x` : "No debt", target: "≥ 1.25x", ok: snap.dscr === null || snap.dscr >= 1.25, path: "/debt" },
     { label: "Interest Coverage", value: snap.interestCoverage !== null ? `${snap.interestCoverage.toFixed(1)}x` : "No debt", target: "≥ 3x", ok: snap.interestCoverage === null || snap.interestCoverage >= 3, path: "/debt" },
     { label: "Cash Conversion Cycle", value: `${snap.cccDays} days`, target: "≤ 45 days", ok: snap.cccDays <= 45, path: "/working-capital" },
-    { label: "Net Margin (6 mo)", value: snap.grossMarginPct !== null ? `${snap.grossMarginPct.toFixed(0)}%` : "—", target: "≥ 10%", ok: (snap.grossMarginPct ?? 0) >= 10, path: "/analytics" },
+    { label: "Net Margin (6 mo)", value: snap.grossMarginPct !== null ? `${snap.grossMarginPct.toFixed(0)}%` : "-", target: "≥ 10%", ok: (snap.grossMarginPct ?? 0) >= 10, path: "/analytics" },
     { label: "Runway", value: snap.runwayDays >= 999 ? "CF positive" : `${snap.runwayDays} days`, target: "≥ 90 days", ok: snap.runwayDays >= 90, path: "/forecast" },
     { label: "Net Working Capital", value: formatAmount(snap.netWorkingCapital), target: "> ₹0", ok: snap.netWorkingCapital > 0, path: "/working-capital" },
     { label: "Top-Customer Share",    value: `${snap.topCustomerPct.toFixed(0)}%`,                                target: "≤ 30%",   ok: snap.topCustomerPct <= 30,                                   path: "/invoices"   },
-    { label: "EBITDA Margin",         value: ebitdaMgnPct !== null ? `${ebitdaMgnPct}%` : "—",                     target: "≥ 15%",   ok: (ebitdaMgnPct ?? 0) >= 15,                                  path: "/analytics"  },
-    { label: "Free Cash Flow Ratio",  value: fcfRatioPct  !== null ? `${fcfRatioPct}%` : "—",                      target: "≥ 10%",   ok: (fcfRatioPct ?? 0) >= 10,                                   path: "/debt"       },
-    { label: "Revenue Growth (CMGR)", value: snap.revenueGrowthPct !== null ? `${snap.revenueGrowthPct.toFixed(1)}%/mo` : "—", target: "≥ 3%/mo", ok: (snap.revenueGrowthPct ?? 0) >= 3,            path: "/analytics"  },
+    { label: "EBITDA Margin",         value: ebitdaMgnPct !== null ? `${ebitdaMgnPct}%` : "-",                     target: "≥ 15%",   ok: (ebitdaMgnPct ?? 0) >= 15,                                  path: "/analytics"  },
+    { label: "Free Cash Flow Ratio",  value: fcfRatioPct  !== null ? `${fcfRatioPct}%` : "-",                      target: "≥ 10%",   ok: (fcfRatioPct ?? 0) >= 10,                                   path: "/debt"       },
+    { label: "Revenue Growth (CMGR)", value: snap.revenueGrowthPct !== null ? `${snap.revenueGrowthPct.toFixed(1)}%/mo` : "-", target: "≥ 3%/mo", ok: (snap.revenueGrowthPct ?? 0) >= 3,            path: "/analytics"  },
   ];
 
   const weakest = [...health.components].sort((a, b) => a.score - b.score).slice(0, 3);
 
-  // Section index — single-scroll equivalent of a tab selector. Each entry jumps
+  // Section index - single-scroll equivalent of a tab selector. Each entry jumps
   // to the matching <section> anchor below. Add new tools here as [id, label, Icon].
   const sections = ([
     ["health-altman-z",        "Distress (Z')",  Gauge],
@@ -118,7 +118,7 @@ export default function FinancialHealthPage() {
       <div>
         <h1 className="text-xl font-bold flex items-center gap-2"><HeartPulse size={18} className="text-[var(--color-primary)]" /> Financial Health</h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
-          One composite score from cash, receivables, debt, growth and compliance — recomputed live from every module.
+          One composite score from cash, receivables, debt, growth and compliance - recomputed live from every module.
         </p>
         <div className="flex flex-wrap gap-1 mt-3">
           {sections.map(([id, label, Icon]) => (
@@ -136,7 +136,7 @@ export default function FinancialHealthPage() {
           <ScoreRing score={health.score} grade={health.grade} />
           <div className={`text-xs px-3 py-1.5 rounded-full border font-medium ${lenderReady ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
             <Landmark size={11} className="inline mr-1.5 -mt-px" />
-            {lenderReady ? "Lender-ready: meets typical underwriting bar" : "Below typical lender bar — fix weakest areas first"}
+            {lenderReady ? "Lender-ready: meets typical underwriting bar" : "Below typical lender bar - fix weakest areas first"}
           </div>
         </div>
 
@@ -266,7 +266,7 @@ export default function FinancialHealthPage() {
         ))}
       </div>
 
-      {/* #154 Altman Z' Score — Distress Indicator */}
+      {/* #154 Altman Z' Score - Distress Indicator */}
       <AltmanZScore snap={snap} />
 
       {/* #155 Liquidity Stress Test */}
@@ -339,7 +339,7 @@ function MetricCard({ label, value, target, ok, note }: { label: string; value: 
   );
 }
 
-// ── #157 LIQUIDITY LADDER — current / quick / cash ratios with health bands ──────
+// ── #157 LIQUIDITY LADDER - current / quick / cash ratios with health bands ──────
 // Three layered liquidity tests against the same current-liabilities base, from
 // least to most conservative, so owners see how much survives if inventory and
 // receivables are stripped out.
@@ -357,7 +357,7 @@ function LiquidityLadder({ snap }: { snap: FinancialSnapshot }) {
 
   const rungs: { label: string; value: number; target: number; desc: string }[] = [
     { label: "Current Ratio", value: m.current, target: 1.5, desc: "All current assets ÷ current liabilities" },
-    { label: "Quick Ratio (acid test)", value: m.quick, target: 1.0, desc: "Excludes inventory — cash + receivables only" },
+    { label: "Quick Ratio (acid test)", value: m.quick, target: 1.0, desc: "Excludes inventory - cash + receivables only" },
     { label: "Cash Ratio", value: m.cash, target: 0.5, desc: "Pure cash cover for near-term bills" },
   ];
 
@@ -400,7 +400,7 @@ function LiquidityLadder({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #158 SOLVENCY & COVERAGE — long-term leverage & ability to service debt ──────
+// ── #158 SOLVENCY & COVERAGE - long-term leverage & ability to service debt ──────
 // Debt-to-equity, debt-to-assets, equity ratio and interest/debt coverage against
 // lender bands, with a single solvency verdict.
 function SolvencyCoverage({ snap }: { snap: FinancialSnapshot }) {
@@ -424,7 +424,7 @@ function SolvencyCoverage({ snap }: { snap: FinancialSnapshot }) {
     { label: "Equity Ratio", value: `${(m.equityRatio * 100).toFixed(0)}%`, target: "≥ 40%", ok: m.equityRatio >= 0.4 },
     { label: "Interest Coverage", value: snap.interestCoverage !== null ? `${snap.interestCoverage.toFixed(1)}x` : "No debt", target: "≥ 3x", ok: snap.interestCoverage === null || snap.interestCoverage >= 3 },
     { label: "DSCR", value: snap.dscr !== null ? `${snap.dscr.toFixed(2)}x` : "No debt", target: "≥ 1.25x", ok: snap.dscr === null || snap.dscr >= 1.25 },
-    { label: "Debt ÷ Annual Profit", value: m.debtToEarnings === null ? "—" : `${m.debtToEarnings.toFixed(1)}x`, target: "≤ 3x", ok: m.debtToEarnings !== null && m.debtToEarnings <= 3 },
+    { label: "Debt ÷ Annual Profit", value: m.debtToEarnings === null ? "-" : `${m.debtToEarnings.toFixed(1)}x`, target: "≤ 3x", ok: m.debtToEarnings !== null && m.debtToEarnings <= 3 },
   ];
   const passes = rows.filter(r => r.ok).length;
   const solvent = passes >= 4;
@@ -455,7 +455,7 @@ function SolvencyCoverage({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #159 EFFICIENCY / TURNOVER — how hard assets work, in turns and days ─────────
+// ── #159 EFFICIENCY / TURNOVER - how hard assets work, in turns and days ─────────
 function EfficiencyTurnover({ snap }: { snap: FinancialSnapshot }) {
   const navigate = useNavigate();
   const m = useMemo(() => {
@@ -496,7 +496,7 @@ function EfficiencyTurnover({ snap }: { snap: FinancialSnapshot }) {
             {rows.map(r => (
               <tr key={r.label} className="border-b border-[var(--color-border)] last:border-0">
                 <td className="px-3 py-2 font-medium">{r.label}</td>
-                <td className="px-3 py-2 tabular-nums">{r.turns === null ? "—" : `${r.turns.toFixed(1)}x`}</td>
+                <td className="px-3 py-2 tabular-nums">{r.turns === null ? "-" : `${r.turns.toFixed(1)}x`}</td>
                 <td className="px-3 py-2 tabular-nums">{r.days} days</td>
                 <td className="px-3 py-2 text-xs text-[var(--color-muted)]">{r.target}</td>
                 <td className={`px-3 py-2 text-xs font-semibold ${r.ok ? "text-green-400" : "text-red-400"}`}>{r.ok ? "Good" : "Slow"}</td>
@@ -512,7 +512,7 @@ function EfficiencyTurnover({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #160 DUPONT ROE — return on equity decomposed into its three drivers ─────────
+// ── #160 DUPONT ROE - return on equity decomposed into its three drivers ─────────
 // ROE = Net margin × Asset turnover × Equity multiplier. Shows which lever drives
 // (or drags) the return shareholders earn.
 function DuPontRoe({ snap }: { snap: FinancialSnapshot }) {
@@ -533,7 +533,7 @@ function DuPontRoe({ snap }: { snap: FinancialSnapshot }) {
   const drivers: { label: string; value: string; note: string }[] = [
     { label: "Net Profit Margin", value: `${(m.netMargin * 100).toFixed(1)}%`, note: "Profit kept per ₹1 of sales" },
     { label: "Asset Turnover", value: `${m.assetTurn.toFixed(2)}x`, note: "Sales generated per ₹1 of assets" },
-    { label: "Equity Multiplier", value: `${m.equityMult.toFixed(2)}x`, note: "Leverage — assets per ₹1 of equity" },
+    { label: "Equity Multiplier", value: `${m.equityMult.toFixed(2)}x`, note: "Leverage - assets per ₹1 of equity" },
   ];
   const roePct = m.roe * 100;
   const ok = roePct >= 15;
@@ -570,21 +570,21 @@ function DuPontRoe({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #161 CASH-RUNWAY GAUGE — months of survival against burn, with bands ─────────
+// ── #161 CASH-RUNWAY GAUGE - months of survival against burn, with bands ─────────
 function RunwayGauge({ snap }: { snap: FinancialSnapshot }) {
   const navigate = useNavigate();
   const cfPositive = snap.runwayDays >= 999;
   const months = cfPositive ? 99 : snap.runwayDays / 30;
   const dailyBurn = snap.monthlyNet < 0 ? -snap.monthlyNet / 30 : 0;
-  // Gauge: 0–12 months mapped to a half-ring.
+  // Gauge: 0-12 months mapped to a half-ring.
   const capped = Math.min(12, months);
   const pct = capped / 12;
   const r = 70, c = Math.PI * r; // semicircle length
   const stroke = cfPositive || months >= 6 ? "#22c55e" : months >= 3 ? "#eab308" : "#ef4444";
-  const band = cfPositive ? "Cash-flow positive — burning nothing"
-    : months >= 6 ? "Comfortable — 6+ months of cover"
-    : months >= 3 ? "Tight — rebuild buffer toward 6 months"
-    : "Critical — under 3 months, act now";
+  const band = cfPositive ? "Cash-flow positive - burning nothing"
+    : months >= 6 ? "Comfortable - 6+ months of cover"
+    : months >= 3 ? "Tight - rebuild buffer toward 6 months"
+    : "Critical - under 3 months, act now";
 
   return (
     <section id="health-runway-gauge" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
@@ -621,7 +621,7 @@ function RunwayGauge({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #162 DISTRESS EARLY-WARNING CHECKLIST — red flags lenders watch ──────────────
+// ── #162 DISTRESS EARLY-WARNING CHECKLIST - red flags lenders watch ──────────────
 // Eight live red-flag tests; the count of triggered flags maps to a warning level.
 function EarlyWarning({ snap }: { snap: FinancialSnapshot }) {
   const navigate = useNavigate();
@@ -631,7 +631,7 @@ function EarlyWarning({ snap }: { snap: FinancialSnapshot }) {
       { label: "Negative operating cash flow", bad: snap.monthlyNet < 0, detail: `Monthly net ${formatAmount(snap.monthlyNet)}`, path: "/forecast" },
       { label: "Runway under 90 days", bad: snap.runwayDays < 90, detail: snap.runwayDays >= 999 ? "CF positive" : `${snap.runwayDays} days left`, path: "/forecast" },
       { label: "DSCR below 1.25x", bad: snap.dscr !== null && snap.dscr < 1.25, detail: snap.dscr !== null ? `${snap.dscr.toFixed(2)}x` : "No debt", path: "/debt" },
-      { label: "Current ratio below 1.0x", bad: snap.currentRatio !== null && snap.currentRatio < 1, detail: snap.currentRatio !== null ? `${snap.currentRatio.toFixed(2)}x` : "—", path: "/working-capital" },
+      { label: "Current ratio below 1.0x", bad: snap.currentRatio !== null && snap.currentRatio < 1, detail: snap.currentRatio !== null ? `${snap.currentRatio.toFixed(2)}x` : "-", path: "/working-capital" },
       { label: "Over 40% receivables overdue", bad: overduePct > 40, detail: `${overduePct.toFixed(0)}% overdue`, path: "/receivables" },
       { label: "Customer concentration over 40%", bad: snap.topCustomerPct > 40, detail: `Top customer ${snap.topCustomerPct.toFixed(0)}%`, path: "/invoices" },
       { label: "Cash-conversion cycle over 75 days", bad: snap.cccDays > 75, detail: `${snap.cccDays} days`, path: "/working-capital" },
@@ -641,10 +641,10 @@ function EarlyWarning({ snap }: { snap: FinancialSnapshot }) {
 
   const triggered = flags.filter(f => f.bad).length;
   const level = triggered === 0
-    ? { label: "All clear — no distress flags raised", color: "text-green-400", border: "border-green-800/40", bg: "bg-green-900/20", Icon: CheckCircle2 }
+    ? { label: "All clear - no distress flags raised", color: "text-green-400", border: "border-green-800/40", bg: "bg-green-900/20", Icon: CheckCircle2 }
     : triggered <= 2
-    ? { label: `${triggered} early warning${triggered > 1 ? "s" : ""} — monitor`, color: "text-yellow-400", border: "border-yellow-800/40", bg: "bg-yellow-900/20", Icon: AlertTriangle }
-    : { label: `${triggered} red flags raised — intervene`, color: "text-red-400", border: "border-red-800/40", bg: "bg-red-900/20", Icon: Siren };
+    ? { label: `${triggered} early warning${triggered > 1 ? "s" : ""} - monitor`, color: "text-yellow-400", border: "border-yellow-800/40", bg: "bg-yellow-900/20", Icon: AlertTriangle }
+    : { label: `${triggered} red flags raised - intervene`, color: "text-red-400", border: "border-red-800/40", bg: "bg-red-900/20", Icon: Siren };
 
   return (
     <section id="health-early-warning" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
@@ -672,7 +672,7 @@ function EarlyWarning({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #155 LIQUIDITY STRESS TEST — survive-a-shock simulation ──────────────────────
+// ── #155 LIQUIDITY STRESS TEST - survive-a-shock simulation ──────────────────────
 // Models a combined demand/collections/cost shock against live cash & burn, then
 // reports the runway you'd be left with and whether you breach a safety buffer.
 function LiquidityStressTest({ snap }: { snap: FinancialSnapshot }) {
@@ -713,7 +713,7 @@ function LiquidityStressTest({ snap }: { snap: FinancialSnapshot }) {
   }, [snap, revDrop, arDelay, costRise, bufferMonths]);
 
   const verdict = base.breaches
-    ? { label: "Fails the stress test — would breach safety buffer", color: "text-red-400", border: "border-red-800/40", bg: "bg-red-900/20", Icon: AlertTriangle }
+    ? { label: "Fails the stress test - would breach safety buffer", color: "text-red-400", border: "border-red-800/40", bg: "bg-red-900/20", Icon: AlertTriangle }
     : { label: "Survives the shock with buffer intact", color: "text-green-400", border: "border-green-800/40", bg: "bg-green-900/20", Icon: CheckCircle2 };
 
   const sliders: { label: string; value: number; set: (n: number) => void; min: number; max: number; suffix: string }[] = [
@@ -729,7 +729,7 @@ function LiquidityStressTest({ snap }: { snap: FinancialSnapshot }) {
     <section id="health-stress-test" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
       <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Waves size={15} className="text-[var(--color-primary)]" /> Liquidity Stress Test</p>
       <p className="text-xs text-[var(--color-muted)] mb-5">
-        Survive-a-shock simulation. Drag the levers to model a downturn — falling sales, customers who stop paying, rising input costs — and see how many days of runway you would have left and whether you breach your cash safety buffer.
+        Survive-a-shock simulation. Drag the levers to model a downturn - falling sales, customers who stop paying, rising input costs - and see how many days of runway you would have left and whether you breach your cash safety buffer.
       </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -791,7 +791,7 @@ function LiquidityStressTest({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #156 FINANCIAL FITNESS TREND — health score over time + drivers ──────────────
+// ── #156 FINANCIAL FITNESS TREND - health score over time + drivers ──────────────
 // Records a durable monthly fingerprint of the live composite score and its top
 // drivers, then charts the fitness trajectory so owners can see momentum, not
 // just today's number.
@@ -807,8 +807,8 @@ function FinancialFitnessTrend({ snap }: { snap: FinancialSnapshot }) {
   const monthKey = format(new Date(), "yyyy-MM");
 
   const sorted = [...snap.health.components].sort((a, b) => b.score - a.score);
-  const topDriver = sorted[0]?.label ?? "—";
-  const topDrag   = sorted[sorted.length - 1]?.label ?? "—";
+  const topDriver = sorted[0]?.label ?? "-";
+  const topDrag   = sorted[sorted.length - 1]?.label ?? "-";
 
   // Snapshot today's score into durable history once per calendar month.
   useEffect(() => {
@@ -921,11 +921,11 @@ function FinancialFitnessTrend({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #154 ALTMAN Z' SCORE — distress / bankruptcy-risk indicator ──────────────────
+// ── #154 ALTMAN Z' SCORE - distress / bankruptcy-risk indicator ──────────────────
 // Altman Z' for private manufacturers/SMBs:
 //   Z' = 0.717·X1 + 0.847·X2 + 3.107·X3 + 0.420·X4 + 0.998·X5
 // X1 working-capital/assets, X2 retained-earnings/assets, X3 EBIT/assets,
-// X4 equity/liabilities, X5 sales/assets. Bands: >2.9 safe · 1.23–2.9 grey · <1.23 distress.
+// X4 equity/liabilities, X5 sales/assets. Bands: >2.9 safe · 1.23-2.9 grey · <1.23 distress.
 // All inputs are derived live from the financial snapshot (transaction proxies).
 function AltmanZScore({ snap }: { snap: FinancialSnapshot }) {
   const z = useMemo(() => {
@@ -960,9 +960,9 @@ function AltmanZScore({ snap }: { snap: FinancialSnapshot }) {
 
   return (
     <section id="health-altman-z" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Gauge size={15} className="text-[var(--color-primary)]" /> Altman Z' Score — Distress Indicator</p>
+      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Gauge size={15} className="text-[var(--color-primary)]" /> Altman Z' Score - Distress Indicator</p>
       <p className="text-xs text-[var(--color-muted)] mb-5">
-        Used by lenders worldwide to predict insolvency risk. Z' &gt; 2.9 = safe, 1.23–2.9 = grey zone, &lt; 1.23 = distress. Values derived from transaction proxies — connect all accounts for best accuracy.
+        Used by lenders worldwide to predict insolvency risk. Z' &gt; 2.9 = safe, 1.23-2.9 = grey zone, &lt; 1.23 = distress. Values derived from transaction proxies - connect all accounts for best accuracy.
       </p>
       <div className="flex items-start gap-6 flex-wrap">
         <div className={`rounded-xl px-7 py-5 border ${zone.border} ${zone.bg} shrink-0 text-center`}>
@@ -1006,8 +1006,8 @@ function AltmanZScore({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #163 CASH-FLOW COVERAGE — can operating cash cover all fixed claims? ──────────
-// Tests whether monthly operating cash flow covers each layer of fixed claims —
+// ── #163 CASH-FLOW COVERAGE - can operating cash cover all fixed claims? ──────────
+// Tests whether monthly operating cash flow covers each layer of fixed claims -
 // interest, full debt service, then debt service plus a tax accrual. The tightest
 // passing layer tells the owner how much fixed cost the cash engine can actually carry.
 function CashFlowCoverage({ snap }: { snap: FinancialSnapshot }) {
@@ -1039,7 +1039,7 @@ function CashFlowCoverage({ snap }: { snap: FinancialSnapshot }) {
         </span>
       </div>
       <p className="text-xs text-[var(--color-muted)] mb-5">
-        How comfortably your monthly operating cash covers each layer of fixed claims — interest, full EMI, then EMI plus a tax accrual. The tightest layer that still clears tells you the headroom in your cash engine.
+        How comfortably your monthly operating cash covers each layer of fixed claims - interest, full EMI, then EMI plus a tax accrual. The tightest layer that still clears tells you the headroom in your cash engine.
       </p>
       <div className="space-y-4">
         {layers.map(l => {
@@ -1077,7 +1077,7 @@ function CashFlowCoverage({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #164 MARGIN STABILITY SCORE — how consistent monthly margins are ─────────────
+// ── #164 MARGIN STABILITY SCORE - how consistent monthly margins are ─────────────
 // Volatile margins scare lenders even when the average is fine. This scores the
 // month-to-month consistency of net margin using its coefficient of variation,
 // then flags the best and worst month so the owner can chase the swing.
@@ -1108,7 +1108,7 @@ function MarginStability({ snap }: { snap: FinancialSnapshot }) {
         Lenders trust steady margins more than high-but-erratic ones. This scores month-to-month consistency of your net margin (100 = rock-steady). Wide swings drag the score down even when the average looks healthy.
       </p>
       {m.score === null ? (
-        <p className="text-xs text-[var(--color-muted)] py-6 text-center">Not enough revenue history yet — needs at least two months of sales.</p>
+        <p className="text-xs text-[var(--color-muted)] py-6 text-center">Not enough revenue history yet - needs at least two months of sales.</p>
       ) : (
         <>
           <div className="flex items-center gap-6 flex-wrap mb-4">
@@ -1119,9 +1119,9 @@ function MarginStability({ snap }: { snap: FinancialSnapshot }) {
             </div>
             <div className="grid grid-cols-2 gap-3 flex-1 min-w-[220px]">
               <MetricCard label="Average net margin" value={`${m.mean.toFixed(1)}%`} ok={m.mean >= 10} />
-              <MetricCard label="Variation (CV)" value={m.cv !== null ? `${(m.cv * 100).toFixed(0)}%` : "—"} note="lower is steadier" />
-              <MetricCard label="Best month" value={m.best ? `${m.best.margin.toFixed(0)}%` : "—"} note={m.best ? m.best.label : ""} />
-              <MetricCard label="Worst month" value={m.worst ? `${m.worst.margin.toFixed(0)}%` : "—"} note={m.worst ? m.worst.label : ""} />
+              <MetricCard label="Variation (CV)" value={m.cv !== null ? `${(m.cv * 100).toFixed(0)}%` : "-"} note="lower is steadier" />
+              <MetricCard label="Best month" value={m.best ? `${m.best.margin.toFixed(0)}%` : "-"} note={m.best ? m.best.label : ""} />
+              <MetricCard label="Worst month" value={m.worst ? `${m.worst.margin.toFixed(0)}%` : "-"} note={m.worst ? m.worst.label : ""} />
             </div>
           </div>
           <div className="flex items-end gap-1.5 h-20">
@@ -1145,7 +1145,7 @@ function MarginStability({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #165 GROWTH QUALITY — is growth backed by cash, or just receivables? ─────────
+// ── #165 GROWTH QUALITY - is growth backed by cash, or just receivables? ─────────
 // Revenue can rise while cash falls if sales pile up as uncollected receivables.
 // This compares revenue growth against operating-cash growth and the share of
 // revenue still locked in receivables, then grades whether growth is "cash-real".
@@ -1166,10 +1166,10 @@ function GrowthQuality({ snap }: { snap: FinancialSnapshot }) {
   }, [snap]);
 
   const verdict = m.passes === 3
-    ? { label: "High-quality growth — backed by real cash", color: "text-green-400", border: "border-green-800/40", bg: "bg-green-900/20", Icon: CheckCircle2 }
+    ? { label: "High-quality growth - backed by real cash", color: "text-green-400", border: "border-green-800/40", bg: "bg-green-900/20", Icon: CheckCircle2 }
     : m.passes === 2
-    ? { label: "Mixed quality — watch the cash conversion", color: "text-yellow-400", border: "border-yellow-800/40", bg: "bg-yellow-900/20", Icon: AlertTriangle }
-    : { label: "Low-quality growth — sales aren't turning into cash", color: "text-red-400", border: "border-red-800/40", bg: "bg-red-900/20", Icon: AlertTriangle };
+    ? { label: "Mixed quality - watch the cash conversion", color: "text-yellow-400", border: "border-yellow-800/40", bg: "bg-yellow-900/20", Icon: AlertTriangle }
+    : { label: "Low-quality growth - sales aren't turning into cash", color: "text-red-400", border: "border-red-800/40", bg: "bg-red-900/20", Icon: AlertTriangle };
 
   const tests: { label: string; ok: boolean; detail: string }[] = [
     { label: "Revenue is growing", ok: m.growthPos, detail: m.revGrowth !== null ? `${m.revGrowth.toFixed(1)}%/mo CMGR` : "Not enough history" },
@@ -1179,7 +1179,7 @@ function GrowthQuality({ snap }: { snap: FinancialSnapshot }) {
 
   return (
     <section id="health-growth-quality" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><GitCompareArrows size={15} className="text-[var(--color-primary)]" /> Growth Quality — Cash vs Accrual</p>
+      <p className="text-sm font-semibold mb-1 flex items-center gap-2"><GitCompareArrows size={15} className="text-[var(--color-primary)]" /> Growth Quality - Cash vs Accrual</p>
       <p className="text-xs text-[var(--color-muted)] mb-5">
         Revenue can rise while cash falls if sales pile up as uncollected receivables. This checks whether growth is "cash-real": positive growth, sales converting to cash, and receivables that aren't ballooning.
       </p>
@@ -1210,7 +1210,7 @@ function GrowthQuality({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #166 EXPENSE DISCIPLINE TREND — is the cost base growing faster than sales? ──
+// ── #166 EXPENSE DISCIPLINE TREND - is the cost base growing faster than sales? ──
 // Tracks the expense-to-revenue ratio month by month. Discipline slips when costs
 // climb faster than revenue. Charts the ratio, flags the trend direction and
 // estimates the rupee swing from the best month to the latest.
@@ -1247,10 +1247,10 @@ function ExpenseDiscipline({ snap }: { snap: FinancialSnapshot }) {
         )}
       </div>
       <p className="text-xs text-[var(--color-muted)] mb-5">
-        Your expense-to-revenue ratio over time. Discipline slips when costs climb faster than sales — a falling ratio is healthy. The gap to your best month shows recoverable cost leakage.
+        Your expense-to-revenue ratio over time. Discipline slips when costs climb faster than sales - a falling ratio is healthy. The gap to your best month shows recoverable cost leakage.
       </p>
       {m.first === null ? (
-        <p className="text-xs text-[var(--color-muted)] py-6 text-center">Not enough revenue history yet — needs at least two months of sales.</p>
+        <p className="text-xs text-[var(--color-muted)] py-6 text-center">Not enough revenue history yet - needs at least two months of sales.</p>
       ) : (
         <>
           <div className="flex items-end gap-1.5 h-24 mb-2">
@@ -1268,7 +1268,7 @@ function ExpenseDiscipline({ snap }: { snap: FinancialSnapshot }) {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
             <MetricCard label="Latest cost ratio" value={`${m.last!.ratio.toFixed(0)}%`} ok={m.last!.ratio < 90} />
-            <MetricCard label="Best month" value={m.best ? `${m.best.ratio.toFixed(0)}%` : "—"} note={m.best ? m.best.label : ""} />
+            <MetricCard label="Best month" value={m.best ? `${m.best.ratio.toFixed(0)}%` : "-"} note={m.best ? m.best.label : ""} />
             <MetricCard label="Trend" value={improving ? "Improving" : worsening ? "Worsening" : "Flat"} note={`${m.delta >= 0 ? "+" : ""}${m.delta.toFixed(0)} pts`} />
             <MetricCard label="Cost leakage / mo" value={formatAmount(m.leakage)} note="vs best month" />
           </div>
@@ -1281,9 +1281,9 @@ function ExpenseDiscipline({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #167 OVERALL RESILIENCE INDEX — one blended shock-absorption number ───────────
-// Blends four survival pillars — cash buffer (runway), profitability cushion,
-// leverage headroom and customer diversification — into a single 0–100 resilience
+// ── #167 OVERALL RESILIENCE INDEX - one blended shock-absorption number ───────────
+// Blends four survival pillars - cash buffer (runway), profitability cushion,
+// leverage headroom and customer diversification - into a single 0-100 resilience
 // index that answers "how well could this business absorb a shock?"
 function ResilienceIndex({ snap }: { snap: FinancialSnapshot }) {
   const navigate = useNavigate();
@@ -1302,10 +1302,10 @@ function ResilienceIndex({ snap }: { snap: FinancialSnapshot }) {
   }, [snap]);
 
   const band = idx.score >= 70
-    ? { label: "Resilient — well-buffered against shocks", color: "text-green-400" }
+    ? { label: "Resilient - well-buffered against shocks", color: "text-green-400" }
     : idx.score >= 45
-    ? { label: "Moderately resilient — thin in places", color: "text-yellow-400" }
-    : { label: "Fragile — little cushion for a downturn", color: "text-red-400" };
+    ? { label: "Moderately resilient - thin in places", color: "text-yellow-400" }
+    : { label: "Fragile - little cushion for a downturn", color: "text-red-400" };
 
   const pillars: { label: string; score: number; weight: number; path: string }[] = [
     { label: "Cash buffer (runway)", score: idx.buffer, weight: 35, path: "/forecast" },
@@ -1346,10 +1346,10 @@ function ResilienceIndex({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #168 QUICK-RATIO GAUGE — acid-test liquidity on a banded dial ─────────────────
+// ── #168 QUICK-RATIO GAUGE - acid-test liquidity on a banded dial ─────────────────
 // The quick (acid-test) ratio strips inventory out of current assets to ask the
 // harshest near-term question: can you cover short-term liabilities from cash and
-// receivables alone? Plotted on a 0–2x dial with the standard 1.0x safety bar.
+// receivables alone? Plotted on a 0-2x dial with the standard 1.0x safety bar.
 function QuickRatioGauge({ snap }: { snap: FinancialSnapshot }) {
   const navigate = useNavigate();
   const [showWhy, setShowWhy] = useState(false);
@@ -1358,10 +1358,10 @@ function QuickRatioGauge({ snap }: { snap: FinancialSnapshot }) {
   const band = q === null
     ? { label: "No liability data yet", color: "text-[var(--color-muted)]", bar: "bg-[var(--color-border)]" }
     : q >= 1
-    ? { label: "Healthy — can settle short-term dues without selling stock", color: "text-green-400", bar: "bg-green-500" }
+    ? { label: "Healthy - can settle short-term dues without selling stock", color: "text-green-400", bar: "bg-green-500" }
     : q >= 0.7
-    ? { label: "Tight — a slow collection month could squeeze you", color: "text-yellow-400", bar: "bg-yellow-500" }
-    : { label: "Strained — liquid assets fall short of near-term claims", color: "text-red-400", bar: "bg-red-500" };
+    ? { label: "Tight - a slow collection month could squeeze you", color: "text-yellow-400", bar: "bg-yellow-500" }
+    : { label: "Strained - liquid assets fall short of near-term claims", color: "text-red-400", bar: "bg-red-500" };
 
   return (
     <section id="health-quick-ratio-gauge" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
@@ -1379,7 +1379,7 @@ function QuickRatioGauge({ snap }: { snap: FinancialSnapshot }) {
       )}
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-[10px] text-[var(--color-muted)]">0x</span>
-        <span className={`text-3xl font-bold tabular-nums ${band.color}`}>{q === null ? "—" : `${q.toFixed(2)}x`}</span>
+        <span className={`text-3xl font-bold tabular-nums ${band.color}`}>{q === null ? "-" : `${q.toFixed(2)}x`}</span>
         <span className="text-[10px] text-[var(--color-muted)]">2x+</span>
       </div>
       <div className="relative h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden mb-1">
@@ -1389,8 +1389,8 @@ function QuickRatioGauge({ snap }: { snap: FinancialSnapshot }) {
       <p className="text-[10px] text-[var(--color-muted)] mb-3">Marker = 1.0x safety bar</p>
       <p className={`text-xs font-medium mb-4 ${band.color}`}>{band.label}</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <MetricCard label="Quick ratio" value={q === null ? "—" : `${q.toFixed(2)}x`} target="≥ 1.0x" ok={q === null || q >= 1} />
-        <MetricCard label="Current ratio" value={snap.currentRatio === null ? "—" : `${snap.currentRatio.toFixed(2)}x`} note="incl. inventory" />
+        <MetricCard label="Quick ratio" value={q === null ? "-" : `${q.toFixed(2)}x`} target="≥ 1.0x" ok={q === null || q >= 1} />
+        <MetricCard label="Current ratio" value={snap.currentRatio === null ? "-" : `${snap.currentRatio.toFixed(2)}x`} note="incl. inventory" />
         <MetricCard label="Cash on hand" value={formatAmount(snap.cash)} />
       </div>
       <button onClick={() => navigate("/working-capital")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1 mt-3">
@@ -1400,9 +1400,9 @@ function QuickRatioGauge({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #169 DEBT-BURDEN INDEX — how heavily debt weighs on monthly cash ──────────────
-// Blends three leverage strains — debt service as a share of revenue, DSCR headroom
-// and interest coverage — into one 0–100 burden index. High score = light burden.
+// ── #169 DEBT-BURDEN INDEX - how heavily debt weighs on monthly cash ──────────────
+// Blends three leverage strains - debt service as a share of revenue, DSCR headroom
+// and interest coverage - into one 0-100 burden index. High score = light burden.
 function DebtBurdenIndex({ snap }: { snap: FinancialSnapshot }) {
   const navigate = useNavigate();
   const m = useMemo(() => {
@@ -1419,12 +1419,12 @@ function DebtBurdenIndex({ snap }: { snap: FinancialSnapshot }) {
   }, [snap]);
 
   const band = snap.monthlyDebtService === 0
-    ? { label: "Debt-free — no servicing burden", color: "text-green-400" }
+    ? { label: "Debt-free - no servicing burden", color: "text-green-400" }
     : m.score >= 70
-    ? { label: "Light — debt sits comfortably within cash flow", color: "text-green-400" }
+    ? { label: "Light - debt sits comfortably within cash flow", color: "text-green-400" }
     : m.score >= 45
-    ? { label: "Moderate — manageable but watch new borrowing", color: "text-yellow-400" }
-    : { label: "Heavy — debt is crowding out operating cash", color: "text-red-400" };
+    ? { label: "Moderate - manageable but watch new borrowing", color: "text-yellow-400" }
+    : { label: "Heavy - debt is crowding out operating cash", color: "text-red-400" };
 
   const rows: { label: string; score: number; weight: number; note: string }[] = [
     { label: "Debt service vs revenue", score: m.dsrScore, weight: 40, note: `${m.dsrPct.toFixed(0)}% of revenue` },
@@ -1467,7 +1467,7 @@ function DebtBurdenIndex({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #170 CASH-BUFFER MONTHS — survival window at current burn ──────────────────────
+// ── #170 CASH-BUFFER MONTHS - survival window at current burn ──────────────────────
 // Translates runway into the metric owners and boards actually track: how many
 // months of operating expenses sit in the bank. Banded against a 3-month resilience
 // floor and a 6-month comfort target.
@@ -1486,10 +1486,10 @@ function CashBufferMonths({ snap }: { snap: FinancialSnapshot }) {
   const band = m.months === null
     ? { label: "No expense history yet", color: "text-[var(--color-muted)]" }
     : m.months >= 6
-    ? { label: "Comfortable — over six months of expenses covered", color: "text-green-400" }
+    ? { label: "Comfortable - over six months of expenses covered", color: "text-green-400" }
     : m.months >= 3
-    ? { label: "Adequate — past the three-month resilience floor", color: "text-yellow-400" }
-    : { label: "Thin — under three months of cover is fragile", color: "text-red-400" };
+    ? { label: "Adequate - past the three-month resilience floor", color: "text-yellow-400" }
+    : { label: "Thin - under three months of cover is fragile", color: "text-red-400" };
 
   return (
     <section id="health-cash-buffer" className="scroll-mt-20 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
@@ -1498,7 +1498,7 @@ function CashBufferMonths({ snap }: { snap: FinancialSnapshot }) {
         How many months of total operating expenses your current bank balance would cover. The board-room view of runway, banded against a three-month resilience floor and a six-month comfort target.
       </p>
       <div className="flex items-baseline gap-3 mb-2">
-        <span className={`text-4xl font-bold tabular-nums ${band.color}`}>{m.months === null ? "—" : m.months.toFixed(1)}</span>
+        <span className={`text-4xl font-bold tabular-nums ${band.color}`}>{m.months === null ? "-" : m.months.toFixed(1)}</span>
         <span className="text-xs text-[var(--color-muted)]">months of expenses in the bank</span>
       </div>
       <div className="relative h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden mb-1">
@@ -1510,8 +1510,8 @@ function CashBufferMonths({ snap }: { snap: FinancialSnapshot }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <MetricCard label="Cash on hand" value={formatAmount(snap.cash)} />
         <MetricCard label="Monthly expenses" value={formatAmount(m.monthlyExpense)} />
-        <MetricCard label="Months covered" value={m.months === null ? "—" : `${m.months.toFixed(1)}`} target="≥ 3" ok={m.months !== null && m.months >= 3} />
-        <MetricCard label="At current burn" value={m.cfPositive ? "CF positive" : m.burnMonths !== null ? `${m.burnMonths.toFixed(1)} mo` : "—"} ok={m.cfPositive || (m.burnMonths !== null && m.burnMonths >= 3)} />
+        <MetricCard label="Months covered" value={m.months === null ? "-" : `${m.months.toFixed(1)}`} target="≥ 3" ok={m.months !== null && m.months >= 3} />
+        <MetricCard label="At current burn" value={m.cfPositive ? "CF positive" : m.burnMonths !== null ? `${m.burnMonths.toFixed(1)} mo` : "-"} ok={m.cfPositive || (m.burnMonths !== null && m.burnMonths >= 3)} />
       </div>
       <button onClick={() => navigate("/forecast")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1 mt-3">
         Project the buffer forward <ArrowRight size={11} />
@@ -1520,7 +1520,7 @@ function CashBufferMonths({ snap }: { snap: FinancialSnapshot }) {
   );
 }
 
-// ── #171 REVENUE-DIVERSIFICATION INDEX — concentration risk on a 0–100 scale ───────
+// ── #171 REVENUE-DIVERSIFICATION INDEX - concentration risk on a 0-100 scale ───────
 // Converts the customer-revenue HHI into an intuitive diversification score and
 // flags the dependency on the single largest account. Low diversification means one
 // lost customer could break the business.
@@ -1538,10 +1538,10 @@ function RevenueDiversification({ snap }: { snap: FinancialSnapshot }) {
   const band = m.score === null
     ? { label: "No customer revenue data yet", color: "text-[var(--color-muted)]" }
     : m.score >= 70
-    ? { label: "Well spread — no single account dominates", color: "text-green-400" }
+    ? { label: "Well spread - no single account dominates", color: "text-green-400" }
     : m.score >= 45
-    ? { label: "Some concentration — a few accounts carry the load", color: "text-yellow-400" }
-    : { label: "Concentrated — losing one customer would hurt badly", color: "text-red-400" };
+    ? { label: "Some concentration - a few accounts carry the load", color: "text-yellow-400" }
+    : { label: "Concentrated - losing one customer would hurt badly", color: "text-red-400" };
 
   const topOk = snap.topCustomerPct <= 30;
 
@@ -1553,14 +1553,14 @@ function RevenueDiversification({ snap }: { snap: FinancialSnapshot }) {
       </p>
       <div className="flex items-center gap-6 flex-wrap">
         <div className="shrink-0 text-center">
-          <ScoreRing score={m.score ?? 0} grade={m.score === null ? "—" : m.score >= 85 ? "A+" : m.score >= 70 ? "A" : m.score >= 55 ? "B" : m.score >= 40 ? "C" : "D"} />
+          <ScoreRing score={m.score ?? 0} grade={m.score === null ? "-" : m.score >= 85 ? "A+" : m.score >= 70 ? "A" : m.score >= 55 ? "B" : m.score >= 40 ? "C" : "D"} />
           <p className={`text-xs font-semibold mt-1 max-w-[176px] ${band.color}`}>{band.label}</p>
         </div>
         <div className="flex-1 min-w-[240px] grid grid-cols-2 gap-3">
           <MetricCard label="Top-customer share" value={`${snap.topCustomerPct.toFixed(0)}%`} target="≤ 30%" ok={topOk} />
-          <MetricCard label="Concentration (HHI)" value={m.hhi > 0 ? `${Math.round(m.hhi)}` : "—"} note="lower is safer" />
-          <MetricCard label="Effective customers" value={m.effective !== null ? m.effective.toFixed(1) : "—"} note="equal-weight equivalent" />
-          <MetricCard label="Diversification" value={m.score === null ? "—" : `${m.score}/100`} ok={m.score !== null && m.score >= 60} />
+          <MetricCard label="Concentration (HHI)" value={m.hhi > 0 ? `${Math.round(m.hhi)}` : "-"} note="lower is safer" />
+          <MetricCard label="Effective customers" value={m.effective !== null ? m.effective.toFixed(1) : "-"} note="equal-weight equivalent" />
+          <MetricCard label="Diversification" value={m.score === null ? "-" : `${m.score}/100`} ok={m.score !== null && m.score >= 60} />
         </div>
       </div>
       <button onClick={() => navigate("/invoices")} className="w-full text-xs text-[var(--color-primary)] hover:underline flex items-center justify-center gap-1 py-1 mt-4">

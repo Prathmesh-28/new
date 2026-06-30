@@ -5,9 +5,10 @@ import { useAuth } from "@/context/AuthContext";
 import { ArrowLeft } from "lucide-react";
 import Logo from "@/components/Logo";
 import Turnstile, { turnstileEnabled } from "@/components/Turnstile";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function LoginPage() {
-  useSeo({ title: "Log in — Headroom", description: "Log in to Headroom — your all-in-one GST billing, accounting and cash-flow workspace for Indian SMBs." });
+  useSeo({ title: "Log in - Headroom", description: "Log in to Headroom - your all-in-one GST billing, accounting and cash-flow workspace for Indian SMBs." });
   const { login } = useAuth();
   const navigate    = useNavigate();
   const [params]    = useSearchParams();
@@ -38,7 +39,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex bg-[var(--color-bg)]">
-      {/* Left panel — decorative */}
+      {/* Left panel - decorative */}
       <div className="hidden lg:flex flex-1 flex-col justify-between p-12 bg-[var(--color-surface)] border-r border-[var(--color-border)] relative overflow-hidden">
         <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-[var(--color-primary)]/8 blur-[120px] rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2" />
         <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-[var(--color-primary)]/5 blur-[100px] rounded-full pointer-events-none translate-x-1/2 translate-y-1/2" />
@@ -50,7 +51,7 @@ export default function LoginPage() {
         <div className="relative space-y-6">
           <h2 className="text-2xl font-bold leading-tight max-w-xs">Know your cash. Before it knows you.</h2>
           {[
-            { t: "Live cash clarity",  d: "Runway, a 13-week forecast and a health score — in one view." },
+            { t: "Live cash clarity",  d: "Runway, a 13-week forecast and a health score - in one view." },
             { t: "Built for India",    d: "GST, TDS and compliance baked in, not bolted on." },
             { t: "Your whole team",    d: "Role-based access for finance, your CA, sales and ops." },
           ].map(({ t, d }) => (
@@ -64,7 +65,7 @@ export default function LoginPage() {
         <p className="relative text-xs text-[var(--color-muted)]">Financial OS for lean SMBs</p>
       </div>
 
-      {/* Right panel — form */}
+      {/* Right panel - form */}
       <div className="flex-1 flex flex-col items-center justify-center px-5 py-10">
         <div className="w-full max-w-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 sm:p-8 shadow-xl">
           <button
@@ -94,8 +95,8 @@ export default function LoginPage() {
               <label className="block text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1.5">
                 Password
               </label>
-              <input
-                type="password" value={password} onChange={e => setPassword(e.target.value)}
+              <PasswordInput
+                value={password} onChange={e => setPassword(e.target.value)}
                 required placeholder="••••••••"
                 className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-muted)]/50"
               />

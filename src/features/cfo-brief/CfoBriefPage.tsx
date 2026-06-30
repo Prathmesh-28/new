@@ -114,7 +114,7 @@ function AiBriefView() {
 
   const burn    = monthlyBurn(transactions);
   const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
-  // Net-burn runway (nets revenue against expenses) — not gross-expense burn.
+  // Net-burn runway (nets revenue against expenses) - not gross-expense burn.
   const runway  = computeFinancialSnapshot(store).runwayDays;
 
   const now  = new Date();
@@ -154,7 +154,7 @@ function AiBriefView() {
 
   const buildPrompt = useCallback(() => {
     if (isInvestor) {
-      return `You are the founder of ${firm.name || "this business"} writing a transparent MONTHLY INVESTOR / BOARD UPDATE. Use ONLY the real data below — never invent metrics you don't have.
+      return `You are the founder of ${firm.name || "this business"} writing a transparent MONTHLY INVESTOR / BOARD UPDATE. Use ONLY the real data below - never invent metrics you don't have.
 
 DATA:
 ${DATA_BLOCK}
@@ -199,12 +199,12 @@ Be specific with numbers. Use ₹ for amounts. Max 400 words total. Speak direct
       setGenerated(new Date());
       toast.success(isInvestor ? "Investor update generated" : "CFO Brief generated");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to generate — AI not configured");
+      toast.error(err instanceof Error ? err.message : "Failed to generate - AI not configured");
       // Deterministic fallback built from the same real numbers (no AI needed).
       const metrics = `Cash balance: ${formatCurrency(balance)}\nRunway: ${runway} days\nMonthly burn: ${formatAmount(burn)}\nThis month revenue: ${formatAmount(thisMRev)} (MoM ${momPct})\nThis month expenses: ${formatAmount(thisMExp)}`;
       const fallbackRaw = isInvestor
-        ? `## Headline\n${firm.name || "We"} ended the month with ${formatAmount(balance)} cash and ${runway} days of runway; revenue is ${momPct} MoM.\n\n## Performance\nRevenue ${formatAmount(thisMRev)} vs ${formatAmount(lastMRev)} last month. Expenses ${formatAmount(thisMExp)}.\n\n## Cash & Runway\n${formatCurrency(balance)} in the bank, ~${runway} days at the current ${formatAmount(burn)}/mo burn.\n\n## Risks & Mitigations\n${unreadAlerts.length} open alert(s). ${runway < 90 ? "Runway under 90 days — tightening spend and accelerating collections." : "Runway healthy."}\n\n## Asks\n${runway < 90 ? "Intros to working-capital lenders would help us extend runway." : "No asks this month."}`
-        : `## Key Metrics\n${metrics}\n\n## Cash & Risk Alerts\n${runway < 60 ? `⚠️ Runway is only ${runway} days — below the recommended 90-day threshold.` : `Cash runway of ${runway} days is healthy.`}\n\n## Top 3 Action Items\n1. Review overdue receivables and send collection reminders\n2. Reconcile this month's GST liability before the 20th\n3. ${runway < 90 ? "Consider a credit facility before runway drops below 60 days" : "Review top vendor spend for optimization"}`;
+        ? `## Headline\n${firm.name || "We"} ended the month with ${formatAmount(balance)} cash and ${runway} days of runway; revenue is ${momPct} MoM.\n\n## Performance\nRevenue ${formatAmount(thisMRev)} vs ${formatAmount(lastMRev)} last month. Expenses ${formatAmount(thisMExp)}.\n\n## Cash & Runway\n${formatCurrency(balance)} in the bank, ~${runway} days at the current ${formatAmount(burn)}/mo burn.\n\n## Risks & Mitigations\n${unreadAlerts.length} open alert(s). ${runway < 90 ? "Runway under 90 days - tightening spend and accelerating collections." : "Runway healthy."}\n\n## Asks\n${runway < 90 ? "Intros to working-capital lenders would help us extend runway." : "No asks this month."}`
+        : `## Key Metrics\n${metrics}\n\n## Cash & Risk Alerts\n${runway < 60 ? `⚠️ Runway is only ${runway} days - below the recommended 90-day threshold.` : `Cash runway of ${runway} days is healthy.`}\n\n## Top 3 Action Items\n1. Review overdue receivables and send collection reminders\n2. Reconcile this month's GST liability before the 20th\n3. ${runway < 90 ? "Consider a credit facility before runway drops below 60 days" : "Review top vendor spend for optimization"}`;
       setRawBrief(fallbackRaw);
       setBrief(parseBrief(fallbackRaw));
       setGenerated(new Date());
@@ -216,14 +216,14 @@ Be specific with numbers. Use ₹ for amounts. Max 400 words total. Speak direct
   const downloadTxt = () => {
     if (!rawBrief) return;
     const heading = isInvestor ? "Investor Update" : "CFO Brief";
-    const blob = new Blob([`${heading} — ${firm.name}\nGenerated: ${generated?.toLocaleString("en-IN")}\n\n${rawBrief}`], { type: "text/plain" });
+    const blob = new Blob([`${heading} - ${firm.name}\nGenerated: ${generated?.toLocaleString("en-IN")}\n\n${rawBrief}`], { type: "text/plain" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = isInvestor ? "investor-update.txt" : "cfo-brief.txt"; a.click();
   };
 
   const quickStats = [
     { label: "Cash Balance",    value: formatAmount(balance),     color: balance > burn * 3 ? "text-green-400" : "text-red-400" },
     { label: "Runway",          value: `${runway}d`,              color: runway > 90 ? "text-green-400" : runway > 45 ? "text-yellow-400" : "text-red-400" },
-    { label: "MoM Revenue",     value: lastMRev > 0 ? `${thisMRev >= lastMRev ? "+" : ""}${Math.round(((thisMRev-lastMRev)/lastMRev)*100)}%` : "—", color: thisMRev >= lastMRev ? "text-green-400" : "text-red-400" },
+    { label: "MoM Revenue",     value: lastMRev > 0 ? `${thisMRev >= lastMRev ? "+" : ""}${Math.round(((thisMRev-lastMRev)/lastMRev)*100)}%` : "-", color: thisMRev >= lastMRev ? "text-green-400" : "text-red-400" },
     { label: "Active Alerts",   value: unreadAlerts.length.toString(), color: unreadAlerts.length > 0 ? "text-orange-400" : "text-green-400" },
   ];
 
@@ -234,7 +234,7 @@ Be specific with numbers. Use ₹ for amounts. Max 400 words total. Speak direct
           <h1 className="text-xl font-bold">{isInvestor ? "AI Investor Update" : "AI CFO Brief"}</h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
             {isInvestor
-              ? "Board-ready monthly update drafted from your live numbers — no fabricated metrics"
+              ? "Board-ready monthly update drafted from your live numbers - no fabricated metrics"
               : "Weekly executive summary generated from your live financial data"}
           </p>
         </div>
@@ -300,8 +300,8 @@ Be specific with numbers. Use ₹ for amounts. Max 400 words total. Speak direct
           <h2 className="text-base font-semibold mb-2">{isInvestor ? "Your investor update is ready to draft" : "Your CFO Brief is ready to generate"}</h2>
           <p className="text-sm text-[var(--color-muted)] max-w-sm mx-auto mb-6">
             {isInvestor
-              ? "AI drafts a board-ready monthly update — performance, cash & runway, risks, and asks — straight from your live numbers. Review, edit, and send."
-              : "AI analyses your live cash data, revenue trends, burn rate, and alerts to write a concise executive brief — like having a CFO on call."}
+              ? "AI drafts a board-ready monthly update - performance, cash & runway, risks, and asks - straight from your live numbers. Review, edit, and send."
+              : "AI analyses your live cash data, revenue trends, burn rate, and alerts to write a concise executive brief - like having a CFO on call."}
           </p>
           <button onClick={generate}
             className="flex items-center gap-2 mx-auto bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-6 py-3 rounded-lg hover:opacity-90">
@@ -410,12 +410,12 @@ function VarianceCommentary() {
     const moved = r.delta >= 0 ? "increased" : "decreased";
     const dirWord = r.category === "revenue" ? (r.delta >= 0 ? "favourably" : "unfavourably") : (r.delta >= 0 ? "unfavourably" : "favourably");
     const pctTxt = r.pct === null ? "(no comparable prior activity)" : `${r.pct >= 0 ? "+" : ""}${r.pct}%`;
-    const driverTxt = r.driver ? ` — chiefly ${r.driver[0]} (${r.driver[1] >= 0 ? "+" : ""}${formatAmount(r.driver[1])})` : "";
+    const driverTxt = r.driver ? ` - chiefly ${r.driver[0]} (${r.driver[1] >= 0 ? "+" : ""}${formatAmount(r.driver[1])})` : "";
     return `${capitalise(r.category)} ${moved} ${formatAmount(Math.abs(r.delta))} ${pctTxt} MoM, moving ${dirWord}${driverTxt}.`;
   }), [lines]);
 
   const copyAll = () => {
-    const txt = `Variance Commentary — ${prev.label} → ${cur.label}\n\n${commentary.join("\n")}`;
+    const txt = `Variance Commentary - ${prev.label} → ${cur.label}\n\n${commentary.join("\n")}`;
     navigator.clipboard.writeText(txt).then(() => toast.success("Commentary copied"), () => toast.error("Copy failed"));
   };
 
@@ -426,7 +426,7 @@ function VarianceCommentary() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><FileText size={18} className="text-[var(--color-primary)]" /> Auto Variance Commentary</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">The plain-English "why" behind every month-on-month movement — {prev.label} vs {cur.label}</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">The plain-English "why" behind every month-on-month movement - {prev.label} vs {cur.label}</p>
         </div>
         {hasData && (
           <button onClick={copyAll} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
@@ -438,7 +438,7 @@ function VarianceCommentary() {
       {!hasData ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-12 text-center">
           <FileText size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
-          <p className="text-sm text-[var(--color-muted)]">No movement to explain yet — transactions across two consecutive months are needed to compute variance.</p>
+          <p className="text-sm text-[var(--color-muted)]">No movement to explain yet - transactions across two consecutive months are needed to compute variance.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -467,7 +467,7 @@ function VarianceCommentary() {
                 </div>
                 <p className="text-sm text-[var(--color-muted)] leading-relaxed">
                   {capitalise(r.category)} {r.delta >= 0 ? "increased" : "decreased"} by {formatAmount(Math.abs(r.delta))}
-                  {r.driver ? <> — chiefly driven by <span className="text-[var(--color-text)] font-medium">{r.driver[0]}</span> ({r.driver[1] >= 0 ? "+" : ""}{formatAmount(r.driver[1])}).</> : "."}
+                  {r.driver ? <> - chiefly driven by <span className="text-[var(--color-text)] font-medium">{r.driver[0]}</span> ({r.driver[1] >= 0 ? "+" : ""}{formatAmount(r.driver[1])}).</> : "."}
                 </p>
               </div>
             );
@@ -489,7 +489,7 @@ function BoardDeckGenerator() {
   const { store, canExport } = useApp();
   const { transactions, bankAccounts, firm, activeLoans, alerts } = store;
 
-  // Which slides to include — durable so the owner's deck template persists.
+  // Which slides to include - durable so the owner's deck template persists.
   const [enabled, setEnabled] = useFeatureState<Record<string, boolean>>("cfo-deck-slides", {});
   const isOn = (id: string) => enabled[id] !== false; // default on
   const toggle = (id: string) => setEnabled(prev => ({ ...prev, [id]: prev[id] === false ? true : false }));
@@ -512,8 +512,8 @@ function BoardDeckGenerator() {
     ).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
     return [
-      { id: "title", title: `${firm.name || "Company"} — Board Review (${cur.label})`, bullets: [
-        `Industry: ${firm.industry || "—"}`,
+      { id: "title", title: `${firm.name || "Company"} - Board Review (${cur.label})`, bullets: [
+        `Industry: ${firm.industry || "-"}`,
         `Prepared from live financial data on ${format(new Date(), "d MMM yyyy")}`,
       ] },
       { id: "summary", title: "Executive Summary", bullets: [
@@ -531,14 +531,14 @@ function BoardDeckGenerator() {
       { id: "cash", title: "Cash & Runway", bullets: [
         `Total cash across ${bankAccounts.length} account${bankAccounts.length === 1 ? "" : "s"}: ${formatCurrency(balance)}`,
         `Runway at current burn: ~${runway} days`,
-        runway < 90 ? "Runway below 90 days — prioritise collections / financing." : "Runway healthy (>90 days).",
+        runway < 90 ? "Runway below 90 days - prioritise collections / financing." : "Runway healthy (>90 days).",
       ] },
       { id: "customers", title: "Top Revenue Concentration", bullets: topCustomers.length
         ? topCustomers.map(([n, v]) => `${n}: ${formatCurrency(v)} (${c.inflow > 0 ? Math.round((v / c.inflow) * 100) : 0}% of month)`)
         : ["No customer revenue recorded this month."] },
       { id: "debt", title: "Debt & Obligations", bullets: activeLoans.length
         ? [`${activeLoans.length} active loan${activeLoans.length === 1 ? "" : "s"}, ${formatCurrency(totalDebt)} outstanding`, `Total EMI commitment: ${formatCurrency(totalEmi)}/month`]
-        : ["No active loans — debt-free."] },
+        : ["No active loans - debt-free."] },
       { id: "risks", title: "Key Risks", bullets: openRisks.length
         ? openRisks.slice(0, 4).map(a => `[${a.severity}] ${a.title}`)
         : ["No open alerts this period."] },
@@ -557,7 +557,7 @@ function BoardDeckGenerator() {
 
   const copyDeck = () => navigator.clipboard.writeText(deckText).then(() => toast.success("Deck copied to clipboard"), () => toast.error("Copy failed"));
   const exportDeck = () => {
-    const blob = new Blob([`${firm.name || "Company"} — Board Deck\n${"=".repeat(40)}\n\n${deckText}`], { type: "text/plain" });
+    const blob = new Blob([`${firm.name || "Company"} - Board Deck\n${"=".repeat(40)}\n\n${deckText}`], { type: "text/plain" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "board-deck.txt"; a.click();
     toast.success("Board deck exported");
   };
@@ -567,7 +567,7 @@ function BoardDeckGenerator() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Presentation size={18} className="text-[var(--color-primary)]" /> Board-Deck Generator</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Board-ready financial slides assembled from your live numbers — toggle, copy, or export</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Board-ready financial slides assembled from your live numbers - toggle, copy, or export</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={copyDeck} disabled={!activeSlides.length} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg disabled:opacity-40">
@@ -618,7 +618,7 @@ function BoardDeckGenerator() {
 // #153 ── RISK & WATCHLIST BRIEF ─────────────────────────────────────────────────
 // Surfaces the top financial risks this period by scoring live signals: short
 // runway, negative cash flow, revenue concentration, debt-service load, and open
-// alerts — each with a plain-English explanation and severity.
+// alerts - each with a plain-English explanation and severity.
 interface RiskItem { id: string; title: string; detail: string; severity: "critical" | "high" | "medium" | "low"; score: number }
 
 const RISK_STYLE: Record<RiskItem["severity"], string> = {
@@ -641,7 +641,7 @@ function RiskWatchlistBrief() {
 
     // 1. Runway risk
     if (runway < 30) out.push({ id: "runway", title: "Critical cash runway", detail: `Only ~${runway} days of runway at the current ${formatAmount(burn)}/mo burn. Immediate financing or spend cuts needed.`, severity: "critical", score: 100 - runway });
-    else if (runway < 90) out.push({ id: "runway", title: "Tightening cash runway", detail: `~${runway} days of runway — below the recommended 90-day buffer. Accelerate collections.`, severity: "high", score: 100 - runway });
+    else if (runway < 90) out.push({ id: "runway", title: "Tightening cash runway", detail: `~${runway} days of runway - below the recommended 90-day buffer. Accelerate collections.`, severity: "high", score: 100 - runway });
 
     // 2. Cash-flow risk
     if (c.net < 0) out.push({ id: "burn", title: "Negative net cash flow", detail: `This month's outflow (${formatAmount(c.outflow)}) exceeds inflow (${formatAmount(c.inflow)}) by ${formatAmount(Math.abs(c.net))}.`, severity: c.net < -burn ? "high" : "medium", score: Math.min(90, Math.round(Math.abs(c.net) / Math.max(burn, 1) * 40)) });
@@ -653,7 +653,7 @@ function RiskWatchlistBrief() {
     ).sort((a, b) => b[1] - a[1]);
     if (byCustomer.length && c.inflow > 0) {
       const topShare = Math.round((byCustomer[0][1] / c.inflow) * 100);
-      if (topShare >= 40) out.push({ id: "concentration", title: "High revenue concentration", detail: `${byCustomer[0][0]} accounts for ${topShare}% of this month's revenue — losing them would materially hit cash.`, severity: topShare >= 60 ? "high" : "medium", score: topShare });
+      if (topShare >= 40) out.push({ id: "concentration", title: "High revenue concentration", detail: `${byCustomer[0][0]} accounts for ${topShare}% of this month's revenue - losing them would materially hit cash.`, severity: topShare >= 60 ? "high" : "medium", score: topShare });
     }
 
     // 4. Debt-service load
@@ -678,7 +678,7 @@ function RiskWatchlistBrief() {
   }), [risks]);
 
   const copyBrief = () => {
-    const txt = `Risk & Watchlist Brief — ${monthBounds(0).label}\n\n${risks.length ? risks.map((r, i) => `${i + 1}. [${r.severity.toUpperCase()}] ${r.title}\n   ${r.detail}`).join("\n\n") : "No material financial risks detected this period."}`;
+    const txt = `Risk & Watchlist Brief - ${monthBounds(0).label}\n\n${risks.length ? risks.map((r, i) => `${i + 1}. [${r.severity.toUpperCase()}] ${r.title}\n   ${r.detail}`).join("\n\n") : "No material financial risks detected this period."}`;
     navigator.clipboard.writeText(txt).then(() => toast.success("Risk brief copied"), () => toast.error("Copy failed"));
   };
 
@@ -772,7 +772,7 @@ function KpiScorecard() {
   const ragDot: Record<string, string> = { green: "bg-green-400", amber: "bg-yellow-400", red: "bg-red-400" };
 
   const copy = () => {
-    const txt = `Weekly KPI Scorecard — ${monthBounds(0).label}\n\n${rows.map(r => `${r.label}: ${r.value}${r.delta !== null ? ` (${r.delta >= 0 ? "+" : ""}${r.delta}% MoM)` : ""} [${r.rag.toUpperCase()}]`).join("\n")}`;
+    const txt = `Weekly KPI Scorecard - ${monthBounds(0).label}\n\n${rows.map(r => `${r.label}: ${r.value}${r.delta !== null ? ` (${r.delta >= 0 ? "+" : ""}${r.delta}% MoM)` : ""} [${r.rag.toUpperCase()}]`).join("\n")}`;
     navigator.clipboard.writeText(txt).then(() => toast.success("Scorecard copied"), () => toast.error("Copy failed"));
   };
 
@@ -781,7 +781,7 @@ function KpiScorecard() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Gauge size={18} className="text-[var(--color-primary)]" /> Weekly KPI Scorecard</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Headline finance KPIs with MoM deltas and red/amber/green status — straight from your live data</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Headline finance KPIs with MoM deltas and red/amber/green status - straight from your live data</p>
         </div>
         <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
           <Copy size={12} /> Copy scorecard
@@ -868,7 +868,7 @@ function CashFlowSnapshot() {
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-bold flex items-center gap-2"><Wallet size={18} className="text-[var(--color-primary)]" /> Cash-Flow Snapshot</h1>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Sources &amp; uses of cash for {data.label} — where money came from and where it went</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Sources &amp; uses of cash for {data.label} - where money came from and where it went</p>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -988,8 +988,8 @@ function MarginSnapshot() {
 }
 
 // #157 ── FINANCIAL CALENDAR (dues this month) ───────────────────────────────────
-// Consolidates upcoming financial obligations — loan EMIs, payable/overdue
-// invoices, and a fixed GST filing date — into a single dated to-do for the month.
+// Consolidates upcoming financial obligations - loan EMIs, payable/overdue
+// invoices, and a fixed GST filing date - into a single dated to-do for the month.
 function FinancialCalendar() {
   const { store } = useApp();
   const { activeLoans, invoices } = store;
@@ -1001,15 +1001,15 @@ function FinancialCalendar() {
 
     activeLoans.forEach(l => {
       if (l.nextPaymentDate >= cur.start && l.nextPaymentDate <= cur.end) {
-        out.push({ date: l.nextPaymentDate, label: `EMI — ${l.lender}`, amount: l.nextPaymentAmount || l.monthlyEmi, kind: "emi" });
+        out.push({ date: l.nextPaymentDate, label: `EMI - ${l.lender}`, amount: l.nextPaymentAmount || l.monthlyEmi, kind: "emi" });
       }
     });
 
     invoices.filter(i => i.status !== "paid" && i.dueDate >= cur.start && i.dueDate <= cur.end).forEach(i => {
-      out.push({ date: i.dueDate, label: `Receivable due — ${i.customer}`, amount: i.amount, kind: "ar" });
+      out.push({ date: i.dueDate, label: `Receivable due - ${i.customer}`, amount: i.amount, kind: "ar" });
     });
 
-    // GST filing — standard 20th-of-month deadline.
+    // GST filing - standard 20th-of-month deadline.
     const gstDate = `${cur.start.slice(0, 7)}-20`;
     out.push({ date: gstDate, label: "GSTR-3B filing deadline", amount: 0, kind: "compliance" });
 
@@ -1030,7 +1030,7 @@ function FinancialCalendar() {
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-bold flex items-center gap-2"><CalendarClock size={18} className="text-[var(--color-primary)]" /> Financial Calendar</h1>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Everything due in {monthBounds(0).label} — EMIs, receivables and the GST deadline, in date order</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Everything due in {monthBounds(0).label} - EMIs, receivables and the GST deadline, in date order</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -1091,18 +1091,18 @@ function TopActionsThisWeek() {
 
     const overdue = invoices.filter(i => i.status === "overdue");
     const overdueAmt = overdue.reduce((s, i) => s + i.amount, 0);
-    if (overdue.length) out.push({ id: "collect", title: `Chase ${overdue.length} overdue invoice${overdue.length === 1 ? "" : "s"}`, detail: `${formatAmount(overdueAmt)} is past due — sending reminders frees up working capital fast.`, impact: overdueAmt, weight: 90 });
+    if (overdue.length) out.push({ id: "collect", title: `Chase ${overdue.length} overdue invoice${overdue.length === 1 ? "" : "s"}`, detail: `${formatAmount(overdueAmt)} is past due - sending reminders frees up working capital fast.`, impact: overdueAmt, weight: 90 });
 
     if (runway < 90) out.push({ id: "runway", title: "Shore up runway", detail: `Runway is ~${runway} days. Line up a working-capital facility or trim discretionary spend before it tightens further.`, impact: burn, weight: 100 - runway });
 
-    if (c.net < 0) out.push({ id: "cashflow", title: "Reverse negative cash flow", detail: `Outflow exceeded inflow by ${formatAmount(Math.abs(c.net))} this month — review the largest expense categories.`, impact: Math.abs(c.net), weight: 70 });
+    if (c.net < 0) out.push({ id: "cashflow", title: "Reverse negative cash flow", detail: `Outflow exceeded inflow by ${formatAmount(Math.abs(c.net))} this month - review the largest expense categories.`, impact: Math.abs(c.net), weight: 70 });
 
     const idle = balance - burn * 3;
-    if (idle > burn) out.push({ id: "idle", title: "Park idle cash", detail: `~${formatAmount(idle)} sits above a 3-month buffer — sweep into a liquid fund or FD to earn yield.`, impact: Math.round(idle * 0.06 / 12), weight: 30 });
+    if (idle > burn) out.push({ id: "idle", title: "Park idle cash", detail: `~${formatAmount(idle)} sits above a 3-month buffer - sweep into a liquid fund or FD to earn yield.`, impact: Math.round(idle * 0.06 / 12), weight: 30 });
 
     const due = activeLoans.filter(l => l.nextPaymentDate >= cur.start && l.nextPaymentDate <= cur.end);
     const dueAmt = due.reduce((s, l) => s + (l.nextPaymentAmount || l.monthlyEmi), 0);
-    if (due.length) out.push({ id: "emi", title: `Fund ${due.length} EMI payment${due.length === 1 ? "" : "s"} due this month`, detail: `${formatAmount(dueAmt)} in EMIs fall due — ensure the balance is available to avoid penalties.`, impact: dueAmt, weight: 50 });
+    if (due.length) out.push({ id: "emi", title: `Fund ${due.length} EMI payment${due.length === 1 ? "" : "s"} due this month`, detail: `${formatAmount(dueAmt)} in EMIs fall due - ensure the balance is available to avoid penalties.`, impact: dueAmt, weight: 50 });
 
     alerts.filter(a => !a.isRead && (a.severity === "critical" || a.severity === "high")).slice(0, 3).forEach(a => {
       out.push({ id: `alert-${a.id}`, title: `Resolve: ${a.title}`, detail: a.message, impact: 0, weight: a.severity === "critical" ? 85 : 60 });
@@ -1118,7 +1118,7 @@ function TopActionsThisWeek() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><ListChecks size={18} className="text-[var(--color-primary)]" /> Top Actions This Week</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">The five highest-impact finance moves for the week, ranked from your live signals — {completed}/{actions.length} done</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">The five highest-impact finance moves for the week, ranked from your live signals - {completed}/{actions.length} done</p>
         </div>
       </div>
 
@@ -1180,11 +1180,11 @@ function OnePageSummary() {
   const takeaway = s.net >= 0 && s.runway > 90
     ? "Healthy position: positive cash flow this month and over 90 days of runway. Focus on growth and collections discipline."
     : s.runway < 45
-      ? "Caution: runway is short — prioritise collections and financing this week."
+      ? "Caution: runway is short - prioritise collections and financing this week."
       : "Stable but watch cash: keep outflow in check and accelerate receivables to extend runway.";
 
   const exportTxt = () => {
-    const txt = `${firm.name || "Company"} — One-Page Financial Summary (${s.cur.label})
+    const txt = `${firm.name || "Company"} - One-Page Financial Summary (${s.cur.label})
 ${"=".repeat(48)}
 
 POSITION
@@ -1229,7 +1229,7 @@ TAKEAWAY
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><FileText size={18} className="text-[var(--color-primary)]" /> One-Page Financial Summary</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">The whole picture on one page for {s.cur.label} — position, performance, obligations and the takeaway</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">The whole picture on one page for {s.cur.label} - position, performance, obligations and the takeaway</p>
         </div>
         {canExport() && (
           <button onClick={exportTxt} className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
@@ -1319,7 +1319,7 @@ function FinancialRatios() {
   const dot: Record<string, string> = { good: "bg-green-400", watch: "bg-yellow-400", poor: "bg-red-400" };
 
   const copy = () => {
-    const txt = `Financial Ratios — ${monthBounds(0).label}\n\n${ratios.map(r => `${r.label}: ${r.value} (${r.band}) [${r.status.toUpperCase()}]`).join("\n")}`;
+    const txt = `Financial Ratios - ${monthBounds(0).label}\n\n${ratios.map(r => `${r.label}: ${r.value} (${r.band}) [${r.status.toUpperCase()}]`).join("\n")}`;
     navigator.clipboard.writeText(txt).then(() => toast.success("Ratios copied"), () => toast.error("Copy failed"));
   };
 
@@ -1328,7 +1328,7 @@ function FinancialRatios() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Scale size={18} className="text-[var(--color-primary)]" /> Financial Ratios Snapshot</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Liquidity, leverage and efficiency ratios benchmarked against healthy bands — from your live data</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Liquidity, leverage and efficiency ratios benchmarked against healthy bands - from your live data</p>
         </div>
         <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
           <Copy size={12} /> Copy ratios
@@ -1380,10 +1380,10 @@ function ProfitabilityTrend() {
   const trendPct = pctChange(last.net, first.net);
 
   const verdict = profitable >= 5
-    ? "Consistently profitable across the window — a strong, durable trajectory."
+    ? "Consistently profitable across the window - a strong, durable trajectory."
     : profitable >= 3
       ? "Mixed: profitable in most months but with loss-making swings to watch."
-      : "Mostly loss-making — net profit needs structural attention, not one-off fixes.";
+      : "Mostly loss-making - net profit needs structural attention, not one-off fixes.";
 
   const copy = () => {
     const txt = `Profitability Trend (6 months)\n\n${months.map(m => `${m.label}: rev ${formatAmount(m.revenue)}, exp ${formatAmount(m.expense)}, net ${formatAmount(m.net)}`).join("\n")}\n\n${verdict}`;
@@ -1395,7 +1395,7 @@ function ProfitabilityTrend() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><LineChart size={18} className="text-[var(--color-primary)]" /> Profitability Trend</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Revenue, expenses and net profit over the last six months — the trajectory, not just today</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Revenue, expenses and net profit over the last six months - the trajectory, not just today</p>
         </div>
         <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
           <Copy size={12} /> Copy trend
@@ -1406,7 +1406,7 @@ function ProfitabilityTrend() {
         {[
           { label: "Profitable months", value: `${profitable}/6`, color: profitable >= 4 ? "text-green-400" : profitable >= 2 ? "text-yellow-400" : "text-red-400" },
           { label: `Net (${last.label})`, value: formatAmount(last.net), color: last.net >= 0 ? "text-green-400" : "text-red-400" },
-          { label: "Net trend (6mo)", value: trendPct === null ? "—" : `${trendPct >= 0 ? "+" : ""}${trendPct}%`, color: (trendPct ?? 0) >= 0 ? "text-green-400" : "text-red-400" },
+          { label: "Net trend (6mo)", value: trendPct === null ? "-" : `${trendPct >= 0 ? "+" : ""}${trendPct}%`, color: (trendPct ?? 0) >= 0 ? "text-green-400" : "text-red-400" },
         ].map(s => (
           <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
@@ -1486,7 +1486,7 @@ function ExpenseControlScorecard() {
   };
 
   const copy = () => {
-    const txt = `Expense-Control Scorecard — ${monthBounds(0).label} (Grade ${grade})\n\n${rows.map(r => `${capitalise(r.category)}: ${formatAmount(r.current)} vs ${formatAmount(r.baseline)} avg (${r.pct === null ? "n/a" : `${r.pct >= 0 ? "+" : ""}${r.pct}%`}) [${r.status.toUpperCase()}]`).join("\n")}`;
+    const txt = `Expense-Control Scorecard - ${monthBounds(0).label} (Grade ${grade})\n\n${rows.map(r => `${capitalise(r.category)}: ${formatAmount(r.current)} vs ${formatAmount(r.baseline)} avg (${r.pct === null ? "n/a" : `${r.pct >= 0 ? "+" : ""}${r.pct}%`}) [${r.status.toUpperCase()}]`).join("\n")}`;
     navigator.clipboard.writeText(txt).then(() => toast.success("Scorecard copied"), () => toast.error("Copy failed"));
   };
 
@@ -1495,7 +1495,7 @@ function ExpenseControlScorecard() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Receipt size={18} className="text-[var(--color-primary)]" /> Expense-Control Scorecard</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">This month's spend per category vs its trailing 3-month average — catching the creep early</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">This month's spend per category vs its trailing 3-month average - catching the creep early</p>
         </div>
         {rows.length > 0 && (
           <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
@@ -1537,7 +1537,7 @@ function ExpenseControlScorecard() {
               </div>
               <p className="text-sm text-[var(--color-muted)] leading-relaxed">
                 Spent <span className="text-[var(--color-text)] font-medium">{formatCurrency(r.current)}</span> this month vs a 3-month average of {formatCurrency(r.baseline)}.
-                {r.status === "overrun" ? " Running well above trend — review the drivers." : r.status === "watch" ? " Drifting up — keep an eye on it." : " Within trend — well controlled."}
+                {r.status === "overrun" ? " Running well above trend - review the drivers." : r.status === "watch" ? " Drifting up - keep an eye on it." : " Within trend - well controlled."}
               </p>
             </div>
           ))}
@@ -1552,8 +1552,8 @@ function ExpenseControlScorecard() {
 }
 
 // #163 ── LOAN & COVENANT BRIEF ──────────────────────────────────────────────────
-// A per-loan brief with the headline covenant most lenders track — debt-service
-// coverage — plus repayment progress and the next payment due, from the live store.
+// A per-loan brief with the headline covenant most lenders track - debt-service
+// coverage - plus repayment progress and the next payment due, from the live store.
 function CovenantBrief() {
   const { store } = useApp();
   const { activeLoans, transactions } = store;
@@ -1577,7 +1577,7 @@ function CovenantBrief() {
   }, [activeLoans, transactions]);
 
   const copy = () => {
-    const txt = `Loan & Covenant Brief — ${data.label}\n\nPortfolio DSCR: ${data.portfolioDscr === null ? "n/a" : `${data.portfolioDscr.toFixed(2)}×`}\nTotal outstanding: ${formatAmount(data.totalDebt)}\nTotal EMI: ${formatAmount(data.totalEmi)}/mo\n\n${data.loans.map(l => `${l.lender}: ${formatAmount(l.outstanding)} outstanding, ${l.repaid}% repaid, DSCR ${l.dscr === null ? "n/a" : `${l.dscr.toFixed(2)}×`}${l.breach ? " [COVENANT WATCH]" : ""}`).join("\n")}`;
+    const txt = `Loan & Covenant Brief - ${data.label}\n\nPortfolio DSCR: ${data.portfolioDscr === null ? "n/a" : `${data.portfolioDscr.toFixed(2)}×`}\nTotal outstanding: ${formatAmount(data.totalDebt)}\nTotal EMI: ${formatAmount(data.totalEmi)}/mo\n\n${data.loans.map(l => `${l.lender}: ${formatAmount(l.outstanding)} outstanding, ${l.repaid}% repaid, DSCR ${l.dscr === null ? "n/a" : `${l.dscr.toFixed(2)}×`}${l.breach ? " [COVENANT WATCH]" : ""}`).join("\n")}`;
     navigator.clipboard.writeText(txt).then(() => toast.success("Covenant brief copied"), () => toast.error("Copy failed"));
   };
 
@@ -1586,7 +1586,7 @@ function CovenantBrief() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Banknote size={18} className="text-[var(--color-primary)]" /> Loan & Covenant Brief</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Repayment progress and debt-service coverage per loan — the covenant lenders actually watch</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Repayment progress and debt-service coverage per loan - the covenant lenders actually watch</p>
         </div>
         {data.loans.length > 0 && (
           <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
@@ -1597,7 +1597,7 @@ function CovenantBrief() {
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Portfolio DSCR", value: data.portfolioDscr === null ? "—" : `${data.portfolioDscr.toFixed(2)}×`, color: data.portfolioDscr === null ? "text-[var(--color-text)]" : data.portfolioDscr >= 2 ? "text-green-400" : data.portfolioDscr >= 1.25 ? "text-yellow-400" : "text-red-400" },
+          { label: "Portfolio DSCR", value: data.portfolioDscr === null ? "-" : `${data.portfolioDscr.toFixed(2)}×`, color: data.portfolioDscr === null ? "text-[var(--color-text)]" : data.portfolioDscr >= 2 ? "text-green-400" : data.portfolioDscr >= 1.25 ? "text-yellow-400" : "text-red-400" },
           { label: "Total outstanding", value: formatAmount(data.totalDebt), color: "text-[var(--color-text)]" },
           { label: "Total EMI / month", value: formatAmount(data.totalEmi), color: "text-orange-400" },
         ].map(s => (
@@ -1612,7 +1612,7 @@ function CovenantBrief() {
         <div className="border border-green-800/30 bg-green-950/10 rounded-xl p-10 text-center">
           <CheckCircle2 size={28} className="mx-auto mb-3 text-green-400" />
           <p className="text-sm font-semibold text-green-400 mb-1">No active loans</p>
-          <p className="text-xs text-[var(--color-muted)]">You are debt-free — no covenants to monitor this period.</p>
+          <p className="text-xs text-[var(--color-muted)]">You are debt-free - no covenants to monitor this period.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -1642,7 +1642,7 @@ function CovenantBrief() {
       )}
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
-        DSCR uses this month's revenue against the EMI commitment. "Covenant watch" flags coverage below 1.25× — a common minimum lenders require.
+        DSCR uses this month's revenue against the EMI commitment. "Covenant watch" flags coverage below 1.25× - a common minimum lenders require.
       </div>
     </div>
   );
@@ -1678,7 +1678,7 @@ function WhatChangedThisWeek() {
 
   const capture = () => {
     setBaseline(current);
-    toast.success("Snapshot captured — changes will show against this baseline");
+    toast.success("Snapshot captured - changes will show against this baseline");
   };
 
   const diffs = useMemo(() => {
@@ -1704,7 +1704,7 @@ function WhatChangedThisWeek() {
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><GitCompareArrows size={18} className="text-[var(--color-primary)]" /> What Changed This Week</h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            {baseline ? `Movement since your last snapshot — ${format(new Date(baseline.takenAt), "d MMM, h:mma")}` : "Capture a baseline, then return next week to see exactly what moved"}
+            {baseline ? `Movement since your last snapshot - ${format(new Date(baseline.takenAt), "d MMM, h:mma")}` : "Capture a baseline, then return next week to see exactly what moved"}
           </p>
         </div>
         <button onClick={capture} className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">
@@ -1778,7 +1778,7 @@ function LiquidityPositionBrief() {
   }, [bankAccounts, activeLoans, obligations]);
 
   const copy = () => {
-    const txt = `Liquidity Position — cash ${formatAmount(data.balance)}\n\n${data.buckets.map(b => `Next ${b.days} days: due ${formatAmount(b.due)} — ${b.ok ? "covered" : "SHORTFALL " + formatAmount(b.due - data.balance)}`).join("\n")}`;
+    const txt = `Liquidity Position - cash ${formatAmount(data.balance)}\n\n${data.buckets.map(b => `Next ${b.days} days: due ${formatAmount(b.due)} - ${b.ok ? "covered" : "SHORTFALL " + formatAmount(b.due - data.balance)}`).join("\n")}`;
     navigator.clipboard.writeText(txt).then(() => toast.success("Liquidity brief copied"), () => toast.error("Copy failed"));
   };
 
@@ -1812,7 +1812,7 @@ function LiquidityPositionBrief() {
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
-        Nets your total bank balance against scheduled EMIs and dated obligations in each window. Inflows from receivables are excluded — this is a worst-case liquidity test.
+        Nets your total bank balance against scheduled EMIs and dated obligations in each window. Inflows from receivables are excluded - this is a worst-case liquidity test.
       </div>
     </div>
   );
@@ -1838,9 +1838,9 @@ function GrowthVsBurnBrief() {
   }, [transactions]);
 
   const VERDICT: Record<string, { label: string; cls: string }> = {
-    "self-funding": { label: "Self-funding — net cash positive", cls: "border-green-800/30 bg-green-950/10 text-green-400" },
+    "self-funding": { label: "Self-funding - net cash positive", cls: "border-green-800/30 bg-green-950/10 text-green-400" },
     "efficient": { label: "Efficient growth (<1× burn multiple)", cls: "border-green-800/30 bg-green-950/10 text-green-400" },
-    "acceptable": { label: "Acceptable growth (1–2× burn multiple)", cls: "border-yellow-800/30 bg-yellow-950/10 text-yellow-400" },
+    "acceptable": { label: "Acceptable growth (1-2× burn multiple)", cls: "border-yellow-800/30 bg-yellow-950/10 text-yellow-400" },
     "expensive": { label: "Expensive growth (>2× burn multiple)", cls: "border-orange-800/40 bg-orange-950/20 text-orange-400" },
     "burning-no-growth": { label: "Burning cash without revenue growth", cls: "border-red-800/40 bg-red-950/20 text-red-400" },
   };
@@ -1850,7 +1850,7 @@ function GrowthVsBurnBrief() {
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-bold flex items-center gap-2"><Rocket size={18} className="text-[var(--color-primary)]" /> Growth vs Burn Brief</h1>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">How much cash you burn for each rupee of net-new revenue — {data.prev.label} vs {data.cur.label}</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">How much cash you burn for each rupee of net-new revenue - {data.prev.label} vs {data.cur.label}</p>
       </div>
 
       <div className={`border rounded-xl p-5 ${v.cls}`}>
@@ -1860,7 +1860,7 @@ function GrowthVsBurnBrief() {
         </div>
         <p className="text-sm text-[var(--color-muted)] leading-relaxed">
           Revenue moved {data.netNewRev >= 0 ? "+" : ""}{formatAmount(data.netNewRev)} MoM ({data.revPct === null ? "n/a" : `${data.revPct >= 0 ? "+" : ""}${data.revPct}%`}) while net cash flow was {formatAmount(data.c.net)}.
-          {data.multiple !== null && <> That is a burn multiple of <span className="text-[var(--color-text)] font-bold">{data.multiple.toFixed(2)}×</span> — {formatAmount(data.burned)} burned per {formatAmount(data.netNewRev)} of new revenue.</>}
+          {data.multiple !== null && <> That is a burn multiple of <span className="text-[var(--color-text)] font-bold">{data.multiple.toFixed(2)}×</span> - {formatAmount(data.burned)} burned per {formatAmount(data.netNewRev)} of new revenue.</>}
         </p>
       </div>
 
@@ -1869,7 +1869,7 @@ function GrowthVsBurnBrief() {
           { label: "Net-new revenue", value: `${data.netNewRev >= 0 ? "+" : ""}${formatAmount(data.netNewRev)}`, color: data.netNewRev >= 0 ? "text-green-400" : "text-red-400" },
           { label: "Net cash flow", value: formatAmount(data.c.net), color: data.c.net >= 0 ? "text-green-400" : "text-orange-400" },
           { label: "Cash burned", value: formatAmount(data.burned), color: data.burned > 0 ? "text-orange-400" : "text-green-400" },
-          { label: "Burn multiple", value: data.multiple === null ? "—" : `${data.multiple.toFixed(2)}×`, color: data.multiple !== null && data.multiple < 1 ? "text-green-400" : data.multiple !== null && data.multiple < 2 ? "text-yellow-400" : "text-orange-400" },
+          { label: "Burn multiple", value: data.multiple === null ? "-" : `${data.multiple.toFixed(2)}×`, color: data.multiple !== null && data.multiple < 1 ? "text-green-400" : data.multiple !== null && data.multiple < 2 ? "text-yellow-400" : "text-orange-400" },
         ].map(s => (
           <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
@@ -1887,7 +1887,7 @@ function GrowthVsBurnBrief() {
 
 // #183 ── TOP CUSTOMERS & VENDORS BRIEF ──────────────────────────────────────────
 // Side-by-side ranking of the counterparties that brought in the most cash and
-// took the most out this month, each as a share of its side — the relationships
+// took the most out this month, each as a share of its side - the relationships
 // that matter most to protect (customers) or renegotiate (vendors).
 function TopAccountsBrief() {
   const { store } = useApp();
@@ -1909,7 +1909,7 @@ function TopAccountsBrief() {
   const copy = () => {
     const side = (title: string, d: { rows: [string, number][]; total: number }) =>
       `${title}\n${d.rows.length ? d.rows.map(([n, v]) => `  ${n}: ${formatAmount(v)} (${d.total > 0 ? Math.round((v / d.total) * 100) : 0}%)`).join("\n") : "  none"}`;
-    const txt = `Top Accounts — ${data.label}\n\n${side("Customers (inflow)", data.customers)}\n\n${side("Vendors (outflow)", data.vendors)}`;
+    const txt = `Top Accounts - ${data.label}\n\n${side("Customers (inflow)", data.customers)}\n\n${side("Vendors (outflow)", data.vendors)}`;
     navigator.clipboard.writeText(txt).then(() => toast.success("Brief copied"), () => toast.error("Copy failed"));
   };
 
@@ -1945,7 +1945,7 @@ function TopAccountsBrief() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Users size={18} className="text-[var(--color-primary)]" /> Top Customers &amp; Vendors</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">The counterparties driving the most cash in and out this {data.label} — who to protect and who to renegotiate</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">The counterparties driving the most cash in and out this {data.label} - who to protect and who to renegotiate</p>
         </div>
         <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
           <Copy size={12} /> Copy brief
@@ -1995,7 +1995,7 @@ function WorkingCapitalBrief() {
     { label: "Open receivables", value: formatAmount(data.openAr), color: "text-green-400", hint: `${formatAmount(data.overdueAr)} overdue` },
     { label: "Near-term payables", value: formatAmount(data.payables), color: "text-orange-400", hint: `${formatAmount(data.oblDue)} dues + ${formatAmount(data.emi)} EMI` },
     { label: "Net working capital", value: formatAmount(data.netWc), color: data.netWc >= 0 ? "text-green-400" : "text-red-400", hint: data.netWc >= 0 ? "receivables cover payables" : "payables exceed receivables" },
-    { label: "AR days", value: data.arDays === null ? "—" : `${data.arDays}d`, color: data.arDays !== null && data.arDays > 60 ? "text-orange-400" : "text-[var(--color-text)]", hint: "cash tied up in collections" },
+    { label: "AR days", value: data.arDays === null ? "-" : `${data.arDays}d`, color: data.arDays !== null && data.arDays > 60 ? "text-orange-400" : "text-[var(--color-text)]", hint: "cash tied up in collections" },
   ];
 
   return (
@@ -2003,7 +2003,7 @@ function WorkingCapitalBrief() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Coins size={18} className="text-[var(--color-primary)]" /> Working Capital Brief</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Receivables vs near-term payables — how much cash is locked in your operating cycle right now</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Receivables vs near-term payables - how much cash is locked in your operating cycle right now</p>
         </div>
         <button onClick={copy} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
           <Copy size={12} /> Copy brief
@@ -2024,7 +2024,7 @@ function WorkingCapitalBrief() {
         <p className="text-sm text-[var(--color-muted)] leading-relaxed">
           {data.netWc >= 0
             ? <>Your open receivables of <span className="text-[var(--color-text)] font-medium">{formatAmount(data.openAr)}</span> more than cover near-term payables of {formatAmount(data.payables)}, leaving {formatAmount(data.netWc)} of positive working-capital headroom.</>
-            : <>Near-term payables of <span className="text-[var(--color-text)] font-medium">{formatAmount(data.payables)}</span> exceed open receivables of {formatAmount(data.openAr)} by {formatAmount(Math.abs(data.netWc))} — prioritise collections{data.overdueAr > 0 ? `, starting with the ${formatAmount(data.overdueAr)} already overdue` : ""}.</>}
+            : <>Near-term payables of <span className="text-[var(--color-text)] font-medium">{formatAmount(data.payables)}</span> exceed open receivables of {formatAmount(data.openAr)} by {formatAmount(Math.abs(data.netWc))} - prioritise collections{data.overdueAr > 0 ? `, starting with the ${formatAmount(data.overdueAr)} already overdue` : ""}.</>}
         </p>
       </div>
 

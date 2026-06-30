@@ -1,5 +1,5 @@
-// §9.3 — e-invoice generation, async. enqueue() parks a QUEUED row; a DB-polling
-// worker (durable across restarts — no Redis needed) builds the IRP payload and
+// §9.3 - e-invoice generation, async. enqueue() parks a QUEUED row; a DB-polling
+// worker (durable across restarts - no Redis needed) builds the IRP payload and
 // registers it with the GSP. Swap startWorker() for a BullMQ worker when Redis exists.
 const { pool } = require("../../db");
 const { toRupees } = require("./money");
@@ -36,7 +36,7 @@ async function _processVoucher(tenantId, voucherId) {
   const { rows: buyer } = voucher.party_ledger_id ? await pool.query("SELECT name, gstin, state_code FROM book_ledgers WHERE id=$1", [voucher.party_ledger_id]) : [{}];
   const payload = buildIrpPayload(voucher, taxes, prof[0], buyer[0]);
   try {
-    if (!gsp.isConfigured()) { await _set(voucherId, "PENDING_CONFIG", { error: "GSP not configured — set GSP_BASE_URL / GSP_API_KEY" }); return; }
+    if (!gsp.isConfigured()) { await _set(voucherId, "PENDING_CONFIG", { error: "GSP not configured - set GSP_BASE_URL / GSP_API_KEY" }); return; }
     const res = await gsp.registerInvoice(payload);
     await pool.query("UPDATE book_einvoices SET status='REGISTERED', irn=$2, ack_no=$3, ack_date=$4, signed_qr=$5, error=NULL, updated_at=now() WHERE voucher_id=$1",
       [voucherId, res.irn || null, res.ackNo || null, res.ackDate || null, res.signedQRCode || null]);
@@ -69,7 +69,7 @@ async function status(tenantId, voucherId) {
 }
 
 // book_einvoices predates cancellation; ensure the cancel-tracking columns exist
-// (idempotent, run once). schema.js owns table creation — this only backfills cols.
+// (idempotent, run once). schema.js owns table creation - this only backfills cols.
 let _cancelColsReady = null;
 function _ensureCancelCols() {
   if (!_cancelColsReady) {
@@ -90,7 +90,7 @@ const CANCEL_WINDOW_MS = gsp.CANCEL_WINDOW_MS || 24 * 60 * 60 * 1000;
 const _reasonCode = (r) => { const n = Number(r); return n === 1 || n === 2 ? n : 2; };
 
 // Cancel a registered e-invoice within the allowed window. Honest about config:
-// with no GSP keys we never fabricate a cancellation — mirror enqueue/status.
+// with no GSP keys we never fabricate a cancellation - mirror enqueue/status.
 //   reason: IRP CnlRsn code (1 Duplicate / 2 Data entry mistake; defaults to 2)
 async function cancelIrn(tenantId, actorId, { voucherId, reason, remarks } = {}) {
   if (!voucherId) { const e = new Error("voucherId required"); e.code = "BAD_REQUEST"; throw e; }
@@ -102,11 +102,11 @@ async function cancelIrn(tenantId, actorId, { voucherId, reason, remarks } = {})
 
   // 24h cancel window measured from the IRN ack date.
   const ack = row.ack_date ? new Date(row.ack_date) : null;
-  if (!ack || isNaN(ack.getTime())) { const e = new Error("missing/invalid IRN ack date — cannot verify cancel window"); e.code = "NO_ACK_DATE"; throw e; }
+  if (!ack || isNaN(ack.getTime())) { const e = new Error("missing/invalid IRN ack date - cannot verify cancel window"); e.code = "NO_ACK_DATE"; throw e; }
   if (Date.now() - ack.getTime() > CANCEL_WINDOW_MS) { const e = new Error("24-hour IRN cancellation window has passed"); e.code = "CANCEL_WINDOW_PASSED"; throw e; }
 
-  // Honest config gate — never fabricate a cancellation without a real GSP.
-  if (!gsp.isConfigured()) return { configured: false, reason: "GSP not configured — set GSP_BASE_URL / GSP_API_KEY" };
+  // Honest config gate - never fabricate a cancellation without a real GSP.
+  if (!gsp.isConfigured()) return { configured: false, reason: "GSP not configured - set GSP_BASE_URL / GSP_API_KEY" };
 
   // Real GSP cancel: build the IRP cancel payload (Irn, CnlRsn 1/2, CnlRem) and
   // let the connector re-enforce the 24h window against the ack date.

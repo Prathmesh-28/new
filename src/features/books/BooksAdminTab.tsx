@@ -11,12 +11,12 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// API base — all books routes are mounted under /api/books
+// API base - all books routes are mounted under /api/books
 // ─────────────────────────────────────────────────────────────────────────────
 const B = "/api/books";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES (loose — mirror backend response shapes)
+// TYPES (loose - mirror backend response shapes)
 // ─────────────────────────────────────────────────────────────────────────────
 interface CostCentre {
   id: string;
@@ -109,7 +109,7 @@ function rupee(v: string | null | undefined): string {
   return s ? `₹${s}` : "₹0.00";
 }
 function fmtTime(iso: string): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
   return isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
@@ -240,7 +240,7 @@ function ImportSummary({ created, updated, skipped, openingNet }: {
 }
 
 function Sch3Rows({ lines }: { lines: Sch3Line[] }) {
-  if (!lines.length) return <p className="text-xs text-[var(--color-muted)] py-1 px-3">—</p>;
+  if (!lines.length) return <p className="text-xs text-[var(--color-muted)] py-1 px-3">-</p>;
   return (
     <>
       {lines.map((l, i) => (
@@ -299,7 +299,7 @@ export default function BooksAdminTab() {
       <ScheduleIIIPanel fy={fy} />
 
       {/* ─────────────────────────────────────────────────────────────────────
-          CONTROLS SUITE — approvals workflow + document numbering governance
+          CONTROLS SUITE - approvals workflow + document numbering governance
           ───────────────────────────────────────────────────────────────────── */}
       <ApprovalsHowTo />
 
@@ -311,7 +311,7 @@ export default function BooksAdminTab() {
       <NumberFormatsPanel />
 
       {/* ─────────────────────────────────────────────────────────────────────
-          ADDED SECTIONS (surgical — below the original Admin controls)
+          ADDED SECTIONS (surgical - below the original Admin controls)
           ───────────────────────────────────────────────────────────────────── */}
       <ProfitabilityPanel fy={fy} />
 
@@ -346,7 +346,7 @@ function ApprovalsHowTo() {
         Approvals &amp; numbering controls
       </h3>
       <ul className="text-xs text-[var(--color-muted)] space-y-1 list-disc pl-4">
-        <li><b className="text-[var(--color-text)]">Approval rules</b> set the threshold above which a document type (e.g. PURCHASE) needs sign-off — anything at or above <i>min amount</i> routes to the chosen approver role.</li>
+        <li><b className="text-[var(--color-text)]">Approval rules</b> set the threshold above which a document type (e.g. PURCHASE) needs sign-off - anything at or above <i>min amount</i> routes to the chosen approver role.</li>
         <li><b className="text-[var(--color-text)]">Approvals queue</b> lists every pending / decided request; an owner approves or rejects with an optional note. Raise a request manually below to test the flow.</li>
         <li><b className="text-[var(--color-text)]">Number formats</b> govern the prefix / zero-padding / suffix and whether the FY is embedded in each document type's running number (e.g. <span className="font-mono">INV-2026-27-0001</span>).</li>
       </ul>
@@ -355,7 +355,7 @@ function ApprovalsHowTo() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// CONTROLS SUITE: approval rules (create) — POST /api/books/approval-rules
+// CONTROLS SUITE: approval rules (create) - POST /api/books/approval-rules
 // ═════════════════════════════════════════════════════════════════════════════
 interface ApprovalRule {
   id: string;
@@ -453,7 +453,7 @@ function ApprovalRulesPanel() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// CONTROLS SUITE: approvals queue + decide + raise — /api/books/approvals
+// CONTROLS SUITE: approvals queue + decide + raise - /api/books/approvals
 // ═════════════════════════════════════════════════════════════════════════════
 type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 interface Approval {
@@ -509,7 +509,7 @@ function ApprovalsQueuePanel() {
   useEffect(() => { void load(); }, [load]);
 
   const decide = useCallback(async (id: string, approve: boolean) => {
-    const note = window.prompt(approve ? "Approve — optional note:" : "Reject — optional note:", "");
+    const note = window.prompt(approve ? "Approve - optional note:" : "Reject - optional note:", "");
     if (note === null) return; // cancelled
     setBusyId(id);
     try {
@@ -658,7 +658,7 @@ function ApprovalsQueuePanel() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// CONTROLS SUITE: document number formats — POST /api/books/number-formats
+// CONTROLS SUITE: document number formats - POST /api/books/number-formats
 // ═════════════════════════════════════════════════════════════════════════════
 interface NumberFormat {
   tenant_id?: string;
@@ -867,7 +867,7 @@ function ProfitabilityPanel({ fy }: { fy: string }) {
                   <td className="px-3 py-2 text-right tabular-nums text-green-400">{rupee(r.revenue)}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-red-400">{rupee(r.cost)}</td>
                   <td className="px-3 py-2 text-right tabular-nums font-semibold">{rupee(r.profit)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-[var(--color-muted)]">{r.margin != null && r.margin !== "" ? `${r.margin}%` : "—"}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-[var(--color-muted)]">{r.margin != null && r.margin !== "" ? `${r.margin}%` : "-"}</td>
                 </tr>
               ))
             )}
@@ -918,7 +918,7 @@ function TallyExportPanel({ fy }: { fy: string }) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ADDED: Numbering audit — voucher number gaps
+// ADDED: Numbering audit - voucher number gaps
 // ═════════════════════════════════════════════════════════════════════════════
 // Backend (auto.numberGaps) returns one entry per voucher_type:
 //   { voucherType, max, missing: number[], duplicates: number[] }
@@ -977,7 +977,7 @@ function NumberGapsPanel({ fy }: { fy: string }) {
       }
     >
       <p className="text-[11px] text-[var(--color-muted)] mb-3">
-        The counter is gap-free by design — gaps usually mean cancelled vouchers, while duplicates point to a data-integrity issue worth investigating.
+        The counter is gap-free by design - gaps usually mean cancelled vouchers, while duplicates point to a data-integrity issue worth investigating.
       </p>
       {flagged.length === 0 ? (
         <p className="text-xs py-4 text-center">
@@ -1170,7 +1170,7 @@ function ReversingJournalPanel() {
           <input value={voucherId} onChange={(e) => setVoucherId(e.target.value)} className={inputCls} placeholder="e.g. JV/2026/0007 or uuid" />
         </div>
         <div>
-          <label className={labelCls}>Reversal date (optional — defaults to today)</label>
+          <label className={labelCls}>Reversal date (optional - defaults to today)</label>
           <input type="date" value={reversalDate} onChange={(e) => setReversalDate(e.target.value)} className={inputCls} />
         </div>
         <div>
@@ -1282,7 +1282,7 @@ function AssetRegisterPanel() {
                       {a.asset_code ? <span className="text-[var(--color-muted)]"> · {a.asset_code}</span> : null}
                       {disposed && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-red-900/30 text-red-300 border border-red-700/40">Disposed</span>}
                     </td>
-                    <td className="px-3 py-2 text-xs text-[var(--color-muted)] whitespace-nowrap">{a.acquired_on ?? "—"}</td>
+                    <td className="px-3 py-2 text-xs text-[var(--color-muted)] whitespace-nowrap">{a.acquired_on ?? "-"}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{rupee(a.cost)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-red-400">{rupee(a.accumulated_depreciation)}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-semibold">{rupee(bookVal(a))}</td>
@@ -1485,7 +1485,7 @@ function PdcRegisterPanel() {
     <Section
       icon={<CalendarClock size={15} />}
       title="PDC register"
-      subtitle="Post-dated cheques — track, clear or bounce"
+      subtitle="Post-dated cheques - track, clear or bounce"
       action={
         <button type="button" onClick={() => void load()} className={btnGhost} disabled={loading}>
           <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Refresh
@@ -1547,11 +1547,11 @@ function PdcRegisterPanel() {
                 return (
                   <tr key={p.id} className="border-b border-[var(--color-border)]">
                     <td className="px-3 py-2 font-mono text-xs">
-                      {p.cheque_number ?? "—"}
+                      {p.cheque_number ?? "-"}
                       {p.direction ? <span className="ml-1 text-[10px] text-[var(--color-muted)]">{p.direction}</span> : null}
                     </td>
-                    <td className="px-3 py-2">{p.party_name ?? p.party ?? "—"}</td>
-                    <td className="px-3 py-2 text-xs text-[var(--color-muted)] whitespace-nowrap">{p.cheque_date ?? "—"}</td>
+                    <td className="px-3 py-2">{p.party_name ?? p.party ?? "-"}</td>
+                    <td className="px-3 py-2 text-xs text-[var(--color-muted)] whitespace-nowrap">{p.cheque_date ?? "-"}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{rupee(p.amount)}</td>
                     <td className="px-3 py-2 text-xs">{status}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
@@ -1832,7 +1832,7 @@ function AuditLogPanel() {
               rows.map((r) => (
                 <tr key={String(r.id)} className="border-b border-[var(--color-border)]">
                   <td className="px-3 py-2 text-xs text-[var(--color-muted)] whitespace-nowrap">{fmtTime(r.created_at)}</td>
-                  <td className="px-3 py-2 text-xs">{r.actor_email ?? "—"}</td>
+                  <td className="px-3 py-2 text-xs">{r.actor_email ?? "-"}</td>
                   <td className="px-3 py-2 text-xs font-medium">{r.action}</td>
                   <td className="px-3 py-2 text-xs text-[var(--color-muted)]">{r.entity}{r.entity_id ? <span className="opacity-60"> #{String(r.entity_id).slice(0, 8)}</span> : null}</td>
                 </tr>
@@ -1889,12 +1889,12 @@ function ImportPanel() {
     <Section
       icon={<Upload size={15} />}
       title="Opening balances & import"
-      subtitle="Paste CSV — first line is the header. One bad row is skipped, not the batch."
+      subtitle="Paste CSV - first line is the header. One bad row is skipped, not the batch."
     >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Ledgers */}
         <div>
-          <label className={labelCls}>Chart of accounts — columns: name, group, opening_balance, opening_is_debit, gstin, pan, state_code</label>
+          <label className={labelCls}>Chart of accounts - columns: name, group, opening_balance, opening_is_debit, gstin, pan, state_code</label>
           <textarea
             value={ledgerCsv}
             onChange={(e) => setLedgerCsv(e.target.value)}
@@ -1911,7 +1911,7 @@ function ImportPanel() {
 
         {/* Opening balances */}
         <div>
-          <label className={labelCls}>Opening balances — columns: ledger (name or id), opening_balance, opening_is_debit</label>
+          <label className={labelCls}>Opening balances - columns: ledger (name or id), opening_balance, opening_is_debit</label>
           <textarea
             value={openingCsv}
             onChange={(e) => setOpeningCsv(e.target.value)}

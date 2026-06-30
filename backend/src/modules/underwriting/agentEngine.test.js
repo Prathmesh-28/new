@@ -33,7 +33,7 @@ const weak = { name: "New Co", sector: "hospitality", region: "tier3", monthlyRe
   const expected = (agg) => (agg >= 70 ? "pre_qualified" : agg >= 50 ? "refer" : "declined");
   ok(a.decision === expected(a.aggregate) && m.decision === expected(m.aggregate) && w.decision === expected(w.aggregate), "T4 decision == band(aggregate) for all three");
 
-  // ---- T5: determinism — same input twice => identical scores/decision ----
+  // ---- T5: determinism - same input twice => identical scores/decision ----
   const a2 = await E.runUnderwriting(strong);
   ok(a.aggregate === a2.aggregate && a.scores.fraud === a2.scores.fraud && a.decision === a2.decision, "T5 deterministic (fraud agent not random)");
 
@@ -71,7 +71,7 @@ const weak = { name: "New Co", sector: "hospitality", region: "tier3", monthlyRe
   // ---- T11: greedy LLM tenure is pinned to the deterministic band (was sent as 999) ----
   ok(aClamp.offer.tenure_months === 24, "T11 tenure pinned to band (strong=24, got " + aClamp.offer.tenure_months + ")");
 
-  console.log(`\n${fail === 0 ? "✅ ALL PASS" : "❌ FAIL"} — ${pass} passed, ${fail} failed`);
+  console.log(`\n${fail === 0 ? "✅ ALL PASS" : "❌ FAIL"} - ${pass} passed, ${fail} failed`);
   console.log("Sample (strong):", JSON.stringify({ scores: a.scores, aggregate: a.aggregate, decision: a.decision, grade: a.grade, offer: a.offer }, null, 2));
   process.exit(fail === 0 ? 0 : 1);
 })().catch((e) => { console.error("UNCAUGHT", e); process.exit(1); });

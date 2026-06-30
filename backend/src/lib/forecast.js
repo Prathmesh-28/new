@@ -1,5 +1,5 @@
 /**
- * Forecast engine — Node.js implementation.
+ * Forecast engine - Node.js implementation.
  *
  * Steps:
  * 1. Detect recurring transactions using sliding-window algorithm.
@@ -158,7 +158,7 @@ function computeVariableBaseline(txns) {
   const avgDailyInflow  = totalInflow  / days;
   const avgDailyOutflow = totalOutflow / days;
 
-  // Variance approximation — measure day-level std dev
+  // Variance approximation - measure day-level std dev
   const dailyInflows = {};
   const dailyOutflows = {};
   for (const t of recent) {

@@ -15,7 +15,7 @@ async function authenticate(req, res, next) {
     // ── Super-admin impersonation ("ombudsman" god-mode) ───────────────────────
     // When the platform owner opens a tenant from the admin console, the client
     // sends X-Tenant-Id. We transparently make EVERY downstream route act on that
-    // tenant (read AND write), without touching each route — they all read
+    // tenant (read AND write), without touching each route - they all read
     // req.user.tenant_id. STRICTLY gated: only a real super_admin, only when the
     // target differs. Mutations are recorded in audit_log for accountability.
     const target = req.headers["x-tenant-id"];

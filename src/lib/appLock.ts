@@ -1,6 +1,6 @@
-// App-lock: a 4–6 digit PIN gate for the app, stored hashed in Capacitor
+// App-lock: a 4-6 digit PIN gate for the app, stored hashed in Capacitor
 // Preferences (Keychain/Keystore-backed on device, localStorage on web).
-// Pure JS — no fragile native plugin. Biometric can layer on later.
+// Pure JS - no fragile native plugin. Biometric can layer on later.
 import { Preferences } from "@capacitor/preferences";
 
 const KEY = "hr_pin_hash";

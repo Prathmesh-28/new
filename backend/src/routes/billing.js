@@ -31,7 +31,7 @@ async function applyPlan(tenantId, plan, { provider = "razorpay", razorpayPaymen
   await pool.query("UPDATE users SET subscription_plan=$1 WHERE tenant_id=$2", [plan, tenantId]);
 }
 
-// GET /api/billing/current — the tenant's current plan + status
+// GET /api/billing/current - the tenant's current plan + status
 router.get("/current", authenticate, async (req, res) => {
   const { rows } = await pool.query(
     "SELECT plan, status, current_period_end, provider FROM tenant_billing WHERE tenant_id=$1",
@@ -51,7 +51,7 @@ router.get("/current", authenticate, async (req, res) => {
 // India-first gateway: UPI / cards / netbanking / wallets. One-time Standard
 // Checkout per period; the signature is verified server-side before the plan applies.
 
-// POST /api/billing/razorpay/order — create an order for a plan (amount in paise, INR)
+// POST /api/billing/razorpay/order - create an order for a plan (amount in paise, INR)
 router.post("/razorpay/order", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { plan } = req.body || {};
   if (!VALID_PLANS.includes(plan)) return res.status(400).json({ error: "Invalid plan" });
@@ -70,19 +70,19 @@ router.post("/razorpay/order", authenticate, requireOwnerOrAdmin, async (req, re
     res.json({ order_id: order.id, amount: order.amount, currency: order.currency, key_id: razorpay.keyId(), plan });
   } catch (e) {
     console.error("[billing] razorpay order", e.statusCode, e.message);
-    if (e.statusCode === 401) return res.status(401).json({ error: "Razorpay auth failed — check RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET on the server." });
+    if (e.statusCode === 401) return res.status(401).json({ error: "Razorpay auth failed - check RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET on the server." });
     res.status(500).json({ error: `Razorpay: ${e.message || "could not create order"}` });
   }
 });
 
-// POST /api/billing/razorpay/verify — verify the payment signature, then apply the plan
+// POST /api/billing/razorpay/verify - verify the payment signature, then apply the plan
 router.post("/razorpay/verify", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { plan, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) return res.status(400).json({ error: "Missing payment fields" });
   if (!VALID_PLANS.includes(plan)) return res.status(400).json({ error: "Invalid plan" });
   const ok = razorpay.verifyPaymentSignature({ orderId: razorpay_order_id, paymentId: razorpay_payment_id, signature: razorpay_signature });
-  if (!ok) return res.status(400).json({ error: "Payment verification failed — signature mismatch." });
-  // Verified — apply the plan (~30-day period for this one-time Standard Checkout).
+  if (!ok) return res.status(400).json({ error: "Payment verification failed - signature mismatch." });
+  // Verified - apply the plan (~30-day period for this one-time Standard Checkout).
   await applyPlan(req.user.tenant_id, plan, {
     provider: "razorpay",
     razorpayPaymentId: razorpay_payment_id,

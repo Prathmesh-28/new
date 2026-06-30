@@ -42,7 +42,7 @@ router.get("/", authenticate, async (req, res) => {
   });
 });
 
-// GET /api/transactions/summary — category totals for the last N days
+// GET /api/transactions/summary - category totals for the last N days
 router.get("/summary", authenticate, async (req, res) => {
   const days = parseInt(req.query.days) || 30;
   const { rows } = await pool.query(
@@ -58,7 +58,7 @@ router.get("/summary", authenticate, async (req, res) => {
   res.json(rows);
 });
 
-// POST /api/transactions — manual entry or bulk import
+// POST /api/transactions - manual entry or bulk import
 router.post("/", authenticate, canWrite, async (req, res) => {
   const items = Array.isArray(req.body) ? req.body : [req.body];
   const inserted = [];
@@ -78,7 +78,7 @@ router.post("/", authenticate, canWrite, async (req, res) => {
   res.status(201).json(inserted.length === 1 ? inserted[0] : inserted);
 });
 
-// PATCH /api/transactions/:id — update category, merchant etc.
+// PATCH /api/transactions/:id - update category, merchant etc.
 router.patch("/:id", authenticate, canWrite, async (req, res) => {
   const { category, merchant_name, is_recurring, recurrence_cadence } = req.body;
 

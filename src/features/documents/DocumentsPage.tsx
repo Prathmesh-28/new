@@ -69,7 +69,7 @@ function fileType(mime: string): Doc["type"] {
 }
 
 function humanSize(bytes: number): string {
-  if (!bytes) return "—";
+  if (!bytes) return "-";
   return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(0)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
@@ -97,7 +97,7 @@ function rowToDoc(r: FileRow): Doc {
 }
 
 // Fetch a file's bytes with the bearer token (the download route is auth-gated,
-// so a plain <a href> can't carry the token — we fetch a blob instead).
+// so a plain <a href> can't carry the token - we fetch a blob instead).
 async function fetchBlob(id: string): Promise<Blob> {
   const res = await fetch(`${API_BASE}/api/files/${id}`, { headers: { Authorization: `Bearer ${token()}` } });
   if (!res.ok) throw new Error(String(res.status));
@@ -132,7 +132,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
       fd.append("category", category);
       fd.append("tags", JSON.stringify(tags.split(",").map(t => t.trim()).filter(Boolean)));
       if (hasExpiry && expiry) fd.append("expires_at", expiry);
-      // No Content-Type header — the browser sets the multipart boundary.
+      // No Content-Type header - the browser sets the multipart boundary.
       const res = await fetch(`${API_BASE}/api/files`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token()}` },
@@ -175,7 +175,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
             ? <p className="text-sm font-medium text-[var(--color-primary)]">{file.name}</p>
             : <>
                 <p className="text-sm text-[var(--color-muted)]">Drop file here or click to browse</p>
-                <p className="text-xs text-[var(--color-muted)] mt-0.5">PDF, image, Excel, Word, CSV — max 10 MB</p>
+                <p className="text-xs text-[var(--color-muted)] mt-0.5">PDF, image, Excel, Word, CSV - max 10 MB</p>
               </>
           }
           <input ref={inputRef} type="file" accept={ACCEPT} className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
@@ -319,7 +319,7 @@ export default function DocumentsPage() {
             Document Vault
           </h1>
           <p className="text-sm text-[var(--color-muted)] mt-1">
-            GST certificates, bank statements, legal docs — stored securely on your account.
+            GST certificates, bank statements, legal docs - stored securely on your account.
           </p>
         </div>
         {docTab === "vault" && (
@@ -549,7 +549,7 @@ type OcrExpense = {
   createdAt: string;
 };
 
-// Lightweight parse-hint pass over a filename / typed text. No real OCR backend —
+// Lightweight parse-hint pass over a filename / typed text. No real OCR backend -
 // we surface best-guess fields the user then confirms before the record is saved.
 function parseReceiptHints(text: string): { vendor?: string; amount?: number; gst?: number; date?: string } {
   const out: { vendor?: string; amount?: number; gst?: number; date?: string } = {};
@@ -597,7 +597,7 @@ function ReceiptOcrCapture() {
     if (hints.gst && !gst) setGst(String(hints.gst));
     if (hints.date) setDate(hints.date);
     setScanned(true);
-    toast.success("Receipt captured — confirm the fields below");
+    toast.success("Receipt captured - confirm the fields below");
   };
 
   const save = () => {
@@ -624,7 +624,7 @@ function ReceiptOcrCapture() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ScanLine size={14} className="text-[var(--color-primary)]" /> Receipt / Bill OCR Capture</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Snap a bill or pick a photo, confirm the auto-suggested vendor / amount / GST, and book it as an expense — no typing the whole bill out. Captured records sync to your account.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Snap a bill or pick a photo, confirm the auto-suggested vendor / amount / GST, and book it as an expense - no typing the whole bill out. Captured records sync to your account.</p>
 
         <div
           onClick={() => inputRef.current?.click()}
@@ -637,7 +637,7 @@ function ReceiptOcrCapture() {
           <input ref={inputRef} type="file" accept="image/*,.pdf" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onPick(f); }} />
         </div>
 
-        {scanned && <p className="text-[11px] text-[var(--color-muted)] mb-3 flex items-center gap-1.5"><CheckCircle2 size={11} className="text-green-400" /> Parsed a few fields from the file name — please verify the amounts before saving.</p>}
+        {scanned && <p className="text-[11px] text-[var(--color-muted)] mb-3 flex items-center gap-1.5"><CheckCircle2 size={11} className="text-green-400" /> Parsed a few fields from the file name - please verify the amounts before saving.</p>}
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={INP} />
@@ -673,7 +673,7 @@ function ReceiptOcrCapture() {
                   <td className="px-3 py-2.5 text-xs font-medium">{e.vendor}</td>
                   <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{e.category}</td>
                   <td className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{fc(e.amount)}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums">{e.gst > 0 ? fc(e.gst) : "—"}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums">{e.gst > 0 ? fc(e.gst) : "-"}</td>
                   <td className="px-3 py-2.5 text-xs">{e.date}</td>
                   <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[140px] truncate flex items-center gap-1"><Receipt size={11} /> {e.fileName}</td>
                   <td className="px-3 py-2.5"><button onClick={() => setExpenses(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
@@ -683,7 +683,7 @@ function ReceiptOcrCapture() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Field detection is a best-effort hint only — always confirm the amount and GST against the original bill before booking. Keep the source image; ITC claims require a valid tax invoice.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Field detection is a best-effort hint only - always confirm the amount and GST against the original bill before booking. Keep the source image; ITC claims require a valid tax invoice.</p>
     </div>
   );
 }
@@ -794,7 +794,7 @@ function ESignWorkflow() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Statuses are tracked manually here — wire to an ASP/eSign provider (NSDL/CDSL e-Sign, eMudhra) for legally-timestamped audit trails under the IT Act, 2000.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Statuses are tracked manually here - wire to an ASP/eSign provider (NSDL/CDSL e-Sign, eMudhra) for legally-timestamped audit trails under the IT Act, 2000.</p>
     </div>
   );
 }
@@ -843,7 +843,7 @@ function ExpiryRenewalVault() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Document Expiry / Renewal Vault</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Track licenses, insurance policies, contracts and certificates with their expiry dates and a custom alert window — so nothing lapses without warning.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Track licenses, insurance policies, contracts and certificates with their expiry dates and a custom alert window - so nothing lapses without warning.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Document name *" className={INP} />
           <select value={type} onChange={e => setType(e.target.value)} className={INP}>
@@ -869,7 +869,7 @@ function ExpiryRenewalVault() {
             {expired > 0 && <span className="font-semibold text-red-400">{expired} expired</span>}
             {expired > 0 && dueSoon > 0 && <span> · </span>}
             {dueSoon > 0 && <span className="font-semibold text-yellow-300">{dueSoon} due soon</span>}
-            <span className="text-[var(--color-muted)]"> — renew to avoid compliance gaps.</span>
+            <span className="text-[var(--color-muted)]"> - renew to avoid compliance gaps.</span>
           </p>
         </div>
       )}
@@ -885,7 +885,7 @@ function ExpiryRenewalVault() {
                   <tr key={i.id} className="hover:bg-white/2">
                     <td className="px-3 py-2.5 text-xs font-medium">{i.name}</td>
                     <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.type}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.owner || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.owner || "-"}</td>
                     <td className="px-3 py-2.5 text-xs">{format(new Date(i.expiresAt), "d MMM yyyy")}</td>
                     <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${t.txt}`}>{i.days < 0 ? `${Math.abs(i.days)}d ago` : `in ${i.days}d`}</td>
                     <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${t.badge}`}>{t.label}</span></td>
@@ -933,7 +933,7 @@ function parseStatement(text: string): ParsedRow[] {
     if (dateM.index !== undefined) description = line.slice(dateM.index + dateM[0].length);
     const firstAmtM = line.match(/-?(?:₹|rs\.?)?\s*[0-9][0-9,]*\.[0-9]{2}/i);
     if (firstAmtM && firstAmtM.index !== undefined) description = description.slice(0, description.indexOf(firstAmtM[0])) || description;
-    description = description.replace(/\s+/g, " ").replace(/(cr|dr)\b/gi, "").trim() || "—";
+    description = description.replace(/\s+/g, " ").replace(/(cr|dr)\b/gi, "").trim() || "-";
 
     // The first amount is the transaction value; everything below decides direction.
     const first = amounts[0];
@@ -955,7 +955,7 @@ function parseStatement(text: string): ParsedRow[] {
       const second = amounts[1];
       const mid = (first.index + second.index) / 2;
       if (first.index < mid) debit = value; else credit = value;
-      // Column inference is heuristic — flag for confirmation unless narration agrees.
+      // Column inference is heuristic - flag for confirmation unless narration agrees.
       const dk = DEBIT_KEYWORDS.test(description), ck = CREDIT_KEYWORDS.test(description);
       if (dk && !ck) { debit = value; credit = 0; }
       else if (ck && !dk) { credit = value; debit = 0; }
@@ -980,10 +980,10 @@ function BankStatementParser() {
 
   const run = () => {
     const parsed = parseStatement(text);
-    if (!parsed.length) { toast.error("No transaction rows found — paste lines with a date and an amount"); return; }
+    if (!parsed.length) { toast.error("No transaction rows found - paste lines with a date and an amount"); return; }
     setRows(parsed);
     const review = parsed.filter(r => r.needsReview).length;
-    if (review > 0) toast.warning(`Parsed ${parsed.length} row${parsed.length > 1 ? "s" : ""} — ${review} need${review === 1 ? "s" : ""} Dr/Cr confirmation`);
+    if (review > 0) toast.warning(`Parsed ${parsed.length} row${parsed.length > 1 ? "s" : ""} - ${review} need${review === 1 ? "s" : ""} Dr/Cr confirmation`);
     else toast.success(`Parsed ${parsed.length} row${parsed.length > 1 ? "s" : ""}`);
   };
 
@@ -1037,7 +1037,7 @@ function BankStatementParser() {
             <AlertTriangle size={14} className="text-yellow-400 shrink-0" />
             <p className="text-sm">
               <span className="font-semibold text-yellow-300">{reviewCount} row{reviewCount > 1 ? "s" : ""} need{reviewCount === 1 ? "s" : ""} confirmation</span>
-              <span className="text-[var(--color-muted)]"> — we couldn't tell debit from credit. Tap Dr or Cr on each flagged row before importing.</span>
+              <span className="text-[var(--color-muted)]"> - we couldn't tell debit from credit. Tap Dr or Cr on each flagged row before importing.</span>
             </p>
           </div>
         )}
@@ -1049,8 +1049,8 @@ function BankStatementParser() {
                 <tr key={r.id} className={`hover:bg-white/2 ${r.needsReview ? "bg-yellow-950/10" : ""}`}>
                   <td className="px-3 py-2.5 text-xs whitespace-nowrap">{r.date}</td>
                   <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{r.description}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums text-red-400">{r.debit > 0 ? fc(r.debit) : "—"}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums text-green-400">{r.credit > 0 ? fc(r.credit) : "—"}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-red-400">{r.debit > 0 ? fc(r.debit) : "-"}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-green-400">{r.credit > 0 ? fc(r.credit) : "-"}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
                     {r.needsReview ? (
                       <span className="inline-flex items-center gap-1.5">
@@ -1068,7 +1068,7 @@ function BankStatementParser() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Parsing is a preview only — formats vary by bank, so verify a sample of rows before importing into your ledger. Where the debit/credit direction is unclear we flag the row for your confirmation instead of guessing. Amounts must include decimals (e.g. 1,250.00); a Cr/Dr tag, sign, or withdrawal/deposit keyword improves direction detection.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Parsing is a preview only - formats vary by bank, so verify a sample of rows before importing into your ledger. Where the debit/credit direction is unclear we flag the row for your confirmation instead of guessing. Amounts must include decimals (e.g. 1,250.00); a Cr/Dr tag, sign, or withdrawal/deposit keyword improves direction detection.</p>
     </div>
   );
 }
@@ -1156,7 +1156,7 @@ function AuditTrailLog() {
                   <td className="px-3 py-2.5 text-xs tabular-nums">v{e.version}</td>
                   <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${ACTION_STYLE[e.action]}`}>{e.action}</span></td>
                   <td className="px-3 py-2.5 text-xs">{e.actor}</td>
-                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[180px] truncate">{e.note || "—"}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[180px] truncate">{e.note || "-"}</td>
                   <td className="px-3 py-2.5"><button onClick={() => setEntries(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                 </tr>
               ))}
@@ -1169,7 +1169,7 @@ function AuditTrailLog() {
           <p className="text-sm text-[var(--color-muted)]">{entries.length === 0 ? "No audit entries yet" : "No entries match your filter"}</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Entries are append-only by convention — for tamper-evident audit logs required by statutory audits, back this with a server-side immutable log and hash chaining.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Entries are append-only by convention - for tamper-evident audit logs required by statutory audits, back this with a server-side immutable log and hash chaining.</p>
     </div>
   );
 }
@@ -1179,7 +1179,7 @@ function AuditTrailLog() {
 // done-ticks persisted so a team can collect a complete pack without missing anything.
 const CHECKLIST_PACKS: { id: string; label: string; items: string[] }[] = [
   { id: "loan", label: "Business loan / working capital", items: [
-    "PAN card (business + proprietor/directors)", "GST registration certificate", "Last 6–12 months bank statements",
+    "PAN card (business + proprietor/directors)", "GST registration certificate", "Last 6-12 months bank statements",
     "Last 2 years ITR with computation", "Audited financials / P&L + balance sheet", "Address proof (rent deed / utility bill)",
     "KYC of promoters (Aadhaar + PAN)", "Business registration / Udyam (MSME) certificate", "Existing loan sanction letters (if any)",
   ] },
@@ -1214,7 +1214,7 @@ function DocumentChecklist() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ListChecks size={14} className="text-[var(--color-primary)]" /> Document Checklist by purpose</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Pick what you're preparing for — a loan, GST registration, a tender or vendor onboarding — and tick off each required document as you gather it. Your progress is saved.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Pick what you're preparing for - a loan, GST registration, a tender or vendor onboarding - and tick off each required document as you gather it. Your progress is saved.</p>
         <div className="flex flex-wrap gap-2">
           {CHECKLIST_PACKS.map(p => (
             <button key={p.id} onClick={() => setPackId(p.id)}
@@ -1252,11 +1252,11 @@ function DocumentChecklist() {
         </div>
         {pct === 100 && (
           <div className="bg-green-950/20 border border-green-800/30 rounded-lg px-3 py-2 flex items-center gap-2 text-xs text-green-300">
-            <CheckCircle2 size={13} /> Pack complete — every document for {pack.label.toLowerCase()} is collected.
+            <CheckCircle2 size={13} /> Pack complete - every document for {pack.label.toLowerCase()} is collected.
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative lists for common cases — lenders, GST officers and tendering authorities may ask for additional documents. Confirm the exact requirements before final submission.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Indicative lists for common cases - lenders, GST officers and tendering authorities may ask for additional documents. Confirm the exact requirements before final submission.</p>
     </div>
   );
 }
@@ -1300,7 +1300,7 @@ function TemplateLibrary() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Files size={14} className="text-[var(--color-primary)]" /> Template Library</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Ready-made letters, NOCs, authorisations and declarations. Fill the blanks and copy a clean draft — no more hunting for last year's format.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Ready-made letters, NOCs, authorisations and declarations. Fill the blanks and copy a clean draft - no more hunting for last year's format.</p>
         <div className="flex flex-wrap gap-2">
           {LETTER_TEMPLATES.map(t => (
             <button key={t.id} onClick={() => pickTpl(t.id)}
@@ -1330,14 +1330,14 @@ function TemplateLibrary() {
           <pre className="text-xs whitespace-pre-wrap font-sans bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 leading-relaxed min-h-[200px]">{output}</pre>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Boilerplate only — these are not a substitute for legal advice. Have material documents reviewed by a professional and printed on letterhead / stamp paper where required.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Boilerplate only - these are not a substitute for legal advice. Have material documents reviewed by a professional and printed on letterhead / stamp paper where required.</p>
     </div>
   );
 }
 
 // ── Document Share-Link Tracker ──────────────────────────────────────────────────
-// A register of share links handed out for documents — who got it, when it expires,
-// and whether it's been revoked — so external access stays accountable.
+// A register of share links handed out for documents - who got it, when it expires,
+// and whether it's been revoked - so external access stays accountable.
 type ShareLink = {
   id: string;
   docName: string;
@@ -1434,7 +1434,7 @@ function ShareLinkTracker() {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">This is a sharing register — the links shown are illustrative tokens. Wire to a server-side signed-URL service to enforce real expiry and revocation on the file itself.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">This is a sharing register - the links shown are illustrative tokens. Wire to a server-side signed-URL service to enforce real expiry and revocation on the file itself.</p>
     </div>
   );
 }
@@ -1481,7 +1481,7 @@ function KycCollector() {
       {parties.length === 0 ? (
         <div className="py-12 text-center border border-dashed border-[var(--color-border)] rounded-lg">
           <UserCheck size={24} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
-          <p className="text-sm text-[var(--color-muted)]">No counterparties yet — add one to start collecting KYC.</p>
+          <p className="text-sm text-[var(--color-muted)]">No counterparties yet - add one to start collecting KYC.</p>
         </div>
       ) : parties.map(p => {
         const got = progress(p);
@@ -1519,8 +1519,8 @@ function KycCollector() {
 }
 
 // ── Contract Key-Dates Extractor (manual entry → reminders) ──────────────────────
-// Capture the dates that matter in a contract — renewal, notice-to-terminate,
-// payment milestones — and see what's coming up, sorted by urgency.
+// Capture the dates that matter in a contract - renewal, notice-to-terminate,
+// payment milestones - and see what's coming up, sorted by urgency.
 type KeyDate = { id: string; contract: string; kind: string; date: string; counterparty: string; note: string };
 const KEYDATE_KINDS = ["Renewal", "Notice deadline", "Payment milestone", "Expiry", "Review", "Other"] as const;
 
@@ -1554,7 +1554,7 @@ function ContractKeyDates() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarRange size={14} className="text-[var(--color-primary)]" /> Contract Key-Dates</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Record the dates buried in your contracts — renewal, notice-to-terminate, payment milestones — so a missed deadline never costs you an auto-renewal or a penalty.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Record the dates buried in your contracts - renewal, notice-to-terminate, payment milestones - so a missed deadline never costs you an auto-renewal or a penalty.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={contract} onChange={e => setContract(e.target.value)} placeholder="Contract / agreement *" className={INP} />
           <select value={kind} onChange={e => setKind(e.target.value)} className={INP}>
@@ -1577,7 +1577,7 @@ function ContractKeyDates() {
             {overdue > 0 && <span className="font-semibold text-red-400">{overdue} passed</span>}
             {overdue > 0 && upcoming > 0 && <span> · </span>}
             {upcoming > 0 && <span className="font-semibold text-yellow-300">{upcoming} within 30 days</span>}
-            <span className="text-[var(--color-muted)]"> — act before they lapse.</span>
+            <span className="text-[var(--color-muted)]"> - act before they lapse.</span>
           </p>
         </div>
       )}
@@ -1593,7 +1593,7 @@ function ContractKeyDates() {
                   <tr key={d.id} className="hover:bg-white/2">
                     <td className="px-3 py-2.5 text-xs font-medium">{d.contract}{d.note ? <span className="block text-[10px] text-[var(--color-muted)]">{d.note}</span> : null}</td>
                     <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{d.kind}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{d.counterparty || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{d.counterparty || "-"}</td>
                     <td className="px-3 py-2.5 text-xs">{format(new Date(d.date), "d MMM yyyy")}</td>
                     <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${t.txt}`}>{d.days < 0 ? `${Math.abs(d.days)}d ago` : `in ${d.days}d`}</td>
                     <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${t.badge}`}>{t.label}</span></td>
@@ -1605,7 +1605,7 @@ function ContractKeyDates() {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Dates are entered manually from your reading of the contract — double-check the clause wording for notice periods, which are often counted in calendar vs business days.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Dates are entered manually from your reading of the contract - double-check the clause wording for notice periods, which are often counted in calendar vs business days.</p>
     </div>
   );
 }
@@ -1655,7 +1655,7 @@ function BillFilingTracker() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Archive size={14} className="text-[var(--color-primary)]" /> Invoice / Bill Filing Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Log every purchase bill the moment it arrives and mark it once it's filed — note whether the copy sits in a folder, a drive or the vault — so audit season has no missing vouchers.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Log every purchase bill the moment it arrives and mark it once it's filed - note whether the copy sits in a folder, a drive or the vault - so audit season has no missing vouchers.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={INP} />
           <input value={billNo} onChange={e => setBillNo(e.target.value)} placeholder="Bill / invoice no." className={INP} />
@@ -1699,10 +1699,10 @@ function BillFilingTracker() {
               {shown.map(i => (
                 <tr key={i.id} className="hover:bg-white/2">
                   <td className="px-3 py-2.5 text-xs font-medium">{i.vendor}</td>
-                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.billNo || "—"}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{i.amount > 0 ? fc(i.amount) : "—"}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.billNo || "-"}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{i.amount > 0 ? fc(i.amount) : "-"}</td>
                   <td className="px-3 py-2.5 text-xs">{format(new Date(i.billDate), "d MMM yyyy")}</td>
-                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.location || "—"}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.location || "-"}</td>
                   <td className="px-3 py-2.5">
                     {i.status === "to-file"
                       ? <button onClick={() => markFiled(i.id)} className="text-[10px] text-green-400 hover:underline flex items-center gap-1"><CheckCircle2 size={11} /> Mark filed</button>
@@ -1720,7 +1720,7 @@ function BillFilingTracker() {
           <p className="text-sm text-[var(--color-muted)]">{tab === "to-file" ? "Nothing waiting to be filed." : "No bills filed yet."}</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Keep the original tax invoice for every booked bill — ITC and assessments require the source document, not just the ledger entry. Retain for the statutory period.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Keep the original tax invoice for every booked bill - ITC and assessments require the source document, not just the ledger entry. Retain for the statutory period.</p>
     </div>
   );
 }
@@ -1816,7 +1816,7 @@ function ApprovalFlow() {
                     {r.raisedBy ? <span className="block text-[10px] text-[var(--color-muted)]">by {r.raisedBy}</span> : null}
                   </td>
                   <td className="px-3 py-2.5 text-xs">{r.approver}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{r.amount > 0 ? fc(r.amount) : "—"}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{r.amount > 0 ? fc(r.amount) : "-"}</td>
                   <td className="px-3 py-2.5 text-xs">{format(new Date(r.raisedAt), "d MMM")}</td>
                   <td className="px-3 py-2.5">
                     <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span>
@@ -1842,7 +1842,7 @@ function ApprovalFlow() {
           <p className="text-sm text-[var(--color-muted)]">No approval requests yet.</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Approvals here are tracked by name for an internal trail — for binding authorisation tie each decision to an authenticated user and your delegation-of-authority matrix.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Approvals here are tracked by name for an internal trail - for binding authorisation tie each decision to an authenticated user and your delegation-of-authority matrix.</p>
     </div>
   );
 }
@@ -1907,7 +1907,7 @@ function GstinValidator() {
       pan: result.pan, checkedAt: new Date().toISOString(),
     }, ...prev]);
     setLabel(""); setGstin("");
-    toast.success(result.valid ? "GSTIN looks valid — added to register" : "Saved, but the GSTIN failed the checksum");
+    toast.success(result.valid ? "GSTIN looks valid - added to register" : "Saved, but the GSTIN failed the checksum");
   };
 
   const validCount = register.filter(e => e.valid).length;
@@ -1916,7 +1916,7 @@ function GstinValidator() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><BadgeCheck size={14} className="text-[var(--color-primary)]" /> GSTIN Validator / Register</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Check a GSTIN's structure and check-digit before you book a vendor or customer — it derives the state and embedded PAN, and keeps a register of everything you've verified. Catches typos and obviously fake numbers offline.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Check a GSTIN's structure and check-digit before you book a vendor or customer - it derives the state and embedded PAN, and keeps a register of everything you've verified. Catches typos and obviously fake numbers offline.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-2">
           <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Party / vendor name" className={INP} />
           <input value={gstin} onChange={e => setGstin(e.target.value.toUpperCase())} placeholder="GSTIN (15 chars) *" maxLength={15} className={`${INP} font-mono uppercase`} />
@@ -1947,8 +1947,8 @@ function GstinValidator() {
                 <tr key={e.id} className="hover:bg-white/2">
                   <td className="px-3 py-2.5 text-xs font-medium">{e.label}</td>
                   <td className="px-3 py-2.5 text-xs font-mono">{e.gstin}</td>
-                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{e.state || "—"}</td>
-                  <td className="px-3 py-2.5 text-xs font-mono text-[var(--color-muted)]">{e.pan || "—"}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{e.state || "-"}</td>
+                  <td className="px-3 py-2.5 text-xs font-mono text-[var(--color-muted)]">{e.pan || "-"}</td>
                   <td className="px-3 py-2.5 text-xs">{format(new Date(e.checkedAt), "d MMM")}</td>
                   <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${e.valid ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-red-900/30 text-red-400 border-red-800/40"}`}>{e.valid ? "Valid" : "Invalid"}</span></td>
                   <td className="px-3 py-2.5"><button onClick={() => setRegister(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
@@ -1958,7 +1958,7 @@ function GstinValidator() {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">This is an offline structural + checksum check only — it cannot confirm the GSTIN is active or that the legal name matches. Verify status on the GST portal before claiming input credit.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">This is an offline structural + checksum check only - it cannot confirm the GSTIN is active or that the legal name matches. Verify status on the GST portal before claiming input credit.</p>
     </div>
   );
 }
@@ -2005,7 +2005,7 @@ function DocumentRequestTracker() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Inbox size={14} className="text-[var(--color-primary)]" /> Document Request Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Need papers from a client, vendor or your CA? List what you've asked for, set a due date, and tick items off as they arrive — so you always know exactly what's still outstanding and from whom.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Need papers from a client, vendor or your CA? List what you've asked for, set a due date, and tick items off as they arrive - so you always know exactly what's still outstanding and from whom.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={party} onChange={e => setParty(e.target.value)} placeholder="Requested from *" className={INP} />
           <select value={channel} onChange={e => setChannel(e.target.value)} className={INP}>
@@ -2032,7 +2032,7 @@ function DocumentRequestTracker() {
       {requests.length === 0 ? (
         <div className="py-12 text-center border border-dashed border-[var(--color-border)] rounded-lg">
           <Inbox size={24} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
-          <p className="text-sm text-[var(--color-muted)]">No document requests yet — raise one to start chasing.</p>
+          <p className="text-sm text-[var(--color-muted)]">No document requests yet - raise one to start chasing.</p>
         </div>
       ) : requests.map(r => {
         const s = reqState(r);
@@ -2065,7 +2065,7 @@ function DocumentRequestTracker() {
           </div>
         );
       })}
-      <p className="text-[10px] text-[var(--color-muted)]">A tracker for what you've asked for — it doesn't send the request itself. Use the WhatsApp or Alerts pages to actually nudge the counterparty for outstanding items.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A tracker for what you've asked for - it doesn't send the request itself. Use the WhatsApp or Alerts pages to actually nudge the counterparty for outstanding items.</p>
     </div>
   );
 }
@@ -2110,7 +2110,7 @@ function NamingHelper() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Wand2 size={14} className="text-[var(--color-primary)]" /> Smart Document Naming Helper</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Stop saving files as IMG_1234. Pick a naming pattern once and generate a clean, sortable filename for every document — consistent names mean your vault stays searchable and audit-ready.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Stop saving files as IMG_1234. Pick a naming pattern once and generate a clean, sortable filename for every document - consistent names mean your vault stays searchable and audit-ready.</p>
         <div className="flex flex-wrap gap-2 mb-4">
           {NAMING_PATTERNS.map(p => (
             <button key={p.id} onClick={() => setPatternId(p.id)}
@@ -2140,7 +2140,7 @@ function NamingHelper() {
         <code className="block text-sm font-mono bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 break-all">{fileName}</code>
         <p className="text-[10px] text-[var(--color-muted)] mt-2">Lower-cased, spaces and symbols replaced with hyphens, date as YYYYMMDD so files sort chronologically. Swap the <code>.pdf</code> extension to match your actual file.</p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A naming convention, not a file renamer — copy the suggested name when saving or uploading. Consistent names make full-text and tag search far more reliable later.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A naming convention, not a file renamer - copy the suggested name when saving or uploading. Consistent names make full-text and tag search far more reliable later.</p>
     </div>
   );
 }
@@ -2183,7 +2183,7 @@ function ComplianceCalendar() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarDays size={14} className="text-[var(--color-primary)]" /> Compliance-Document Calendar</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Map your recurring filings — GSTR-1/3B, TDS, advance tax, ROC returns — to their due dates, mark when the supporting documents are ready, and tick each off once filed. A single view so a deadline never slips.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Map your recurring filings - GSTR-1/3B, TDS, advance tax, ROC returns - to their due dates, mark when the supporting documents are ready, and tick each off once filed. A single view so a deadline never slips.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Filing (e.g. GSTR-3B) *" className={INP} />
           <select value={category} onChange={e => setCategory(e.target.value)} className={INP}>
@@ -2204,7 +2204,7 @@ function ComplianceCalendar() {
             {overdue > 0 && <span className="font-semibold text-red-400">{overdue} overdue</span>}
             {overdue > 0 && dueSoon > 0 && <span> · </span>}
             {dueSoon > 0 && <span className="font-semibold text-yellow-300">{dueSoon} due within 7 days</span>}
-            <span className="text-[var(--color-muted)]"> — late filings attract interest and late fees.</span>
+            <span className="text-[var(--color-muted)]"> - late filings attract interest and late fees.</span>
           </p>
         </div>
       )}
@@ -2221,7 +2221,7 @@ function ComplianceCalendar() {
                     <td className="px-3 py-2.5 text-xs font-medium">{t.name}</td>
                     <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{t.category}</td>
                     <td className="px-3 py-2.5 text-xs">{format(new Date(t.dueDate), "d MMM yyyy")}</td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${t.filed ? "text-[var(--color-muted)]" : tn.txt}`}>{t.filed ? "—" : t.days < 0 ? `${Math.abs(t.days)}d ago` : `in ${t.days}d`}</td>
+                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${t.filed ? "text-[var(--color-muted)]" : tn.txt}`}>{t.filed ? "-" : t.days < 0 ? `${Math.abs(t.days)}d ago` : `in ${t.days}d`}</td>
                     <td className="px-3 py-2.5">
                       <button onClick={() => toggleDocs(t.id)} className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium flex items-center gap-1 ${t.docsReady ? "bg-green-900/30 text-green-400 border-green-800/40" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
                         {t.docsReady ? <CheckCircle2 size={10} /> : <Clock size={10} />} {t.docsReady ? "Ready" : "Pending"}
@@ -2243,13 +2243,13 @@ function ComplianceCalendar() {
           <p className="text-sm text-[var(--color-muted)]">No filings on the calendar yet.</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Due dates are entered manually — statutory deadlines shift with extensions and notifications, so confirm each against the latest CBIC/MCA circular. Tap a status to mark it filed.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Due dates are entered manually - statutory deadlines shift with extensions and notifications, so confirm each against the latest CBIC/MCA circular. Tap a status to mark it filed.</p>
     </div>
   );
 }
 
 // ── Multi-Document Bundles (linked records) ──────────────────────────────────────
-// Group related papers for one transaction — invoice + challan + payment proof —
+// Group related papers for one transaction - invoice + challan + payment proof -
 // into a single named bundle, with a per-item type tag and a completeness check.
 type BundleDoc = { id: string; name: string; type: string };
 type DocBundle = { id: string; title: string; reference: string; createdAt: string; docs: BundleDoc[] };
@@ -2268,7 +2268,7 @@ function DocumentBundles() {
     const id = crypto.randomUUID();
     setBundles(prev => [{ id, title, reference, createdAt: new Date().toISOString(), docs: [] }, ...prev]);
     setTitle(""); setReference(""); setActiveId(id);
-    toast.success("Bundle created — now add documents to it");
+    toast.success("Bundle created - now add documents to it");
   };
   const addDoc = (bid: string) => {
     if (!docName) { toast.error("Enter a document name"); return; }
@@ -2284,7 +2284,7 @@ function DocumentBundles() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Multi-Document Bundles</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Tie all the paper behind one transaction together — the invoice, delivery challan, PO and payment proof in a single linked record — so the full trail is one click away during an audit or a dispute.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Tie all the paper behind one transaction together - the invoice, delivery challan, PO and payment proof in a single linked record - so the full trail is one click away during an audit or a dispute.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Bundle title (e.g. Acme PO-204) *" className={INP} />
           <input value={reference} onChange={e => setReference(e.target.value)} placeholder="Reference / txn no." className={INP} />
@@ -2295,7 +2295,7 @@ function DocumentBundles() {
       {bundles.length === 0 ? (
         <div className="py-12 text-center border border-dashed border-[var(--color-border)] rounded-lg">
           <Layers size={24} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
-          <p className="text-sm text-[var(--color-muted)]">No bundles yet — create one to group related documents.</p>
+          <p className="text-sm text-[var(--color-muted)]">No bundles yet - create one to group related documents.</p>
         </div>
       ) : bundles.map(b => {
         const open = activeId === b.id;
@@ -2336,7 +2336,7 @@ function DocumentBundles() {
           </div>
         );
       })}
-      <p className="text-[10px] text-[var(--color-muted)]">Bundles link documents by name for a transaction trail — for a tamper-evident pack, attach the actual files from the vault and export them together as the audit voucher.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Bundles link documents by name for a transaction trail - for a tamper-evident pack, attach the actual files from the vault and export them together as the audit voucher.</p>
     </div>
   );
 }
@@ -2422,7 +2422,7 @@ function StorageUsageSummary() {
           })}
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">These are figures you record — for live usage, read counts and sizes off the vault file list. Sizes are summed per category to show relative footprint.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">These are figures you record - for live usage, read counts and sizes off the vault file list. Sizes are summed per category to show relative footprint.</p>
     </div>
   );
 }
@@ -2468,7 +2468,7 @@ function AccessPermissionMatrix() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><KeyRound size={14} className="text-[var(--color-primary)]" /> Access Permission Matrix</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Map who can see, edit or manage each document category. Add a role, then click any cell to cycle its access level — a quick reference for your vault sharing policy.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Map who can see, edit or manage each document category. Add a role, then click any cell to cycle its access level - a quick reference for your vault sharing policy.</p>
         <div className="flex gap-3">
           <input value={role} onChange={e => setRole(e.target.value)} onKeyDown={e => e.key === "Enter" && addRole()} placeholder="Role / person (e.g. Accountant, CA) *" className={INP} />
           <button onClick={addRole} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5 shrink-0"><Plus size={13} /> Add role</button>
@@ -2505,13 +2505,13 @@ function AccessPermissionMatrix() {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">This matrix documents your intended access policy — enforce it with the role permissions in Settings. Click a cell repeatedly to cycle none → view → edit → manage.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">This matrix documents your intended access policy - enforce it with the role permissions in Settings. Click a cell repeatedly to cycle none → view → edit → manage.</p>
     </div>
   );
 }
 
 // ── #177 Watermark Note Generator ────────────────────────────────────────────────
-const WATERMARK_PRESETS = ["CONFIDENTIAL", "DRAFT — DO NOT FILE", "COPY — NOT FOR CIRCULATION", "FOR INTERNAL USE ONLY", "ORIGINAL"] as const;
+const WATERMARK_PRESETS = ["CONFIDENTIAL", "DRAFT - DO NOT FILE", "COPY - NOT FOR CIRCULATION", "FOR INTERNAL USE ONLY", "ORIGINAL"] as const;
 
 function WatermarkNoteGenerator() {
   const [preset, setPreset] = useState<string>(WATERMARK_PRESETS[0]);
@@ -2537,7 +2537,7 @@ function WatermarkNoteGenerator() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Stamp size={14} className="text-[var(--color-primary)]" /> Watermark Note Generator</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Build a standard watermark / header line to paste onto a document footer or PDF stamp before you share it — marking copies as confidential, draft or recipient-specific.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Build a standard watermark / header line to paste onto a document footer or PDF stamp before you share it - marking copies as confidential, draft or recipient-specific.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           <select value={preset} onChange={e => setPreset(e.target.value)} className={INP}>
             {WATERMARK_PRESETS.map(p => <option key={p} value={p}>{p}</option>)}
@@ -2556,11 +2556,11 @@ function WatermarkNoteGenerator() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         {docName.trim() && <p className="text-xs text-[var(--color-muted)] mb-2">For: <span className="font-medium text-[var(--color-text)]">{docName.trim()}</span></p>}
         <div className="border border-dashed border-[var(--color-primary)]/40 rounded-lg py-6 px-4 text-center bg-[var(--color-bg)]">
-          <p className="text-sm font-bold tracking-wide text-[var(--color-primary)] uppercase break-words">{stamp || "—"}</p>
+          <p className="text-sm font-bold tracking-wide text-[var(--color-primary)] uppercase break-words">{stamp || "-"}</p>
         </div>
         <button onClick={copy} className="mt-4 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Copy size={13} /> Copy watermark note</button>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">This generates the text only — apply it as a real watermark in your PDF editor. A visible stamp does not encrypt the file, so still control who you share originals with.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">This generates the text only - apply it as a real watermark in your PDF editor. A visible stamp does not encrypt the file, so still control who you share originals with.</p>
     </div>
   );
 }
@@ -2588,7 +2588,7 @@ function StatutoryDocumentPack() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><PackageCheck size={14} className="text-[var(--color-primary)]" /> Statutory Document Pack</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Pick a filing or application and get the standard document checklist for it — tick off what you've gathered so the pack is complete before you submit.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Pick a filing or application and get the standard document checklist for it - tick off what you've gathered so the pack is complete before you submit.</p>
         <div className="flex flex-wrap gap-2">
           {STATUTORY_PACKS.map(p => (
             <button key={p.id} onClick={() => setPackId(p.id)}
@@ -2620,9 +2620,9 @@ function StatutoryDocumentPack() {
             );
           })}
         </div>
-        {pct === 100 && <p className="mt-3 text-xs text-green-400 flex items-center gap-1.5"><CheckCircle2 size={12} /> Pack complete — ready to submit.</p>}
+        {pct === 100 && <p className="mt-3 text-xs text-green-400 flex items-center gap-1.5"><CheckCircle2 size={12} /> Pack complete - ready to submit.</p>}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Checklists are standard guidance — exact requirements vary by state, entity type and the reviewing officer. Confirm against the official portal or your CA before filing.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Checklists are standard guidance - exact requirements vary by state, entity type and the reviewing officer. Confirm against the official portal or your CA before filing.</p>
     </div>
   );
 }
@@ -2650,7 +2650,7 @@ function VersionLog() {
       id: crypto.randomUUID(),
       docName: docName.trim(),
       version: version.trim(),
-      changedBy: changedBy.trim() || "—",
+      changedBy: changedBy.trim() || "-",
       note: note.trim(),
       loggedAt: new Date().toISOString(),
     }, ...prev]);
@@ -2669,7 +2669,7 @@ function VersionLog() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><GitBranch size={14} className="text-[var(--color-primary)]" /> Document Version Log</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Keep a running history of revisions for important documents — contracts, policies, templates — so you always know which version is current and what changed between them.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Keep a running history of revisions for important documents - contracts, policies, templates - so you always know which version is current and what changed between them.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <input value={docName} onChange={e => setDocName(e.target.value)} placeholder="Document name *" className={INP} />
           <input value={version} onChange={e => setVersion(e.target.value)} placeholder="Version (e.g. v2.1) *" className={INP} />
@@ -2680,7 +2680,7 @@ function VersionLog() {
       </div>
 
       {docNames.length === 0 ? (
-        <EmptyState icon={GitBranch} title="No versions logged yet" description="Log a revision above to start a version history per document — the most recent entry for each is shown as the current version." />
+        <EmptyState icon={GitBranch} title="No versions logged yet" description="Log a revision above to start a version history per document - the most recent entry for each is shown as the current version." />
       ) : (
         <div className="space-y-4">
           {docNames.map(dn => {
@@ -2712,7 +2712,7 @@ function VersionLog() {
           })}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">This is a manual revision register, not file storage — keep each version's actual file in the Vault. Use it to record what changed and who approved it.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">This is a manual revision register, not file storage - keep each version's actual file in the Vault. Use it to record what changed and who approved it.</p>
     </div>
   );
 }
@@ -2741,7 +2741,7 @@ function SignatoryRegister() {
     setPeople(prev => [...prev, {
       id: crypto.randomUUID(),
       name: name.trim(),
-      designation: designation.trim() || "—",
+      designation: designation.trim() || "-",
       authority,
       limit: parseFloat(limit) || 0,
       signatureOnFile: false,
@@ -2757,7 +2757,7 @@ function SignatoryRegister() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Signature size={14} className="text-[var(--color-primary)]" /> Signatory Register</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Record who is authorised to sign on behalf of the business — for banking, contracts or filings — along with any approval limit and whether their specimen signature is on file.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Record who is authorised to sign on behalf of the business - for banking, contracts or filings - along with any approval limit and whether their specimen signature is on file.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Name *" className={INP} />
           <input value={designation} onChange={e => setDesignation(e.target.value)} placeholder="Designation" className={INP} />
@@ -2807,7 +2807,7 @@ function SignatoryRegister() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Keep this register aligned with your board resolution and bank mandate. Approval limits here document intent — enforce them in your approval workflow and banking controls.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Keep this register aligned with your board resolution and bank mandate. Approval limits here document intent - enforce them in your approval workflow and banking controls.</p>
     </div>
   );
 }
@@ -2835,7 +2835,7 @@ function RedactionChecklist() {
     setItems(prev => [{
       id: crypto.randomUUID(),
       docName: docName.trim(),
-      sharedWith: sharedWith.trim() || "—",
+      sharedWith: sharedWith.trim() || "-",
       fields: { ...fields },
       loggedAt: new Date().toISOString(),
     }, ...prev]);
@@ -2849,7 +2849,7 @@ function RedactionChecklist() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><EyeOff size={14} className="text-[var(--color-primary)]" /> Redaction Checklist</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Before sharing a document externally, tick off the personal fields you have masked — Aadhaar, PAN, bank numbers — and log who received it, so your DPDP data-minimisation trail is auditable.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Before sharing a document externally, tick off the personal fields you have masked - Aadhaar, PAN, bank numbers - and log who received it, so your DPDP data-minimisation trail is auditable.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           <input value={docName} onChange={e => setDocName(e.target.value)} placeholder="Document name *" className={INP} />
           <input value={sharedWith} onChange={e => setSharedWith(e.target.value)} placeholder="Shared with (party / purpose)" className={INP} />
@@ -2892,7 +2892,7 @@ function RedactionChecklist() {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">This is a self-attested log — it records the masking you performed, it does not redact files for you. Verify the shared copy visually before it leaves your control.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">This is a self-attested log - it records the masking you performed, it does not redact files for you. Verify the shared copy visually before it leaves your control.</p>
     </div>
   );
 }
@@ -2949,7 +2949,7 @@ function RetentionPolicy() {
           <History size={12} /> Reset to suggested defaults
         </button>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Suggested defaults are a general guide — Indian tax records are commonly kept 6–8 years. Statutory retention varies by law and ongoing litigation; confirm with your CA before purging anything.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Suggested defaults are a general guide - Indian tax records are commonly kept 6-8 years. Statutory retention varies by law and ongoing litigation; confirm with your CA before purging anything.</p>
     </div>
   );
 }
@@ -2977,7 +2977,7 @@ function ObligationTracker() {
       id: crypto.randomUUID(),
       contract: contract.trim(),
       obligation: obligation.trim(),
-      owner: owner.trim() || "—",
+      owner: owner.trim() || "-",
       dueDate,
       done: false,
     }]);
@@ -3002,7 +3002,7 @@ function ObligationTracker() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ListTodo size={14} className="text-[var(--color-primary)]" /> Contract Obligation Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Turn the commitments buried in your contracts — deliverables, reporting, payments, milestones — into a tracked list with an owner and a due date, so nothing slips through.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Turn the commitments buried in your contracts - deliverables, reporting, payments, milestones - into a tracked list with an owner and a due date, so nothing slips through.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <input value={contract} onChange={e => setContract(e.target.value)} placeholder="Contract / party *" className={INP} />
           <input value={obligation} onChange={e => setObligation(e.target.value)} placeholder="Obligation *" className={INP} />
@@ -3056,7 +3056,7 @@ function ObligationTracker() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Obligations are entered manually — read the contract carefully to capture every deliverable, reporting duty and penalty trigger. This list reminds you; it does not amend the contract.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Obligations are entered manually - read the contract carefully to capture every deliverable, reporting duty and penalty trigger. This list reminds you; it does not amend the contract.</p>
     </div>
   );
 }

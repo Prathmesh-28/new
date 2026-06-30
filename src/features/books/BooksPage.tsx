@@ -33,7 +33,7 @@ import BulkUpload from "@/components/BulkUpload";
 import ExportMenu from "@/components/ExportMenu";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES (response shapes inlined — backend confirmed)
+// TYPES (response shapes inlined - backend confirmed)
 // ─────────────────────────────────────────────────────────────────────────────
 type Nature = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" | "EQUITY";
 
@@ -202,7 +202,7 @@ function newLine(): LineDraft {
   };
 }
 
-// Round HALF_UP to 2dp — display value; backend keeps 4dp at posting time.
+// Round HALF_UP to 2dp - display value; backend keeps 4dp at posting time.
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
@@ -227,7 +227,7 @@ function computeLine(l: LineDraft, interState: boolean): LineCalc {
 function NaturePill({ nature }: { nature: string }) {
   const key = (nature || "").toUpperCase() as Nature;
   const cls = NATURE_STYLE[key] ?? "bg-[var(--color-bg)] text-[var(--color-muted)] border border-[var(--color-border)]";
-  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>{key || "—"}</span>;
+  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>{key || "-"}</span>;
 }
 
 function BalancedBadge({ ok }: { ok: boolean }) {
@@ -376,7 +376,7 @@ export default function BooksPage() {
       <div className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 sm:px-6 py-4">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <BookOpen size={20} className="text-[var(--color-primary)]" />
-          Books — double-entry ledger
+          Books - double-entry ledger
         </h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">Tally-grade GL · GST-ready</p>
       </div>
@@ -468,7 +468,7 @@ function EmptyState({ onSeed, seeding, canWrite }: { onSeed: () => void; seeding
       </div>
       <h2 className="text-lg font-semibold">Set up your books</h2>
       <p className="text-sm text-[var(--color-muted)] mt-2">
-        Create the chart of accounts — 28 account groups and the default ledgers — so you can start
+        Create the chart of accounts - 28 account groups and the default ledgers - so you can start
         posting double-entry vouchers.
       </p>
       <button type="button" onClick={onSeed} disabled={seeding || !canWrite} className={`${btnPrimary} mt-5 mx-auto`}>
@@ -533,7 +533,7 @@ function OverviewTab({ loading }: { loading: boolean }) {
       >
         {balanced ? (
           <span className="inline-flex items-center gap-2">
-            <CheckCircle2 size={16} /> Books are balanced — debits equal credits for FY {fy}.
+            <CheckCircle2 size={16} /> Books are balanced - debits equal credits for FY {fy}.
           </span>
         ) : (
           <span className="inline-flex items-center gap-2">
@@ -935,7 +935,7 @@ function NewEntryTab({ ledgers, canWrite }: { ledgers: Ledger[]; canWrite: boole
                     <td className="px-3 py-2.5 font-mono text-xs">{v.voucher_number}</td>
                     <td className="px-3 py-2.5 text-[var(--color-muted)] truncate max-w-[220px]">
                       {v.is_cancelled ? <span className="text-red-400">Cancelled · </span> : null}
-                      {v.narration || v.reference || "—"}
+                      {v.narration || v.reference || "-"}
                     </td>
                     <td className="px-3 py-2.5 text-right">
                       <button
@@ -1177,7 +1177,7 @@ function ReceiptPaymentCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INVOICES TAB — real multi-line document editor (estimate / tax invoice)
+// INVOICES TAB - real multi-line document editor (estimate / tax invoice)
 // ─────────────────────────────────────────────────────────────────────────────
 function InvoicesTab({ ledgers, canWrite }: { ledgers: Ledger[]; canWrite: boolean }) {
   const partyLedgers = ledgers.filter((l) => l.is_party);
@@ -1282,7 +1282,7 @@ function DocumentList({ docs, busy, onReload }: { docs: DocumentRow[]; busy: boo
             {busy ? (
               <SkeletonRows cols={6} rows={5} />
             ) : docs.length === 0 ? (
-              <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--color-muted)]">No documents yet — create one above.</td></tr>
+              <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--color-muted)]">No documents yet - create one above.</td></tr>
             ) : (
               docs.map((d) => (
                 <tr key={d.id} className="border-b border-[var(--color-border)] last:border-b-0">
@@ -1335,7 +1335,7 @@ function DocumentEditor({ customers, onSaved }: { customers: Ledger[]; onSaved: 
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [saving, setSaving] = useState(false);
 
-  // Load the inventory items for the item picker (optional — silent if unavailable).
+  // Load the inventory items for the item picker (optional - silent if unavailable).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -1366,7 +1366,7 @@ function DocumentEditor({ customers, onSaved }: { customers: Ledger[]; onSaved: 
     });
   };
 
-  // Live per-line + document totals (rounded once per line, then summed — mirrors
+  // Live per-line + document totals (rounded once per line, then summed - mirrors
   // how the backend posts each line at full precision and presents at 2dp).
   const calcs = useMemo(() => lines.map((l) => computeLine(l, interState)), [lines, interState]);
   const totals = useMemo(() => {
@@ -1405,7 +1405,7 @@ function DocumentEditor({ customers, onSaved }: { customers: Ledger[]; onSaved: 
     setSaving(true);
     try {
       // BACKWARD-COMPATIBLE payload: always send subtotal (sum of taxable) +
-      // gst_rate (uniform rate, else 0) + inter_state — the exact single-line
+      // gst_rate (uniform rate, else 0) + inter_state - the exact single-line
       // shape today's backend posts from. lines[] is extra detail it stores as-is.
       const payload = {
         docKind,
@@ -2096,7 +2096,7 @@ function ReconcileTab({ ledgers, canWrite }: { ledgers: Ledger[]; canWrite: bool
     }
     try {
       await api.post<{ voucherId: string }>("/api/books/recon/confirm", { lineId: line.id, counterLedgerId });
-      toast.success("Confirmed — voucher posted");
+      toast.success("Confirmed - voucher posted");
       setInbox((rows) => rows.filter((r) => r.id !== line.id));
       setCounters((c) => {
         const next = { ...c };
@@ -2257,7 +2257,7 @@ function ReconcileTab({ ledgers, canWrite }: { ledgers: Ledger[]; canWrite: bool
               {inboxBusy ? (
                 <SkeletonRows cols={6} rows={4} />
               ) : inbox.length === 0 ? (
-                <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--color-muted)]">Nothing to reconcile — import statement lines above.</td></tr>
+                <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--color-muted)]">Nothing to reconcile - import statement lines above.</td></tr>
               ) : (
                 inbox.map((line) => {
                   const inflow = Number(line.amount) >= 0;
@@ -2265,7 +2265,7 @@ function ReconcileTab({ ledgers, canWrite }: { ledgers: Ledger[]; canWrite: bool
                     <tr key={line.id} className="border-b border-[var(--color-border)] last:border-b-0 align-middle">
                       <td className="px-3 py-2.5 whitespace-nowrap text-[var(--color-muted)]">{line.txn_date}</td>
                       <td className={`px-3 py-2.5 text-right tabular-nums ${inflow ? "text-green-400" : "text-red-400"}`}>{rupee(line.amount)}</td>
-                      <td className="px-3 py-2.5 truncate max-w-[200px]">{line.description || "—"}</td>
+                      <td className="px-3 py-2.5 truncate max-w-[200px]">{line.description || "-"}</td>
                       <td className="px-3 py-2.5">
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)] uppercase">
                           {line.suggestion?.kind || (inflow ? "RECEIPT" : "PAYMENT")}

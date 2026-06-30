@@ -1,12 +1,12 @@
 // Platform-level settings the super-admin controls LIVE (no redeploy). Each group is
 // one row in platform_settings(key=<group>). Designed to be the company owner's
-// "control panel" — add new typed groups here, or use the generic `custom` group to
+// "control panel" - add new typed groups here, or use the generic `custom` group to
 // add ANY key/value at runtime with zero code change.
 //
-//   GET  /settings            PUBLIC  — public groups only (marketing/app pre-login)
-//   GET  /settings/all        ADMIN   — every group incl. admin-only + custom (editor)
-//   GET  /social              PUBLIC  — back-compat for the footer
-//   PUT  /settings/:group     ADMIN   — update one group (super-admin only)
+//   GET  /settings            PUBLIC  - public groups only (marketing/app pre-login)
+//   GET  /settings/all        ADMIN   - every group incl. admin-only + custom (editor)
+//   GET  /social              PUBLIC  - back-compat for the footer
+//   PUT  /settings/:group     ADMIN   - update one group (super-admin only)
 //
 // Per-group meta: keys[], defaults{}, and optional url[]/email[]/bool[]/num[] for
 // validation; `public:true` exposes it on the public GET; `custom:true` accepts
@@ -58,7 +58,7 @@ const GROUPS = {
     defaults: { upiId: "", payeeName: "", paymentNote: "" },
   },
   features: {
-    // Module on/off switches — the app can hide a whole section without a deploy.
+    // Module on/off switches - the app can hide a whole section without a deploy.
     public: true,
     keys: ["enableAgents", "enableWhatsapp", "enableMarketplace", "enableInvestor", "enableEsg", "enableGlobal", "enableTokens"],
     bool: ["enableAgents", "enableWhatsapp", "enableMarketplace", "enableInvestor", "enableEsg", "enableGlobal", "enableTokens"],
@@ -73,7 +73,7 @@ const GROUPS = {
     public: true,
     keys: ["helpUrl", "docsUrl", "statusUrl", "whatsappNumber", "hours"],
     url: ["helpUrl", "docsUrl", "statusUrl"],
-    defaults: { helpUrl: "", docsUrl: "", statusUrl: "", whatsappNumber: "", hours: "Mon–Fri, 10am–7pm IST" },
+    defaults: { helpUrl: "", docsUrl: "", statusUrl: "", whatsappNumber: "", hours: "Mon-Fri, 10am-7pm IST" },
   },
   seo: {
     public: true,
@@ -131,14 +131,14 @@ async function readGroup(group) {
   }
 }
 
-// PUBLIC — public groups only (footer, banner, contact, features, localization…).
+// PUBLIC - public groups only (footer, banner, contact, features, localization…).
 router.get("/settings", async (_req, res) => {
   const out = {};
   for (const g of Object.keys(GROUPS)) if (GROUPS[g].public) out[g] = await readGroup(g);
   res.json(out);
 });
 
-// ADMIN — every group (incl. admin-only + custom) for the console editor.
+// ADMIN - every group (incl. admin-only + custom) for the console editor.
 router.get("/settings/all", authenticate, async (req, res) => {
   if (req.user.role !== "super_admin") return res.status(403).json({ error: "Forbidden" });
   const out = {};
@@ -146,7 +146,7 @@ router.get("/settings/all", authenticate, async (req, res) => {
   res.json(out);
 });
 
-// PUBLIC — back-compat for the footer SocialLinks component.
+// PUBLIC - back-compat for the footer SocialLinks component.
 router.get("/social", async (_req, res) => res.json(await readGroup("social")));
 
 function sanitizeCustomValue(v) {
@@ -155,7 +155,7 @@ function sanitizeCustomValue(v) {
   return String(v).slice(0, MAX_VAL_LEN);
 }
 
-// SUPER-ADMIN — update one group.
+// SUPER-ADMIN - update one group.
 router.put("/settings/:group", authenticate, async (req, res) => {
   if (req.user.role !== "super_admin") return res.status(403).json({ error: "Forbidden" });
   const group = req.params.group;
@@ -165,7 +165,7 @@ router.put("/settings/:group", authenticate, async (req, res) => {
   let clean = {};
 
   if (schema.custom) {
-    // Arbitrary key/value — sanitize, cap count + size. This is the zero-code
+    // Arbitrary key/value - sanitize, cap count + size. This is the zero-code
     // extension point: add any setting here and read it from platform_settings.
     const entries = Object.entries(body).filter(([k]) => /^[A-Za-z0-9_.-]{1,64}$/.test(k)).slice(0, MAX_CUSTOM_KEYS);
     for (const [k, v] of entries) clean[k] = sanitizeCustomValue(v);

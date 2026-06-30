@@ -1,4 +1,4 @@
-// §IT — Income-Tax computation + Advance Tax for the BUSINESS, driven by the books P&L.
+// §IT - Income-Tax computation + Advance Tax for the BUSINESS, driven by the books P&L.
 //
 // This module produces the COMPUTATION that underlies an Income-Tax Return (ITR):
 // it takes the net profit the books already prove (reports.profitLoss), treats it
@@ -8,7 +8,7 @@
 // the four statutory advance-tax instalments (s.211).
 //
 // SCOPE: this is the computation, NOT a filing. A portal-ready ITR JSON is a later
-// step. Nothing here marks anything "filed" — these are figures the user verifies.
+// step. Nothing here marks anything "filed" - these are figures the user verifies.
 //
 // All money math goes through ./money (decimal.js); never a JS float. The slab/
 // surcharge/rebate facts are statutory (Income-Tax Act + Finance Acts) and are
@@ -19,7 +19,7 @@ const reports = require("./reports");
 const taxrules = require("./taxrules");
 
 // ── (A) Statutory rate tables ─────────────────────────────────────────────────
-// The slab/surcharge/rebate/cess facts are no longer inline here — they live in
+// The slab/surcharge/rebate/cess facts are no longer inline here - they live in
 // ./taxrules as DATED, VALIDATED parameters (rules-as-data, OpenFisca-style), keyed
 // by the Assessment Year. We resolve them by AY via taxrules.ayToDate + resolveParam
 // and run them through the pure helpers taxrules exports (slabTax / applyRebate87A /
@@ -29,7 +29,7 @@ const { ayToDate, resolveParam, slabTax, applyRebate87A, surcharge: surchargeOf,
 // The AYs whose INDIVIDUAL/HUF slab tables this engine is willing to compute. The
 // dated parameter store could resolve any date to its nearest-effective entry, but
 // historically this engine only configured these two AYs (the old IT_RULES had just
-// these keys) and threw UNSUPPORTED_AY for any other AY — we keep that contract exact
+// these keys) and threw UNSUPPORTED_AY for any other AY - we keep that contract exact
 // (a future/prior AY needs an explicit Finance-Act review, not silent slab reuse).
 // NOTE: only the individual path was AY-gated historically; company/firm used static
 // FLAT_RATES regardless of AY (see flatRulesFor), so that path is intentionally NOT
@@ -62,7 +62,7 @@ function rulesFor(ay) {
 
 // Resolve the NON-INDIVIDUAL flat-rate rule set (company/firm). These rates are not
 // AY-keyed in the legislation we encode (a single static entry), and historically the
-// company/firm path never consulted the AY — so we resolve "as of today" and do NOT
+// company/firm path never consulted the AY - so we resolve "as of today" and do NOT
 // gate on SUPPORTED_AYS, preserving that any AY (even unconfigured) computes a flat
 // liability. Mirrors the old FLAT_RATES + CESS_RATE shape.
 const _FLAT_DATE = new Date().toISOString().slice(0, 10);
@@ -85,7 +85,7 @@ function normEntity(entityType) {
 }
 
 // Walk the slabs and tax each band's slice. Returns a Decimal. (Thin wrapper over
-// the rules-as-data helper taxrules.slabTax — kept so the engine reads clearly.)
+// the rules-as-data helper taxrules.slabTax - kept so the engine reads clearly.)
 function computeSlab(taxableIncome, slabs) {
   return slabTax(taxableIncome, slabs);
 }
@@ -100,7 +100,7 @@ function computeSurcharge(taxableIncome, baseTax, surchargeBands) {
 // Statutory cumulative instalments: 15% by 15-Jun, 45% by 15-Sep, 75% by 15-Dec,
 // 100% by 15-Mar. A 44AD/44ADA presumptive assessee pays the whole thing (100%)
 // in a single instalment by 15-Mar. The due dates are stamped against the FY whose
-// advance tax this is — derived from the AY (AY 2025-26 ⇒ FY 2024-25, dates in
+// advance tax this is - derived from the AY (AY 2025-26 ⇒ FY 2024-25, dates in
 // Jun-2024 … Mar-2025). Pure; no DB.
 function advanceTaxSchedule({ projectedAnnualIncome, regime, entityType, ay } = {}) {
   const entity = normEntity(entityType);
@@ -215,7 +215,7 @@ async function itrSummary(tenantId, fy, opts = {}) {
 
   const otherIncome = money(opts.otherIncome || 0);
   const capitalGains = money(opts.capitalGains || 0);
-  const deductions = money(opts.deductions || 0); // Chapter VI-A (80C/80D/…) — caller-supplied.
+  const deductions = money(opts.deductions || 0); // Chapter VI-A (80C/80D/…) - caller-supplied.
 
   const incomeHeads = [
     { head: "Profits & gains of business or profession", amount: toRupees(businessProfit), source: `Books P&L (FY ${fy})` },
@@ -252,7 +252,7 @@ async function itrSummary(tenantId, fy, opts = {}) {
     deductions: toRupees(deductions),
     taxableIncome: toRupees(taxableIncome),
     taxComputation,
-    note: "Computation only — not a filing. A portal-ready ITR JSON is a later step.",
+    note: "Computation only - not a filing. A portal-ready ITR JSON is a later step.",
   };
 }
 

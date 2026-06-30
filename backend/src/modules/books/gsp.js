@@ -1,10 +1,10 @@
-// §9.3 — GSP/ASP client for e-invoicing (IRN) and e-way bills. Provider-agnostic
+// §9.3 - GSP/ASP client for e-invoicing (IRN) and e-way bills. Provider-agnostic
 // over a configured GSP base URL + key. Without keys, isConfigured() is false and
 // every call returns/throws PENDING_CONFIG (no fake IRNs, no fake cancellations).
 const isConfigured = () => !!(process.env.GSP_BASE_URL && process.env.GSP_API_KEY);
 
 const PENDING_CONFIG = "PENDING_CONFIG";
-const _pendingConfig = () => { const e = new Error("GSP not configured — set GSP_BASE_URL / GSP_API_KEY"); e.code = PENDING_CONFIG; return e; };
+const _pendingConfig = () => { const e = new Error("GSP not configured - set GSP_BASE_URL / GSP_API_KEY"); e.code = PENDING_CONFIG; return e; };
 
 // IRN cancellation is allowed only within 24h of IRN generation (the ack date).
 const CANCEL_WINDOW_MS = 24 * 60 * 60 * 1000;

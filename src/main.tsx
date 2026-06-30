@@ -11,7 +11,7 @@ import { recoverFromChunkError } from "@/lib/chunkReload";
 installGlobalErrorReporting();
 
 // A new deploy renames hashed chunks; a tab on the old index.html fails the next
-// lazy import. Vite fires `vite:preloadError` — reload once to pull the fresh
+// lazy import. Vite fires `vite:preloadError` - reload once to pull the fresh
 // index.html instead of showing a blank error screen.
 window.addEventListener("vite:preloadError", (event) => {
   event.preventDefault();

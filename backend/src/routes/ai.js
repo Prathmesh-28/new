@@ -1,7 +1,7 @@
 const router   = require("express").Router();
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
-// All app AI runs on the tenant's own engine (OpenRouter by default, self-host later) —
+// All app AI runs on the tenant's own engine (OpenRouter by default, self-host later) -
 // the same per-tenant gateway the agents use. No direct Anthropic dependency.
 const llm = require("../modules/books/llm");
 const platformConfig = require("../lib/platformConfig");
@@ -36,7 +36,7 @@ async function categorizeOne(merchant, description, tenantId) {
   ).catch(() => ({ rows: [] }));
   if (globalRows[0]) return { category: globalRows[0].category, source: "cache_global" };
 
-  // 3. The tenant's LLM engine (OpenRouter / self-host) — graceful default if unset.
+  // 3. The tenant's LLM engine (OpenRouter / self-host) - graceful default if unset.
   let raw;
   try {
     const out = await llm.chat(tenantId, { system: FEW_SHOT, messages: [{ role: "user", content: `Merchant: ${merchant}\nDescription: ${description}` }] });
@@ -57,7 +57,7 @@ async function categorizeOne(merchant, description, tenantId) {
   return { category, source: "haiku" };
 }
 
-// POST /api/ai/ask — runs on the tenant's own engine (OpenRouter / self-host gateway).
+// POST /api/ai/ask - runs on the tenant's own engine (OpenRouter / self-host gateway).
 router.post("/ask", authenticate, async (req, res) => {
   const { messages, system } = req.body;
   if (!messages?.length) return res.status(400).json({ error: "messages required" });
@@ -72,7 +72,7 @@ router.post("/ask", authenticate, async (req, res) => {
   }
 });
 
-// POST /api/ai/scan-receipt — extract fields from a receipt/invoice photo (Claude vision)
+// POST /api/ai/scan-receipt - extract fields from a receipt/invoice photo (Claude vision)
 // body: { image: "data:image/...;base64,...." }  → { amount, date, vendor, category, description }
 router.post("/scan-receipt", authenticate, async (req, res) => {
   const { image } = req.body || {};
@@ -102,7 +102,7 @@ If a field is unreadable use null. amount is the grand total.`,
   }
 });
 
-// POST /api/ai/categorize — single transaction
+// POST /api/ai/categorize - single transaction
 router.post("/categorize", authenticate, async (req, res) => {
   const { merchant, description = "" } = req.body;
   if (!merchant) return res.status(400).json({ error: "merchant required" });
@@ -114,7 +114,7 @@ router.post("/categorize", authenticate, async (req, res) => {
   }
 });
 
-// POST /api/ai/categorize/bulk — up to 100 transactions
+// POST /api/ai/categorize/bulk - up to 100 transactions
 router.post("/categorize/bulk", authenticate, async (req, res) => {
   const { transactions } = req.body;
   if (!Array.isArray(transactions) || !transactions.length) return res.status(400).json({ error: "transactions array required" });
@@ -134,7 +134,7 @@ router.post("/categorize/bulk", authenticate, async (req, res) => {
   res.json(results);
 });
 
-// POST /api/ai/categorize/feedback — user correction
+// POST /api/ai/categorize/feedback - user correction
 router.post("/categorize/feedback", authenticate, async (req, res) => {
   const { merchant, category } = req.body;
   if (!merchant || !category) return res.status(400).json({ error: "merchant and category required" });

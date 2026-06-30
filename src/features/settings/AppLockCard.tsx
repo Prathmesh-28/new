@@ -22,7 +22,7 @@ export default function AppLockCard() {
     if (p1 !== p2) { toast.error("PINs don't match"); return; }
     await setPin(p1);
     setEnabled(true); setEditing(false); setP1(""); setP2("");
-    toast.success("App lock enabled — you'll be asked for your PIN on launch");
+    toast.success("App lock enabled - you'll be asked for your PIN on launch");
   };
   const disable = async () => { await clearPin(); await setBiometricEnabled(false); setBioOn(false); setEnabled(false); toast.success("App lock removed"); };
 
@@ -43,7 +43,7 @@ export default function AppLockCard() {
           <div>
             <h2 className="text-sm font-semibold">App Lock</h2>
             <p className="text-xs text-[var(--color-muted)] mt-0.5">
-              {enabled ? "On — a 4-digit PIN is required on launch and when you reopen the app." : "Require a 4-digit PIN to open the app — protects your cash data on a shared phone."}
+              {enabled ? "On - a 4-digit PIN is required on launch and when you reopen the app." : "Require a 4-digit PIN to open the app - protects your cash data on a shared phone."}
             </p>
           </div>
         </div>

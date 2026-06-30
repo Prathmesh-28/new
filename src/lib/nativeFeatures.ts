@@ -21,7 +21,7 @@ export function whatsappTo(phone: string, text = "") {
   if (n) window.open(`https://wa.me/${n}${text ? `?text=${encodeURIComponent(text)}` : ""}`, "_blank", "noopener");
 }
 
-// ── Local (on-device, scheduled) notifications — no backend needed ───────────
+// ── Local (on-device, scheduled) notifications - no backend needed ───────────
 export async function ensureLocalNotifPermission(): Promise<boolean> {
   if (!isNative()) return false;
   try {

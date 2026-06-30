@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 
-/* Honest empty-state — shown when a tenant genuinely has no data yet, instead of
+/* Honest empty-state - shown when a tenant genuinely has no data yet, instead of
    fabricated sample rows. Optional CTA routes to the import/create flow. */
 export default function EmptyState({
   icon: Icon, title, description, ctaText, ctaHref, onCta,

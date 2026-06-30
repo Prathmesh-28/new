@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES — shapes mirror backend/src/modules/books/{gst,itr,billofentry,ewaybill}.js
+// TYPES - shapes mirror backend/src/modules/books/{gst,itr,billofentry,ewaybill}.js
 // ─────────────────────────────────────────────────────────────────────────────
 type SubTab = "gstr9" | "itr" | "imports" | "eway";
 
@@ -153,7 +153,7 @@ function bucketCells(b: Record<string, unknown> | undefined) {
   const g = (k: string) => rupee((b?.[k] as string) ?? 0);
   return (
     <>
-      <td className="px-3 py-2.5 text-right tabular-nums">{b?.taxable != null ? rupee(b.taxable as string) : "—"}</td>
+      <td className="px-3 py-2.5 text-right tabular-nums">{b?.taxable != null ? rupee(b.taxable as string) : "-"}</td>
       <td className="px-3 py-2.5 text-right tabular-nums">{g("cgst")}</td>
       <td className="px-3 py-2.5 text-right tabular-nums">{g("sgst")}</td>
       <td className="px-3 py-2.5 text-right tabular-nums">{g("igst")}</td>
@@ -182,7 +182,7 @@ export default function BooksComplianceTab({ canWrite = true }: { canWrite?: boo
           <FileCheck2 size={17} className="text-[var(--color-primary)]" /> Annual returns &amp; compliance
         </h2>
         <p className="text-xs text-[var(--color-muted)] mt-1">
-          GSTR-9/9C annual returns, portal-ready ITR JSON, import Bills of Entry + ITC-04 job-work, and the e-way bill lifecycle. Nothing here files on your behalf — every output is a draft you review and upload yourself.
+          GSTR-9/9C annual returns, portal-ready ITR JSON, import Bills of Entry + ITC-04 job-work, and the e-way bill lifecycle. Nothing here files on your behalf - every output is a draft you review and upload yourself.
         </p>
       </div>
 
@@ -216,7 +216,7 @@ export default function BooksComplianceTab({ canWrite = true }: { canWrite?: boo
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// (1) GSTR-9 / GSTR-9C — annual return + reconciliation
+// (1) GSTR-9 / GSTR-9C - annual return + reconciliation
 // ─────────────────────────────────────────────────────────────────────────────
 function Gstr9Section() {
   const [fy, setFy] = useState(currentFy());
@@ -285,23 +285,23 @@ function Gstr9Section() {
   const t7 = nine?.partIII_itc?.table7_reversed as Record<string, any> | undefined;
   const t9 = nine?.partIV_taxPaid?.table9 as Record<string, any> | undefined;
   const t4Labels: [string, string][] = [
-    ["4A_b2c", "4A — B2C supplies"],
-    ["4B_b2b", "4B — B2B supplies"],
-    ["4C_exports", "4C — Exports"],
-    ["4D_sez", "4D — SEZ supplies"],
-    ["4F_advances", "4F — Advances received"],
-    ["4G_rcm_payable", "4G — Inward RCM (payable)"],
-    ["4I_credit_notes", "4I — Credit notes"],
-    ["4J_debit_notes", "4J — Debit notes"],
-    ["4N_total", "4N — Total (net)"],
+    ["4A_b2c", "4A - B2C supplies"],
+    ["4B_b2b", "4B - B2B supplies"],
+    ["4C_exports", "4C - Exports"],
+    ["4D_sez", "4D - SEZ supplies"],
+    ["4F_advances", "4F - Advances received"],
+    ["4G_rcm_payable", "4G - Inward RCM (payable)"],
+    ["4I_credit_notes", "4I - Credit notes"],
+    ["4J_debit_notes", "4J - Debit notes"],
+    ["4N_total", "4N - Total (net)"],
   ];
   const itcLabels: { label: string; b?: Record<string, any> }[] = [
-    { label: "6A — ITC as per GSTR-3B", b: t6?.["6A_as_per_3b"] },
-    { label: "6B — Inputs", b: t6?.["6B_inputs"] },
-    { label: "6D — RCM (registered)", b: t6?.["6D_rcm_registered"] },
-    { label: "6O — Total availed", b: t6?.["6O_total"] },
-    { label: "7E — Blocked s.17(5)", b: t7?.["7E_blocked_17_5"] },
-    { label: "7J — Total reversed", b: t7?.["7J_total_reversed"] },
+    { label: "6A - ITC as per GSTR-3B", b: t6?.["6A_as_per_3b"] },
+    { label: "6B - Inputs", b: t6?.["6B_inputs"] },
+    { label: "6D - RCM (registered)", b: t6?.["6D_rcm_registered"] },
+    { label: "6O - Total availed", b: t6?.["6O_total"] },
+    { label: "7E - Blocked s.17(5)", b: t7?.["7E_blocked_17_5"] },
+    { label: "7J - Total reversed", b: t7?.["7J_total_reversed"] },
   ];
 
   // Flatten the GSTR-9 tables on screen (Table 4 outward + Tables 6/7 ITC) into a
@@ -328,7 +328,7 @@ function Gstr9Section() {
             </select>
             <ExportMenu
               filename={`gstr9-${fy}`}
-              title={`GSTR-9 — FY ${fy}`}
+              title={`GSTR-9 - FY ${fy}`}
               columns={[
                 { key: "section", label: "Section" },
                 { key: "row", label: "Row" },
@@ -354,9 +354,9 @@ function Gstr9Section() {
           GSTR-9 is the consolidated annual GST return. Pt II (Table 4/5) is outward supplies, Pt III (Tables 6-8) is ITC availed/reversed/reconciled, Pt IV (Table 9) is tax paid. Caller-supplied figures (Pt V amendments, demands) default to zero. Download the portal envelope to upload to the GST offline tool.
         </Hint>
 
-        {/* Table 4 — outward */}
+        {/* Table 4 - outward */}
         <div className="mt-4">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)] mb-2">Pt II · Table 4 — outward supplies (tax payable)</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)] mb-2">Pt II · Table 4 - outward supplies (tax payable)</h4>
           <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">
             <table className="w-full text-sm border-collapse min-w-[640px]">
               <thead>
@@ -387,9 +387,9 @@ function Gstr9Section() {
           </div>
         </div>
 
-        {/* Tables 6/7 — ITC */}
+        {/* Tables 6/7 - ITC */}
         <div className="mt-4">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)] mb-2">Pt III · Tables 6-7 — ITC availed / reversed</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)] mb-2">Pt III · Tables 6-7 - ITC availed / reversed</h4>
           <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">
             <table className="w-full text-sm border-collapse min-w-[560px]">
               <thead>
@@ -420,12 +420,12 @@ function Gstr9Section() {
           </div>
         </div>
 
-        {/* Table 9 — tax paid */}
+        {/* Table 9 - tax paid */}
         {t9 && (
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <TaxPaidMini label="9 — Payable" b={t9["9_payable"]} />
-            <TaxPaidMini label="9 — Paid in cash" b={t9["9_paid_cash"]} tint="green" />
-            <TaxPaidMini label="9 — Paid via ITC" b={t9["9_paid_itc"]} tint="green" />
+            <TaxPaidMini label="9 - Payable" b={t9["9_payable"]} />
+            <TaxPaidMini label="9 - Paid in cash" b={t9["9_paid_cash"]} tint="green" />
+            <TaxPaidMini label="9 - Paid via ITC" b={t9["9_paid_itc"]} tint="green" />
           </div>
         )}
 
@@ -452,36 +452,36 @@ function Gstr9Section() {
         }
       >
         <Hint>
-          GSTR-9C reconciles your audited financials against the GSTR-9 figures: turnover (Pt II), tax paid (Pt III), and ITC (Pt IV). The audited side comes from caller-supplied figures and defaults to zero here — surface the books side so you can spot the unreconciled gaps before your auditor signs off.
+          GSTR-9C reconciles your audited financials against the GSTR-9 figures: turnover (Pt II), tax paid (Pt III), and ITC (Pt IV). The audited side comes from caller-supplied figures and defaults to zero here - surface the books side so you can spot the unreconciled gaps before your auditor signs off.
         </Hint>
         {busyC ? (
           <p className="text-sm text-[var(--color-muted)] py-6 text-center">Loading…</p>
         ) : nineC ? (
           <div className="mt-4 space-y-4">
             <ReconBlock
-              title="Pt II — turnover reconciliation"
+              title="Pt II - turnover reconciliation"
               rows={[
-                ["5A — Audited turnover", nineC.turnoverReconciliation?.["5A_audited_turnover"]],
-                ["5P — Turnover after adjustments", nineC.turnoverReconciliation?.["5P_turnover_after_adjustments"]],
-                ["5Q — Turnover per returns", nineC.turnoverReconciliation?.["5Q_turnover_per_returns"]],
-                ["6 — Unreconciled", nineC.turnoverReconciliation?.["6_unreconciled"]],
-                ["7 — Taxable turnover per returns", nineC.turnoverReconciliation?.["7_taxable_turnover_per_returns"]],
+                ["5A - Audited turnover", nineC.turnoverReconciliation?.["5A_audited_turnover"]],
+                ["5P - Turnover after adjustments", nineC.turnoverReconciliation?.["5P_turnover_after_adjustments"]],
+                ["5Q - Turnover per returns", nineC.turnoverReconciliation?.["5Q_turnover_per_returns"]],
+                ["6 - Unreconciled", nineC.turnoverReconciliation?.["6_unreconciled"]],
+                ["7 - Taxable turnover per returns", nineC.turnoverReconciliation?.["7_taxable_turnover_per_returns"]],
               ]}
             />
             <ReconBlock
-              title="Pt III — tax paid reconciliation"
+              title="Pt III - tax paid reconciliation"
               rows={[
-                ["9 — Tax payable (audited)", nineC.taxPaidReconciliation?.["9_tax_payable_audited"]],
-                ["9 — Tax paid per returns", nineC.taxPaidReconciliation?.["9_tax_paid_per_returns"]],
-                ["10 — Unreconciled tax", nineC.taxPaidReconciliation?.["10_unreconciled_tax"]],
+                ["9 - Tax payable (audited)", nineC.taxPaidReconciliation?.["9_tax_payable_audited"]],
+                ["9 - Tax paid per returns", nineC.taxPaidReconciliation?.["9_tax_paid_per_returns"]],
+                ["10 - Unreconciled tax", nineC.taxPaidReconciliation?.["10_unreconciled_tax"]],
               ]}
             />
             <ReconBlock
-              title="Pt IV — ITC reconciliation"
+              title="Pt IV - ITC reconciliation"
               rows={[
-                ["12 — ITC per accounts", nineC.itcReconciliation?.["12_itc_per_accounts"]],
-                ["14 — ITC per returns", nineC.itcReconciliation?.["14_itc_per_returns"]],
-                ["15 — Unreconciled ITC", nineC.itcReconciliation?.["15_unreconciled_itc"]],
+                ["12 - ITC per accounts", nineC.itcReconciliation?.["12_itc_per_accounts"]],
+                ["14 - ITC per returns", nineC.itcReconciliation?.["14_itc_per_returns"]],
+                ["15 - Unreconciled ITC", nineC.itcReconciliation?.["15_unreconciled_itc"]],
               ]}
             />
             <div className="flex justify-end">
@@ -543,7 +543,7 @@ function ReconBlock({ title, rows }: { title: string; rows: [string, any][] }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// (2) ITR JSON — form + regime pickers, JSON preview + download
+// (2) ITR JSON - form + regime pickers, JSON preview + download
 // ─────────────────────────────────────────────────────────────────────────────
 function ItrSection() {
   const [forms, setForms] = useState<ItrForms | null>(null);
@@ -586,7 +586,7 @@ function ItrSection() {
       });
       setResult(res);
       if (res?.schema?.valid === false) {
-        toast.error(`JSON built but ${res.schema.errors?.length || 0} required field(s) missing — review before upload`);
+        toast.error(`JSON built but ${res.schema.errors?.length || 0} required field(s) missing - review before upload`);
       } else {
         toast.success(`${form} JSON built for AY ${ay}`);
       }
@@ -600,7 +600,7 @@ function ItrSection() {
   return (
     <Card title="ITR JSON assembler" icon={<FileJson size={15} />}>
       <Hint>
-        Builds portal-ready ITR JSON from your books (P&amp;L → business income via the income-tax engine) plus TDS/TCS credits and advance-tax challans. ITR-3 is regular books; ITR-4 SUGAM is the 44AD/44ADA presumptive scheme. This is a draft for you to review and upload to the e-filing utility — it is never filed automatically.
+        Builds portal-ready ITR JSON from your books (P&amp;L → business income via the income-tax engine) plus TDS/TCS credits and advance-tax challans. ITR-3 is regular books; ITR-4 SUGAM is the 44AD/44ADA presumptive scheme. This is a draft for you to review and upload to the e-filing utility - it is never filed automatically.
       </Hint>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
@@ -691,7 +691,7 @@ function ItrSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// (3) IMPORTS — Bill of Entry + ITC-04 job-work
+// (3) IMPORTS - Bill of Entry + ITC-04 job-work
 // ─────────────────────────────────────────────────────────────────────────────
 function ImportsSection({ canWrite }: { canWrite: boolean }) {
   return (
@@ -835,7 +835,7 @@ function BoeCard({ canWrite }: { canWrite: boolean }) {
       }
     >
       <Hint>
-        Imports carry no GST on the supplier invoice — duties are assessed at the customs port. BCD and Social Welfare Surcharge are non-creditable (capitalised into landed cost); import IGST on (assessable + BCD + SWS) is creditable ITC flowing to GSTR-3B 4(A)(1). Posting a BoE books a balanced purchase voucher automatically.
+        Imports carry no GST on the supplier invoice - duties are assessed at the customs port. BCD and Social Welfare Surcharge are non-creditable (capitalised into landed cost); import IGST on (assessable + BCD + SWS) is creditable ITC flowing to GSTR-3B 4(A)(1). Posting a BoE books a balanced purchase voucher automatically.
       </Hint>
 
       {open && canWrite && (
@@ -980,7 +980,7 @@ function Itc04Card({ canWrite }: { canWrite: boolean }) {
 
   return (
     <Card
-      title="ITC-04 — job-work challans"
+      title="ITC-04 - job-work challans"
       icon={<ClipboardList size={15} />}
       action={
         <div className="flex items-center gap-2">
@@ -991,7 +991,7 @@ function Itc04Card({ canWrite }: { canWrite: boolean }) {
           </select>
           <ExportMenu
             filename="itc04-challans"
-            title="ITC-04 — job-work challans"
+            title="ITC-04 - job-work challans"
             columns={[
               { key: "challan_no", label: "Challan no" },
               { key: "challan_date", label: "Date" },
@@ -1047,7 +1047,7 @@ function Itc04Card({ canWrite }: { canWrite: boolean }) {
       }
     >
       <Hint>
-        Form ITC-04 declares goods sent to (Table 4) and received back from (Table 5A) a job-worker. Sending goods on a delivery challan for job-work is not a supply — it carries no GST and posts no voucher. These rows are tracked purely for the ITC-04 return.
+        Form ITC-04 declares goods sent to (Table 4) and received back from (Table 5A) a job-worker. Sending goods on a delivery challan for job-work is not a supply - it carries no GST and posts no voucher. These rows are tracked purely for the ITC-04 return.
       </Hint>
 
       {open && canWrite && (
@@ -1120,10 +1120,10 @@ function Itc04Card({ canWrite }: { canWrite: boolean }) {
                     }`}>{r.direction === "SENT" ? "Sent" : "Received"}</span>
                   </td>
                   <td className="px-3 py-2.5">
-                    <span>{r.job_worker_name || "—"}</span>
+                    <span>{r.job_worker_name || "-"}</span>
                     {r.job_worker_gstin && <span className="ml-2 text-[10px] font-mono text-[var(--color-muted)]">{r.job_worker_gstin}</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-[var(--color-muted)] text-xs">{r.item_description || r.hsn_sac || "—"}</td>
+                  <td className="px-3 py-2.5 text-[var(--color-muted)] text-xs">{r.item_description || r.hsn_sac || "-"}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{num(r.qty).toLocaleString("en-IN", { maximumFractionDigits: 3 })}{r.uom ? ` ${r.uom}` : ""}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{rupee(r.taxable_value)}</td>
                 </tr>
@@ -1137,21 +1137,21 @@ function Itc04Card({ canWrite }: { canWrite: boolean }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// (4) E-WAY BILL LIFECYCLE — update vehicle / transporter, extend, cancel
+// (4) E-WAY BILL LIFECYCLE - update vehicle / transporter, extend, cancel
 // ─────────────────────────────────────────────────────────────────────────────
 type EwayAction = "update-vehicle" | "update-transporter" | "extend" | "cancel";
 
 const CANCEL_REASONS = [
-  { code: "1", label: "1 — Duplicate" },
-  { code: "2", label: "2 — Order cancelled" },
-  { code: "3", label: "3 — Data entry mistake" },
-  { code: "4", label: "4 — Others" },
+  { code: "1", label: "1 - Duplicate" },
+  { code: "2", label: "2 - Order cancelled" },
+  { code: "3", label: "3 - Data entry mistake" },
+  { code: "4", label: "4 - Others" },
 ] as const;
 const TRANS_MODES = [
-  { code: "1", label: "1 — Road" },
-  { code: "2", label: "2 — Rail" },
-  { code: "3", label: "3 — Air" },
-  { code: "4", label: "4 — Ship" },
+  { code: "1", label: "1 - Road" },
+  { code: "2", label: "2 - Rail" },
+  { code: "3", label: "3 - Air" },
+  { code: "4", label: "4 - Ship" },
 ] as const;
 
 function EwaySection({ canWrite }: { canWrite: boolean }) {
@@ -1176,7 +1176,7 @@ function EwaySection({ canWrite }: { canWrite: boolean }) {
     <div className="space-y-5">
       <Card title="E-way bill lifecycle" icon={<Truck size={15} />}>
         <Hint>
-          Once an e-way bill is generated for a dispatch document you can update its vehicle (Part-B), assign a transporter, extend validity before it expires, or cancel within 24 hours. Each action builds the NIC-shaped payload and routes through the GSP when configured — with no GSP credentials the call returns honestly that the rail is not configured rather than faking a portal action.
+          Once an e-way bill is generated for a dispatch document you can update its vehicle (Part-B), assign a transporter, extend validity before it expires, or cancel within 24 hours. Each action builds the NIC-shaped payload and routes through the GSP when configured - with no GSP credentials the call returns honestly that the rail is not configured rather than faking a portal action.
         </Hint>
 
         <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -1191,12 +1191,12 @@ function EwaySection({ canWrite }: { canWrite: boolean }) {
 
         {state && (
           <div className="mt-4 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 text-sm grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <KV label="EWB no" value={state.ewbNo || "— none generated —"} mono />
-            <KV label="Status" value={state.ewayStatus || state.status || "—"} />
-            <KV label="Valid upto" value={state.validUpto || "—"} />
-            <KV label="Vehicle" value={state.vehicleNo || "—"} mono />
-            <KV label="Transporter" value={state.transporterId || "—"} mono />
-            <KV label="Cancelled" value={state.cancelledAt || "—"} />
+            <KV label="EWB no" value={state.ewbNo || "- none generated -"} mono />
+            <KV label="Status" value={state.ewayStatus || state.status || "-"} />
+            <KV label="Valid upto" value={state.validUpto || "-"} />
+            <KV label="Vehicle" value={state.vehicleNo || "-"} mono />
+            <KV label="Transporter" value={state.transporterId || "-"} mono />
+            <KV label="Cancelled" value={state.cancelledAt || "-"} />
           </div>
         )}
       </Card>

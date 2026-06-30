@@ -24,7 +24,7 @@ const BRAND = `
 const FOOTER = `
         <tr><td style="padding:20px 32px;border-top:1px solid #2a2a1a;text-align:center">
           <p style="margin:0;font-size:11px;color:#5a5a40;font-family:system-ui,sans-serif">
-            Headroom — Cash flow intelligence for Indian SMBs<br>
+            Headroom - Cash flow intelligence for Indian SMBs<br>
             This is an automated message, please do not reply.
           </p>
         </td></tr>
@@ -112,7 +112,7 @@ async function sendWelcome({ to, password, name }) {
       </a>
     </td></tr>
   `);
-  await sendMail({ to, subject: "Welcome to Headroom — your credentials", html });
+  await sendMail({ to, subject: "Welcome to Headroom - your credentials", html });
 }
 
 async function sendPasswordResetSuccess({ to, name }) {
@@ -165,7 +165,7 @@ async function sendAlertEmail({ to, title, message, severity }) {
       </a>
     </td></tr>
   `);
-  await sendMail({ to, subject: `[${severity.toUpperCase()}] ${title} — Headroom`, html });
+  await sendMail({ to, subject: `[${severity.toUpperCase()}] ${title} - Headroom`, html });
 }
 
 module.exports = { sendMail, sendOtp, sendWelcome, sendPasswordResetSuccess, sendAlertEmail };

@@ -1,4 +1,4 @@
-// §11 — Bank reconciliation bridge. Imported bank lines auto-match to vouchers;
+// §11 - Bank reconciliation bridge. Imported bank lines auto-match to vouchers;
 // unmatched lines get a suggested RECEIPT/PAYMENT the user confirms in one tap,
 // which posts a balanced voucher. Keeps the ledger pristine while feeling effortless.
 const { pool } = require("../../db");
@@ -95,8 +95,8 @@ async function confirmLine(tenantId, actorId, lineId, counterLedgerId) {
     const { rows: lr } = await client.query("SELECT * FROM book_bank_lines WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [tenantId, lineId]);
     const line = lr[0];
     if (!line) throw new PostError("NOT_FOUND", "Bank line not found", 404);
-    // Reject any line that isn't still UNMATCHED — MATCHED lines already carry a voucher,
-    // POSTED/IGNORED are terminal — re-posting any of them would double-count cash.
+    // Reject any line that isn't still UNMATCHED - MATCHED lines already carry a voucher,
+    // POSTED/IGNORED are terminal - re-posting any of them would double-count cash.
     if (line.status !== "UNMATCHED") throw new PostError("BAD_STATE", "Line already " + line.status, 409);
     const amt = money(line.amount);
     const isReceipt = amt.greaterThan(0);
@@ -129,7 +129,7 @@ async function confirmLine(tenantId, actorId, lineId, counterLedgerId) {
 
 // Manually reconcile a known bank/cash voucher WITHOUT an imported statement line.
 // We don't carry a per-voucher "reconciled" flag, and bankRecStatement treats any
-// book_bank_line in ('MATCHED','POSTED') as reconciled — so we materialise a single
+// book_bank_line in ('MATCHED','POSTED') as reconciled - so we materialise a single
 // POSTED line (amount = the voucher's net bank-side movement) linked to the voucher.
 // Idempotent: if a book_bank_line already references this voucher, do nothing.
 async function markCleared(tenantId, { voucherId } = {}) {
@@ -150,7 +150,7 @@ async function markCleared(tenantId, { voucherId } = {}) {
       [tenantId, voucherId]
     );
     if (existing[0]) { await client.query("COMMIT"); return { ok: true, alreadyCleared: true, lineId: existing[0].id, bankLedgerId: existing[0].bank_ledger_id }; }
-    // Find the voucher's bank/cash-side entry. book_ledgers has no "kind" — banks
+    // Find the voucher's bank/cash-side entry. book_ledgers has no "kind" - banks
     // carry is_bank=true; cash ledgers live under a Cash group (name ILIKE %cash%).
     // Net it (debit - credit) so the sign matches imported lines (+inflow/-outflow).
     const { rows: bankEntries } = await client.query(
@@ -182,7 +182,7 @@ async function markCleared(tenantId, { voucherId } = {}) {
 // Read-only rule engine: auto-categorise imported lines by keyword→ledger rules.
 // rules = [{ match, ledgerId }]; match is a case-insensitive substring tested
 // against the line description/reference. First matching rule wins. Pure
-// suggestion — never posts. Returns each line with a suggestedLedgerId (or null)
+// suggestion - never posts. Returns each line with a suggestedLedgerId (or null)
 // plus the inherited RECEIPT/PAYMENT kind from classifyLine.
 function applyRules(tenantId, lines, rules) {
   const ls = Array.isArray(lines) ? lines : [];

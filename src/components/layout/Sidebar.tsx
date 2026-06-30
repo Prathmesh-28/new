@@ -33,9 +33,9 @@ interface NavItem  { to: string; label: string; icon: React.ElementType; tab: st
 interface NavGroup { label: string; items: NavItem[] }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Single master navigation catalogue — every page in the app, organised by the
+// Single master navigation catalogue - every page in the app, organised by the
 // JOB the user is doing (user-flow categories), not by which team built it.
-// Each role's sidebar is derived from this ONE list, filtered by canAccess() —
+// Each role's sidebar is derived from this ONE list, filtered by canAccess() -
 // so categorisation stays identical for everyone and we never duplicate it per
 // role. Order of groups = the natural daily flow: understand → sell → record →
 // run → people → plan → fund → automate → extend → administer.
@@ -43,7 +43,7 @@ interface NavGroup { label: string; items: NavItem[] }
 // IA redesign (2026-06): grouped by the JOB the owner does, not by tech. Every
 // nav item is a CANONICAL page for its job. Duplicate / thin / stub pages (e.g.
 // Analytics→Insights, Debt→Credit, Scenarios→Forecast, Automation→Flows, Voice,
-// ESG, Tokens) are intentionally NOT listed here — their ROUTES stay alive in
+// ESG, Tokens) are intentionally NOT listed here - their ROUTES stay alive in
 // App.tsx and remain reachable via ⌘K search (CommandPalette has its own list).
 // This is the nav layer only: no feature page was merged or rewritten.
 const NAV_CATALOG: NavGroup[] = [
@@ -136,7 +136,7 @@ const NAV_CATALOG: NavGroup[] = [
 
 // Nav-level role gate (on top of canAccess): some real pages serve a NON-owner
 // audience and only clutter the owner's sidebar. The route + canAccess are
-// unchanged — this just decides who sees the nav slot.
+// unchanged - this just decides who sees the nav slot.
 const ROLE_ONLY: Record<string, string[]> = {
   advisor:  ["accountant", "super_admin"],   // external-CA multi-client console
   investor: ["investor", "super_admin"],      // the other side of the cap table
@@ -283,8 +283,8 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
 
   // ── IA (audit #1): a short role-based "Main" + a personalised "Frequent" group,
   // with the long tail collapsed. Turns a ~60-item wall into ~8 visible by default.
-  // Dedup is by PATH (not tab) so items that intentionally share a tab — e.g.
-  // /admin + /admin/data, or /settings + /settings#team — don't collide.
+  // Dedup is by PATH (not tab) so items that intentionally share a tab - e.g.
+  // /admin + /admin/data, or /settings + /settings#team - don't collide.
   const byTab: Record<string, NavItem> = {};
   const byPath: Record<string, NavItem> = {};
   groupsRaw.forEach(g => g.items.forEach(it => { if (!byTab[it.tab]) byTab[it.tab] = it; byPath[it.to] = it; }));
@@ -313,7 +313,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
   });
   const activeGroupLabel = groups.find(g => g.items.some(it => it.to === location.pathname))?.label;
   const shownGroups = new Set(openGroups);
-  // "Main" (the curated primary nav — incl. Admin for super_admin) and "Frequent"
+  // "Main" (the curated primary nav - incl. Admin for super_admin) and "Frequent"
   // are always shown; a stale saved state can never hide them.
   shownGroups.add("Main"); shownGroups.add("Frequent");
   if (activeGroupLabel) shownGroups.add(activeGroupLabel);
@@ -344,7 +344,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
         "transition-[width] duration-200",
         collapsed ? "w-14" : "w-56"
       )}>
-        {/* Logo row — click returns to the dashboard (home) */}
+        {/* Logo row - click returns to the dashboard (home) */}
         <button
           onClick={() => navigate("/dashboard")}
           aria-label="Go to dashboard"
@@ -358,11 +358,11 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
           }
         </button>
 
-        {/* Always-visible CTA — the single Build & Automate hub (agents, app builder,
+        {/* Always-visible CTA - the single Build & Automate hub (agents, app builder,
             flows). Shares /agents with the "Build & Automate" nav item: one door. */}
         <NavLink
           to="/agents"
-          title="Build & Automate — agents, apps, flows"
+          title="Build & Automate - agents, apps, flows"
           className={cn(
             "shrink-0 mx-2 mt-2 flex items-center gap-2 rounded-lg font-semibold text-[var(--color-bg)] bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] hover:opacity-90 transition-opacity",
             collapsed ? "justify-center p-2" : "px-3 py-2 text-sm"
@@ -379,7 +379,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
               <Eye size={10} className="text-blue-400 shrink-0 mt-px" />
               <p className="text-[10px] text-blue-300 truncate font-medium leading-tight">
                 {selectedClientLabel || selectedClientTenantId}
-                <span className="block text-blue-400/60">{user?.role === "super_admin" ? "editing — changes save to this company" : "read-only"}</span>
+                <span className="block text-blue-400/60">{user?.role === "super_admin" ? "editing - changes save to this company" : "read-only"}</span>
               </p>
             </div>
             <button

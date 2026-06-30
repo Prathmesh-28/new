@@ -1,15 +1,15 @@
-// §8.R — Stock REPOSTING (repost_item_valuation, ported in spirit from
+// §8.R - Stock REPOSTING (repost_item_valuation, ported in spirit from
 // frappe/erpnext stock/doctype/repost_item_valuation). The problem it solves: a
 // back-dated stock movement, or a rate correction on a past receipt, invalidates
 // the method-derived outgoing rate (WAVG / FIFO) and the running balance of every
 // LATER movement of the same item. Re-pricing those rows by hand is how books
 // drift from the subsidiary. Instead we recompute the whole chronological chain
 // for the affected item and post ONE GL Stock-Adjustment correction voucher for
-// the net valuation delta — never mutating posted vouchers (§6.5).
+// the net valuation delta - never mutating posted vouchers (§6.5).
 //
 // Correctness over cleverness: we replay the item's ENTIRE Stock-Ledger from its
 // opening balance in chronological order (posting_date, then created_at). This is
-// deterministic and self-healing — `fromDate` only bounds WHICH rows we treat as
+// deterministic and self-healing - `fromDate` only bounds WHICH rows we treat as
 // "downstream" (and dates the GL correction); the replay itself always starts from
 // the opening so a previously-botched mid-history row cannot poison the result.
 //
@@ -27,9 +27,9 @@ const today = () => new Date().toISOString().slice(0, 10);
 // rows: SLE rows oldest-first, each { id, qty_in, qty_out, rate, value }.
 // method: 'FIFO' | 'WEIGHTED_AVG'. opening: { qty, value } before the first row.
 // Returns { recomputed:[{id, rate, value, qtyAfter, valueAfter, fifoQueue}], queue,
-//           qtyAfter, valueAfter } — `queue` is the final FIFO layer list.
+//           qtyAfter, valueAfter } - `queue` is the final FIFO layer list.
 //
-// For an INWARD row we trust the stored `rate` (that is the purchase/landed cost —
+// For an INWARD row we trust the stored `rate` (that is the purchase/landed cost -
 // the only authoritative input). For an OUTWARD row we DERIVE the rate from the
 // running method so a back-dated inward correctly re-prices later issues.
 function replayLedger(rows, method, opening = { qty: 0, value: 0 }) {
@@ -177,7 +177,7 @@ async function repostItem(tenantId, { itemId, warehouseId = null, fromDate, acto
     await client.query("COMMIT");
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
-    // Record the failure for recovery (separate connection — txn rolled back).
+    // Record the failure for recovery (separate connection - txn rolled back).
     await pool.query(
       `INSERT INTO book_repost_runs(tenant_id, item_id, warehouse_id, from_date, status, detail, created_by)
          VALUES($1,$2,$3,$4,'FAILED',$5,$6)
@@ -194,7 +194,7 @@ async function repostItem(tenantId, { itemId, warehouseId = null, fromDate, acto
   if (delta && !delta.isZero()) {
     const stockLedger = await ledgerIdByName(tenantId, "Stock-in-hand");
     const adjLedger = await ledgerIdByName(tenantId, "Stock Adjustment");
-    if (!stockLedger || !adjLedger) throw new PostError("NOT_SEEDED", "Stock-in-hand / Stock Adjustment ledgers missing — seed first", 422);
+    if (!stockLedger || !adjLedger) throw new PostError("NOT_SEEDED", "Stock-in-hand / Stock Adjustment ledgers missing - seed first", 422);
     const amt = delta.abs();
     const up = gt(delta, 0);
     voucherShape = await postVoucher(tenantId, actorId,
@@ -213,8 +213,8 @@ async function repostItem(tenantId, { itemId, warehouseId = null, fromDate, acto
 }
 
 // ── Public: repostFromDate (single item OR all open items) ────────────────────
-// repostFromDate(tenantId, { itemId, warehouseId, fromDate }) — one item.
-// repostFromDate(tenantId, { fromDate, allOpen:true })        — every item that
+// repostFromDate(tenantId, { itemId, warehouseId, fromDate }) - one item.
+// repostFromDate(tenantId, { fromDate, allOpen:true })        - every item that
 //   has a movement on/after fromDate ("repost all open from date" entrypoint).
 // Per-item errors are isolated so one bad item never blocks the rest; the run is
 // recorded in book_repost_runs (status FAILED) for recovery and surfaced in the
@@ -243,7 +243,7 @@ async function repostAllOpen(tenantId, { fromDate, warehouseId = null, actorId, 
 }
 
 // ── Error recovery: re-run every repost that previously FAILED ────────────────
-// Idempotent — safe to call repeatedly (e.g. from a cron). Each retry re-replays
+// Idempotent - safe to call repeatedly (e.g. from a cron). Each retry re-replays
 // from the opening, so a transient failure self-heals on the next run.
 async function recoverFailedReposts(tenantId, actorId) {
   const { rows } = await pool.query(

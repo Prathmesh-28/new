@@ -6,7 +6,7 @@ import { ShieldCheck, CheckCircle2, AlertTriangle, Loader2, ArrowRight } from "l
 // Surfaces the trust proof an SMB owner / CA actually wants before relying on the
 // numbers: "are my books internally consistent, and is my GST reconciled?" Every
 // check runs live on the ledger via existing endpoints (no external upload needed):
-//   • Trial balance balanced (Σdebit = Σcredit) — the double-entry integrity guarantee
+//   • Trial balance balanced (Σdebit = Σcredit) - the double-entry integrity guarantee
 //   • Balance sheet tallies (Assets = Liabilities + Equity)
 //   • No posting errors (duplicate vouchers / postings to group ledgers / failed assertions)
 //   • GST liability for the current month (books-derived)
@@ -58,7 +58,7 @@ export default function BooksHealthCard() {
 
   const items: { ok: boolean | null; label: string; detail: string }[] = [
     { ok: tb?.balanced ?? null, label: "Books balanced", detail: tb?.balanced ? "Debits = Credits" : `Dr ${tb?.totalDebit} vs Cr ${tb?.totalCredit}` },
-    { ok: bs?.balanced ?? null, label: "Balance sheet tallies", detail: bs?.balanced ? "Assets = Liabilities + Equity" : "Does not tally — review" },
+    { ok: bs?.balanced ?? null, label: "Balance sheet tallies", detail: bs?.balanced ? "Assets = Liabilities + Equity" : "Does not tally - review" },
     { ok: issueCount === null ? null : issueCount === 0, label: "No posting errors", detail: issueCount === 0 ? "No duplicates / mis-postings" : `${issueCount} to review` },
   ];
 
@@ -91,10 +91,10 @@ export default function BooksHealthCard() {
         ))}
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5">
           <p className="text-[11px] text-[var(--color-muted)]">GST payable (this month)</p>
-          <p className="mt-0.5 text-sm font-semibold">{gstPayable === null ? "—" : gstPayable > 0 ? rupee(gstPayable) : "Settled"}</p>
+          <p className="mt-0.5 text-sm font-semibold">{gstPayable === null ? "-" : gstPayable > 0 ? rupee(gstPayable) : "Settled"}</p>
         </div>
       </div>
-      <p className="mt-2 text-[11px] text-[var(--color-muted)]">Same double-entry checks a CA runs at audit — recomputed from your live postings, not stored summaries.</p>
+      <p className="mt-2 text-[11px] text-[var(--color-muted)]">Same double-entry checks a CA runs at audit - recomputed from your live postings, not stored summaries.</p>
     </div>
   );
 }

@@ -138,7 +138,7 @@ export default function TransactionsPage() {
   // and mirror it into the AppContext store, so the main table *and* every
   // downstream tool view (which read `store.transactions`) reflect server data.
   // If the API is unreachable we keep whatever is already in the KV-backed store
-  // — the page stays fully usable offline.
+  // - the page stays fully usable offline.
   const [apiState, setApiState] = useState<"idle" | "loading" | "online" | "offline">("idle");
   const [serverTotal, setServerTotal] = useState<number | null>(null);
 
@@ -182,7 +182,7 @@ export default function TransactionsPage() {
       const image = await capturePhoto();
       if (!image) { setScanning(false); return; }
       const r = await api.post<{ vendor: string; amount: number; date: string | null; category: Transaction["category"]; description: string }>("/api/ai/scan-receipt", { image });
-      if (!r.amount) { toast.error("Couldn't read an amount — try a clearer photo."); setScanning(false); return; }
+      if (!r.amount) { toast.error("Couldn't read an amount - try a clearer photo."); setScanning(false); return; }
       const sign = r.category === "revenue" ? 1 : -1;
       const draft: Transaction = {
         id: generateId(), date: r.date || new Date().toISOString().slice(0, 10),
@@ -200,7 +200,7 @@ export default function TransactionsPage() {
         `Category: ${draft.category}\n\n` +
         `Add this transaction? You can edit any field on the row afterward.`,
       );
-      if (!ok) { toast("Scan discarded — nothing was added."); setScanning(false); return; }
+      if (!ok) { toast("Scan discarded - nothing was added."); setScanning(false); return; }
       // Persist server-side so the row computes into summaries and survives reload.
       try {
         const created = await api.post<any>("/api/transactions", txnToApiBody(draft));
@@ -209,7 +209,7 @@ export default function TransactionsPage() {
       } catch {
         addTransaction(draft); // offline fallback: keep it locally
       }
-      toast.success(`Added: ${formatCurrency(Math.abs(r.amount))} · ${r.vendor || "receipt"} — review on the row below`);
+      toast.success(`Added: ${formatCurrency(Math.abs(r.amount))} · ${r.vendor || "receipt"} - review on the row below`);
     } catch {
       toast.error("Receipt scan failed. Check your connection and try again.");
     } finally { setScanning(false); }
@@ -286,7 +286,7 @@ export default function TransactionsPage() {
     try {
       await api.patch(`/api/transactions/${t.id}`, { category: catToApi(category) });
     } catch {
-      toast.error("Saved locally — couldn't sync category to the server.");
+      toast.error("Saved locally - couldn't sync category to the server.");
     }
   }, [updateTransaction, apiState]);
 
@@ -326,7 +326,7 @@ export default function TransactionsPage() {
   const deleteSelected = async () => {
     const rows = transactions.filter(t => selected.has(t.id));
     if (rows.length === 0) return;
-    // Richer confirm: show what's about to go — count, net total, and a few names —
+    // Richer confirm: show what's about to go - count, net total, and a few names -
     // not just an opaque ID list.
     const total = rows.reduce((s, t) => s + Math.abs(t.amount), 0);
     const names = rows
@@ -375,12 +375,12 @@ export default function TransactionsPage() {
     const deleted: Transaction[] = [];
     results.forEach((r, i) => { if (r.status === "fulfilled") { deleteTransaction(ids[i]); ok++; deleted.push(rows[i]); } });
     setServerTotal(prev => (prev == null ? prev : Math.max(0, prev - ok)));
-    if (ok === 0) { toast.error(`Couldn't delete — all ${ids.length} failed.`); return; }
+    if (ok === 0) { toast.error(`Couldn't delete - all ${ids.length} failed.`); return; }
     lastDeletedRef.current = deleted;
     setTimeout(() => { lastDeletedRef.current = []; }, 10000);
     const msg = ok === ids.length
       ? `Deleted ${ok} transaction${ok !== 1 ? "s" : ""}`
-      : `Deleted ${ok} of ${ids.length} — the rest failed.`;
+      : `Deleted ${ok} of ${ids.length} - the rest failed.`;
     const opts = { action: { label: "Undo", onClick: () => undo(deleted) }, duration: 10000 };
     ok === ids.length ? toast.success(msg, opts) : toast.error(msg, opts);
   };
@@ -459,7 +459,7 @@ export default function TransactionsPage() {
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold">Transactions</h1>
             {apiState === "offline" && (
-              <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-orange-800/40 bg-orange-900/20 text-orange-400" title="The server is unreachable — showing locally cached data. Changes are kept on this device and will not sync until you reconnect.">
+              <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-orange-800/40 bg-orange-900/20 text-orange-400" title="The server is unreachable - showing locally cached data. Changes are kept on this device and will not sync until you reconnect.">
                 <CloudOff size={10} /> Offline
               </span>
             )}
@@ -586,13 +586,13 @@ export default function TransactionsPage() {
         {([
           {
             label: "Spend Velocity (7d vs 30d avg)",
-            value: intelligence.daily7 > 0 ? `${formatCurrency(intelligence.daily7)}/day` : "—",
-            sub: intelligence.velChange === 0 ? "Stable spending pattern" : intelligence.velChange > 0 ? `+${intelligence.velChange}% acceleration — watch` : `${intelligence.velChange}% slowing down`,
+            value: intelligence.daily7 > 0 ? `${formatCurrency(intelligence.daily7)}/day` : "-",
+            sub: intelligence.velChange === 0 ? "Stable spending pattern" : intelligence.velChange > 0 ? `+${intelligence.velChange}% acceleration - watch` : `${intelligence.velChange}% slowing down`,
             color: intelligence.velChange > 20 ? "text-red-400" : intelligence.velChange > 10 ? "text-yellow-400" : "text-green-400",
           },
           {
             label: "Largest Expense This Month",
-            value: intelligence.biggestExpense ? formatCurrency(Math.abs(intelligence.biggestExpense.amount)) : "—",
+            value: intelligence.biggestExpense ? formatCurrency(Math.abs(intelligence.biggestExpense.amount)) : "-",
             sub: intelligence.biggestExpense?.description ?? "No expenses this month",
             color: "text-red-400",
           },
@@ -758,7 +758,7 @@ export default function TransactionsPage() {
                           </button>
                         )}
                       </td>
-                      <td className="px-3 hidden md:table-cell text-xs text-[var(--color-muted)] max-w-[120px] truncate">{acct?.name ?? "—"}</td>
+                      <td className="px-3 hidden md:table-cell text-xs text-[var(--color-muted)] max-w-[120px] truncate">{acct?.name ?? "-"}</td>
                       <td className="px-3 text-right tabular-nums font-semibold whitespace-nowrap">
                         <span className={t.amount >= 0 ? "text-green-400" : "text-[var(--color-text)]"}>
                           {t.amount >= 0 ? "+" : ""}{formatCurrency(t.amount)}
@@ -777,7 +777,7 @@ export default function TransactionsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm">
           <p className="text-xs text-[var(--color-muted)]">
-            {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+            {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
           </p>
           <div className="flex items-center gap-1">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
@@ -959,7 +959,7 @@ function PDCRegister() {
                     <tr key={c.id} className={`hover:bg-white/2 ${overdue ? "bg-red-950/20" : ""}`}>
                       <td className="px-4 py-3 font-medium">{c.party}</td>
                       <td className="px-4 py-3 font-mono text-xs">{c.chequeNo}</td>
-                      <td className="px-4 py-3 text-[var(--color-muted)]">{c.bank || "—"}</td>
+                      <td className="px-4 py-3 text-[var(--color-muted)]">{c.bank || "-"}</td>
                       <td className="px-4 py-3 tabular-nums font-semibold">{formatCurrency(c.amount)}</td>
                       <td className={`px-4 py-3 tabular-nums text-xs ${overdue ? "text-red-400 font-semibold" : ""}`}>{c.dueDate}</td>
                       <td className="px-4 py-3">
@@ -1109,7 +1109,7 @@ function BounceTracker() {
                   <tr key={r.id} className="hover:bg-white/2">
                     <td className="px-4 py-3 font-medium">{r.party}</td>
                     <td className="px-4 py-3 font-mono text-xs">{r.chequeNo}</td>
-                    <td className="px-4 py-3 text-[var(--color-muted)] text-xs">{r.bank || "—"}</td>
+                    <td className="px-4 py-3 text-[var(--color-muted)] text-xs">{r.bank || "-"}</td>
                     <td className="px-4 py-3 tabular-nums font-semibold text-red-400">{formatCurrency(r.amount)}</td>
                     <td className="px-4 py-3 text-xs tabular-nums">{r.bounceDate}</td>
                     <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{REASONS[r.reason]}</td>
@@ -1133,7 +1133,7 @@ function BounceTracker() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Under Sec 138 of the Negotiable Instruments Act, a bounced cheque is a criminal offence. File a complaint within 30 days of receiving the bank memo — after a 15-day notice to the drawer. Keep the original cheque, bank memo, and courier receipts.
+        Under Sec 138 of the Negotiable Instruments Act, a bounced cheque is a criminal offence. File a complaint within 30 days of receiving the bank memo - after a 15-day notice to the drawer. Keep the original cheque, bank memo, and courier receipts.
       </div>
     </div>
   );
@@ -1163,7 +1163,7 @@ function UpiDashboard() {
   }, [store.transactions]);
 
   const allEntries = [...entries, ...txnUpi.map(t => ({
-    id: t.id, vpa: "—", name: t.counterparty ?? t.description, amount: Math.abs(t.amount),
+    id: t.id, vpa: "-", name: t.counterparty ?? t.description, amount: Math.abs(t.amount),
     type: (t.category === "revenue" ? "received" : "paid") as "received" | "paid",
     ref: t.id.slice(0, 12), date: t.date, note: t.notes ?? "",
   }))];
@@ -1258,12 +1258,12 @@ function UpiDashboard() {
               <tbody>
                 {allEntries.slice().reverse().map(e => (
                   <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                    <td className="px-4 py-3"><div className="font-semibold">{e.name || e.vpa}</div><div className="text-xs text-[var(--color-muted)]">{e.vpa !== "—" ? e.vpa : ""}</div></td>
+                    <td className="px-4 py-3"><div className="font-semibold">{e.name || e.vpa}</div><div className="text-xs text-[var(--color-muted)]">{e.vpa !== "-" ? e.vpa : ""}</div></td>
                     <td className={`px-4 py-3 tabular-nums font-semibold ${e.type === "received" ? "text-green-400" : "text-orange-400"}`}>{e.type === "received" ? "+" : "−"}{fc(e.amount)}</td>
                     <td className="px-4 py-3"><span className={`text-xs font-bold px-2 py-0.5 rounded-full ${e.type === "received" ? "bg-green-950/30 text-green-400" : "bg-orange-950/30 text-orange-400"}`}>{e.type}</span></td>
-                    <td className="px-4 py-3 text-xs font-mono text-[var(--color-muted)]">{e.ref || "—"}</td>
-                    <td className="px-4 py-3 text-[var(--color-muted)]">{e.date || "—"}</td>
-                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{e.note || "—"}</td>
+                    <td className="px-4 py-3 text-xs font-mono text-[var(--color-muted)]">{e.ref || "-"}</td>
+                    <td className="px-4 py-3 text-[var(--color-muted)]">{e.date || "-"}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{e.note || "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1363,8 +1363,8 @@ function BankReconStatement() {
                   <tr key={r.id} className={`border-b border-[var(--color-border)] last:border-0 ${r.matched ? "opacity-50" : "hover:bg-[var(--color-accent)]"}`}>
                     <td className="px-4 py-3 text-[var(--color-muted)]">{r.date}</td>
                     <td className="px-4 py-3">{r.description}</td>
-                    <td className="px-4 py-3 tabular-nums text-red-400">{r.debit > 0 ? fc(r.debit) : "—"}</td>
-                    <td className="px-4 py-3 tabular-nums text-green-400">{r.credit > 0 ? fc(r.credit) : "—"}</td>
+                    <td className="px-4 py-3 tabular-nums text-red-400">{r.debit > 0 ? fc(r.debit) : "-"}</td>
+                    <td className="px-4 py-3 tabular-nums text-green-400">{r.credit > 0 ? fc(r.credit) : "-"}</td>
                     <td className="px-4 py-3">
                       <button onClick={() => toggleMatch(r.id)} className={`text-xs font-bold px-2 py-0.5 rounded-full ${r.matched ? "bg-green-950/30 text-green-400" : "bg-[var(--color-accent)] text-[var(--color-muted)] border border-[var(--color-border)]"}`}>
                         {r.matched ? "✓ Matched" : "Unmatched"}
@@ -1511,7 +1511,7 @@ function RecurringTemplates() {
                       {t.description}
                       <span className={`ml-2 text-[9px] px-1 py-0.5 rounded ${t.direction === "income" ? "text-green-400 bg-green-950/30" : "text-red-400 bg-red-950/30"}`}>{t.direction}</span>
                     </td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{t.counterparty || "—"}</td>
+                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{t.counterparty || "-"}</td>
                     <td className="px-3 py-2.5 text-[var(--color-muted)]">{t.category}</td>
                     <td className="px-3 py-2.5 tabular-nums">{fc(t.amount)}</td>
                     <td className="px-3 py-2.5 text-[var(--color-muted)] capitalize">{t.frequency}</td>
@@ -1588,7 +1588,7 @@ function CategorisationRulesEngine() {
   };
   const removeRule = (id: string) => setRules(prev => prev.filter(r => r.id !== id));
 
-  // First-match-wins evaluation across the ledger (preview only — does not write).
+  // First-match-wins evaluation across the ledger (preview only - does not write).
   const preview = useMemo(() => {
     return txns.map(t => {
       const hit = rules.find(r => matchesRule(r, t));
@@ -1628,7 +1628,7 @@ function CategorisationRulesEngine() {
                   <td className="px-4 py-2.5 capitalize">{r.field === "counterparty" ? "Payee" : "Description"}</td>
                   <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.op}</td>
                   <td className="px-4 py-2.5 font-medium">{r.needle}</td>
-                  <td className="px-4 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.minAmount || maxLabel(r.maxAmount) ? `${r.minAmount ? fc(parseFloat(r.minAmount)) : "0"} – ${r.maxAmount ? fc(parseFloat(r.maxAmount)) : "∞"}` : "any"}</td>
+                  <td className="px-4 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{r.minAmount || maxLabel(r.maxAmount) ? `${r.minAmount ? fc(parseFloat(r.minAmount)) : "0"} - ${r.maxAmount ? fc(parseFloat(r.maxAmount)) : "∞"}` : "any"}</td>
                   <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded border ${CAT_COLOR[r.category]}`}>{r.category}</span></td>
                   <td className="px-4 py-2.5"><button onClick={() => removeRule(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
                 </tr>
@@ -1653,7 +1653,7 @@ function CategorisationRulesEngine() {
             ))}
           </div>
         )}
-        <p className="text-[10px] text-[var(--color-muted)] mt-2">Preview only — review changes here, then apply categories on the main Transactions table or via Bulk Tag.</p>
+        <p className="text-[10px] text-[var(--color-muted)] mt-2">Preview only - review changes here, then apply categories on the main Transactions table or via Bulk Tag.</p>
       </div>
     </div>
   );
@@ -1741,11 +1741,11 @@ function ReconciliationWorkbench() {
                   <tr key={l.id} className={`border-b border-[var(--color-border)] last:border-0 ${m || isCleared ? "opacity-60" : "hover:bg-[var(--color-accent)]"}`}>
                     <td className="px-4 py-2.5 text-[var(--color-muted)]">{l.date}</td>
                     <td className={`px-4 py-2.5 tabular-nums font-semibold ${parseFloat(l.amount) >= 0 ? "text-green-400" : "text-red-400"}`}>{fc(parseFloat(l.amount) || 0)}</td>
-                    <td className="px-4 py-2.5 text-xs">{l.narration || "—"}</td>
+                    <td className="px-4 py-2.5 text-xs">{l.narration || "-"}</td>
                     <td className="px-4 py-2.5">
                       <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${m ? "bg-green-950/30 text-green-400" : isCleared ? "bg-blue-950/30 text-blue-400" : "bg-orange-950/30 text-orange-400"}`}>{m ? "Auto-matched" : isCleared ? "Cleared" : "Unmatched"}</span>
                     </td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{m ? `${m.description} (${m.date})` : "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{m ? `${m.description} (${m.date})` : "-"}</td>
                     <td className="px-4 py-2.5">{!m && <button onClick={() => toggleClear(l.id)} className="text-[9px] border border-[var(--color-border)] text-[var(--color-muted)] px-2 py-0.5 rounded hover:text-[var(--color-text)]">{isCleared ? "Reopen" : "Clear"}</button>}</td>
                   </tr>
                 );
@@ -1805,7 +1805,7 @@ function SplitTransactionTool() {
         <div className="flex items-center gap-2 mb-3"><Split size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Split a Transaction Across Heads</h3></div>
         <label className="text-xs text-[var(--color-muted)] block mb-1">Pick a transaction</label>
         <select value={txnId} onChange={e => setTxnId(e.target.value)} className={inp}>
-          <option value="">— select —</option>
+          <option value="">- select -</option>
           {txns.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 200).map(t => (
             <option key={t.id} value={t.id}>{t.date} · {t.description} · {fc(t.amount)}</option>
           ))}
@@ -1843,7 +1843,7 @@ function SplitTransactionTool() {
               <button onClick={splitEqually} className="text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)]">Split equally</button>
             </div>
             <div className={`rounded-lg p-3 border text-xs ${Math.abs(remaining) < 0.5 ? "border-green-800/40 bg-green-950/20 text-green-400" : "border-orange-800/40 bg-orange-950/20 text-orange-400"}`}>
-              {Math.abs(remaining) < 0.5 ? "✓ Splits balance to the transaction total." : `Splits are off by ${fc(Math.abs(remaining))} — adjust the legs to balance.`}
+              {Math.abs(remaining) < 0.5 ? "✓ Splits balance to the transaction total." : `Splits are off by ${fc(Math.abs(remaining))} - adjust the legs to balance.`}
             </div>
           </div>
         </>
@@ -1954,7 +1954,7 @@ function TransferDetection() {
     return out;
   }, [txns]);
 
-  const acctName = (id: string) => store.bankAccounts.find(a => a.id === id)?.name ?? "—";
+  const acctName = (id: string) => store.bankAccounts.find(a => a.id === id)?.name ?? "-";
   const netAmount = pairs.reduce((s, p) => s + Math.abs(p.debit.amount), 0);
 
   const markTransfer = (p: { debit: Transaction; credit: Transaction }) => {
@@ -2095,7 +2095,7 @@ function CostCenterTagging() {
                 <td className="px-3 py-2">
                   <select value={assign[t.id] ?? ""} onChange={e => setTxnProject(t.id, e.target.value)} disabled={projects.length === 0}
                     className="text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-0.5 outline-none disabled:opacity-50">
-                    <option value="">— unassigned —</option>
+                    <option value="">- unassigned -</option>
                     {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </td>
@@ -2194,7 +2194,7 @@ function CashAccrualToggle() {
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Window: last {months} months. Cash basis counts money actually received/paid; accrual adds revenue you've invoiced but not yet collected. Expense-side accrual (open bills) is not modelled here. Indicative — confirm your method with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Window: last {months} months. Cash basis counts money actually received/paid; accrual adds revenue you've invoiced but not yet collected. Expense-side accrual (open bills) is not modelled here. Indicative - confirm your method with your CA.</p>
     </div>
   );
 }
@@ -2273,7 +2273,7 @@ function JournalEntryComposer() {
                   <div className="flex items-center gap-2 text-xs">
                     <span className="font-mono font-semibold text-[var(--color-primary)]">{j.voucherNo}</span>
                     <span className="text-[var(--color-muted)]">{j.date}</span>
-                    {j.narration && <span className="text-[var(--color-muted)] italic truncate max-w-xs">— {j.narration}</span>}
+                    {j.narration && <span className="text-[var(--color-muted)] italic truncate max-w-xs">- {j.narration}</span>}
                   </div>
                   <button onClick={() => setJournals(prev => prev.filter(x => x.id !== j.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
                 </div>
@@ -2351,8 +2351,8 @@ function TrialBalanceView() {
               {rows.map(r => (
                 <tr key={r.account} className="hover:bg-[var(--color-accent)]">
                   <td className="px-5 py-2.5 font-medium">{r.account}</td>
-                  <td className="px-5 py-2.5 text-right tabular-nums">{r.debit > 0 ? fc(r.debit) : "—"}</td>
-                  <td className="px-5 py-2.5 text-right tabular-nums">{r.credit > 0 ? fc(r.credit) : "—"}</td>
+                  <td className="px-5 py-2.5 text-right tabular-nums">{r.debit > 0 ? fc(r.debit) : "-"}</td>
+                  <td className="px-5 py-2.5 text-right tabular-nums">{r.credit > 0 ? fc(r.credit) : "-"}</td>
                 </tr>
               ))}
             </tbody>
@@ -2435,8 +2435,8 @@ function DayBook() {
                   return (
                     <tr key={t.id} className="hover:bg-[var(--color-accent)]">
                       <td className="px-4 py-2.5"><span className="font-medium">{t.description}</span>{t.counterparty && <span className="text-[var(--color-muted)] text-xs"> · {t.counterparty}</span>}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{t.amount > 0 ? fc(t.amount) : "—"}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-red-400">{t.amount < 0 ? fc(Math.abs(t.amount)) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{t.amount > 0 ? fc(t.amount) : "-"}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-red-400">{t.amount < 0 ? fc(Math.abs(t.amount)) : "-"}</td>
                       <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${running >= 0 ? "" : "text-red-400"}`}>{fc(running)}</td>
                     </tr>
                   );
@@ -2478,7 +2478,7 @@ function PartyLedger() {
         <div className="flex items-center gap-2 mb-3"><BookText size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Party / Counterparty Ledger</h3></div>
         <label className="text-xs text-[var(--color-muted)] block mb-1">Select a party</label>
         <select value={party} onChange={e => setParty(e.target.value)} className={inp}>
-          <option value="">— select counterparty —</option>
+          <option value="">- select counterparty -</option>
           {parties.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
       </div>
@@ -2508,8 +2508,8 @@ function PartyLedger() {
                     <tr key={t.id} className="hover:bg-[var(--color-accent)]">
                       <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] tabular-nums whitespace-nowrap">{t.date}</td>
                       <td className="px-4 py-2.5"><span className="font-medium">{t.description}</span><span className={`ml-2 text-[9px] px-1 py-0.5 rounded border ${CAT_COLOR[t.category]}`}>{t.category}</span></td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-red-400">{t.amount < 0 ? fc(Math.abs(t.amount)) : "—"}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{t.amount > 0 ? fc(t.amount) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-red-400">{t.amount < 0 ? fc(Math.abs(t.amount)) : "-"}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-green-400">{t.amount > 0 ? fc(t.amount) : "-"}</td>
                       <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${running >= 0 ? "" : "text-red-400"}`}>{fc(running)}</td>
                     </tr>
                   );
@@ -2519,7 +2519,7 @@ function PartyLedger() {
           </div>
         </>
       )}
-      {!party && <p className="text-xs text-[var(--color-muted)]">Pick a counterparty to see their full statement of account with a running balance — handy for sending ledger confirmations.</p>}
+      {!party && <p className="text-xs text-[var(--color-muted)]">Pick a counterparty to see their full statement of account with a running balance - handy for sending ledger confirmations.</p>}
     </div>
   );
 }
@@ -2682,7 +2682,7 @@ function WriteOffComposer() {
                   <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] tabular-nums">{r.date}</td>
                   <td className="px-4 py-2.5 font-medium">{r.party}</td>
                   <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{REASONS[r.reason]}</td>
-                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[200px] truncate">{r.notes || "—"}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[200px] truncate">{r.notes || "-"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-red-400">{fc(r.amount)}</td>
                   <td className="px-4 py-2.5 text-right"><button onClick={() => setRecords(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
                 </tr>
@@ -2691,7 +2691,7 @@ function WriteOffComposer() {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A register of amounts written off the books — bad debts, short receipts, discounts, and rounding. Discuss bad-debt deductibility and GST credit-note treatment with your CA before claiming.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A register of amounts written off the books - bad debts, short receipts, discounts, and rounding. Discuss bad-debt deductibility and GST credit-note treatment with your CA before claiming.</p>
     </div>
   );
 }
@@ -2734,7 +2734,7 @@ function PeriodLockManager() {
         <Lock size={16} className={lockedUpto ? "text-orange-400" : "text-green-400"} />
         {lockedUpto
           ? <span className="text-orange-400 font-medium">Books are locked through <span className="tabular-nums">{lockedUpto}</span>. Entries on or before this date should be corrected with a reversing journal, not edited in place.</span>
-          : <span className="text-green-400 font-medium">No period lock is active — all transactions are open for editing.</span>}
+          : <span className="text-green-400 font-medium">No period lock is active - all transactions are open for editing.</span>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -2793,7 +2793,7 @@ function ChartOfAccounts() {
 
   const add = () => {
     if (!name.trim()) { toast.error("Account name required"); return; }
-    setAccounts(prev => [...prev, { id: generateId(), code: code.trim() || "—", name: name.trim(), group }]);
+    setAccounts(prev => [...prev, { id: generateId(), code: code.trim() || "-", name: name.trim(), group }]);
     setCode(""); setName("");
     toast.success(`Added "${name.trim()}" under ${GROUPS[group]}`);
   };
@@ -2887,7 +2887,7 @@ function GstLedger() {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">An indicative GSTR-3B-style summary. It back-computes the tax embedded in revenue and expense lines at a single slab assuming amounts are tax-inclusive — real returns need line-level rates, ineligible-ITC exclusions and RCM. Use as a directional estimate and confirm with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">An indicative GSTR-3B-style summary. It back-computes the tax embedded in revenue and expense lines at a single slab assuming amounts are tax-inclusive - real returns need line-level rates, ineligible-ITC exclusions and RCM. Use as a directional estimate and confirm with your CA.</p>
     </div>
   );
 }
@@ -2969,7 +2969,7 @@ function TdsLedger() {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">An indicative TDS estimate on expense and payroll payments per counterparty, applied above a section threshold. Actual TDS depends on PAN/payee status, aggregate-during-year limits and exact section applicability — treat this as a working estimate and confirm with your CA before depositing.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">An indicative TDS estimate on expense and payroll payments per counterparty, applied above a section threshold. Actual TDS depends on PAN/payee status, aggregate-during-year limits and exact section applicability - treat this as a working estimate and confirm with your CA before depositing.</p>
     </div>
   );
 }
@@ -3023,14 +3023,14 @@ function CashBankSplit() {
         <span className="text-[var(--color-muted)]">Cash share of outflow</span>
         <span className="tabular-nums font-semibold">{(split.cashOut + split.bankOut) > 0 ? Math.round(split.cashOut / (split.cashOut + split.bankOut) * 100) : 0}%</span>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Splits flows between cash-type accounts (name or provider contains cash, petty or wallet — plus any transaction with no account) and bank accounts, so you can see true cash-in-hand against bank money. Rename a petty-cash account to include "cash" to have it counted here.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Splits flows between cash-type accounts (name or provider contains cash, petty or wallet - plus any transaction with no account) and bank accounts, so you can see true cash-in-hand against bank money. Rename a petty-cash account to include "cash" to have it counted here.</p>
     </div>
   );
 }
 
 // ── #204 COUNTERPARTY 360 ───────────────────────────────────────────────────
 // A ranked, one-screen profile of every counterparty: net position, money in
-// vs out, transaction count, and last-seen date — sortable by net exposure.
+// vs out, transaction count, and last-seen date - sortable by net exposure.
 function Counterparty360() {
   const { store } = useApp();
   const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
@@ -3090,7 +3090,7 @@ function Counterparty360() {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">A complete relationship view for every counterparty in your books — money received, money paid, net position, activity, and last-seen date — built live from transactions. A positive net means you have received more than you have paid them.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">A complete relationship view for every counterparty in your books - money received, money paid, net position, activity, and last-seen date - built live from transactions. A positive net means you have received more than you have paid them.</p>
     </div>
   );
 }
@@ -3170,13 +3170,13 @@ function BudgetVsActual() {
   );
 }
 
-// ── #206 CASH APPLICATION — MATCH PAYMENTS TO INVOICES ──────────────────────
+// ── #206 CASH APPLICATION - MATCH PAYMENTS TO INVOICES ──────────────────────
 // The finance manager's core reconciliation loop: received cash (revenue
 // transactions) and open customer invoices live in separate lists and never
 // link, so invoices get marked paid by hand. This view auto-suggests which
 // payment settles which invoice (exact = high confidence, ±5% / ±₹500 = medium),
 // then on "Match" stamps the transaction's invoiceId and flips the invoice to
-// paid — closing AR against the ledger in one click. Pure store writes:
+// paid - closing AR against the ledger in one click. Pure store writes:
 // updateTransaction (set invoiceId) + updateInvoice (status → paid).
 type CashMatch = {
   invoice: Invoice;
@@ -3205,12 +3205,12 @@ function CashApplication() {
   // Auto-suggest one best candidate receipt per open invoice. A receipt is only
   // a candidate if it lands on/after the invoice date (you don't get paid before
   // you bill). Exact amount (within ₹1) is high confidence; within ±5% OR ±₹500
-  // is medium. Each receipt can back only one invoice — greedily assign the
+  // is medium. Each receipt can back only one invoice - greedily assign the
   // strongest matches first so a single payment isn't double-counted.
   const suggestions = useMemo<CashMatch[]>(() => {
     const used = new Set<string>();
     const out: CashMatch[] = [];
-    // High-confidence (exact) pass first, then medium — so exact matches win the
+    // High-confidence (exact) pass first, then medium - so exact matches win the
     // receipt before a looser invoice can claim it.
     const ranked = [...openInvoices].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     const findFor = (inv: Invoice, want: "high" | "medium"): CashMatch | null => {
@@ -3259,7 +3259,7 @@ function CashApplication() {
     updateTransaction({ ...priorTxn, invoiceId: priorInv.id });
     updateInvoice({ ...priorInv, status: "paid" });
     if (silent) return;
-    toast.success(`Matched ${fc(priorTxn.amount)} → ${priorInv.customer}'s invoice — marked paid`, {
+    toast.success(`Matched ${fc(priorTxn.amount)} → ${priorInv.customer}'s invoice - marked paid`, {
       action: {
         label: "Undo",
         onClick: () => {
@@ -3338,7 +3338,7 @@ function CashApplication() {
             <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]">Open invoices ({openInvoices.length})</h4>
           </div>
           {openInvoices.length === 0 ? (
-            <p className="px-4 py-8 text-center text-xs text-[var(--color-muted)]">No open invoices — everything is reconciled.</p>
+            <p className="px-4 py-8 text-center text-xs text-[var(--color-muted)]">No open invoices - everything is reconciled.</p>
           ) : (
             <div className="divide-y divide-[var(--color-border)] max-h-[28rem] overflow-y-auto">
               {[...openInvoices].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map(inv => {

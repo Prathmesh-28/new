@@ -1,10 +1,10 @@
-// §7 — Document → journal mappers. Pure functions: (document, ledgerCtx) →
+// §7 - Document → journal mappers. Pure functions: (document, ledgerCtx) →
 // { voucher, entries[], taxes[] }. All business rules live here; the engine just
 // validates the result. Money math via decimal.js, rounded once at the split.
 const { money, toDb, ZERO } = require("./money");
 
 // §9.1 place-of-supply: intra-state → CGST+SGST (rate/2 each); inter-state → IGST.
-// REGULAR (taxable) supply only — see splitGstFor for the supply-type aware split.
+// REGULAR (taxable) supply only - see splitGstFor for the supply-type aware split.
 // 4th arg is OPTIONAL and backward-compatible: pass a number/string for cessRate,
 // or an options object { cessRate }. Default cessRate 0 → byte-identical output,
 // PLUS a `cess` field (0 by default) added to the gross when cessRate>0. Existing
@@ -48,7 +48,7 @@ function splitGstFor(supplyType, net, rate, interState) {
 
 // §7.x LINE-ITEMISED GST. Frappe Books / Zoho compute tax PER LINE at that
 // line's own rate (line net = qty*rate − discount), round each line's tax, then
-// SUM — so a 5% line and an 18% line on one invoice each carry their correct tax.
+// SUM - so a 5% line and an 18% line on one invoice each carry their correct tax.
 // Returns { taxable, cgst, sgst, igst, gross, lines:[{...,split}], taxes:[per-line] }.
 // `taxes[]` is the side-record array postVoucher persists into book_tax_entries.
 // `isInput` flags purchase-side ITC; place-of-supply/hsn carried per line.
@@ -178,7 +178,7 @@ function buildPurchaseVoucherLines(input, ctx) {
 }
 
 // PURCHASE under Reverse Charge Mechanism (ERPNext india RCM). The vendor does
-// NOT charge GST, so the bill PAYABLE is the taxable value only — there is no
+// NOT charge GST, so the bill PAYABLE is the taxable value only - there is no
 // input GST on the bill itself. The recipient self-assesses the GST and must pay
 // it in CASH: we book it as an OUTPUT liability (Cr CGST/SGST/IGST Output) and at
 // the same time book the claimable ITC (Dr CGST/SGST/IGST Input). The Input ↔
@@ -199,7 +199,7 @@ function buildRcmBill(input, ctx) {
     { ledgerId: ctx.vendorLedgerId, debit: "0", credit: toDb(taxable) },
   ];
   const taxes = [];
-  // 2) Self-assessed GST: Dr Input (ITC) + Cr Output (liability) — nets to zero.
+  // 2) Self-assessed GST: Dr Input (ITC) + Cr Output (liability) - nets to zero.
   if (interState) {
     entries.push({ ledgerId: ctx.igstInputLedgerId, debit: toDb(igst), credit: "0" });
     entries.push({ ledgerId: ctx.igstOutputLedgerId, debit: "0", credit: toDb(igst) });
@@ -311,7 +311,7 @@ function buildBadDebt(input, ctx) {
 
 // §9.x GST on a customer ADVANCE (GST is payable on receipt of an advance for a
 // supply of services). The money RECEIVED is tax-inclusive: Dr Bank input.amount.
-// We back out the GST embedded in that gross — net = gross / (1 + rate/100) — so
+// We back out the GST embedded in that gross - net = gross / (1 + rate/100) - so
 // Cr Customer (the advance liability we still owe to fulfil) = net, and Cr GST
 // Output = the tax now payable. Intra-state → CGST+SGST; inter-state → IGST.
 // Tax side-records are emitted is_input:false, supplyType 'ADVANCE' so they land
@@ -350,7 +350,7 @@ function buildAdvanceReceipt(input, ctx) {
 }
 
 // Advance PAID to a supplier (prepayment before the bill). Dr Vendor Advance (the
-// receivable/advance against the party) / Cr Bank — money out, so a PAYMENT.
+// receivable/advance against the party) / Cr Bank - money out, so a PAYMENT.
 // ctx: { bankLedgerId }   input: { partyLedgerId, amount, date, ... }
 function buildVendorAdvance(input, ctx) {
   return {

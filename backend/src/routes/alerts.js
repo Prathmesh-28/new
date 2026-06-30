@@ -37,7 +37,7 @@ router.get("/unread-count", authenticate, async (req, res) => {
   res.json({ count: rows[0].count });
 });
 
-// PATCH /api/alerts/:id — mark read or resolved
+// PATCH /api/alerts/:id - mark read or resolved
 router.patch("/:id", authenticate, async (req, res) => {
   const { is_read, is_resolved } = req.body;
   const { rows: existing } = await pool.query(

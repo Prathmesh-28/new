@@ -4,7 +4,7 @@ const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 const { tenantSeatInfo, PLAN_LABEL } = require("../lib/plans");
 const { writeAudit } = require("../lib/audit");
 
-// Team membership lifecycle — fully in-platform, no email.
+// Team membership lifecycle - fully in-platform, no email.
 //   • invite  : owner/admin → person ("join my team")            invitee accepts/rejects
 //   • request : person → company ("let me join your team", B3)   owner approves/declines
 // Either way, accepting moves the person into the tenant with the agreed role.
@@ -18,7 +18,7 @@ function seatFullResponse(res, seat, who) {
   });
 }
 
-// ── GET /api/invites/companies?q= — find a company to request to join (B3) ────
+// ── GET /api/invites/companies?q= - find a company to request to join (B3) ────
 router.get("/companies", authenticate, async (req, res) => {
   const q = (req.query.q || "").toString().trim().toLowerCase();
   if (q.length < 2) return res.json([]);
@@ -40,7 +40,7 @@ router.get("/companies", authenticate, async (req, res) => {
   res.json(rows);
 });
 
-// ── POST /api/invites — owner/admin creates an invite ─────────────────────────
+// ── POST /api/invites - owner/admin creates an invite ─────────────────────────
 router.post("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const actor = req.user;
   const { invitee_email, invitee_user_id, role, tenant_id, message } = req.body || {};
@@ -74,7 +74,7 @@ router.post("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
   res.status(201).json(rows[0]);
 });
 
-// ── POST /api/invites/request — a person asks to join a company (B3) ──────────
+// ── POST /api/invites/request - a person asks to join a company (B3) ──────────
 router.post("/request", authenticate, async (req, res) => {
   const me = req.user;
   const tid = (req.body && req.body.tenant_id || "").toString().trim();
@@ -97,7 +97,7 @@ router.post("/request", authenticate, async (req, res) => {
   res.status(201).json(rows[0]);
 });
 
-// ── GET /api/invites — everything relevant to me ──────────────────────────────
+// ── GET /api/invites - everything relevant to me ──────────────────────────────
 //   incoming : invites addressed to me (I accept/reject)
 //   requests : join-requests into a tenant I own/admin (I approve/decline)
 //   outgoing : invites my tenant sent (owner) or all (super)
@@ -134,7 +134,7 @@ async function loadForInvitee(id, me) {
   return { inv };
 }
 
-// ── POST /api/invites/:id/accept — invitee joins (invite flow) ────────────────
+// ── POST /api/invites/:id/accept - invitee joins (invite flow) ────────────────
 router.post("/:id/accept", authenticate, async (req, res) => {
   const { inv, code } = await loadForInvitee(req.params.id, req.user);
   if (code) return res.status(code).json({ error: code === 404 ? "Not found" : "Forbidden" });
@@ -148,7 +148,7 @@ router.post("/:id/accept", authenticate, async (req, res) => {
   res.json({ ok: true, tenant_id: inv.tenant_id, role: inv.role });
 });
 
-// ── POST /api/invites/:id/reject — invitee declines (invite flow) ─────────────
+// ── POST /api/invites/:id/reject - invitee declines (invite flow) ─────────────
 router.post("/:id/reject", authenticate, async (req, res) => {
   const { inv, code } = await loadForInvitee(req.params.id, req.user);
   if (code) return res.status(code).json({ error: code === 404 ? "Not found" : "Forbidden" });
@@ -166,7 +166,7 @@ async function loadRequestForApprover(id, me) {
   return { inv };
 }
 
-// ── POST /api/invites/:id/approve — owner approves a join request (B3) ─────────
+// ── POST /api/invites/:id/approve - owner approves a join request (B3) ─────────
 router.post("/:id/approve", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { inv, code } = await loadRequestForApprover(req.params.id, req.user);
   if (code) return res.status(code).json({ error: code === 404 ? "Not found" : "Forbidden" });
@@ -179,7 +179,7 @@ router.post("/:id/approve", authenticate, requireOwnerOrAdmin, async (req, res) 
   res.json({ ok: true });
 });
 
-// ── POST /api/invites/:id/decline — owner declines a join request ─────────────
+// ── POST /api/invites/:id/decline - owner declines a join request ─────────────
 router.post("/:id/decline", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { inv, code } = await loadRequestForApprover(req.params.id, req.user);
   if (code) return res.status(code).json({ error: code === 404 ? "Not found" : "Forbidden" });
@@ -188,7 +188,7 @@ router.post("/:id/decline", authenticate, requireOwnerOrAdmin, async (req, res) 
   res.json({ ok: true });
 });
 
-// ── POST /api/invites/:id/cancel — inviter/owner/super withdraws a pending one ─
+// ── POST /api/invites/:id/cancel - inviter/owner/super withdraws a pending one ─
 router.post("/:id/cancel", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { rows } = await pool.query("SELECT * FROM team_invites WHERE id=$1", [req.params.id]);
   const inv = rows[0];

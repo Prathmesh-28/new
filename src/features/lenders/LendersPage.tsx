@@ -206,7 +206,7 @@ function Marketplace() {
         purpose: purpose.trim() || undefined,
         tenure_months: parseInt(tenure || "12", 10) || 12,
       });
-      toast.success("Loan application submitted — lenders can now bid.");
+      toast.success("Loan application submitted - lenders can now bid.");
       setCompany(""); setAmount(""); setPurpose(""); setTenure("12"); setShowForm(false);
       load();
     } catch {
@@ -292,7 +292,7 @@ function Marketplace() {
                   <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-muted)] shrink-0">{app.status}</span>
                 </div>
                 {appBids.length === 0 ? (
-                  <p className="text-xs text-[var(--color-muted)]">No bids yet — lenders are reviewing.</p>
+                  <p className="text-xs text-[var(--color-muted)]">No bids yet - lenders are reviewing.</p>
                 ) : (
                   <div className="border-t border-[var(--color-border)] pt-2 space-y-1.5">
                     {appBids.map(b => (
@@ -502,7 +502,7 @@ function CovenantDashboard() {
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No covenants yet — add one below.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No covenants yet - add one below.</td></tr>
             )}
             {rows.map(r => {
               const s = STATUS[r.status];
@@ -514,7 +514,7 @@ function CovenantDashboard() {
                   </td>
                   <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.op === "min" ? "≥" : "≤"} {r.threshold.toFixed(2)}×</td>
                   <td className={`px-4 py-2.5 tabular-nums font-semibold ${s.color}`}>{r.actual >= 99 ? "n/a" : `${r.actual.toFixed(2)}×`}</td>
-                  <td className={`px-4 py-2.5 tabular-nums ${r.headroom < 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.actual >= 99 ? "—" : `${(r.headroom * 100).toFixed(0)}%`}</td>
+                  <td className={`px-4 py-2.5 tabular-nums ${r.headroom < 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.actual >= 99 ? "-" : `${(r.headroom * 100).toFixed(0)}%`}</td>
                   <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${s.badge}`}>{s.text}</span></td>
                   <td className="px-4 py-2.5">
                     <button onClick={() => setCovenants(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
@@ -612,7 +612,7 @@ function BorrowingBaseGenerator() {
 
       <div className={`${card} overflow-hidden`}>
         <div className="px-4 py-3 border-b border-[var(--color-border)]">
-          <p className="text-sm font-semibold">{fin.firmName} — Borrowing-Base Certificate</p>
+          <p className="text-sm font-semibold">{fin.firmName} - Borrowing-Base Certificate</p>
           <p className="text-[10px] text-[var(--color-muted)]">As at {format(new Date(), "d MMM yyyy")}</p>
         </div>
         <table className="w-full text-sm">
@@ -648,7 +648,7 @@ function BorrowingBaseGenerator() {
       {overDrawn && (
         <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-3 flex items-start gap-2">
           <AlertTriangle size={14} className="text-red-400 shrink-0 mt-px" />
-          <p className="text-xs text-red-300">Drawn balance exceeds drawing power by {formatCurrency(drawnAmt - cappedDP)}. Expect a margin call or regularisation request — collect receivables or reduce the outstanding.</p>
+          <p className="text-xs text-red-300">Drawn balance exceeds drawing power by {formatCurrency(drawnAmt - cappedDP)}. Expect a margin call or regularisation request - collect receivables or reduce the outstanding.</p>
         </div>
       )}
 
@@ -709,7 +709,7 @@ function LenderMisPack() {
 
   const copyPack = () => {
     const lines = [
-      `${fin.firmName} — Lender MIS (${cadence}) — ${period}`,
+      `${fin.firmName} - Lender MIS (${cadence}) - ${period}`,
       "",
       ...sections.flatMap(s => [s.title, ...s.rows.map(r => `  ${r.label}: ${r.value}`), ""]),
     ].join("\n");
@@ -722,7 +722,7 @@ function LenderMisPack() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${card} p-4`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} className="text-[var(--color-primary)]" /> Lender MIS Pack</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">The recurring management-information pack lenders demand — auto-assembled from your synced transactions, AR, inventory, cash and debt.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">The recurring management-information pack lenders demand - auto-assembled from your synced transactions, AR, inventory, cash and debt.</p>
         <div className="grid grid-cols-2 gap-3 mt-4">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Reporting period</label>
@@ -761,7 +761,7 @@ function LenderMisPack() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        Your selected cadence is saved across devices. Figures are computed from the live store, not audited financials — share alongside your signed statements at each reporting date.
+        Your selected cadence is saved across devices. Figures are computed from the live store, not audited financials - share alongside your signed statements at each reporting date.
       </div>
     </div>
   );
@@ -831,7 +831,7 @@ function LenderShortlist() {
           </thead>
           <tbody>
             {scored.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No lenders yet — add one below.</td></tr>
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No lenders yet - add one below.</td></tr>
             )}
             {scored.map((l, i) => (
               <tr key={l.id} className="border-b border-[var(--color-border)] last:border-0">
@@ -926,7 +926,7 @@ function OfferCompare() {
     <div className="space-y-4">
       <div className={`${card} p-4`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> Loan-Offer Comparison</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Compare competing sanctions on true cost — EMI, total interest, processing fee and an effective annual cost so headline rates do not mislead.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Compare competing sanctions on true cost - EMI, total interest, processing fee and an effective annual cost so headline rates do not mislead.</p>
       </div>
 
       <div className={`${card} overflow-x-auto`}>
@@ -940,7 +940,7 @@ function OfferCompare() {
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No offers yet — add one below.</td></tr>
+              <tr><td colSpan={9} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No offers yet - add one below.</td></tr>
             )}
             {rows.map(o => {
               const isBest = best?.id === o.id;
@@ -984,7 +984,7 @@ function OfferCompare() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        EMI assumes a reducing-balance loan. Effective annual cost = (total interest + processing fee) ÷ principal, annualised over the tenure — a simple comparison metric, not a regulatory APR. Confirm GST on fees and any insurance separately.
+        EMI assumes a reducing-balance loan. Effective annual cost = (total interest + processing fee) ÷ principal, annualised over the tenure - a simple comparison metric, not a regulatory APR. Confirm GST on fees and any insurance separately.
       </div>
     </div>
   );
@@ -1175,7 +1175,7 @@ function DisbursementPlanner() {
                 <td className="px-4 py-2.5 tabular-nums">{formatCurrency(t.amount)}</td>
                 <td className="px-4 py-2.5 tabular-nums">{formatCurrency(t.cumulative)}</td>
                 <td className={`px-4 py-2.5 tabular-nums ${t.undrawn < 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{t.undrawn < 0 ? `(${formatCurrency(Math.abs(t.undrawn))})` : formatCurrency(t.undrawn)}</td>
-                <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{t.note || "—"}</td>
+                <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{t.note || "-"}</td>
                 <td className="px-4 py-2.5">
                   <button onClick={() => setTranches(prev => prev.filter(x => x.id !== t.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
                 </td>
@@ -1206,8 +1206,8 @@ function DisbursementPlanner() {
 }
 
 // ── #124 RATE-NEGOTIATION PREP SHEET ─────────────────────────────────────────────
-// Assemble the leverage points that justify a rate cut — strong ratios, clean
-// repayment, low utilization — into talking points and a defensible target rate.
+// Assemble the leverage points that justify a rate cut - strong ratios, clean
+// repayment, low utilization - into talking points and a defensible target rate.
 function RateNegotiationPrep() {
   const fin = useLenderFinancials();
   const { store } = useApp();
@@ -1235,11 +1235,11 @@ function RateNegotiationPrep() {
 
   const copy = () => {
     const text = [
-      `${fin.firmName} — Rate negotiation brief`,
+      `${fin.firmName} - Rate negotiation brief`,
       `Current weighted rate: ${cur.toFixed(2)}%  →  Target: ${targetRate.toFixed(2)}%`,
       "",
       "Leverage points:",
-      ...points.filter(p => p.ok).map(p => `  • ${p.label} (${p.detail}) — worth ~${p.bps}bps`),
+      ...points.filter(p => p.ok).map(p => `  • ${p.label} (${p.detail}) - worth ~${p.bps}bps`),
       "",
       `Indicative annual saving on current outstanding: ${formatCurrency(Math.round(annualSaving))}`,
     ].join("\n");
@@ -1283,7 +1283,7 @@ function RateNegotiationPrep() {
                   </span>
                   <span className="block text-[10px] text-[var(--color-muted)] ml-5">{p.detail}</span>
                 </td>
-                <td className={`px-4 py-2.5 tabular-nums text-right ${p.ok ? "text-green-400 font-semibold" : "text-[var(--color-muted)]"}`}>{p.ok ? `+${p.bps} bps` : "—"}</td>
+                <td className={`px-4 py-2.5 tabular-nums text-right ${p.ok ? "text-green-400 font-semibold" : "text-[var(--color-muted)]"}`}>{p.ok ? `+${p.bps} bps` : "-"}</td>
               </tr>
             ))}
           </tbody>
@@ -1304,7 +1304,7 @@ function RateNegotiationPrep() {
 
 // ── #125 REPAYMENT TRACK-RECORD SHEET ────────────────────────────────────────────
 // A per-loan record of how far through each loan you are and how much you have
-// repaid — the credibility sheet lenders ask for before pricing a new facility.
+// repaid - the credibility sheet lenders ask for before pricing a new facility.
 function RepaymentRecord() {
   const { store } = useApp();
   const loans = store.activeLoans ?? [];
@@ -1326,7 +1326,7 @@ function RepaymentRecord() {
     <div className="space-y-4">
       <div className={`${card} p-4`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><History size={14} className="text-[var(--color-primary)]" /> Repayment Track-Record</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">How far through each active loan you are, built from your synced debt schedule — the credibility sheet a new lender asks for before pricing.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">How far through each active loan you are, built from your synced debt schedule - the credibility sheet a new lender asks for before pricing.</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -1446,7 +1446,7 @@ function SyndicationSplit() {
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No participants yet — add one below.</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No participants yet - add one below.</td></tr>
             )}
             {rows.map(p => (
               <tr key={p.id} className="border-b border-[var(--color-border)] last:border-0">
@@ -1466,7 +1466,7 @@ function SyndicationSplit() {
       {!balanced && parts.length > 0 && (
         <div className="rounded-lg border border-yellow-800/40 bg-yellow-950/20 px-4 py-3 flex items-start gap-2">
           <AlertTriangle size={14} className="text-yellow-400 shrink-0 mt-px" />
-          <p className="text-xs text-yellow-300">Shares total {totalShare.toFixed(1)}%, not 100%. {totalShare < 100 ? `${(100 - totalShare).toFixed(1)}% of the facility is still unallocated.` : `Over-allocated by ${(totalShare - 100).toFixed(1)}% — trim a participant's share.`}</p>
+          <p className="text-xs text-yellow-300">Shares total {totalShare.toFixed(1)}%, not 100%. {totalShare < 100 ? `${(100 - totalShare).toFixed(1)}% of the facility is still unallocated.` : `Over-allocated by ${(totalShare - 100).toFixed(1)}% - trim a participant's share.`}</p>
         </div>
       )}
 
@@ -1482,7 +1482,7 @@ function SyndicationSplit() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        Blended rate is share-weighted across participants. Co-lending under RBI norms typically requires the originating lender to retain a minimum share — confirm the split against the inter-lender agreement.
+        Blended rate is share-weighted across participants. Co-lending under RBI norms typically requires the originating lender to retain a minimum share - confirm the split against the inter-lender agreement.
       </div>
     </div>
   );
@@ -1555,7 +1555,7 @@ function CollateralRegister() {
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No collateral recorded yet — add one below.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No collateral recorded yet - add one below.</td></tr>
             )}
             {rows.map(c => (
               <tr key={c.id} className="border-b border-[var(--color-border)] last:border-0">
@@ -1576,7 +1576,7 @@ function CollateralRegister() {
       {shortfall > 0 && (
         <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-3 flex items-start gap-2">
           <AlertTriangle size={14} className="text-red-400 shrink-0 mt-px" />
-          <p className="text-xs text-red-300">Realisable cover falls short of the exposure by {formatCurrency(shortfall)}. Expect a top-up security demand or a margin shortfall notice — pledge an additional asset or reduce the outstanding.</p>
+          <p className="text-xs text-red-300">Realisable cover falls short of the exposure by {formatCurrency(shortfall)}. Expect a top-up security demand or a margin shortfall notice - pledge an additional asset or reduce the outstanding.</p>
         </div>
       )}
 
@@ -1665,7 +1665,7 @@ function RefinanceScanner() {
                   <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.outstanding)}</td>
                   <td className="px-4 py-2.5 tabular-nums">{r.rate.toFixed(2)}%</td>
                   <td className={`px-4 py-2.5 tabular-nums ${r.gap > 0 ? "text-red-400" : "text-green-400"}`}>{r.gap > 0 ? "+" : ""}{r.gap.toFixed(2)}%</td>
-                  <td className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{r.annualSaving > 0 ? formatCurrency(Math.round(r.annualSaving)) : "—"}</td>
+                  <td className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{r.annualSaving > 0 ? formatCurrency(Math.round(r.annualSaving)) : "-"}</td>
                   <td className="px-4 py-2.5">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${r.candidate ? "bg-yellow-950/30 text-yellow-400 border-yellow-800/40" : "bg-green-950/30 text-green-400 border-green-800/40"}`}>{r.candidate ? "REFINANCE" : "AT MARKET"}</span>
                   </td>
@@ -1685,15 +1685,15 @@ function RefinanceScanner() {
 }
 
 // ── #129 LENDER-RELATIONSHIP CRM ─────────────────────────────────────────────────
-// A light CRM for the lender relationships you are managing — owner, last contact,
-// next action and date — surfacing follow-ups that are due or overdue today.
+// A light CRM for the lender relationships you are managing - owner, last contact,
+// next action and date - surfacing follow-ups that are due or overdue today.
 interface LenderContact { id: string; lender: string; contact: string; lastContacted: string; nextAction: string; nextDate: string; }
 
 function LenderCrm() {
   const today = format(new Date(), "yyyy-MM-dd");
   const [contacts, setContacts] = useFeatureState<LenderContact[]>("lnd-relationship-crm", [
-    { id: "r1", lender: "HDFC Bank",   contact: "RM — Priya Nair",  lastContacted: "2026-06-05", nextAction: "Submit Q1 stock statement", nextDate: "2026-06-12" },
-    { id: "r2", lender: "Bajaj Finserv", contact: "Credit — Amit Shah", lastContacted: "2026-06-10", nextAction: "Renewal review call",     nextDate: "2026-06-25" },
+    { id: "r1", lender: "HDFC Bank",   contact: "RM - Priya Nair",  lastContacted: "2026-06-05", nextAction: "Submit Q1 stock statement", nextDate: "2026-06-12" },
+    { id: "r2", lender: "Bajaj Finserv", contact: "Credit - Amit Shah", lastContacted: "2026-06-10", nextAction: "Renewal review call",     nextDate: "2026-06-25" },
   ]);
   const [lender, setLender]   = useState("");
   const [contact, setContact] = useState("");
@@ -1723,7 +1723,7 @@ function LenderCrm() {
     <div className="space-y-4">
       <div className={`${card} p-4`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Phone size={14} className="text-[var(--color-primary)]" /> Lender-Relationship CRM</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Keep every lender relationship warm — who you spoke to, when, and the next action due. Follow-ups that have slipped past their date are flagged in red.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Keep every lender relationship warm - who you spoke to, when, and the next action due. Follow-ups that have slipped past their date are flagged in red.</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -1750,17 +1750,17 @@ function LenderCrm() {
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No relationships yet — add one below.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">No relationships yet - add one below.</td></tr>
             )}
             {rows.map(c => (
               <tr key={c.id} className={`border-b border-[var(--color-border)] last:border-0 ${c.overdue ? "bg-red-950/10" : ""}`}>
                 <td className="px-4 py-2.5 font-medium">{c.lender}</td>
-                <td className="px-4 py-2.5 text-[var(--color-muted)]">{c.contact || "—"}</td>
-                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{c.lastContacted ? format(new Date(c.lastContacted), "d MMM") : "—"}</td>
+                <td className="px-4 py-2.5 text-[var(--color-muted)]">{c.contact || "-"}</td>
+                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{c.lastContacted ? format(new Date(c.lastContacted), "d MMM") : "-"}</td>
                 <td className="px-4 py-2.5">{c.nextAction}</td>
                 <td className="px-4 py-2.5 tabular-nums">
                   <span className={c.overdue ? "text-red-400 font-semibold" : c.dueToday ? "text-yellow-400 font-semibold" : "text-[var(--color-muted)]"}>
-                    {c.nextDate ? format(new Date(c.nextDate), "d MMM") : "—"}{c.overdue ? " · overdue" : c.dueToday ? " · today" : ""}
+                    {c.nextDate ? format(new Date(c.nextDate), "d MMM") : "-"}{c.overdue ? " · overdue" : c.dueToday ? " · today" : ""}
                   </span>
                 </td>
                 <td className="px-4 py-2.5">
@@ -1843,7 +1843,7 @@ function UtilizationTrend() {
 
       <div className={`${card} p-4`}>
         {rows.length === 0 ? (
-          <p className="py-6 text-center text-xs text-[var(--color-muted)]">No data points yet — add one below.</p>
+          <p className="py-6 text-center text-xs text-[var(--color-muted)]">No data points yet - add one below.</p>
         ) : (
           <div className="flex items-end gap-2 h-40">
             {rows.map(r => (
@@ -1896,7 +1896,7 @@ function UtilizationTrend() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        Adding a month already present overwrites it. Bars turn amber above 75% and red above 90% utilization — sustained high utilization can prompt a lender to review or reprice the limit.
+        Adding a month already present overwrites it. Bars turn amber above 75% and red above 90% utilization - sustained high utilization can prompt a lender to review or reprice the limit.
       </div>
     </div>
   );
@@ -1932,7 +1932,7 @@ function ConcentrationRisk() {
     <div className="space-y-4">
       <div className={`${card} p-4`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Lender Concentration Risk</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Outstanding debt grouped by lender from your live loan book. Over-reliance on one counterparty is a refinancing and pricing risk — diversify before you need to.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Outstanding debt grouped by lender from your live loan book. Over-reliance on one counterparty is a refinancing and pricing risk - diversify before you need to.</p>
       </div>
 
       {rows.length === 0 ? (
@@ -1945,7 +1945,7 @@ function ConcentrationRisk() {
           <div className="grid grid-cols-3 gap-3">
             {[
               { label: "Lenders", value: rows.length.toString(), color: "text-[var(--color-text)]" },
-              { label: "Largest share", value: top ? `${(top.share * 100).toFixed(0)}%` : "—", color: top && top.share >= 0.5 ? "text-red-400" : "text-[var(--color-text)]" },
+              { label: "Largest share", value: top ? `${(top.share * 100).toFixed(0)}%` : "-", color: top && top.share >= 0.5 ? "text-red-400" : "text-[var(--color-text)]" },
               { label: "Concentration", value: CONC[concLevel].text, color: CONC[concLevel].color },
             ].map(c => (
               <div key={c.label} className={`${card} p-4`}>
@@ -1989,7 +1989,7 @@ function ConcentrationRisk() {
           {concLevel === "high" && top && (
             <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-3 flex items-start gap-2">
               <AlertTriangle size={14} className="text-red-400 shrink-0 mt-px" />
-              <p className="text-xs text-red-300">{top.lender} holds {(top.share * 100).toFixed(0)}% of your outstanding debt. If they tighten terms or exit, you have limited fallback — line up a second lender before your next renewal.</p>
+              <p className="text-xs text-red-300">{top.lender} holds {(top.share * 100).toFixed(0)}% of your outstanding debt. If they tighten terms or exit, you have limited fallback - line up a second lender before your next renewal.</p>
             </div>
           )}
         </>
@@ -1997,7 +1997,7 @@ function ConcentrationRisk() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        Concentration uses a Herfindahl-style index on outstanding balances: high above 0.50, moderate 0.25–0.50, diversified below. Loans without a distinct lender name are grouped together.
+        Concentration uses a Herfindahl-style index on outstanding balances: high above 0.50, moderate 0.25-0.50, diversified below. Loans without a distinct lender name are grouped together.
       </div>
     </div>
   );
@@ -2109,7 +2109,7 @@ function SanctionVsDrawn() {
     <div className="space-y-4">
       <div className={`${card} p-4`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /> Sanction vs Drawn / Repaid</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Each facility's sanctioned principal against the balance still outstanding, with repayment progress — a clean snapshot for any lender review.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Each facility's sanctioned principal against the balance still outstanding, with repayment progress - a clean snapshot for any lender review.</p>
       </div>
 
       {rows.length === 0 ? (
@@ -2173,7 +2173,7 @@ function SanctionVsDrawn() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        Repaid is computed as sanctioned principal minus current outstanding, so it reflects principal reduction only — not interest paid. Drawn-down term loans show the full sanction as drawn; revolving lines may differ.
+        Repaid is computed as sanctioned principal minus current outstanding, so it reflects principal reduction only - not interest paid. Drawn-down term loans show the full sanction as drawn; revolving lines may differ.
       </div>
     </div>
   );

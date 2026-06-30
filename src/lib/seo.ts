@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 // Dependency-free per-route SEO. Sets document.title and upserts the meta/OG/Twitter
-// tags + canonical for the current page — purely additive (no UI/design change). Use
+// tags + canonical for the current page - purely additive (no UI/design change). Use
 // on public pages so each has an intent-matched title + description for search & social.
 
 interface SeoOpts {

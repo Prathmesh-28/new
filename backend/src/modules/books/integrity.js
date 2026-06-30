@@ -1,16 +1,16 @@
-// §13 — INTEGRITY. A beancount-style assurance layer ON TOP of the posting engine
+// §13 - INTEGRITY. A beancount-style assurance layer ON TOP of the posting engine
 // (§6). It never mutates posted rows and never opens its own GL transaction by hand:
 // every correcting entry it makes goes through ./posting-engine postVoucher, so the
 // double-entry invariant, period locks, idempotency and audit trail all still apply.
 //
 // Three capabilities, ported in spirit (not code) from beancount + ERPNext + Tryton:
-//   1. assertBalance  — beancount's `balance` directive: assert a ledger's running
+//   1. assertBalance  - beancount's `balance` directive: assert a ledger's running
 //      balance equals a CONFIRMED figure (e.g. a bank statement) within an inferred
 //      decimal tolerance. A mismatch is recorded (signed diff) for later review.
-//   2. padOpening     — beancount's `pad` + Opening-Balances directive: auto-plug a
+//   2. padOpening     - beancount's `pad` + Opening-Balances directive: auto-plug a
 //      ledger to a target balance by posting the difference against an
 //      "Opening Balance Equity" ledger (ERPNext's "Temporary Opening" account).
-//   3. validation passes — duplicateVoucherCheck (Tryton/ERPNext duplicate-warning)
+//   3. validation passes - duplicateVoucherCheck (Tryton/ERPNext duplicate-warning)
 //      and leafOnlyCheck (beancount/Tally: never post to a parent/group account).
 //
 // Sign convention is the engine's: debit-positive (§10.1). A signed balance >0 is a
@@ -22,7 +22,7 @@ const { postVoucher, PostError } = require("./posting-engine");
 const { financialYearFor } = require("./fy");
 
 // The equity account opening-balance plugs land against. ERPNext calls this the
-// "Temporary Opening" / "Opening Balance Equity" account — a wash account that nets
+// "Temporary Opening" / "Opening Balance Equity" account - a wash account that nets
 // to zero once every opening balance is entered. Seeded lazily under Capital Account.
 const OBE_LEDGER = "Opening Balance Equity";
 const OBE_GROUP = "Capital Account"; // seeded EQUITY group (seed.js)
@@ -209,7 +209,7 @@ async function padOpening(tenantId, actorId, params = {}, opts = {}) {
 
 // ── 3. validation passes ─────────────────────────────────────────────────────────
 
-// duplicateVoucherCheck — Tryton/ERPNext "duplicate warning". Finds groups of
+// duplicateVoucherCheck - Tryton/ERPNext "duplicate warning". Finds groups of
 // non-cancelled vouchers that share (party_ledger_id, voucher_type, voucher_date)
 // AND post the same total amount (sum of debits). These are likely double-entered
 // bills/receipts. Read-only: it reports, it never deletes (reversal is the user's call).
@@ -254,9 +254,9 @@ async function duplicateVoucherCheck(tenantId, opts = {}) {
   }));
 }
 
-// leafOnlyCheck — beancount/Tally: postings must hit LEAF accounts, never a parent.
+// leafOnlyCheck - beancount/Tally: postings must hit LEAF accounts, never a parent.
 // Ledgers here have no child ledgers, so a "parent" is a ledger whose GROUP still has
-// CHILD GROUPS (a structural/roll-up group that should not directly carry txns — a
+// CHILD GROUPS (a structural/roll-up group that should not directly carry txns - a
 // more specific sub-group exists). Reports each offending ledger with its posting
 // count so the user can re-map entries to a leaf group.
 async function leafOnlyCheck(tenantId, opts = {}) {
@@ -290,7 +290,7 @@ async function leafOnlyCheck(tenantId, opts = {}) {
   }));
 }
 
-// Convenience aggregate for GET /integrity/checks — runs both passes and the recent
+// Convenience aggregate for GET /integrity/checks - runs both passes and the recent
 // failed assertions in one shot.
 async function runChecks(tenantId, opts = {}) {
   const [duplicates, nonLeaf, assertions] = await Promise.all([

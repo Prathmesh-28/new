@@ -151,7 +151,7 @@ function HowToUse() {
       <div className="text-sm text-[var(--color-muted)] space-y-1">
         <p className="text-[var(--color-text)] font-semibold">PSP settlement reconciliation</p>
         <p>
-          Your payment processor (Razorpay, Cashfree, PayU, Stripe) periodically dumps a <span className="text-[var(--color-text)]">payout file</span> — one row per captured transaction with the customer's gross charge, the PSP fee, GST on the fee, and the net amount deposited to your bank.
+          Your payment processor (Razorpay, Cashfree, PayU, Stripe) periodically dumps a <span className="text-[var(--color-text)]">payout file</span> - one row per captured transaction with the customer's gross charge, the PSP fee, GST on the fee, and the net amount deposited to your bank.
         </p>
         <p>
           <span className="text-[var(--color-text)]">1. Ingest</span> the payout rows · <span className="text-[var(--color-text)]">2. Reconcile</span> ties each line to its bank deposit (net) and booked receipt (gross) and verifies the fee · <span className="text-[var(--color-text)]">3. Worklist</span> surfaces every deviation as an exception to resolve.
@@ -165,7 +165,7 @@ function HowToUse() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PAYOUT CSV PARSER — columns: gross, fee, tax, net, utr, txn_ref, order_id, settled_on
+// PAYOUT CSV PARSER - columns: gross, fee, tax, net, utr, txn_ref, order_id, settled_on
 // ─────────────────────────────────────────────────────────────────────────────
 const CSV_PLACEHOLDER =
   "gross,fee,tax,net,utr,txn_ref,order_id,settled_on\n1000,20,3.6,976.4,UTR-55012,pay_AbC123,ord_9001,2026-06-18\n2500,50,9,2441,UTR-55012,pay_DeF456,ord_9002,2026-06-18";
@@ -478,9 +478,9 @@ export default function BooksSettlementTab() {
                           <span className="ml-1 text-[10px] text-green-400">✓</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 capitalize">{ln.provider || "—"}</td>
+                      <td className="px-3 py-2.5 capitalize">{ln.provider || "-"}</td>
                       <td className="px-3 py-2.5">
-                        <span className="font-mono text-xs block">{ln.utr || "—"}</span>
+                        <span className="font-mono text-xs block">{ln.utr || "-"}</span>
                         {ln.txnRef && <span className="font-mono text-[10px] text-[var(--color-muted)] block">{ln.txnRef}</span>}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{rupee(ln.gross)}</td>
@@ -488,12 +488,12 @@ export default function BooksSettlementTab() {
                       <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{rupee(ln.tax)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{rupee(ln.net)}</td>
                       <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${x.amount != null ? "text-red-400" : "text-[var(--color-muted)]"}`}>
-                        {x.amount != null ? rupee(x.amount) : "—"}
+                        {x.amount != null ? rupee(x.amount) : "-"}
                       </td>
                       <td className="px-3 py-2.5 text-[11px] text-[var(--color-muted)] max-w-[220px]">
                         <ExceptionDetail kind={x.kind} detail={x.detail} />
                       </td>
-                      <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap text-xs">{ln.settledOn || "—"}</td>
+                      <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap text-xs">{ln.settledOn || "-"}</td>
                     </tr>
                   );
                 })
@@ -503,7 +503,7 @@ export default function BooksSettlementTab() {
         </div>
         {exceptions.length > 0 && (
           <p className="text-[11px] text-[var(--color-muted)] mt-2">
-            {exceptions.length} exception{exceptions.length === 1 ? "" : "s"} shown. Fix the underlying bank line / receipt / fee and re-run reconciliation — resolved flags clear automatically.
+            {exceptions.length} exception{exceptions.length === 1 ? "" : "s"} shown. Fix the underlying bank line / receipt / fee and re-run reconciliation - resolved flags clear automatically.
           </p>
         )}
       </Card>
@@ -512,10 +512,10 @@ export default function BooksSettlementTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EXCEPTION DETAIL — render the kind-specific detail payload as a short, human row.
+// EXCEPTION DETAIL - render the kind-specific detail payload as a short, human row.
 // ─────────────────────────────────────────────────────────────────────────────
 function ExceptionDetail({ kind, detail }: { kind: string; detail?: Record<string, unknown> | null }) {
-  if (!detail) return <span>—</span>;
+  if (!detail) return <span>-</span>;
   const d = detail as Record<string, unknown>;
   const r = (v: unknown) => rupee(v as string | number);
 

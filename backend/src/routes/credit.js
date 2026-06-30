@@ -39,7 +39,7 @@ router.get("/applications/:id", authenticate, async (req, res) => {
   res.json({ application: appRows[0], offers: offerRows });
 });
 
-// POST /api/credit/apply — create application + run underwriting
+// POST /api/credit/apply - create application + run underwriting
 router.post("/apply", authenticate, canWrite, async (req, res) => {
   const { requested_amount } = req.body;
 
@@ -138,7 +138,7 @@ router.get("/loans", authenticate, async (req, res) => {
   res.json(rows);
 });
 
-// POST /api/credit/loans/:id/payment — record a repayment
+// POST /api/credit/loans/:id/payment - record a repayment
 router.post("/loans/:id/payment", authenticate, canWrite, async (req, res) => {
   const { amount } = req.body;
   if (!amount || Number(amount) <= 0) return res.status(400).json({ error: "Positive amount required" });
@@ -166,13 +166,13 @@ router.post("/loans/:id/payment", authenticate, canWrite, async (req, res) => {
   res.json(updated[0]);
 });
 
-// GET /api/credit/score — current underwriting score (no application created)
+// GET /api/credit/score - current underwriting score (no application created)
 router.get("/score", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const result = await underwrite(req.user.tenant_id, pool);
   res.json(result);
 });
 
-// POST /api/credit/enrich — pull bureau + bank-statement enrichment via FinBox and
+// POST /api/credit/enrich - pull bureau + bank-statement enrichment via FinBox and
 // re-underwrite with it. Degrades cleanly (enrichment.configured=false) without a key.
 router.post("/enrich", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const finbox = require("../lib/finbox");
@@ -187,7 +187,7 @@ router.post("/enrich", authenticate, requireOwnerOrAdmin, async (req, res) => {
   res.json({ enrichment, result, enriched: !!usable });
 });
 
-// GET /api/credit/report — formal JSON creditworthiness report (Headroom's own "output
+// GET /api/credit/report - formal JSON creditworthiness report (Headroom's own "output
 // layer", the artifact that flows into a lender/LOS). Read-only; no application created.
 router.get("/report", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const result = await underwrite(req.user.tenant_id, pool);
@@ -208,7 +208,7 @@ router.get("/report", authenticate, requireOwnerOrAdmin, async (req, res) => {
   });
 });
 
-// POST /api/credit/underwrite-agentic — run the multi-agent (LangGraph-pattern)
+// POST /api/credit/underwrite-agentic - run the multi-agent (LangGraph-pattern)
 // underwriting DAG: 4 deterministic risk agents → weighted decision → LLM
 // explanation/audit → policy-clamped offer. Underwrites an SMB borrower for an
 // investor / crowdfunding lender / NBFC partner. Body may carry an { applicant }
@@ -259,7 +259,7 @@ router.post("/underwrite-agentic", authenticate, requireOwnerOrAdmin, async (req
   }
 });
 
-// POST /api/credit/finbox — submit lead to Finbox Credit API (NBFC routing)
+// POST /api/credit/finbox - submit lead to Finbox Credit API (NBFC routing)
 router.post("/finbox", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { requested_amount, purpose } = req.body;
   const result = await underwrite(req.user.tenant_id, pool);
@@ -293,22 +293,22 @@ router.post("/finbox", authenticate, requireOwnerOrAdmin, async (req, res) => {
     }
   }
 
-  // Demo mode — simulate Finbox routing response
+  // Demo mode - simulate Finbox routing response
   const nbfcs = [
-    { lender: "Lendingkart",     rate: "14–18% p.a.", max: Math.round(result.approved_amount * 1.0), term: "12–36 months", processing_fee: "1%" },
-    { lender: "KreditBee",       rate: "16–24% p.a.", max: Math.round(result.approved_amount * 0.8), term: "6–24 months",  processing_fee: "2%" },
-    { lender: "IIFL Finance",    rate: "13–20% p.a.", max: Math.round(result.approved_amount * 1.2), term: "12–48 months", processing_fee: "0.5%" },
+    { lender: "Lendingkart",     rate: "14-18% p.a.", max: Math.round(result.approved_amount * 1.0), term: "12-36 months", processing_fee: "1%" },
+    { lender: "KreditBee",       rate: "16-24% p.a.", max: Math.round(result.approved_amount * 0.8), term: "6-24 months",  processing_fee: "2%" },
+    { lender: "IIFL Finance",    rate: "13-20% p.a.", max: Math.round(result.approved_amount * 1.2), term: "12-48 months", processing_fee: "0.5%" },
   ].filter(n => result.score >= 40);
 
   res.json({
     internal_score: result.score,
     matched_nbfcs:  nbfcs,
-    next_steps:     nbfcs.length ? "Finbox will contact you within 2 business days to verify KYC." : "Score too low — check the Not Yet tab for improvement actions.",
+    next_steps:     nbfcs.length ? "Finbox will contact you within 2 business days to verify KYC." : "Score too low - check the Not Yet tab for improvement actions.",
     demo:           true,
   });
 });
 
-// GET /api/credit/lender-api/:tenantId — B2B lender API (API key protected)
+// GET /api/credit/lender-api/:tenantId - B2B lender API (API key protected)
 router.get("/lender-api/:tenantId", async (req, res) => {
   const apiKey = req.headers["x-api-key"];
   if (!apiKey || apiKey !== process.env.LENDER_API_KEY) {

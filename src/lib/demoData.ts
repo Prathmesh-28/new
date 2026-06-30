@@ -6,10 +6,10 @@ import type {
 import { DEMO_FEATURE_DATA } from "./demoFeatureData";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Deterministic multi-year demo dataset spanning FY23 → FY28 (Indian FY, Apr–Mar:
+// Deterministic multi-year demo dataset spanning FY23 → FY28 (Indian FY, Apr-Mar:
 // Apr-2022 through Mar-2028). Generates realistic monthly revenue/expense/payroll/
 // tax/loan transactions with growth + seasonality, plus invoices, a loan and
-// upcoming obligations — enough to light up every statement, chart and forecast.
+// upcoming obligations - enough to light up every statement, chart and forecast.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CUSTOMERS = [
@@ -44,15 +44,15 @@ export function generateDemoData(today = new Date()): Partial<AppStore> {
 
     const c1 = CUSTOMERS[i % CUSTOMERS.length];
     const c2 = CUSTOMERS[(i + 3) % CUSTOMERS.length];
-    txns.push(mk(`${ym}-08`, Math.round(baseRev * 0.6),  `Payment received — ${c1}`, "revenue", c1, true));
-    txns.push(mk(`${ym}-21`, Math.round(baseRev * 0.4),  `Payment received — ${c2}`, "revenue", c2, false));
+    txns.push(mk(`${ym}-08`, Math.round(baseRev * 0.6),  `Payment received - ${c1}`, "revenue", c1, true));
+    txns.push(mk(`${ym}-21`, Math.round(baseRev * 0.4),  `Payment received - ${c2}`, "revenue", c2, false));
     txns.push(mk(`${ym}-28`, -Math.round(baseRev * 0.34), "Monthly payroll", "payroll", "Team Payroll", true));
     txns.push(mk(`${ym}-05`, -120000,                     "Office rent", "expense", "Office Landlord", true));
     txns.push(mk(`${ym}-12`, -Math.round(38000 * growth), "Software & cloud (AWS, Google)", "expense", "AWS India", true));
     txns.push(mk(`${ym}-15`, -Math.round(baseRev * 0.07), "Digital marketing", "expense", "Meta Ads", false));
     txns.push(mk(`${ym}-18`, -Math.round(22000 + i * 120),"Electricity & internet", "expense", "BESCOM / Airtel", true));
     txns.push(mk(`${ym}-20`, -Math.round(baseRev * 0.6 * 0.18 * 0.4), "GST payment (GSTR-3B)", "tax", "GST Portal", false));
-    if (i >= 12) txns.push(mk(`${ym}-10`, -65000, "Loan EMI — working capital", "loan", "HDFC Bank", true));
+    if (i >= 12) txns.push(mk(`${ym}-10`, -65000, "Loan EMI - working capital", "loan", "HDFC Bank", true));
   }
   // One-time loan disbursal at start of FY24
   txns.push(mk("2023-04-10", 2000000, "Working capital loan disbursed", "loan", "HDFC Bank", false));
@@ -89,7 +89,7 @@ export function generateDemoData(today = new Date()): Partial<AppStore> {
 
   const obligations: CashObligation[] = [
     { id: "demo-obl-1", name: "GST payment (GSTR-3B)", amount: 185000, dueDate: addDaysIso(today, 7),  type: "tax" },
-    { id: "demo-obl-2", name: "Advance tax — Q instalment", amount: 320000, dueDate: addDaysIso(today, 24), type: "tax" },
+    { id: "demo-obl-2", name: "Advance tax - Q instalment", amount: 320000, dueDate: addDaysIso(today, 24), type: "tax" },
     { id: "demo-obl-3", name: "Monthly payroll", amount: 410000, dueDate: addDaysIso(today, 15), type: "payroll" },
     { id: "demo-obl-4", name: "Loan EMI", amount: 65000, dueDate: addDaysIso(today, 12), type: "loan" },
   ];
@@ -107,7 +107,7 @@ export function generateDemoData(today = new Date()): Partial<AppStore> {
   // ── Alerts: mixed severity, deterministic, anchored around today ──────────────
   const alerts: Alert[] = [
     { id: "demo-alert-1", type: "low_cash", severity: "critical", title: "Cash runway under 3 weeks",
-      message: "Projected balance dips to ₹2.1L on " + addDaysIso(today, 18) + " — below your 21-day safety buffer.",
+      message: "Projected balance dips to ₹2.1L on " + addDaysIso(today, 18) + " - below your 21-day safety buffer.",
       isRead: false, createdAt: addDaysIso(today, -1) },
     { id: "demo-alert-2", type: "overdue", severity: "high", title: "₹4.6L in overdue invoices",
       message: "Sharma Textiles and Gupta Traders are past due. Send a WhatsApp reminder ladder.",
@@ -138,9 +138,9 @@ export function generateDemoData(today = new Date()): Partial<AppStore> {
 
   // ── Credit applications + offers (offers linked to an application) ────────────
   const creditApplications: CreditApplication[] = [
-    { id: "demo-capp-1", status: "approved", loanAmount: 1500000, termMonths: 24, purpose: "Working capital — raw material procurement",
+    { id: "demo-capp-1", status: "approved", loanAmount: 1500000, termMonths: 24, purpose: "Working capital - raw material procurement",
       underwritingScore: 742, approvedAmount: 1500000, createdAt: addDaysIso(today, -40), updatedAt: addDaysIso(today, -12) },
-    { id: "demo-capp-2", status: "submitted", loanAmount: 2500000, termMonths: 36, purpose: "Capex — new CNC line",
+    { id: "demo-capp-2", status: "submitted", loanAmount: 2500000, termMonths: 36, purpose: "Capex - new CNC line",
       underwritingScore: 718, approvedAmount: 0, createdAt: addDaysIso(today, -9), updatedAt: addDaysIso(today, -4) },
     { id: "demo-capp-3", status: "draft", loanAmount: 800000, termMonths: 12, purpose: "Invoice discounting facility",
       underwritingScore: 0, approvedAmount: 0, createdAt: addDaysIso(today, -2), updatedAt: addDaysIso(today, -2) },
@@ -193,7 +193,7 @@ export function generateDemoData(today = new Date()): Partial<AppStore> {
     { id: "demo-ord-6", orderNumber: "ORD-2606", source: "whatsapp", buyerName: "Singh Distributors", buyerPhone: "+919876554433", status: "confirmed", totalValue: 144000, notes: "",
       items: [{ id: "demo-oi-8", productName: "Mounting kit", sku: "SKU-MK-09", quantity: 480, unitPrice: 300 }],
       createdAt: addDaysIso(today, -3), updatedAt: addDaysIso(today, -2) },
-    { id: "demo-ord-7", orderNumber: "ORD-2607", source: "email", buyerName: "Patel Exports", buyerPhone: "+919900011223", status: "cancelled", totalValue: 210000, notes: "Buyer cancelled — spec mismatch",
+    { id: "demo-ord-7", orderNumber: "ORD-2607", source: "email", buyerName: "Patel Exports", buyerPhone: "+919900011223", status: "cancelled", totalValue: 210000, notes: "Buyer cancelled - spec mismatch",
       items: [{ id: "demo-oi-9", productName: "Loom spare gear", sku: "SKU-LG-07", quantity: 300, unitPrice: 700 }],
       createdAt: addDaysIso(today, -11), updatedAt: addDaysIso(today, -7) },
     { id: "demo-ord-8", orderNumber: "ORD-2608", source: "manual", buyerName: "Nair Solutions", buyerPhone: "+919745566778", status: "pending", totalValue: 75000, notes: "New customer",

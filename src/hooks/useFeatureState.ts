@@ -12,7 +12,7 @@ type Updater<T> = T | ((prev: T) => T);
  *
  * Because `featureData` lives in the "app" KV namespace, anything stored here is
  * written to localStorage immediately and pushed to the backend (debounced),
- * then propagated to the user's other devices by the poll / live-sync stream —
+ * then propagated to the user's other devices by the poll / live-sync stream -
  * exactly like transactions or invoices. The API mirrors useState: the setter
  * accepts a value or a functional updater, and functional updaters always read
  * the latest committed value (no stale closures).
@@ -21,7 +21,7 @@ type Updater<T> = T | ((prev: T) => T);
  * Keep transient UI state (form fields, open/closed toggles) on plain useState.
  *
  * Note: in read-only contexts (advisor client view, viewer role) the underlying
- * setStore is gated and writes are ignored with a toast — same as every other
+ * setStore is gated and writes are ignored with a toast - same as every other
  * store mutation.
  */
 export function useFeatureState<T>(key: string, initial: T): [T, (updater: Updater<T>) => void] {

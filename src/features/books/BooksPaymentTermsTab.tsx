@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES (loose — backend response shapes inlined)
+// TYPES (loose - backend response shapes inlined)
 // ─────────────────────────────────────────────────────────────────────────────
 type Basis = "days" | "month_end" | "months_after_month_end";
 
@@ -93,7 +93,7 @@ function rupee(v: string | number | null | undefined): string {
 }
 
 function basisLabel(b?: string): string {
-  return BASIS_OPTIONS.find((o) => o.id === b)?.label ?? (b ?? "—");
+  return BASIS_OPTIONS.find((o) => o.id === b)?.label ?? (b ?? "-");
 }
 
 function newInstallment(pct = "100"): InstallmentDraft {
@@ -268,7 +268,7 @@ function TemplatesSection() {
                 <Th right>Percentage</Th>
                 <Th right>Due (value)</Th>
                 <Th>Basis</Th>
-                <Th right>—</Th>
+                <Th right>-</Th>
               </tr>
             </thead>
             <tbody>
@@ -330,7 +330,7 @@ function TemplatesSection() {
             <Plus size={14} /> Add installment
           </button>
 
-          {/* LIVE PREVIEW — pcts must sum to 100 */}
+          {/* LIVE PREVIEW - pcts must sum to 100 */}
           <div
             className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border ${
               pctOk
@@ -372,7 +372,7 @@ function TemplatesSection() {
               {busy ? (
                 <SkeletonRows cols={2} />
               ) : templates.length === 0 ? (
-                <tr><td colSpan={2} className="px-3 py-8 text-center text-[var(--color-muted)]">No templates yet — create one above.</td></tr>
+                <tr><td colSpan={2} className="px-3 py-8 text-center text-[var(--color-muted)]">No templates yet - create one above.</td></tr>
               ) : (
                 templates.map((t) => {
                   const insts = Array.isArray(t.installments) ? t.installments : [];
@@ -381,7 +381,7 @@ function TemplatesSection() {
                       <td className="px-3 py-2.5 font-medium whitespace-nowrap">{t.name}</td>
                       <td className="px-3 py-2.5">
                         {insts.length === 0 ? (
-                          <span className="text-[var(--color-muted)]">—</span>
+                          <span className="text-[var(--color-muted)]">-</span>
                         ) : (
                           <div className="flex flex-wrap gap-1.5">
                             {insts.map((ins, i) => (
@@ -533,7 +533,7 @@ function ReconciliationSection() {
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {result.allocations.map((a, i) => (
                     <span key={i} className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)]">
-                      #{a.voucherNumber ?? "—"} · <span className="tabular-nums text-[var(--color-text)]">{rupee(a.amount)}</span>
+                      #{a.voucherNumber ?? "-"} · <span className="tabular-nums text-[var(--color-text)]">{rupee(a.amount)}</span>
                     </span>
                   ))}
                 </div>
@@ -565,8 +565,8 @@ function ReconciliationSection() {
                     ) : (
                       credits.map((c, i) => (
                         <tr key={c.id ?? c.voucherId ?? i} className="border-b border-[var(--color-border)] last:border-b-0">
-                          <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{c.date ?? "—"}</td>
-                          <td className="px-3 py-2.5 font-mono text-xs">{c.voucherNumber ?? "—"}</td>
+                          <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{c.date ?? "-"}</td>
+                          <td className="px-3 py-2.5 font-mono text-xs">{c.voucherNumber ?? "-"}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums">{rupee(c.unapplied ?? c.amount)}</td>
                         </tr>
                       ))
@@ -599,8 +599,8 @@ function ReconciliationSection() {
                     ) : (
                       bills.map((b, i) => (
                         <tr key={b.id ?? b.voucherId ?? i} className="border-b border-[var(--color-border)] last:border-b-0">
-                          <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{b.date ?? "—"}</td>
-                          <td className="px-3 py-2.5 font-mono text-xs">{b.voucherNumber ?? "—"}</td>
+                          <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{b.date ?? "-"}</td>
+                          <td className="px-3 py-2.5 font-mono text-xs">{b.voucherNumber ?? "-"}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums">{rupee(b.outstanding ?? b.amount)}</td>
                         </tr>
                       ))

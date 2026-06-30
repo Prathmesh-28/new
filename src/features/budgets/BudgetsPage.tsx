@@ -142,7 +142,7 @@ export default function BudgetsPage() {
         <EmptyState
           icon={PiggyBank}
           title="No budgets yet"
-          description="Set monthly limits by category to track budget vs actual — we'll flag overspends and categories trending up versus last month, live from your transactions."
+          description="Set monthly limits by category to track budget vs actual - we'll flag overspends and categories trending up versus last month, live from your transactions."
           ctaText="Create your first budget"
           onCta={() => setAdding(true)}
         />
@@ -280,7 +280,7 @@ export default function BudgetsPage() {
       </>
       )}
 
-      {/* Advanced budgeting tools (#198–#200) */}
+      {/* Advanced budgeting tools (#198-#200) */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
         {([
           ["zero-based", "Zero-Based Builder", RotateCcw],
@@ -385,7 +385,7 @@ function ZeroBasedBudgetBuilder() {
     if (!label.trim() || amt <= 0) { toast.error("Enter a line item and a justified amount"); return; }
     upsertLines([...lines, { id: crypto.randomUUID(), category, label: label.trim(), justified: amt }]);
     setLabel(""); setAmount("");
-    toast.success("Line added — every rupee re-justified");
+    toast.success("Line added - every rupee re-justified");
   };
   const remove = (id: string) => upsertLines(lines.filter(l => l.id !== id));
   const copyPrior = () => {
@@ -409,7 +409,7 @@ function ZeroBasedBudgetBuilder() {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><RotateCcw size={14} className="text-[var(--color-primary)]" /> Rolling / Zero-Based Budget Builder</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Build each period from a clean slate — justify every line item, then compare against live actuals from your transactions. Roll a prior month forward as a starting point if you prefer a rolling budget.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Build each period from a clean slate - justify every line item, then compare against live actuals from your transactions. Roll a prior month forward as a starting point if you prefer a rolling budget.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
           <input type="month" value={period} onChange={e => setPeriod(e.target.value)} className={INP} />
           <select value={category} onChange={e => setCategory(e.target.value)} className={INP}>
@@ -477,7 +477,7 @@ function DepartmentBudgetAllocation() {
   const [category, setCategory] = useState<string>("expense");
   const fc = formatCurrency;
 
-  // Live spend this month, by category — a proxy for what each department is consuming.
+  // Live spend this month, by category - a proxy for what each department is consuming.
   const spendByCat = useMemo(() => {
     const start = startOfMonth(new Date()).toISOString().split("T")[0];
     const end = endOfMonth(new Date()).toISOString().split("T")[0];
@@ -715,7 +715,7 @@ function StatCards({ cards }: { cards: { label: string; value: string; color?: s
   );
 }
 
-// ── Annual Budget Builder — spread a yearly figure across 12 months ──────────────
+// ── Annual Budget Builder - spread a yearly figure across 12 months ──────────────
 type AnnualLine = { id: string; label: string; category: string; annual: number; mode: "even" | "seasonal" };
 // A simple India-aware seasonal weighting (festival/quarter-end skew), normalised to 12.
 const SEASONAL = [0.85, 0.8, 1.05, 0.95, 0.95, 1.0, 1.0, 1.0, 1.05, 1.2, 1.25, 0.9];
@@ -744,10 +744,10 @@ function AnnualBudgetBuilder() {
   };
   const monthlyTotals = MONTH_KEYS.map((_, mi) => lines.reduce((s, l) => s + spread(l)[mi], 0));
   const grandTotal = lines.reduce((s, l) => s + l.annual, 0);
-  const peakMonth = monthlyTotals.length ? MONTH_KEYS[monthlyTotals.indexOf(Math.max(...monthlyTotals))] : "—";
+  const peakMonth = monthlyTotals.length ? MONTH_KEYS[monthlyTotals.indexOf(Math.max(...monthlyTotals))] : "-";
 
   return (
-    <ToolShell icon={CalendarRange} title="Annual Budget Builder" intro="Enter one annual figure per line and spread it across 12 months — evenly, or with a festival-weighted seasonal curve (Oct–Nov skew). Build the full-year plan in minutes.">
+    <ToolShell icon={CalendarRange} title="Annual Budget Builder" intro="Enter one annual figure per line and spread it across 12 months - evenly, or with a festival-weighted seasonal curve (Oct-Nov skew). Build the full-year plan in minutes.">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Line item *" className={INP} />
         <select value={category} onChange={e => setCategory(e.target.value)} className={INP}>
@@ -799,7 +799,7 @@ function AnnualBudgetBuilder() {
   );
 }
 
-// ── Budget-vs-Actual Variance Report — live from budgets + transactions ──────────
+// ── Budget-vs-Actual Variance Report - live from budgets + transactions ──────────
 function BudgetVarianceReport() {
   const { store } = useApp();
   const budgets = store.budgets ?? [];
@@ -863,7 +863,7 @@ function BudgetVarianceReport() {
   );
 }
 
-// ── Flexible Budget Recalc — volume-adjust variable costs for fair variance ──────
+// ── Flexible Budget Recalc - volume-adjust variable costs for fair variance ──────
 type FlexLine = { id: string; label: string; fixed: number; variablePerUnit: number };
 
 function FlexibleBudgetRecalc() {
@@ -890,7 +890,7 @@ function FlexibleBudgetRecalc() {
   const volumeEffect = flexBudget - staticBudget;
 
   return (
-    <ToolShell icon={SlidersHorizontal} title="Flexible Budget Recalc" intro="Split each cost into fixed + variable-per-unit, then flex the budget to actual volume. Comparing actuals to the flexed budget — not the static one — isolates true cost performance from volume-driven swings.">
+    <ToolShell icon={SlidersHorizontal} title="Flexible Budget Recalc" intro="Split each cost into fixed + variable-per-unit, then flex the budget to actual volume. Comparing actuals to the flexed budget - not the static one - isolates true cost performance from volume-driven swings.">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Planned volume (units)</label>
@@ -938,7 +938,7 @@ function FlexibleBudgetRecalc() {
   );
 }
 
-// ── Cash Budget Planner — opening cash, planned inflows/outflows, closing ─────────
+// ── Cash Budget Planner - opening cash, planned inflows/outflows, closing ─────────
 type CashRow = { id: string; month: string; inflow: number; outflow: number };
 
 function CashBudgetPlanner() {
@@ -1012,7 +1012,7 @@ function CashBudgetPlanner() {
   );
 }
 
-// ── Headcount / Manpower Budget — roles with statutory loaded cost ────────────────
+// ── Headcount / Manpower Budget - roles with statutory loaded cost ────────────────
 type Hire = { id: string; role: string; dept: string; headcount: number; monthlyCtc: number; startMonth: string };
 const PF_ESI_LOAD = 0.13; // employer PF (12%) + ESI (~1%) approximation on CTC
 
@@ -1083,7 +1083,7 @@ function HeadcountBudgetPlanner() {
   );
 }
 
-// ── Project Budget Tracker — budget + actual + % per project ──────────────────────
+// ── Project Budget Tracker - budget + actual + % per project ──────────────────────
 type Project = { id: string; name: string; client: string; budget: number; spent: number };
 
 function ProjectBudgetTracker() {
@@ -1154,7 +1154,7 @@ function ProjectBudgetTracker() {
   );
 }
 
-// ── Budget Utilization Gauges — live consumption % per budget this month ──────────
+// ── Budget Utilization Gauges - live consumption % per budget this month ──────────
 function BudgetUtilizationGauges() {
   const { store } = useApp();
   const budgets = store.budgets ?? [];
@@ -1185,7 +1185,7 @@ function BudgetUtilizationGauges() {
   });
 
   return (
-    <ToolShell icon={Gauge} title="Budget Utilization Gauges" intro={`Live consumption against each budget this month. We're ${expectedPace.toFixed(0)}% through ${format(today, "MMMM")} — any gauge well above that line is pacing too fast and likely to overspend.`}>
+    <ToolShell icon={Gauge} title="Budget Utilization Gauges" intro={`Live consumption against each budget this month. We're ${expectedPace.toFixed(0)}% through ${format(today, "MMMM")} - any gauge well above that line is pacing too fast and likely to overspend.`}>
       {gauges.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {gauges.map(g => {
@@ -1215,7 +1215,7 @@ function BudgetUtilizationGauges() {
   );
 }
 
-// ── Forecast-vs-Budget Reforecast — restate the rest of the year from actuals ─────
+// ── Forecast-vs-Budget Reforecast - restate the rest of the year from actuals ─────
 function ForecastVsBudgetReforecast() {
   const { store } = useApp();
   const budgets = store.budgets ?? [];
@@ -1290,7 +1290,7 @@ function ForecastVsBudgetReforecast() {
   );
 }
 
-// ── Marketing Budget Allocator — split spend across channels by ROI ───────────────
+// ── Marketing Budget Allocator - split spend across channels by ROI ───────────────
 type Channel = { id: string; name: string; spend: number; revenue: number };
 
 function MarketingBudgetAllocator() {
@@ -1325,10 +1325,10 @@ function MarketingBudgetAllocator() {
     const tr = channels.reduce((s, c) => s + c.revenue, 0);
     return ts > 0 ? tr / ts : 0;
   })();
-  const bestChannel = rows.length > 0 ? rows[0].name : "—";
+  const bestChannel = rows.length > 0 ? rows[0].name : "-";
 
   return (
-    <ToolShell icon={Megaphone} title="Marketing Budget Allocator" intro="Enter prior spend and revenue per channel, set your next-period marketing pool, and we recommend an allocation weighted by each channel's return on ad spend (ROAS) — funnelling more budget to what actually converts.">
+    <ToolShell icon={Megaphone} title="Marketing Budget Allocator" intro="Enter prior spend and revenue per channel, set your next-period marketing pool, and we recommend an allocation weighted by each channel's return on ad spend (ROAS) - funnelling more budget to what actually converts.">
       <div className="md:max-w-xs mb-3">
         <label className="text-xs text-[var(--color-muted)] block mb-1">Marketing pool to allocate (₹)</label>
         <input type="number" min="0" value={budget} onChange={e => setBudget(e.target.value)} placeholder="e.g. 500000" className={INP} />
@@ -1372,7 +1372,7 @@ function MarketingBudgetAllocator() {
   );
 }
 
-// ── Cost-Cutting Simulator — rank live expenses by cuttability, model savings ─────
+// ── Cost-Cutting Simulator - rank live expenses by cuttability, model savings ─────
 type CutLevel = "easy" | "medium" | "hard";
 const CUT_PCT: Record<CutLevel, number> = { easy: 0.3, medium: 0.15, hard: 0.05 };
 
@@ -1451,7 +1451,7 @@ function CostCuttingSimulator() {
   );
 }
 
-// ── Budget Reallocation Tool — move budget between live budgets, balance to zero ──
+// ── Budget Reallocation Tool - move budget between live budgets, balance to zero ──
 type Move = { id: string; fromId: string; toId: string; amount: number };
 
 function BudgetReallocationTool() {
@@ -1482,10 +1482,10 @@ function BudgetReallocationTool() {
   const totalBefore = budgets.reduce((s, b) => s + b.monthlyLimit, 0);
   const totalAfter = revised.reduce((s, b) => s + b.revised, 0);
   const netSwing = moves.reduce((s, m) => s + m.amount, 0);
-  const nameOf = (id: string) => budgets.find(b => b.id === id)?.label ?? "—";
+  const nameOf = (id: string) => budgets.find(b => b.id === id)?.label ?? "-";
 
   return (
-    <ToolShell icon={ArrowLeftRight} title="Budget Reallocation Tool" intro="Move money between your budget categories without changing the total. Queue from → to transfers and see each budget's revised limit — total pool stays balanced, so reallocations never silently inflate the plan.">
+    <ToolShell icon={ArrowLeftRight} title="Budget Reallocation Tool" intro="Move money between your budget categories without changing the total. Queue from → to transfers and see each budget's revised limit - total pool stays balanced, so reallocations never silently inflate the plan.">
       {budgets.length >= 2 ? (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1540,7 +1540,7 @@ function BudgetReallocationTool() {
   );
 }
 
-// ── Quarterly Phasing Planner — spread an annual figure across Q1–Q4 ──────────────
+// ── Quarterly Phasing Planner - spread an annual figure across Q1-Q4 ──────────────
 type PhaseLine = { id: string; label: string; annual: number; q1: number; q2: number; q3: number; q4: number };
 const QUARTERS = ["q1", "q2", "q3", "q4"] as const;
 const Q_LABELS = ["Q1", "Q2", "Q3", "Q4"] as const;
@@ -1557,7 +1557,7 @@ function QuarterlyPhasingPlanner() {
     const even = amt / 4;
     setLines(prev => [...prev, { id: crypto.randomUUID(), label: label.trim(), annual: amt, q1: even, q2: even, q3: even, q4: even }]);
     setLabel(""); setAnnual("");
-    toast.success("Line added — phased evenly across quarters");
+    toast.success("Line added - phased evenly across quarters");
   };
   const remove = (id: string) => setLines(prev => prev.filter(l => l.id !== id));
   const setQ = (id: string, q: typeof QUARTERS[number], value: number) =>
@@ -1620,7 +1620,7 @@ function QuarterlyPhasingPlanner() {
   );
 }
 
-// ── Contingency Reserve Planner — buffer sized to spend volatility ────────────────
+// ── Contingency Reserve Planner - buffer sized to spend volatility ────────────────
 function ContingencyReservePlanner() {
   const { store } = useApp();
   const transactions = store.transactions ?? [];
@@ -1646,13 +1646,13 @@ function ContingencyReservePlanner() {
     return { mean, std, cv, monthly };
   }, [transactions]);
 
-  // Suggested buffer % scales with volatility (cap 5–30%); a manual override wins.
+  // Suggested buffer % scales with volatility (cap 5-30%); a manual override wins.
   const suggestedPct = Math.min(Math.max(stats.cv * 100, 5), 30);
   const usePct = manualPct.trim() !== "" ? (parseFloat(manualPct) || 0) : suggestedPct;
   const reserve = stats.mean * (usePct / 100);
 
   return (
-    <ToolShell icon={ShieldCheck} title="Contingency Reserve Planner" intro="Sizes a contingency buffer from your last 6 months of spend: the more volatile your monthly outflows, the larger the suggested reserve (5–30% of average monthly spend). Override the percentage if you want a fixed policy.">
+    <ToolShell icon={ShieldCheck} title="Contingency Reserve Planner" intro="Sizes a contingency buffer from your last 6 months of spend: the more volatile your monthly outflows, the larger the suggested reserve (5-30% of average monthly spend). Override the percentage if you want a fixed policy.">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-1">
         <div className="md:col-span-2">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Override reserve % (optional)</label>

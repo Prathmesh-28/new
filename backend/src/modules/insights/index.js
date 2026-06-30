@@ -1,10 +1,10 @@
-// Insights — two layers:
+// Insights - two layers:
 //
 //   A) Cross-module KPI overview (finance from books, sales from CRM, people from
 //      HRMS) + saved dashboards. Computed live so it always reconciles. (UNCHANGED.)
 //
 //   B) A SAFE query engine ported from Frappe Insights' query/chart/dashboard model.
-//      A query is a STRUCTURED MODEL over a WHITELISTED dataset — never raw SQL. The
+//      A query is a STRUCTURED MODEL over a WHITELISTED dataset - never raw SQL. The
 //      model { source, columns, filters, group_by, order_by, limit } is compiled to a
 //      PARAMETERIZED SQL string. Safety is the point:
 //        - only columns present in the dataset whitelist may appear (every column /
@@ -23,7 +23,7 @@ const crm = require("../crm");
 const hrms = require("../hrms");
 
 // ─────────────────────────────────────────────────────────────────────────────
-// A) LIVE CROSS-MODULE OVERVIEW  (unchanged behaviour — the page depends on it)
+// A) LIVE CROSS-MODULE OVERVIEW  (unchanged behaviour - the page depends on it)
 // ─────────────────────────────────────────────────────────────────────────────
 const METRIC_CATALOG = [
   { key: "income", label: "Income (FY)", group: "Finance" },
@@ -96,7 +96,7 @@ const AGGREGATES = {
 
 // Fixed operator allowlist (mirrors Frappe's BinaryOperations + set ops). Each entry
 // knows its arity and how many $N placeholders it consumes. Values NEVER touch the
-// SQL string — only `$N` placeholders do.
+// SQL string - only `$N` placeholders do.
 const OPERATORS = {
   "=": { sql: (c, p) => `${c} = ${p[0]}`, params: 1 },
   "!=": { sql: (c, p) => `${c} <> ${p[0]}`, params: 1 },
@@ -118,7 +118,7 @@ const OPERATORS = {
 const DATASETS = {
   vouchers: {
     label: "Vouchers (book entries)",
-    description: "Every accounting voucher — sales, purchases, payments, receipts, journals.",
+    description: "Every accounting voucher - sales, purchases, payments, receipts, journals.",
     from: "book_vouchers",
     columns: {
       voucher_type: { type: "string" },
@@ -209,7 +209,7 @@ const DATASETS = {
 
   crm_deals: {
     label: "CRM deals",
-    description: "Sales pipeline — deals, their stage, value and probability.",
+    description: "Sales pipeline - deals, their stage, value and probability.",
     from: "crm_deals",
     columns: {
       title: { type: "string" },
@@ -241,7 +241,7 @@ const DATASETS = {
 
   hrms_employees: {
     label: "Employees",
-    description: "People directory — department, designation, status, joining date.",
+    description: "People directory - department, designation, status, joining date.",
     from: "hrms_employees",
     columns: {
       name: { type: "string" },
@@ -257,7 +257,7 @@ const DATASETS = {
 
   hrms_payroll_runs: {
     label: "Payroll runs",
-    description: "Monthly payroll runs — gross, deductions and net.",
+    description: "Monthly payroll runs - gross, deductions and net.",
     from: "hrms_payroll_runs",
     columns: {
       run_month: { type: "string" },
@@ -270,7 +270,7 @@ const DATASETS = {
   },
 };
 
-// Public catalogue (no `from` expressions leak to the client — only safe metadata).
+// Public catalogue (no `from` expressions leak to the client - only safe metadata).
 function datasetsCatalog() {
   return Object.entries(DATASETS).map(([key, ds]) => ({
     key,
@@ -280,7 +280,7 @@ function datasetsCatalog() {
   }));
 }
 
-// A bare, valid SQL identifier — defensive sanity check on whitelist keys before
+// A bare, valid SQL identifier - defensive sanity check on whitelist keys before
 // they reach the SQL string. (Column names always come from DATASETS keys, never
 // from user input, but we re-assert the shape so a bad whitelist entry can never
 // produce an injectable identifier.)
@@ -303,7 +303,7 @@ function resolveColumn(dataset, column) {
 }
 
 // Coerce/validate a filter value for binding. Arrays only allowed for `in`. We never
-// inspect the value's content for SQL — it's bound as a parameter — but we reject
+// inspect the value's content for SQL - it's bound as a parameter - but we reject
 // shapes that would break arity (objects, nested arrays) to fail loudly.
 function normalizeValue(v) {
   if (v === null || v === undefined) return null;
@@ -327,7 +327,7 @@ function compile(model, tenantId) {
     return `$${params.length}`;
   };
 
-  // SELECT — columns with optional aggregate. `count` ignores its column (COUNT(*)).
+  // SELECT - columns with optional aggregate. `count` ignores its column (COUNT(*)).
   const cols = Array.isArray(model.columns) ? model.columns : [];
   const groupBy = Array.isArray(model.group_by) ? model.group_by : [];
   const selectParts = [];
@@ -340,7 +340,7 @@ function compile(model, tenantId) {
 
   if (cols.length === 0 && groupBy.length === 0) {
     // No columns chosen → select every whitelisted column explicitly (never `*`,
-    // and never tenant noise — exactly the catalogued columns).
+    // and never tenant noise - exactly the catalogued columns).
     for (const c of Object.keys(dataset.columns)) selectParts.push(`"${assertIdent(c)}"`);
   } else {
     // group_by columns are always selected (as dimensions).
@@ -355,7 +355,7 @@ function compile(model, tenantId) {
       const aggFn = AGGREGATES[agg];
 
       if (agg === "count") {
-        // COUNT(*) — alias to a stable name so the result column is predictable.
+        // COUNT(*) - alias to a stable name so the result column is predictable.
         selectParts.push(`COUNT(*) AS "count"`);
         continue;
       }
@@ -377,7 +377,7 @@ function compile(model, tenantId) {
     }
   }
 
-  // WHERE — tenant filter ALWAYS first, then validated/parameterized user filters.
+  // WHERE - tenant filter ALWAYS first, then validated/parameterized user filters.
   const whereParts = [`"tenant_id" = $1`];
   const filters = Array.isArray(model.filters) ? model.filters : [];
   for (const f of filters) {
@@ -400,7 +400,7 @@ function compile(model, tenantId) {
     }
   }
 
-  // ORDER BY — column must be whitelisted; direction restricted to ASC/DESC.
+  // ORDER BY - column must be whitelisted; direction restricted to ASC/DESC.
   const orderBy = Array.isArray(model.order_by) ? model.order_by : [];
   const orderParts = [];
   for (const o of orderBy) {
@@ -410,7 +410,7 @@ function compile(model, tenantId) {
     orderParts.push(`${sqlCol} ${dir}`);
   }
 
-  // LIMIT — always present, hard-capped.
+  // LIMIT - always present, hard-capped.
   let limit = Number.parseInt(model.limit, 10);
   if (!Number.isFinite(limit) || limit <= 0) limit = DEFAULT_LIMIT;
   if (limit > MAX_LIMIT) limit = MAX_LIMIT;

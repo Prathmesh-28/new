@@ -1,4 +1,4 @@
-// §3.2 — the public surface of the books module. Everything OUTSIDE the module
+// §3.2 - the public surface of the books module. Everything OUTSIDE the module
 // must interact only through here (never the ledger tables directly).
 const engine = require("./posting-engine");
 const reports = require("./reports");

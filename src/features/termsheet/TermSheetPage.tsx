@@ -190,7 +190,7 @@ export default function TermSheetPage() {
                 </div>
                 <div className="bg-[var(--color-bg)] rounded-lg p-3 border border-[var(--color-border)] col-span-2">
                   <p className="text-[10px] text-[var(--color-muted)]">Structure</p>
-                  <p className="text-xs font-medium mt-0.5">No equity — repaid from revenue</p>
+                  <p className="text-xs font-medium mt-0.5">No equity - repaid from revenue</p>
                 </div>
               </>
             )}
@@ -207,7 +207,7 @@ export default function TermSheetPage() {
           <table className="w-full text-xs">
             <tbody className="divide-y divide-gray-100">
               {[
-                ["Investor", investor || "—"],
+                ["Investor", investor || "-"],
                 ["Investment amount", formatCurrency(investment)],
                 ...(roundType === "priced" ? [
                   ["Pre-money valuation", formatCurrency(preMoney)],
@@ -231,11 +231,11 @@ export default function TermSheetPage() {
                 ...(roundType === "rev_share" ? [
                   ["Repayment cap", `${revShareMultiple}× (${formatCurrency(result.repaymentTotal)})`],
                   ["Term", `${termMonths} months`],
-                  ["Security", "None — revenue-linked"],
+                  ["Security", "None - revenue-linked"],
                 ] : []),
                 ...(isEquity ? [
                   ["Liquidation preference", liqPref],
-                  ["Board seat", boardSeat ? "Yes — 1 investor seat" : "No"],
+                  ["Board seat", boardSeat ? "Yes - 1 investor seat" : "No"],
                   ["Pro-rata rights", proRata ? "Yes" : "No"],
                 ] : []),
                 ["Conversion / structure", result.conversionNote],
@@ -269,7 +269,7 @@ export default function TermSheetPage() {
 
 const tsInp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
-// ── #120 Term-Sheet Comparator — compare 2-3 offers on valuation / liquidation / control ──
+// ── #120 Term-Sheet Comparator - compare 2-3 offers on valuation / liquidation / control ──
 interface Offer {
   id: string;
   investor: string;
@@ -415,13 +415,13 @@ function TermSheetComparator() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <Info size={12} className="shrink-0 mt-px" />
-        Option pool is assumed created pre-money, so it dilutes founders not the incoming investor. A higher liquidation multiple or participating preference reduces founder/common payout at exit — model it in the Liquidation Pref tab.
+        Option pool is assumed created pre-money, so it dilutes founders not the incoming investor. A higher liquidation multiple or participating preference reduces founder/common payout at exit - model it in the Liquidation Pref tab.
       </div>
     </div>
   );
 }
 
-// ── #121 Liquidation-Preference Modeller — 1x/2x participating vs non-participating at exit ──
+// ── #121 Liquidation-Preference Modeller - 1x/2x participating vs non-participating at exit ──
 function LiquidationPrefModeller() {
   const [exitValue, setExitValue]       = useState(50_000_000);
   const [investment, setInvestment]     = useState(10_000_000);
@@ -510,7 +510,7 @@ function LiquidationPrefModeller() {
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-        <p className="text-xs font-semibold mb-2">Waterfall — {mode}</p>
+        <p className="text-xs font-semibold mb-2">Waterfall - {mode}</p>
         <div className="space-y-2">
           {[
             { label: "Investor (preferred)", value: investorPayout, color: "#6366f1" },
@@ -540,7 +540,7 @@ function LiquidationPrefModeller() {
   );
 }
 
-// ── #122 ESOP-Pool Top-up Impact — dilution from expanding the pool pre-round ──
+// ── #122 ESOP-Pool Top-up Impact - dilution from expanding the pool pre-round ──
 function EsopTopupImpact() {
   const [founderPct, setFounderPct]       = useState(70);
   const [investorPct, setInvestorPct]     = useState(20);
@@ -578,7 +578,7 @@ function EsopTopupImpact() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
         <div>
           <h3 className="text-sm font-semibold flex items-center gap-2"><Users size={14} className="text-[var(--color-primary)]" /> ESOP-Pool Top-up Impact</h3>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Investors often demand a bigger option pool created pre-round — the increment comes out of founders' shares. See the dilution before you sign.</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Investors often demand a bigger option pool created pre-round - the increment comes out of founders' shares. See the dilution before you sign.</p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <label className="text-xs text-[var(--color-muted)] block">Founder / common %
@@ -645,13 +645,13 @@ function EsopTopupImpact() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <Info size={12} className="shrink-0 mt-px" />
-        A pre-money pool top-up effectively lowers the founders' real pre-money price — the &quot;option pool shuffle.&quot; Negotiating the pool post-money, or sizing it to the actual hiring plan, preserves founder ownership. Single-round model; convert existing pool too if it carries over.
+        A pre-money pool top-up effectively lowers the founders' real pre-money price - the &quot;option pool shuffle.&quot; Negotiating the pool post-money, or sizing it to the actual hiring plan, preserves founder ownership. Single-round model; convert existing pool too if it carries over.
       </div>
     </div>
   );
 }
 
-// ── #123 Term-Sheet Clause Explainer — plain-language clause library with founder/investor impact ──
+// ── #123 Term-Sheet Clause Explainer - plain-language clause library with founder/investor impact ──
 interface ClauseInfo {
   id: string;
   name: string;
@@ -668,7 +668,7 @@ const CLAUSES: ClauseInfo[] = [
     negotiate: "Hold to 1× non-participating. Resist participation, or cap it at 2-3×." },
   { id: "anti-dilution", name: "Anti-Dilution Protection", founderFriendly: "watch",
     what: "Re-prices investor shares if you raise a later round at a lower price (a down round).",
-    impact: "Full-ratchet repriced everything to the new low price — brutal dilution for founders. Weighted-average is gentler.",
+    impact: "Full-ratchet repriced everything to the new low price - brutal dilution for founders. Weighted-average is gentler.",
     negotiate: "Always push for broad-based weighted-average, never full-ratchet." },
   { id: "drag-tag", name: "Drag-Along / Tag-Along", founderFriendly: "neutral",
     what: "Drag-along lets a majority force minority holders to join a sale; tag-along lets minorities join a majority's sale on the same terms.",
@@ -734,13 +734,13 @@ function ClauseExplainer() {
       </div>
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <Info size={12} className="shrink-0 mt-px" />
-        Educational summary only — not legal advice. Always have a lawyer review your definitive documents before signing.
+        Educational summary only - not legal advice. Always have a lawyer review your definitive documents before signing.
       </div>
     </div>
   );
 }
 
-// ── #124 Anti-Dilution Calculator — full-ratchet vs broad-based weighted-average on a down round ──
+// ── #124 Anti-Dilution Calculator - full-ratchet vs broad-based weighted-average on a down round ──
 function AntiDilutionCalc() {
   const [origPrice, setOrigPrice]   = useState(100);     // ₹ per share investor paid
   const [origShares, setOrigShares] = useState(100_000); // preferred shares held by investor
@@ -801,7 +801,7 @@ function AntiDilutionCalc() {
             <input type="number" value={newMoney} onChange={e => setNewMoney(+e.target.value)} className={tsInp} />
           </label>
         </div>
-        {!down && <p className="text-[11px] text-green-400">New price ≥ original — no down round, so anti-dilution does not trigger.</p>}
+        {!down && <p className="text-[11px] text-green-400">New price ≥ original - no down round, so anti-dilution does not trigger.</p>}
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
@@ -819,7 +819,7 @@ function AntiDilutionCalc() {
                 <td className={`px-4 py-2.5 font-medium ${r.color}`}>{r.label}</td>
                 <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.cp))}</td>
                 <td className="px-4 py-2.5 tabular-nums">{Math.round(r.asConvertedShares).toLocaleString("en-IN")}</td>
-                <td className="px-4 py-2.5 tabular-nums text-orange-400">{r.bonus > 0.5 ? `+${Math.round(r.bonus).toLocaleString("en-IN")}` : "—"}</td>
+                <td className="px-4 py-2.5 tabular-nums text-orange-400">{r.bonus > 0.5 ? `+${Math.round(r.bonus).toLocaleString("en-IN")}` : "-"}</td>
               </tr>
             ))}
           </tbody>
@@ -828,13 +828,13 @@ function AntiDilutionCalc() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <Info size={12} className="shrink-0 mt-px" />
-        Full ratchet resets the investor's conversion price to the new low price regardless of how few shares are sold — maximal founder dilution. Broad-based weighted-average blends old and new prices by volume, so a small down round causes only a small adjustment. Always negotiate for weighted-average.
+        Full ratchet resets the investor's conversion price to the new low price regardless of how few shares are sold - maximal founder dilution. Broad-based weighted-average blends old and new prices by volume, so a small down round causes only a small adjustment. Always negotiate for weighted-average.
       </div>
     </div>
   );
 }
 
-// ── #125 Pro-Rata Rights Calculator — what an investor must invest to hold their % in the next round ──
+// ── #125 Pro-Rata Rights Calculator - what an investor must invest to hold their % in the next round ──
 function ProRataCalc() {
   const [currentPct, setCurrentPct] = useState(15);
   const [roundSize, setRoundSize]   = useState(50_000_000);
@@ -861,7 +861,7 @@ function ProRataCalc() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
         <div>
           <h3 className="text-sm font-semibold flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> Pro-Rata Rights Calculator</h3>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">An investor with pro-rata rights can buy enough of the next round to keep their ownership %. See the cheque size required — and the dilution if they pass.</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">An investor with pro-rata rights can buy enough of the next round to keep their ownership %. See the cheque size required - and the dilution if they pass.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <label className="text-xs text-[var(--color-muted)] block">Current ownership %
@@ -888,13 +888,13 @@ function ProRataCalc() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <Info size={12} className="shrink-0 mt-px" />
-        Pro-rata simply means buying your ownership share of the new round. Exercising keeps your % flat; skipping dilutes you by the round's own dilution. Founders: heavy pro-rata commitments from earlier investors can leave little room for a new lead — manage the allocation.
+        Pro-rata simply means buying your ownership share of the new round. Exercising keeps your % flat; skipping dilutes you by the round's own dilution. Founders: heavy pro-rata commitments from earlier investors can leave little room for a new lead - manage the allocation.
       </div>
     </div>
   );
 }
 
-// ── #126 SAFE vs Priced-Round Comparator — dilution & ownership of a SAFE (post-money cap) vs a priced round ──
+// ── #126 SAFE vs Priced-Round Comparator - dilution & ownership of a SAFE (post-money cap) vs a priced round ──
 function SafeVsPriced() {
   const [raise, setRaise]       = useState(5_000_000);
   const [cap, setCap]           = useState(50_000_000);   // SAFE post-money cap
@@ -916,8 +916,8 @@ function SafeVsPriced() {
   const cards = [
     { label: "SAFE investor ownership", value: `${safePct.toFixed(1)}%`, sub: `converts on ${safeBasis}`, color: "text-blue-400" },
     { label: "Priced-round ownership", value: `${pricedPct.toFixed(1)}%`, sub: `at ${formatAmount(preMoney)} pre`, color: "text-[var(--color-primary)]" },
-    { label: "Founder dilution — SAFE", value: `−${safePct.toFixed(1)}%`, sub: "deferred to conversion", color: "text-orange-400" },
-    { label: "Founder dilution — Priced", value: `−${pricedPct.toFixed(1)}%`, sub: "immediate", color: "text-orange-400" },
+    { label: "Founder dilution - SAFE", value: `−${safePct.toFixed(1)}%`, sub: "deferred to conversion", color: "text-orange-400" },
+    { label: "Founder dilution - Priced", value: `−${pricedPct.toFixed(1)}%`, sub: "immediate", color: "text-orange-400" },
   ];
 
   return (
@@ -960,7 +960,7 @@ function SafeVsPriced() {
         <p className="text-xs font-semibold mb-2">Verdict</p>
         <p className="text-xs leading-relaxed text-[var(--color-muted)]">
           {safePct < pricedPct
-            ? <>The <span className="text-blue-400 font-medium">SAFE</span> dilutes you less here ({safePct.toFixed(1)}% vs {pricedPct.toFixed(1)}%) and is faster/cheaper to close — but note India's FEMA rules make priced rounds / CCPS the compliant default for many situations.</>
+            ? <>The <span className="text-blue-400 font-medium">SAFE</span> dilutes you less here ({safePct.toFixed(1)}% vs {pricedPct.toFixed(1)}%) and is faster/cheaper to close - but note India's FEMA rules make priced rounds / CCPS the compliant default for many situations.</>
             : <>The <span className="text-[var(--color-primary)] font-medium">priced round</span> dilutes you less here ({pricedPct.toFixed(1)}% vs {safePct.toFixed(1)}%) and gives a firm valuation today, at the cost of slower, more expensive legals.</>}
           {" "}Raise: {fc(raise)}.
         </p>
@@ -968,13 +968,13 @@ function SafeVsPriced() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <Info size={12} className="shrink-0 mt-px" />
-        Post-money SAFE ownership is fixed at raise ÷ cap (the founder bears all subsequent dilution), unless the discounted next-round price beats the cap. Estimate only — actual conversion depends on the priced round's final terms and pool.
+        Post-money SAFE ownership is fixed at raise ÷ cap (the founder bears all subsequent dilution), unless the discounted next-round price beats the cap. Estimate only - actual conversion depends on the priced round's final terms and pool.
       </div>
     </div>
   );
 }
 
-// ── #127 Vesting / Cliff Schedule — month-by-month equity accrual with cliff ──
+// ── #127 Vesting / Cliff Schedule - month-by-month equity accrual with cliff ──
 function VestingSchedule() {
   const [totalShares, setTotalShares] = useState(400_000);
   const [years, setYears]             = useState(4);
@@ -1043,7 +1043,7 @@ function VestingSchedule() {
         <div className="h-2.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
           <div className="h-full rounded-full bg-[var(--color-primary)] transition-all duration-500" style={{ width: `${vestedPct}%` }} />
         </div>
-        {monthsServed < cliff && <p className="text-[11px] text-orange-400 mt-2">Still in the cliff — 0 vested until month {cliff}.</p>}
+        {monthsServed < cliff && <p className="text-[11px] text-orange-400 mt-2">Still in the cliff - 0 vested until month {cliff}.</p>}
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
@@ -1075,7 +1075,7 @@ function VestingSchedule() {
   );
 }
 
-// ── #128 Term-Sheet Readiness Checklist — durable, persisted across devices ──
+// ── #128 Term-Sheet Readiness Checklist - durable, persisted across devices ──
 interface CheckItem { id: string; label: string; done: boolean; }
 
 const DEFAULT_CHECKLIST: CheckItem[] = [
@@ -1131,7 +1131,7 @@ function TermSheetChecklist() {
 
       {pct === 100 && (
         <div className="bg-green-500/10 border border-green-500/40 rounded-lg px-4 py-2.5 text-[11px] text-green-400 flex items-start gap-2">
-          <Sparkles size={12} className="shrink-0 mt-px" /> All points reviewed — you are ready to sign with eyes open. Keep your lawyer in the loop on the definitive docs.
+          <Sparkles size={12} className="shrink-0 mt-px" /> All points reviewed - you are ready to sign with eyes open. Keep your lawyer in the loop on the definitive docs.
         </div>
       )}
 
@@ -1143,7 +1143,7 @@ function TermSheetChecklist() {
   );
 }
 
-// ── #129 Multi-Class Liquidation Waterfall — seniority-ordered payout across preferred classes ──
+// ── #129 Multi-Class Liquidation Waterfall - seniority-ordered payout across preferred classes ──
 interface PrefClass {
   id: string;
   name: string;
@@ -1288,7 +1288,7 @@ function MultiClassWaterfall() {
             <tr className="bg-[var(--color-accent)]/30">
               <td className="px-4 py-2.5 font-semibold">Common (founders + ESOP)</td>
               <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">last</td>
-              <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">—</td>
+              <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">-</td>
               <td className={`px-4 py-2.5 tabular-nums font-semibold ${commonPayout > 0 ? "text-green-400" : "text-red-400"}`}>{fc(Math.round(commonPayout))}</td>
               <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">residual</td>
               <td className="px-4 py-2.5 tabular-nums">{exit > 0 ? ((commonPayout / exit) * 100).toFixed(1) : "0.0"}%</td>
@@ -1299,13 +1299,13 @@ function MultiClassWaterfall() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <Info size={12} className="shrink-0 mt-px" />
-        Preferences pay in seniority order (lowest number first); later money is usually senior in real stacks. Non-participating classes take the greater of their preference or as-converted equity; participating classes also share the leftover. Ownership is approximated pro-rata to invested capital — a simplification of an actual share ledger.
+        Preferences pay in seniority order (lowest number first); later money is usually senior in real stacks. Non-participating classes take the greater of their preference or as-converted equity; participating classes also share the leftover. Ownership is approximated pro-rata to invested capital - a simplification of an actual share ledger.
       </div>
     </div>
   );
 }
 
-// ── #130 Board-Composition Modeler — seats by group and who holds control ──
+// ── #130 Board-Composition Modeler - seats by group and who holds control ──
 function BoardCompositionModeler() {
   const [founderSeats, setFounderSeats]   = useState(2);
   const [investorSeats, setInvestorSeats] = useState(1);
@@ -1379,16 +1379,16 @@ function BoardCompositionModeler() {
         : "bg-[var(--color-accent)]/40 border-[var(--color-border)] text-[var(--color-muted)]"}`}>
         <Info size={13} className="shrink-0 mt-px" />
         {total === 0 ? "Add at least one seat to model control."
-          : founderControls ? `Founders hold ${founderBloc}/${total} — a controlling majority. Investors get a voice, not control. This is the founder-friendly seed-stage default.`
-          : investorControls ? `Investors hold ${investorBloc}/${total} — they can outvote founders. Push for an independent seat or one investor seat only to keep founder/independent majority.`
-          : "No single bloc holds a majority — decisions need cross-group agreement. A neutral independent can be the swing vote; define how the chair/casting vote works."}
-        {deadlock && total % 2 === 0 && " An even board can deadlock — consider an odd number of seats."}
+          : founderControls ? `Founders hold ${founderBloc}/${total} - a controlling majority. Investors get a voice, not control. This is the founder-friendly seed-stage default.`
+          : investorControls ? `Investors hold ${investorBloc}/${total} - they can outvote founders. Push for an independent seat or one investor seat only to keep founder/independent majority.`
+          : "No single bloc holds a majority - decisions need cross-group agreement. A neutral independent can be the swing vote; define how the chair/casting vote works."}
+        {deadlock && total % 2 === 0 && " An even board can deadlock - consider an odd number of seats."}
       </div>
     </div>
   );
 }
 
-// ── #131 Milestone / Tranche Funding Planner — split a raise into milestone-gated tranches ──
+// ── #131 Milestone / Tranche Funding Planner - split a raise into milestone-gated tranches ──
 interface Tranche { id: string; label: string; amount: number; milestone: string; }
 
 function blankTranche(n: number): Tranche {
@@ -1497,13 +1497,13 @@ function TranchePlanner() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <Info size={12} className="shrink-0 mt-px" />
-        Tranching protects investors and stretches your runway, but missed milestones can stall the next tranche when you most need it. Negotiate objective, achievable triggers and a fixed price for all tranches so later money is not re-priced down. All tranches here are modeled at one pre-money — a real deal may re-price.
+        Tranching protects investors and stretches your runway, but missed milestones can stall the next tranche when you most need it. Negotiate objective, achievable triggers and a fixed price for all tranches so later money is not re-priced down. All tranches here are modeled at one pre-money - a real deal may re-price.
       </div>
     </div>
   );
 }
 
-// ── #132 Convertible-Note Maturity Scenarios — what happens at maturity if no priced round ──
+// ── #132 Convertible-Note Maturity Scenarios - what happens at maturity if no priced round ──
 function NoteMaturityScenarios() {
   const [principal, setPrincipal]   = useState(10_000_000);
   const [interestPct, setInterestPct] = useState(8);
@@ -1523,14 +1523,14 @@ function NoteMaturityScenarios() {
   const convPostMoney = convVal + balance;
   const convPct = convPostMoney > 0 ? (balance / convPostMoney) * 100 : 0;
   const convBasis = (cap > 0 && cap <= discPrice) ? "valuation cap" : "discounted price";
-  // Scenario 3: extend (no change today, interest keeps accruing) — illustrate +12 months
+  // Scenario 3: extend (no change today, interest keeps accruing) - illustrate +12 months
   const extYears = (termMonths + 12) / 12;
   const extBalance = principal + principal * (Math.max(0, interestPct) / 100) * extYears;
   const fc = formatCurrency;
 
   const scenarios = [
-    { name: "Repay in cash", detail: `Principal ${fc(principal)} + interest ${fc(Math.round(accruedInterest))}`, headline: fc(Math.round(balance)), note: "Needs cash you may not have — most startups can't repay.", color: "text-orange-400" },
-    { name: "Convert to equity", detail: `Converts on ${convBasis} at ${formatAmount(convVal)} → ≈${convPct.toFixed(1)}% stake`, headline: `${convPct.toFixed(1)}%`, note: "Most common outcome — note becomes equity at maturity.", color: "text-[var(--color-primary)]" },
+    { name: "Repay in cash", detail: `Principal ${fc(principal)} + interest ${fc(Math.round(accruedInterest))}`, headline: fc(Math.round(balance)), note: "Needs cash you may not have - most startups can't repay.", color: "text-orange-400" },
+    { name: "Convert to equity", detail: `Converts on ${convBasis} at ${formatAmount(convVal)} → ≈${convPct.toFixed(1)}% stake`, headline: `${convPct.toFixed(1)}%`, note: "Most common outcome - note becomes equity at maturity.", color: "text-[var(--color-primary)]" },
     { name: "Extend maturity", detail: `+12 months; balance grows to ${fc(Math.round(extBalance))}`, headline: fc(Math.round(extBalance)), note: "Buys time but more interest accrues; needs investor consent.", color: "text-blue-400" },
   ];
 
@@ -1591,13 +1591,13 @@ function NoteMaturityScenarios() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <Info size={12} className="shrink-0 mt-px" />
-        At maturity a note typically converts on the better of its cap or discount, or — failing a priced round — may be repaid or extended by negotiation. Interest is shown as simple (not compounded). In India, instrument choice (CCPS vs note) and FEMA rules affect what is actually permitted.
+        At maturity a note typically converts on the better of its cap or discount, or - failing a priced round - may be repaid or extended by negotiation. Interest is shown as simple (not compounded). In India, instrument choice (CCPS vs note) and FEMA rules affect what is actually permitted.
       </div>
     </div>
   );
 }
 
-// ── #133 Founder Dilution Over Rounds — cumulative ownership across a sequence of raises ──
+// ── #133 Founder Dilution Over Rounds - cumulative ownership across a sequence of raises ──
 interface RaiseRound { id: string; name: string; investorPct: number; poolPct: number; }
 
 function blankRound(n: number): RaiseRound {
@@ -1722,7 +1722,7 @@ function DilutionOverRounds() {
   );
 }
 
-// ── #126 Exit-Proceeds Distribution — split a sale across preferred stack + common after liquidation prefs ──
+// ── #126 Exit-Proceeds Distribution - split a sale across preferred stack + common after liquidation prefs ──
 interface ProceedRow {
   id: string;
   name: string;
@@ -1842,10 +1842,10 @@ function ExitProceedsDistribution() {
               <tr key={d.row.id} className="border-b border-[var(--color-border)] last:border-0">
                 <td className="px-4 py-2.5 font-medium">{d.row.name}</td>
                 <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{d.row.prefX <= 0 ? "Common" : d.converts ? "Converted to common" : d.row.participating ? "Pref + participation" : "Took preference"}</td>
-                <td className="px-4 py-2.5 tabular-nums">{d.prefPaid > 0 ? fc(Math.round(d.prefPaid)) : "—"}</td>
-                <td className="px-4 py-2.5 tabular-nums">{d.fromRemainder > 0 ? fc(Math.round(d.fromRemainder)) : "—"}</td>
+                <td className="px-4 py-2.5 tabular-nums">{d.prefPaid > 0 ? fc(Math.round(d.prefPaid)) : "-"}</td>
+                <td className="px-4 py-2.5 tabular-nums">{d.fromRemainder > 0 ? fc(Math.round(d.fromRemainder)) : "-"}</td>
                 <td className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{fc(Math.round(d.payout))}</td>
-                <td className={`px-4 py-2.5 tabular-nums ${d.row.invested > 0 ? (d.multiple >= 1 ? "text-green-400" : "text-red-400") : "text-[var(--color-muted)]"}`}>{d.row.invested > 0 ? `${d.multiple.toFixed(2)}×` : "—"}</td>
+                <td className={`px-4 py-2.5 tabular-nums ${d.row.invested > 0 ? (d.multiple >= 1 ? "text-green-400" : "text-red-400") : "text-[var(--color-muted)]"}`}>{d.row.invested > 0 ? `${d.multiple.toFixed(2)}×` : "-"}</td>
               </tr>
             ))}
           </tbody>
@@ -1873,13 +1873,13 @@ function ExitProceedsDistribution() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <Info size={12} className="shrink-0 mt-px" />
-        Simplified single-tier waterfall — all preferences are treated pari-passu (paid together, pro-rated if the exit can't cover them). Real stacks often have seniority ordering (later rounds paid first) and caps. Use this for a directional split, not the closing statement.
+        Simplified single-tier waterfall - all preferences are treated pari-passu (paid together, pro-rated if the exit can't cover them). Real stacks often have seniority ordering (later rounds paid first) and caps. Use this for a directional split, not the closing statement.
       </div>
     </div>
   );
 }
 
-// ── #127 ESOP Value at Exit — what an option grant is worth across exit valuations after strike & dilution ──
+// ── #127 ESOP Value at Exit - what an option grant is worth across exit valuations after strike & dilution ──
 function EsopExitValue() {
   const [grantPct, setGrantPct]       = useState(0.5);   // grant as % of fully-diluted at grant
   const [strikePrice, setStrikePrice] = useState(50);    // ₹ per share
@@ -1976,13 +1976,13 @@ function EsopExitValue() {
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <Info size={12} className="shrink-0 mt-px" />
-        Grant value erodes with every future round (dilution) and you pay the strike to exercise. Implied gain multiple at base exit: <span className="tabular-nums text-[var(--color-text)]">{gainMultiple.toFixed(1)}×</span> the grant-date price. Ignores taxes (perquisite + capital gains) and exit liquidation preferences ahead of common — net cash may be lower.
+        Grant value erodes with every future round (dilution) and you pay the strike to exercise. Implied gain multiple at base exit: <span className="tabular-nums text-[var(--color-text)]">{gainMultiple.toFixed(1)}×</span> the grant-date price. Ignores taxes (perquisite + capital gains) and exit liquidation preferences ahead of common - net cash may be lower.
       </div>
     </div>
   );
 }
 
-// ── #128 Convertible Discount-vs-Cap Chooser — which term wins at the next round's price ──
+// ── #128 Convertible Discount-vs-Cap Chooser - which term wins at the next round's price ──
 function DiscountVsCapChooser() {
   const [investment, setInvestment]   = useState(5_000_000);
   const [discountPct, setDiscountPct] = useState(20);
@@ -2023,7 +2023,7 @@ function DiscountVsCapChooser() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
         <div>
           <h3 className="text-sm font-semibold flex items-center gap-2"><SlidersHorizontal size={14} className="text-[var(--color-primary)]" /> Convertible Discount-vs-Cap Chooser</h3>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">A SAFE/note usually converts at the better of its discount or its valuation cap. See which term actually bites at a given next-round price — and the founder dilution it implies.</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">A SAFE/note usually converts at the better of its discount or its valuation cap. See which term actually bites at a given next-round price - and the founder dilution it implies.</p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <label className="text-xs text-[var(--color-muted)] block">Investment (₹)

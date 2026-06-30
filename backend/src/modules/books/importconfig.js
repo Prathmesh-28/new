@@ -1,16 +1,16 @@
-// §12b — Import Configurations + idempotent (hash-deduped) statement import.
+// §12b - Import Configurations + idempotent (hash-deduped) statement import.
 //
 // importers.js holds the DEEP, stateless parsers (OFX/QIF/CAMT/MT940/CSV). This
 // module is the data-importer layer ported in LOGIC (not code) from Firefly-III's
-// CSV/data-importer: it stores a reusable per-bank *Configuration* object — which
+// CSV/data-importer: it stores a reusable per-bank *Configuration* object - which
 // parser to use, optional column/value Mappings, a date-format hint, and the bank
-// account it binds to — and remembers a stable hash for every line it has ever
+// account it binds to - and remembers a stable hash for every line it has ever
 // imported so re-uploading the same statement is idempotent (already-seen lines
 // are skipped, never double-posted).
 //
 // Boundaries (per module conventions):
 //   • CommonJS, money as strings via ./money.
-//   • NO GL posting here — runImport only materialises raw bank lines via
+//   • NO GL posting here - runImport only materialises raw bank lines via
 //     recon.importLines; the user still confirms each line (recon.confirmLine →
 //     posting-engine.postVoucher) exactly as a manual import. Dedup happens BEFORE
 //     recon ever sees a line, so the ledger path is untouched.
@@ -57,7 +57,7 @@ function normMappings(m) {
 
 // Apply a Configuration's CSV column overrides by rewriting the header row of the
 // raw CSV so importers.parseCsv (which is header-driven) picks our intended columns.
-// Pure string surgery — keeps parseCsv as the single source of CSV truth.
+// Pure string surgery - keeps parseCsv as the single source of CSV truth.
 // columns values may be a header substring OR a 0-based column index (number/string).
 function applyCsvColumnMap(content, columns) {
   if (!columns || !Object.keys(columns).length) return content;
@@ -154,13 +154,13 @@ async function updateConfig(tenantId, id, body = {}) {
 
 async function deleteConfig(tenantId, id) {
   // Keep the hash ledger: deleting a config must NOT make previously-imported lines
-  // re-importable. Hashes are keyed by (tenant, bank_ledger) — independent of config.
+  // re-importable. Hashes are keyed by (tenant, bank_ledger) - independent of config.
   const { rowCount } = await pool.query("DELETE FROM book_import_configs WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
   if (!rowCount) throw new PostError("NOT_FOUND", "Import config not found", 404);
   return { ok: true, deleted: id };
 }
 
-// ── runImport — parse → dedup by hash → import new lines ───────────────────────
+// ── runImport - parse → dedup by hash → import new lines ───────────────────────
 // Idempotent: every line gets importers.lineHash(bankLedgerId, line). Hashes already
 // recorded in book_import_hashes are duplicates and skipped; new hashes are recorded
 // and their lines handed to recon.importLines. Re-running the SAME content yields
@@ -180,7 +180,7 @@ async function runImport(tenantId, { configId, content } = {}) {
   lines = applyValueMap(lines, mappings.valueMap);
 
   // 2. Hash every parsed line and collapse intra-batch dups (two byte-identical
-  //    lines in one statement share a hash — keep the first, count the rest as dups).
+  //    lines in one statement share a hash - keep the first, count the rest as dups).
   const byHash = new Map(); // hash -> first line with that hash
   for (const l of lines) {
     const h = importers.lineHash(cfg.bank_ledger_id, l);
@@ -193,7 +193,7 @@ async function runImport(tenantId, { configId, content } = {}) {
     await client.query("BEGIN");
 
     // 3. Claim hashes atomically. ON CONFLICT DO NOTHING + RETURNING tells us EXACTLY
-    //    which hashes WE inserted this run — anything not returned was already present
+    //    which hashes WE inserted this run - anything not returned was already present
     //    (a prior import or a concurrent run claimed it first), i.e. a duplicate. The
     //    unique index is the real guard, so a SELECT-then-INSERT race can't double-import.
     let freshHashes = [];
@@ -210,7 +210,7 @@ async function runImport(tenantId, { configId, content } = {}) {
       freshHashes = inserted.map((r) => r.line_hash);
     }
 
-    // 4. Materialise only the genuinely-new lines as raw UNMATCHED bank lines — the
+    // 4. Materialise only the genuinely-new lines as raw UNMATCHED bank lines - the
     //    SAME shape recon.importLines produces (/recon/import-file path). runImport
     //    only adds the dedup gate; GL posting still happens later via recon.confirmLine.
     //    We insert on OUR client so hash-claim + bank-line insert are one atomic txn.

@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES — response shapes mirror backend/src/modules/books/reports.js
+// TYPES - response shapes mirror backend/src/modules/books/reports.js
 // ─────────────────────────────────────────────────────────────────────────────
 interface Sch3Line { name: string; group: string; amount: string }
 interface Sch3Block { lines: Sch3Line[]; subtotal: string }
@@ -218,7 +218,7 @@ export default function BooksReportsProTab() {
         </h2>
         <div className="mt-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3 text-xs text-[var(--color-muted)] leading-relaxed">
           <span className="font-semibold text-[var(--color-fg)]">How to use:</span> Pick a financial
-          year (Apr–Mar, e.g. <span className="font-mono">{currentFy()}</span>) and an
+          year (Apr-Mar, e.g. <span className="font-mono">{currentFy()}</span>) and an
           "as-of" date, then load any report. Schedule III gives the statutory P&amp;L and
           balance sheet; aging shows what each party owes you (AR) or you owe them (AP);
           the day-book lists every voucher in a date range. Use the download buttons to
@@ -269,7 +269,7 @@ export default function BooksReportsProTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DOWNLOAD BUTTONS — Tally XML + GSTR-1 JSON
+// DOWNLOAD BUTTONS - Tally XML + GSTR-1 JSON
 // ─────────────────────────────────────────────────────────────────────────────
 function DownloadButtons({ fy }: { fy: string }) {
   const [tallyBusy, setTallyBusy] = useState(false);
@@ -280,7 +280,7 @@ function DownloadButtons({ fy }: { fy: string }) {
     setTallyBusy(true);
     try {
       const xml = await api.get<string>(`/api/books/reports/tally-xml?fy=${encodeURIComponent(fy)}`);
-      // backend sends application/xml; api.get parses JSON only on json responses — guard for both.
+      // backend sends application/xml; api.get parses JSON only on json responses - guard for both.
       const text = typeof xml === "string" ? xml : JSON.stringify(xml);
       saveBlob(text, "application/xml", `tally-${fy}.xml`);
       toast.success(`Downloaded tally-${fy}.xml`);
@@ -330,7 +330,7 @@ function DownloadButtons({ fy }: { fy: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCHEDULE III — statutory P&L + balance sheet
+// SCHEDULE III - statutory P&L + balance sheet
 // ─────────────────────────────────────────────────────────────────────────────
 function Sch3Section({ title, lines, subtotal }: { title: string; lines: Sch3Line[]; subtotal?: string }) {
   return (
@@ -339,7 +339,7 @@ function Sch3Section({ title, lines, subtotal }: { title: string; lines: Sch3Lin
         <td className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]" colSpan={2}>{title}</td>
       </tr>
       {lines.length === 0 ? (
-        <tr><td className="px-3 py-2 text-[var(--color-muted)] text-xs" colSpan={2}>— none —</td></tr>
+        <tr><td className="px-3 py-2 text-[var(--color-muted)] text-xs" colSpan={2}>- none -</td></tr>
       ) : (
         lines.map((l, i) => (
           <tr key={i} className="border-b border-[var(--color-border)] last:border-b-0">
@@ -420,7 +420,7 @@ function ScheduleIIICard({ fy, asOf }: { fy: string; asOf: string }) {
 
   return (
     <Card
-      title="Schedule III — P&L and Balance Sheet"
+      title="Schedule III - P&L and Balance Sheet"
       icon={<Scale size={15} />}
       action={
         <button type="button" onClick={load} disabled={busy} className={btnGhost}>
@@ -501,7 +501,7 @@ function ScheduleIIICard({ fy, asOf }: { fy: string; asOf: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COMPARATIVE P&L — current vs previous FY
+// COMPARATIVE P&L - current vs previous FY
 // ─────────────────────────────────────────────────────────────────────────────
 function ComparativePLCard({ fy }: { fy: string }) {
   const [data, setData] = useState<ComparativePL | null>(null);
@@ -664,9 +664,9 @@ function AgingCard({ kind, asOf }: { kind: "ar" | "ap"; asOf: string }) {
           <>
             <th className={thCls}>{partyCol}</th>
             <th className={thR}>Not due</th>
-            <th className={thR}>0–30</th>
-            <th className={thR}>31–60</th>
-            <th className={thR}>61–90</th>
+            <th className={thR}>0-30</th>
+            <th className={thR}>31-60</th>
+            <th className={thR}>61-90</th>
             <th className={thR}>90+</th>
             <th className={thR}>Total</th>
           </>
@@ -709,7 +709,7 @@ function AgingCard({ kind, asOf }: { kind: "ar" | "ap"; asOf: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DAY BOOK — vouchers in a date range with their entries
+// DAY BOOK - vouchers in a date range with their entries
 // ─────────────────────────────────────────────────────────────────────────────
 function DayBookCard() {
   const monthStart = new Date().toISOString().slice(0, 8) + "01";
@@ -834,7 +834,7 @@ function DayBookCard() {
         )}
       </TableShell>
       {rows && rows.length >= 1000 && (
-        <p className="text-[11px] text-amber-300 mt-2">Showing the first 1000 vouchers — narrow the date range to see the rest.</p>
+        <p className="text-[11px] text-amber-300 mt-2">Showing the first 1000 vouchers - narrow the date range to see the rest.</p>
       )}
     </Card>
   );
@@ -920,7 +920,7 @@ function BudgetVsActualCard({ fy }: { fy: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROFITABILITY — by item / party / project
+// PROFITABILITY - by item / party / project
 // ─────────────────────────────────────────────────────────────────────────────
 type ProfDim = "item" | "party" | "project";
 
@@ -968,7 +968,7 @@ function ProfitabilityCard({ fy }: { fy: string }) {
     { key: "marginPct", label: "Margin %" },
   ];
   const profRows: Record<string, unknown>[] = (data?.rows ?? []).map((r) => ({
-    name: r.party || r.name || "—",
+    name: r.party || r.name || "-",
     qtySold: r.qtySold ?? "",
     revenue: revOf(r) ?? "",
     cost: r.cost,
@@ -1041,7 +1041,7 @@ function ProfitabilityCard({ fy }: { fy: string }) {
         ) : (
           <>
             {data!.rows.map((r, i) => {
-              const label = r.party || r.name || "—";
+              const label = r.party || r.name || "-";
               const notDerivable = (dim === "item" && r.salesDerivable === false) || (dim === "party" && r.costDerivable === false);
               const margin = Number(r.marginPct ?? 0);
               return (

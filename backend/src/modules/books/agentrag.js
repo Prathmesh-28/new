@@ -5,7 +5,7 @@
 // agent's chunks by cosine similarity in JS, returning the top-k text joined.
 //
 // CONTRACT (see orchestrator/http routes): addDoc, listDocs, deleteDoc, retrieve.
-// Hard rule for retrieve(): it MUST degrade gracefully — if the agent has no
+// Hard rule for retrieve(): it MUST degrade gracefully - if the agent has no
 // docs, or embeddings are unavailable (no key / provider down), it returns an
 // empty string and NEVER throws, so a run is never broken by missing knowledge.
 const { pool } = require("../../db");
@@ -47,7 +47,7 @@ function cosine(a, b) {
 }
 
 // Add a document: chunk → embed → store one row per chunk. Embedding failure is
-// surfaced (callers — the upload route — should know the doc was NOT saved), but
+// surfaced (callers - the upload route - should know the doc was NOT saved), but
 // we never leave a half-saved doc behind.
 async function addDoc(tenantId, agentId, { title, content } = {}) {
   const t = String(title == null ? "" : title).trim();
@@ -83,7 +83,7 @@ async function addDoc(tenantId, agentId, { title, content } = {}) {
   return { title: t, chunks: chunks.length };
 }
 
-// List the agent's docs grouped by title (no vectors) — title, chunk count,
+// List the agent's docs grouped by title (no vectors) - title, chunk count,
 // character length, most-recent timestamp.
 async function listDocs(tenantId, agentId) {
   const { rows } = await pool.query(
@@ -126,7 +126,7 @@ async function retrieve(tenantId, agentId, query, k = 5) {
       const vecs = await llm.embed(tenantId, [q]);
       qv = vecs && vecs[0];
     } catch {
-      return ""; // embeddings unavailable — degrade silently
+      return ""; // embeddings unavailable - degrade silently
     }
     if (!Array.isArray(qv) || !qv.length) return "";
 

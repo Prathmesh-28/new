@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { useSeo } from "@/lib/seo";
 
 export default function NotFoundPage() {
-  useSeo({ title: "Page not found — Headroom", noindex: true });
+  useSeo({ title: "Page not found - Headroom", noindex: true });
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-bg)] px-6 text-center">
       <p className="text-7xl font-black text-[var(--color-primary)] mb-2">404</p>

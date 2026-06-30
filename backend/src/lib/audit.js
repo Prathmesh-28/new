@@ -2,7 +2,7 @@ const { pool } = require("../db");
 
 // Fire-and-forget audit trail. Admin/org mutations call this so there's an
 // accountable record of "who changed what". Never block or fail the request on
-// an audit write — swallow errors.
+// an audit write - swallow errors.
 async function writeAudit(userId, action, entity, entityId, meta) {
   try {
     await pool.query(

@@ -1,15 +1,15 @@
-// CRM module — leads → deals (pipeline) → won, with SLAs, tasks, notes and a unified
+// CRM module - leads → deals (pipeline) → won, with SLAs, tasks, notes and a unified
 // activity timeline. Domain logic ported from Frappe CRM (fcrm):
 //
-//   • SLA            — crm_service_level_agreement.py : apply(), calc_time() business-hours
+//   • SLA            - crm_service_level_agreement.py : apply(), calc_time() business-hours
 //                       walk, set_response_by(), handle_communication_status()/first response,
 //                       handle_sla_status() WITHIN/BREACHED.
-//   • Lead → Deal    — crm_lead.py : convert_to_deal(), create_contact/create_organization/
+//   • Lead → Deal    - crm_lead.py : convert_to_deal(), create_contact/create_organization/
 //                       create_deal() faithful field mapping; marks lead Qualified+converted.
-//   • Deal pipeline  — crm_deal.py / crm_deal_status.json : stage→probability, primary contact,
+//   • Deal pipeline  - crm_deal.py / crm_deal_status.json : stage→probability, primary contact,
 //                       lost reason, closed_date on Won.
-//   • Tasks / Notes  — crm_task.py / fcrm_note.py.
-//   • Status log     — crm_status_change_log.py : add_status_change_log + duration.
+//   • Tasks / Notes  - crm_task.py / fcrm_note.py.
+//   • Status log     - crm_status_change_log.py : add_status_change_log + duration.
 //
 // A won deal still creates a Sundry-Debtors customer ledger in books. Tenant-scoped;
 // money kept simple (NUMERIC(19,2)); the ledger is the source of truth.
@@ -40,7 +40,7 @@ const DEAL_STATUSES = {
   LOST: { type: "Lost", probability: 0, label: "Lost" },
 };
 const STAGES = Object.keys(DEAL_STATUSES);
-// open (board) stages, ordered — used for forward/back movement + pipeline buckets.
+// open (board) stages, ordered - used for forward/back movement + pipeline buckets.
 const OPEN_STAGES = ["QUALIFICATION", "DEMO", "PROPOSAL", "NEGOTIATION"];
 const stageProbability = (stage) => (DEAL_STATUSES[stage] ? DEAL_STATUSES[stage].probability : 0);
 const dealStatusType = (stage) => (DEAL_STATUSES[stage] ? DEAL_STATUSES[stage].type : "Open");
@@ -57,7 +57,7 @@ class CrmError extends Error {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════
-// SLA ENGINE  (port of crm_service_level_agreement.py — pure, unit-testable)
+// SLA ENGINE  (port of crm_service_level_agreement.py - pure, unit-testable)
 // ════════════════════════════════════════════════════════════════════════════════════
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DAY_MS = 86400000;
@@ -72,7 +72,7 @@ const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0
 const isHoliday = (date, holidays) => holidays.includes(ymd(date));
 const secsSinceMidnight = (d) => d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
 
-// Default 9–6 Mon–Fri working hours (used when an SLA omits working_hours).
+// Default 9-6 Mon-Fri working hours (used when an SLA omits working_hours).
 function defaultWorkingHours() {
   const wh = {};
   for (const day of ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]) {
@@ -392,7 +392,7 @@ async function deleteContact(tenantId, id) {
   return { ok: true, deleted: rows.length };
 }
 
-// Match an existing contact by email (port of lead.contact_exists — email uniquely
+// Match an existing contact by email (port of lead.contact_exists - email uniquely
 // identifies a person), then mobile.
 async function findContact(tenantId, email, phone) {
   if (email) {
@@ -511,7 +511,7 @@ async function convertLead(tenantId, actorId, leadId, opts = {}) {
   }
 
   // create_deal: map value/source/owner; carry SLA snapshot (lead.first_responded_on → deal)
-  const title = opts.title || `${lead.company || lead.name} — opportunity`;
+  const title = opts.title || `${lead.company || lead.name} - opportunity`;
   const deal = await createDeal(tenantId, actorId, {
     title,
     accountId: account ? account.id : null,
@@ -889,14 +889,14 @@ async function seedDemo(tenantId, actorId) {
 
   // ── Deals (~8 spread over the pipeline) ──
   const dealDefs = [
-    { title: "Tata Digital — Annual Accounting Suite", accountId: acct(0), contactId: cont(0), value: 1850000, stage: "QUALIFICATION", source: "Website", priority: "HIGH", expectedClose: "2026-09-30" },
-    { title: "Zomato — Vendor Reconciliation Platform", accountId: acct(1), contactId: cont(1), value: 980000, stage: "DEMO", source: "Referral", priority: "MEDIUM", expectedClose: "2026-08-15" },
-    { title: "Nykaa — GST Filing Automation", accountId: acct(2), contactId: cont(2), value: 1250000, stage: "PROPOSAL", source: "Event", priority: "HIGH", expectedClose: "2026-07-31" },
-    { title: "Freshworks — Multi-entity Ledger Rollout", accountId: acct(3), contactId: cont(3), value: 2400000, stage: "NEGOTIATION", source: "Referral", priority: "HIGH", expectedClose: "2026-07-15" },
-    { title: "Polycab — Inventory + Books Integration", accountId: acct(4), contactId: cont(4), value: 3100000, stage: "NEGOTIATION", source: "Cold Call", priority: "MEDIUM", expectedClose: "2026-10-31" },
-    { title: "Tata Digital — Pilot Expansion", accountId: acct(0), contactId: cont(5), value: 750000, stage: "DEMO", source: "Website", priority: "MEDIUM", expectedClose: "2026-09-15" },
-    { title: "Zomato — Payroll Module (Closed)", accountId: acct(1), contactId: cont(1), value: 1450000, stage: "WON", source: "Referral", priority: "HIGH", expectedClose: "2026-05-30" },
-    { title: "Nykaa — Custom Reporting (Lost)", accountId: acct(2), contactId: cont(2), value: 620000, stage: "LOST", source: "Cold Call", priority: "LOW", expectedClose: "2026-06-10", lostReason: "Budget cut for FY26" },
+    { title: "Tata Digital - Annual Accounting Suite", accountId: acct(0), contactId: cont(0), value: 1850000, stage: "QUALIFICATION", source: "Website", priority: "HIGH", expectedClose: "2026-09-30" },
+    { title: "Zomato - Vendor Reconciliation Platform", accountId: acct(1), contactId: cont(1), value: 980000, stage: "DEMO", source: "Referral", priority: "MEDIUM", expectedClose: "2026-08-15" },
+    { title: "Nykaa - GST Filing Automation", accountId: acct(2), contactId: cont(2), value: 1250000, stage: "PROPOSAL", source: "Event", priority: "HIGH", expectedClose: "2026-07-31" },
+    { title: "Freshworks - Multi-entity Ledger Rollout", accountId: acct(3), contactId: cont(3), value: 2400000, stage: "NEGOTIATION", source: "Referral", priority: "HIGH", expectedClose: "2026-07-15" },
+    { title: "Polycab - Inventory + Books Integration", accountId: acct(4), contactId: cont(4), value: 3100000, stage: "NEGOTIATION", source: "Cold Call", priority: "MEDIUM", expectedClose: "2026-10-31" },
+    { title: "Tata Digital - Pilot Expansion", accountId: acct(0), contactId: cont(5), value: 750000, stage: "DEMO", source: "Website", priority: "MEDIUM", expectedClose: "2026-09-15" },
+    { title: "Zomato - Payroll Module (Closed)", accountId: acct(1), contactId: cont(1), value: 1450000, stage: "WON", source: "Referral", priority: "HIGH", expectedClose: "2026-05-30" },
+    { title: "Nykaa - Custom Reporting (Lost)", accountId: acct(2), contactId: cont(2), value: 620000, stage: "LOST", source: "Cold Call", priority: "LOW", expectedClose: "2026-06-10", lostReason: "Budget cut for FY26" },
   ];
   const deals = [];
   for (const d of dealDefs) {

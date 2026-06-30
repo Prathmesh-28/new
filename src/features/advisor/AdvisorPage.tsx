@@ -124,7 +124,7 @@ function useAdvisorWorkspace<T>(key: string, initial: T): [T, (updater: WsUpdate
         const isEmptyObj = stored && typeof stored === "object" && !Array.isArray(stored) && Object.keys(stored as object).length === 0;
         if (stored !== undefined && stored !== null && !isEmptyObj) setValue(stored);
       } catch {
-        toast.error("Couldn't load saved data — working offline");
+        toast.error("Couldn't load saved data - working offline");
       } finally {
         if (alive) { loadedRef.current = true; setLoaded(true); }
       }
@@ -141,7 +141,7 @@ function useAdvisorWorkspace<T>(key: string, initial: T): [T, (updater: WsUpdate
         if (saveTimer.current) clearTimeout(saveTimer.current);
         saveTimer.current = setTimeout(() => {
           api.put(`/api/advisor/workspace/${key}`, next).catch(() => {
-            toast.error("Couldn't save — changes kept locally only");
+            toast.error("Couldn't save - changes kept locally only");
           });
         }, 600);
       }
@@ -430,7 +430,7 @@ function BulkGstTab() {
                     </span>
                     <div className="text-right min-w-[80px]">
                       <p className={`text-sm font-bold tabular-nums ${isPending ? "text-orange-400" : "text-[var(--color-muted)]"}`}>
-                        {c.net_liability !== null ? formatCurrency(c.net_liability) : "—"}
+                        {c.net_liability !== null ? formatCurrency(c.net_liability) : "-"}
                       </p>
                     </div>
                     {isExpanded ? <ChevronUp size={12} className="text-[var(--color-muted)] shrink-0" /> : <ChevronDown size={12} className="text-[var(--color-muted)] shrink-0" />}
@@ -508,7 +508,7 @@ function PracticeTab({ clients }: { clients: ClientSummary[] }) {
   // Document requests (static for now)
   const docRequests = clients.slice(0, 3).map(c => ({
     client: c.label,
-    docs: ["Bank statement – May 2026", "Sales invoices – Q1", "TDS certificate"],
+    docs: ["Bank statement - May 2026", "Sales invoices - Q1", "TDS certificate"],
   }));
 
   const tasksByStatus = {
@@ -691,14 +691,14 @@ function PracticeTab({ clients }: { clients: ClientSummary[] }) {
 // ── Marketplace Tab ───────────────────────────────────────────────────────────
 
 const LEAD_REASONS = [
-  "No CA on record — first GST registration needed",
+  "No CA on record - first GST registration needed",
   "Missed TDS deposit for 2 consecutive months",
-  "Revenue crossed ₹40L — approaching GST threshold",
+  "Revenue crossed ₹40L - approaching GST threshold",
   "Looking for audit-ready financials for investor due diligence",
   "Wants monthly MIS reports + CFO-lite advisory",
   "Needs tax planning before FY close",
 ];
-const REVENUE_TIERS = ["₹5L–20L / yr", "₹20L–1Cr / yr", "₹1Cr–5Cr / yr", "₹5Cr+ / yr"];
+const REVENUE_TIERS = ["₹5L-20L / yr", "₹20L-1Cr / yr", "₹1Cr-5Cr / yr", "₹5Cr+ / yr"];
 
 function MarketplaceTab() {
   const [leads, setLeads]    = useState<MarketplaceLead[]>([]);
@@ -728,7 +728,7 @@ function MarketplaceTab() {
   };
   const declineLead = (id: string) => {
     setDeclined(s => new Set([...s, id]));
-    toast.success("Lead passed — we'll show you better matches next time.");
+    toast.success("Lead passed - we'll show you better matches next time.");
   };
 
   if (loading) return <div className="py-8 flex justify-center"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>;
@@ -742,10 +742,10 @@ function MarketplaceTab() {
         <div className="flex items-start gap-3">
           <Star size={14} className="text-[var(--color-primary)] mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-[var(--color-text)]">CA Lead Marketplace — the Headroom inversion</p>
+            <p className="text-sm font-semibold text-[var(--color-text)]">CA Lead Marketplace - the Headroom inversion</p>
             <p className="text-xs text-[var(--color-muted)] mt-0.5">
-              Every other product charges CAs for software. Headroom pays CAs in clients. Businesses on Headroom without a CA are matched to you by city, sector, and capacity — for free.
-              <span className="text-[var(--color-primary)] font-semibold"> 2 new clients/year = ₹1–5L in fees.</span>
+              Every other product charges CAs for software. Headroom pays CAs in clients. Businesses on Headroom without a CA are matched to you by city, sector, and capacity - for free.
+              <span className="text-[var(--color-primary)] font-semibold"> 2 new clients/year = ₹1-5L in fees.</span>
             </p>
           </div>
         </div>
@@ -754,7 +754,7 @@ function MarketplaceTab() {
       {visibleLeads.length === 0 ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <Star size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-          <p className="text-sm text-[var(--color-muted)]">No open leads right now. Check back soon — we add new businesses weekly.</p>
+          <p className="text-sm text-[var(--color-muted)]">No open leads right now. Check back soon - we add new businesses weekly.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -857,7 +857,7 @@ function BillingTab({ clients }: { clients: ClientSummary[] }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-[var(--color-muted)]">Invoice your clients for retainer, filings, or advisory fees — collect via UPI</p>
+        <p className="text-xs text-[var(--color-muted)]">Invoice your clients for retainer, filings, or advisory fees - collect via UPI</p>
         <button onClick={() => setShowNew(v => !v)}
           className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
           <Plus size={11} /> New Invoice
@@ -894,7 +894,7 @@ function BillingTab({ clients }: { clients: ClientSummary[] }) {
             </div>
             <div className="col-span-2">
               <label className="text-xs text-[var(--color-muted)] block mb-1">Description *</label>
-              <input value={newBill.description} onChange={e => setNewBill(n => ({ ...n, description: e.target.value }))} placeholder="e.g. Monthly retainer – Jun 2026" className={inp} />
+              <input value={newBill.description} onChange={e => setNewBill(n => ({ ...n, description: e.target.value }))} placeholder="e.g. Monthly retainer - Jun 2026" className={inp} />
             </div>
             <div>
               <label className="text-xs text-[var(--color-muted)] block mb-1">Due date</label>
@@ -929,7 +929,7 @@ function BillingTab({ clients }: { clients: ClientSummary[] }) {
                   <td className="px-4 py-3 text-xs font-medium">{b.clientLabel}</td>
                   <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{b.description}</td>
                   <td className="px-4 py-3 text-sm font-bold tabular-nums">{formatCurrency(b.amount)}</td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{b.dueDate || "—"}</td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{b.dueDate || "-"}</td>
                   <td className="px-4 py-3">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_COLOR[b.status]}`}>{b.status}</span>
                   </td>
@@ -1205,7 +1205,7 @@ export default function AdvisorPage() {
           <p className="text-sm text-[var(--color-muted)] mb-5 max-w-sm mx-auto">
             Add your first client using their Tenant ID, or browse the{" "}
             <button onClick={() => setTab("marketplace")} className="text-[var(--color-primary)] underline">Marketplace</button>{" "}
-            — Headroom brings you new clients.
+            - Headroom brings you new clients.
           </p>
           <button onClick={() => setShowForm(true)} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">
             Add First Client
@@ -1423,7 +1423,7 @@ function ComplianceBoardTab({ clients }: { clients: ClientSummary[] }) {
 // ── Document Request Tracker ────────────────────────────────────────────────────
 // A durable, statusful tracker of documents the CA has asked clients for, with
 // follow-up/received states. Distinct from the Practice tab's static "send link"
-// chips — these are records that persist and move through a workflow.
+// chips - these are records that persist and move through a workflow.
 
 type DocRequest = {
   id: string;
@@ -1467,7 +1467,7 @@ function DocTrackerTab({ clients }: { clients: ClientSummary[] }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <p className="text-xs text-[var(--color-muted)]">Track every document you've asked clients for — chase pending ones, mark received.</p>
+        <p className="text-xs text-[var(--color-muted)]">Track every document you've asked clients for - chase pending ones, mark received.</p>
         <button onClick={() => setShowNew(v => !v)}
           className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
           <Plus size={11} /> Request Document
@@ -1499,7 +1499,7 @@ function DocTrackerTab({ clients }: { clients: ClientSummary[] }) {
             </div>
             <div>
               <label className="text-xs text-[var(--color-muted)] block mb-1">Document *</label>
-              <input value={draft.document} onChange={e => setDraft(d => ({ ...d, document: e.target.value }))} placeholder="e.g. Bank statement – May 2026" className={inp} />
+              <input value={draft.document} onChange={e => setDraft(d => ({ ...d, document: e.target.value }))} placeholder="e.g. Bank statement - May 2026" className={inp} />
             </div>
           </div>
           <div className="flex gap-2">
@@ -1595,7 +1595,7 @@ function QueryLogTab({ clients }: { clients: ClientSummary[] }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <p className="text-xs text-[var(--color-muted)]">Log every client question or notice — track what's open and what you've answered.</p>
+        <p className="text-xs text-[var(--color-muted)]">Log every client question or notice - track what's open and what you've answered.</p>
         <button onClick={() => setShowNew(v => !v)}
           className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
           <Plus size={11} /> Log Query

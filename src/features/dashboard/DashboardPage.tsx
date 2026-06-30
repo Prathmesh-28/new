@@ -189,17 +189,17 @@ function SmartActionsPanel() {
   const actions: { urgency: number; label: string; detail: string; path: string; color: string }[] = [];
 
   if (runway > 0 && runway < 30) {
-    actions.push({ urgency: 10, label: "Cash crunch in " + runway + " days", detail: "Explore working capital options now — don't wait.", path: "/credit", color: "text-red-400" });
+    actions.push({ urgency: 10, label: "Cash crunch in " + runway + " days", detail: "Explore working capital options now - don't wait.", path: "/credit", color: "text-red-400" });
   }
   if (overdueAmt > 0) {
-    actions.push({ urgency: 9, label: `Chase ${overdue.length} overdue invoice${overdue.length > 1 ? "s" : ""}`, detail: `${formatCurrency(overdueAmt)} outstanding — ${overdue[0]?.customer} is highest priority.`, path: "/receivables", color: "text-orange-400" });
+    actions.push({ urgency: 9, label: `Chase ${overdue.length} overdue invoice${overdue.length > 1 ? "s" : ""}`, detail: `${formatCurrency(overdueAmt)} outstanding - ${overdue[0]?.customer} is highest priority.`, path: "/receivables", color: "text-orange-400" });
   }
   const unread = alerts.filter(a => !a.isRead);
   if (unread.length > 0) {
     actions.push({ urgency: 7, label: `${unread.length} unread alert${unread.length > 1 ? "s" : ""}`, detail: unread[0]?.message ?? "Review your alerts.", path: "/alerts", color: "text-yellow-400" });
   }
   if (balance > 0 && burn > balance * 0.3 && runway < 90) {
-    actions.push({ urgency: 6, label: "High burn relative to balance", detail: `Monthly burn ₹${Math.round(burn / 1000)}K is ${balance > 0 ? Math.round((burn / balance) * 100) + "%" : "—"} of balance. Review spend.`, path: "/spend", color: "text-orange-400" });
+    actions.push({ urgency: 6, label: "High burn relative to balance", detail: `Monthly burn ₹${Math.round(burn / 1000)}K is ${balance > 0 ? Math.round((burn / balance) * 100) + "%" : "-"} of balance. Review spend.`, path: "/spend", color: "text-orange-400" });
   }
   actions.push({ urgency: 3, label: "Review sector benchmarks", detail: "See how your margins compare to industry peers.", path: "/benchmarks", color: "text-[var(--color-primary)]" });
 
@@ -275,7 +275,7 @@ function TreasuryBanner() {
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold flex items-center gap-2">₹{idleL}L idle in current account · Auto-sweep could earn {yieldAmt}/yr at 6.5% <PreviewBadge capability="treasurySweep" /></p>
-          <p className="text-xs text-[var(--color-muted)]">Put excess cash to work in liquid mutual funds — withdraw anytime, same-day.</p>
+          <p className="text-xs text-[var(--color-muted)]">Put excess cash to work in liquid mutual funds - withdraw anytime, same-day.</p>
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
@@ -421,7 +421,7 @@ function AddAccountModal({ onClose, onAdd }: { onClose: () => void; onAdd: (a: A
         setManual(false);
         if (!name.trim() && d.BANK) setName(`${d.BANK.split(" ")[0]} ${ACCOUNT_TYPES.find(t => t.id === accountType)?.label ?? ""}`.trim());
       })
-      .catch(() => { if (!cancelled) { setResolved(null); setFetchErr("Couldn't auto-fetch — check the IFSC, or enter your bank manually."); setManual(true); } })
+      .catch(() => { if (!cancelled) { setResolved(null); setFetchErr("Couldn't auto-fetch - check the IFSC, or enter your bank manually."); setManual(true); } })
       .finally(() => { if (!cancelled) setFetching(false); });
     return () => { cancelled = true; };
   }, [ifsc]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -436,7 +436,7 @@ function AddAccountModal({ onClose, onAdd }: { onClose: () => void; onAdd: (a: A
     if (!bank) { toast.error("Enter your IFSC to auto-fetch the bank, or type the bank name"); return; }
     const bal = parseFloat(balance);
     if (isNaN(bal) || bal < 0) { toast.error("Enter a valid current balance"); return; }
-    if (accountNumber && (digits.length < 9 || digits.length > 18)) { toast.error("Account number looks off — it should be 9–18 digits"); return; }
+    if (accountNumber && (digits.length < 9 || digits.length > 18)) { toast.error("Account number looks off - it should be 9-18 digits"); return; }
     onAdd({
       name: name.trim() || `${bank} ${ACCOUNT_TYPES.find(t => t.id === accountType)?.label ?? ""}`.trim(),
       balance: bal,
@@ -463,7 +463,7 @@ function AddAccountModal({ onClose, onAdd }: { onClose: () => void; onAdd: (a: A
           <h2 className="text-base font-bold">Add a bank account</h2>
           <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={18} /></button>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Enter your IFSC and we'll pull the bank &amp; branch for you — no hand-typing.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Enter your IFSC and we'll pull the bank &amp; branch for you - no hand-typing.</p>
         <form onSubmit={handleSubmit} className="space-y-3.5">
           {/* IFSC + auto-resolve */}
           <div>
@@ -535,7 +535,7 @@ function AddAccountModal({ onClose, onAdd }: { onClose: () => void; onAdd: (a: A
 
           <div>
             <label className={lbl}>Nickname (shown across Headroom)</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. HDFC Current — main" className={field} />
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. HDFC Current - main" className={field} />
           </div>
 
           <div className="flex gap-2 pt-1">
@@ -654,13 +654,13 @@ function CashForecastChart({ forecast }: { forecast: { date: string; p10: number
           {!hidden.has("p10") && <Area type="monotone" dataKey="p10" name="p10" stroke="#d97706" strokeWidth={1} strokeDasharray="3 3" fill="transparent" animationDuration={400} />}
         </AreaChart>
       </ResponsiveContainer>
-      <p className="text-[10px] text-[var(--color-muted)] mt-2">Tap a band to toggle it · change the horizon above. P10–P90 is the likely range; P50 is most probable.</p>
+      <p className="text-[10px] text-[var(--color-muted)] mt-2">Tap a band to toggle it · change the horizon above. P10-P90 is the likely range; P50 is most probable.</p>
     </div>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// DASHBOARD TOOLS #147–#150 (FEATURES_200 · "Dashboard" section)
+// DASHBOARD TOOLS #147-#150 (FEATURES_200 · "Dashboard" section)
 // Additive, self-contained widgets. Each computes from the live store; durable
 // picks/goals persist via useFeatureState. Do not disturb existing widgets.
 // ════════════════════════════════════════════════════════════════════════════
@@ -702,7 +702,7 @@ function KpiWidgetBuilder() {
       case "revenueMtd": return { value: formatCurrency(revMtd), color: "text-green-400" };
       case "netMtd":     return { value: formatCurrency(revMtd - outMtd), color: revMtd - outMtd >= 0 ? "text-green-400" : "text-red-400" };
       case "alerts":     return { value: String(alerts.filter(a => !a.isRead).length), color: "text-orange-400" };
-      case "topBank":    return { value: topBank ? `${topBank.name} · ${formatCurrency(topBank.balance)}` : "—", color: "text-[var(--color-text)]" };
+      case "topBank":    return { value: topBank ? `${topBank.name} · ${formatCurrency(topBank.balance)}` : "-", color: "text-[var(--color-text)]" };
       case "accounts":   return { value: String(bankAccounts.length), color: "text-blue-400" };
     }
   };
@@ -763,7 +763,7 @@ function DailyCashSnapshot() {
   const { transactions, bankAccounts } = store;
   const todayStr = new Date().toISOString().split("T")[0];
 
-  // No bank accounts yet — show a small inline hint instead of all-zero cards.
+  // No bank accounts yet - show a small inline hint instead of all-zero cards.
   if (bankAccounts.length === 0) {
     return (
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -927,7 +927,7 @@ function GoalTracker() {
                 <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
                   <div className={`h-full rounded-full transition-all duration-700 ${hit ? "bg-green-500" : pct >= 60 ? "bg-[var(--color-primary)]" : "bg-yellow-500"}`} style={{ width: `${pct}%` }} />
                 </div>
-                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{pct.toFixed(0)}% of target{hit ? " — achieved 🎉" : ""}</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{pct.toFixed(0)}% of target{hit ? " - achieved 🎉" : ""}</p>
               </div>
             );
           })}
@@ -990,14 +990,14 @@ function MorningBriefCard() {
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold flex items-center gap-1.5">
           <Sunrise size={14} className="text-[var(--color-primary)]" />
-          {greeting} — your brief
+          {greeting} - your brief
         </h2>
         <span className="text-[10px] text-[var(--color-muted)]">{format(now, "EEE, d MMM · HH:mm")}</span>
       </div>
 
       {allClear && (
         <div className="flex items-center gap-2 mb-2 text-xs text-green-400">
-          <CheckCircle2 size={12} /> All clear — no alerts or deadlines pending.
+          <CheckCircle2 size={12} /> All clear - no alerts or deadlines pending.
         </div>
       )}
 
@@ -1023,7 +1023,7 @@ function MorningBriefCard() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// DASHBOARD WIDGETS — additional practical cards (additive, self-contained).
+// DASHBOARD WIDGETS - additional practical cards (additive, self-contained).
 // Each computes from the live store; transient UI uses useState; durable picks
 // persist via useFeatureState with "dash-" keys. Do not disturb existing widgets.
 // ════════════════════════════════════════════════════════════════════════════
@@ -1315,7 +1315,7 @@ function MiniPnLWidget() {
 }
 
 // ── Spend by Payee (donut) ────────────────────────────────────────────────────
-// Where the money goes — top outflow counterparties as a donut (distinct from
+// Where the money goes - top outflow counterparties as a donut (distinct from
 // the category bar breakdown).
 const PAYEE_COLORS = ["#2EA882", "#3b82f6", "#a855f7", "#eab308", "#ef4444", "#64748b"] as const;
 
@@ -1380,14 +1380,14 @@ function SpendByPayeeDonut() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// DASHBOARD WIDGETS — 2nd pass additions (additive, self-contained).
+// DASHBOARD WIDGETS - 2nd pass additions (additive, self-contained).
 // Net-flow trend, expense biggest-movers, customer payment status, burn gauge,
 // weekday inflow pattern. Each computes from the live store. Do not disturb
 // existing widgets. Durable picks (none needed here) would use "dash-" keys.
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── Net Cash Flow · last 6 months ─────────────────────────────────────────────
-// Monthly net (inflow − outflow) as a signed bar chart — distinct from the
+// Monthly net (inflow − outflow) as a signed bar chart - distinct from the
 // 30-day balance sparkline and the current-month mini P&L.
 function NetCashFlowTrend() {
   const { store } = useApp();
@@ -1438,7 +1438,7 @@ function NetCashFlowTrend() {
 }
 
 // ── Expense biggest movers (this month vs last) ───────────────────────────────
-// Per-category outflow change MoM — surfaces what is growing/shrinking, distinct
+// Per-category outflow change MoM - surfaces what is growing/shrinking, distinct
 // from the static burn-by-category bar.
 function ExpenseMoversWidget() {
   const { store } = useApp();
@@ -1513,7 +1513,7 @@ function ExpenseMoversWidget() {
 }
 
 // ── Customer payment status ───────────────────────────────────────────────────
-// Receivables split into paid / due-soon / overdue — a status summary (donut +
+// Receivables split into paid / due-soon / overdue - a status summary (donut +
 // counts), distinct from the overdue-only list and the dues timeline.
 const PAY_STATUS_COLORS = ["#2EA882", "#eab308", "#ef4444"] as const;
 
@@ -1588,7 +1588,7 @@ function CustomerPaymentStatus() {
 
 // ── Days-of-cash gauge + savings rate ─────────────────────────────────────────
 // A half-circle gauge of days of cash on hand plus the share of inflow retained
-// this month (savings rate) — a distinct framing from the runway stat card.
+// this month (savings rate) - a distinct framing from the runway stat card.
 function CashGaugeWidget() {
   const { store } = useApp();
   const navigate = useNavigate();
@@ -1655,7 +1655,7 @@ function CashGaugeWidget() {
 }
 
 // ── Inflow by weekday ─────────────────────────────────────────────────────────
-// Which weekday brings the most money in — a 7-bar pattern over all history,
+// Which weekday brings the most money in - a 7-bar pattern over all history,
 // distinct from the forward-looking 7-day Cash This Week view.
 function WeekdayInflowWidget() {
   const { store } = useApp();
@@ -1707,13 +1707,13 @@ function WeekdayInflowWidget() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// DASHBOARD WIDGETS — 3rd pass (additive, self-contained, non-duplicate).
+// DASHBOARD WIDGETS - 3rd pass (additive, self-contained, non-duplicate).
 // Top vendors MTD, invoice-status breakdown, 6-month burn trend, AR-vs-AP
 // balance. Each computes from the live store. Do not disturb existing widgets.
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── Top Vendors · this month ──────────────────────────────────────────────────
-// Largest outflow counterparties for the current month, ranked — distinct from
+// Largest outflow counterparties for the current month, ranked - distinct from
 // the all-time payee donut.
 function TopVendorsWidget() {
   const { store } = useApp();
@@ -1770,7 +1770,7 @@ function TopVendorsWidget() {
 
 // ── Invoice Status Breakdown ──────────────────────────────────────────────────
 // Receivables split by paid / due / overdue, with counts, amounts and a stacked
-// bar — distinct from the overdue-only list.
+// bar - distinct from the overdue-only list.
 function InvoiceStatusWidget() {
   const { store } = useApp();
   const navigate = useNavigate();
@@ -1825,7 +1825,7 @@ function InvoiceStatusWidget() {
 }
 
 // ── Monthly Burn Trend · 6 months ─────────────────────────────────────────────
-// Total outflow per month as an area trend — distinct from signed net-flow bars.
+// Total outflow per month as an area trend - distinct from signed net-flow bars.
 function BurnTrendWidget() {
   const { store } = useApp();
   const navigate = useNavigate();
@@ -1878,7 +1878,7 @@ function BurnTrendWidget() {
 
 // ── Receivables vs Payables ───────────────────────────────────────────────────
 // Money owed to you (open invoices) vs money you owe (recurring/scheduled
-// outflows due this month) — a working-capital balance snapshot.
+// outflows due this month) - a working-capital balance snapshot.
 function ReceivablesVsPayablesWidget() {
   const { store } = useApp();
   const { transactions } = store;
@@ -2002,7 +2002,7 @@ export default function DashboardPage() {
   const taxDates = getUpcomingTaxDates();
   const today    = new Date();
 
-  // Overdue receivables (from store invoices) — for the AI cash-position summary
+  // Overdue receivables (from store invoices) - for the AI cash-position summary
   const todayStr = today.toISOString().split("T")[0];
   const invoices = (store as { invoices?: { dueDate: string; amount: number; status: string }[] }).invoices ?? [];
   const overdueInvoices = invoices.filter(i => i.dueDate < todayStr && i.status !== "paid");
@@ -2063,7 +2063,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Quick actions — derived from real store data; only shows rows that apply */}
+      {/* Quick actions - derived from real store data; only shows rows that apply */}
       {(() => {
         const quickActions: { icon: React.ElementType; label: string; path: string; color: string }[] = [];
         if (overdueInvoices.length > 0)
@@ -2159,7 +2159,7 @@ export default function DashboardPage() {
 
       {!isEmpty && (
         <>
-          {/* Stat cards — compute deltas vs last month */}
+          {/* Stat cards - compute deltas vs last month */}
           {(() => {
             const now = new Date();
             const thisM = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
@@ -2184,7 +2184,7 @@ export default function DashboardPage() {
             );
           })()}
 
-          {/* AI cash-position summary — full-width, collapsed (no auto-call) */}
+          {/* AI cash-position summary - full-width, collapsed (no auto-call) */}
           <AiInsight
             collapsed
             question="Summarise my cash position, runway and what I should do this week."
@@ -2225,7 +2225,7 @@ export default function DashboardPage() {
           <TreasuryBanner />
           <HealthScoreWidget />
 
-          {/* ── Dashboard tools #147–#150 ──────────────────────────────── */}
+          {/* ── Dashboard tools #147-#150 ──────────────────────────────── */}
           <div className="flex items-center gap-2 pt-2">
             <LayoutGrid size={13} className="text-[var(--color-primary)]" />
             <h2 className="text-sm font-bold">Your dashboard tools</h2>
@@ -2275,7 +2275,7 @@ export default function DashboardPage() {
             <div className="bg-red-900/40 border border-red-700/60 rounded-lg px-4 py-3 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <AlertTriangle size={16} className="text-red-400 shrink-0" />
-                <p className="text-sm">Your cash runway is <strong className="text-red-400">{runway} days</strong> — balance pressure detected. Act now before it becomes critical.</p>
+                <p className="text-sm">Your cash runway is <strong className="text-red-400">{runway} days</strong> - balance pressure detected. Act now before it becomes critical.</p>
               </div>
               <button onClick={() => navigate("/credit")}
                 className="text-xs bg-red-900/40 text-red-300 border border-red-800/40 px-3 py-1.5 rounded-lg hover:bg-red-900/60 shrink-0 whitespace-nowrap">
