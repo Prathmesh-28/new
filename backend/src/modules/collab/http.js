@@ -40,6 +40,7 @@ router.get("/stream", async (req, res) => {
 });
 
 router.use(authenticate, collabContext);
+router.use(require("../../lib/entitlements").requireFeature("collab"));
 
 const T = (req) => req.collab.tenantId;
 const U = (req) => req.collab.userId;

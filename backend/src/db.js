@@ -486,6 +486,17 @@ async function initDb() {
     ALTER TABLE tenant_billing ADD COLUMN IF NOT EXISTS provider TEXT;
     ALTER TABLE tenant_billing ADD COLUMN IF NOT EXISTS razorpay_payment_id TEXT;
 
+    -- Per-tenant monthly usage counters for plan quota metering (entitlements engine).
+    -- 'period' is the YYYY-MM bucket so a new month resets automatically (no cron).
+    CREATE TABLE IF NOT EXISTS usage_counters (
+      tenant_id   TEXT NOT NULL,
+      metric      TEXT NOT NULL,
+      period      TEXT NOT NULL,
+      count       BIGINT NOT NULL DEFAULT 0,
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (tenant_id, metric, period)
+    );
+
     -- ── Team invites (request / accept / reject join-a-team lifecycle) ─────────
     CREATE TABLE IF NOT EXISTS team_invites (
       id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

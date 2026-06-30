@@ -20,6 +20,7 @@ router.post("/webhook/:token", async (req, res) => {
 });
 
 router.use(authenticate);
+router.use(require("../../lib/entitlements").requireFeature("flows"));
 
 const tenantOf = (req) => (req.user.role === "super_admin" && req.query.tenant_id ? String(req.query.tenant_id) : req.user.tenant_id);
 const WRITE_ROLES = ["super_admin", "owner", "finance_manager", "accountant", "sales", "operations_manager"];
@@ -53,7 +54,7 @@ router.patch("/flows/:id", canWrite, async (req, res) => { try { res.json(await 
 router.delete("/flows/:id", canWrite, async (req, res) => { try { res.json(await flows.deleteFlow(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 
 // Run now (manual trigger).
-router.post("/flows/:id/run", canWrite, async (req, res) => {
+router.post("/flows/:id/run", canWrite, require("../../lib/entitlements").enforceQuota("flow_runs"), async (req, res) => {
   try { res.json(await runner.runFlow(tenantOf(req), req.params.id, { triggerKind: "manual", input: (req.body || {}).input || {}, actorId: req.user.id })); }
   catch (e) { fail(res, e); }
 });

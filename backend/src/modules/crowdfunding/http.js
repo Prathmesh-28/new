@@ -41,6 +41,7 @@ router.post("/public/:token/pledge", async (req, res) => {
 });
 
 router.use(authenticate);
+router.use(require("../../lib/entitlements").requireFeature("campaigns"));
 
 const tenantOf = (req) => (req.user.role === "super_admin" && req.query.tenant_id ? String(req.query.tenant_id) : req.user.tenant_id);
 const WRITE_ROLES = ["super_admin", "owner", "finance_manager", "accountant", "sales", "operations_manager"];

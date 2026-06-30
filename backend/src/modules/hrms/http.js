@@ -8,6 +8,7 @@ const { authenticate } = require("../../middleware/auth");
 const hr = require("./index");
 
 router.use(authenticate);
+router.use(require("../../lib/entitlements").requireFeature("hrms"));
 const WRITE_ROLES = ["super_admin", "owner", "finance_manager"];
 const canWrite = (req, res, next) => (WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" }));
 const tenantOf = (req) => (req.user.role === "super_admin" && req.query.tenant_id ? String(req.query.tenant_id) : req.user.tenant_id);

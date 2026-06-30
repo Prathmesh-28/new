@@ -47,6 +47,13 @@ router.get("/current", authenticate, async (req, res) => {
   });
 });
 
+// GET /api/billing/entitlements - plan + seats + monthly usage vs quotas (+ whether
+// enforcement is on). Powers the usage/limits UI; reflects the entitlements engine.
+router.get("/entitlements", authenticate, async (req, res) => {
+  try { res.json(await require("../lib/entitlements").snapshot(req.user.tenant_id, req.user.subscription_plan || "free")); }
+  catch (e) { console.error("[billing] entitlements", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
 // ── Razorpay Standard Checkout (subscription upgrades) ──────────────────────
 // India-first gateway: UPI / cards / netbanking / wallets. One-time Standard
 // Checkout per period; the signature is verified server-side before the plan applies.

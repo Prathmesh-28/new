@@ -10,6 +10,7 @@ const studio = require("./index");
 const codegen = require("./codegen");
 
 router.use(authenticate);
+router.use(require("../../lib/entitlements").requireFeature("studio"));
 
 const tenantOf = (req) => (req.user.role === "super_admin" && req.query.tenant_id ? String(req.query.tenant_id) : req.user.tenant_id);
 const WRITE_ROLES = ["super_admin", "owner", "finance_manager", "accountant", "sales", "operations_manager"];
@@ -47,7 +48,7 @@ router.get("/versions/:id", async (req, res) => {
 });
 
 // ── Codegen (Phase 1) - describe → plan or build a new version ────────────────
-router.post("/projects/:id/generate", canWrite, async (req, res) => {
+router.post("/projects/:id/generate", canWrite, require("../../lib/entitlements").enforceQuota("studio_builds"), async (req, res) => {
   try {
     const b = req.body || {};
     res.json(await codegen.generate(tenantOf(req), req.user.id, req.params.id, { prompt: b.prompt, mode: b.mode || "build", model: b.model }));

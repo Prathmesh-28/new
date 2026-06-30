@@ -8,6 +8,7 @@ const lending = require("./index");
 let capabilities; try { capabilities = require("../../routes/capabilities").capabilities; } catch { capabilities = () => ({}); }
 
 router.use(authenticate);
+router.use(require("../../lib/entitlements").requireFeature("lending"));
 
 const tenantOf = (req) => (req.user.role === "super_admin" && req.query.tenant_id ? String(req.query.tenant_id) : req.user.tenant_id);
 const WRITE_ROLES = ["super_admin", "owner", "finance_manager", "accountant"];

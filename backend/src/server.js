@@ -441,7 +441,29 @@ async function seed() {
 initDb()
   .then(seed)
   .then(() => {
-    app.listen(PORT, () => console.log(`[server] :${PORT}`));
+    const server = app.listen(PORT, () => console.log(`[server] :${PORT}`));
+    // Graceful shutdown: Render sends SIGTERM on every deploy/restart. Stop accepting
+    // new connections, let in-flight requests (money posts, webhooks, uploads) finish,
+    // close the DB pool, then exit — instead of being hard-killed mid-transaction.
+    let shuttingDown = false;
+    const shutdown = (sig) => {
+      if (shuttingDown) return; shuttingDown = true;
+      console.log(`[shutdown] ${sig} — draining in-flight requests…`);
+      const force = setTimeout(() => { console.error("[shutdown] forced exit after 25s"); process.exit(1); }, 25000);
+      if (force.unref) force.unref();
+      server.close((err) => {
+        if (err) console.error("[shutdown] server.close:", err.message);
+        pool.end().catch((e) => console.error("[shutdown] pool.end:", e.message))
+          .finally(() => { clearTimeout(force); console.log("[shutdown] clean exit"); process.exit(err ? 1 : 0); });
+      });
+    };
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGINT", () => shutdown("SIGINT"));
+    // No more silent crashes: surface process-level errors (the audit flagged none were
+    // captured). A truly uncaught exception leaves an undefined state → drain + let
+    // Render restart cleanly; an unhandled rejection is logged but kept non-fatal.
+    process.on("unhandledRejection", (reason) => require("./lib/logger").error("unhandledRejection", { reason: reason instanceof Error ? reason.stack : String(reason) }));
+    process.on("uncaughtException", (err) => { require("./lib/logger").error("uncaughtException", { stack: err && err.stack ? err.stack : String(err) }); shutdown("uncaughtException"); });
     // Daily digest at 7:00 AM IST (01:30 UTC) - email + WhatsApp
     cron.schedule("30 1 * * *", async () => {
       sendDailyDigest().catch(err => console.error("[digest-email]", err.message));
