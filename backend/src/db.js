@@ -1277,6 +1277,10 @@ async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS lender_bids_app ON lender_bids(application_id, created_at DESC);
   `);
+
+  // Baseline (above) is the idempotent create-if-not-exists schema. Ordered, recorded
+  // migrations for changes SINCE the baseline run here, once each (see lib/migrate.js).
+  await require("./lib/migrate").runMigrations(pool);
 }
 
 module.exports = { pool, initDb };
