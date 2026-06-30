@@ -4,6 +4,12 @@
 // source invoice is paid). Eligibility reuses the deterministic scorecard. GL postings
 // are SMB-side, best-effort + idempotent, and degrade when the chart isn't seeded.
 const { pool } = require("../../db");
+const { q } = require("../../lib/tenantDb"); // RLS Phase 5
+// RLS rollout: the 4 lending tables (loan_offers, loans, loan_schedule, loan_repayments)
+// are FORCE-RLS (migration 0006). Their reads/writes go through q(tenantId,...). There are
+// NO multi-statement transactions here, so no withTenant is needed. The GL helpers below
+// (ledgerByName/firstBankLedger/ensureByNature) query book_* tables (NOT RLS'd) and keep
+// pool.query; postDisbursal/postRepayment post via books on their own connection.
 const { postVoucher } = require("../books/posting-engine");
 
 class LendError extends Error {
@@ -105,7 +111,7 @@ async function createOffer(tenantId, userId, body = {}) {
   }
 
   const kfs = buildKFS({ kind, principal, processingFee, apr, sched });
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO loan_offers(tenant_id,kind,principal,processing_fee,apr,tenure_months,tenure_days,source_invoice_id,kfs,created_by,expires_at)
      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now() + interval '14 days') RETURNING *`,
     [tenantId, kind, principal, processingFee, apr, tenureMonths, tenureDays, sourceInvoiceId, JSON.stringify(kfs), userId || null]
@@ -114,16 +120,16 @@ async function createOffer(tenantId, userId, body = {}) {
 }
 
 async function listOffers(tenantId) {
-  const { rows } = await pool.query("SELECT * FROM loan_offers WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 100", [tenantId]);
+  const { rows } = await q(tenantId,"SELECT * FROM loan_offers WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 100", [tenantId]);
   return rows.map((o) => ({ ...o, principal: n(o.principal), processing_fee: n(o.processing_fee), apr: n(o.apr) }));
 }
 async function getOffer(tenantId, id) {
-  const { rows } = await pool.query("SELECT * FROM loan_offers WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
+  const { rows } = await q(tenantId,"SELECT * FROM loan_offers WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
   if (!rows[0]) throw new LendError("NOT_FOUND", "Offer not found", 404);
   return rows[0];
 }
 async function declineOffer(tenantId, id) {
-  await pool.query("UPDATE loan_offers SET status='declined' WHERE tenant_id=$1 AND id=$2 AND status='offered'", [tenantId, id]);
+  await q(tenantId,"UPDATE loan_offers SET status='declined' WHERE tenant_id=$1 AND id=$2 AND status='offered'", [tenantId, id]);
   return { declined: true };
 }
 
@@ -138,31 +144,31 @@ async function acceptOffer(tenantId, offerId, actorId) {
   const dueDate = sched.rows[sched.rows.length - 1].due_date;
   const net = r2(n(offer.principal) - n(offer.processing_fee));
 
-  const { rows: lr } = await pool.query(
+  const { rows: lr } = await q(tenantId,
     `INSERT INTO loans(tenant_id,offer_id,kind,principal,apr,outstanding_principal,status,source_invoice_id,disbursed_amount,disbursed_at,due_date)
      VALUES($1,$2,$3,$4,$5,$4,'active',$6,$7, now(), $8) RETURNING *`,
     [tenantId, offer.id, offer.kind, n(offer.principal), n(offer.apr), offer.source_invoice_id, net, dueDate]
   );
   const loan = lr[0];
   for (const s of sched.rows) {
-    await pool.query(
+    await q(tenantId,
       `INSERT INTO loan_schedule(loan_id,tenant_id,installment_no,due_date,principal_due,interest_due,total_due)
        VALUES($1,$2,$3,$4,$5,$6,$7)`,
       [loan.id, tenantId, s.installment_no, s.due_date, s.principal_due, s.interest_due, s.total_due]
     );
   }
-  await pool.query("UPDATE loan_offers SET status='accepted' WHERE id=$1", [offer.id]);
+  await q(tenantId,"UPDATE loan_offers SET status='accepted' WHERE id=$1", [offer.id]);
   const voucherId = await postDisbursal(tenantId, actorId, loan, net);
-  if (voucherId) await pool.query("UPDATE loans SET disbursal_voucher_id=$2 WHERE id=$1", [loan.id, voucherId]);
+  if (voucherId) await q(tenantId,"UPDATE loans SET disbursal_voucher_id=$2 WHERE id=$1", [loan.id, voucherId]);
   return getLoan(tenantId, loan.id);
 }
 
 // ── LMS: loans, repayments, DPD ──────────────────────────────────────────────
 async function getLoan(tenantId, id) {
-  const { rows } = await pool.query("SELECT * FROM loans WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
+  const { rows } = await q(tenantId,"SELECT * FROM loans WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
   if (!rows[0]) throw new LendError("NOT_FOUND", "Loan not found", 404);
-  const { rows: sch } = await pool.query("SELECT * FROM loan_schedule WHERE loan_id=$1 ORDER BY installment_no", [id]);
-  const { rows: rep } = await pool.query("SELECT * FROM loan_repayments WHERE loan_id=$1 ORDER BY created_at", [id]);
+  const { rows: sch } = await q(tenantId,"SELECT * FROM loan_schedule WHERE loan_id=$1 ORDER BY installment_no", [id]);
+  const { rows: rep } = await q(tenantId,"SELECT * FROM loan_repayments WHERE loan_id=$1 ORDER BY created_at", [id]);
   const loan = rows[0];
   return {
     ...loan, principal: n(loan.principal), apr: n(loan.apr), outstanding_principal: n(loan.outstanding_principal),
@@ -173,7 +179,7 @@ async function getLoan(tenantId, id) {
   };
 }
 async function listLoans(tenantId) {
-  const { rows } = await pool.query("SELECT * FROM loans WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 100", [tenantId]);
+  const { rows } = await q(tenantId,"SELECT * FROM loans WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 100", [tenantId]);
   return rows.map((l) => ({ ...l, principal: n(l.principal), apr: n(l.apr), outstanding_principal: n(l.outstanding_principal) }));
 }
 
@@ -192,13 +198,13 @@ const dpdBucket = (d) => (d <= 0 ? "current" : d <= 30 ? "1-30" : d <= 60 ? "31-
 async function recordRepayment(tenantId, loanId, { amount, method = "manual", ref, actorId } = {}) {
   const amt = n(amount);
   if (!(amt > 0)) throw new LendError("BAD_INPUT", "amount must be > 0", 400);
-  const { rows: lr } = await pool.query("SELECT * FROM loans WHERE tenant_id=$1 AND id=$2", [tenantId, loanId]);
+  const { rows: lr } = await q(tenantId,"SELECT * FROM loans WHERE tenant_id=$1 AND id=$2", [tenantId, loanId]);
   const loan = lr[0];
   if (!loan) throw new LendError("NOT_FOUND", "Loan not found", 404);
   if (loan.status === "closed") return { alreadyClosed: true };
 
-  const { rows: sch } = await pool.query("SELECT * FROM loan_schedule WHERE loan_id=$1 ORDER BY installment_no", [loanId]);
-  const { rows: prevRep } = await pool.query("SELECT COALESCE(SUM(interest_component),0) AS i FROM loan_repayments WHERE loan_id=$1", [loanId]);
+  const { rows: sch } = await q(tenantId,"SELECT * FROM loan_schedule WHERE loan_id=$1 ORDER BY installment_no", [loanId]);
+  const { rows: prevRep } = await q(tenantId,"SELECT COALESCE(SUM(interest_component),0) AS i FROM loan_repayments WHERE loan_id=$1", [loanId]);
   const scheduledInterest = sch.reduce((s, x) => s + n(x.interest_due), 0);
   const interestOutstanding = Math.max(0, r2(scheduledInterest - n(prevRep[0].i)));
   const payInterest = r2(Math.min(amt, interestOutstanding));
@@ -206,7 +212,7 @@ async function recordRepayment(tenantId, loanId, { amount, method = "manual", re
   const newOutstanding = r2(n(loan.outstanding_principal) - payPrincipal);
 
   try {
-    await pool.query(
+    await q(tenantId,
       `INSERT INTO loan_repayments(loan_id,tenant_id,amount,principal_component,interest_component,method,ref)
        VALUES($1,$2,$3,$4,$5,$6,$7)`,
       [loanId, tenantId, amt, payPrincipal, payInterest, method, ref || null]
@@ -216,31 +222,31 @@ async function recordRepayment(tenantId, loanId, { amount, method = "manual", re
     throw e;
   }
   const closing = newOutstanding <= 0;
-  await pool.query("UPDATE loans SET outstanding_principal=$2, status=$3 WHERE id=$1",
+  await q(tenantId,"UPDATE loans SET outstanding_principal=$2, status=$3 WHERE id=$1",
     [loanId, newOutstanding, closing ? "closed" : "active"]);
 
   // Mark installments paid greedily by cumulative amount paid.
-  const { rows: paidAgg } = await pool.query("SELECT COALESCE(SUM(amount),0) AS p FROM loan_repayments WHERE loan_id=$1", [loanId]);
+  const { rows: paidAgg } = await q(tenantId,"SELECT COALESCE(SUM(amount),0) AS p FROM loan_repayments WHERE loan_id=$1", [loanId]);
   let cum = 0; const cumPaid = n(paidAgg[0].p);
   for (const s of sch) {
     cum = r2(cum + n(s.total_due));
     const status = cumPaid >= cum ? "paid" : (cumPaid > r2(cum - n(s.total_due)) ? "partial" : "due");
-    await pool.query("UPDATE loan_schedule SET status=$2, paid_at=CASE WHEN $2='paid' THEN now() ELSE paid_at END WHERE id=$1", [s.id, status]);
+    await q(tenantId,"UPDATE loan_schedule SET status=$2, paid_at=CASE WHEN $2='paid' THEN now() ELSE paid_at END WHERE id=$1", [s.id, status]);
   }
   const voucherId = await postRepayment(tenantId, actorId, loan, payPrincipal, payInterest);
-  if (voucherId) await pool.query("UPDATE loan_repayments SET gl_voucher_id=$2 WHERE loan_id=$1 AND ref IS NOT DISTINCT FROM $3", [loanId, voucherId, ref || null]);
+  if (voucherId) await q(tenantId,"UPDATE loan_repayments SET gl_voucher_id=$2 WHERE loan_id=$1 AND ref IS NOT DISTINCT FROM $3", [loanId, voucherId, ref || null]);
   return { applied: amt, principal: payPrincipal, interest: payInterest, outstanding: newOutstanding, closed: closing, glPosted: !!voucherId };
 }
 
 // Invoice-financing wedge: when the source invoice is paid, auto-recover the loan.
 async function onInvoicePaid(tenantId, invoiceId, { ref } = {}) {
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "SELECT * FROM loans WHERE tenant_id=$1 AND source_invoice_id=$2 AND status='active' LIMIT 1", [tenantId, invoiceId]
   );
   if (!rows[0]) return { matched: false };
   const loan = rows[0];
-  const { rows: sch } = await pool.query("SELECT COALESCE(SUM(interest_due),0) AS i FROM loan_schedule WHERE loan_id=$1", [loan.id]);
-  const { rows: prev } = await pool.query("SELECT COALESCE(SUM(interest_component),0) AS i, COALESCE(SUM(principal_component),0) AS p FROM loan_repayments WHERE loan_id=$1", [loan.id]);
+  const { rows: sch } = await q(tenantId,"SELECT COALESCE(SUM(interest_due),0) AS i FROM loan_schedule WHERE loan_id=$1", [loan.id]);
+  const { rows: prev } = await q(tenantId,"SELECT COALESCE(SUM(interest_component),0) AS i, COALESCE(SUM(principal_component),0) AS p FROM loan_repayments WHERE loan_id=$1", [loan.id]);
   const due = r2(n(loan.outstanding_principal) + Math.max(0, n(sch[0].i) - n(prev[0].i)));
   const res = await recordRepayment(tenantId, loan.id, { amount: due, method: "auto_invoice", ref: ref || `inv_${invoiceId}` });
   return { matched: true, loanId: loan.id, ...res };
