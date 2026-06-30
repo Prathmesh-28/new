@@ -14,6 +14,12 @@
 // A won deal still creates a Sundry-Debtors customer ledger in books. Tenant-scoped;
 // money kept simple (NUMERIC(19,2)); the ledger is the source of truth.
 const { pool } = require("../../db");
+const { q } = require("../../lib/tenantDb"); // RLS Phase 2: all crm_* tables are FORCE-RLS
+
+// Every crm_* query runs through q(tenantId, …) so the app.current_tenant GUC is set and
+// RLS enforces isolation (migration 0003). Note: some writes here scope only by id (e.g.
+// the UPDATE crm_contacts/crm_accounts inside convertLead/winDeal) — RLS now adds the
+// tenant constraint those queries lacked. q() is pool-safe (per-txn SET LOCAL).
 
 // ── Status vocabularies (ported from crm_lead_status / crm_deal_status fixtures) ─────
 // Lead statuses (type drives workflow): New/Contacted/Nurture = Open, Qualified = Ongoing,
@@ -211,7 +217,7 @@ function computeSla(sla, doc, now = new Date()) {
 // matches, within validity window, prefer one whose priorities include the doc priority,
 // default last.
 async function findSla(tenantId, applyOn, priority) {
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `SELECT * FROM crm_slas
        WHERE tenant_id=$1 AND apply_on=$2 AND enabled=true
          AND (start_date IS NULL OR start_date <= now())
@@ -238,7 +244,7 @@ async function createSla(tenantId, s) {
   }
   const workingHours = s.workingHours && Object.keys(s.workingHours).length ? s.workingHours : defaultWorkingHours();
   const holidays = Array.isArray(s.holidays) ? s.holidays : [];
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO crm_slas(tenant_id,name,apply_on,enabled,is_default,priorities,working_hours,holidays,start_date,end_date)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        ON CONFLICT(tenant_id,name) DO UPDATE SET apply_on=EXCLUDED.apply_on, enabled=EXCLUDED.enabled,
@@ -250,7 +256,7 @@ async function createSla(tenantId, s) {
   );
   return rows[0];
 }
-const listSlas = async (t) => (await pool.query("SELECT * FROM crm_slas WHERE tenant_id=$1 ORDER BY apply_on, name", [t])).rows;
+const listSlas = async (tenantId) => (await q(tenantId,"SELECT * FROM crm_slas WHERE tenant_id=$1 ORDER BY apply_on, name", [tenantId])).rows;
 
 // ════════════════════════════════════════════════════════════════════════════════════
 // LEAD SCORING  (simple rules-based, computed from filled fields/qualification)
@@ -281,7 +287,7 @@ function computeLeadScore(lead) {
 async function logStatusChange(tenantId, refType, refId, fromStatus, toStatus, actorId, fromDate) {
   let duration = null;
   if (fromDate) duration = Math.max(0, Math.round((Date.now() - new Date(fromDate).getTime()) / 1000));
-  await pool.query(
+  await q(tenantId,
     "INSERT INTO crm_status_change_log(tenant_id,reference_type,reference_id,from_status,to_status,duration_secs,log_owner) VALUES($1,$2,$3,$4,$5,$6,$7)",
     [tenantId, refType, refId, fromStatus || null, toStatus || null, duration, actorId || null]
   );
@@ -290,7 +296,7 @@ async function logStatusChange(tenantId, refType, refId, fromStatus, toStatus, a
 // ── Accounts / contacts ──────────────────────────────────────────────────────────────
 async function createAccount(tenantId, actorId, a) {
   if (!a.name) throw new CrmError("name required");
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO crm_accounts(tenant_id,name,industry,website,phone,gstin,annual_revenue,territory,owner_user_id)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT(tenant_id,name) DO UPDATE SET industry=COALESCE(EXCLUDED.industry,crm_accounts.industry)
@@ -300,14 +306,14 @@ async function createAccount(tenantId, actorId, a) {
   );
   return rows[0];
 }
-const listAccounts = async (t) => (await pool.query("SELECT * FROM crm_accounts WHERE tenant_id=$1 ORDER BY name", [t])).rows;
+const listAccounts = async (tenantId) => (await q(tenantId,"SELECT * FROM crm_accounts WHERE tenant_id=$1 ORDER BY name", [tenantId])).rows;
 
 // Update an account's editable fields (tenant-scoped). Only columns present on
 // crm_accounts; COALESCE keeps the existing value when a field is omitted (undefined).
 async function updateAccount(tenantId, id, patch) {
   const p = patch || {};
   if (p.name != null && !String(p.name).trim()) throw new CrmError("name required");
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `UPDATE crm_accounts SET
         name = COALESCE($3, name),
         industry = COALESCE($4, industry),
@@ -328,7 +334,7 @@ async function updateAccount(tenantId, id, patch) {
 
 // Delete an account (tenant-scoped). 404 if it doesn't belong to the tenant.
 async function deleteAccount(tenantId, id) {
-  const { rows } = await pool.query("DELETE FROM crm_accounts WHERE tenant_id=$1 AND id=$2 RETURNING id", [tenantId, id]);
+  const { rows } = await q(tenantId,"DELETE FROM crm_accounts WHERE tenant_id=$1 AND id=$2 RETURNING id", [tenantId, id]);
   if (!rows.length) throw new CrmError("Account not found", 404);
   return { ok: true, deleted: rows.length };
 }
@@ -342,7 +348,7 @@ function splitName(name) {
 async function createContact(tenantId, c) {
   if (!c.name) throw new CrmError("name required");
   const { first, last } = c.firstName ? { first: c.firstName, last: c.lastName || "" } : splitName(c.name);
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO crm_contacts(tenant_id,account_id,name,salutation,first_name,last_name,email,phone,mobile_no,designation,gender)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
     [tenantId, c.accountId || null, c.name, c.salutation || null, first || null, last || null,
@@ -350,7 +356,7 @@ async function createContact(tenantId, c) {
   );
   return rows[0];
 }
-const listContacts = async (t) => (await pool.query("SELECT * FROM crm_contacts WHERE tenant_id=$1 ORDER BY name", [t])).rows;
+const listContacts = async (tenantId) => (await q(tenantId,"SELECT * FROM crm_contacts WHERE tenant_id=$1 ORDER BY name", [tenantId])).rows;
 
 // Update a contact's editable fields (tenant-scoped). Only columns present on
 // crm_contacts; COALESCE keeps the existing value when a field is omitted. When the
@@ -362,7 +368,7 @@ async function updateContact(tenantId, id, patch) {
   let first = null, last = null;
   if (p.firstName != null) { first = p.firstName; last = p.lastName != null ? p.lastName : ""; }
   else if (p.name != null) { const s = splitName(p.name); first = s.first; last = s.last; }
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `UPDATE crm_contacts SET
         account_id = COALESCE($3, account_id),
         name = COALESCE($4, name),
@@ -387,7 +393,7 @@ async function updateContact(tenantId, id, patch) {
 
 // Delete a contact (tenant-scoped). 404 if it doesn't belong to the tenant.
 async function deleteContact(tenantId, id) {
-  const { rows } = await pool.query("DELETE FROM crm_contacts WHERE tenant_id=$1 AND id=$2 RETURNING id", [tenantId, id]);
+  const { rows } = await q(tenantId,"DELETE FROM crm_contacts WHERE tenant_id=$1 AND id=$2 RETURNING id", [tenantId, id]);
   if (!rows.length) throw new CrmError("Contact not found", 404);
   return { ok: true, deleted: rows.length };
 }
@@ -396,11 +402,11 @@ async function deleteContact(tenantId, id) {
 // identifies a person), then mobile.
 async function findContact(tenantId, email, phone) {
   if (email) {
-    const { rows } = await pool.query("SELECT * FROM crm_contacts WHERE tenant_id=$1 AND lower(email)=lower($2) LIMIT 1", [tenantId, email]);
+    const { rows } = await q(tenantId,"SELECT * FROM crm_contacts WHERE tenant_id=$1 AND lower(email)=lower($2) LIMIT 1", [tenantId, email]);
     if (rows[0]) return rows[0];
   }
   if (phone) {
-    const { rows } = await pool.query("SELECT * FROM crm_contacts WHERE tenant_id=$1 AND (phone=$2 OR mobile_no=$2) LIMIT 1", [tenantId, phone]);
+    const { rows } = await q(tenantId,"SELECT * FROM crm_contacts WHERE tenant_id=$1 AND (phone=$2 OR mobile_no=$2) LIMIT 1", [tenantId, phone]);
     if (rows[0]) return rows[0];
   }
   return null;
@@ -427,7 +433,7 @@ async function createLead(tenantId, actorId, l) {
   let slaFields = {};
   if (sla) slaFields = computeSla(sla, { sla_creation: new Date(), priority, first_response_at: null });
 
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO crm_leads(tenant_id,name,company,email,phone,source,status,industry,territory,job_title,
         annual_revenue,no_of_employees,website,priority,score,owner_user_id,
         sla_id,sla_creation,response_by,resolution_by,sla_status,escalated)
@@ -440,9 +446,9 @@ async function createLead(tenantId, actorId, l) {
   );
   return rows[0];
 }
-const listLeads = async (t) => (await pool.query("SELECT * FROM crm_leads WHERE tenant_id=$1 ORDER BY created_at DESC", [t])).rows;
+const listLeads = async (tenantId) => (await q(tenantId,"SELECT * FROM crm_leads WHERE tenant_id=$1 ORDER BY created_at DESC", [tenantId])).rows;
 async function getLead(tenantId, leadId) {
-  const { rows } = await pool.query("SELECT * FROM crm_leads WHERE tenant_id=$1 AND id=$2", [tenantId, leadId]);
+  const { rows } = await q(tenantId,"SELECT * FROM crm_leads WHERE tenant_id=$1 AND id=$2", [tenantId, leadId]);
   if (!rows[0]) throw new CrmError("Lead not found", 404);
   return rows[0];
 }
@@ -450,10 +456,10 @@ async function getLead(tenantId, leadId) {
 // Recompute the SLA snapshot for a lead/deal from its current row + an as-of time.
 async function refreshLeadSla(tenantId, lead, now = new Date()) {
   if (!lead.sla_id) return lead;
-  const { rows: sr } = await pool.query("SELECT * FROM crm_slas WHERE tenant_id=$1 AND id=$2", [tenantId, lead.sla_id]);
+  const { rows: sr } = await q(tenantId,"SELECT * FROM crm_slas WHERE tenant_id=$1 AND id=$2", [tenantId, lead.sla_id]);
   if (!sr[0]) return lead;
   const f = computeSla(sr[0], { sla_creation: lead.sla_creation, priority: lead.priority, first_response_at: lead.first_response_at }, now);
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "UPDATE crm_leads SET response_by=$3,resolution_by=$4,sla_status=$5,escalated=$6 WHERE tenant_id=$1 AND id=$2 RETURNING *",
     [tenantId, lead.id, f.response_by, f.resolution_by, f.sla_status, f.escalated]
   );
@@ -472,12 +478,12 @@ async function setLeadStatus(tenantId, actorId, leadId, status) {
     await logStatusChange(tenantId, "LEAD", leadId, lead.status, key, actorId, lead.created_at);
   }
   const score = computeLeadScore({ ...lead, status: key });
-  const { rows } = await pool.query("UPDATE crm_leads SET status=$3, score=$4 WHERE tenant_id=$1 AND id=$2 RETURNING *", [tenantId, leadId, key, score]);
+  const { rows } = await q(tenantId,"UPDATE crm_leads SET status=$3, score=$4 WHERE tenant_id=$1 AND id=$2 RETURNING *", [tenantId, leadId, key, score]);
   return rows[0];
 }
 
 async function setLeadLostReason(tenantId, leadId, reason) {
-  const { rows } = await pool.query("UPDATE crm_leads SET lost_reason=$3 WHERE tenant_id=$1 AND id=$2 RETURNING *", [tenantId, leadId, reason || null]);
+  const { rows } = await q(tenantId,"UPDATE crm_leads SET lost_reason=$3 WHERE tenant_id=$1 AND id=$2 RETURNING *", [tenantId, leadId, reason || null]);
   if (!rows[0]) throw new CrmError("Lead not found", 404);
   return rows[0];
 }
@@ -506,7 +512,7 @@ async function convertLead(tenantId, actorId, leadId, opts = {}) {
       email: lead.email, phone: lead.phone, designation: lead.job_title,
     });
   } else if (account && !contact.account_id) {
-    await pool.query("UPDATE crm_contacts SET account_id=$2 WHERE id=$1", [contact.id, account.id]);
+    await q(tenantId,"UPDATE crm_contacts SET account_id=$2 WHERE id=$1", [contact.id, account.id]);
     contact = { ...contact, account_id: account.id };
   }
 
@@ -535,7 +541,7 @@ async function convertLead(tenantId, actorId, leadId, opts = {}) {
   // mark lead Qualified + converted (port: db_set status="Qualified", converted=1)
   await logStatusChange(tenantId, "LEAD", lead.id, lead.status, "CONVERTED", actorId, lead.created_at);
   const score = computeLeadScore({ ...lead, status: "CONVERTED" });
-  const { rows: lr } = await pool.query(
+  const { rows: lr } = await q(tenantId,
     "UPDATE crm_leads SET status='CONVERTED', converted_deal_id=$3, score=$4 WHERE tenant_id=$1 AND id=$2 RETURNING *",
     [tenantId, leadId, deal.id, score]
   );
@@ -559,7 +565,7 @@ async function createDeal(tenantId, actorId, d) {
     if (sla) slaFields = computeSla(sla, { sla_creation: new Date(), priority: d.priority, first_response_at: null });
   }
 
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO crm_deals(tenant_id,title,account_id,contact_id,value,stage,probability,expected_close,next_step,
         status,lead_id,source,priority,owner_user_id,
         sla_id,sla_creation,response_by,resolution_by,first_response_at,sla_status,escalated)
@@ -572,9 +578,9 @@ async function createDeal(tenantId, actorId, d) {
   );
   return rows[0];
 }
-const listDeals = async (t) => (await pool.query("SELECT * FROM crm_deals WHERE tenant_id=$1 ORDER BY created_at DESC", [t])).rows;
+const listDeals = async (tenantId) => (await q(tenantId,"SELECT * FROM crm_deals WHERE tenant_id=$1 ORDER BY created_at DESC", [tenantId])).rows;
 async function getDeal(tenantId, dealId) {
-  const { rows } = await pool.query("SELECT * FROM crm_deals WHERE tenant_id=$1 AND id=$2", [tenantId, dealId]);
+  const { rows } = await q(tenantId,"SELECT * FROM crm_deals WHERE tenant_id=$1 AND id=$2", [tenantId, dealId]);
   if (!rows[0]) throw new CrmError("Deal not found", 404);
   return rows[0];
 }
@@ -585,7 +591,7 @@ async function getDeal(tenantId, dealId) {
 async function updateDeal(tenantId, id, patch) {
   const p = patch || {};
   if (p.title != null && !String(p.title).trim()) throw new CrmError("title required");
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `UPDATE crm_deals SET
         title = COALESCE($3, title),
         account_id = COALESCE($4, account_id),
@@ -607,9 +613,9 @@ async function updateDeal(tenantId, id, patch) {
 
 // Set the primary contact (port of crm_deal.set_primary_contact / set_primary_email_mobile_no).
 async function setPrimaryContact(tenantId, dealId, contactId) {
-  const { rows: cr } = await pool.query("SELECT id FROM crm_contacts WHERE tenant_id=$1 AND id=$2", [tenantId, contactId]);
+  const { rows: cr } = await q(tenantId,"SELECT id FROM crm_contacts WHERE tenant_id=$1 AND id=$2", [tenantId, contactId]);
   if (!cr[0]) throw new CrmError("Contact not found", 404);
-  const { rows } = await pool.query("UPDATE crm_deals SET contact_id=$3 WHERE tenant_id=$1 AND id=$2 RETURNING *", [tenantId, dealId, contactId]);
+  const { rows } = await q(tenantId,"UPDATE crm_deals SET contact_id=$3 WHERE tenant_id=$1 AND id=$2 RETURNING *", [tenantId, dealId, contactId]);
   if (!rows[0]) throw new CrmError("Deal not found", 404);
   return rows[0];
 }
@@ -632,7 +638,7 @@ async function moveStage(tenantId, actorId, dealId, stage, opts = {}) {
   if (deal.stage !== key) {
     await logStatusChange(tenantId, "DEAL", dealId, deal.stage, key, actorId, deal.created_at);
   }
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "UPDATE crm_deals SET stage=$3, probability=$4, status=$5, closed_at=$6, lost_reason=$7 WHERE tenant_id=$1 AND id=$2 RETURNING *",
     [tenantId, dealId, key, stageProbability(key), status, closed, lostReason || null]
   );
@@ -642,7 +648,7 @@ async function moveStage(tenantId, actorId, dealId, stage, opts = {}) {
 // Delete a deal (tenant-scoped). Returns { ok:true } even if already gone so the
 // client can safely remove its optimistic cache row.
 async function deleteDeal(tenantId, dealId) {
-  const { rows } = await pool.query("DELETE FROM crm_deals WHERE tenant_id=$1 AND id=$2 RETURNING id", [tenantId, dealId]);
+  const { rows } = await q(tenantId,"DELETE FROM crm_deals WHERE tenant_id=$1 AND id=$2 RETURNING id", [tenantId, dealId]);
   return { ok: true, deleted: rows.length };
 }
 
@@ -650,16 +656,16 @@ async function deleteDeal(tenantId, dealId) {
 async function winDeal(tenantId, actorId, dealId) {
   const deal = await moveStage(tenantId, actorId, dealId, "WON");
   if (deal.account_id) {
-    const { rows: ar } = await pool.query("SELECT * FROM crm_accounts WHERE id=$1", [deal.account_id]);
+    const { rows: ar } = await q(tenantId,"SELECT * FROM crm_accounts WHERE id=$1", [deal.account_id]);
     const acct = ar[0];
     if (acct && !acct.books_ledger_id) {
-      const { rows: g } = await pool.query("SELECT id FROM book_account_groups WHERE tenant_id=$1 AND name='Sundry Debtors'", [tenantId]);
+      const { rows: g } = await q(tenantId,"SELECT id FROM book_account_groups WHERE tenant_id=$1 AND name='Sundry Debtors'", [tenantId]);
       if (g[0]) {
-        const { rows: lg } = await pool.query(
+        const { rows: lg } = await q(tenantId,
           "INSERT INTO book_ledgers(tenant_id,name,group_id,is_party,gstin) VALUES($1,$2,$3,true,$4) ON CONFLICT(tenant_id,name) DO UPDATE SET is_party=true RETURNING id",
           [tenantId, acct.name, g[0].id, acct.gstin || null]
         );
-        await pool.query("UPDATE crm_accounts SET books_ledger_id=$2 WHERE id=$1", [acct.id, lg[0].id]);
+        await q(tenantId,"UPDATE crm_accounts SET books_ledger_id=$2 WHERE id=$1", [acct.id, lg[0].id]);
         return { ...deal, booksLedgerId: lg[0].id, customerCreated: true };
       }
     }
@@ -697,7 +703,7 @@ async function createTask(tenantId, actorId, t) {
   const priority = TASK_PRIORITIES.includes((t.priority || "MEDIUM").toUpperCase()) ? (t.priority || "MEDIUM").toUpperCase() : "MEDIUM";
   const refType = t.referenceType ? String(t.referenceType).toUpperCase() : null;
   if (refType && !["LEAD", "DEAL"].includes(refType)) throw new CrmError("referenceType must be LEAD or DEAL");
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `INSERT INTO crm_tasks(tenant_id,title,description,status,priority,start_date,due_date,reference_type,reference_id,assigned_to,created_by,completed_at)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
     [tenantId, t.title, t.description || null, status, priority, t.startDate || null, t.dueDate || null,
@@ -712,14 +718,14 @@ async function listTasks(tenantId, filter = {}) {
     params.push(String(filter.referenceType).toUpperCase()); where.push(`reference_type=$${params.length}`);
     params.push(filter.referenceId); where.push(`reference_id=$${params.length}`);
   }
-  const { rows } = await pool.query(`SELECT * FROM crm_tasks WHERE ${where.join(" AND ")} ORDER BY (status='DONE'), COALESCE(due_date, created_at) LIMIT 500`, params);
+  const { rows } = await q(tenantId,`SELECT * FROM crm_tasks WHERE ${where.join(" AND ")} ORDER BY (status='DONE'), COALESCE(due_date, created_at) LIMIT 500`, params);
   return rows;
 }
 async function setTaskStatus(tenantId, taskId, status) {
   const key = (status || "").toUpperCase();
   if (!TASK_STATUSES.includes(key)) throw new CrmError("Invalid task status");
   const completed = key === "DONE" ? new Date().toISOString() : null;
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "UPDATE crm_tasks SET status=$3, completed_at=$4 WHERE tenant_id=$1 AND id=$2 RETURNING *",
     [tenantId, taskId, key, completed]
   );
@@ -733,7 +739,7 @@ async function createNote(tenantId, actorId, n) {
   if (!n.content) throw new CrmError("content required");
   const refType = n.referenceType ? String(n.referenceType).toUpperCase() : null;
   if (refType && !["LEAD", "DEAL"].includes(refType)) throw new CrmError("referenceType must be LEAD or DEAL");
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "INSERT INTO crm_notes(tenant_id,title,content,reference_type,reference_id,created_by) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",
     [tenantId, n.title || null, n.content, refType, n.referenceId || null, actorId || null]
   );
@@ -746,7 +752,7 @@ async function listNotes(tenantId, filter = {}) {
     params.push(String(filter.referenceType).toUpperCase()); where.push(`reference_type=$${params.length}`);
     params.push(filter.referenceId); where.push(`reference_id=$${params.length}`);
   }
-  const { rows } = await pool.query(`SELECT * FROM crm_notes WHERE ${where.join(" AND ")} ORDER BY created_at DESC LIMIT 500`, params);
+  const { rows } = await q(tenantId,`SELECT * FROM crm_notes WHERE ${where.join(" AND ")} ORDER BY created_at DESC LIMIT 500`, params);
   return rows;
 }
 
@@ -755,7 +761,7 @@ async function listNotes(tenantId, filter = {}) {
 // first agent response, then recomputes the SLA status (Fulfilled / Failed / Due).
 async function logActivity(tenantId, actorId, a) {
   const direction = a.direction && ["INBOUND", "OUTBOUND"].includes(String(a.direction).toUpperCase()) ? String(a.direction).toUpperCase() : null;
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     "INSERT INTO crm_activities(tenant_id,kind,direction,subject,body,deal_id,lead_id,account_id,due_date,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",
     [tenantId, a.kind || "NOTE", direction, a.subject || null, a.body || null, a.dealId || null, a.leadId || null, a.accountId || null, a.dueDate || null, actorId || null]
   );
@@ -763,13 +769,13 @@ async function logActivity(tenantId, actorId, a) {
   if (direction === "OUTBOUND") {
     const now = new Date();
     if (a.leadId) {
-      const { rows: lr } = await pool.query("SELECT * FROM crm_leads WHERE tenant_id=$1 AND id=$2", [tenantId, a.leadId]);
+      const { rows: lr } = await q(tenantId,"SELECT * FROM crm_leads WHERE tenant_id=$1 AND id=$2", [tenantId, a.leadId]);
       const lead = lr[0];
       if (lead && lead.sla_id && !lead.first_response_at) {
-        const { rows: sr } = await pool.query("SELECT * FROM crm_slas WHERE tenant_id=$1 AND id=$2", [tenantId, lead.sla_id]);
+        const { rows: sr } = await q(tenantId,"SELECT * FROM crm_slas WHERE tenant_id=$1 AND id=$2", [tenantId, lead.sla_id]);
         if (sr[0]) {
           const f = computeSla(sr[0], { sla_creation: lead.sla_creation, priority: lead.priority, first_response_at: now }, now);
-          await pool.query(
+          await q(tenantId,
             "UPDATE crm_leads SET first_response_at=$3, sla_status=$4, escalated=$5 WHERE tenant_id=$1 AND id=$2",
             [tenantId, lead.id, now.toISOString(), f.sla_status, f.escalated]
           );
@@ -777,13 +783,13 @@ async function logActivity(tenantId, actorId, a) {
       }
     }
     if (a.dealId) {
-      const { rows: dr } = await pool.query("SELECT * FROM crm_deals WHERE tenant_id=$1 AND id=$2", [tenantId, a.dealId]);
+      const { rows: dr } = await q(tenantId,"SELECT * FROM crm_deals WHERE tenant_id=$1 AND id=$2", [tenantId, a.dealId]);
       const deal = dr[0];
       if (deal && deal.sla_id && !deal.first_response_at) {
-        const { rows: sr } = await pool.query("SELECT * FROM crm_slas WHERE tenant_id=$1 AND id=$2", [tenantId, deal.sla_id]);
+        const { rows: sr } = await q(tenantId,"SELECT * FROM crm_slas WHERE tenant_id=$1 AND id=$2", [tenantId, deal.sla_id]);
         if (sr[0]) {
           const f = computeSla(sr[0], { sla_creation: deal.sla_creation, priority: deal.priority, first_response_at: now }, now);
-          await pool.query(
+          await q(tenantId,
             "UPDATE crm_deals SET first_response_at=$3, sla_status=$4, escalated=$5 WHERE tenant_id=$1 AND id=$2",
             [tenantId, deal.id, now.toISOString(), f.sla_status, f.escalated]
           );
@@ -798,11 +804,11 @@ async function listActivities(tenantId, filter = {}) {
   const where = ["tenant_id=$1"];
   if (filter.dealId) { params.push(filter.dealId); where.push(`deal_id=$${params.length}`); }
   if (filter.leadId) { params.push(filter.leadId); where.push(`lead_id=$${params.length}`); }
-  const { rows } = await pool.query(`SELECT * FROM crm_activities WHERE ${where.join(" AND ")} ORDER BY created_at DESC LIMIT 500`, params);
+  const { rows } = await q(tenantId,`SELECT * FROM crm_activities WHERE ${where.join(" AND ")} ORDER BY created_at DESC LIMIT 500`, params);
   return rows;
 }
 async function completeActivity(tenantId, id) {
-  await pool.query("UPDATE crm_activities SET done=true WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
+  await q(tenantId,"UPDATE crm_activities SET done=true WHERE tenant_id=$1 AND id=$2", [tenantId, id]);
   return { ok: true };
 }
 
@@ -812,10 +818,10 @@ async function timeline(tenantId, refType, refId) {
   if (!["LEAD", "DEAL"].includes(type)) throw new CrmError("reference must be LEAD or DEAL");
   const col = type === "LEAD" ? "lead_id" : "deal_id";
   const [acts, tasks, notes, logs] = await Promise.all([
-    pool.query(`SELECT * FROM crm_activities WHERE tenant_id=$1 AND ${col}=$2 ORDER BY created_at DESC LIMIT 500`, [tenantId, refId]),
+    q(tenantId,`SELECT * FROM crm_activities WHERE tenant_id=$1 AND ${col}=$2 ORDER BY created_at DESC LIMIT 500`, [tenantId, refId]),
     listTasks(tenantId, { referenceType: type, referenceId: refId }),
     listNotes(tenantId, { referenceType: type, referenceId: refId }),
-    pool.query("SELECT * FROM crm_status_change_log WHERE tenant_id=$1 AND reference_type=$2 AND reference_id=$3 ORDER BY created_at DESC LIMIT 500", [tenantId, type, refId]),
+    q(tenantId,"SELECT * FROM crm_status_change_log WHERE tenant_id=$1 AND reference_type=$2 AND reference_id=$3 ORDER BY created_at DESC LIMIT 500", [tenantId, type, refId]),
   ]);
   const events = [];
   for (const a of acts.rows) events.push({ type: "activity", at: a.created_at, kind: a.kind, direction: a.direction, subject: a.subject, body: a.body, id: a.id });

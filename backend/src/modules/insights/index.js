@@ -427,7 +427,9 @@ function compile(model, tenantId) {
 // Compile + execute. Returns { columns, rows }.
 async function runQuery(tenantId, model) {
   const { text, params } = compile(model, tenantId);
-  const result = await pool.query(text, params);
+  // The BI query can target RLS-protected sources (e.g. crm_deals/crm_leads), so run it
+  // under the tenant GUC. Harmless for non-RLS sources (the GUC is simply ignored).
+  const result = await require("../../lib/tenantDb").q(tenantId, text, params);
   return {
     columns: result.fields.map((f) => f.name),
     rows: result.rows,
