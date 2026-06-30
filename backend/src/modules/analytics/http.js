@@ -52,7 +52,12 @@ router.get("/retention", canViewAnalytics, async (req, res) => {
 // Win-back: who's gone quiet, and a button to nudge them. Owner → own tenant only;
 // super_admin → platform-wide. The daily cron in server.js runs the platform sweep.
 router.get("/dormant", canViewAnalytics, async (req, res) => {
-  try { res.json({ dormant: await analytics.findDormant(scopeOf(req), { idleDays: req.query.idle_days, cooldownDays: req.query.cooldown_days }) }); } catch (e) { fail(res, e); }
+  try {
+    const dormant = await analytics.findDormant(scopeOf(req), { idleDays: req.query.idle_days, cooldownDays: req.query.cooldown_days });
+    // Classify the first 100 for per-row reason chips (bounded: 2 indexed queries each).
+    const head = await Promise.all(dormant.slice(0, 100).map(async (t) => ({ ...t, ...(await analytics.classifyReason(t.tenant_id, t.days_idle)) })));
+    res.json({ dormant: head.concat(dormant.slice(100)) });
+  } catch (e) { fail(res, e); }
 });
 router.post("/winback/run", canViewAnalytics, async (req, res) => {
   try {

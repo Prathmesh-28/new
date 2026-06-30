@@ -14,9 +14,13 @@ interface Overview {
   segments: Record<string, Seg[]>;
 }
 interface Retention { weeks: number; role: string | null; cohorts: { cohort: string; size: number; retention: number[] }[] }
-interface Dormant { tenant_id: string; last_seen: string; days_idle: number }
-interface WinResult { scanned: number; channels: Record<string, number> }
+interface Dormant { tenant_id: string; last_seen: string; days_idle: number; reason?: string; label?: string; amount?: number }
+interface WinResult { scanned: number; channels: Record<string, number>; reasons: Record<string, number> }
 const ROLES = ["owner", "finance_manager", "accountant", "sales", "operations_manager", "investor"];
+const REASON_LABELS: Record<string, string> = {
+  overdue_invoices: "overdue invoices", unpaid_invoices: "unpaid invoices",
+  active_then_dropped: "went quiet", never_onboarded: "never set up", dormant_generic: "general",
+};
 
 export default function ProductAnalytics() {
   const [d, setD] = useState<Overview | null>(null);
@@ -33,7 +37,7 @@ export default function ProductAnalytics() {
   const runWinback = () => {
     setWinRunning(true); setWinMsg("");
     api.post<WinResult>("/api/analytics/winback/run", {})
-      .then((r) => { const sent = Object.entries(r.channels).map(([k, v]) => `${v} ${k}`).join(", "); setWinMsg(r.scanned ? `Nudged ${r.scanned} business${r.scanned > 1 ? "es" : ""}${sent ? ` (${sent})` : ""}.` : "No dormant businesses to nudge right now."); loadDormant(); })
+      .then((r) => { const by = Object.entries(r.reasons || {}).map(([k, v]) => `${v} ${REASON_LABELS[k] || k}`).join(", "); setWinMsg(r.scanned ? `Nudged ${r.scanned} business${r.scanned > 1 ? "es" : ""}${by ? ` — ${by}` : ""}.` : "No dormant businesses to nudge right now."); loadDormant(); })
       .catch((e) => setWinMsg((e as { message?: string })?.message || "Could not run win-back."))
       .finally(() => setWinRunning(false));
   };
@@ -234,9 +238,10 @@ export default function ProductAnalytics() {
               <div className="space-y-1.5">
                 <p className="text-xs"><span className="text-[var(--color-text)] font-semibold">{dormant.length}</span> <span className="text-[var(--color-muted)]">awaiting a nudge</span></p>
                 {dormant.slice(0, 8).map((t) => (
-                  <div key={t.tenant_id} className="flex items-center justify-between text-sm">
-                    <span className="font-mono text-xs truncate">{t.tenant_id}</span>
-                    <span className="text-[var(--color-muted)] text-xs shrink-0 ml-2">idle {t.days_idle}d</span>
+                  <div key={t.tenant_id} className="flex items-center gap-2 text-sm">
+                    <span className="font-mono text-xs truncate flex-1 min-w-0">{t.tenant_id}</span>
+                    {t.label && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] shrink-0 whitespace-nowrap">{t.label}{t.amount ? ` · ₹${Math.round(t.amount).toLocaleString("en-IN")}` : ""}</span>}
+                    <span className="text-[var(--color-muted)] text-xs shrink-0">idle {t.days_idle}d</span>
                   </div>
                 ))}
                 {dormant.length > 8 && <p className="text-xs text-[var(--color-muted)]">+{dormant.length - 8} more</p>}

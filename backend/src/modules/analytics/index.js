@@ -185,6 +185,26 @@ async function retention(scopeTenantId, { weeks, role } = {}) {
 
 // ── Win-back: detect dormant businesses + nudge them ──────────────────────────
 const ci = (v, d, lo, hi) => Math.min(Math.max(parseInt(v, 10) || d, lo), hi);
+const inr = (n) => "₹" + Math.round(Number(n) || 0).toLocaleString("en-IN");
+
+// Reason-specific nudge copy. Channel-NEUTRAL on purpose (the email footer says
+// "do not reply", so no reply CTAs) and TRUTHFUL — only the invoice reasons quote a
+// ₹ amount (backed by SUM(total_amount)); none claim a feature the tenant may not
+// have used. n=name, d=days idle, a=₹ amount.
+const REASON_MSG = {
+  overdue_invoices:    (n, d, a) => `Hi${n ? " " + n : ""}, you have ${inr(a)} in overdue invoices waiting to be collected on Headroom. Open the app to send a payment reminder in one tap - getting paid is the fastest reason to log back in.`,
+  unpaid_invoices:     (n, d, a) => `Hi${n ? " " + n : ""}, you have ${inr(a)} in unpaid invoices on Headroom. Track who owes you and send a reminder - your receivables are one tap away.`,
+  active_then_dropped: (n, d)    => `Hi${n ? " " + n : ""}, it's been ${d} days since you used Headroom. Everything is right where you left it - pop in for a 30-second check on where your business stands this week.`,
+  never_onboarded:     (n)       => `Hi${n ? " " + n : ""}, you signed up for Headroom but haven't finished setting up your business yet. It takes 2 minutes - add a few basics and your cash dashboard, GST tracker and invoicing are ready to use.`,
+  dormant_generic:     (n, d)    => `Hi${n ? " " + n : ""}, we haven't seen you on Headroom in ${d} days. Your cash dashboard, GST status and invoicing are ready whenever you are - log in any time to pick up where you left off.`,
+};
+const REASON_LABEL = {
+  overdue_invoices: "Overdue invoices",
+  unpaid_invoices: "Unpaid invoices",
+  active_then_dropped: "Was active, went quiet",
+  never_onboarded: "Never finished setup",
+  dormant_generic: "General re-engagement",
+};
 
 // Businesses whose last activity is idleDays-90d ago (active before, gone quiet now)
 // and that haven't already been nudged within cooldownDays.
@@ -215,6 +235,39 @@ async function firmContact(tenantId) {
   return { name: firm.name || null, phone: firm.phone || null, email: firm.email || null };
 }
 
+// Why did this business go quiet? Returns { reason, label, amount? } from data we
+// already capture — two tenant-scoped, indexed queries run concurrently; never
+// throws (a missing invoices/users table degrades to the generic reason). Precedence
+// (first match wins): money owed → was-active → never-set-up → generic. Money-backed
+// reasons win because a concrete ₹ figure is the most actionable thing to log in for.
+async function classifyReason(tenantId, daysIdle) {
+  const [q1, q2] = await Promise.all([
+    pool.query(
+      `SELECT (MIN(p.onboarded_at) IS NULL) AS not_onboarded,
+              bool_or(ae.event='onboarding_completed') AS completed_ev,
+              bool_or(ae.event IN ('invoice_created','forecast_run','loan_accepted','campaign_published')) AS reached_value,
+              (SELECT bool_or(u.role='owner') FROM users u WHERE u.tenant_id=$1) AS has_owner
+       FROM analytics_events ae LEFT JOIN tenant_profile p ON p.tenant_id=ae.tenant_id
+       WHERE ae.tenant_id=$1 AND ae.event <> 'winback_nudge'`, [tenantId]
+    ).catch(() => ({ rows: [{}] })),
+    pool.query(
+      `SELECT count(*) FILTER (WHERE due_date < CURRENT_DATE AND status NOT IN ('paid','cancelled','draft')) AS overdue_count,
+              COALESCE(SUM(total_amount) FILTER (WHERE due_date < CURRENT_DATE AND status NOT IN ('paid','cancelled','draft')),0) AS overdue_amount,
+              count(*) FILTER (WHERE status NOT IN ('paid','cancelled','draft')) AS unpaid_count,
+              COALESCE(SUM(total_amount) FILTER (WHERE status NOT IN ('paid','cancelled','draft')),0) AS unpaid_amount
+       FROM invoices WHERE tenant_id=$1`, [tenantId]
+    ).catch(() => ({ rows: [{ overdue_count: 0, unpaid_count: 0, overdue_amount: 0, unpaid_amount: 0 }] })),
+  ]);
+  const a = q1.rows[0] || {}, b = q2.rows[0] || {};
+  let reason, amount;
+  if (Number(b.overdue_count) > 0) { reason = "overdue_invoices"; amount = Number(b.overdue_amount); }
+  else if (Number(b.unpaid_count) > 0) { reason = "unpaid_invoices"; amount = Number(b.unpaid_amount); }
+  else if (a.reached_value) reason = "active_then_dropped";
+  else if (a.has_owner && a.not_onboarded && !a.completed_ev) reason = "never_onboarded";
+  else reason = "dormant_generic";
+  return { reason, label: REASON_LABEL[reason], ...(amount ? { amount } : {}) };
+}
+
 // Nudge each dormant business via WhatsApp → email → in-app alert (whichever is
 // available), and record a 'winback_nudge' event so we don't re-nudge within the
 // cooldown. dryRun records the decision without actually sending (used by tests).
@@ -222,23 +275,26 @@ async function runWinback({ idleDays, cooldownDays, dryRun = false, scopeTenantI
   const dormant = await findDormant(scopeTenantId, { idleDays, cooldownDays });
   const waLive = !!(process.env.TWILIO_ACCOUNT_SID && String(process.env.TWILIO_ACCOUNT_SID).trim());
   const mailLive = !!(process.env.SMTP_USER && String(process.env.SMTP_USER).trim());
-  const channels = {};
+  const channels = {}, reasons = {};
   for (const t of dormant) {
     const c = await firmContact(t.tenant_id);
-    const msg = `Hi${c.name ? " " + c.name : ""} - we have not seen you on Headroom in ${t.days_idle} days. Your cash dashboard, GST status and pending invoices are ready whenever you are.`;
+    const { reason, amount } = await classifyReason(t.tenant_id, t.days_idle);
+    const msg = (REASON_MSG[reason] || REASON_MSG.dormant_generic)(c.name, t.days_idle, amount);
     let channel = "alert";
     if (dryRun) channel = "dry";
     else {
       try {
         if (waLive && c.phone) { await require("../../lib/whatsapp").sendWhatsApp(c.phone, msg); channel = "whatsapp"; }
         else if (mailLive && c.email) { await require("../../lib/email").sendMail({ to: c.email, subject: "We miss you at Headroom", html: `<p>${msg}</p>` }); channel = "email"; }
-        else { await pool.query("INSERT INTO alerts(tenant_id, rule_id, severity, title, message, meta) VALUES($1,NULL,'info',$2,$3,$4)", [t.tenant_id, "We miss you", msg, JSON.stringify({ kind: "winback", days_idle: t.days_idle })]).catch(() => {}); channel = "alert"; }
+        else { await pool.query("INSERT INTO alerts(tenant_id, rule_id, severity, title, message, meta) VALUES($1,NULL,'info',$2,$3,$4)", [t.tenant_id, "We miss you", msg, JSON.stringify({ kind: "winback", days_idle: t.days_idle, reason })]).catch(() => {}); channel = "alert"; }
       } catch (e) { try { console.warn("[winback] send failed", t.tenant_id, e.message); } catch {} channel = "failed"; }
     }
     channels[channel] = (channels[channel] || 0) + 1;
-    await track(t.tenant_id, null, { event: "winback_nudge", props: { channel, days_idle: t.days_idle } }).catch(() => {});
+    reasons[reason] = (reasons[reason] || 0) + 1;
+    // Don't burn the 30-day cooldown on a failed send — leave the tenant eligible for retry.
+    if (channel !== "failed") await track(t.tenant_id, null, { event: "winback_nudge", props: { channel, days_idle: t.days_idle, reason, ...(amount ? { amount } : {}) } }).catch(() => {});
   }
-  return { scanned: dormant.length, channels };
+  return { scanned: dormant.length, channels, reasons };
 }
 
-module.exports = { AnalyticsError, track, saveProfile, getProfile, overview, retention, findDormant, runWinback, hasAnalyticsConsent };
+module.exports = { AnalyticsError, track, saveProfile, getProfile, overview, retention, findDormant, classifyReason, runWinback, hasAnalyticsConsent };
