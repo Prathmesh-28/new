@@ -88,6 +88,33 @@ const apiLimiter = rateLimit({
 });
 app.use("/api", apiLimiter);
 
+// ── Product-analytics auto-capture ───────────────────────────────────────────
+// One place that records EVERY authenticated write (POST/PATCH/PUT/DELETE) that
+// succeeds, as a `{resource}.{verb}` event tagged with the stakeholder's role —
+// so we understand behaviour across all 48 route groups + all stakeholder types
+// without touching each feature. Reads `req.user` at response-finish (set by the
+// per-router authenticate middleware by then). Consent-gated in analytics.track().
+const TRACK_VERB = { POST: "create", PATCH: "update", PUT: "update", DELETE: "delete" };
+app.use((req, res, next) => {
+  res.on("finish", () => {
+    try {
+      const u = req.user, verb = TRACK_VERB[req.method];
+      if (!u || !u.tenant_id || !verb) return;                 // authed mutations only
+      if (res.statusCode < 200 || res.statusCode >= 300) return; // successful only
+      const p = req.path || "";
+      if (p.startsWith("/api/analytics") || p.startsWith("/auth")) return; // avoid self / double-count
+      const parts = p.split("/").filter(Boolean);
+      const resource = (parts[0] === "api" ? parts[1] : parts[0]) || "root";
+      require("./modules/analytics").track(u.tenant_id, u.id, {
+        event: `${resource}.${verb}`,
+        props: { role: u.role, method: req.method, status: res.statusCode },
+        path: p.slice(0, 160),
+      }).catch(() => {});
+    } catch { /* analytics must never affect the response */ }
+  });
+  next();
+});
+
 // Health check
 app.get("/health", (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 

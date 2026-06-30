@@ -97,6 +97,20 @@ async function overview(scopeTenantId, { days } = {}) {
      GROUP BY event ORDER BY n DESC LIMIT 15`, args
   );
 
+  // Behaviour by stakeholder (the role stamped on every event).
+  const byRole = await pool.query(
+    `SELECT props->>'role' AS role, COUNT(*) AS n, COUNT(DISTINCT user_id) AS users
+     FROM analytics_events WHERE ${since} AND props->>'role' IS NOT NULL ${tFilter}
+     GROUP BY role ORDER BY n DESC`, args
+  );
+
+  // Most-visited pages (from page_view events).
+  const topPaths = await pool.query(
+    `SELECT path, COUNT(*) AS n FROM analytics_events
+     WHERE event='page_view' AND ${since} AND path IS NOT NULL ${tFilter}
+     GROUP BY path ORDER BY n DESC LIMIT 12`, args
+  );
+
   // Segments only meaningful platform-wide (an owner has one profile).
   const segBy = async (col) => {
     if (scoped) return [];
@@ -113,6 +127,8 @@ async function overview(scopeTenantId, { days } = {}) {
     active: { dau: Number(activeRow.rows[0].dau), wau: Number(activeRow.rows[0].wau), mau: Number(activeRow.rows[0].mau), events: Number(activeRow.rows[0].events) },
     funnel,
     top_events: top.rows.map((r) => ({ event: r.event, count: Number(r.n), tenants: Number(r.tenants) })),
+    by_role: byRole.rows.map((r) => ({ role: r.role, count: Number(r.n), users: Number(r.users) })),
+    top_paths: topPaths.rows.map((r) => ({ path: r.path, count: Number(r.n) })),
     segments: { industry: await segBy("industry"), turnover_band: await segBy("turnover_band"), primary_goal: await segBy("primary_goal"), acquisition_source: await segBy("acquisition_source") },
   };
 }

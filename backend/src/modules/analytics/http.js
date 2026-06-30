@@ -23,8 +23,10 @@ const fail = (res, e) => {
 // Fire-and-forget event ingest (consent-gated in the data layer).
 router.post("/track", async (req, res) => {
   try {
+    // Tag every client event with the stakeholder's role for segmentation.
+    const props = { ...(req.body?.props && typeof req.body.props === "object" ? req.body.props : {}), role: req.user.role };
     res.json(await analytics.track(req.user.tenant_id, req.user.id, {
-      event: req.body?.event, props: req.body?.props,
+      event: req.body?.event, props,
       sessionId: req.body?.session_id, path: req.body?.path, ua: req.headers["user-agent"],
     }));
   } catch (e) { fail(res, e); }

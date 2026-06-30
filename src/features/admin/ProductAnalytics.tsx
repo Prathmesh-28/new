@@ -8,6 +8,8 @@ interface Overview {
   active: { dau: number; wau: number; mau: number; events: number };
   funnel: { key: string; label: string; count: number }[];
   top_events: { event: string; count: number; tenants: number }[];
+  by_role: { role: string; count: number; users: number }[];
+  top_paths: { path: string; count: number }[];
   segments: Record<string, Seg[]>;
 }
 
@@ -75,6 +77,38 @@ export default function ProductAnalytics() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Behaviour by stakeholder */}
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+              <p className="text-sm font-semibold mb-3">Activity by stakeholder</p>
+              {d.by_role.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No activity yet.</p> : (
+                <div className="space-y-1.5">
+                  {d.by_role.map((r) => {
+                    const max = d.by_role[0]?.count || 1;
+                    return (
+                      <div key={r.role || "?"} className="flex items-center gap-2 text-sm">
+                        <span className="w-32 shrink-0 capitalize">{(r.role || "unknown").replace(/_/g, " ")}</span>
+                        <div className="flex-1 h-4 rounded bg-[var(--color-bg)] overflow-hidden"><div className="h-full bg-[var(--color-primary)]/60" style={{ width: `${Math.round((r.count / max) * 100)}%` }} /></div>
+                        <span className="w-24 text-right text-xs text-[var(--color-muted)]">{r.count.toLocaleString("en-IN")} · {r.users}u</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            {/* Top pages */}
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+              <p className="text-sm font-semibold mb-3">Top pages</p>
+              {d.top_paths.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No page views yet.</p> : (
+                <div className="space-y-1.5">
+                  {d.top_paths.map((p) => (
+                    <div key={p.path} className="flex items-center justify-between text-sm"><span className="font-mono text-xs truncate">{p.path}</span><span className="text-[var(--color-muted)] text-xs shrink-0 ml-2">{p.count.toLocaleString("en-IN")}</span></div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
