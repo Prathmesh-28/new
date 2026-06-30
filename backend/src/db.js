@@ -1,8 +1,17 @@
 const { Pool } = require("pg");
 
+// Explicit pool sizing + timeouts (the audit flagged pg defaults). Without these, the
+// default max=10 with an INFINITE acquire wait means a slow query or a flow that holds a
+// client while opening another connection (e.g. the manufacturing → GL posting path) can
+// silently block every request instead of failing fast. connectionTimeoutMillis makes
+// acquisition fail-fast under exhaustion; statement_timeout caps a runaway query.
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+  max: parseInt(process.env.PG_POOL_MAX || "20", 10),
+  idleTimeoutMillis: parseInt(process.env.PG_IDLE_TIMEOUT_MS || "30000", 10),
+  connectionTimeoutMillis: parseInt(process.env.PG_CONN_TIMEOUT_MS || "10000", 10),
+  statement_timeout: parseInt(process.env.PG_STATEMENT_TIMEOUT_MS || "30000", 10),
 });
 
 async function initDb() {
