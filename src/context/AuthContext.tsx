@@ -26,7 +26,7 @@ interface AuthCtx {
   user: AuthUser | null;
   loading: boolean;
   serverReady: boolean;
-  login: (email: string, password: string, turnstileToken?: string) => Promise<AuthUser>;
+  login: (email: string, password: string, turnstileToken?: string, mfaCode?: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, [fetchMe, tryRefresh]);
 
-  const login = useCallback(async (email: string, password: string, turnstileToken?: string): Promise<AuthUser> => {
+  const login = useCallback(async (email: string, password: string, turnstileToken?: string, mfaCode?: string): Promise<AuthUser> => {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (turnstileToken) headers["cf-turnstile-response"] = turnstileToken;  // Cloudflare Turnstile (no-op until configured)
     const res = await fetchWithTimeout(
@@ -98,13 +98,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {
         method: "POST",
         headers,
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, ...(mfaCode ? { mfa_code: mfaCode } : {}) }),
       },
       65_000  // 65 s - enough for Render cold start
     );
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: "Login failed" }));
-      throw new Error(err.error ?? "Login failed");
+      const e = new Error(err.error ?? "Login failed") as Error & { mfaRequired?: boolean };
+      if (err.mfa_required) e.mfaRequired = true;  // second factor needed → caller shows the code field
+      throw e;
     }
     const { access, refresh, user: u } = await res.json();
     await secureSet("hr_access", access);

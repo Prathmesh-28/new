@@ -12,6 +12,7 @@ import { ROLE_META, ASSIGNABLE_ROLES, CONFIGURABLE_ROLES, TAB_CATALOG, TAB_GROUP
 import type { UserRole } from "@/data/types";
 import BillingCard from "./BillingCard";
 import AppLockCard from "./AppLockCard";
+import SecurityCard from "./SecurityCard";
 import NotificationsCard from "./NotificationsCard";
 import PrivacyCard from "./PrivacyCard";
 
@@ -2015,6 +2016,9 @@ export default function SettingsPage() {
         </div>
         <ChevronRight size={16} className="text-[var(--color-muted)] group-hover:text-[var(--color-primary)] shrink-0" />
       </button>
+
+      {/* Two-factor authentication */}
+      <div id="security" className="scroll-mt-24"><SecurityCard /></div>
 
       {/* App lock */}
       <div id="app-lock" className="scroll-mt-24"><AppLockCard /></div>

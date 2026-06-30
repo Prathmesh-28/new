@@ -261,7 +261,7 @@ router.post("/mfa/disable", authenticate, async (req, res) => {
   const { rows } = await pool.query("SELECT password, mfa_secret_enc, mfa_enabled, mfa_backup_codes FROM users WHERE id=$1", [req.user.id]);
   const u = rows[0] || {};
   if (!u.mfa_enabled) return res.json({ enabled: false });
-  if (!password || !(await bcrypt.compare(password, u.password))) return res.status(401).json({ error: "Enter your account password to disable MFA." });
+  if (!password || !(await bcrypt.compare(password, u.password))) return res.status(403).json({ error: "Enter your account password to disable MFA." });
   const okCode = (u.mfa_secret_enc && totp.verifyTotp(totp.decSecret(u.mfa_secret_enc), code)) ||
                  (Array.isArray(u.mfa_backup_codes) && u.mfa_backup_codes.includes(totp.hashBackup(code)));
   if (!okCode) return res.status(400).json({ error: "Enter a valid authenticator or backup code to disable MFA." });

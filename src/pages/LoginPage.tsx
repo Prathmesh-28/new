@@ -17,13 +17,16 @@ export default function LoginPage() {
   const [error, setError]       = useState("");
   const [loading, setLoading]   = useState(false);
   const [tsToken, setTsToken]   = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaCode, setMfaCode]   = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (turnstileEnabled && !tsToken) { setError("Please complete the verification below."); return; }
+    if (mfaRequired && !/^\d{6}$/.test(mfaCode.trim()) && mfaCode.trim().length < 6) { setError("Enter the 6-digit code from your authenticator (or a backup code)."); return; }
     setError(""); setLoading(true);
     try {
-      const u = await login(email, password, tsToken);
+      const u = await login(email, password, tsToken, mfaRequired ? mfaCode.trim() : undefined);
       if (u.first_login) {
         navigate("/set-password", { replace: true });
       } else {
@@ -31,7 +34,12 @@ export default function LoginPage() {
         navigate(params.get("redirect") ?? defaultHome, { replace: true });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      if ((err as { mfaRequired?: boolean })?.mfaRequired) {
+        setMfaRequired(true);
+        setError(mfaCode ? "That code didn't match. Try again, or use a backup code." : "");
+      } else {
+        setError(err instanceof Error ? err.message : "Login failed");
+      }
     } finally {
       setLoading(false);
     }
@@ -102,6 +110,21 @@ export default function LoginPage() {
               />
             </div>
 
+            {mfaRequired && (
+              <div>
+                <label className="block text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1.5">
+                  Authenticator code
+                </label>
+                <input
+                  type="text" inputMode="numeric" autoComplete="one-time-code" autoFocus
+                  value={mfaCode} onChange={e => setMfaCode(e.target.value.replace(/[^0-9a-fA-F]/g, "").slice(0, 16))}
+                  placeholder="6-digit code"
+                  className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-muted)]/50 text-center tracking-[0.3em]"
+                />
+                <p className="text-[11px] text-[var(--color-muted)] mt-1.5">Open your authenticator app, or enter a backup code.</p>
+              </div>
+            )}
+
             {error && (
               <div className="text-xs bg-red-950/30 border border-red-800/40 text-red-400 rounded-lg px-4 py-3 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
@@ -124,9 +147,9 @@ export default function LoginPage() {
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="w-4 h-4 border-2 border-[var(--color-bg)] border-t-transparent rounded-full animate-spin" />
-                  Signing in…
+                  {mfaRequired ? "Verifying…" : "Signing in…"}
                 </span>
-              ) : "Sign in →"}
+              ) : (mfaRequired ? "Verify →" : "Sign in →")}
             </button>
           </form>
 
