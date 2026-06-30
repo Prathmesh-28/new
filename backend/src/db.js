@@ -472,6 +472,11 @@ async function initDb() {
 
     -- ── Billing / subscriptions (Stripe) ──────────────────────────────────────
     ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan TEXT NOT NULL DEFAULT 'free';
+    -- Opt-in TOTP MFA: secret stored AES-GCM encrypted; only enforced once mfa_enabled.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret_enc   TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled      BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_backup_codes TEXT[] NOT NULL DEFAULT '{}';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_last_totp_counter BIGINT NOT NULL DEFAULT 0;
 
     CREATE TABLE IF NOT EXISTS tenant_billing (
       tenant_id              TEXT PRIMARY KEY,

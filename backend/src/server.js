@@ -463,7 +463,9 @@ initDb()
     // captured). A truly uncaught exception leaves an undefined state → drain + let
     // Render restart cleanly; an unhandled rejection is logged but kept non-fatal.
     process.on("unhandledRejection", (reason) => require("./lib/logger").error("unhandledRejection", { reason: reason instanceof Error ? reason.stack : String(reason) }));
-    process.on("uncaughtException", (err) => { require("./lib/logger").error("uncaughtException", { stack: err && err.stack ? err.stack : String(err) }); shutdown("uncaughtException"); });
+    // In an uncaught-exception the process state is undefined — log SYNCHRONOUSLY to
+    // stderr (not via the async forwarder, which could itself fault) and drain-restart.
+    process.on("uncaughtException", (err) => { console.error("[uncaughtException]", err && err.stack ? err.stack : String(err)); shutdown("uncaughtException"); });
     // Daily digest at 7:00 AM IST (01:30 UTC) - email + WhatsApp
     cron.schedule("30 1 * * *", async () => {
       sendDailyDigest().catch(err => console.error("[digest-email]", err.message));

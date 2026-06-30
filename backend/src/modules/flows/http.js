@@ -10,6 +10,14 @@ router.post("/webhook/:token", async (req, res) => {
   try {
     const flow = await flows.getFlowByWebhookToken(req.params.token);
     if (!flow) return res.status(404).json({ error: "Unknown or disabled webhook" });
+    // Meter webhook-triggered runs too (the authed run path is metered by enforceQuota).
+    // Resolve the owner tenant's plan; block only when enforcement is on and over quota.
+    const ent = require("../../lib/entitlements");
+    try {
+      const { rows } = await require("../../db").pool.query("SELECT COALESCE(MAX(subscription_plan),'free') AS plan FROM users WHERE tenant_id=$1", [flow.tenant_id]);
+      const u = await ent.consume(flow.tenant_id, "flow_runs", rows[0] ? rows[0].plan : "free");
+      if (u.over && ent.enforcing()) return res.status(429).json({ error: "Monthly flow-run limit reached.", code: "PLAN_QUOTA_EXCEEDED", metric: "flow_runs", used: u.count, limit: u.limit });
+    } catch (e) { console.error("[flows-webhook] metering", e.message); } // fail-open
     const run = await runner.runFlow(flow.tenant_id, flow.id, { triggerKind: "webhook", input: req.body || {} });
     return res.json({ ok: true, runId: run.id, status: run.status });
   } catch (e) {

@@ -65,10 +65,10 @@ function enforceQuota(metric) {
       const plan = planOf(req);
       const u = await consume(req.user.tenant_id, metric, plan);
       req.usage = u;
-      if (Number.isFinite(u.limit)) res.set("X-Usage", `${metric}=${u.count}/${u.limit}`);
+      if (Number.isFinite(u.count) && Number.isFinite(u.limit)) res.set("X-Usage", `${metric}=${u.count}/${u.limit}`);
       if (u.over && enforcing()) return res.status(429).json({ error: `Monthly ${metric.replace(/_/g, " ")} limit reached on the ${plan} plan.`, code: "PLAN_QUOTA_EXCEEDED", metric, used: u.count, limit: u.limit, upgrade: true });
       next();
-    } catch { next(); }
+    } catch (e) { console.error("[entitlements] metering failed (fail-open):", e.message); next(); } // never block a request because metering broke
   };
 }
 

@@ -43,6 +43,7 @@ router.post("/signup", validateBody({
 router.post("/login", validateBody({
   email:    { type: "email",  required: true, maxLen: 254 },
   password: { type: "string", required: true, maxLen: 200 },
+  mfa_code: { type: "string", required: false, maxLen: 16 },
 }), async (req, res) => {
   if (!(await requireHuman(req, res))) return;   // Turnstile (no-op until configured)
   const { email, password } = req.body;
@@ -77,6 +78,39 @@ router.post("/login", validateBody({
   }
 
   if (user.status === "suspended") return res.status(403).json({ error: "This account has been suspended. Contact support." });
+
+  // Opt-in MFA: only users who enabled it must pass a second factor (TOTP or a backup
+  // code). Wrong codes count toward the same 5-attempt lockout to stop brute force; a
+  // missing code just asks for it (mfa_required) without burning an attempt.
+  if (user.mfa_enabled) {
+    const totp = require("../lib/totp");
+    if (!user.mfa_secret_enc) return res.status(400).json({ error: "MFA setup is incomplete — reset your password to recover access." });
+    const code = String((req.body && req.body.mfa_code) || "").trim();
+    if (!code) return res.status(401).json({ error: "Enter your authenticator code.", mfa_required: true });
+    // TOTP first, with anti-replay: never accept a step counter already used.
+    const matched = totp.verifyTotpCounter(totp.decSecret(user.mfa_secret_enc), code, { after: Number(user.mfa_last_totp_counter || 0) });
+    let mfaOk = matched > 0;
+    if (!mfaOk && Array.isArray(user.mfa_backup_codes) && user.mfa_backup_codes.length) {
+      const h = Buffer.from(totp.hashBackup(code));
+      let isMember = false;
+      for (const stored of user.mfa_backup_codes) { const sb = Buffer.from(String(stored)); if (sb.length === h.length && crypto.timingSafeEqual(sb, h)) isMember = true; }
+      if (isMember) { // atomic single-use: only succeeds if the code is still present (race-safe)
+        const del = await pool.query("UPDATE users SET mfa_backup_codes = array_remove(mfa_backup_codes, $1) WHERE id=$2 AND $1 = ANY(mfa_backup_codes)", [totp.hashBackup(code), user.id]);
+        if (del.rowCount === 1) mfaOk = true;
+      }
+    }
+    if (!mfaOk) {
+      const attempts = (user.failed_attempts || 0) + 1;
+      if (attempts >= 5) {
+        const lockUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        await pool.query("UPDATE users SET failed_attempts=$1, locked_until=$2 WHERE id=$3", [attempts, lockUntil, user.id]);
+        return res.status(423).json({ error: "Too many failed codes. Account locked for 15 minutes." });
+      }
+      await pool.query("UPDATE users SET failed_attempts=$1 WHERE id=$2", [attempts, user.id]);
+      return res.status(401).json({ error: "Invalid authenticator code.", mfa_required: true });
+    }
+    if (matched > 0) await pool.query("UPDATE users SET mfa_last_totp_counter=$1 WHERE id=$2", [matched, user.id]);
+  }
 
   const firstLogin = viaResetOtp ? true : user.first_login;
   await pool.query(
@@ -183,6 +217,57 @@ router.get("/me/profile", authenticate, async (req, res) => {
   const { rows } = await pool.query("SELECT id, email, role, tenant_id, first_login, display_name FROM users WHERE id=$1", [req.user.id]);
   if (!rows[0]) return res.status(404).json({ error: "User not found" });
   res.json(rows[0]);
+});
+
+// ── MFA (opt-in TOTP) ─────────────────────────────────────────────────────────
+const totp = require("../lib/totp");
+
+// Status: is MFA on for this user, and how many backup codes remain.
+router.get("/mfa/status", authenticate, async (req, res) => {
+  const { rows } = await pool.query("SELECT mfa_enabled, mfa_backup_codes FROM users WHERE id=$1", [req.user.id]);
+  const u = rows[0] || {};
+  res.json({ enabled: !!u.mfa_enabled, backup_codes_remaining: Array.isArray(u.mfa_backup_codes) ? u.mfa_backup_codes.length : 0 });
+});
+
+// Step 1 — generate a pending secret + otpauth URL (for the QR). NOT enabled until verified.
+router.post("/mfa/setup", authenticate, async (req, res) => {
+  const { rows } = await pool.query("SELECT email, mfa_enabled FROM users WHERE id=$1", [req.user.id]);
+  if (rows[0] && rows[0].mfa_enabled) return res.status(409).json({ error: "MFA is already enabled. Disable it first to re-enroll." });
+  const secret = totp.genSecret();
+  await pool.query("UPDATE users SET mfa_secret_enc=$1, mfa_enabled=false WHERE id=$2", [totp.encSecret(secret), req.user.id]);
+  res.json({ secret, otpauth_url: totp.otpauthURL(secret, rows[0] ? rows[0].email : req.user.id) });
+});
+
+// Step 2 — verify a code against the pending secret, then turn MFA on + issue backup codes (shown ONCE).
+router.post("/mfa/enable", authenticate, async (req, res) => {
+  const code = String((req.body && req.body.code) || "").trim();
+  const { rows } = await pool.query("SELECT mfa_secret_enc, mfa_enabled FROM users WHERE id=$1", [req.user.id]);
+  const u = rows[0] || {};
+  if (u.mfa_enabled) return res.status(409).json({ error: "MFA is already enabled." });
+  if (!u.mfa_secret_enc) return res.status(400).json({ error: "Start with /mfa/setup first." });
+  if (!totp.verifyTotp(totp.decSecret(u.mfa_secret_enc), code)) return res.status(400).json({ error: "That code didn't match. Check your authenticator and try again." });
+  const backup = totp.genBackupCodes();
+  await pool.query("UPDATE users SET mfa_enabled=true, mfa_backup_codes=$1, mfa_last_totp_counter=0 WHERE id=$2", [backup.map(totp.hashBackup), req.user.id]);
+  pool.query("INSERT INTO audit_log(user_id, action, entity, entity_id, meta) VALUES($1,'mfa_enabled','user',$2,$3)", [req.user.id, req.user.id, { ip: req.ip }]).catch(() => {});
+  res.set("Cache-Control", "no-store");
+  res.json({ enabled: true, backup_codes: backup }); // shown once — the server only stores hashes
+});
+
+// Disable — requires the account PASSWORD plus a current code/backup code, so neither a
+// hijacked session (no password) nor a glimpsed code alone can strip MFA.
+router.post("/mfa/disable", authenticate, async (req, res) => {
+  const code = String((req.body && req.body.code) || "").trim();
+  const password = String((req.body && req.body.password) || "");
+  const { rows } = await pool.query("SELECT password, mfa_secret_enc, mfa_enabled, mfa_backup_codes FROM users WHERE id=$1", [req.user.id]);
+  const u = rows[0] || {};
+  if (!u.mfa_enabled) return res.json({ enabled: false });
+  if (!password || !(await bcrypt.compare(password, u.password))) return res.status(401).json({ error: "Enter your account password to disable MFA." });
+  const okCode = (u.mfa_secret_enc && totp.verifyTotp(totp.decSecret(u.mfa_secret_enc), code)) ||
+                 (Array.isArray(u.mfa_backup_codes) && u.mfa_backup_codes.includes(totp.hashBackup(code)));
+  if (!okCode) return res.status(400).json({ error: "Enter a valid authenticator or backup code to disable MFA." });
+  await pool.query("UPDATE users SET mfa_enabled=false, mfa_secret_enc=NULL, mfa_backup_codes='{}', mfa_last_totp_counter=0 WHERE id=$1", [req.user.id]);
+  pool.query("INSERT INTO audit_log(user_id, action, entity, entity_id, meta) VALUES($1,'mfa_disabled','user',$2,$3)", [req.user.id, req.user.id, { ip: req.ip }]).catch(() => {});
+  res.json({ enabled: false });
 });
 
 module.exports = router;

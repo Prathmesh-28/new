@@ -23,6 +23,9 @@ async function authenticate(req, res, next) {
       req.realTenantId = rows[0].tenant_id;
       req.impersonatedTenantId = String(target);
       req.user = { ...rows[0], tenant_id: String(target) };
+      // Reflect the impersonated tenant's plan so entitlement checks gate on THEIR
+      // plan, not the admin's (else a super_admin would mis-gate the tenant).
+      try { const pr = await pool.query("SELECT COALESCE(MAX(subscription_plan),'free') AS plan FROM users WHERE tenant_id=$1", [String(target)]); req.user.subscription_plan = pr.rows[0].plan; } catch { req.user.subscription_plan = "free"; }
       if (req.method !== "GET" && req.method !== "HEAD") {
         res.on("finish", () => {
           if (res.statusCode < 400) {
