@@ -59,6 +59,9 @@ router.get("/dormant", canViewAnalytics, async (req, res) => {
     res.json({ dormant: head.concat(dormant.slice(100)) });
   } catch (e) { fail(res, e); }
 });
+router.get("/reactivation", canViewAnalytics, async (req, res) => {
+  try { res.json(await analytics.reactivation(scopeOf(req), { windowDays: req.query.window_days })); } catch (e) { fail(res, e); }
+});
 router.post("/winback/run", canViewAnalytics, async (req, res) => {
   try {
     res.json(await analytics.runWinback({

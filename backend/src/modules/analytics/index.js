@@ -297,4 +297,60 @@ async function runWinback({ idleDays, cooldownDays, dryRun = false, scopeTenantI
   return { scanned: dormant.length, channels, reasons };
 }
 
-module.exports = { AnalyticsError, track, saveProfile, getProfile, overview, retention, findDormant, classifyReason, runWinback, hasAnalyticsConsent };
+// ── Did the nudges work? Win-back → reactivation funnel ───────────────────────
+// Per-NUDGE attribution: a nudge counts as "reactivated" if the tenant did a REAL
+// (non-nudge) event STRICTLY after it, within windowDays — AND before any follow-up
+// nudge to that tenant (the LEAD cap), so one return is never double-credited across
+// overlapping windows at any windowDays. Only nudges whose window has fully elapsed
+// ("matured") enter the rate; fresher ones are "pending" (neither hit nor miss yet).
+// Dry-run nudges are excluded from the headline rate (never actually sent) but kept
+// visible in by_channel. HONESTY: there is no control group, so this is the share of
+// nudges FOLLOWED BY a return (correlation), not causal lift — some would return anyway.
+const WINBACK_MIN_N = 5; // below this a percentage is noise; surface the raw fraction instead
+async function reactivation(scopeTenantId, { windowDays } = {}) {
+  const w = ci(windowDays, 14, 1, 180);
+  const { rows } = await pool.query(
+    `WITH nudges AS (
+       SELECT wn.id, wn.tenant_id, wn.created_at,
+              COALESCE(wn.props->>'reason','unknown')  AS reason,
+              COALESCE(wn.props->>'channel','unknown') AS channel,
+              LEAD(wn.created_at) OVER (PARTITION BY wn.tenant_id ORDER BY wn.created_at) AS next_nudge_at,
+              (wn.created_at <= now() - ($2::int * interval '1 day')) AS matured
+       FROM analytics_events wn
+       WHERE wn.event='winback_nudge' AND ($1::text IS NULL OR wn.tenant_id=$1::text)
+     ), scored AS (
+       SELECT n.reason, n.channel, n.matured,
+              EXISTS (SELECT 1 FROM analytics_events ae
+                      WHERE ae.tenant_id=n.tenant_id AND ae.event <> 'winback_nudge'
+                        AND ae.created_at >  n.created_at
+                        AND ae.created_at <= n.created_at + ($2::int * interval '1 day')
+                        AND ae.created_at <  COALESCE(n.next_nudge_at, 'infinity'::timestamptz)) AS reactivated
+       FROM nudges n
+     )
+     SELECT 'reason'  AS kind, reason  AS key, COUNT(*)::int AS n, COUNT(*) FILTER (WHERE reactivated)::int AS reactivated
+       FROM scored WHERE matured AND channel <> 'dry' GROUP BY reason
+     UNION ALL
+     SELECT 'channel', channel, COUNT(*)::int, COUNT(*) FILTER (WHERE reactivated)::int
+       FROM scored WHERE matured GROUP BY channel
+     UNION ALL
+     SELECT 'overall', NULL, COUNT(*) FILTER (WHERE channel <> 'dry')::int, COUNT(*) FILTER (WHERE reactivated AND channel <> 'dry')::int
+       FROM scored WHERE matured
+     UNION ALL
+     SELECT 'pending', NULL, COUNT(*) FILTER (WHERE NOT matured)::int, 0
+       FROM scored`, [scopeTenantId || null, w]
+  );
+  const pct = (r, n) => (n > 0 ? Math.round((r / n) * 1000) / 10 : null); // null (not 0%) when n=0
+  const mk = (r) => { const n = Number(r.n); return { key: r.key, nudges: n, reactivated: Number(r.reactivated), rate: pct(Number(r.reactivated), n), reliable: n >= WINBACK_MIN_N }; };
+  const o = rows.find((r) => r.kind === "overall") || { n: 0, reactivated: 0 };
+  return {
+    scope: scopeTenantId ? "tenant" : "platform",
+    window_days: w, min_n: WINBACK_MIN_N,
+    overall: mk(o),
+    by_reason: rows.filter((r) => r.kind === "reason").map(mk).sort((a, b) => b.nudges - a.nudges),
+    by_channel: rows.filter((r) => r.kind === "channel").map((r) => ({ ...mk(r), dry_run: r.key === "dry" })).sort((a, b) => b.nudges - a.nudges),
+    pending: Number((rows.find((r) => r.kind === "pending") || {}).n || 0),
+    disclaimer: `Correlation, not causal lift. With no control group some businesses would have returned anyway — read this as the share of nudges followed by a return within ${w} days (an upper bound on the nudge's effect), not the share of businesses the nudge brought back.`,
+  };
+}
+
+module.exports = { AnalyticsError, track, saveProfile, getProfile, overview, retention, findDormant, classifyReason, runWinback, reactivation, hasAnalyticsConsent };

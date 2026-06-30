@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import { Loader2, Activity, Filter, BarChart3, Send, MoonStar } from "lucide-react";
+import { Loader2, Activity, Filter, BarChart3, Send, MoonStar, RotateCcw } from "lucide-react";
 
 interface Seg { key: string; count: number }
 interface Overview {
@@ -16,6 +16,8 @@ interface Overview {
 interface Retention { weeks: number; role: string | null; cohorts: { cohort: string; size: number; retention: number[] }[] }
 interface Dormant { tenant_id: string; last_seen: string; days_idle: number; reason?: string; label?: string; amount?: number }
 interface WinResult { scanned: number; channels: Record<string, number>; reasons: Record<string, number> }
+interface ReactBucket { key: string | null; nudges: number; reactivated: number; rate: number | null; reliable: boolean; dry_run?: boolean }
+interface Reactivation { scope: string; window_days: number; min_n: number; overall: ReactBucket; by_reason: ReactBucket[]; by_channel: ReactBucket[]; pending: number; disclaimer: string }
 const ROLES = ["owner", "finance_manager", "accountant", "sales", "operations_manager", "investor"];
 const REASON_LABELS: Record<string, string> = {
   overdue_invoices: "overdue invoices", unpaid_invoices: "unpaid invoices",
@@ -32,6 +34,8 @@ export default function ProductAnalytics() {
   const [dormant, setDormant] = useState<Dormant[] | null>(null);
   const [winRunning, setWinRunning] = useState(false);
   const [winMsg, setWinMsg] = useState("");
+  const [react, setReact] = useState<Reactivation | null>(null);
+  const [winDays, setWinDays] = useState(14);
 
   const loadDormant = () => api.get<{ dormant: Dormant[] }>("/api/analytics/dormant").then((r) => setDormant(r.dormant)).catch(() => setDormant(null));
   const runWinback = () => {
@@ -54,6 +58,10 @@ export default function ProductAnalytics() {
   }, [roleFilter]);
 
   useEffect(() => { loadDormant(); }, []);
+
+  useEffect(() => {
+    api.get<Reactivation>(`/api/analytics/reactivation?window_days=${winDays}`).then(setReact).catch(() => setReact(null));
+  }, [winDays, winMsg]);
 
   const Stat = ({ label, value }: { label: string; value: number }) => (
     <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
@@ -248,6 +256,47 @@ export default function ProductAnalytics() {
               </div>
             )}
             {winMsg && <p className="text-xs mt-3 text-[var(--color-primary)]">{winMsg}</p>}
+          </div>
+
+          {/* Reactivation: did the nudges actually bring people back? */}
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+              <p className="text-sm font-semibold flex items-center gap-2"><RotateCcw size={15} className="text-[var(--color-primary)]" /> Reactivation <span className="text-xs font-normal text-[var(--color-muted)]">(% of nudges followed by a return)</span></p>
+              <div className="flex items-center gap-1 text-xs">
+                {[14, 30].map((n) => (
+                  <button key={n} onClick={() => setWinDays(n)} className={`px-2 py-1 rounded-lg border ${winDays === n ? "border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-text)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>within {n}d</button>
+                ))}
+              </div>
+            </div>
+            {!react || (react.overall.nudges === 0 && react.pending === 0) ? (
+              <p className="text-xs text-[var(--color-muted)]">No win-back nudges sent yet — this fills in once nudges go out and their {winDays}-day window elapses.</p>
+            ) : (
+              <>
+                {react.overall.reliable && react.overall.rate != null ? (
+                  <p className="mt-1"><span className="text-3xl font-bold tabular-nums">{react.overall.rate}%</span> <span className="text-sm text-[var(--color-muted)]">returned within {react.window_days}d <span className="tabular-nums">({react.overall.reactivated}/{react.overall.nudges} nudges)</span></span></p>
+                ) : (
+                  <p className="mt-1 text-sm">Too few matured nudges to trust a rate — <span className="tabular-nums">{react.overall.reactivated} of {react.overall.nudges}</span> returned so far{react.overall.nudges > 0 ? ` (need ≥${react.min_n})` : ""}.</p>
+                )}
+                {react.pending > 0 && <p className="text-xs text-[var(--color-muted)] mt-1">{react.pending} nudge{react.pending > 1 ? "s" : ""} still maturing (sent &lt;{react.window_days}d ago) — not yet counted.</p>}
+
+                {(["by_reason", "by_channel"] as const).map((dim) => react[dim].length > 0 && (
+                  <div key={dim} className="mt-3">
+                    <p className="text-[11px] uppercase tracking-wide text-[var(--color-muted)] mb-1.5">{dim === "by_reason" ? "By reason" : "By channel"}</p>
+                    <div className="space-y-1.5">
+                      {react[dim].map((b) => (
+                        <div key={b.key} className="flex items-center gap-2 text-sm">
+                          <span className="w-36 shrink-0 text-xs capitalize">{dim === "by_reason" ? (REASON_LABELS[b.key || ""] || b.key) : (b.key || "?")}{b.dry_run && <span className="ml-1 text-[10px] text-[var(--color-muted)]">(dry-run)</span>}</span>
+                          <div className="flex-1 h-3.5 rounded bg-[var(--color-bg)] overflow-hidden"><div className="h-full bg-[var(--color-primary)]/60" style={{ width: `${b.rate ?? 0}%` }} /></div>
+                          <span className="w-24 text-right text-xs text-[var(--color-muted)] shrink-0">{b.reliable && b.rate != null ? `${b.rate}%` : "—"} · <span className="tabular-nums">{b.reactivated}/{b.nudges}</span></span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                <p className="text-[11px] text-[var(--color-muted)] mt-3 leading-relaxed">{react.disclaimer}</p>
+              </>
+            )}
           </div>
         </>
       )}
