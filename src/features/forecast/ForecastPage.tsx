@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { track } from "@/lib/analytics";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
@@ -31,6 +32,7 @@ import type { Scenario, Transaction } from "@/data/types";
 
 export default function ForecastPage() {
   const { store, addScenario, deleteScenario, updateScenario, addObligation, deleteObligation, setStore, isReadOnly } = useApp();
+  useEffect(() => { track("forecast_run"); }, []);   // funnel: engaged with forecasting
   const { forecast, scenarios, obligations, transactions, bankAccounts, firm } = store;
   const [generating, setGenerating] = useState(false);
   const [showForm,   setShowForm]   = useState(false);

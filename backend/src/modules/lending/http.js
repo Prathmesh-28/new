@@ -30,10 +30,18 @@ router.get("/offers", async (req, res) => {
   try { res.json(await lending.listOffers(tenantOf(req))); } catch (e) { fail(res, e); }
 });
 router.post("/offers", canWrite, async (req, res) => {
-  try { res.status(201).json({ offer: await lending.createOffer(tenantOf(req), req.user.id, req.body || {}), rails: rails() }); } catch (e) { fail(res, e); }
+  try {
+    const offer = await lending.createOffer(tenantOf(req), req.user.id, req.body || {});
+    require("../analytics").track(req.user.tenant_id, req.user.id, { event: "loan_offer_created", props: { kind: offer.kind, principal: offer.principal } }).catch(() => {});
+    res.status(201).json({ offer, rails: rails() });
+  } catch (e) { fail(res, e); }
 });
 router.post("/offers/:id/accept", canWrite, async (req, res) => {
-  try { res.json({ loan: await lending.acceptOffer(tenantOf(req), req.params.id, req.user.id), rails: rails() }); } catch (e) { fail(res, e); }
+  try {
+    const loan = await lending.acceptOffer(tenantOf(req), req.params.id, req.user.id);
+    require("../analytics").track(req.user.tenant_id, req.user.id, { event: "loan_accepted", props: { kind: loan.kind, principal: loan.principal } }).catch(() => {});
+    res.json({ loan, rails: rails() });
+  } catch (e) { fail(res, e); }
 });
 router.post("/offers/:id/decline", canWrite, async (req, res) => {
   try { res.json(await lending.declineOffer(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); }

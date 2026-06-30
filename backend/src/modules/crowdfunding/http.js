@@ -53,7 +53,11 @@ router.get("/", async (req, res) => {
   try { res.json(await crowd.listCampaigns(tenantOf(req), { limit: req.query.limit, before: req.query.before })); } catch (e) { fail(res, e); }
 });
 router.post("/", canWrite, async (req, res) => {
-  try { res.status(201).json(await crowd.createCampaign(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); }
+  try {
+    const c = await crowd.createCampaign(tenantOf(req), req.user.id, req.body || {});
+    require("../analytics").track(req.user.tenant_id, req.user.id, { event: "campaign_created", props: { fulfillment_type: c.fulfillment_type } }).catch(() => {});
+    res.status(201).json(c);
+  } catch (e) { fail(res, e); }
 });
 router.get("/:id", async (req, res) => {
   try { res.json(await crowd.getCampaign(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); }
@@ -70,7 +74,11 @@ router.post("/:id/vet", canVet, async (req, res) => {
   try { res.json(await crowd.vetCampaign(tenantOf(req), req.params.id, req.body?.approve !== false, req.body?.note)); } catch (e) { fail(res, e); }
 });
 router.post("/:id/publish", canWrite, async (req, res) => {
-  try { res.json({ campaign: await crowd.publishCampaign(tenantOf(req), req.params.id, { paymentsConfigured: paymentsLive() }), payments_live: paymentsLive() }); } catch (e) { fail(res, e); }
+  try {
+    const campaign = await crowd.publishCampaign(tenantOf(req), req.params.id, { paymentsConfigured: paymentsLive() });
+    require("../analytics").track(req.user.tenant_id, req.user.id, { event: "campaign_published", props: { status: campaign.status } }).catch(() => {});
+    res.json({ campaign, payments_live: paymentsLive() });
+  } catch (e) { fail(res, e); }
 });
 router.post("/:id/close", canWrite, async (req, res) => {
   try { res.json(await crowd.closeCampaign(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); }

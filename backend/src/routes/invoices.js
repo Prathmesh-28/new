@@ -92,6 +92,7 @@ router.post("/", authenticate, canWrite, async (req, res) => {
   }
 
   require("../modules/flows/runner").emitEvent(req.user.tenant_id, "invoice.created", { invoice: inv }).catch(() => {});
+  require("../modules/analytics").track(req.user.tenant_id, req.user.id, { event: "invoice_created", props: { total } }).catch(() => {});
   res.status(201).json(inv);
 });
 
