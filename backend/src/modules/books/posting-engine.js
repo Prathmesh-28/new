@@ -2,6 +2,7 @@
 // ledger. If postVoucher is correct, the books are correct. It knows nothing
 // about invoices or GST - only ledgers, debits and credits.
 const { pool } = require("../../db");
+const { withTenant, q } = require("../../lib/tenantDb"); // RLS Phase 1 (books)
 const { money, sum, toDb, eq } = require("./money");
 const { financialYearFor, periodMonthFor } = require("./fy");
 
@@ -144,23 +145,19 @@ async function postVoucher(tenantId, actorId, voucher, entries, opts = {}) {
   validateEntries(entries);
   let attempt = 0;
   for (;;) {
-    const client = await pool.connect();
     try {
-      await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
-      const res = await _post(client, tenantId, actorId, voucher, entries, opts);
-      await client.query("COMMIT");
-      return res;
+      // withTenant sets the app.current_tenant GUC (RLS) + runs under REPEATABLE READ; it
+      // owns BEGIN/COMMIT/ROLLBACK. _post uses the client, inheriting both.
+      return await withTenant(tenantId, (client) => _post(client, tenantId, actorId, voucher, entries, opts), { isolation: "REPEATABLE READ" });
     } catch (err) {
-      await client.query("ROLLBACK").catch(() => {});
       // Idempotency race: a concurrent identical request inserted first → return it.
+      // (q() sets the GUC so this lookup works once book_vouchers is RLS-enabled.)
       if (err.code === "23505" && opts.idempotencyKey && /idempotency/i.test(`${err.constraint || ""}${err.detail || ""}`)) {
-        const { rows } = await pool.query("SELECT id, voucher_number, financial_year FROM book_vouchers WHERE tenant_id=$1 AND idempotency_key=$2", [tenantId, opts.idempotencyKey]);
+        const { rows } = await q(tenantId, "SELECT id, voucher_number, financial_year FROM book_vouchers WHERE tenant_id=$1 AND idempotency_key=$2", [tenantId, opts.idempotencyKey]);
         if (rows[0]) return { voucherId: rows[0].id, voucherNumber: Number(rows[0].voucher_number), financialYear: rows[0].financial_year, replayed: true };
       }
       if (err.code === "40001" && attempt < 3) { attempt += 1; await sleep(20 * attempt); continue; } // serialization_failure
       throw err;
-    } finally {
-      client.release();
     }
   }
 }
@@ -168,9 +165,7 @@ async function postVoucher(tenantId, actorId, voucher, entries, opts = {}) {
 // §6.5 - the ONLY way to "edit" or "delete": post a mirror voucher and flag the
 // original cancelled, atomically.
 async function reverseVoucher(tenantId, actorId, voucherId, opts = {}) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
+  return withTenant(tenantId, async (client) => {
     const { rows: vr } = await client.query("SELECT * FROM book_vouchers WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [tenantId, voucherId]);
     const orig = vr[0];
     if (!orig) throw new PostError("NOT_FOUND", "Voucher not found", 404);
@@ -196,14 +191,8 @@ async function reverseVoucher(tenantId, actorId, voucherId, opts = {}) {
     }, mirror, { taxes: mirrorTaxes, reversesVoucherId: voucherId });
 
     await client.query("UPDATE book_vouchers SET is_cancelled=true, cancelled_by_voucher_id=$2 WHERE id=$1", [voucherId, res.voucherId]);
-    await client.query("COMMIT");
     return res;
-  } catch (err) {
-    await client.query("ROLLBACK").catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+  }, { isolation: "REPEATABLE READ" });
 }
 
 module.exports = { postVoucher, reverseVoucher, validateEntries, PostError };
