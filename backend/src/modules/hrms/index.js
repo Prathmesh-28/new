@@ -1100,9 +1100,9 @@ async function getTdsProjection(tenantId, employeeId, fy) {
   const { rows } = await q(tenantId,"SELECT * FROM hrms_tds_projections WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, employeeId, fy]);
   return rows[0] || null;
 }
-const listTdsProjections = async (t, fy) => (await q(tenantId,
+const listTdsProjections = async (tenantId, fy) => (await q(tenantId,
   `SELECT pr.*, e.name AS employee_name FROM hrms_tds_projections pr JOIN hrms_employees e ON e.id=pr.employee_id
-    WHERE pr.tenant_id=$1 AND pr.fy=$2 ORDER BY e.name`, [t, fy])).rows;
+    WHERE pr.tenant_id=$1 AND pr.fy=$2 ORDER BY e.name`, [tenantId, fy])).rows;
 
 // The per-month TDS to deduct for an employee in a given payroll month. Reads the
 // stored projection (computing one if absent). Returns a money string.
@@ -1161,9 +1161,9 @@ async function getDeclaration(tenantId, employeeId, fy) {
   const { rows } = await q(tenantId,"SELECT * FROM hrms_investment_declarations WHERE tenant_id=$1 AND employee_id=$2 AND fy=$3", [tenantId, employeeId, fy]);
   return rows[0] || null;
 }
-const listDeclarations = async (t, fy) => (await q(tenantId,
+const listDeclarations = async (tenantId, fy) => (await q(tenantId,
   `SELECT d.*, e.name AS employee_name FROM hrms_investment_declarations d JOIN hrms_employees e ON e.id=d.employee_id
-    WHERE d.tenant_id=$1 AND d.fy=$2 ORDER BY e.name`, [t, fy])).rows;
+    WHERE d.tenant_id=$1 AND d.fy=$2 ORDER BY e.name`, [tenantId, fy])).rows;
 
 // ═════════════════════════════════════════════════════════════════════════════
 // (4a) Two-stage payroll → GL  (Frappe payroll_entry.make_accrual_jv_entry +
@@ -1288,7 +1288,7 @@ async function createLoan(tenantId, l) {
     [tenantId, l.employeeId, flt(l.principal, 2)]);
   return rows[0];
 }
-const loansFor = async (t, e) => (await q(tenantId,"SELECT * FROM hrms_employee_loans WHERE tenant_id=$1 AND employee_id=$2 AND status='OPEN' ORDER BY created_at", [t, e])).rows;
+const loansFor = async (tenantId, e) => (await q(tenantId,"SELECT * FROM hrms_employee_loans WHERE tenant_id=$1 AND employee_id=$2 AND status='OPEN' ORDER BY created_at", [tenantId, e])).rows;
 
 // ═════════════════════════════════════════════════════════════════════════════
 // (4d) FULL & FINAL SETTLEMENT  (Frappe "Full and Final Statement")
