@@ -689,7 +689,7 @@ export default function TransactionsPage() {
       ) : (
         <div className="rounded-lg border border-[var(--color-border)] overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
+            <table className="w-full text-sm border-collapse rcard">
               <thead className="sticky top-0 z-10 bg-[var(--color-surface)] border-b border-[var(--color-border)]">
                 <tr>
                   <th className="w-10 px-3 py-2.5">
@@ -721,12 +721,12 @@ export default function TransactionsPage() {
                       key={t.id}
                       className={`h-10 transition-colors ${isSel ? "bg-[var(--color-primary)]/5" : "hover:bg-white/3"} ${unusual ? "border-l-2 border-orange-500/60" : ""}`}
                     >
-                      <td className="px-3">
+                      <td data-label="" className="px-3">
                         <input type="checkbox" checked={isSel} onChange={() => toggleSelect(t.id)}
                           className="accent-[var(--color-primary)] cursor-pointer" />
                       </td>
-                      <td className="px-3 text-xs text-[var(--color-muted)] tabular-nums whitespace-nowrap">{t.date}</td>
-                      <td className="px-3 max-w-xs">
+                      <td data-label="Date" className="px-3 text-xs text-[var(--color-muted)] tabular-nums whitespace-nowrap">{t.date}</td>
+                      <td data-label="Description" className="px-3 max-w-xs">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span className="truncate font-medium text-sm">{t.description}</span>
                           {t.isRecurring && <span className="text-[9px] text-blue-400 bg-blue-900/20 border border-blue-800/30 px-1 py-0.5 rounded shrink-0">REC</span>}
@@ -734,7 +734,7 @@ export default function TransactionsPage() {
                         </div>
                         {t.counterparty && <p className="text-[10px] text-[var(--color-muted)] truncate leading-tight">{t.counterparty}</p>}
                       </td>
-                      <td className="px-3">
+                      <td data-label="Category" className="px-3">
                         {editingCat ? (
                           <select
                             value={t.category}
@@ -758,8 +758,8 @@ export default function TransactionsPage() {
                           </button>
                         )}
                       </td>
-                      <td className="px-3 hidden md:table-cell text-xs text-[var(--color-muted)] max-w-[120px] truncate">{acct?.name ?? "-"}</td>
-                      <td className="px-3 text-right tabular-nums font-semibold whitespace-nowrap">
+                      <td data-label="Account" className="px-3 hidden md:table-cell text-xs text-[var(--color-muted)] max-w-[120px] truncate">{acct?.name ?? "-"}</td>
+                      <td data-label="Amount" className="px-3 text-right tabular-nums font-semibold whitespace-nowrap">
                         <span className={t.amount >= 0 ? "text-green-400" : "text-[var(--color-text)]"}>
                           {t.amount >= 0 ? "+" : ""}{formatCurrency(t.amount)}
                         </span>

@@ -588,7 +588,7 @@ export default function InvoicesPage() {
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[680px]">
+          <table className="w-full text-sm min-w-[680px] rcard">
             <thead className="bg-[var(--color-surface)] border-b border-[var(--color-border)]">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Invoice</th>
@@ -602,32 +602,32 @@ export default function InvoicesPage() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {filtered.map(inv => (
                 <tr key={inv.id} className="hover:bg-white/2 transition-colors">
-                  <td className="px-4 py-3">
+                  <td data-label="Invoice" className="px-4 py-3">
                     <p className="font-mono text-xs font-medium">{inv.invoice_number}</p>
                     <p className="text-[10px] text-[var(--color-muted)]">{new Date(inv.created_at).toLocaleDateString("en-IN")}</p>
                   </td>
-                  <td className="px-4 py-3">
+                  <td data-label="Customer" className="px-4 py-3">
                     <p className="font-medium truncate max-w-[160px]">{inv.customer_name}</p>
                     {inv.customer_gstin && <p className="text-[10px] text-[var(--color-muted)]">{inv.customer_gstin}</p>}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td data-label="Amount" className="px-4 py-3 text-right tabular-nums">
                     <p className="font-semibold">{formatCurrency(parseFloat(String(inv.total_amount)))}</p>
                     <p className="text-[10px] text-[var(--color-muted)]">+GST {inv.gst_rate}%</p>
                   </td>
-                  <td className="px-4 py-3 hidden md:table-cell">
+                  <td data-label="Due" className="px-4 py-3 hidden md:table-cell">
                     {inv.due_date ? (
                       <span className={`text-xs tabular-nums ${AGING_COLOR[inv.aging ?? "current"] ?? ""}`}>
                         {inv.aging === "90d+" ? "90d+ overdue" : inv.aging === "60d" ? "60d overdue" : inv.aging === "30d" ? "30d overdue" : inv.due_date}
                       </span>
                     ) : <span className="text-xs text-[var(--color-muted)]">-</span>}
                   </td>
-                  <td className="px-4 py-3">
+                  <td data-label="Status" className="px-4 py-3">
                     <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLOR[inv.status] ?? ""}`}>
                       {inv.status === "paid" ? <Check size={9} /> : inv.status === "sent" ? <Send size={9} /> : inv.status === "draft" ? <Clock size={9} /> : <AlertCircle size={9} />}
                       {inv.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td data-label="" className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => downloadPdf(inv.id, inv.invoice_number)} title="Download PDF"
                         className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/5 rounded">

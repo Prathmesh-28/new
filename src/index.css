@@ -174,4 +174,26 @@ p, span, h1, h2, h3, h4, label, a, button, li, td, th, dd, dt {
   main table { display: block; width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   /* Tab/segment strips wrap to multiple rows instead of overflowing. */
   main .flex.gap-1 { flex-wrap: wrap; }
+
+  /* Opt-in mobile card layout for data lists: add `rcard` to a <table> and a
+     data-label to each <td>. Each row stacks into a labelled card instead of a
+     tiny sideways-scrolling grid. Higher specificity than the `main table` rule
+     above, so it wins; tables without `rcard` keep the scroll floor. */
+  main table.rcard { display: block; overflow-x: visible; min-width: 0 !important; }
+  main table.rcard thead { display: none; }
+  main table.rcard tbody, main table.rcard tr, main table.rcard td { display: block; width: 100%; }
+  main table.rcard tr {
+    border: 1px solid var(--color-border); border-radius: 0.5rem;
+    margin-bottom: 0.5rem; padding: 0.125rem 0.75rem; background: var(--color-surface);
+  }
+  main table.rcard td {
+    display: block; width: 100%; padding: 0.5rem 0; text-align: left; border: 0;
+  }
+  main table.rcard td + td { border-top: 1px solid var(--color-border); }
+  main table.rcard td::before {
+    content: attr(data-label); display: block; margin-bottom: 0.125rem;
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--color-muted);
+  }
+  main table.rcard td[data-label=""]::before { display: none; }
 }
