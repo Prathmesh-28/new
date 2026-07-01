@@ -78,7 +78,7 @@ router.get("/gratuity/compute", async (req, res) => { try { res.json(await hr.co
 
 // ── (4c) Employee loans ─────────────────────────────────────────────────────────
 router.get("/loans", async (req, res) => { try { res.json(await hr.loansFor(tenantOf(req), req.query.employeeId)); } catch (e) { fail(res, e); } });
-router.post("/loans", canWrite, async (req, res) => { try { res.status(201).json(await hr.createLoan(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/loans", canWrite, async (req, res) => { try { res.status(201).json(await hr.createLoan(tenantOf(req), { ...(req.body || {}), actorId: req.user.id })); } catch (e) { fail(res, e); } });
 
 // ── (4d) Full & final settlement ────────────────────────────────────────────────
 router.get("/full-and-final", async (req, res) => { try { res.json(await hr.listFullAndFinal(tenantOf(req))); } catch (e) { fail(res, e); } });

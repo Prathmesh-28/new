@@ -1281,12 +1281,39 @@ async function computeGratuity(tenantId, employeeId, relievingDate, opts = {}) {
 // ═════════════════════════════════════════════════════════════════════════════
 // (4c) EMPLOYEE LOANS (for F&F recovery)
 // ═════════════════════════════════════════════════════════════════════════════
+// Resolve (or create) the asset ledger a staff loan is disbursed into, under the seeded
+// "Loans & Advances (Asset)" group. Returns null if the books aren't seeded.
+async function ensureStaffAdvanceLedger(tenantId) {
+  const existing = await resolveLedger(tenantId, ["Staff Loans & Advances", "Employee Advances", "Staff Advances"]);
+  if (existing) return existing;
+  const { rows: g } = await pool.query(
+    "SELECT id FROM book_account_groups WHERE tenant_id=$1 AND name='Loans & Advances (Asset)' LIMIT 1", [tenantId]);
+  if (!g[0]) return null;
+  const { rows: ins } = await pool.query(
+    "INSERT INTO book_ledgers(tenant_id,name,group_id) VALUES($1,'Staff Loans & Advances',$2) ON CONFLICT(tenant_id,name) DO UPDATE SET name=EXCLUDED.name RETURNING id",
+    [tenantId, g[0].id]);
+  return ins[0].id;
+}
+
 async function createLoan(tenantId, l) {
   if (!l.employeeId || !(Number(l.principal) > 0)) throw new HrError("employeeId and principal>0 required");
   const { rows } = await q(tenantId,
     "INSERT INTO hrms_employee_loans(tenant_id,employee_id,principal,outstanding) VALUES($1,$2,$3,$3) RETURNING *",
     [tenantId, l.employeeId, flt(l.principal, 2)]);
-  return rows[0];
+  const loan = rows[0];
+  // Post the disbursement to the GL (best-effort, idempotent): Dr Staff Loans & Advances / Cr Bank.
+  // Previously createLoan only inserted a row — the money never hit the ledger.
+  try {
+    const bank = await resolveLedger(tenantId, [l.bankLedger, "Bank Accounts", "Bank", "Cash"].filter(Boolean));
+    const advance = await ensureStaffAdvanceLedger(tenantId);
+    if (bank && advance) {
+      await books.postVoucher(tenantId, l.actorId || null,
+        { voucherType: "PAYMENT", voucherDate: new Date().toISOString().slice(0, 10), narration: `Staff loan disbursed (employee ${l.employeeId})`, source: "hrms" },
+        [{ ledgerId: advance, debit: flt(l.principal, 2), credit: 0 }, { ledgerId: bank, debit: 0, credit: flt(l.principal, 2) }],
+        { idempotencyKey: `emp_loan_disburse:${loan.id}` });
+    }
+  } catch (e) { console.warn("[hrms] loan disbursement GL skipped:", e && e.message); }
+  return loan;
 }
 const loansFor = async (tenantId, e) => (await q(tenantId,"SELECT * FROM hrms_employee_loans WHERE tenant_id=$1 AND employee_id=$2 AND status='OPEN' ORDER BY created_at", [tenantId, e])).rows;
 
