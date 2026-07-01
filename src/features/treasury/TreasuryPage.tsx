@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { format, addDays, addMonths, differenceInCalendarDays } from "date-fns";
 import AiInsight from "@/components/ai/AiInsight";
+import TabStrip from "@/components/TabStrip";
 
 // shared styles (reused from TaxPage/DebtPage input convention)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -125,8 +126,7 @@ export default function TreasuryPage() {
             Turn idle current-account cash into risk-graded, tax-efficient yield - sweeps, FD ladders, T-bills and goal buckets.
           </p>
         </div>
-        <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-          {([
+        <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
             ["overview", "Overview", Wallet],
             ["sweep", "Idle-Cash Sweep", Droplets],
             ["ladder", "FD/RD Ladder", Layers],
@@ -166,13 +166,7 @@ export default function TreasuryPage() {
             ["ppfnps", "PPF / NPS Top-Up", PiggyBank],
             ["realyield", "Real Yield (Inflation)", Flame],
             ["fdrenew", "FD Renewal Optimizer", RefreshCw],
-          ] as const).map(([id, label, Icon]) => (
-            <button key={id} onClick={() => setTab(id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              <Icon size={11} />{label}
-            </button>
-          ))}
-        </div>
+          ] as const).map(([id, label, icon]) => ({ id, label, icon }))} />
       </div>
 
       <AiInsight

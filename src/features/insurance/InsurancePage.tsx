@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import TabStrip from "@/components/TabStrip";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import {
@@ -42,8 +43,7 @@ export default function InsurancePage() {
             Track every policy, size your cover, find protection gaps and price premiums - IRDAI-aware, GST-on-premium included.
           </p>
         </div>
-        <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-          {([
+        <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
             ["overview", "Overview", ShieldCheck],
             ["register", "Policy Register", Wallet],
             ["gaps", "Coverage Gaps", FileWarning],
@@ -83,13 +83,7 @@ export default function InsurancePage() {
             ["pkgrec", "Package by Sector", Boxes],
             ["empgap", "Employee Gap", UserPlus],
             ["liability", "Liability Adequacy", Scale3d],
-          ] as const).map(([id, label, Icon]) => (
-            <button key={id} onClick={() => setTab(id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              <Icon size={11} />{label}
-            </button>
-          ))}
-        </div>
+          ] as const).map(([id, label, icon]) => ({ id, label, icon }))} />
       </div>
 
       {tab === "overview" && <Overview onPick={setTab} />}

@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useApp } from "@/context/AppContext";
 import EmptyState from "@/components/EmptyState";
+import TabStrip from "@/components/TabStrip";
 import { api } from "@/lib/api";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
@@ -56,8 +57,7 @@ export default function PaymentsPage() {
             Collect over UPI &amp; cards, build payment links, track autopay mandates, reconcile settlements and watch success rate - India-first money movement.
           </p>
         </div>
-        <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-          {([
+        <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
             ["overview", "Overview", IndianRupee],
             ["qr", "UPI QR / Intent", QrCode],
             ["links", "Payment Links", Link2],
@@ -100,13 +100,7 @@ export default function PaymentsPage() {
             ["approval", "Payout Approvals", UserCheck],
             ["recovery", "Recovery Analytics", LineChart],
             ["tippool", "Tip Pooling", ClipboardCheck],
-          ] as const).map(([id, label, Icon]) => (
-            <button key={id} onClick={() => setTab(id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              <Icon size={11} />{label}
-            </button>
-          ))}
-        </div>
+          ] as const).map(([id, label, icon]) => ({ id, label, icon }))} />
       </div>
 
       {tab === "overview" && <Overview onJump={setTab} />}

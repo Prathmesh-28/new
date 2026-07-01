@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useFeatureState } from "@/hooks/useFeatureState";
+import TabStrip from "@/components/TabStrip";
 import { formatCurrency } from "@/lib/utils";
 import {
   ShoppingCart, FileSpreadsheet, Calculator, Undo2, Layers, CalendarClock,
@@ -294,8 +295,7 @@ export default function MarketplacePage() {
             Reconcile marketplace payouts, find true per-SKU margin and stay GST-compliant - Amazon, Flipkart, Meesho, ONDC & D2C in one ledger.
           </p>
         </div>
-        <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-          {([
+        <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as MktTab)} tabs={([
             ["overview", "Overview", ShoppingCart],
             ["settlement", "Settlement Recon", FileSpreadsheet],
             ["commission", "Fee Calculator", Calculator],
@@ -333,13 +333,7 @@ export default function MarketplacePage() {
             ["gateway-fee", "Gateway Fee Recon", CreditCard],
             ["neg-balance", "Negative Balance", MinusCircle],
             ["channel-roi", "Channel-add ROI", Rocket],
-          ] as const).map(([id, label, Icon]) => (
-            <button key={id} onClick={() => setTab(id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              <Icon size={11} />{label}
-            </button>
-          ))}
-        </div>
+          ] as const).map(([id, label, icon]) => ({ id, label, icon }))} />
       </div>
 
       {tab === "overview" && <Overview onJump={setTab} />}
