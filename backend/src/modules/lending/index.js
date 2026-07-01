@@ -236,7 +236,7 @@ async function recordRepayment(tenantId, loanId, { amount, method = "manual", re
     await q(tenantId,"UPDATE loan_schedule SET status=$2, paid_at=CASE WHEN $2='paid' THEN now() ELSE paid_at END WHERE id=$1", [s.id, status]);
   }
   const voucherId = await postRepayment(tenantId, actorId, loan, payPrincipal, payInterest, repaymentId);
-  if (voucherId) await q(tenantId,"UPDATE loan_repayments SET gl_voucher_id=$2 WHERE loan_id=$1 AND ref IS NOT DISTINCT FROM $3", [loanId, voucherId, ref || null]);
+  if (voucherId) await q(tenantId,"UPDATE loan_repayments SET gl_voucher_id=$2 WHERE tenant_id=$1 AND id=$3", [tenantId, voucherId, repaymentId]); // key on the just-inserted row id — ref can be NULL for >1 manual repayment
   return { applied: amt, principal: payPrincipal, interest: payInterest, outstanding: newOutstanding, closed: closing, glPosted: !!voucherId };
 }
 

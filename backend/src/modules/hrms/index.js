@@ -444,11 +444,15 @@ function normalizeState(s) {
   if (/^[A-Za-z]{2,3}$/.test(t)) return t.toUpperCase().replace(/&/g, "");       // already a code
   return STATE_ALIASES[t.toLowerCase()] || null;
 }
+// Back-compat default when no work-state is configured: the pre-per-state flat slab (NO Feb
+// bump). Only an EXPLICIT state gets its real slab (e.g. MH's Feb ₹300) — otherwise a Feb
+// payroll for an unconfigured tenant would silently over-deduct 200→300 (a money/GL regression).
+const DEFAULT_PT = (g) => (g <= 7500 ? 0 : g <= 10000 ? 175 : 200);
 function ptAmount(gross, state, month) {
   const g = Number(gross) || 0;
   const code = normalizeState(state);
-  if (code && NON_PT_STATES.has(code)) return 0;      // state levies no PT
-  const fn = (code && PT_STATE[code]) || PT_STATE.MH; // unknown/unset → MH default (back-compat)
+  if (code && NON_PT_STATES.has(code)) return 0;        // state levies no PT
+  const fn = (code && PT_STATE[code]) || DEFAULT_PT;    // explicit state → its slab; unknown/unset → flat default (no regression)
   return fn(g, month);
 }
 

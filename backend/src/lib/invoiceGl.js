@@ -88,7 +88,11 @@ async function postInvoiceReceipt(tenantId, inv, { amount, ref, idempotencyKey }
   try {
     const amt = round2(amount != null ? num(amount) : num(inv.total_amount));
     if (amt <= 0) return null;
-    await postInvoiceSale(tenantId, inv); // idempotent; books the debtor if not already
+    // Book the debtor first (idempotent). If the SALES leg couldn't be established (books
+    // unseeded, or its period is locked, or an output-GST ledger is missing) it returns null —
+    // do NOT post a lone RECEIPT then, or the debtor is driven negative with no matching sale.
+    const sale = await postInvoiceSale(tenantId, inv);
+    if (!sale) { console.warn("[invoiceGl] receipt skipped: sale voucher not established (books unseeded / period locked / ledger missing)"); return null; }
     const party = await resolvePartyLedgerByName(tenantId, inv.customer_name || "Customer", "SALES");
     const landing = (await ledgerIdByName(tenantId, "Undeposited Funds")) || (await ledgerIdByName(tenantId, "Cash"));
     if (!party || !landing) return null;

@@ -529,7 +529,9 @@ export default function ForecastPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-red-400">{formatCurrency(o.amount)}</span>
-                      <button onClick={() => deleteObligation(o.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+                      {String(o.id).startsWith("loan:")
+                        ? <span className="text-[10px] text-[var(--color-muted)] italic" title="From your loan schedule — manage in Lending">from loan</span>
+                        : <button onClick={() => deleteObligation(o.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>}
                     </div>
                   </div>
                 ))}

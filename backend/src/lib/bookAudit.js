@@ -50,9 +50,9 @@ async function appendAudit(client, rec) {
      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
     [
       tenantId, rec.actorId ?? null, rec.action, rec.entity, rec.entityId ?? null,
-      rec.before ? JSON.stringify(rec.before) : null,
-      rec.after ? JSON.stringify(rec.after) : null,
-      rec.detail ? JSON.stringify(rec.detail) : null,
+      rec.before == null ? null : JSON.stringify(rec.before), // match canonical()'s ?? null exactly (0/false/"" are stored, not nulled) so the hash round-trips
+      rec.after == null ? null : JSON.stringify(rec.after),
+      rec.detail == null ? null : JSON.stringify(rec.detail),
       prev, rowHash,
     ]
   );

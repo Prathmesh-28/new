@@ -15,6 +15,7 @@ export interface ForecastInputs {
     invoiceNumber?: string;
     customer: string;
     amount: number;
+    issueDate?: string | null;
     dueDate: string | null;
     status: string;
   }[];
@@ -70,7 +71,7 @@ export function mergeForecastInputs(store: AppStore, live: ForecastInputs | null
     customer: r.customer || "Customer",
     amount: r.amount,
     invoiceNumber: r.invoiceNumber,
-    invoiceDate: r.dueDate || asOf,
+    invoiceDate: r.issueDate || r.dueDate || asOf, // real issue date (DSO/sales-90 key), not the due date
     dueDate: r.dueDate || asOf,
     description: "",
     status: r.status === "overdue" ? "overdue" : "pending",
@@ -92,7 +93,7 @@ export function mergeForecastInputs(store: AppStore, live: ForecastInputs | null
     : store.obligations ?? [];
 
   const bankAccounts: BankAccount[] =
-    live.startBalanceSource === "books" && live.startBalance > 0
+    live.startBalanceSource === "books" // trust the ledger even at 0 / negative (overdraft) — don't mask it with stale KV rows
       ? [{
           id: "books-cash",
           name: "Cash & bank (Books)",

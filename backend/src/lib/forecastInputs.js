@@ -35,7 +35,7 @@ async function assembleForecastInputs(tenantId) {
 
   // ── Receivables: open invoices (not draft/paid/cancelled/void) with due dates ──
   const { rows: rec } = await pool.query(
-    `SELECT id, invoice_number, customer_name, total_amount, due_date, status
+    `SELECT id, invoice_number, customer_name, total_amount, due_date, status, created_at
        FROM invoices
       WHERE tenant_id = $1
         AND status NOT IN ('draft','paid','cancelled','void')
@@ -49,6 +49,7 @@ async function assembleForecastInputs(tenantId) {
     invoiceNumber: r.invoice_number,
     customer: r.customer_name,
     amount: Number(r.total_amount),
+    issueDate: iso(r.created_at), // real issue date — the engine's DSO/90-day-sales key
     dueDate: iso(r.due_date),
     status: r.status,
   }));

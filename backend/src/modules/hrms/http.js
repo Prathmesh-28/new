@@ -52,9 +52,9 @@ router.get("/payroll", async (req, res) => { try { res.json(await hr.listPayroll
 router.post("/payroll/run", canWrite, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await hr.runPayroll(tenantOf(req), req.user.id, b.month, { costCentreId: b.costCentreId })); } catch (e) { fail(res, e); } });
 router.post("/payroll/:id/pay", canWrite, async (req, res) => { try { const b = req.body || {}; res.json(await hr.payPayrollRun(tenantOf(req), req.user.id, req.params.id, { bankLedger: b.bankLedger, date: b.date })); } catch (e) { fail(res, e); } });
 router.get("/payroll/:id/payslips", async (req, res) => { try { res.json(await hr.payslipsForRun(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
-router.get("/payroll/:id/ecr", async (req, res) => { try { res.json(await hr.generateEcr(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } }); // EPFO ECR file (generation only; upload gated)
-router.get("/payroll/:id/esic", async (req, res) => { try { res.json(await hr.generateEsicReturn(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } }); // ESIC monthly contribution (generation only; upload gated)
-router.get("/tds/24q", async (req, res) => { try { res.json(await hr.generateForm24QStatement(tenantOf(req), req.query.fy, req.query.quarter)); } catch (e) { fail(res, e); } }); // 24Q quarterly deductee statement (FVU + TRACES deferred/gated)
+router.get("/payroll/:id/ecr", canWrite, async (req, res) => { try { res.json(await hr.generateEcr(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } }); // exposes UAN → owner/finance only
+router.get("/payroll/:id/esic", canWrite, async (req, res) => { try { res.json(await hr.generateEsicReturn(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } }); // exposes ESIC-IP → owner/finance only
+router.get("/tds/24q", canWrite, async (req, res) => { try { res.json(await hr.generateForm24QStatement(tenantOf(req), req.query.fy, req.query.quarter)); } catch (e) { fail(res, e); } }); // exposes decrypted PAN + salary/TDS → owner/finance only
 router.post("/payroll/link-legacy", canWrite, async (req, res) => { try { res.json(await hr.linkPayrollEmployees(tenantOf(req))); } catch (e) { fail(res, e); } }); // link HRMS ↔ legacy payroll employees (PAN) by email
 
 // ── (3) Formula-driven salary components ────────────────────────────────────────
