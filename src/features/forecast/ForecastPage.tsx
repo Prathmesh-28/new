@@ -5,6 +5,7 @@ import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { runForecast, generateForecast } from "@/lib/forecastEngine";
+import { useForecastInputs, mergeForecastInputs } from "@/lib/liveForecast";
 import { monthlyAggregates, cmgr, monthlyCashFlow, dso, dio, dpo, advanceTaxSchedule, gstSummary } from "@/lib/finance";
 import { scheduleReminders, cancelReminders } from "@/lib/nativeFeatures";
 import { isNative } from "@/lib/mobile";
@@ -31,8 +32,13 @@ import { api } from "@/lib/api";
 import type { Scenario, Transaction } from "@/data/types";
 
 export default function ForecastPage() {
-  const { store, addScenario, deleteScenario, updateScenario, addObligation, deleteObligation, setStore, isReadOnly } = useApp();
+  const { store: rawStore, addScenario, deleteScenario, updateScenario, addObligation, deleteObligation, setStore, isReadOnly } = useApp();
   useEffect(() => { track("forecast_run"); }, []);   // funnel: engaged with forecasting
+  // Overlay REAL backend drivers (Books cash, open invoices, loan schedule) so the
+  // engine forecasts the tenant's actual money, not just the KV store. Silent no-op
+  // until /api/forecast/inputs resolves; every downstream computation reads `store`.
+  const liveInputs = useForecastInputs();
+  const store = useMemo(() => mergeForecastInputs(rawStore, liveInputs), [rawStore, liveInputs]);
   const { forecast, scenarios, obligations, transactions, bankAccounts, firm } = store;
   const [generating, setGenerating] = useState(false);
   const [showForm,   setShowForm]   = useState(false);
