@@ -4,6 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import { api } from "@/lib/api";
+import TabStrip from "@/components/TabStrip";
 import {
   Workflow, Zap, GitBranch, CheckSquare, BookOpen, Layers, BellRing,
   CalendarClock, ScrollText, Webhook, LayoutTemplate, Plus, Play,
@@ -83,14 +84,12 @@ export default function AutomationPage() {
             Define IF-THEN rules, approval chains, reminders and notification logic - previewed against your live data. Execution is client-side preview; no backend scheduler runs these yet.
           </p>
         </div>
-        <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-          {TABS.map(([id, label, Icon]) => (
-            <button key={id} onClick={() => setTab(id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              <Icon size={11} />{label}
-            </button>
-          ))}
-        </div>
+        <TabStrip
+          tabs={TABS.map(([id, label, icon]) => ({ id, label, icon }))}
+          active={tab}
+          onChange={(id) => setTab(id as TabId)}
+          primaryCount={6}
+        />
       </div>
 
       {tab === "overview" && <Overview onJump={setTab} />}
