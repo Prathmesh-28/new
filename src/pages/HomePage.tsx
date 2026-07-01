@@ -73,7 +73,7 @@ function DashMockup({ inr }: { inr: boolean }) {
     return () => clearTimeout(t);
   }, []);
   return (
-    <div style={{ background: C.deep, border: `1px solid rgba(169,217,188,0.15)`, borderRadius: 14, overflow: "hidden", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
+    <div data-h3d-tilt style={{ background: C.deep, border: `1px solid rgba(169,217,188,0.15)`, borderRadius: 14, overflow: "hidden", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
       <div style={{ background: "rgba(0,0,0,0.35)", padding: "10px 16px", display: "flex", alignItems: "center", gap: 6 }}>
         {["#E24B4A","#EF9F27","#3D9A60"].map(c => <span key={c} style={{ width: 9, height: 9, borderRadius: "50%", background: c, opacity: 0.8 }} />)}
         <span style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.45)", marginLeft: 6 }}>Headroom - 90-day forecast</span>
@@ -259,6 +259,51 @@ function Walkthrough({ inr }: { inr: boolean }) {
   );
 }
 
+/* ─── 3D flip card (Credit section): front = card art, back = terms ─── */
+function FlipCard() {
+  const { ref, vis } = useInView(0.4);
+  const [hover, setHover] = useState(false);
+  const reduce = typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const showBack = reduce ? false : hover ? false : vis; // in view → back; hover peeks front
+  const face: React.CSSProperties = {
+    position: "absolute", inset: 0, borderRadius: 16, padding: 22,
+    backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden",
+    boxShadow: "0 30px 60px -20px rgba(0,0,0,0.6)", display: "flex", flexDirection: "column",
+  };
+  return (
+    <div
+      ref={ref}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ perspective: 1100, width: 300, height: 189, flexShrink: 0 }}
+    >
+      <div style={{ position: "relative", width: "100%", height: "100%", transformStyle: "preserve-3d", transition: reduce ? "none" : "transform 1s cubic-bezier(0.22,1,0.36,1)", transform: `rotateY(${showBack ? 180 : 0}deg)` }}>
+        {/* front */}
+        <div style={{ ...face, justifyContent: "space-between", background: `linear-gradient(135deg, ${C.deep}, ${C.mid})`, border: "1px solid rgba(169,217,188,0.2)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontFamily: sans, fontWeight: 700, color: C.creamW, fontSize: 15 }}>headroom</span>
+            <span style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.15em", color: C.pale }}>CASH LINE</span>
+          </div>
+          <div style={{ width: 40, height: 29, borderRadius: 6, background: `linear-gradient(135deg, ${C.light}, ${C.gold})`, opacity: 0.9 }} />
+          <div>
+            <div style={{ fontFamily: mono, fontSize: 15, letterSpacing: "0.18em", color: C.pale }}>•••• •••• •••• 4210</div>
+            <div style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.5)", marginTop: 6 }}>Sized from your own cash-flow data</div>
+          </div>
+        </div>
+        {/* back */}
+        <div style={{ ...face, transform: "rotateY(180deg)", justifyContent: "center", gap: 12, background: `linear-gradient(135deg, ${C.mid}, ${C.deepest})`, border: "1px solid rgba(95,190,124,0.35)" }}>
+          {[["Up to ₹50L", "revolving credit line"], ["0 bureau pulls", "silent pre-qualification"], ["Repay on revenue", "no fixed EMI lock-in"]].map(([a, b]) => (
+            <div key={a}>
+              <div style={{ fontFamily: serif, fontSize: 20, color: C.goldL, letterSpacing: -0.5 }}>{a}</div>
+              <div style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.6)" }}>{b}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════ */
 export default function HomePage() {
   useSeo({ title: "Headroom - GST Billing, Accounting & Cash-Flow Software for Indian SMBs", description: "All-in-one finance platform for Indian SMBs - GST billing & e-invoicing, double-entry accounting, GST/TDS filing, invoicing, collections, payroll and 90-day cash-flow forecasts. Your CA works in it too. Free to start." });
@@ -284,6 +329,28 @@ export default function HomePage() {
 
   // Decorative 3D/WebGL hero background layers (behind all content, reduced-motion aware)
   useEffect(() => initHero3D(), []);
+
+  // Hero scroll parallax — the background panel and the dashboard column drift at
+  // different rates for depth. Skipped under reduced-motion; only runs while the
+  // hero is on screen. Applied to a wrapper, so it never fights the fade-in or tilt.
+  const heroBgRef = useRef<HTMLDivElement>(null);
+  const dashParallaxRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const y = window.scrollY;
+        if (y > window.innerHeight * 1.3) return;
+        if (heroBgRef.current) heroBgRef.current.style.transform = `translateY(${(y * 0.16).toFixed(1)}px)`;
+        if (dashParallaxRef.current) dashParallaxRef.current.style.transform = `translateY(${(y * -0.07).toFixed(1)}px)`;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   // Trigger the hero headline scramble-in once mounted (reduced-motion aware inside ScrambleIn).
   const [heroIn, setHeroIn] = useState(false);
@@ -364,7 +431,7 @@ export default function HomePage() {
 
       {/* ═══ HERO ═════════════════════════════════════════════════════════════ */}
       <section data-h3d="hero" style={{ background: C.deepest, paddingTop: 128, paddingBottom: 80, paddingLeft: 48, paddingRight: 48, position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: 0, right: 0, width: "50%", height: "100%", background: C.deep, clipPath: "polygon(8% 0, 100% 0, 100% 100%, 0% 100%)", zIndex: 0 }} />
+        <div ref={heroBgRef} style={{ position: "absolute", top: 0, right: 0, width: "50%", height: "100%", background: C.deep, clipPath: "polygon(8% 0, 100% 0, 100% 100%, 0% 100%)", zIndex: 0, willChange: "transform" }} />
         <div style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}>
           <div className="animate-fade-up">
             <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(61,154,96,0.15)", border: "1px solid rgba(61,154,96,0.3)", borderRadius: 20, padding: "5px 14px", marginBottom: 28 }}>
@@ -394,12 +461,14 @@ export default function HomePage() {
               ))}
             </div>
           </div>
-          <div className="animate-fade-up delay-200" data-h3d="dash" style={{ position: "relative" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(169,217,188,0.55)", marginBottom: 8 }}>
-              <span>CASH_CORE v2.4.1</span>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span className="hr-blink" style={{ width: 5, height: 5, borderRadius: "50%", background: C.light, display: "inline-block" }} />SIGNAL: ACTIVE · 10/10</span>
+          <div ref={dashParallaxRef} style={{ willChange: "transform" }}>
+            <div className="animate-fade-up delay-200" data-h3d="dash" style={{ position: "relative" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(169,217,188,0.55)", marginBottom: 8 }}>
+                <span>CASH_CORE v2.4.1</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span className="hr-blink" style={{ width: 5, height: 5, borderRadius: "50%", background: C.light, display: "inline-block" }} />SIGNAL: ACTIVE · 10/10</span>
+              </div>
+              <DashMockup inr={inr} />
             </div>
-            <DashMockup inr={inr} />
           </div>
         </div>
       </section>
@@ -428,7 +497,7 @@ export default function HomePage() {
           { n:"4.8 days", d:"Avg time to first insight"    },
         ].map(({ n, d }, i) => (
           <div key={d} className="hr-stat" style={{ textAlign: "center", padding: "0 24px", borderRight: i < 3 ? "1px solid rgba(169,217,188,0.15)" : "none" }}>
-            <div style={{ fontFamily: serif, fontSize: 32, color: C.pale, letterSpacing: -1 }}><Odometer value={n} /></div>
+            <div style={{ fontFamily: serif, fontSize: 32, color: C.pale, letterSpacing: -1 }}><Odometer value={n} depth3d /></div>
             <div style={{ fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.55)", marginTop: 3 }}>{d}</div>
           </div>
         ))}
@@ -500,13 +569,18 @@ export default function HomePage() {
       <section id="credit" data-h3d-deco="shapes-light" style={{ background: C.cream, padding: "88px 48px" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
           <Reveal>
-            <Label text="Credit rescue" />
-            <h2 style={{ fontFamily: serif, fontSize: 38, color: C.txt, letterSpacing: -1, marginBottom: 14 }}>
-              Credit support that appears inside<br />the cash flow workflow.
-            </h2>
-            <p style={{ fontFamily: sans, fontSize: 15, color: C.txtMut, maxWidth: 540, lineHeight: 1.7, marginBottom: 52 }}>
-              When a forecast shows real pressure, the platform surfaces rescue options in context - evaluates fit with silent underwriting, and models repayment impact before a business commits.
-            </p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 48, flexWrap: "wrap", marginBottom: 52 }}>
+              <div style={{ maxWidth: 540 }}>
+                <Label text="Credit rescue" />
+                <h2 style={{ fontFamily: serif, fontSize: 38, color: C.txt, letterSpacing: -1, marginBottom: 14 }}>
+                  Credit support that appears inside<br />the cash flow workflow.
+                </h2>
+                <p style={{ fontFamily: sans, fontSize: 15, color: C.txtMut, lineHeight: 1.7 }}>
+                  When a forecast shows real pressure, the platform surfaces rescue options in context - evaluates fit with silent underwriting, and models repayment impact before a business commits.
+                </p>
+              </div>
+              <FlipCard />
+            </div>
           </Reveal>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 20, marginBottom: 52 }}>
