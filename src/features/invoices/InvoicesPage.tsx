@@ -6,6 +6,7 @@ import { useFeatureState } from "@/hooks/useFeatureState";
 import type { Invoice as StoreInvoice } from "@/data/types";
 import { formatCurrency } from "@/lib/utils";
 import DiscussButton from "@/features/collab/DiscussButton";
+import { LoadingState, ErrorState } from "@/components/EmptyState";
 import {
   Plus, FileText, Send, Download, QrCode, X, Check, Clock, AlertCircle, MessageCircle, Bell, Zap,
   FileSignature, FilePlus2, Repeat, Link2, FileMinus2, ShieldAlert, Globe, GitPullRequestArrow,
@@ -355,6 +356,7 @@ export default function InvoicesPage() {
   const { setStore } = useApp();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading]   = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showNew, setShowNew]   = useState(false);
   const [composeInitial, setComposeInitial] = useState<{ customer?: string; amount?: string; desc?: string } | undefined>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -428,12 +430,12 @@ export default function InvoicesPage() {
   }, [setStore]);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setLoading(true); setLoadError(false);
     try {
       const data = await api.get<Invoice[]>("/api/invoices");
       setInvoices(data);
       syncToStore(data);
-    } catch { /* ok */ } finally { setLoading(false); }
+    } catch { setLoadError(true); } finally { setLoading(false); }
   }, [syncToStore]);
 
   useEffect(() => { load(); }, [load]);
@@ -575,7 +577,9 @@ export default function InvoicesPage() {
        tab === "collection" ? (
         <CollectionAutoPanel invoices={invoices} onRefresh={load} />
       ) : loading ? (
-        <div className="py-12 text-center text-sm text-[var(--color-muted)]">Loading…</div>
+        <LoadingState rows={5} label="Loading invoices" />
+      ) : loadError ? (
+        <ErrorState title="Couldn't load invoices" message="We couldn't reach the invoice service. Check your connection and try again." onRetry={load} />
       ) : filtered.length === 0 ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-lg p-12 text-center">
           <FileText size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
