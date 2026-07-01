@@ -3,41 +3,74 @@
  * Scores a credit application 0-100 from 9 signals.
  */
 
+const { q } = require("./tenantDb"); // RLS-safe reads of the lending tables (loans/loan_schedule)
+
 const INDUSTRY_RISK = {
   restaurant: 1.15, retail: 1.1, construction: 1.12,
   software: 0.9, professional_services: 0.92, healthcare: 0.88,
   default: 1.0,
 };
 
+// Map free-text firm.industry/sector → an INDUSTRY_RISK band (policy heuristic, NOT a live
+// default-rate feed). Unknown → default (1.0).
+function normalizeIndustry(s) {
+  const t = String(s || "").toLowerCase();
+  if (/(restaurant|food|cafe|hospitality|hotel|catering)/.test(t)) return "restaurant";
+  if (/(retail|trading|shop|store|ecommerce|e-commerce|fmcg|distribut)/.test(t)) return "retail";
+  if (/(construction|realty|real estate|infra|contractor|builder)/.test(t)) return "construction";
+  if (/(software|saas|tech|information technology|digital|\bit\b)/.test(t)) return "software";
+  if (/(consult|professional|services|agency|legal|account|advisory|design)/.test(t)) return "professional_services";
+  if (/(health|clinic|pharma|hospital|medical|diagnostic|wellness)/.test(t)) return "healthcare";
+  return "default";
+}
+
 async function score(tenantId, pool, enrichment) {
   const cutoff90  = daysAgo(90);
   const cutoff180 = daysAgo(180);
+  const c90 = new Date(cutoff90); // Date form for in-JS filters — a Date compared to a string is ALWAYS false (latent bug: the 90-day window was silently empty)
 
   // Fetch raw data. GST + receivables are SMB-specific signals Headroom uniquely has.
-  const [txnRes, accountRes, loanRes, userRes, gstRes, invRes] = await Promise.all([
+  // Legacy active_loans is kept ONLY as a fallback; real debt lives in the RLS'd lending
+  // tables (loans/loan_schedule) → read via q() (a plain pool.query returns 0 rows under
+  // FORCE RLS). kv_store (firm profile) + the legacy tables are not RLS'd.
+  const [txnRes, accountRes, loanRes, userRes, gstRes, invRes, realLoanRes, dueNextRes, dpdRes, kvRes] = await Promise.all([
     pool.query(
       "SELECT * FROM transactions WHERE tenant_id=$1 AND transaction_date>=$2 ORDER BY transaction_date",
       [tenantId, cutoff180]
     ),
     pool.query("SELECT * FROM bank_accounts WHERE tenant_id=$1 AND is_active=true", [tenantId]),
-    pool.query("SELECT * FROM active_loans WHERE tenant_id=$1", [tenantId]),
+    pool.query("SELECT * FROM active_loans WHERE tenant_id=$1", [tenantId]).catch(() => ({ rows: [] })),
     pool.query("SELECT created_at FROM users WHERE tenant_id=$1 ORDER BY created_at LIMIT 1", [tenantId]),
     pool.query("SELECT period_year, period_month, status, filed_at, output_tax FROM gst_returns WHERE tenant_id=$1 ORDER BY period_year DESC, period_month DESC LIMIT 24", [tenantId]).catch(() => ({ rows: [] })),
     pool.query("SELECT total_amount, status, due_date FROM invoices WHERE tenant_id=$1 AND status <> 'cancelled'", [tenantId]).catch(() => ({ rows: [] })),
+    q(tenantId, "SELECT outstanding_principal FROM loans WHERE tenant_id=$1 AND status='active'", [tenantId]).catch(() => ({ rows: [] })),
+    q(tenantId, "SELECT COALESCE(SUM(s.total_due),0) AS due_next FROM loan_schedule s JOIN loans l ON l.id=s.loan_id WHERE l.tenant_id=$1 AND l.status='active' AND s.status <> 'paid' AND s.due_date < now() + interval '31 days'", [tenantId]).catch(() => ({ rows: [{ due_next: 0 }] })),
+    q(tenantId, "SELECT COALESCE(MAX(now()::date - s.due_date),0) AS max_dpd FROM loan_schedule s JOIN loans l ON l.id=s.loan_id WHERE l.tenant_id=$1 AND l.status='active' AND s.status <> 'paid' AND s.due_date < now()::date", [tenantId]).catch(() => ({ rows: [{ max_dpd: 0 }] })),
+    pool.query("SELECT value FROM kv_store WHERE tenant_id=$1 AND namespace='app' AND key='store' LIMIT 1", [tenantId]).catch(() => ({ rows: [] })),
   ]);
 
   const txns     = txnRes.rows;
   const accounts = accountRes.rows;
-  const loans    = loanRes.rows;
+  const loans    = loanRes.rows; // legacy active_loans (fallback only)
   const joinDate = userRes.rows[0]?.created_at || new Date();
   const gstRows  = gstRes.rows;
   const invRows  = invRes.rows;
 
+  // Real lending debt (RLS'd), with legacy fallback so existing active_loans users don't regress.
+  const realLoans         = realLoanRes.rows;
+  const useLending        = realLoans.length > 0;
+  const realOutstanding   = realLoans.reduce((s, l) => s + Number(l.outstanding_principal || 0), 0);
+  const legacyOutstanding = loans.reduce((s, l) => s + Number(l.outstanding_balance || 0), 0);
+  const existingDebt      = useLending ? realOutstanding : legacyOutstanding;
+  const dueNext           = Number(dueNextRes.rows[0]?.due_next || 0);
+  const maxDpd            = Number(dpdRes.rows[0]?.max_dpd || 0);
+  const firm              = kvRes.rows[0]?.value?.value?.firm ?? {};
+
   const currentBalance = accounts.reduce((s, a) => s + Number(a.current_balance), 0);
 
   // ── Signal helpers ──────────────────────────────────────────────────────────
-  const inflows90  = txns.filter(t => Number(t.amount) > 0 && new Date(t.transaction_date) >= cutoff90);
-  const outflows90 = txns.filter(t => Number(t.amount) < 0 && new Date(t.transaction_date) >= cutoff90);
+  const inflows90  = txns.filter(t => Number(t.amount) > 0 && new Date(t.transaction_date) >= c90);
+  const outflows90 = txns.filter(t => Number(t.amount) < 0 && new Date(t.transaction_date) >= c90);
   const inflows180 = txns.filter(t => Number(t.amount) > 0);
   const outflows180 = txns.filter(t => Number(t.amount) < 0);
 
@@ -60,13 +93,18 @@ async function score(tenantId, pool, enrichment) {
   // S5 - Overdraft frequency (transactions that cause balance to go <0)
   const s5 = scoreOverdraft(txns);
 
-  // S6 - Debt service ratio
-  const monthlyLoanRepayment = loans.reduce((s, l) => {
-    // Estimate monthly from outstanding balance
-    return s + (Number(l.outstanding_balance) * 0.05);
-  }, 0);
+  // S6 - Debt service ratio. Real near-term scheduled repayment from the lending module
+  // (SUM of total_due in the next 31 days); falls back to a 5%-of-outstanding proxy for
+  // out-of-window bullet loans, and to legacy active_loans when no lending loan exists.
+  const monthlyLoanRepayment = useLending
+    ? (dueNext > 0 ? dueNext : realOutstanding * 0.05)
+    : legacyOutstanding * 0.05;
   const dsr = monthlyRevenue90 > 0 ? monthlyLoanRepayment / monthlyRevenue90 : 0;
   const s6 = dsr < 0.15 ? 100 : dsr < 0.30 ? 80 : dsr < 0.45 ? 60 : dsr < 0.60 ? 40 : 20;
+
+  // S12 - Loan repayment conduct (worst current DPD across the real schedule). Neutral (100)
+  // when there are no loans or nothing is overdue.
+  const s12 = maxDpd <= 0 ? 100 : maxDpd <= 30 ? 60 : maxDpd <= 60 ? 35 : 15;
 
   // S7 - Current balance vs monthly burn
   const monthlyBurn = Math.abs(sum(outflows90)) / 3;
@@ -96,11 +134,13 @@ async function score(tenantId, pool, enrichment) {
     { key: "runway",       label: "Cash runway",            score: s7,  weight: 0.10, hint: "Keep a bigger cash buffer vs monthly burn." },
     { key: "gst",          label: "GST filing regularity",  score: s10, weight: 0.08, hint: "File GST returns on time, every period." },
     { key: "age",          label: "Business vintage",       score: s3,  weight: 0.08, hint: "Track record builds with age - automatic over time." },
-    { key: "concentration",label: "Customer diversity",     score: s4,  weight: 0.07, hint: "Reduce reliance on one large customer." },
+    { key: "concentration",label: "Customer diversity",     score: s4,  weight: 0.05, hint: "Reduce reliance on one large customer." },
     { key: "receivables",  label: "Receivables health",     score: s11, weight: 0.07, hint: "Collect overdue invoices to cut your overdue %." },
-    { key: "payments",     label: "Payment behaviour",      score: s8,  weight: 0.05, hint: "Keep regular, on-time recurring payments." },
-    { key: "activity",     label: "Account activity",       score: Math.round(activityScore), weight: 0.02, hint: "More transaction history strengthens the picture." },
+    { key: "loan_conduct", label: "Loan repayment conduct", score: s12, weight: 0.05, hint: "Pay loan instalments on or before the due date." },
+    { key: "payments",     label: "Payment behaviour",      score: s8,  weight: 0.03, hint: "Keep regular, on-time recurring payments." },
+    { key: "activity",     label: "Account activity",       score: Math.round(activityScore), weight: 0.01, hint: "More transaction history strengthens the picture." },
   ];
+  // Weights above sum to 1.0 (loan_conduct 0.05 offset by concentration −0.02, payments −0.02, activity −0.01).
   // Optional FinBox/bureau enrichment - adds a credit-bureau factor when available, then
   // renormalizes weights to 1.0. Absent → scorecard is exactly the internal-data version.
   if (enrichment && enrichment.bureau && enrichment.bureau.score != null) {
@@ -110,7 +150,8 @@ async function score(tenantId, pool, enrichment) {
   }
   const raw = factorDefs.reduce((s, f) => s + f.score * f.weight, 0); // weights sum to 1.0
 
-  const multiplier = INDUSTRY_RISK["default"];
+  const sectorKey = normalizeIndustry(firm.industry || firm.sector);
+  const multiplier = INDUSTRY_RISK[sectorKey] ?? INDUSTRY_RISK["default"];
   const finalScore = Math.min(100, Math.round(raw / multiplier));
   const grade = gradeOf(finalScore);
 
@@ -140,12 +181,16 @@ async function score(tenantId, pool, enrichment) {
       gst_periods_filed: recv ? s10 : 0,           // NOTE: this is the 0-100 GST SCORE
       gst_filings_count: gstFiledCount(gstRows),   // the real COUNT of periods filed
       gst_window: GST_WINDOW,                       // periods in the window (denominator)
-      existing_debt: Math.round(loans.reduce((s, l) => s + Number(l.outstanding_balance || 0), 0)),
+      existing_debt: Math.round(existingDebt),
+      debt_source: useLending ? "lending" : "legacy",
+      max_dpd: maxDpd,
+      industry: sectorKey,
+      industry_multiplier: multiplier,
       monthly_burn: Math.round(monthlyBurn),
       overdue_ratio: Math.round(recv.overdueRatio * 100) / 100,
       outstanding_receivables: recv.outstanding,
       overdue_receivables: recv.overdue,
-      signals: { s1, s2, s3, s4, s5, s6, s7, s8, gst: s10, receivables: s11, activity: activityScore },
+      signals: { s1, s2, s3, s4, s5, s6, s7, s8, gst: s10, receivables: s11, activity: activityScore, loan_conduct: s12 },
     },
   };
   result.decision = decide(result);
