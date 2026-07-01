@@ -211,12 +211,14 @@ async function recordRepayment(tenantId, loanId, { amount, method = "manual", re
   const payPrincipal = r2(Math.min(amt - payInterest, n(loan.outstanding_principal)));
   const newOutstanding = r2(n(loan.outstanding_principal) - payPrincipal);
 
+  let repaymentId;
   try {
-    await q(tenantId,
+    const { rows: ins } = await q(tenantId,
       `INSERT INTO loan_repayments(loan_id,tenant_id,amount,principal_component,interest_component,method,ref)
-       VALUES($1,$2,$3,$4,$5,$6,$7)`,
+       VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
       [loanId, tenantId, amt, payPrincipal, payInterest, method, ref || null]
     );
+    repaymentId = ins[0].id;
   } catch (e) {
     if (e.code === "23505") return { duplicate: true }; // same ref already applied → idempotent
     throw e;
@@ -233,7 +235,7 @@ async function recordRepayment(tenantId, loanId, { amount, method = "manual", re
     const status = cumPaid >= cum ? "paid" : (cumPaid > r2(cum - n(s.total_due)) ? "partial" : "due");
     await q(tenantId,"UPDATE loan_schedule SET status=$2, paid_at=CASE WHEN $2='paid' THEN now() ELSE paid_at END WHERE id=$1", [s.id, status]);
   }
-  const voucherId = await postRepayment(tenantId, actorId, loan, payPrincipal, payInterest);
+  const voucherId = await postRepayment(tenantId, actorId, loan, payPrincipal, payInterest, repaymentId);
   if (voucherId) await q(tenantId,"UPDATE loan_repayments SET gl_voucher_id=$2 WHERE loan_id=$1 AND ref IS NOT DISTINCT FROM $3", [loanId, voucherId, ref || null]);
   return { applied: amt, principal: payPrincipal, interest: payInterest, outstanding: newOutstanding, closed: closing, glPosted: !!voucherId };
 }
@@ -281,7 +283,7 @@ async function postDisbursal(tenantId, actorId, loan, net) {
     return res.voucherId || null;
   } catch (e) { console.warn("[lending] disbursal GL skipped:", e.message); return null; }
 }
-async function postRepayment(tenantId, actorId, loan, principal, interest) {
+async function postRepayment(tenantId, actorId, loan, principal, interest, repaymentId) {
   try {
     const bank = await firstBankLedger(tenantId);
     const borrow = await ledgerByName(tenantId, "Borrowings");
@@ -295,7 +297,7 @@ async function postRepayment(tenantId, actorId, loan, principal, interest) {
     entries.push({ ledgerId: bank, debit: 0, credit: r2(total) });
     const res = await postVoucher(tenantId, actorId || null,
       { voucherType: "PAYMENT", voucherDate: new Date().toISOString().slice(0, 10), narration: `Loan repayment ${loan.id}`, source: "lending" },
-      entries, { idempotencyKey: `loan_repay_${loan.id}_${Date.now()}` });
+      entries, { idempotencyKey: `loan_repay_${repaymentId || loan.id}` }); // STABLE business key (the repayment row id), never a timestamp — so postVoucher itself dedupes retries
     return res.voucherId || null;
   } catch (e) { console.warn("[lending] repayment GL skipped:", e.message); return null; }
 }
