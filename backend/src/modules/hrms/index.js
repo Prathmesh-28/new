@@ -1535,11 +1535,55 @@ async function generateEsicReturn(tenantId, runId) {
   };
 }
 
+// Form 24Q quarterly deductee-wise TDS statement (salary, §192). Aggregates the quarter's
+// payslips per employee into the deductee schedule an employer/CA completes with PANs and
+// feeds into the NSDL RPU/FVU utility to produce the filing. Correct by construction — TDS
+// and salary are keyed to the same hrms_employee. NOTE: PAN is NOT sourced here (it lives on
+// a separate legacy `employees` table with no reliable join), so it is left for completion;
+// the FVU file build + TRACES upload are deferred/gated, never faked.
+const Q_MONTHS = { 1: ["04", "05", "06"], 2: ["07", "08", "09"], 3: ["10", "11", "12"], 4: ["01", "02", "03"] };
+async function generateForm24QStatement(tenantId, fyStartYear, quarter) {
+  const y = parseInt(fyStartYear, 10);
+  const qn = parseInt(quarter, 10);
+  if (!(y > 1900) || !Q_MONTHS[qn]) throw new HrError("valid fyStartYear + quarter (1-4) required", 400);
+  const yr = qn === 4 ? y + 1 : y; // Q4 (Jan-Mar) falls in the next calendar year
+  const months = Q_MONTHS[qn].map((m) => `${yr}-${m}`);
+  const { rows } = await q(tenantId,
+    `SELECT p.employee_name, COALESCE(SUM(p.gross),0) AS salary, COALESCE(SUM(p.tds),0) AS tds
+       FROM hrms_payslips p JOIN hrms_payroll_runs r ON r.id=p.run_id AND r.tenant_id=p.tenant_id
+      WHERE p.tenant_id=$1 AND r.run_month = ANY($2::text[])
+      GROUP BY p.employee_id, p.employee_name
+      HAVING COALESCE(SUM(p.tds),0) > 0
+      ORDER BY p.employee_name`, [tenantId, months]);
+  const R = (x) => Math.round(Number(x) || 0);
+  const deductees = rows.map((r2) => ({
+    pan: null, // employer/CA completes the PAN (see NOTE above)
+    name: r2.employee_name,
+    section: "192B",
+    salary_paid: R(r2.salary),
+    tds_deducted: R(r2.tds),
+  }));
+  return {
+    form: "24Q",
+    financial_year: `${y}-${y + 1}`,
+    quarter: `Q${qn}`,
+    months,
+    deductees,
+    deductee_count: deductees.length,
+    total_salary: deductees.reduce((s, d) => s + d.salary_paid, 0),
+    total_tds: deductees.reduce((s, d) => s + d.tds_deducted, 0),
+    note: "Deductee-wise TDS (§192) statement for the quarter. Complete each PAN, then generate the FVU via the NSDL RPU utility and file on TRACES.",
+    fvu: "deferred",   // NSDL FVU multi-record file build is a dedicated task
+    upload: "gated",   // TRACES filing needs the deductor's credentials
+  };
+}
+
 module.exports = {
   HrError,
   ptAmount, // per-state Professional Tax (exported for tests)
   generateEcr, // EPFO ECR file generation
   generateEsicReturn, // ESIC monthly contribution file
+  generateForm24QStatement, // 24Q quarterly deductee TDS statement
   // pure logic (exported for asserts/tests)
   evalExpr, evalCondition, evaluateComponents, computeSlip, workingDayDetails,
   pfAmount, esiAmount, ptAmount, leaveDayCount, abbrOf, roundRupee, flt,
