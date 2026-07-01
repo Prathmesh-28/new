@@ -198,29 +198,29 @@ function WalkPanel({ i, active, inr }: { i: number; active: number; inr: boolean
 }
 
 function Walkthrough({ inr }: { inr: boolean }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const { ref, vis } = useInView(0.3);
   const [active, setActive] = useState(0);
   const [mobile, setMobile] = useState(false);
+  const [interacted, setInteracted] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 820px)");
     const onM = () => setMobile(mq.matches);
     onM();
     mq.addEventListener?.("change", onM);
-    const onScroll = () => {
-      const el = ref.current;
-      if (!el) return;
-      const total = el.offsetHeight - window.innerHeight;
-      const scrolled = Math.min(Math.max(-el.getBoundingClientRect().top, 0), Math.max(total, 1));
-      const p = total > 0 ? scrolled / total : 0;
-      setActive(Math.min(WALK.length - 1, Math.floor(p * WALK.length)));
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      mq.removeEventListener?.("change", onM);
-    };
+    return () => mq.removeEventListener?.("change", onM);
   }, []);
+  // Auto-advance through the steps once the section is in view. Pauses after a
+  // manual click, and is skipped entirely under prefers-reduced-motion.
+  useEffect(() => {
+    if (!vis || interacted) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const id = setInterval(() => setActive((a) => (a + 1) % WALK.length), 3200);
+    return () => clearInterval(id);
+  }, [vis, interacted]);
+  const pick = (i: number) => {
+    setActive(i);
+    setInteracted(true);
+  };
 
   const dash = (
     <div style={{ background: C.deep, border: "1px solid rgba(169,217,188,0.15)", borderRadius: 16, padding: 16, boxShadow: "0 32px 80px rgba(0,0,0,0.5)", width: "100%", maxWidth: 440 }}>
@@ -235,35 +235,16 @@ function Walkthrough({ inr }: { inr: boolean }) {
     </div>
   );
 
-  if (mobile) {
-    return (
-      <section id="walkthrough" style={{ background: C.deepest, padding: "64px 24px" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <Label text="Product walkthrough" dark />
-          <h2 style={{ fontFamily: serif, fontSize: 30, color: C.creamW, letterSpacing: -1, marginBottom: 24 }}>Your whole business, in one view.</h2>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 28 }}>{dash}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {WALK.map((s, i) => (
-              <div key={s.t} onClick={() => setActive(i)} style={{ padding: "14px 16px", borderRadius: 12, cursor: "pointer", background: i === active ? "rgba(255,255,255,0.05)" : "transparent", borderLeft: `3px solid ${i === active ? C.light : "rgba(169,217,188,0.15)"}` }}>
-                <div style={{ fontFamily: sans, fontSize: 15, fontWeight: 700, color: C.pale, marginBottom: 4 }}>{s.t}</div>
-                <div style={{ fontFamily: sans, fontSize: 13, color: "rgba(169,217,188,0.55)", lineHeight: 1.55 }}>{s.d}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-    );
-  }
-
   return (
-    <section id="walkthrough" ref={ref} style={{ background: C.deepest, height: `${WALK.length * 78 + 30}vh`, position: "relative" }}>
-      <div style={{ position: "sticky", top: 0, minHeight: "100vh", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 56, alignItems: "center", maxWidth: 1100, margin: "0 auto", padding: "0 48px" }}>
-        <div>
-          <Label text="Product walkthrough" dark />
-          <h2 style={{ fontFamily: serif, fontSize: 40, color: C.creamW, letterSpacing: -1, marginBottom: 28 }}>Your whole business,<br />in one view.</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <section id="walkthrough" ref={ref} style={{ background: C.deepest, padding: mobile ? "64px 24px" : "88px 48px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <Label text="Product walkthrough" dark />
+        <h2 style={{ fontFamily: serif, fontSize: mobile ? 30 : 40, color: C.creamW, letterSpacing: -1, marginBottom: mobile ? 28 : 44 }}>Your whole business, in one view.</h2>
+        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: mobile ? 32 : 56, alignItems: "center" }}>
+          <div style={{ display: "flex", justifyContent: "center", order: mobile ? 1 : 2 }}>{dash}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, order: mobile ? 2 : 1 }}>
             {WALK.map((s, i) => (
-              <div key={s.t} onClick={() => setActive(i)} style={{ display: "flex", gap: 16, padding: "14px 16px", borderRadius: 12, cursor: "pointer", opacity: i === active ? 1 : 0.4, background: i === active ? "rgba(255,255,255,0.05)" : "transparent", transition: "all 0.4s ease" }}>
+              <div key={s.t} onClick={() => pick(i)} style={{ display: "flex", gap: 16, padding: "16px 18px", borderRadius: 12, cursor: "pointer", opacity: i === active ? 1 : 0.45, background: i === active ? "rgba(255,255,255,0.05)" : "transparent", transition: "all 0.4s ease" }}>
                 <span style={{ width: 3, borderRadius: 3, flexShrink: 0, background: i === active ? C.light : "rgba(169,217,188,0.15)", boxShadow: i === active ? `0 0 12px ${C.light}` : "none", transition: "all 0.4s ease" }} />
                 <div>
                   <div style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.pale, marginBottom: 4 }}>{s.t}</div>
@@ -273,7 +254,6 @@ function Walkthrough({ inr }: { inr: boolean }) {
             ))}
           </div>
         </div>
-        <div style={{ display: "flex", justifyContent: "center" }}>{dash}</div>
       </div>
     </section>
   );
