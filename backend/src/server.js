@@ -177,6 +177,7 @@ app.use("/webhook/whatsapp",       require("./routes/whatsapp")); // Twilio inbo
 // Phase 1+2 modules
 app.use("/api/invoices",           require("./routes/invoices"));
 app.use("/api/forecast",           require("./routes/forecast"));
+app.use("/api/audit",              require("./routes/audit"));
 app.use("/api/gst",                require("./routes/gst"));
 app.use("/api/payroll",            require("./routes/payroll"));
 app.use("/api/bnpl",               require("./routes/bnpl"));

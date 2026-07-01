@@ -4,6 +4,7 @@
 const { pool } = require("../../db");
 const { money, sum, toDb, eq } = require("./money");
 const { financialYearFor, periodMonthFor } = require("./fy");
+const { appendAudit } = require("../../lib/bookAudit"); // MCA Rule 3(1) hash-chained audit trail
 
 class PostError extends Error {
   constructor(code, message, http) {
@@ -129,11 +130,13 @@ async function _post(client, tenantId, actorId, voucher, entries, opts = {}) {
   }
 
   // 10. Audit.
-  await client.query(
-    "INSERT INTO book_audit_log(tenant_id, actor_id, action, entity, entity_id, detail) VALUES($1,$2,$3,$4,$5,$6)",
-    [tenantId, actorId || null, opts.reversesVoucherId ? "voucher.reverse" : "voucher.post", "voucher", voucherId,
-     JSON.stringify({ type: voucher.voucherType, number, fy, source: voucher.source || "api" })]
-  );
+  await appendAudit(client, {
+    tenantId, actorId: actorId || null,
+    action: opts.reversesVoucherId ? "voucher.reverse" : "voucher.post",
+    entity: "voucher", entityId: voucherId,
+    after: { type: voucher.voucherType, number, fy, currency: voucher.currency || "INR" },
+    detail: { type: voucher.voucherType, number, fy, source: voucher.source || "api", reverses: opts.reversesVoucherId || null },
+  });
 
   return { voucherId, voucherNumber: number, financialYear: fy };
 }
