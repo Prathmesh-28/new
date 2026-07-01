@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import { initHero3D } from "@/animations/hero3d";
 import ScrambleIn from "@/components/ScrambleIn";
+import AnimatedNumber from "@/components/AnimatedNumber";
+import Odometer from "@/components/Odometer";
 import Logo from "@/components/Logo";
 import SocialLinks from "@/components/SocialLinks";
 import { usePlatformSettings } from "@/lib/usePlatformSettings";
@@ -65,6 +67,11 @@ function Reveal({ children, delay = 0, className = "" }: { children: React.React
 const BARS = [82,78,85,75,70,62,55,48,40,35,42,50,58,65,70,68,72,78,80,76];
 
 function DashMockup({ inr }: { inr: boolean }) {
+  const [go, setGo] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setGo(true), 450);
+    return () => clearTimeout(t);
+  }, []);
   return (
     <div style={{ background: C.deep, border: `1px solid rgba(169,217,188,0.15)`, borderRadius: 14, overflow: "hidden", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
       <div style={{ background: "rgba(0,0,0,0.35)", padding: "10px 16px", display: "flex", alignItems: "center", gap: 6 }}>
@@ -80,17 +87,27 @@ function DashMockup({ inr }: { inr: boolean }) {
           ].map(s => (
             <div key={s.label} style={{ background: "rgba(0,0,0,0.28)", border: "1px solid rgba(169,217,188,0.08)", borderRadius: 8, padding: "11px 12px" }}>
               <div style={{ fontFamily: sans, fontSize: 9, color: "rgba(169,217,188,0.4)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>{s.label}</div>
-              <div style={{ fontFamily: sans, fontSize: 19, fontWeight: 600, color: C.pale }}>{s.val}</div>
+              <div style={{ fontFamily: sans, fontSize: 19, fontWeight: 600, color: C.pale }}><AnimatedNumber value={s.val} start={go} /></div>
               <div style={{ fontFamily: sans, fontSize: 9, color: s.subC, marginTop: 2 }}>{s.sub}</div>
             </div>
           ))}
         </div>
         <div style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(169,217,188,0.08)", borderRadius: 8, padding: "12px 14px", marginBottom: 12 }}>
           <div style={{ fontFamily: sans, fontSize: 9, color: "rgba(169,217,188,0.38)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>Cash position - next 90 days</div>
-          <div data-h3d="cashbars" style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 58 }}>
+          <div data-h3d="cashbars" style={{ position: "relative", display: "flex", alignItems: "flex-end", gap: 3, height: 58 }}>
             {BARS.map((h, i) => (
-              <div key={i} style={{ flex: 1, borderRadius: "2px 2px 0 0", minWidth: 7, height: `${Math.round(h * 0.72)}%`, background: h < 50 ? "#E24B4A" : h < 65 ? C.gold : C.bright, opacity: i < 10 ? 0.5 : 0.85 }} />
+              <div key={i} style={{ flex: 1, borderRadius: "2px 2px 0 0", minWidth: 7, height: go ? `${Math.round(h * 0.72)}%` : "0%", background: h < 50 ? "#E24B4A" : h < 65 ? C.gold : C.bright, opacity: i < 10 ? 0.5 : 0.85, transition: "height 0.9s cubic-bezier(0.22,1,0.36,1)", transitionDelay: `${i * 22}ms` }} />
             ))}
+            {/* Self-drawing P50 forecast line over the bars */}
+            <svg viewBox="0 0 100 58" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }} aria-hidden="true">
+              <polyline
+                pathLength={100}
+                points={BARS.map((h, i) => `${((i / (BARS.length - 1)) * 100).toFixed(2)},${(58 - (Math.round(h * 0.72) / 100) * 58).toFixed(2)}`).join(" ")}
+                fill="none" stroke={C.pale} strokeWidth={1.6} vectorEffect="non-scaling-stroke"
+                strokeLinecap="round" strokeLinejoin="round"
+                style={{ strokeDasharray: 100, strokeDashoffset: go ? 0 : 100, transition: "stroke-dashoffset 1.8s ease 0.4s", opacity: 0.85 }}
+              />
+            </svg>
           </div>
         </div>
         <div style={{ background: "rgba(61,154,96,0.1)", border: "1px solid rgba(61,154,96,0.22)", borderRadius: 8, padding: "10px 12px", display: "flex", alignItems: "flex-start", gap: 10 }}>
@@ -151,6 +168,114 @@ function IconTile({ icon: Icon, size = 44, dark = false }: { icon: LucideIcon; s
       <Icon size={Math.round(size * 0.44)} color={dark ? C.pale : C.mid} strokeWidth={1.85} />
       <span style={{ position: "absolute", top: Math.round(size * 0.16), right: Math.round(size * 0.16), width: Math.max(4, Math.round(size * 0.1)), height: Math.max(4, Math.round(size * 0.1)), borderRadius: "50%", background: C.gold, opacity: 0.9 }} />
     </div>
+  );
+}
+
+/* ─── Scroll-pinned product walkthrough ─── */
+const WALK = [
+  { t: "Cash & runway", d: "Every bank, wallet and card in one live balance — with a runway clock counting down in real days, not last month's spreadsheet." },
+  { t: "90-day forecast", d: "A daily P10 / P50 / P90 cash position. Recurring and variable spend are modelled separately, so the tight weeks surface early." },
+  { t: "Alerts & insights", d: "Plain-language warnings fire up to 45 days before pressure hits — specific, actionable, and never a wall of noise." },
+  { t: "Credit & capital", d: "When a forecast shows real pressure, rescue options appear in context — pre-qualified silently from your own data." },
+];
+
+function WalkPanel({ i, active, inr }: { i: number; active: number; inr: boolean }) {
+  const on = i === active;
+  const base: React.CSSProperties = {
+    border: `1px solid ${on ? "rgba(95,190,124,0.5)" : "rgba(169,217,188,0.1)"}`,
+    background: on ? "rgba(61,154,96,0.09)" : "rgba(0,0,0,0.25)",
+    boxShadow: on ? "0 0 0 1px rgba(95,190,124,0.25), 0 20px 50px -24px rgba(61,154,96,0.6)" : "none",
+    borderRadius: 12, padding: "14px 16px", minHeight: 118, display: "flex", flexDirection: "column", gap: 6,
+    opacity: on ? 1 : 0.5, transition: "all 0.45s ease",
+  };
+  const lbl = (s: string) => <div style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.12em", color: "rgba(169,217,188,0.5)", textTransform: "uppercase" }}>{s}</div>;
+  const big = (s: React.ReactNode, c: string = C.pale) => <div style={{ fontFamily: sans, fontSize: 22, fontWeight: 700, color: c, letterSpacing: -0.5 }}>{s}</div>;
+  const mini = (s: string) => <div style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.5)", marginTop: "auto" }}>{s}</div>;
+  if (i === 0) return <div style={base}>{lbl("Cash on hand")}{big(<AnimatedNumber value={inr ? "₹4.2L" : "$52K"} start={on} />)}<div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 30, marginTop: "auto" }}>{[0.5,0.7,0.45,0.8,0.6,0.9,0.75].map((b, k) => <span key={k} style={{ flex: 1, height: `${b*100}%`, background: `linear-gradient(180deg, ${C.light}, ${C.bright})`, borderRadius: 2 }} />)}</div></div>;
+  if (i === 1) return <div style={base}>{lbl("Runway")}{big(<AnimatedNumber value="68 days" start={on} />)}<svg viewBox="0 0 120 30" preserveAspectRatio="none" style={{ width: "100%", height: 30, marginTop: "auto" }} aria-hidden="true"><polyline points="0,20 20,17 40,22 60,25 80,15 100,9 120,4" fill="none" stroke={C.light} strokeWidth={2} vectorEffect="non-scaling-stroke" /></svg></div>;
+  if (i === 2) return <div style={base}>{lbl("Alert")}<div style={{ display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "flex-start", fontFamily: sans, fontSize: 12, color: C.goldL, background: "rgba(61,154,96,0.14)", border: "1px solid rgba(61,154,96,0.3)", borderRadius: 999, padding: "3px 10px" }}><span className="hr-blink" style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold, display: "inline-block" }} />Low point in 41 days</div>{mini("A revenue advance keeps you positive")}</div>;
+  return <div style={base}>{lbl("Capital")}{big(<AnimatedNumber value={inr ? "₹1.5L" : "$18K"} start={on} />, C.goldL)}{mini("Advance pre-qualified · 0 bureau pulls")}</div>;
+}
+
+function Walkthrough({ inr }: { inr: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(0);
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 820px)");
+    const onM = () => setMobile(mq.matches);
+    onM();
+    mq.addEventListener?.("change", onM);
+    const onScroll = () => {
+      const el = ref.current;
+      if (!el) return;
+      const total = el.offsetHeight - window.innerHeight;
+      const scrolled = Math.min(Math.max(-el.getBoundingClientRect().top, 0), Math.max(total, 1));
+      const p = total > 0 ? scrolled / total : 0;
+      setActive(Math.min(WALK.length - 1, Math.floor(p * WALK.length)));
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      mq.removeEventListener?.("change", onM);
+    };
+  }, []);
+
+  const dash = (
+    <div style={{ background: C.deep, border: "1px solid rgba(169,217,188,0.15)", borderRadius: 16, padding: 16, boxShadow: "0 32px 80px rgba(0,0,0,0.5)", width: "100%", maxWidth: 440 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 12, borderBottom: "1px solid rgba(169,217,188,0.12)", marginBottom: 14 }}>
+        <span style={{ width: 12, height: 12, borderRadius: 4, background: `linear-gradient(135deg, ${C.light}, ${C.bright})` }} />
+        <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 700, color: C.creamW }}>Headroom</span>
+        <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: mono, fontSize: 9, letterSpacing: "0.1em", color: C.pale }}><span className="hr-blink" style={{ width: 5, height: 5, borderRadius: "50%", background: C.light, display: "inline-block" }} />LIVE · 10/10</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {WALK.map((_, i) => <WalkPanel key={i} i={i} active={active} inr={inr} />)}
+      </div>
+    </div>
+  );
+
+  if (mobile) {
+    return (
+      <section id="walkthrough" style={{ background: C.deepest, padding: "64px 24px" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <Label text="Product walkthrough" dark />
+          <h2 style={{ fontFamily: serif, fontSize: 30, color: C.creamW, letterSpacing: -1, marginBottom: 24 }}>Your whole business, in one view.</h2>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 28 }}>{dash}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {WALK.map((s, i) => (
+              <div key={s.t} onClick={() => setActive(i)} style={{ padding: "14px 16px", borderRadius: 12, cursor: "pointer", background: i === active ? "rgba(255,255,255,0.05)" : "transparent", borderLeft: `3px solid ${i === active ? C.light : "rgba(169,217,188,0.15)"}` }}>
+                <div style={{ fontFamily: sans, fontSize: 15, fontWeight: 700, color: C.pale, marginBottom: 4 }}>{s.t}</div>
+                <div style={{ fontFamily: sans, fontSize: 13, color: "rgba(169,217,188,0.55)", lineHeight: 1.55 }}>{s.d}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section id="walkthrough" ref={ref} style={{ background: C.deepest, height: `${WALK.length * 78 + 30}vh`, position: "relative" }}>
+      <div style={{ position: "sticky", top: 0, minHeight: "100vh", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 56, alignItems: "center", maxWidth: 1100, margin: "0 auto", padding: "0 48px" }}>
+        <div>
+          <Label text="Product walkthrough" dark />
+          <h2 style={{ fontFamily: serif, fontSize: 40, color: C.creamW, letterSpacing: -1, marginBottom: 28 }}>Your whole business,<br />in one view.</h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {WALK.map((s, i) => (
+              <div key={s.t} onClick={() => setActive(i)} style={{ display: "flex", gap: 16, padding: "14px 16px", borderRadius: 12, cursor: "pointer", opacity: i === active ? 1 : 0.4, background: i === active ? "rgba(255,255,255,0.05)" : "transparent", transition: "all 0.4s ease" }}>
+                <span style={{ width: 3, borderRadius: 3, flexShrink: 0, background: i === active ? C.light : "rgba(169,217,188,0.15)", boxShadow: i === active ? `0 0 12px ${C.light}` : "none", transition: "all 0.4s ease" }} />
+                <div>
+                  <div style={{ fontFamily: sans, fontSize: 16, fontWeight: 700, color: C.pale, marginBottom: 4 }}>{s.t}</div>
+                  <div style={{ fontFamily: sans, fontSize: 13, color: "rgba(169,217,188,0.55)", lineHeight: 1.55 }}>{s.d}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "center" }}>{dash}</div>
+      </div>
+    </section>
   );
 }
 
@@ -323,11 +448,14 @@ export default function HomePage() {
           { n:"4.8 days", d:"Avg time to first insight"    },
         ].map(({ n, d }, i) => (
           <div key={d} className="hr-stat" style={{ textAlign: "center", padding: "0 24px", borderRight: i < 3 ? "1px solid rgba(169,217,188,0.15)" : "none" }}>
-            <div style={{ fontFamily: serif, fontSize: 32, color: C.pale, letterSpacing: -1 }}>{n}</div>
+            <div style={{ fontFamily: serif, fontSize: 32, color: C.pale, letterSpacing: -1 }}><Odometer value={n} /></div>
             <div style={{ fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.55)", marginTop: 3 }}>{d}</div>
           </div>
         ))}
       </div>
+
+      {/* ═══ PRODUCT WALKTHROUGH (scroll-pinned) ═════════════════════════════ */}
+      <Walkthrough inr={inr} />
 
       {/* ═══ FEATURES - 10 LAYERS ════════════════════════════════════════════ */}
       <section id="features" data-h3d-deco="shapes-light" style={{ background: C.creamW, padding: "88px 48px" }}>

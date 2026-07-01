@@ -50,7 +50,6 @@
     "jspdf-autotable": "^3.8.2",
     "jszip": "^3.10.1",
     "lucide-react": "^0.400.0",
-    "motion": "^12.42.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.0.0",
