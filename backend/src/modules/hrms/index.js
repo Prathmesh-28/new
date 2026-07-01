@@ -411,12 +411,44 @@ function esiAmount(gross, cfg = {}) {
   if ((Number(gross) || 0) > threshold) return 0;
   return roundRupee((Number(gross) || 0) * rate);
 }
-// Maharashtra-style monthly Professional Tax slab (a common default).
-function ptAmount(gross) {
+// Per-state monthly Professional Tax. PT is a STATE levy, so the slab depends on the
+// employee's / firm's work state — not one hardcoded Maharashtra slab. Covers the major
+// employment states with their current monthly slabs; states that levy no PT return 0;
+// unknown/unset state defaults to Maharashtra (back-compat). Half-yearly states (TN/KL)
+// are modelled as an approximate monthly figure. Rates are policy data — keep updated.
+const isFeb = (month) => String(month || "").slice(5, 7) === "02"; // 'YYYY-MM'
+const PT_STATE = {
+  MH: (g, m) => (g <= 7500 ? 0 : g <= 10000 ? 175 : isFeb(m) ? 300 : 200),   // MH annual cap 2500 (Feb 300)
+  KA: (g) => (g < 25000 ? 0 : 200),
+  WB: (g) => (g <= 10000 ? 0 : g <= 15000 ? 110 : g <= 25000 ? 130 : g <= 40000 ? 150 : 200),
+  AP: (g) => (g <= 15000 ? 0 : g <= 20000 ? 150 : 200),
+  TG: (g) => (g <= 15000 ? 0 : g <= 20000 ? 150 : 200),                       // Telangana = AP slabs
+  GJ: (g) => (g < 12000 ? 0 : 200),                                            // Gujarat: nil <12k, 200 above (2022 revision)
+  MP: (g, m) => (g <= 18750 ? 0 : g <= 25000 ? 125 : g <= 33333 ? 167 : isFeb(m) ? 212 : 208),
+  BR: (g) => (g <= 25000 ? 0 : g <= 41666 ? 83 : g <= 83333 ? 166 : 208),     // Bihar (annual /12)
+  OD: (g) => (g <= 13304 ? 0 : g <= 25000 ? 125 : 200),                        // Odisha (Feb 300 cap 2500)
+  AS: (g) => (g <= 10000 ? 0 : g <= 15000 ? 150 : g <= 25000 ? 180 : 208),     // Assam
+  TN: (g) => { const h = g * 6; const hy = h <= 21000 ? 0 : h <= 30000 ? 135 : h <= 45000 ? 315 : h <= 60000 ? 690 : h <= 75000 ? 1025 : 1250; return Math.round(hy / 6); }, // TN half-yearly → monthly approx
+};
+const NON_PT_STATES = new Set(["DL", "HR", "UP", "RJ", "UK", "HP", "JK", "CH", "AN", "GA", "LD", "DN"]); // states/UTs with no PT
+const STATE_ALIASES = {
+  maharashtra: "MH", karnataka: "KA", "west bengal": "WB", westbengal: "WB", "andhra pradesh": "AP", andhrapradesh: "AP",
+  telangana: "TG", gujarat: "GJ", "madhya pradesh": "MP", madhyapradesh: "MP", bihar: "BR", odisha: "OD", orissa: "OD",
+  assam: "AS", "tamil nadu": "TN", tamilnadu: "TN", delhi: "DL", haryana: "HR", "uttar pradesh": "UP", uttarpradesh: "UP",
+  rajasthan: "RJ", uttarakhand: "UK", "himachal pradesh": "HP", goa: "GA",
+};
+function normalizeState(s) {
+  if (!s) return null;
+  const t = String(s).trim();
+  if (/^[A-Za-z]{2,3}$/.test(t)) return t.toUpperCase().replace(/&/g, "");       // already a code
+  return STATE_ALIASES[t.toLowerCase()] || null;
+}
+function ptAmount(gross, state, month) {
   const g = Number(gross) || 0;
-  if (g <= 7500) return 0;
-  if (g <= 10000) return 175;
-  return 200; // ₹300 in Feb in real MH PT; flat 200 here for the monthly model
+  const code = normalizeState(state);
+  if (code && NON_PT_STATES.has(code)) return 0;      // state levies no PT
+  const fn = (code && PT_STATE[code]) || PT_STATE.MH; // unknown/unset → MH default (back-compat)
+  return fn(g, month);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -476,7 +508,7 @@ function computeSlip({ base, components, month, attendance, structure, paidLeave
     if (esi > 0) deductions.push({ name: "ESI", abbr: "ESI", type: "deduction", amount: esi, statutory: true });
   }
   if (structure.apply_pt) {
-    const pt = ptAmount(gross);
+    const pt = ptAmount(gross, statutoryCfg?.ptState || structure.pt_state, month);
     if (pt > 0) deductions.push({ name: "Professional Tax", abbr: "PT", type: "deduction", amount: pt, statutory: true });
   }
 
@@ -1416,6 +1448,7 @@ const listFullAndFinal = async (tenantId) => (await q(tenantId,
 
 module.exports = {
   HrError,
+  ptAmount, // per-state Professional Tax (exported for tests)
   // pure logic (exported for asserts/tests)
   evalExpr, evalCondition, evaluateComponents, computeSlip, workingDayDetails,
   pfAmount, esiAmount, ptAmount, leaveDayCount, abbrOf, roundRupee, flt,
