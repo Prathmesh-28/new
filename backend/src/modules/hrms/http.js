@@ -55,6 +55,7 @@ router.get("/payroll/:id/payslips", async (req, res) => { try { res.json(await h
 router.get("/payroll/:id/ecr", async (req, res) => { try { res.json(await hr.generateEcr(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } }); // EPFO ECR file (generation only; upload gated)
 router.get("/payroll/:id/esic", async (req, res) => { try { res.json(await hr.generateEsicReturn(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } }); // ESIC monthly contribution (generation only; upload gated)
 router.get("/tds/24q", async (req, res) => { try { res.json(await hr.generateForm24QStatement(tenantOf(req), req.query.fy, req.query.quarter)); } catch (e) { fail(res, e); } }); // 24Q quarterly deductee statement (FVU + TRACES deferred/gated)
+router.post("/payroll/link-legacy", canWrite, async (req, res) => { try { res.json(await hr.linkPayrollEmployees(tenantOf(req))); } catch (e) { fail(res, e); } }); // link HRMS ↔ legacy payroll employees (PAN) by email
 
 // ── (3) Formula-driven salary components ────────────────────────────────────────
 router.get("/components", async (req, res) => { try { res.json(await hr.listSalaryComponents(tenantOf(req))); } catch (e) { fail(res, e); } });

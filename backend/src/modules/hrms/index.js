@@ -30,6 +30,7 @@ const { withTenant, q } = require("../../lib/tenantDb"); // RLS Phase 4
 // refresh also runs OUTSIDE the txn.
 const books = require("../books");
 const { money, sum, toRupees } = require("../books/money");
+const fc = require("../../lib/fieldcrypto"); // decrypt the legacy employees.pan for statutory returns
 
 class HrError extends Error { constructor(msg, http) { super(msg); this.http = http || 400; } }
 
@@ -1541,6 +1542,22 @@ async function generateEsicReturn(tenantId, runId) {
 // and salary are keyed to the same hrms_employee. NOTE: PAN is NOT sourced here (it lives on
 // a separate legacy `employees` table with no reliable join), so it is left for completion;
 // the FVU file build + TRACES upload are deferred/gated, never faked.
+// Link each HRMS employee to its legacy payroll `employees` record by EXACT email match
+// (exactly one → link; zero or many → leave unlinked, never guess). Idempotent: only touches
+// still-unlinked rows. This is what lets 24Q/Form-16 pull the correct PAN.
+async function linkPayrollEmployees(tenantId) {
+  const { rows: hemps } = await q(tenantId,
+    "SELECT id, email FROM hrms_employees WHERE tenant_id=$1 AND legacy_employee_id IS NULL AND email IS NOT NULL AND email <> ''", [tenantId]);
+  let linked = 0, ambiguous = 0;
+  for (const h of hemps) {
+    const { rows: m } = await pool.query("SELECT id FROM employees WHERE tenant_id=$1 AND LOWER(email)=LOWER($2)", [tenantId, h.email]); // legacy table, not RLS'd
+    if (m.length === 1) { await q(tenantId, "UPDATE hrms_employees SET legacy_employee_id=$2 WHERE tenant_id=$1 AND id=$3", [tenantId, m[0].id, h.id]); linked += 1; }
+    else if (m.length > 1) ambiguous += 1; // multiple legacy records with the same email → manual
+  }
+  const { rows: un } = await q(tenantId, "SELECT COUNT(*)::int AS n FROM hrms_employees WHERE tenant_id=$1 AND legacy_employee_id IS NULL", [tenantId]);
+  return { linked, ambiguous, still_unlinked: un[0].n };
+}
+
 const Q_MONTHS = { 1: ["04", "05", "06"], 2: ["07", "08", "09"], 3: ["10", "11", "12"], 4: ["01", "02", "03"] };
 async function generateForm24QStatement(tenantId, fyStartYear, quarter) {
   const y = parseInt(fyStartYear, 10);
@@ -1548,21 +1565,25 @@ async function generateForm24QStatement(tenantId, fyStartYear, quarter) {
   if (!(y > 1900) || !Q_MONTHS[qn]) throw new HrError("valid fyStartYear + quarter (1-4) required", 400);
   const yr = qn === 4 ? y + 1 : y; // Q4 (Jan-Mar) falls in the next calendar year
   const months = Q_MONTHS[qn].map((m) => `${yr}-${m}`);
+  // PAN comes from the linked legacy `employees` record (encrypted) — no name-guessing.
   const { rows } = await q(tenantId,
-    `SELECT p.employee_name, COALESCE(SUM(p.gross),0) AS salary, COALESCE(SUM(p.tds),0) AS tds
-       FROM hrms_payslips p JOIN hrms_payroll_runs r ON r.id=p.run_id AND r.tenant_id=p.tenant_id
+    `SELECT p.employee_name, le.pan AS pan_enc,
+            COALESCE(SUM(p.gross),0) AS salary, COALESCE(SUM(p.tds),0) AS tds
+       FROM hrms_payslips p
+       JOIN hrms_payroll_runs r ON r.id=p.run_id AND r.tenant_id=p.tenant_id
+       JOIN hrms_employees e ON e.id=p.employee_id AND e.tenant_id=p.tenant_id
+       LEFT JOIN employees le ON le.id=e.legacy_employee_id AND le.tenant_id=$1
       WHERE p.tenant_id=$1 AND r.run_month = ANY($2::text[])
-      GROUP BY p.employee_id, p.employee_name
+      GROUP BY p.employee_id, p.employee_name, le.pan
       HAVING COALESCE(SUM(p.tds),0) > 0
       ORDER BY p.employee_name`, [tenantId, months]);
   const R = (x) => Math.round(Number(x) || 0);
-  const deductees = rows.map((r2) => ({
-    pan: null, // employer/CA completes the PAN (see NOTE above)
-    name: r2.employee_name,
-    section: "192B",
-    salary_paid: R(r2.salary),
-    tds_deducted: R(r2.tds),
-  }));
+  let deducteesWithoutPan = 0;
+  const deductees = rows.map((r2) => {
+    const pan = r2.pan_enc ? String(fc.decrypt(r2.pan_enc)).trim() || null : null;
+    if (!pan) deducteesWithoutPan += 1;
+    return { pan, name: r2.employee_name, section: "192B", salary_paid: R(r2.salary), tds_deducted: R(r2.tds) };
+  });
   return {
     form: "24Q",
     financial_year: `${y}-${y + 1}`,
@@ -1570,9 +1591,10 @@ async function generateForm24QStatement(tenantId, fyStartYear, quarter) {
     months,
     deductees,
     deductee_count: deductees.length,
+    deductees_without_pan: deducteesWithoutPan, // run POST /payroll/link-legacy, or add the PAN on the payroll record
     total_salary: deductees.reduce((s, d) => s + d.salary_paid, 0),
     total_tds: deductees.reduce((s, d) => s + d.tds_deducted, 0),
-    note: "Deductee-wise TDS (§192) statement for the quarter. Complete each PAN, then generate the FVU via the NSDL RPU utility and file on TRACES.",
+    note: "Deductee-wise TDS (§192) statement for the quarter. PANs are pulled from linked payroll records; complete any missing, then generate the FVU via the NSDL RPU utility and file on TRACES.",
     fvu: "deferred",   // NSDL FVU multi-record file build is a dedicated task
     upload: "gated",   // TRACES filing needs the deductor's credentials
   };
@@ -1584,6 +1606,7 @@ module.exports = {
   generateEcr, // EPFO ECR file generation
   generateEsicReturn, // ESIC monthly contribution file
   generateForm24QStatement, // 24Q quarterly deductee TDS statement
+  linkPayrollEmployees, // link hrms_employees ↔ legacy employees (PAN) by email
   // pure logic (exported for asserts/tests)
   evalExpr, evalCondition, evaluateComponents, computeSlip, workingDayDetails,
   pfAmount, esiAmount, ptAmount, leaveDayCount, abbrOf, roundRupee, flt,
