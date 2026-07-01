@@ -52,6 +52,7 @@ router.get("/payroll", async (req, res) => { try { res.json(await hr.listPayroll
 router.post("/payroll/run", canWrite, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await hr.runPayroll(tenantOf(req), req.user.id, b.month, { costCentreId: b.costCentreId })); } catch (e) { fail(res, e); } });
 router.post("/payroll/:id/pay", canWrite, async (req, res) => { try { const b = req.body || {}; res.json(await hr.payPayrollRun(tenantOf(req), req.user.id, req.params.id, { bankLedger: b.bankLedger, date: b.date })); } catch (e) { fail(res, e); } });
 router.get("/payroll/:id/payslips", async (req, res) => { try { res.json(await hr.payslipsForRun(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.get("/payroll/:id/ecr", async (req, res) => { try { res.json(await hr.generateEcr(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } }); // EPFO ECR file (generation only; upload gated)
 
 // ── (3) Formula-driven salary components ────────────────────────────────────────
 router.get("/components", async (req, res) => { try { res.json(await hr.listSalaryComponents(tenantOf(req))); } catch (e) { fail(res, e); } });

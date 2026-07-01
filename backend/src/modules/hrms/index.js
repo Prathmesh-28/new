@@ -1446,9 +1446,59 @@ const listFullAndFinal = async (tenantId) => (await q(tenantId,
   `SELECT f.*, e.name AS employee_name FROM hrms_full_and_final f JOIN hrms_employees e ON e.id=f.employee_id
     WHERE f.tenant_id=$1 ORDER BY f.created_at DESC`, [tenantId])).rows;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// EPFO ECR (Electronic Challan cum Return) file generation for a payroll run.
+// Reads the persisted payslips, derives each PF member's EPF/EPS/EDLI wages + the
+// EE(12%)/EPS(8.33%)/ER(3.67%) split from the deducted PF, and emits the standard
+// #~#-delimited ECR lines the employer uploads to the EPFO portal. Generation only —
+// the actual EPFO upload is credential-gated and NOT performed here.
+async function generateEcr(tenantId, runId) {
+  const { rows: rr } = await q(tenantId, "SELECT * FROM hrms_payroll_runs WHERE tenant_id=$1 AND id=$2", [tenantId, runId]);
+  const run = rr[0];
+  if (!run) throw new HrError("Payroll run not found", 404);
+  const { rows: slips } = await q(tenantId,
+    `SELECT p.employee_name, p.gross, p.lop_days, p.deductions, e.uan
+       FROM hrms_payslips p JOIN hrms_employees e ON e.id=p.employee_id AND e.tenant_id=p.tenant_id
+      WHERE p.tenant_id=$1 AND p.run_id=$2 ORDER BY p.employee_name`, [tenantId, runId]);
+
+  const R = (x) => Math.round(Number(x) || 0);
+  const lines = [];
+  let members = 0, membersWithoutUan = 0;
+  const totals = { gross: 0, epf_wages: 0, eps_wages: 0, ee: 0, eps: 0, er: 0 };
+  for (const s of slips) {
+    const deds = Array.isArray(s.deductions) ? s.deductions : [];
+    const pf = deds.find((d) => d.abbr === "PF" || /provident/i.test(d.name || ""));
+    const pfAmt = pf ? R(pf.amount) : 0;
+    if (pfAmt <= 0) continue; // not a contributing PF member this month → excluded from the ECR
+    members += 1;
+    const epfWages = R(pfAmt / STATUTORY.PF_RATE);                 // wages PF was computed on (already ≤ ceiling)
+    const epsWages = Math.min(epfWages, STATUTORY.PF_WAGE_CEILING);
+    const ee  = pfAmt;                                             // EE 12%
+    const eps = R(epsWages * 0.0833);                              // EPS 8.33%
+    const er  = ee - eps;                                          // ER PF share (3.67%)
+    const ncp = R(s.lop_days || 0);                                // non-contributory period days
+    const uan = String(s.uan || "").trim();
+    if (!uan) membersWithoutUan += 1;
+    // 11 ECR fields: UAN, Name, GrossWages, EPFWages, EPSWages, EDLIWages, EE, EPS, ER, NCP, RefundAdvances
+    lines.push([uan, String(s.employee_name || "").toUpperCase(), R(s.gross), epfWages, epsWages, epsWages, ee, eps, er, ncp, 0].join("#~#"));
+    totals.gross += R(s.gross); totals.epf_wages += epfWages; totals.eps_wages += epsWages;
+    totals.ee += ee; totals.eps += eps; totals.er += er;
+  }
+  return {
+    run_month: run.run_month,
+    file_name: `ECR_${tenantId}_${run.run_month}.txt`,
+    content: lines.join("\n") + (lines.length ? "\n" : ""),
+    member_count: members,
+    members_without_uan: membersWithoutUan,   // employer must fill UAN before uploading these
+    totals,
+    upload: "gated", // EPFO portal upload requires the employer's establishment credentials
+  };
+}
+
 module.exports = {
   HrError,
   ptAmount, // per-state Professional Tax (exported for tests)
+  generateEcr, // EPFO ECR file generation
   // pure logic (exported for asserts/tests)
   evalExpr, evalCondition, evaluateComponents, computeSlip, workingDayDetails,
   pfAmount, esiAmount, ptAmount, leaveDayCount, abbrOf, roundRupee, flt,
