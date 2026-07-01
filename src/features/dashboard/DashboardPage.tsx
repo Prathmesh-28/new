@@ -1937,6 +1937,7 @@ export default function DashboardPage() {
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showAddTx, setShowAddTx]           = useState(false);
   const [showImport,    setShowImport]      = useState(false);
+  const [dashView, setDashView]             = useState<"today" | "insights">("today");
   const [wizardDismissed, setWizardDismissed] = useState(
     () => localStorage.getItem("hr_onboarding_dismissed") === "true"
   );
@@ -2228,29 +2229,39 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          <CashThisWeekWidget />
-          <SmartActionsPanel />
-          <TreasuryBanner />
+          {/* Dashboard views: Today (act now) vs Insights (analyse) - the home
+              screen leads with what needs attention, not twenty charts at once. */}
+          <div className="flex items-center gap-1 border-b border-[var(--color-border)]">
+            {([["today", "Today"], ["insights", "Insights"]] as const).map(([v, label]) => (
+              <button key={v} onClick={() => setDashView(v)}
+                className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${dashView === v ? "border-[var(--color-primary)] text-[var(--color-text)]" : "border-transparent text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Today: what needs attention right now */}
+          {dashView === "today" && (
+            <>
+              <CashThisWeekWidget />
+              <SmartActionsPanel />
+              <TreasuryBanner />
+              <MorningBriefCard />
+              <DailyCashSnapshot />
+              <OverdueInvoicesWidget />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <UpcomingDuesWidget />
+                <RecentActivityFeed />
+              </div>
+            </>
+          )}
+
+          {/* Insights: understand the business (health, trends, breakdowns, forecast) */}
+          {dashView === "insights" && (
+            <>
           <HealthScoreWidget />
-
-          {/* ── Dashboard tools #147-#150 ──────────────────────────────── */}
-          <div className="flex items-center gap-2 pt-2">
-            <LayoutGrid size={13} className="text-[var(--color-primary)]" />
-            <h2 className="text-sm font-bold">Your dashboard tools</h2>
-          </div>
-          <MorningBriefCard />
           <KpiWidgetBuilder />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <DailyCashSnapshot />
-            <GoalTracker />
-          </div>
-
-          {/* ── More widgets: dues, activity, trend, P&L, overdue, spend ── */}
-          <OverdueInvoicesWidget />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <UpcomingDuesWidget />
-            <RecentActivityFeed />
-          </div>
+          <GoalTracker />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <MiniPnLWidget />
             <SpendByPayeeDonut />
@@ -2514,6 +2525,8 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+            </>
+          )}
         </>
       )}
 
