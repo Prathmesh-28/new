@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useFeatureState } from "@/hooks/useFeatureState";
+import TabStrip from "@/components/TabStrip";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency, generateId } from "@/lib/utils";
 import {
@@ -183,8 +184,7 @@ export default function OperationsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-        {([
+      <TabStrip active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
           ["overview",      "Overview",     null],
           ["orders",        "Orders",       pendingOrders > 0 ? pendingOrders : null],
           ["inventory",     "Inventory",    lowStockItems.length > 0 ? lowStockItems.length : null],
@@ -219,14 +219,7 @@ export default function OperationsPage() {
           ["minmax",        "Min/Max Plan", null],
           ["whutil",        "Warehouse Use", null],
           ["oversell",      "Oversell Guard", null],
-        ] as [Tab, string, number | null][]).map(([id, label, badge]) => (
-          <button key={id} onClick={() => setTab(id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-            {label}
-            {badge !== null && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full leading-none">{badge}</span>}
-          </button>
-        ))}
-      </div>
+        ] as [Tab, string, number | null][]).map(([id, label, badge]) => ({ id, label, badge }))} />
 
       {/* ── OVERVIEW ── */}
       {tab === "overview" && (

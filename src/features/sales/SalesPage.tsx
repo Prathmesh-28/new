@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import EmptyState from "@/components/EmptyState";
+import TabStrip from "@/components/TabStrip";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -45,8 +46,7 @@ export default function SalesPage() {
             Capture leads, run a pipeline, quote with GST, track commissions and targets - built for India's SMB sales teams.
           </p>
         </div>
-        <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-          {([
+        <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as TabId)} tabs={([
             ["overview", "Overview", Briefcase],
             ["pipeline", "Pipeline", KanbanSquare],
             ["deals", "Deal Tracker", ClipboardList],
@@ -84,13 +84,7 @@ export default function SalesPage() {
             ["loyalty", "Loyalty Points", Sparkles],
             ["reorder-reminder", "Reorder Reminder", RotateCw],
             ["revenue-region", "Revenue / Region", MapIcon],
-          ] as const).map(([id, label, Icon]) => (
-            <button key={id} onClick={() => setTab(id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              <Icon size={11} />{label}
-            </button>
-          ))}
-        </div>
+          ] as const).map(([id, label, icon]) => ({ id, label, icon }))} />
       </div>
 
       {tab === "overview" && <SalesOverview onJump={setTab} />}

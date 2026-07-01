@@ -1,7 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 
-export type TabDef = { id: string; label: string; icon?: LucideIcon };
+export type TabDef = { id: string; label: string; icon?: LucideIcon; badge?: number | null };
+
+const Badge = ({ n }: { n: number }) => (
+  <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full leading-none">{n}</span>
+);
 
 /* Tab bar for mega-pages: shows the first `primaryCount` tabs inline and folds the rest
    into a "More tools" dropdown, so a 40-tab page reads as ~6 tabs + a menu instead of a
@@ -29,11 +33,12 @@ export default function TabStrip({
   const overflow = tabs.slice(primaryCount);
   const activeInOverflow = overflow.find(t => t.id === active);
   const TriggerIcon = activeInOverflow?.icon;
+  const overflowBadge = overflow.reduce((sum, t) => sum + (t.badge ?? 0), 0);
 
   const pill = (t: TabDef, isActive: boolean) => (
     <button key={t.id} onClick={() => { onChange(t.id); setOpen(false); }}
       className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${isActive ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-      {t.icon && <t.icon size={11} />}{t.label}
+      {t.icon && <t.icon size={11} />}{t.label}{t.badge != null && <Badge n={t.badge} />}
     </button>
   );
 
@@ -46,6 +51,7 @@ export default function TabStrip({
             className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded font-medium transition-colors ${activeInOverflow ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             {TriggerIcon && <TriggerIcon size={11} />}
             {activeInOverflow ? activeInOverflow.label : moreLabel}
+            {!activeInOverflow && overflowBadge > 0 && <Badge n={overflowBadge} />}
             <ChevronDown size={12} />
           </button>
           {open && (
@@ -53,7 +59,7 @@ export default function TabStrip({
               {overflow.map(t => (
                 <button key={t.id} role="menuitem" onClick={() => { onChange(t.id); setOpen(false); }}
                   className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-[var(--color-accent)] ${active === t.id ? "text-[var(--color-primary)] font-semibold" : "text-[var(--color-text)]"}`}>
-                  {t.icon && <t.icon size={13} className="text-[var(--color-muted)]" />}{t.label}
+                  {t.icon && <t.icon size={13} className="text-[var(--color-muted)]" />}<span className="flex-1">{t.label}</span>{t.badge != null && <Badge n={t.badge} />}
                 </button>
               ))}
             </div>
