@@ -35,9 +35,17 @@ app.set("trust proxy", 1);
 
 const ALLOWED_ORIGINS = new Set([
   process.env.FRONTEND_URL,
+  // Production custom domains. On the web the browser makes SAME-ORIGIN calls to
+  // these hosts (see vercel.json rewrites → Render), but browsers still send an
+  // `Origin` header on POST, which Vercel forwards — so the apex + www of every
+  // custom domain MUST be allowlisted or login/POST 500s with a CORS error.
+  "https://dryzle.com",
+  "https://www.dryzle.com",
   "https://headroom-pi.vercel.app",
   "http://localhost:5173",
   "http://localhost:3000",
+  // Extra origins via env (comma-separated) — add a new domain with no code change.
+  ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim()) : []),
 ].filter(Boolean));
 
 app.use(cors({
