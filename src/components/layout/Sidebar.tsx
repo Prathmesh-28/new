@@ -14,8 +14,7 @@ import {
   Handshake, IndianRupee, Umbrella, Coins,
   ShoppingCart, ShieldAlert, KeyRound, Banknote,
   Smartphone, FlaskConical, BookOpen, Factory, LineChart, UsersRound, Wand2, AppWindow, MessagesSquare, Waypoints,
-  // Icons for the temporary "Extras" group (pages not yet folded into a hub).
-  BarChart3, Award, Receipt, ScanSearch, FileSpreadsheet, Store, Network, Scale, Gem, ScrollText, Bot, Mic, Leaf, Blocks, Globe,
+  BarChart3,
 } from "lucide-react";
 
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
@@ -64,6 +63,7 @@ const NAV_CATALOG: NavGroup[] = [
     { to: "/transactions",    label: "Transactions",       icon: FileText,        tab: "transactions" },
     { to: "/books",           label: "Books (GL)",         icon: BookOpen,        tab: "books"        },
     { to: "/gst",             label: "GST",                icon: Calculator,      tab: "gst"          },
+    { to: "/tax",             label: "Tax Autopilot",      icon: ShieldCheck,     tab: "tax"          },
     { to: "/compliance",      label: "Compliance",         icon: CalendarCheck,   tab: "compliance"   },
     { to: "/insights",        label: "Reports & Analytics",icon: LineChart,       tab: "insights"     },
     { to: "/banking",         label: "Banking",            icon: Banknote,        tab: "banking"      },
@@ -94,28 +94,6 @@ const NAV_CATALOG: NavGroup[] = [
     { to: "/agents",          label: "Build & Automate",   icon: Wand2,           tab: "agents"   },
     { to: "/whatsapp",        label: "WhatsApp",           icon: MessageCircle,   tab: "whatsapp" },
     { to: "/frontier",        label: "Labs",               icon: FlaskConical,    tab: "frontier" },
-  ]},
-  // Temporary holding group: real pages not yet folded into a hub. As each hub
-  // lands (Vendors, Credit, Fundraise, GST, Books, Transactions, Reports…), its
-  // pages graduate out of here into the hub's tabs. Routes are all live.
-  { label: "Extras", items: [
-    { to: "/analytics",       label: "Analytics",     icon: BarChart3,       tab: "analytics"  },
-    { to: "/benchmarks",      label: "Benchmarks",    icon: Award,           tab: "benchmarks" },
-    { to: "/receivables",     label: "Receivables",   icon: Receipt,         tab: "receivables"},
-    { to: "/spend",           label: "Spend Intel",   icon: ScanSearch,      tab: "spend"      },
-    { to: "/statements",      label: "Statements",    icon: FileSpreadsheet, tab: "statements" },
-    { to: "/tax",             label: "Tax Autopilot", icon: ShieldCheck,     tab: "tax"        },
-    { to: "/erp",             label: "ERP / Mfg",     icon: Factory,         tab: "erp"        },
-    { to: "/suppliers",       label: "Suppliers",     icon: Store,           tab: "suppliers"  },
-    { to: "/network",         label: "B2B Network",   icon: Network,         tab: "network"    },
-    { to: "/debt",            label: "Debt",          icon: Scale,           tab: "debt"       },
-    { to: "/valuation",       label: "Valuation",     icon: Gem,             tab: "valuation"  },
-    { to: "/term-sheet",      label: "Term Sheet",    icon: ScrollText,      tab: "term-sheet" },
-    { to: "/copilot",         label: "AI CFO",        icon: Bot,             tab: "copilot"    },
-    { to: "/voice",           label: "Voice",         icon: Mic,             tab: "voice"      },
-    { to: "/esg",             label: "ESG",           icon: Leaf,            tab: "esg"        },
-    { to: "/tokens",          label: "Tokens",        icon: Blocks,          tab: "tokens"     },
-    { to: "/global",          label: "Global",        icon: Globe,           tab: "global"     },
   ]},
   { label: "Organization", items: [
     // The company-admin console (members, roles & access, billing, company,
