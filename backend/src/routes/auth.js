@@ -45,6 +45,7 @@ router.post("/login", validateBody({
   password: { type: "string", required: true, maxLen: 200 },
   mfa_code: { type: "string", required: false, maxLen: 16 },
 }), async (req, res) => {
+ try {
   if (!(await requireHuman(req, res))) return;   // Turnstile (no-op until configured)
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: "Email and password required" });
@@ -126,6 +127,13 @@ router.post("/login", validateBody({
     refresh: signRefresh(payload),
     user:    { id: user.id, email: user.email, role: user.role, tenant_id: user.tenant_id, first_login: firstLogin, plan: user.subscription_plan || "free" },
   });
+ } catch (e) {
+  // Login had NO error handling: any unexpected error (env/schema/DB) previously became an
+  // opaque 500 or a hung request. Log the exact cause (→ stderr + ERROR_WEBHOOK_URL) and
+  // return a distinct message so the failure is diagnosable and never hangs.
+  require("../lib/logger").error("auth_login_error", { msg: e.message, code: e.code, stack: (e.stack || "").split("\n").slice(0, 5).join(" | ") });
+  return res.status(500).json({ error: "Login failed. Please try again in a moment." });
+ }
 });
 
 // POST /auth/refresh
