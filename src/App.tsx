@@ -30,6 +30,7 @@ import { Capacitor } from "@capacitor/core";
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, type PlanTier } from "@/data/types";
 
 const HomePage           = lazy(() => import("@/pages/HomePage"));
+const LandingPage        = lazy(() => import("@/pages/LandingPage"));
 const LoginPage          = lazy(() => import("@/pages/LoginPage"));
 const SignupPage         = lazy(() => import("@/pages/SignupPage"));
 const SignupAdvisorPage  = lazy(() => import("@/pages/SignupAdvisorPage"));
@@ -329,6 +330,7 @@ export default function App() {
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/"                element={<HomePage />} />
+                <Route path="/landing"         element={<LandingPage />} />{/* new video/glass marketing landing — HomePage untouched */}
                 <Route path="/login"           element={<LoginPage />} />
                 <Route path="/signup"          element={<SignupPage />} />
                 <Route path="/signup-advisor" element={<SignupAdvisorPage />} />
