@@ -1495,10 +1495,51 @@ async function generateEcr(tenantId, runId) {
   };
 }
 
+// ESIC monthly contribution return for a payroll run. For each ESI member (gross within
+// the ESI threshold → ESI deducted) emits the IP-wise contribution row (IP number, name,
+// paid days, wages) as the CSV the employer uploads to the ESIC portal. EE is the 0.75%
+// deducted; ER is 3.25% of wages. Generation only — the ESIC portal upload is gated.
+async function generateEsicReturn(tenantId, runId) {
+  const { rows: rr } = await q(tenantId, "SELECT * FROM hrms_payroll_runs WHERE tenant_id=$1 AND id=$2", [tenantId, runId]);
+  const run = rr[0];
+  if (!run) throw new HrError("Payroll run not found", 404);
+  const { rows: slips } = await q(tenantId,
+    `SELECT p.employee_name, p.gross, p.payment_days, p.deductions, e.esic_ip
+       FROM hrms_payslips p JOIN hrms_employees e ON e.id=p.employee_id AND e.tenant_id=p.tenant_id
+      WHERE p.tenant_id=$1 AND p.run_id=$2 ORDER BY p.employee_name`, [tenantId, runId]);
+  const R = (x) => Math.round(Number(x) || 0);
+  const rows = [["IPNumber", "IPName", "NoOfDays", "TotalMonthlyWages", "ReasonCode", "LastWorkingDay"]];
+  let members = 0, membersWithoutIp = 0;
+  const totals = { wages: 0, ee: 0, er: 0 };
+  for (const s of slips) {
+    const deds = Array.isArray(s.deductions) ? s.deductions : [];
+    const esi = deds.find((d) => d.abbr === "ESI" || /employee state insurance|^esi/i.test(d.name || ""));
+    const eeAmt = esi ? R(esi.amount) : 0;
+    if (eeAmt <= 0) continue; // not an ESI member this month → excluded
+    members += 1;
+    const wages = R(s.gross);
+    const days = R(s.payment_days || 0);
+    const ip = String(s.esic_ip || "").trim();
+    if (!ip) membersWithoutIp += 1;
+    rows.push([ip, String(s.employee_name || "").toUpperCase(), days, wages, 0, ""]);
+    totals.wages += wages; totals.ee += eeAmt; totals.er += Math.round(wages * 0.0325);
+  }
+  return {
+    run_month: run.run_month,
+    file_name: `ESIC_${tenantId}_${run.run_month}.csv`,
+    content: rows.map((r) => r.join(",")).join("\n") + "\n",
+    member_count: members,
+    members_without_ip: membersWithoutIp,   // employer must fill the ESIC IP number before uploading
+    totals,
+    upload: "gated", // ESIC portal upload requires the employer's establishment credentials
+  };
+}
+
 module.exports = {
   HrError,
   ptAmount, // per-state Professional Tax (exported for tests)
   generateEcr, // EPFO ECR file generation
+  generateEsicReturn, // ESIC monthly contribution file
   // pure logic (exported for asserts/tests)
   evalExpr, evalCondition, evaluateComponents, computeSlip, workingDayDetails,
   pfAmount, esiAmount, ptAmount, leaveDayCount, abbrOf, roundRupee, flt,
