@@ -7,6 +7,7 @@ import {
   Users, CreditCard, Award, Palette, type LucideIcon,
 } from "lucide-react";
 import { initHero3D } from "@/animations/hero3d";
+import ScrambleIn from "@/components/ScrambleIn";
 import Logo from "@/components/Logo";
 import SocialLinks from "@/components/SocialLinks";
 import { usePlatformSettings } from "@/lib/usePlatformSettings";
@@ -179,6 +180,13 @@ export default function HomePage() {
   // Decorative 3D/WebGL hero background layers (behind all content, reduced-motion aware)
   useEffect(() => initHero3D(), []);
 
+  // Trigger the hero headline scramble-in once mounted (reduced-motion aware inside ScrambleIn).
+  const [heroIn, setHeroIn] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setHeroIn(true), 120);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <div className="hr-landing" style={{ background: C.creamW, color: C.txt, fontFamily: sans, overflowX: "hidden" }}>
 
@@ -258,8 +266,10 @@ export default function HomePage() {
               <span className="hr-blink" style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold, display: "inline-block" }} />
               <span style={{ fontFamily: mono, fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", color: C.goldL }}>[ 10-layer cash flow intelligence ]</span>
             </div>
-            <h1 style={{ fontFamily: serif, fontSize: 50, lineHeight: 1.05, color: C.creamW, marginBottom: 20, letterSpacing: -1.5 }}>
-              Know your cash.<br /><em style={{ fontStyle: "normal", color: C.pale }}>Before</em> it matters.
+            <h1 aria-label="Know your cash. Before it matters." style={{ fontFamily: serif, fontSize: 50, lineHeight: 1.05, color: C.creamW, marginBottom: 20, letterSpacing: -1.5 }}>
+              <ScrambleIn text="Know your cash." start={heroIn} delay={120} /><br />
+              <em style={{ fontStyle: "normal", color: C.pale }}><ScrambleIn text="Before" start={heroIn} delay={440} /></em>{" "}
+              <ScrambleIn text="it matters." start={heroIn} delay={600} />
             </h1>
             <p style={{ fontFamily: sans, fontSize: 16, lineHeight: 1.65, color: "rgba(244,241,228,0.65)", marginBottom: 36, maxWidth: 420 }}>
               Headroom helps businesses forecast cash with more honesty, detect risk earlier, and access the right capital path when timing gets tight.
