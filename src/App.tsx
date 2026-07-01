@@ -6,6 +6,7 @@ import { AppProvider, useApp } from "@/context/AppContext";
 import { CapabilitiesProvider } from "@/context/CapabilitiesContext";
 import { Toaster } from "sonner";
 import Sidebar from "@/components/layout/Sidebar";
+import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { CommandPalette } from "@/components/CommandPalette";
 import UpsellGate from "@/components/UpsellGate";
@@ -230,7 +231,8 @@ function AppShell() {
         <PreviewBanner />
         <NotificationBell />
         <QuickCreate />
-        <main className="flex-1 px-5 py-5 md:p-6 overflow-auto">
+        <MobileBottomNav onOpenSearch={openPalette} />
+        <main className="flex-1 px-5 py-5 md:p-6 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-6 overflow-auto">
           <AppTopMeta />
           <InviteBanner />
           <ErrorBoundary>
