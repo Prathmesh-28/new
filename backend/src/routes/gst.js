@@ -1,53 +1,53 @@
 const router   = require("express").Router();
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
+// Real, ledger-backed GST figures (book_tax_entries) — replaces the fabricated
+// "50% of expenses" ITC proxy. gstr3b/gstr1 return per-head UPPERCASE keys (CGST/
+// SGST/IGST/CESS) in rupees; book_* tables are NOT RLS'd so plain calls are correct.
+const { gstr3b, gstr1 } = require("../modules/books/gst");
 
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
+const round2 = (x) => parseFloat((Number(x) || 0).toFixed(2));
+const sumHeads = (o) => round2((Number(o.CGST) || 0) + (Number(o.SGST) || 0) + (Number(o.IGST) || 0) + (Number(o.CESS) || 0));
+// Taxable outward turnover from GSTR-1 (books); best-effort so liability still returns if it errors.
+async function taxableTurnover(tenantId, period) {
+  try { const g1 = await gstr1(tenantId, period); return round2((g1.rows || []).reduce((s, r) => s + (Number(r.taxable) || 0), 0)); }
+  catch { return 0; }
+}
 
-// GET /api/gst/liability - compute current GSTR-3B fields from transactions
+
+// GET /api/gst/liability - GSTR-3B fields from the REAL ledger (book_tax_entries),
+// not a fabricated proxy. Output tax + eligible ITC are the actual per-head amounts
+// posted to the GL; taxable turnover from GSTR-1. If nothing is posted to the GL for
+// the period, figures are 0 (honest) — raising invoices/purchases through the books
+// populates them. Response keys are preserved exactly for the GST UI.
 router.get("/liability", authenticate, async (req, res) => {
-  const { month, year } = req.query;
-  const now  = new Date();
-  const m    = month ? parseInt(month) : now.getMonth() + 1;
-  const y    = year  ? parseInt(year)  : now.getFullYear();
-  const from = `${y}-${String(m).padStart(2, "0")}-01`;
-  const to   = `${y}-${String(m).padStart(2, "0")}-${new Date(y, m, 0).getDate()}`;
-
-  // Pull firm settings for GST rate
-  const { rows: kvRows } = await pool.query(
-    "SELECT value FROM kv_store WHERE tenant_id=$1 AND namespace='app' AND key='store' LIMIT 1",
-    [req.user.tenant_id]
-  );
-  const firm    = kvRows[0]?.value?.value?.firm ?? {};
-  const gstRate = parseFloat(firm.gstRate ?? 18) / 100;
-
-  // Pull transactions in period from KV store
-  const txns = (kvRows[0]?.value?.value?.transactions ?? []).filter(
-    t => t.date >= from && t.date <= to
-  );
-
-  const revenue  = txns.filter(t => t.amount > 0 && t.category === "revenue").reduce((s,t) => s+t.amount, 0);
-  const expenses = txns.filter(t => t.amount < 0 && ["expense","payroll","procurement"].includes(t.category)).reduce((s,t) => s+Math.abs(t.amount), 0);
-
-  const output_tax       = parseFloat((revenue * gstRate).toFixed(2));
-  const input_tax_credit = parseFloat((expenses * gstRate * 0.5).toFixed(2)); // proxy: ~50% of expenses are GST-eligible
-  const net_liability    = parseFloat(Math.max(0, output_tax - input_tax_credit).toFixed(2));
-
-  // Tax period breakdown (CGST + SGST for intrastate, IGST for interstate)
-  const breakdown = {
-    taxable_turnover: revenue,
-    output_cgst: parseFloat((output_tax / 2).toFixed(2)),
-    output_sgst: parseFloat((output_tax / 2).toFixed(2)),
-    output_igst: 0,
-    itc_cgst:    parseFloat((input_tax_credit / 2).toFixed(2)),
-    itc_sgst:    parseFloat((input_tax_credit / 2).toFixed(2)),
-    itc_igst:    0,
-    net_liability,
-  };
-
-  res.json({ month: m, year: y, output_tax, input_tax_credit, net_liability, breakdown });
+  const now = new Date();
+  const m   = req.query.month ? parseInt(req.query.month) : now.getMonth() + 1;
+  const y   = req.query.year  ? parseInt(req.query.year)  : now.getFullYear();
+  const period = `${y}-${String(m).padStart(2, "0")}`;
+  try {
+    const b3 = await gstr3b(req.user.tenant_id, period);
+    const output_tax       = sumHeads(b3.outputTax);
+    const input_tax_credit = sumHeads(b3.inputTaxCredit);
+    const net_liability    = round2(Math.max(0, output_tax - input_tax_credit)); // total-then-floor (matches prior semantics)
+    const breakdown = {
+      taxable_turnover: await taxableTurnover(req.user.tenant_id, period),
+      output_cgst: round2(b3.outputTax.CGST),
+      output_sgst: round2(b3.outputTax.SGST),
+      output_igst: round2(b3.outputTax.IGST),
+      itc_cgst:    round2(b3.inputTaxCredit.CGST),
+      itc_sgst:    round2(b3.inputTaxCredit.SGST),
+      itc_igst:    round2(b3.inputTaxCredit.IGST),
+      net_liability,
+    };
+    res.json({ month: m, year: y, output_tax, input_tax_credit, net_liability, breakdown, source: "books" });
+  } catch (e) {
+    require("../lib/logger").error("gst_liability_error", { msg: e.message });
+    res.status(500).json({ error: "Could not compute GST liability from the ledger." });
+  }
 });
 
 // GET /api/gst/returns - list all GST returns for tenant
@@ -64,33 +64,29 @@ router.post("/returns", authenticate, canWrite, async (req, res) => {
   const { return_type = "GSTR-3B", period_month, period_year } = req.body;
   if (!period_month || !period_year) return res.status(400).json({ error: "period_month and period_year required" });
 
-  const { rows: kvRows } = await pool.query(
-    "SELECT value FROM kv_store WHERE tenant_id=$1 AND namespace='app' AND key='store' LIMIT 1",
-    [req.user.tenant_id]
-  );
-  const firm    = kvRows[0]?.value?.value?.firm ?? {};
-  const gstRate = parseFloat(firm.gstRate ?? 18) / 100;
-
-  const from = `${period_year}-${String(period_month).padStart(2, "0")}-01`;
-  const to   = `${period_year}-${String(period_month).padStart(2, "0")}-${new Date(period_year, period_month, 0).getDate()}`;
-  const txns = (kvRows[0]?.value?.value?.transactions ?? []).filter(t => t.date >= from && t.date <= to);
-
-  const revenue  = txns.filter(t => t.amount > 0 && t.category === "revenue").reduce((s,t) => s+t.amount, 0);
-  const expenses = txns.filter(t => t.amount < 0).reduce((s,t) => s+Math.abs(t.amount), 0);
-  const output_tax       = parseFloat((revenue * gstRate).toFixed(2));
-  const input_tax_credit = parseFloat((expenses * gstRate * 0.5).toFixed(2));
-  const net_liability    = parseFloat(Math.max(0, output_tax - input_tax_credit).toFixed(2));
-  const computed_data    = { taxable_turnover: revenue, expense_base: expenses };
-
-  const { rows: [ret] } = await pool.query(
-    `INSERT INTO gst_returns(tenant_id, return_type, period_month, period_year, output_tax, input_tax_credit, net_liability, computed_data)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8)
-     ON CONFLICT(tenant_id, return_type, period_month, period_year)
-     DO UPDATE SET output_tax=$5, input_tax_credit=$6, net_liability=$7, computed_data=$8, status='draft'
-     RETURNING *`,
-    [req.user.tenant_id, return_type, period_month, period_year, output_tax, input_tax_credit, net_liability, JSON.stringify(computed_data)]
-  );
-  res.status(201).json(ret);
+  try {
+    const period = `${period_year}-${String(period_month).padStart(2, "0")}`;
+    const b3 = await gstr3b(req.user.tenant_id, period);
+    const output_tax       = sumHeads(b3.outputTax);
+    const input_tax_credit = sumHeads(b3.inputTaxCredit);
+    const net_liability    = round2(Math.max(0, output_tax - input_tax_credit));
+    const computed_data    = {
+      taxable_turnover: await taxableTurnover(req.user.tenant_id, period),
+      outputTax: b3.outputTax, inputTaxCredit: b3.inputTaxCredit, source: "books",
+    };
+    const { rows: [ret] } = await pool.query(
+      `INSERT INTO gst_returns(tenant_id, return_type, period_month, period_year, output_tax, input_tax_credit, net_liability, computed_data)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT(tenant_id, return_type, period_month, period_year)
+       DO UPDATE SET output_tax=$5, input_tax_credit=$6, net_liability=$7, computed_data=$8, status='draft'
+       RETURNING *`,
+      [req.user.tenant_id, return_type, period_month, period_year, output_tax, input_tax_credit, net_liability, JSON.stringify(computed_data)]
+    );
+    res.status(201).json(ret);
+  } catch (e) {
+    require("../lib/logger").error("gst_returns_error", { msg: e.message });
+    res.status(500).json({ error: "Could not compute the GST return from the ledger." });
+  }
 });
 
 // POST /api/gst/irn - generate IRN stub (delegates to Masters India GSP in production)
