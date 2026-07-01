@@ -144,6 +144,10 @@ router.post("/", async (req, res) => {
           [inv.id, inv.tenant_id]
         );
         require("../modules/flows/runner").emitEvent(inv.tenant_id, "invoice.paid", { invoice: { ...inv, status: "paid" } }).catch(() => {});
+        // Post the receipt to the GL server-side (books the SALES voucher first if needed, so
+        // the debtor nets to zero). Best-effort + idempotent on the payment id; never blocks
+        // the 200 that stops Razorpay retrying.
+        require("../lib/invoiceGl").postInvoiceReceipt(inv.tenant_id, inv, { amount: payment.amount / 100, ref: `rzp_${payment.id}`, idempotencyKey: `recv:rzp:${payment.id}` }).catch(() => {});
         // Invoice-financing wedge: if this invoice backs an active advance, auto-recover it (self-liquidating).
         require("../modules/lending").onInvoicePaid(inv.tenant_id, inv.id, { ref: `inv_${payment.id}` }).catch(() => {});
         // Create revenue transaction in KV store is done client-side via polling

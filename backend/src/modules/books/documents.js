@@ -335,4 +335,4 @@ async function postDocumentStock(tenantId, actorId, docId) {
   return { docKind, moved };
 }
 
-module.exports = { createDocument, convertDocument, cancelDocument, listDocuments, allocate, recordDeposit, createRecurring, runRecurringDue, runAllRecurring, postDocumentStock, bulkCreateInvoices, salesCtx, purchaseCtx, NEXT };
+module.exports = { createDocument, convertDocument, cancelDocument, listDocuments, allocate, recordDeposit, createRecurring, runRecurringDue, runAllRecurring, postDocumentStock, bulkCreateInvoices, salesCtx, purchaseCtx, resolvePartyLedgerByName, NEXT };

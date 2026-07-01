@@ -107,7 +107,12 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
     [status, req.params.id, req.user.tenant_id]
   );
   if (!inv) return res.status(404).json({ error: "Invoice not found" });
-  if (status === "paid") require("../modules/flows/runner").emitEvent(req.user.tenant_id, "invoice.paid", { invoice: inv }).catch(() => {});
+  if (status === "paid") {
+    require("../modules/flows/runner").emitEvent(req.user.tenant_id, "invoice.paid", { invoice: inv }).catch(() => {});
+    require("../lib/invoiceGl").postInvoiceReceipt(req.user.tenant_id, inv).catch(() => {}); // Dr Undeposited Funds / Cr Debtor (books the sale first if needed)
+  } else if (status === "sent") {
+    require("../lib/invoiceGl").postInvoiceSale(req.user.tenant_id, inv).catch(() => {}); // accrual: recognise revenue + output GST on issue
+  }
   res.json(inv);
 });
 
@@ -319,6 +324,7 @@ router.post("/:id/send", authenticate, canWrite, async (req, res) => {
   }).catch(() => {});
 
   await pool.query("UPDATE invoices SET status='sent' WHERE id=$1 AND tenant_id=$2", [inv.id, req.user.tenant_id]);
+  require("../lib/invoiceGl").postInvoiceSale(req.user.tenant_id, { ...inv, status: "sent" }).catch(() => {}); // accrual: Dr Debtor / Cr Sales + Output GST on issue
   res.json({ ok: true });
 });
 
