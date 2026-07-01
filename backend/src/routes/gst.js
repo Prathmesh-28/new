@@ -5,6 +5,8 @@ const { authenticate } = require("../middleware/auth");
 // "50% of expenses" ITC proxy. gstr3b/gstr1 return per-head UPPERCASE keys (CGST/
 // SGST/IGST/CESS) in rupees; book_* tables are NOT RLS'd so plain calls are correct.
 const { gstr3b, gstr1 } = require("../modules/books/gst");
+const einvoice = require("../modules/books/einvoice"); // real GSP/IRP e-invoice engine (no fake IRNs)
+const gsp = require("../modules/books/gsp");
 
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
@@ -89,27 +91,39 @@ router.post("/returns", authenticate, canWrite, async (req, res) => {
   }
 });
 
-// POST /api/gst/irn - generate IRN stub (delegates to Masters India GSP in production)
+// POST /api/gst/irn - generate a REAL e-invoice IRN via the shipped GSP/IRP engine.
+// No fake IRNs: the invoice must first have posted a SALES voucher (via /invoices/:id/send →
+// the invoice→GL bridge, which stamps idempotency key sale:inv:<id>). We enqueue that voucher
+// with the e-invoice engine, which registers the IRN when a GSP is configured, or honestly
+// parks it as PENDING_CONFIG otherwise. It NEVER fabricates a placeholder IRN.
 router.post("/irn", authenticate, canWrite, async (req, res) => {
   const { invoice_id } = req.body;
   if (!invoice_id) return res.status(400).json({ error: "invoice_id required" });
-
-  const { rows: [inv] } = await pool.query(
-    "SELECT * FROM invoices WHERE id=$1 AND tenant_id=$2",
-    [invoice_id, req.user.tenant_id]
-  );
-  if (!inv) return res.status(404).json({ error: "Invoice not found" });
-
-  // Production: call Masters India GSP API
-  // POST https://api.mastersindia.co/einvoice/generate
-  // For now: return demo IRN
-  if (process.env.MASTERS_INDIA_API_KEY) {
-    // TODO: real GSP call
+  try {
+    const { rows: [inv] } = await pool.query("SELECT id FROM invoices WHERE id=$1 AND tenant_id=$2", [invoice_id, req.user.tenant_id]);
+    if (!inv) return res.status(404).json({ error: "Invoice not found" });
+    // The SALES voucher the invoice→GL bridge posted for this invoice (if it was sent/paid).
+    const { rows: [v] } = await pool.query(
+      "SELECT id FROM book_vouchers WHERE tenant_id=$1 AND idempotency_key=$2 AND is_cancelled=false",
+      [req.user.tenant_id, `sale:inv:${invoice_id}`]
+    );
+    if (!v) {
+      return res.status(409).json({
+        error: "NO_VOUCHER",
+        message: "Send the invoice first — that posts its sales voucher to the ledger — then generate the e-invoice from it.",
+      });
+    }
+    const result = await einvoice.enqueue(req.user.tenant_id, v.id);
+    const configured = gsp.isConfigured();
+    res.status(202).json({
+      ...result,
+      configured,
+      note: configured ? undefined : "Queued. Connect a GSP/IRP (GSP_BASE_URL + GSP_API_KEY) to register the IRN; status will move from PENDING_CONFIG to REGISTERED.",
+    });
+  } catch (e) {
+    require("../lib/logger").error("gst_irn_error", { msg: e.message });
+    res.status(500).json({ error: "Could not queue the e-invoice." });
   }
-
-  const irn = `DEMO-IRN-${Date.now()}-${inv.invoice_number.replace(/[^A-Z0-9]/g, "")}`;
-  await pool.query("UPDATE invoices SET irn=$1 WHERE id=$2", [irn, inv.id]);
-  res.json({ irn, qr_code_url: null, demo: !process.env.MASTERS_INDIA_API_KEY });
 });
 
 // GET /api/gst/calendar - next 4 statutory due dates
