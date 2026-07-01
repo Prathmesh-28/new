@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSeo } from "@/lib/seo";
 import { Link } from "react-router-dom";
 import { useAuth, BASE } from "@/context/AuthContext";
-import { ArrowLeft, Wifi, WifiOff } from "lucide-react";
+import { ArrowLeft, Wifi, WifiOff, Lock, ShieldCheck, KeyRound } from "lucide-react";
 import type { AuthUser } from "@/data/types";
 import Logo from "@/components/Logo";
 import Turnstile, { turnstileEnabled } from "@/components/Turnstile";
@@ -91,7 +91,20 @@ export default function SignupPage() {
           ))}
         </div>
 
-        <p className="relative text-xs text-[var(--color-muted)]">Financial OS for lean Indian SMBs</p>
+        <div className="relative space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { icon: Lock,        label: "AES-256 encrypted" },
+              { icon: ShieldCheck, label: "MCA audit trail" },
+              { icon: KeyRound,    label: "DPDP data controls" },
+            ].map(({ icon: Icon, label }) => (
+              <span key={label} className="inline-flex items-center gap-1.5 text-[11px] text-[var(--color-muted)] border border-[var(--color-border)] rounded-full px-2.5 py-1">
+                <Icon size={12} className="text-[var(--color-primary)]" /> {label}
+              </span>
+            ))}
+          </div>
+          <p className="text-xs text-[var(--color-muted)]">Financial OS for lean Indian SMBs</p>
+        </div>
       </div>
 
       {/* Right panel - form */}
