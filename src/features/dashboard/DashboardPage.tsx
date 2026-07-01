@@ -2053,6 +2053,14 @@ export default function DashboardPage() {
                 className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                 <Upload size={12} /> Import CSV
               </button>
+              <button onClick={() => navigate("/invoices?compose=1")} disabled={isReadOnly} title={isReadOnly ? "Read-only in client view" : undefined}
+                className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-text)] px-3 py-1.5 rounded-lg font-semibold hover:bg-[var(--color-accent)] disabled:opacity-40 disabled:cursor-not-allowed">
+                <Plus size={12} /> New Invoice
+              </button>
+              <button onClick={() => navigate("/payments")} disabled={isReadOnly} title={isReadOnly ? "Read-only in client view" : undefined}
+                className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-text)] px-3 py-1.5 rounded-lg font-semibold hover:bg-[var(--color-accent)] disabled:opacity-40 disabled:cursor-not-allowed">
+                <Plus size={12} /> Record Payment
+              </button>
               <button onClick={() => setShowAddTx(true)}
                 disabled={isReadOnly} title={isReadOnly ? "Read-only in client view" : undefined}
                 className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">

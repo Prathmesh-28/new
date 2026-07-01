@@ -20,6 +20,7 @@ import HeadroomAssistant from "@/components/HeadroomAssistant";
 import AppLockGate from "@/components/AppLockGate";
 import InstallPrompt from "@/components/InstallPrompt";
 import NotificationBell from "@/components/NotificationBell";
+import QuickCreate from "@/components/QuickCreate";
 import { onAppResume } from "@/lib/mobile";
 import { onDeepLink } from "@/lib/native";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
@@ -228,6 +229,7 @@ function AppShell() {
         <ReadOnlyBanner />
         <PreviewBanner />
         <NotificationBell />
+        <QuickCreate />
         <main className="flex-1 px-5 py-5 md:p-6 overflow-auto">
           <AppTopMeta />
           <InviteBanner />
