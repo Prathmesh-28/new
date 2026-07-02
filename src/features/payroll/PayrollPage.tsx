@@ -13,6 +13,7 @@ import BulkUpload from "@/components/BulkUpload";
 import ExportMenu from "@/components/ExportMenu";
 import SharedEmptyState from "@/components/EmptyState";
 import AiInsight from "@/components/ai/AiInsight";
+import { useT } from "@/i18n";
 
 // Roles allowed to write payroll/HRMS data - mirrors the backend hrms WRITE_ROLES gate.
 const PAYROLL_WRITE_ROLES = new Set(["super_admin", "owner", "finance_manager"]);
@@ -163,6 +164,7 @@ function AddEmployeeModal({ onClose, onAdded }: { onClose: () => void; onAdded: 
 
 export default function PayrollPage() {
   const now = new Date();
+  const tr = useT();
   const { store, currentRole } = useApp();
   const canWrite = PAYROLL_WRITE_ROLES.has(currentRole);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -252,13 +254,13 @@ export default function PayrollPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold">Payroll</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">TDS auto-computed · first-class forecast outflow</p>
+          <h1 className="text-xl font-bold">{tr("payroll.title")}</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("payroll.subtitle")}</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => setShowAdd(true)}
             className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] font-medium px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">
-            <Plus size={12} /> Add Employee
+            <Plus size={12} /> {tr("payroll.addEmployee")}
           </button>
           <BulkUpload
             title="Bulk upload employees"
@@ -296,9 +298,9 @@ export default function PayrollPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Active employees", value: employees.filter(e => e.status === "active").length.toString(), color: "text-[var(--color-text)]" },
-          { label: "Gross monthly",    value: formatCurrency(totalMonthly),                                    color: "text-[var(--color-primary)]" },
-          { label: "TDS monthly",      value: formatCurrency(totalTds),                                        color: "text-orange-400" },
+          { label: tr("payroll.card.activeEmployees"), value: employees.filter(e => e.status === "active").length.toString(), color: "text-[var(--color-text)]" },
+          { label: tr("payroll.card.grossMonthly"),    value: formatCurrency(totalMonthly),                                    color: "text-[var(--color-primary)]" },
+          { label: tr("payroll.card.tdsMonthly"),      value: formatCurrency(totalTds),                                        color: "text-orange-400" },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
@@ -336,14 +338,14 @@ export default function PayrollPage() {
       <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as typeof tab)} tabs={([["employees", `Employees (${employees.length})`, Users], ["runs", `Payroll runs (${runs.length})`, Play], ["ewa", "EWA", Banknote], ["slips", "Salary Slips", FileText], ["form16", "Form 16", FileCheck], ["ecr", "PF ECR", Download], ["labor", "ESI / Bonus", CheckCircle2], ["fnf", "F&F Settlement", FileText], ["variance", "Variance", Building2], ["pt", "Prof. Tax", ShieldCheck], ["flexi", "Flexi Benefits", Banknote], ["lwf", "LWF", ShieldCheck], ["offer", "Offer Letter", FileText], ["esop", "ESOP Pool", TrendingUp], ["ctc", "CTC Optimizer", Wallet], ["attendance", "Attendance", CalendarDays], ["gratuity", "Gratuity", PiggyBank], ["reimburse", "Reimbursements", Receipt], ["tds192", "TDS u/s 192", Percent], ["bonus", "Bonus Accrual", Sparkles], ["contractor", "Contractor Payouts", Briefcase], ["benchmark", "Salary Benchmark", BarChart3], ["appraisal", "Appraisal Planner", TrendingUp], ["journal", "Payroll Journal", BookOpen], ["headcount", "Headcount Cost", UsersRound], ["liability", "Statutory Liability", ShieldCheck], ["portal", "Payslip Portal", Send], ["overtime", "Overtime & Shift", Timer], ["leave-encash", "Leave Encashment", Plane], ["notice", "Notice Recovery", LogOut], ["advance", "Salary Advance", HandCoins], ["nps", "NPS Optimizer", Landmark], ["minwage", "Min-Wage Check", Scale], ["maternity", "Maternity Benefit", Baby], ["roi", "People ROI", Target], ["takehome", "Take-Home Breakup", Calculator], ["attrition-cost", "Attrition Cost", UserMinus], ["incentive", "Incentive Engine", Coins], ["superann", "Superannuation", Sun], ["gpa", "Group Insurance", Umbrella], ["pf-challan", "PF / ESI Challan", ClipboardList], ["register", "Payroll Register", FileSpreadsheet], ["penalty", "Penalty Predictor", Gauge], ["lwp", "LWP Impact", CalendarClock]] as const).map(([id, label, icon]) => ({ id, label, icon }))} />
 
       {loading ? (
-        <div className="py-12 text-center text-sm text-[var(--color-muted)]">Loading…</div>
+        <div className="py-12 text-center text-sm text-[var(--color-muted)]">{tr("payroll.loading")}</div>
       ) : tab === "employees" ? (
         employees.length === 0 ? (
           <SharedEmptyState
             icon={Users}
-            title="No employees yet"
-            description="Add your team members to capture their salary, then run payroll to compute TDS, PF and net pay each month."
-            ctaText="Add employee"
+            title={tr("payroll.empty.title")}
+            description={tr("payroll.empty.description")}
+            ctaText={tr("payroll.empty.cta")}
             onCta={() => setShowAdd(true)}
           />
         ) : (

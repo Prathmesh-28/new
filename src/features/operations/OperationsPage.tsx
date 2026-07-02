@@ -22,6 +22,7 @@ import { api } from "@/lib/api";
 import { detectAnomalies, type Anomaly } from "@/lib/anomalies";
 import EmptyState from "@/components/EmptyState";
 import AiInsight from "@/components/ai/AiInsight";
+import { useT } from "@/i18n";
 
 type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom" | "leadtime" | "reorder" | "payables"
   | "stockledger" | "batchtrack" | "jobwork" | "production" | "warehouse" | "stocktake" | "dispatch"
@@ -88,6 +89,7 @@ function checkAtp(order: Order, inventory: InventoryItem[]): AtpResult {
 }
 
 export default function OperationsPage() {
+  const tr = useT();
   const { store, addOrder, updateOrder, deleteOrder, addInventoryItem, deleteInventoryItem, addProcurement, updateProcurement } = useApp();
   const { orders, inventory, procurement, transactions } = store;
   const [tab, setTab] = useState<Tab>("overview");
@@ -173,8 +175,8 @@ export default function OperationsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Operations Hub</h1>
-          <p className="text-sm text-[var(--color-muted)] mt-0.5">Orders · Inventory · Procurement · Anomaly Radar</p>
+          <h1 className="text-xl font-bold">{tr("ops.title")}</h1>
+          <p className="text-sm text-[var(--color-muted)] mt-0.5">{tr("ops.subtitle")}</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 text-xs text-green-400 bg-green-900/20 border border-green-800/30 px-2.5 py-1.5 rounded-lg">
@@ -185,14 +187,14 @@ export default function OperationsPage() {
 
       {/* Tabs */}
       <TabStrip active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
-          ["overview",      "Overview",     null],
-          ["orders",        "Orders",       pendingOrders > 0 ? pendingOrders : null],
-          ["inventory",     "Inventory",    lowStockItems.length > 0 ? lowStockItems.length : null],
-          ["procurement",   "Procurement",  null],
-          ["intelligence",  "Anomaly Radar", null],
-          ["prices",        "Price List",    null],
-          ["bom",           "BOM Costing",   null],
-          ["leadtime",      "Lead Time",     null],
+          ["overview",      tr("ops.tab.overview"),     null],
+          ["orders",        tr("ops.tab.orders"),       pendingOrders > 0 ? pendingOrders : null],
+          ["inventory",     tr("ops.tab.inventory"),    lowStockItems.length > 0 ? lowStockItems.length : null],
+          ["procurement",   tr("ops.tab.procurement"),  null],
+          ["intelligence",  tr("ops.tab.intelligence"), null],
+          ["prices",        tr("ops.tab.prices"),    null],
+          ["bom",           tr("ops.tab.bom"),   null],
+          ["leadtime",      tr("ops.tab.leadtime"),     null],
           ["reorder",       "Reorder Alert", null],
           ["payables",      "Aged Payables", null],
           ["stockledger",   "Stock Ledger",  null],
@@ -226,10 +228,10 @@ export default function OperationsPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              { label: "Total Order Value",    value: formatCurrency(totalOrderValue),   icon: ShoppingCart,   color: "text-[var(--color-primary)]" },
-              { label: "Pending Orders",       value: pendingOrders.toString(),          icon: Clock,          color: "text-yellow-400" },
-              { label: "Inventory Value",      value: formatCurrency(totalInventoryVal), icon: Package,        color: "text-blue-400" },
-              { label: "Low Stock Alerts",     value: lowStockItems.length.toString(),   icon: AlertTriangle,  color: "text-red-400" },
+              { label: tr("ops.card.orderValue"),    value: formatCurrency(totalOrderValue),   icon: ShoppingCart,   color: "text-[var(--color-primary)]" },
+              { label: tr("ops.card.pendingOrders"),       value: pendingOrders.toString(),          icon: Clock,          color: "text-yellow-400" },
+              { label: tr("ops.card.inventoryValue"),      value: formatCurrency(totalInventoryVal), icon: Package,        color: "text-blue-400" },
+              { label: tr("ops.card.lowStock"),     value: lowStockItems.length.toString(),   icon: AlertTriangle,  color: "text-red-400" },
             ].map(({ label, value, icon: Icon, color }) => (
               <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
@@ -330,7 +332,7 @@ export default function OperationsPage() {
             <p className="text-sm text-[var(--color-muted)]">{orders.length} total orders</p>
             <button onClick={() => setShowOrderForm(v => !v)}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
-              <Plus size={12} /> Add Order
+              <Plus size={12} /> {tr("ops.action.addOrder")}
             </button>
           </div>
 
@@ -370,9 +372,9 @@ export default function OperationsPage() {
           {orders.length === 0 ? (
             <EmptyState
               icon={ShoppingCart}
-              title="No orders yet"
-              description="Capture your first sales order manually, or connect WhatsApp/email to pull orders in automatically."
-              ctaText="Add your first order"
+              title={tr("ops.empty.title")}
+              description={tr("ops.empty.desc")}
+              ctaText={tr("ops.empty.cta")}
               onCta={() => setShowOrderForm(true)}
             />
           ) : (

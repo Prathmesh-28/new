@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/i18n";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import EmptyState from "@/components/EmptyState";
@@ -231,6 +232,7 @@ function EmptyRow({ cols, text }: { cols: number; text: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function HrmsPage() {
   const { user } = useAuth();
+  const tr = useT();
   const canWrite = WRITE_ROLES.has(user?.role ?? "");
 
   const [tab, setTab] = useState<TabId>("employees");
@@ -249,11 +251,11 @@ export default function HrmsPage() {
   useEffect(() => { void loadEmployees(); }, [loadEmployees]);
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-    { id: "employees",  label: "Employees",  icon: <Users size={14} /> },
-    { id: "attendance", label: "Attendance", icon: <CalendarCheck size={14} /> },
-    { id: "leave",      label: "Leave",      icon: <Plane size={14} /> },
-    { id: "structures", label: "Salary structures", icon: <Layers size={14} /> },
-    { id: "payroll",    label: "Payroll",    icon: <Wallet size={14} /> },
+    { id: "employees",  label: tr("hr.tab.employees"),  icon: <Users size={14} /> },
+    { id: "attendance", label: tr("hr.tab.attendance"), icon: <CalendarCheck size={14} /> },
+    { id: "leave",      label: tr("hr.tab.leave"),      icon: <Plane size={14} /> },
+    { id: "structures", label: tr("hr.tab.structures"), icon: <Layers size={14} /> },
+    { id: "payroll",    label: tr("hr.tab.payroll"),    icon: <Wallet size={14} /> },
   ];
 
   return (
@@ -261,10 +263,10 @@ export default function HrmsPage() {
       <div className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 sm:px-6 py-4">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <Users size={20} className="text-[var(--color-primary)]" />
-          HRMS - people &amp; payroll
+          {tr("hr.title")}
         </h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
-          Component-based salary structures · attendance-driven LOP · PF/ESI/PT statutory · payroll posted to your books
+          {tr("hr.subtitle")}
         </p>
       </div>
 
@@ -301,6 +303,7 @@ export default function HrmsPage() {
 function EmployeesTab({ loading, employees, canWrite, onReload }: {
   loading: boolean; employees: Employee[]; canWrite: boolean; onReload: () => Promise<void>;
 }) {
+  const tr = useT();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -343,7 +346,7 @@ function EmployeesTab({ loading, employees, canWrite, onReload }: {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-sm text-[var(--color-muted)] tabular-nums">{employees.length} employee{employees.length === 1 ? "" : "s"}</p>
-        {canWrite && <button type="button" onClick={() => setOpen((o) => !o)} className={btnPrimary}><UserPlus size={14} /> Add employee</button>}
+        {canWrite && <button type="button" onClick={() => setOpen((o) => !o)} className={btnPrimary}><UserPlus size={14} /> {tr("hr.addEmployee")}</button>}
       </div>
 
       {open && canWrite && (
@@ -367,9 +370,9 @@ function EmployeesTab({ loading, employees, canWrite, onReload }: {
       {!loading && employees.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="No employees yet"
-          description="Add your first employee to start tracking attendance, leave and payroll - or bulk-upload your whole team at once via /api/hrms/employees/bulk."
-          ctaText={canWrite ? "Add an employee" : undefined}
+          title={tr("hr.empty.title")}
+          description={tr("hr.empty.desc")}
+          ctaText={canWrite ? tr("hr.empty.cta") : undefined}
           onCta={canWrite ? () => setOpen(true) : undefined}
         />
       ) : (

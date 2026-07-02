@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount, generateId } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -380,6 +381,7 @@ function apAgingBucket(daysOverdue: number): AgingBucket {
 }
 
 export default function VendorsPage() {
+  const tr = useT();
   const { store } = useApp();
   const { transactions } = store;
   const [view, setView] = useState<"directory" | "bills" | "aging" | "msme" | "po" | "three-way" | "vendor-tds" | "kyc-vault" | "early-pay" | "pay-run" | "spend-analysis" | "dup-vendor" | "requisition" | "vendor-score" | "rfq" | "advances" | "debit-notes" | "pay-forecast" | "blanket-po" | "concentration" | "stmt-recon" | "msme-interest" | "savings" | "form16a" | "rebate" | "watchlist" | "pay-mode" | "recurring-bills" | "landed-cost" | "dup-invoice" | "approval-sla" | "wc-simulator">("directory");
@@ -560,17 +562,17 @@ export default function VendorsPage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold">Vendors</h1>
+          <h1 className="text-xl font-bold">{tr("vend.title")}</h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">{master.length} saved profile{master.length !== 1 ? "s" : ""} · spend derived from {transactions.filter(t=>t.amount<0&&t.counterparty).length} expense transactions</p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
           {([
-            ["directory", "Directory", Package],
-            ["bills", "Bills / Payables", Banknote],
-            ["aging", "AP Aging", Clock],
-            ["msme", "MSME 45-Day", ShieldAlert],
-            ["po", "Purchase Orders", ClipboardList],
-            ["three-way", "3-Way Match", GitCompareArrows],
+            ["directory", tr("vend.tab.directory"), Package],
+            ["bills", tr("vend.tab.bills"), Banknote],
+            ["aging", tr("vend.tab.aging"), Clock],
+            ["msme", tr("vend.tab.msme"), ShieldAlert],
+            ["po", tr("vend.tab.po"), ClipboardList],
+            ["three-way", tr("vend.tab.threeWay"), GitCompareArrows],
             ["vendor-tds", "Vendor TDS Ledger", Receipt],
             ["kyc-vault", "Onboarding / KYC", Contact],
             ["early-pay", "Early-Pay Discount", Percent],
@@ -642,9 +644,9 @@ export default function VendorsPage() {
         <>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Total Vendors",      value: vendors.length.toString(),         color: "text-[var(--color-primary)]" },
-              { label: "Total Spend",        value: formatAmount(totalSpend),           color: "text-red-400" },
-              { label: "This Month Spend",   value: formatAmount(thisMSpend),           color: "text-orange-400" },
+              { label: tr("vend.stat.totalVendors"),  value: vendors.length.toString(),         color: "text-[var(--color-primary)]" },
+              { label: tr("vend.stat.totalSpend"),    value: formatAmount(totalSpend),           color: "text-red-400" },
+              { label: tr("vend.stat.thisMonth"),     value: formatAmount(thisMSpend),           color: "text-orange-400" },
             ].map(s => (
               <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                 <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
@@ -670,7 +672,7 @@ export default function VendorsPage() {
             </div>
             <button onClick={() => setProfileEdit({ record: null })}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90 ml-auto shrink-0">
-              <Plus size={13} /> Add Vendor
+              <Plus size={13} /> {tr("vend.addVendor")}
             </button>
           </div>
 
@@ -721,20 +723,20 @@ export default function VendorsPage() {
             masterLoading ? (
               <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
                 <Package size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-                <p className="text-sm text-[var(--color-muted)]">Loading vendor directory…</p>
+                <p className="text-sm text-[var(--color-muted)]">{tr("vend.loading")}</p>
               </div>
             ) : vendors.length === 0 ? (
               <EmptyState
                 icon={Building2}
-                title="No vendors yet"
-                description="Add your first vendor to track spend, payment terms, GSTIN and MSME status - or import your expense transactions to auto-build the directory."
-                ctaText="Add a vendor"
+                title={tr("vend.empty.title")}
+                description={tr("vend.empty.desc")}
+                ctaText={tr("vend.empty.cta")}
                 onCta={() => setProfileEdit({ record: null })}
               />
             ) : (
               <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
                 <Search size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-                <p className="text-sm text-[var(--color-muted)]">No vendors match your search or filter.</p>
+                <p className="text-sm text-[var(--color-muted)]">{tr("vend.noMatch")}</p>
               </div>
             )
           ) : (
