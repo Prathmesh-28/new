@@ -238,6 +238,9 @@ function NavItems({ groups, collapsed, onNavigate, badges, expanded, onToggleGro
   onToggleGroup: (label: string) => void;
   lockedPlan: (tab: string) => PlanTier | null;
 }) {
+  // Nav labels are translated at render (key = the English label, gettext-style); the
+  // catalog keeps the English label as its stable identity for expand/collapse state.
+  const t = useT();
   return (
     <>
       {groups.map(group => {
@@ -252,7 +255,7 @@ function NavItems({ groups, collapsed, onNavigate, badges, expanded, onToggleGro
                 className="w-full flex items-center gap-1 px-2 mb-1 mt-1 text-[10px] font-semibold text-[var(--color-muted)]/50 uppercase tracking-widest select-none hover:text-[var(--color-muted)] transition-colors"
               >
                 <ChevronDown size={11} className={cn("transition-transform shrink-0", !isOpen && "-rotate-90")} />
-                <span className="flex-1 text-left">{group.label}</span>
+                <span className="flex-1 text-left">{t(group.label)}</span>
                 <span className="font-sans normal-case tracking-normal text-[var(--color-muted)]/40">{group.items.length}</span>
               </button>
             )}
@@ -266,7 +269,7 @@ function NavItems({ groups, collapsed, onNavigate, badges, expanded, onToggleGro
                       key={to}
                       to={to}
                       end={tab === "dashboard"}
-                      title={collapsed ? label : undefined}
+                      title={collapsed ? t(label) : undefined}
                       onClick={onNavigate}
                       className={({ isActive }) => cn(
                         "flex items-center gap-2.5 px-2 py-2 rounded-md text-sm font-medium transition-colors",
@@ -285,7 +288,7 @@ function NavItems({ groups, collapsed, onNavigate, badges, expanded, onToggleGro
                           </span>
                         )}
                       </div>
-                      {!collapsed && <span className="flex-1 truncate">{label}</span>}
+                      {!collapsed && <span className="flex-1 truncate">{t(label)}</span>}
                       {!collapsed && lock && (
                         <span title={`Upgrade to ${PLAN_LABEL[lock]}`} className="flex items-center gap-0.5 text-[8px] font-bold uppercase tracking-wide bg-[var(--color-primary)]/15 text-[var(--color-primary)] px-1.5 py-0.5 rounded-full shrink-0">
                           <Lock size={8} /> {PLAN_LABEL[lock]}
