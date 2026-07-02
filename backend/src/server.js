@@ -495,6 +495,13 @@ initDb()
     cron.schedule("0 2 * * *", () => {
       require("./modules/books/documents").runAllRecurring().catch(err => console.error("[books-recurring]", err.message));
     }, { timezone: "UTC" });
+    // Lending: daily loan servicing (DPD refresh, NPA classification, penal-interest accrual)
+    // at 08:00 IST (02:30 UTC), after recurring docs post.
+    cron.schedule("30 2 * * *", () => {
+      require("./modules/lending/servicing").runServicingDue()
+        .then(r => { if (r && r.serviced) console.log(`[lending-servicing] serviced ${r.serviced} loan(s), ${r.penalPosted} penal accrual(s)`); })
+        .catch(err => console.error("[lending-servicing]", err.message));
+    }, { timezone: "UTC" });
     // Books: durable e-invoice worker (registers QUEUED vouchers with the GSP).
     require("./modules/books/einvoice").startWorker();
     // SMB agents: run scheduled (daily/weekly) agents each hour - read-only autonomous runs.

@@ -307,4 +307,5 @@ module.exports = {
   createOffer, listOffers, getOffer, acceptOffer, declineOffer,
   getLoan, listLoans, recordRepayment, onInvoicePaid,
   amortize, bullet, buildKFS, dpdBucket, // pure helpers exported for tests
+  ledgerByName, firstBankLedger, ensureByNature, // GL helpers reused by servicing.js
 };

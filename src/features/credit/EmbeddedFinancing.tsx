@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
-import { Loader2, Zap, FileText, Check, Banknote } from "lucide-react";
+import { Loader2, Zap, FileText, Check, Banknote, Scale } from "lucide-react";
 
 // Wired to /api/lending - the real LOS/LMS + invoice-financing wedge (vs. the other
 // tabs on this page which are local calculators). Disbursal/e-NACH are gated; the
@@ -11,12 +11,16 @@ interface Eligibility { limit: number; grade: string; score: number; decision: s
 interface KFS { net_disbursal: number; total_repayable: number; all_in_cost: number; annual_interest_rate_pct: number; installments: number; recovery?: string }
 interface Offer { id: string; kind: string; principal: number; processing_fee: number; apr: number; status: string; kfs: KFS }
 interface ScheduleRow { installment_no: number; due_date: string; total_due: number; status: string }
-interface Loan { id: string; kind: string; principal: number; outstanding_principal: number; status: string; dpd_bucket?: string; schedule?: ScheduleRow[] }
+interface Loan { id: string; kind: string; principal: number; outstanding_principal: number; status: string; dpd_bucket?: string; asset_class?: string; dpd?: number; penal_accrued?: number; settled_at?: string; schedule?: ScheduleRow[] }
+interface Servicing { active: number; byClass: { standard: number; overdue: number; npa: number }; overdueAmount: number; npaAmount: number; penalAccrued: number; outstanding: number }
 
 export default function EmbeddedFinancing() {
   const [elig, setElig] = useState<Eligibility | null>(null);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
+  const [svc, setSvc] = useState<Servicing | null>(null);
+  const [settling, setSettling] = useState<string | null>(null);
+  const [settleAmt, setSettleAmt] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [kind, setKind] = useState<"invoice_finance" | "working_capital">("invoice_finance");
@@ -25,12 +29,13 @@ export default function EmbeddedFinancing() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [e, o, l] = await Promise.all([
+      const [e, o, l, s] = await Promise.all([
         api.get<Eligibility>("/api/lending/eligibility").catch(() => null),
         api.get<Offer[]>("/api/lending/offers").catch(() => []),
         api.get<Loan[]>("/api/lending/loans").catch(() => []),
+        api.get<Servicing>("/api/lending/servicing").catch(() => null),
       ]);
-      setElig(e); setOffers(o || []); setLoans(l || []);
+      setElig(e); setOffers(o || []); setLoans(l || []); setSvc(s);
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -55,6 +60,13 @@ export default function EmbeddedFinancing() {
     finally { setBusy(false); }
   };
 
+  const settle = async (id: string) => {
+    const amt = parseFloat(settleAmt);
+    if (!(amt >= 0)) { toast.error("Enter a settlement amount"); return; }
+    await act(() => api.post(`/api/lending/loans/${id}/settle`, { settlement_amount: amt }), "Loan settled");
+    setSettling(null); setSettleAmt("");
+  };
+
   if (loading) return <p className="text-sm text-[var(--color-muted)] flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Loading…</p>;
 
   const railsLive = elig?.rails?.disbursal;
@@ -71,6 +83,19 @@ export default function EmbeddedFinancing() {
           {railsLive ? "Disbursal rails: Live" : "Disbursal: Preview (connect a gateway)"}
         </span>
       </div>
+
+      {/* Portfolio health (servicing): DPD / NPA / penal — only when it matters */}
+      {svc && svc.active > 0 && (svc.byClass.overdue + svc.byClass.npa > 0 || svc.penalAccrued > 0) && (
+        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          <p className="text-xs font-semibold mb-3 flex items-center gap-1.5"><Scale size={13} className="text-[var(--color-primary)]" /> Portfolio health</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <KfsCell label="Overdue" v={`${svc.byClass.overdue} · ${formatCurrency(svc.overdueAmount)}`} />
+            <KfsCell label="NPA (90+ DPD)" v={`${svc.byClass.npa} · ${formatCurrency(svc.npaAmount)}`} />
+            <KfsCell label="Penal accrued" v={formatCurrency(svc.penalAccrued)} />
+            <KfsCell label="Total outstanding" v={formatCurrency(svc.outstanding)} />
+          </div>
+        </div>
+      )}
 
       {/* Get an offer */}
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 space-y-3">
@@ -119,18 +144,37 @@ export default function EmbeddedFinancing() {
       {/* Active loans */}
       <div className="space-y-2">
         <p className="text-[11px] uppercase tracking-wide text-[var(--color-muted)] flex items-center gap-1.5"><Banknote size={12} /> Loans</p>
-        {loans.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No loans yet - accept an offer above.</p> : loans.map(l => (
-          <div key={l.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <p className="text-sm font-semibold">{l.kind === "invoice_finance" ? "Invoice advance" : "Working capital"} · {formatCurrency(l.principal)}</p>
-              <p className="text-xs text-[var(--color-muted)]">Outstanding {formatCurrency(l.outstanding_principal)} · {l.status}{l.dpd_bucket && l.dpd_bucket !== "current" ? ` · DPD ${l.dpd_bucket}` : ""}</p>
+        {loans.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No loans yet - accept an offer above.</p> : loans.map(l => {
+          const cls = l.asset_class || "standard";
+          const clsColor = cls === "npa" ? "bg-red-900/30 text-red-400" : "bg-amber-900/30 text-amber-400";
+          return (
+          <div key={l.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  {l.kind === "invoice_finance" ? "Invoice advance" : "Working capital"} · {formatCurrency(l.principal)}
+                  {l.status === "active" && cls !== "standard" && <span className={`text-[10px] px-2 py-0.5 rounded-full ${clsColor}`}>{cls === "npa" ? "NPA" : "Overdue"}{l.dpd ? ` · ${l.dpd} DPD` : ""}</span>}
+                </p>
+                <p className="text-xs text-[var(--color-muted)]">Outstanding {formatCurrency(l.outstanding_principal)} · {l.status}{l.penal_accrued && l.penal_accrued > 0 ? ` · penal ${formatCurrency(l.penal_accrued)}` : ""}</p>
+              </div>
+              {l.status === "active" && (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => act(() => api.post(`/api/lending/loans/${l.id}/repay`, { amount: l.outstanding_principal, method: "manual" }), "Repayment recorded")} disabled={busy} className="text-xs px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]">Record repayment</button>
+                  {cls !== "standard" && <button onClick={() => { setSettling(settling === l.id ? null : l.id); setSettleAmt(String(l.outstanding_principal)); }} disabled={busy} className="text-xs px-3 py-1.5 rounded-lg border border-amber-800/40 text-amber-400 hover:bg-amber-900/10">Settle</button>}
+                </div>
+              )}
+              {l.status === "closed" && <span className="text-xs text-green-400">{l.settled_at ? "Settled" : "Closed"}</span>}
             </div>
-            {l.status === "active" && (
-              <button onClick={() => act(() => api.post(`/api/lending/loans/${l.id}/repay`, { amount: l.outstanding_principal, method: "manual" }), "Repayment recorded")} disabled={busy} className="text-xs px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]">Record repayment</button>
+            {settling === l.id && (
+              <div className="mt-3 flex items-center gap-2 border-t border-[var(--color-border)] pt-3 flex-wrap">
+                <input value={settleAmt} onChange={e => setSettleAmt(e.target.value)} type="number" placeholder="Settlement amount ₹" className="flex-1 min-w-[140px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" />
+                <span className="text-[11px] text-[var(--color-muted)]">Waiver {formatCurrency(Math.max(0, l.outstanding_principal - (parseFloat(settleAmt) || 0)))} → income</span>
+                <button onClick={() => settle(l.id)} disabled={busy} className="text-xs px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold">Confirm settlement</button>
+              </div>
             )}
-            {l.status === "closed" && <span className="text-xs text-green-400">Closed</span>}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

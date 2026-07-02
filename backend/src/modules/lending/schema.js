@@ -40,6 +40,14 @@ CREATE TABLE IF NOT EXISTS loans (
   disbursed_at         TIMESTAMPTZ,
   due_date             DATE,
   disbursal_voucher_id UUID,
+  -- Servicing lifecycle (migration 0011): DPD cache, asset classification, penal accrual.
+  dpd                   INT           NOT NULL DEFAULT 0,
+  asset_class           TEXT          NOT NULL DEFAULT 'standard',  -- standard | overdue | npa
+  dpd_updated_on        DATE,
+  penal_rate_pct        NUMERIC(6,2)  NOT NULL DEFAULT 24,
+  penal_accrued         NUMERIC(15,2) NOT NULL DEFAULT 0,
+  penal_last_accrued_on DATE,
+  settled_at            TIMESTAMPTZ,
   created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_loans_tenant ON loans(tenant_id, created_at DESC);
@@ -73,6 +81,31 @@ CREATE TABLE IF NOT EXISTS loan_repayments (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_loan_repayments_ref ON loan_repayments(ref) WHERE ref IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_loan_repayments_loan ON loan_repayments(loan_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS loan_settlements (
+  id                UUID PRIMARY KEY DEFAULT collab_uuidv7(),
+  loan_id           UUID NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
+  tenant_id         TEXT NOT NULL,
+  settlement_amount NUMERIC(15,2) NOT NULL DEFAULT 0,
+  waiver_amount     NUMERIC(15,2) NOT NULL DEFAULT 0,
+  gl_voucher_id     UUID,
+  note              TEXT,
+  created_by        UUID,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_loan_settlements_loan ON loan_settlements(loan_id);
+
+CREATE TABLE IF NOT EXISTS loan_servicing_events (
+  id           UUID PRIMARY KEY DEFAULT collab_uuidv7(),
+  loan_id      UUID NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
+  tenant_id    TEXT NOT NULL,
+  as_of        DATE NOT NULL,
+  dpd          INT NOT NULL DEFAULT 0,
+  asset_class  TEXT NOT NULL,
+  penal_charge NUMERIC(15,2) NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_loan_servicing_events_loan ON loan_servicing_events(loan_id, as_of DESC);
 `;
 
 module.exports = { LENDING_SCHEMA };

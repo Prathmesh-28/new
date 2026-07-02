@@ -5,6 +5,7 @@
 const router = require("express").Router();
 const { authenticate } = require("../../middleware/auth");
 const lending = require("./index");
+const servicing = require("./servicing");
 let capabilities; try { capabilities = require("../../routes/capabilities").capabilities; } catch { capabilities = () => ({}); }
 
 router.use(authenticate);
@@ -57,6 +58,20 @@ router.get("/loans/:id", async (req, res) => {
 });
 router.post("/loans/:id/repay", canWrite, async (req, res) => {
   try { res.json(await lending.recordRepayment(tenantOf(req), req.params.id, { amount: req.body?.amount, method: req.body?.method, ref: req.body?.ref, actorId: req.user.id })); } catch (e) { fail(res, e); }
+});
+
+// ── Servicing (LMS depth): DPD/NPA, penal interest, settlements ────────────────
+// Portfolio book health (DPD/NPA distribution, overdue + penal totals).
+router.get("/servicing", async (req, res) => {
+  try { res.json(await servicing.portfolioSummary(tenantOf(req))); } catch (e) { fail(res, e); }
+});
+// Manually run the servicing pass for this tenant (the daily cron does it automatically).
+router.post("/servicing/run", canWrite, async (req, res) => {
+  try { res.json(await servicing.runServicing(tenantOf(req))); } catch (e) { fail(res, e); }
+});
+// Settle/waive a loan (borrower pays part, lender forgives the rest of the principal).
+router.post("/loans/:id/settle", canWrite, async (req, res) => {
+  try { res.json(await servicing.settleLoan(tenantOf(req), req.params.id, { settlementAmount: req.body?.settlement_amount, note: req.body?.note, actorId: req.user.id })); } catch (e) { fail(res, e); }
 });
 
 module.exports = router;
