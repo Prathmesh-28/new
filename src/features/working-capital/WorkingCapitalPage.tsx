@@ -10,12 +10,14 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineCh
 import { toast } from "sonner";
 import { format } from "date-fns";
 import AiInsight from "@/components/ai/AiInsight";
+import { useT } from "@/i18n";
 
 const BUCKET_COLORS = ["#22c55e", "#eab308", "#f97316", "#ef4444", "#b91c1c"];
 
 export default function WorkingCapitalPage() {
   const { store } = useApp();
   const navigate = useNavigate();
+  const tr = useT();
   const [wcTab, setWcTab] = useState<"overview" | "ccc-dashboard" | "inventory-optimizer" | "payables-stretch" | "od-cc-utilisation" | "wc-gap-funding" | "trade-cycle-target" | "dynamic-discount" | "seasonal-wc" | "wc-trend" | "cash-locked" | "ar-acceleration" | "liquidity-ratios" | "mpbf-tandon" | "stock-statement" | "debtor-financing" | "creditor-stretch" | "wc-turnover" | "factoring-vs-od" | "operating-cycle" | "current-ratio-planner" | "terms-gap" | "wc-efficiency-score" | "wc-loan-sizer" | "dscr-forecast" | "liquidity-stress" | "od-interest-min" | "bill-discount-margin">("overview");
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
   const aging = useMemo(() => agingBuckets(store.invoices), [store.invoices]);
@@ -39,13 +41,13 @@ export default function WorkingCapitalPage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold flex items-center gap-2"><RefreshCcw size={18} className="text-[var(--color-primary)]" /> Working Capital</h1>
+          <h1 className="text-xl font-bold flex items-center gap-2"><RefreshCcw size={18} className="text-[var(--color-primary)]" /> {tr("wc.title")}</h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Cash Conversion Cycle = DSO + DIO − DPO. Every day in the cycle is cash you must fund yourself.
+            {tr("wc.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-          {([["overview", "Overview", RefreshCcw], ["ccc-dashboard", "CCC Dashboard", Activity], ["inventory-optimizer", "Inventory Optimizer", Boxes], ["payables-stretch", "Payables Trade-off", Scale], ["od-cc-utilisation", "OD/CC Utilisation", CreditCard], ["wc-gap-funding", "WC Gap & Funding", Landmark], ["trade-cycle-target", "Trade-Cycle Optimizer", Target], ["dynamic-discount", "Discount vs Borrow", Percent], ["seasonal-wc", "Seasonal WC Planner", Snowflake], ["wc-trend", "Net WC Trend", LineChartIcon], ["cash-locked", "Cash Locked in WC", Coins], ["ar-acceleration", "AR Acceleration", Zap], ["liquidity-ratios", "Liquidity Ratios", PiggyBank], ["mpbf-tandon", "MPBF (Tandon)", Calculator], ["stock-statement", "Stock Statement", FileSpreadsheet], ["debtor-financing", "Debtor Financing", FileText], ["creditor-stretch", "Creditor Stretch", Repeat], ["wc-turnover", "WC Turnover", Gauge], ["factoring-vs-od", "Factoring vs OD", Split], ["operating-cycle", "Operating Cycle", Clock], ["current-ratio-planner", "Current-Ratio Planner", Sliders], ["terms-gap", "Terms Gap", ArrowLeftRight], ["wc-efficiency-score", "WC Efficiency Score", Award], ["wc-loan-sizer", "WC Loan Sizer", Banknote], ["dscr-forecast", "DSCR Forecast", ShieldCheck], ["liquidity-stress", "Liquidity Stress Test", Siren], ["od-interest-min", "OD Interest Minimiser", HandCoins], ["bill-discount-margin", "Bill Discounting", FileBarChart]] as const).map(([id, label, Icon]) => (
+          {([["overview", tr("wc.tab.overview"), RefreshCcw], ["ccc-dashboard", tr("wc.tab.cccDashboard"), Activity], ["inventory-optimizer", tr("wc.tab.inventoryOptimizer"), Boxes], ["payables-stretch", tr("wc.tab.payablesTradeoff"), Scale], ["od-cc-utilisation", tr("wc.tab.odCcUtilisation"), CreditCard], ["wc-gap-funding", tr("wc.tab.wcGapFunding"), Landmark], ["trade-cycle-target", tr("wc.tab.tradeCycleOptimizer"), Target], ["dynamic-discount", tr("wc.tab.discountVsBorrow"), Percent], ["seasonal-wc", "Seasonal WC Planner", Snowflake], ["wc-trend", "Net WC Trend", LineChartIcon], ["cash-locked", "Cash Locked in WC", Coins], ["ar-acceleration", "AR Acceleration", Zap], ["liquidity-ratios", "Liquidity Ratios", PiggyBank], ["mpbf-tandon", "MPBF (Tandon)", Calculator], ["stock-statement", "Stock Statement", FileSpreadsheet], ["debtor-financing", "Debtor Financing", FileText], ["creditor-stretch", "Creditor Stretch", Repeat], ["wc-turnover", "WC Turnover", Gauge], ["factoring-vs-od", "Factoring vs OD", Split], ["operating-cycle", "Operating Cycle", Clock], ["current-ratio-planner", "Current-Ratio Planner", Sliders], ["terms-gap", "Terms Gap", ArrowLeftRight], ["wc-efficiency-score", "WC Efficiency Score", Award], ["wc-loan-sizer", "WC Loan Sizer", Banknote], ["dscr-forecast", "DSCR Forecast", ShieldCheck], ["liquidity-stress", "Liquidity Stress Test", Siren], ["od-interest-min", "OD Interest Minimiser", HandCoins], ["bill-discount-margin", "Bill Discounting", FileBarChart]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setWcTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${wcTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -58,10 +60,10 @@ export default function WorkingCapitalPage() {
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Cash Conversion Cycle", value: `${snap.cccDays} days`, color: snap.cccDays <= 45 ? "text-green-400" : snap.cccDays <= 75 ? "text-yellow-400" : "text-red-400", sub: "Target ≤ 45 days" },
-          { label: "Receivables (DSO)", value: `${snap.dsoDays} days`, color: snap.dsoDays <= 45 ? "text-green-400" : "text-yellow-400", sub: formatAmount(snap.accountsReceivable) + " outstanding" },
-          { label: "Inventory (DIO)", value: `${snap.dioDays} days`, color: snap.dioDays <= 60 ? "text-green-400" : "text-yellow-400", sub: formatAmount(snap.inventoryValue) + " on shelf" },
-          { label: "Payables (DPO)", value: `${snap.dpoDays} days`, color: "text-[var(--color-primary)]", sub: formatAmount(snap.accountsPayable) + " owed to suppliers" },
+          { label: tr("wc.kpi.ccc"), value: `${snap.cccDays} days`, color: snap.cccDays <= 45 ? "text-green-400" : snap.cccDays <= 75 ? "text-yellow-400" : "text-red-400", sub: "Target ≤ 45 days" },
+          { label: tr("wc.kpi.receivablesDso"), value: `${snap.dsoDays} days`, color: snap.dsoDays <= 45 ? "text-green-400" : "text-yellow-400", sub: formatAmount(snap.accountsReceivable) + " outstanding" },
+          { label: tr("wc.kpi.inventoryDio"), value: `${snap.dioDays} days`, color: snap.dioDays <= 60 ? "text-green-400" : "text-yellow-400", sub: formatAmount(snap.inventoryValue) + " on shelf" },
+          { label: tr("wc.kpi.payablesDpo"), value: `${snap.dpoDays} days`, color: "text-[var(--color-primary)]", sub: formatAmount(snap.accountsPayable) + " owed to suppliers" },
         ].map(k => (
           <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>

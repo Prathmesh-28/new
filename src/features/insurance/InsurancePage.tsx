@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 import TabStrip from "@/components/TabStrip";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
@@ -30,6 +31,7 @@ const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rou
 const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg";
 
 export default function InsurancePage() {
+  const tr = useT();
   const [tab, setTab] = useState<Tab>("overview");
 
   return (
@@ -37,19 +39,19 @@ export default function InsurancePage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <ShieldCheck size={18} className="text-[var(--color-primary)]" /> Insurance & Protection
+            <ShieldCheck size={18} className="text-[var(--color-primary)]" /> {tr("ins.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Track every policy, size your cover, find protection gaps and price premiums - IRDAI-aware, GST-on-premium included.
+            {tr("ins.subtitle")}
           </p>
         </div>
         <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
-            ["overview", "Overview", ShieldCheck],
-            ["register", "Policy Register", Wallet],
-            ["gaps", "Coverage Gaps", FileWarning],
-            ["suminsured", "Sum-Insured Calc", Calculator],
-            ["grouphealth", "Group Health", HeartPulse],
-            ["assetcover", "Asset Cover", Building2],
+            ["overview", tr("ins.tab.overview"), ShieldCheck],
+            ["register", tr("ins.tab.register"), Wallet],
+            ["gaps", tr("ins.tab.gaps"), FileWarning],
+            ["suminsured", tr("ins.tab.suminsured"), Calculator],
+            ["grouphealth", tr("ins.tab.grouphealth"), HeartPulse],
+            ["assetcover", tr("ins.tab.assetcover"), Building2],
             ["tradecredit", "Trade-Credit", Landmark],
             ["claims", "Claims Tracker", ShieldAlert],
             ["premvscover", "Premium vs Cover", GitCompareArrows],

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "@/lib/api";
+import { useT } from "@/i18n";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
@@ -126,6 +127,7 @@ type LenderTab = "marketplace" | "covenants" | "borrowing-base" | "mis-pack"
 
 export default function LendersPage() {
   const { user } = useAuth();
+  const tr = useT();
   const [tab, setTab] = useState<LenderTab>("marketplace");
 
   if (!user || !["investor", "super_admin"].includes(user.role)) return <Navigate to="/dashboard" replace />;
@@ -134,11 +136,11 @@ export default function LendersPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">Lender Dashboard <PreviewBadge capability="lenderMarketplace" /></h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">AA-verified applications · Covenants · Borrowing base · Recurring MIS</p>
+          <h1 className="text-xl font-bold flex items-center gap-2">{tr("lend.title")} <PreviewBadge capability="lenderMarketplace" /></h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("lend.subtitle")}</p>
         </div>
         <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {([["marketplace", "Marketplace", Landmark], ["covenants", "Covenant Dashboard", Gauge], ["borrowing-base", "Borrowing Base", FileSpreadsheet], ["mis-pack", "MIS Pack", ClipboardList], ["lender-shortlist", "Lender Shortlist", Users], ["offer-compare", "Offer Compare", Scale], ["app-tracker", "Application Tracker", ListChecks], ["disbursement", "Disbursement Plan", CalendarClock], ["rate-prep", "Rate Negotiation", Handshake], ["repayment-record", "Repayment Record", History], ["syndication", "Syndication Split", Layers], ["collateral-register", "Collateral Register", Lock], ["refinance-scanner", "Refinance Scanner", Repeat], ["lender-crm", "Lender CRM", Phone], ["utilization-trend", "Utilization Trend", Activity], ["concentration-risk", "Concentration Risk", PieChart], ["interest-paid", "Interest Paid", Percent], ["sanction-vs-drawn", "Sanction vs Drawn", ArrowLeftRight]] as const).map(([id, label, Icon]) => (
+          {([["marketplace", tr("lend.tab.marketplace"), Landmark], ["covenants", tr("lend.tab.covenants"), Gauge], ["borrowing-base", tr("lend.tab.borrowingBase"), FileSpreadsheet], ["mis-pack", tr("lend.tab.misPack"), ClipboardList], ["lender-shortlist", tr("lend.tab.shortlist"), Users], ["offer-compare", tr("lend.tab.offerCompare"), Scale], ["app-tracker", tr("lend.tab.appTracker"), ListChecks], ["disbursement", tr("lend.tab.disbursement"), CalendarClock], ["rate-prep", "Rate Negotiation", Handshake], ["repayment-record", "Repayment Record", History], ["syndication", "Syndication Split", Layers], ["collateral-register", "Collateral Register", Lock], ["refinance-scanner", "Refinance Scanner", Repeat], ["lender-crm", "Lender CRM", Phone], ["utilization-trend", "Utilization Trend", Activity], ["concentration-risk", "Concentration Risk", PieChart], ["interest-paid", "Interest Paid", Percent], ["sanction-vs-drawn", "Sanction vs Drawn", ArrowLeftRight]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}

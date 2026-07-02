@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useFeatureState } from "@/hooks/useFeatureState";
+import { useT } from "@/i18n";
 import TabStrip from "@/components/TabStrip";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -282,6 +283,7 @@ function ImportedTotalsBanner({ note }: { note: string }) {
 }
 
 export default function MarketplacePage() {
+  const tr = useT();
   const [tab, setTab] = useState<MktTab>("overview");
 
   return (
@@ -289,19 +291,19 @@ export default function MarketplacePage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <ShoppingCart size={18} className="text-[var(--color-primary)]" /> E-commerce & ONDC
+            <ShoppingCart size={18} className="text-[var(--color-primary)]" /> {tr("mkt.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Reconcile marketplace payouts, find true per-SKU margin and stay GST-compliant - Amazon, Flipkart, Meesho, ONDC & D2C in one ledger.
+            {tr("mkt.subtitle")}
           </p>
         </div>
         <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as MktTab)} tabs={([
-            ["overview", "Overview", ShoppingCart],
-            ["settlement", "Settlement Recon", FileSpreadsheet],
-            ["commission", "Fee Calculator", Calculator],
-            ["rto", "Return / RTO Loss", Undo2],
-            ["consolidate", "Sales Consolidator", Layers],
-            ["payout-cycle", "Payout Calendar", CalendarClock],
+            ["overview", tr("mkt.tab.overview"), ShoppingCart],
+            ["settlement", tr("mkt.tab.settlement"), FileSpreadsheet],
+            ["commission", tr("mkt.tab.commission"), Calculator],
+            ["rto", tr("mkt.tab.rto"), Undo2],
+            ["consolidate", tr("mkt.tab.consolidate"), Layers],
+            ["payout-cycle", tr("mkt.tab.payoutCycle"), CalendarClock],
             ["tcs52", "TCS u/s 52", Receipt],
             ["sku-pnl", "Listing P&L / SKU", Tag],
             ["channel-compare", "Channel Compare", GitCompareArrows],
