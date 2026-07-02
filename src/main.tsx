@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Capacitor } from "@capacitor/core";
 import "./index.css";
 import App from "./App";
+import { I18nProvider } from "@/i18n";
 import { initNative } from "@/lib/native";
 import { installGlobalErrorReporting } from "@/lib/reportError";
 import { recoverFromChunkError } from "@/lib/chunkReload";
@@ -20,7 +21,9 @@ window.addEventListener("vite:preloadError", (event) => {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <I18nProvider>
+      <App />
+    </I18nProvider>
   </StrictMode>
 );
 

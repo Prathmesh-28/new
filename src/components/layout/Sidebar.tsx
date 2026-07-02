@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
 import { getFrequentPages } from "@/components/CommandPalette";
@@ -30,6 +32,7 @@ type Firm = { tenant_id: string; role: string; name: string };
 // users (one firm, not an owner) so their sidebar is unchanged.
 function FirmSwitcher({ collapsed }: { collapsed: boolean }) {
   const { user, switchFirm, createFirm } = useAuth();
+  const t = useT();
   const [firms, setFirms] = useState<Firm[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -78,7 +81,7 @@ function FirmSwitcher({ collapsed }: { collapsed: boolean }) {
         onClick={() => setOpen(o => !o)}
         disabled={busy}
         className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md text-xs bg-[var(--color-bg)] border border-[var(--color-border)] hover:border-[var(--color-primary)]/40 transition-colors disabled:opacity-50"
-        title="Switch firm"
+        title={t("firm.switch")}
       >
         <Building2 size={13} className="text-[var(--color-primary)] shrink-0" />
         <span className="flex-1 text-left truncate font-medium">{current?.name}</span>
@@ -104,7 +107,7 @@ function FirmSwitcher({ collapsed }: { collapsed: boolean }) {
               onClick={doCreate}
               className="flex items-center gap-1.5 w-full px-2.5 py-2 text-xs text-[var(--color-primary)] hover:bg-white/5 transition-colors border-t border-[var(--color-border)]"
             >
-              <Plus size={12} className="shrink-0" /> Add a firm
+              <Plus size={12} className="shrink-0" /> {t("firm.add")}
             </button>
           )}
         </div>
@@ -307,6 +310,7 @@ function NavItems({ groups, collapsed, onNavigate, badges, expanded, onToggleGro
 
 export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void }) {
   const { user, logout }                          = useAuth();
+  const t = useT();
   // Pending in-platform invites for this user → badge on the Settings nav (polled, no websockets).
   const [inviteCount, setInviteCount] = useState(0);
   useEffect(() => {
@@ -486,7 +490,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
               <Search size={13} className="shrink-0" />
               {!collapsed && (
                 <>
-                  <span className="flex-1 text-left">Search…</span>
+                  <span className="flex-1 text-left">{t("common.search")}</span>
                   <kbd className="font-mono text-[10px] bg-[var(--color-bg)] border border-[var(--color-border)] px-1 py-0.5 rounded">⌘K</kbd>
                 </>
               )}
@@ -517,7 +521,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
               )}
             >
               <ShieldCheck size={13} />
-              {!collapsed && <span>Admin Console</span>}
+              {!collapsed && <span>{t("nav.adminConsole")}</span>}
             </NavLink>
           )}
           <NavLink
@@ -532,19 +536,24 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
             )}
           >
             <User size={13} />
-            {!collapsed && <span>Profile</span>}
+            {!collapsed && <span>{t("nav.profile")}</span>}
           </NavLink>
           <button
             onClick={handleLogout}
-            title="Sign out"
+            title={t("nav.signOut")}
             className={cn(
               "flex items-center gap-2 text-xs text-[var(--color-muted)] hover:text-red-400 transition-colors rounded-md px-2 py-1.5 w-full",
               collapsed && "justify-center"
             )}
           >
             <LogOut size={13} />
-            {!collapsed && <span>Sign out</span>}
+            {!collapsed && <span>{t("nav.signOut")}</span>}
           </button>
+          {!collapsed && (
+            <div className="px-2 pt-1.5">
+              <LanguageSwitcher />
+            </div>
+          )}
         </div>
 
         {/* Collapse toggle */}
@@ -622,9 +631,12 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
                   <p className="text-xs text-[var(--color-text)] truncate">{user?.email}</p>
                   <p className="text-[10px] text-[var(--color-muted)] capitalize">{role.replace("_", " ")}</p>
                 </div>
-                <button onClick={handleLogout} className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-red-400 transition-colors shrink-0">
-                  <LogOut size={13} /> Sign out
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <LanguageSwitcher compact />
+                  <button onClick={handleLogout} className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-red-400 transition-colors">
+                    <LogOut size={13} /> {t("nav.signOut")}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
