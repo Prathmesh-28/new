@@ -14,6 +14,7 @@ import {
 import { format, subMonths, startOfMonth, endOfMonth, parseISO, getDay, subYears } from "date-fns";
 import { SegmentedToggle, SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
 import AiInsight from "@/components/ai/AiInsight";
+import { useT } from "@/i18n";
 
 const CATEGORY_COLORS: Record<string, string> = {
   expense:  "#ef4444",
@@ -68,6 +69,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 };
 
 export default function AnalyticsPage() {
+  const tr = useT();
   const { store, canExport } = useApp();
   const { transactions, firm } = store;
   const [tab, setTab] = useState<"overview" | "revenue" | "expenses" | "benchmarks" | "pl" | "cashflow" | "concentration" | "targets" | "forecast" | "balancesheet" | "ratios" | "trialbalance" | "commission" | "sku-profit" | "customer-cohorts" | "branch-pl" | "unit-economics" | "sales-funnel" | "expense-variance" | "revenue-pareto" | "margin-bridge" | "churn-flags" | "margin-trends" | "expense-ratios" | "ar-ageing" | "break-even" | "working-capital" | "seasonality" | "refund-impact" | "per-employee" | "yoy-growth" | "new-vs-repeat" | "weekday-pattern" | "aov-trend" | "channel-split">("overview");
@@ -238,18 +240,18 @@ export default function AnalyticsPage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold">Analytics</h1>
+          <h1 className="text-xl font-bold">{tr("anlt.title")}</h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">{firm.name} · Last {rangeN} months · {transactions.length} transactions analysed</p>
         </div>
         {canExport() && (
           <div className="flex items-center gap-2">
             <button onClick={() => exportAnalytics("pdf")}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
-              <FileDown size={13} /> PDF
+              <FileDown size={13} /> {tr("anlt.exportPdf")}
             </button>
             <button onClick={() => exportAnalytics("excel")}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
-              <SheetIcon size={13} /> Excel
+              <SheetIcon size={13} /> {tr("anlt.exportExcel")}
             </button>
           </div>
         )}
@@ -260,8 +262,8 @@ export default function AnalyticsPage() {
         {[
           { label: `${rangeN}-Month Revenue`,  value: totalRevenue,  color: "text-green-400",                delta: delta(currMonth.revenue, prevMonth.revenue) },
           { label: `${rangeN}-Month Expenses`, value: totalExpense,  color: "text-red-400",                  delta: delta(currMonth.expense, prevMonth.expense), inverse: true },
-          { label: "Net P&L",          value: totalNet,      color: totalNet >= 0 ? "text-green-400" : "text-red-400", delta: null },
-          { label: "Avg Net Margin",   value: null,          color: avgMargin >= 10 ? "text-green-400" : avgMargin >= 0 ? "text-yellow-400" : "text-red-400", delta: null, pct: avgMargin },
+          { label: tr("anlt.netPl"),          value: totalNet,      color: totalNet >= 0 ? "text-green-400" : "text-red-400", delta: null },
+          { label: tr("anlt.avgNetMargin"),   value: null,          color: avgMargin >= 10 ? "text-green-400" : avgMargin >= 0 ? "text-yellow-400" : "text-red-400", delta: null, pct: avgMargin },
         ].map(({ label, value, color, delta: d, inverse, pct }) => (
           <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
@@ -308,7 +310,7 @@ export default function AnalyticsPage() {
           {/* Revenue vs Expense - interactive */}
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
             <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-              <p className="text-sm font-semibold">Revenue vs Expenses · Monthly</p>
+              <p className="text-sm font-semibold">{tr("anlt.revVsExp")}</p>
               <div className="flex items-center gap-2">
                 <SegmentedToggle
                   ariaLabel="Time range"
@@ -369,7 +371,7 @@ export default function AnalyticsPage() {
           {/* Net Profit Margin Trend + Category Split */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-              <p className="text-sm font-semibold mb-4">Net Profit Margin %</p>
+              <p className="text-sm font-semibold mb-4">{tr("anlt.netProfitMargin")}</p>
               <ResponsiveContainer width="100%" height={180}>
                 <LineChart data={monthlyData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
@@ -382,7 +384,7 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-              <p className="text-sm font-semibold mb-4">Expense Breakdown</p>
+              <p className="text-sm font-semibold mb-4">{tr("anlt.expenseBreakdown")}</p>
               {categoryPieData.length === 0 ? (
                 <div className="flex items-center justify-center h-[180px] text-sm text-[var(--color-muted)]">No expense data</div>
               ) : (
@@ -412,7 +414,7 @@ export default function AnalyticsPage() {
           {/* Top Customers + Top Vendors */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-              <p className="text-sm font-semibold mb-3">Top 5 Revenue Sources</p>
+              <p className="text-sm font-semibold mb-3">{tr("anlt.top5Revenue")}</p>
               {topCustomers.length === 0 ? <p className="text-sm text-[var(--color-muted)]">No revenue transactions</p> : (
                 <div className="space-y-2.5">
                   {topCustomers.map((c, i) => (
@@ -432,7 +434,7 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-              <p className="text-sm font-semibold mb-3">Top 5 Expense Vendors</p>
+              <p className="text-sm font-semibold mb-3">{tr("anlt.top5Vendors")}</p>
               {topVendors.length === 0 ? <p className="text-sm text-[var(--color-muted)]">No expense transactions</p> : (
                 <div className="space-y-2.5">
                   {topVendors.map((v, i) => (

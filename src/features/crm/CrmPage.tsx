@@ -11,6 +11,7 @@ import {
   ListChecks, StickyNote, Send, Gauge, Timer, Trash2, Pencil, FileText,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import { useT } from "@/i18n";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES (response shapes inlined - backend confirmed)
@@ -277,17 +278,18 @@ function EmptyRow({ cols, text }: { cols: number; text: string }) {
 // PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 export default function CrmPage() {
+  const tr = useT();
   const { user } = useAuth();
   const canWrite = WRITE_ROLES.has(user?.role ?? "");
 
   const [tab, setTab] = useState<TabId>("pipeline");
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-    { id: "pipeline", label: "Pipeline", icon: <KanbanSquare size={14} /> },
-    { id: "leads",    label: "Leads",    icon: <UserPlus size={14} /> },
-    { id: "tasks",    label: "Tasks",    icon: <ListChecks size={14} /> },
-    { id: "accounts", label: "Accounts", icon: <Building2 size={14} /> },
-    { id: "contacts", label: "Contacts", icon: <ContactIcon size={14} /> },
+    { id: "pipeline", label: tr("crm.tabPipeline"), icon: <KanbanSquare size={14} /> },
+    { id: "leads",    label: tr("crm.tabLeads"),    icon: <UserPlus size={14} /> },
+    { id: "tasks",    label: tr("crm.tabTasks"),    icon: <ListChecks size={14} /> },
+    { id: "accounts", label: tr("crm.tabAccounts"), icon: <Building2 size={14} /> },
+    { id: "contacts", label: tr("crm.tabContacts"), icon: <ContactIcon size={14} /> },
     { id: "sla",      label: "SLA",      icon: <ShieldCheck size={14} /> },
   ];
 
@@ -297,9 +299,9 @@ export default function CrmPage() {
       <div className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 sm:px-6 py-4">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <Users size={20} className="text-[var(--color-primary)]" />
-          CRM - pipeline & customers
+          {tr("crm.title")}
         </h1>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Leads → deals → books customers · SLA-tracked</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("crm.subtitle")}</p>
       </div>
 
       {/* PILL TAB BAR */}
@@ -343,6 +345,7 @@ export default function CrmPage() {
 // PIPELINE TAB
 // ─────────────────────────────────────────────────────────────────────────────
 function PipelineTab({ canWrite }: { canWrite: boolean }) {
+  const tr = useT();
   const navigate = useNavigate();
   const [pipeline, setPipeline] = useState<Pipeline | null>(null);
   const [loading, setLoading] = useState(true);
@@ -523,9 +526,9 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
     <div className="space-y-5">
       {/* STAT STRIP */}
       <div className="flex flex-wrap gap-3">
-        <StatCard label="Weighted pipeline" value={rupee(pipeline?.weightedValue)} />
-        <StatCard label="Open deals" value={String(pipeline?.openCount ?? 0)} tint="muted" />
-        <StatCard label="Won value" value={rupee(pipeline?.wonValue)} tint="green" />
+        <StatCard label={tr("crm.statWeightedPipeline")} value={rupee(pipeline?.weightedValue)} />
+        <StatCard label={tr("crm.statOpenDeals")} value={String(pipeline?.openCount ?? 0)} tint="muted" />
+        <StatCard label={tr("crm.statWonValue")} value={rupee(pipeline?.wonValue)} tint="green" />
       </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -534,7 +537,7 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
         </p>
         {canWrite && (
           <button type="button" onClick={() => { if (open) { resetForm(); setOpen(false); } else { resetForm(); setOpen(true); } }} className={btnPrimary}>
-            <Plus size={14} /> New deal
+            <Plus size={14} /> {tr("crm.newDeal")}
           </button>
         )}
       </div>
@@ -585,7 +588,7 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
       {(pipeline?.openCount ?? 0) === 0 && (pipeline?.wonCount ?? 0) === 0 && (pipeline?.lostCount ?? 0) === 0 ? (
         <EmptyState
           icon={KanbanSquare}
-          title="No deals in your pipeline yet"
+          title={tr("crm.emptyPipelineTitle")}
           description="Track every opportunity from qualification to won. Add your first deal, or import leads and convert the qualified ones into deals."
           ctaText={canWrite ? "Add a deal" : undefined}
           onCta={canWrite ? () => setOpen(true) : undefined}

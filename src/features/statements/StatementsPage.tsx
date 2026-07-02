@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import FixedAssetRegister from "./FixedAssetRegister";
 import AiInsight from "@/components/ai/AiInsight";
+import { useT } from "@/i18n";
 
 type Tab =
   | "income" | "balance" | "cashflow" | "assets"
@@ -88,6 +89,7 @@ function Row({ label, value, level = 1, pct, note, accent }: {
 }
 
 export default function StatementsPage() {
+  const tr = useT();
   const { store } = useApp();
   const { firm } = store;
   const [tab, setTab] = useState<Tab>("income");
@@ -231,7 +233,7 @@ export default function StatementsPage() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <FileSpreadsheet size={18} className="text-[var(--color-primary)]" /> Financial Statements
+            <FileSpreadsheet size={18} className="text-[var(--color-primary)]" /> {tr("stmt.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
             {firm.name} · derived live from your bank data · {range.label}
@@ -241,11 +243,11 @@ export default function StatementsPage() {
           <div className="flex items-center gap-2">
             <button onClick={doExportPdf}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
-              <FileDown size={13} /> PDF
+              <FileDown size={13} /> {tr("stmt.pdf")}
             </button>
             <button onClick={doExportExcel}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
-              <SheetIcon size={13} /> Excel
+              <SheetIcon size={13} /> {tr("stmt.excel")}
             </button>
           </div>
         )}
@@ -321,9 +323,9 @@ export default function StatementsPage() {
           </div>
           <div className="space-y-4">
             {[
-              { label: "Gross Margin",  value: `${pl.grossMarginPct}%`,  ok: pl.grossMarginPct >= 30 },
-              { label: "EBITDA Margin", value: `${pl.ebitdaMarginPct}%`, ok: pl.ebitdaMarginPct >= 15 },
-              { label: "Net Margin",    value: `${pl.netMarginPct}%`,    ok: pl.netMarginPct >= 8 },
+              { label: tr("stmt.grossMargin"),  value: `${pl.grossMarginPct}%`,  ok: pl.grossMarginPct >= 30 },
+              { label: tr("stmt.ebitdaMargin"), value: `${pl.ebitdaMarginPct}%`, ok: pl.ebitdaMarginPct >= 15 },
+              { label: tr("stmt.netMargin"),    value: `${pl.netMarginPct}%`,    ok: pl.netMarginPct >= 8 },
             ].map(m => (
               <div key={m.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                 <p className="text-xs text-[var(--color-muted)] mb-1">{m.label}</p>
@@ -413,17 +415,17 @@ export default function StatementsPage() {
           </div>
           <div className="space-y-4">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-              <p className="text-xs text-[var(--color-muted)] mb-1">Opening Cash</p>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{tr("stmt.openingCash")}</p>
               <p className="text-xl font-bold tabular-nums">{formatAmount(cf.openingCash)}</p>
             </div>
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-              <p className="text-xs text-[var(--color-muted)] mb-1">Net Change</p>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{tr("stmt.netChange")}</p>
               <p className={`text-xl font-bold tabular-nums ${cf.netChange >= 0 ? "text-green-400" : "text-red-400"}`}>
                 {cf.netChange < 0 ? `(${formatAmount(Math.abs(cf.netChange))})` : formatAmount(cf.netChange)}
               </p>
             </div>
             <div className="bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 rounded-lg p-4">
-              <p className="text-xs text-[var(--color-muted)] mb-1">Closing Cash</p>
+              <p className="text-xs text-[var(--color-muted)] mb-1">{tr("stmt.closingCash")}</p>
               <p className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{formatAmount(cf.closingCash)}</p>
             </div>
             <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg p-3 flex gap-2">

@@ -14,6 +14,7 @@ import {
 import { format, startOfMonth, subMonths, isWithinInterval, differenceInCalendarDays } from "date-fns";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { useT } from "@/i18n";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ export default function SpendPage() {
   const { store, loading } = useApp();
   const navigate  = useNavigate();
   const today     = new Date();
+  const tr = useT();
 
   const expenses = useMemo(() =>
     store.transactions.filter(t => t.amount < 0),
@@ -175,18 +177,18 @@ export default function SpendPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-bold">Spend Intelligence</h1>
+        <h1 className="text-xl font-bold">{tr("spend.title")}</h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
-          Duplicate vendors · silently-growing subscriptions · category mix vs your own norm
+          {tr("spend.subtitle")}
         </p>
       </div>
 
       {store.transactions.length === 0 && !loading ? (
         <EmptyState
           icon={PieChart}
-          title="No transactions to analyze yet"
-          description="Spend Intelligence finds duplicate vendors, creeping subscriptions and category overspend from your transactions. Add or import some to get started."
-          ctaText="Import transactions"
+          title={tr("spend.empty.title")}
+          description={tr("spend.empty.desc")}
+          ctaText={tr("spend.empty.cta")}
           ctaHref="/transactions"
         />
       ) : (
@@ -194,10 +196,10 @@ export default function SpendPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "This Month Spend",  value: formatCurrency(totalCur),                         color: "text-red-400" },
-          { label: "Duplicate Vendors", value: duplicates.length.toString(),                      color: duplicates.length > 0 ? "text-yellow-400" : "text-green-400" },
-          { label: "Subscriptions Growing", value: growingSubscriptions.length.toString(),        color: growingSubscriptions.length > 0 ? "text-orange-400" : "text-green-400" },
-          { label: "Categories Over Benchmark", value: categoryBenchmarks.filter(c => c.delta > 5).length.toString(), color: "text-[var(--color-primary)]" },
+          { label: tr("spend.card.thisMonth"),  value: formatCurrency(totalCur),                         color: "text-red-400" },
+          { label: tr("spend.card.duplicateVendors"), value: duplicates.length.toString(),                      color: duplicates.length > 0 ? "text-yellow-400" : "text-green-400" },
+          { label: tr("spend.card.subsGrowing"), value: growingSubscriptions.length.toString(),        color: growingSubscriptions.length > 0 ? "text-orange-400" : "text-green-400" },
+          { label: tr("spend.card.overBenchmark"), value: categoryBenchmarks.filter(c => c.delta > 5).length.toString(), color: "text-[var(--color-primary)]" },
         ].map(s => (
           <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
