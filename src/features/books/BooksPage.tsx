@@ -28,6 +28,7 @@ import BooksRenewalsTab from "./BooksRenewalsTab";
 import BooksRentTab from "./BooksRentTab";
 import BooksContinuityTab from "./BooksContinuityTab";
 import BooksComplianceRegTab from "./BooksComplianceRegTab";
+import BooksCovenantsTab from "./BooksCovenantsTab";
 import BooksAutomationTab from "./BooksAutomationTab";
 import BooksComplianceTab from "./BooksComplianceTab";
 import BooksSettlementTab from "./BooksSettlementTab";
@@ -135,7 +136,7 @@ interface DocumentRow {
   party_ledger_id: string | null;
 }
 
-type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls" | "taxfiling" | "pricing" | "payterms" | "subscriptions" | "closing" | "dimensions" | "finreports" | "fx" | "assets" | "expenses" | "renewals" | "rent" | "continuity" | "statutory" | "automation" | "compliance" | "settlement" | "documents" | "agents";
+type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls" | "taxfiling" | "pricing" | "payterms" | "subscriptions" | "closing" | "dimensions" | "finreports" | "fx" | "assets" | "expenses" | "renewals" | "rent" | "continuity" | "statutory" | "covenants" | "automation" | "compliance" | "settlement" | "documents" | "agents";
 type ReportId = "tb" | "pl" | "bs" | "cf";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -374,6 +375,7 @@ export default function BooksPage() {
     { id: "rent",      label: "Rent & 194-I",      icon: <Home size={14} /> },
     { id: "continuity", label: "Continuity vault", icon: <ShieldCheck size={14} /> },
     { id: "statutory", label: "Statutory register", icon: <ListChecks size={14} /> },
+    { id: "covenants", label: "Debt covenants",    icon: <Scale size={14} /> },
     { id: "compliance", label: "Compliance",       icon: <ShieldCheck size={14} /> },
     { id: "settlement", label: "Settlements",      icon: <Scale size={14} /> },
     { id: "automation", label: "Automation",       icon: <Workflow size={14} /> },
@@ -461,6 +463,7 @@ export default function BooksPage() {
             {tab === "rent" && <BooksRentTab />}
             {tab === "continuity" && <BooksContinuityTab />}
             {tab === "statutory" && <BooksComplianceRegTab />}
+            {tab === "covenants" && <BooksCovenantsTab />}
             {tab === "compliance" && <BooksComplianceTab canWrite={canWrite} />}
             {tab === "settlement" && <BooksSettlementTab />}
             {tab === "automation" && <BooksAutomationTab />}

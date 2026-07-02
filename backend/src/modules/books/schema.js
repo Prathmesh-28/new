@@ -646,6 +646,35 @@ const BOOKS_SCHEMA = `
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_book_compliance_items ON book_compliance_items(tenant_id, status, due_date);
+
+  -- Debt covenant tracker (roadmap #21 slice): loan covenants (DSCR >= x, leverage <= y…) with
+  -- periodic test results (met/breached), promoted off the KV bag to real, alertable rows.
+  CREATE TABLE IF NOT EXISTS book_debt_covenants (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id   TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    lender      TEXT,
+    metric      TEXT NOT NULL,             -- e.g. DSCR, Current Ratio, Leverage, Interest Coverage
+    operator    TEXT NOT NULL CHECK (operator IN ('gte','lte','gt','lt')),
+    threshold   NUMERIC(15,4) NOT NULL,
+    frequency   TEXT NOT NULL DEFAULT 'quarterly',
+    status      TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','closed')),
+    notes       TEXT,
+    created_by  UUID,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_debt_covenants ON book_debt_covenants(tenant_id, status);
+
+  CREATE TABLE IF NOT EXISTS book_covenant_tests (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    covenant_id  UUID NOT NULL REFERENCES book_debt_covenants(id) ON DELETE CASCADE,
+    tenant_id    TEXT NOT NULL,
+    as_of        DATE NOT NULL,
+    actual_value NUMERIC(15,4) NOT NULL,
+    result       TEXT NOT NULL CHECK (result IN ('met','breached')),
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_covenant_tests ON book_covenant_tests(covenant_id, as_of DESC);
 `;
 
 module.exports = { BOOKS_SCHEMA };

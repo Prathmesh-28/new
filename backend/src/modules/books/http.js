@@ -975,6 +975,13 @@ router.get("/compliance-items/due", async (req, res) => { try { res.json(await c
 router.post("/compliance-items", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await compliance.createComplianceItem(tenantOf(req), req.user.id, { kind: b.kind, title: b.title, authority: b.authority, dueDate: b.due_date, frequency: b.frequency, notes: b.notes })); } catch (e) { fail(res, e); } });
 router.post("/compliance-items/:id/complete", canPost, async (req, res) => { try { res.json(await compliance.completeComplianceItem(tenantOf(req), req.params.id, { completedOn: (req.body || {}).completed_on, actorId: req.user.id })); } catch (e) { fail(res, e); } });
 router.delete("/compliance-items/:id", canPost, async (req, res) => { try { res.json(await compliance.removeComplianceItem(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+// Debt covenant tracker (real table; records tests → auto met/breached).
+const covenants = require("./covenants");
+router.get("/covenants", async (req, res) => { try { res.json(await covenants.listCovenants(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.get("/covenants/:id/tests", async (req, res) => { try { res.json(await covenants.listTests(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/covenants", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await covenants.createCovenant(tenantOf(req), req.user.id, { name: b.name, lender: b.lender, metric: b.metric, operator: b.operator, threshold: b.threshold, frequency: b.frequency, notes: b.notes })); } catch (e) { fail(res, e); } });
+router.post("/covenants/:id/test", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await covenants.recordTest(tenantOf(req), req.params.id, { asOf: b.as_of, actualValue: b.actual_value })); } catch (e) { fail(res, e); } });
+router.post("/covenants/:id/close", canPost, async (req, res) => { try { res.json(await covenants.closeCovenant(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.post("/advances", canPost, async (req, res) => { try { res.status(201).json(await ops.grantAdvance(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/advances/:id/settle", canPost, async (req, res) => { try { res.json(await ops.settleAdvance(tenantOf(req), req.user.id, { advanceId: req.params.id, ...(req.body || {}) })); } catch (e) { fail(res, e); } });
 router.post("/projects", canPost, async (req, res) => { try { res.status(201).json(await ops.createProject(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
