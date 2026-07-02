@@ -6,6 +6,7 @@ const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 const { sendWelcome } = require("../lib/email");
 const { tenantSeatInfo, PLAN_LABEL } = require("../lib/plans");
 const { writeAudit } = require("../lib/audit");
+const { addMembership, removeMembership } = require("../lib/memberships");
 
 // Roles a workspace owner may hand out. super_admin is reserved for super_admins.
 const ASSIGNABLE_ROLES = ["owner", "finance_manager", "accountant", "sales", "operations_manager", "viewer", "investor"];
@@ -37,10 +38,23 @@ async function countSuperAdmins(client) {
 // GET /api/users - super_admin sees all; owner sees own tenant. Lower roles blocked.
 router.get("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const isSuperAdmin = req.user.role === "super_admin";
-  const cols = "id,email,role,tenant_id,first_login,created_at,display_name,status,last_login_at,last_active_at,COALESCE(login_count,0) AS login_count,COALESCE(subscription_plan,'free') AS subscription_plan";
-  const { rows } = isSuperAdmin
-    ? await pool.query(`SELECT ${cols} FROM users ORDER BY created_at DESC`)
-    : await pool.query(`SELECT ${cols} FROM users WHERE tenant_id=$1 ORDER BY created_at DESC`, [req.user.tenant_id]);
+  if (isSuperAdmin) {
+    const cols = "id,email,role,tenant_id,first_login,created_at,display_name,status,last_login_at,last_active_at,COALESCE(login_count,0) AS login_count,COALESCE(subscription_plan,'free') AS subscription_plan";
+    const { rows } = await pool.query(`SELECT ${cols} FROM users ORDER BY created_at DESC`);
+    return res.json(rows);
+  }
+  // Team list = the active MEMBERS of this firm (role from the membership, so a firm's
+  // creator/guest shows even without a users row homed here). 0014 backfill keeps this
+  // identical to the old users-based list for existing single-firm tenants.
+  const { rows } = await pool.query(
+    `SELECT u.id, u.email, m.role AS role, m.tenant_id AS tenant_id, u.first_login, u.created_at,
+            u.display_name, u.status, u.last_login_at, u.last_active_at,
+            COALESCE(u.login_count,0) AS login_count, COALESCE(u.subscription_plan,'free') AS subscription_plan
+       FROM tenant_memberships m JOIN users u ON u.id = m.user_id
+      WHERE m.tenant_id=$1 AND m.status='active'
+      ORDER BY u.created_at DESC`,
+    [req.user.tenant_id]
+  );
   res.json(rows);
 });
 
@@ -80,6 +94,7 @@ router.post("/", authenticate, async (req, res) => {
     "INSERT INTO users(email,password,role,tenant_id) VALUES($1,$2,$3,$4) RETURNING id,email,role,tenant_id,first_login",
     [email.toLowerCase(), hash, role, tid]
   );
+  await addMembership(rows[0].id, tid, role);
   sendWelcome({ to: email, password: tempPass }).catch(() => {});
   writeAudit(actor.id, "user.create", "user", rows[0].id, { email: email.toLowerCase(), role, tenant_id: tid });
   res.status(201).json(rows[0]);
@@ -110,6 +125,7 @@ router.patch("/:id", authenticate, async (req, res) => {
     const out = await withSuperAdminGuard(async (client) => {
       if ((await countSuperAdmins(client)) <= 1) return null;
       const { rows } = await client.query("UPDATE users SET role=$1 WHERE id=$2 RETURNING id,email,role,tenant_id", [role, req.params.id]);
+      await addMembership(req.params.id, target.tenant_id, role, client);   // upsert = self-healing
       return rows[0];
     });
     if (!out) return res.status(409).json({ error: "Can't demote the last super admin" });
@@ -117,6 +133,9 @@ router.patch("/:id", authenticate, async (req, res) => {
   }
 
   const { rows } = await pool.query("UPDATE users SET role=$1 WHERE id=$2 RETURNING id,email,role,tenant_id", [role, req.params.id]);
+  // Keep the member's role in this firm in sync (the team list reads the membership role);
+  // upsert so a missing membership row self-heals.
+  await addMembership(req.params.id, target.tenant_id, role);
   writeAudit(actor.id, "user.role_change", "user", req.params.id, { from: target.role, to: role });
   res.json(rows[0]);
 });
@@ -151,6 +170,7 @@ router.post("/:id/make-owner", authenticate, async (req, res) => {
   if (actor.role === "owner" && target.tenant_id !== actor.tenant_id) return res.status(403).json({ error: "Forbidden" });
   if (target.role === "super_admin") return res.status(403).json({ error: "Forbidden" });
   await pool.query("UPDATE users SET role='owner' WHERE id=$1", [target.id]);
+  await addMembership(target.id, target.tenant_id, "owner");
   writeAudit(actor.id, "user.make_owner", "user", target.id, { email: target.email, tenant_id: target.tenant_id });
   res.json({ ok: true, id: target.id, role: "owner" });
 });
@@ -170,6 +190,9 @@ router.post("/leave", authenticate, async (req, res) => {
   const slug = (u[0]?.email || "user").split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   const newTid = `${slug}-${crypto.randomBytes(3).toString("hex")}`;
   await pool.query("UPDATE users SET tenant_id=$1, role='owner' WHERE id=$2", [newTid, me.id]);
+  // Leave the old firm (drop that membership) and own the fresh solo workspace.
+  await removeMembership(me.id, me.tenant_id);
+  await addMembership(me.id, newTid, "owner");
   writeAudit(me.id, "user.leave_tenant", "tenant", me.tenant_id, { newTenant: newTid });
   res.json({ ok: true, tenant_id: newTid });
 });

@@ -27,7 +27,11 @@ async function tenantPlan(tenant_id) {
 }
 
 async function tenantSeatInfo(tenant_id) {
-  const { rows } = await pool.query("SELECT COUNT(*)::int AS n FROM users WHERE tenant_id=$1", [tenant_id]);
+  // Count active MEMBERS (tenant_memberships is the source of truth for who's in a firm),
+  // not users rows — so a firm created via /auth/create-firm counts its owner even though
+  // that owner's users.tenant_id (home) is elsewhere. For existing tenants the 0014 backfill
+  // makes memberships 1:1 with users, so counts are unchanged.
+  const { rows } = await pool.query("SELECT COUNT(DISTINCT user_id)::int AS n FROM tenant_memberships WHERE tenant_id=$1 AND status='active'", [tenant_id]);
   const plan = await tenantPlan(tenant_id);
   const used = rows[0]?.n || 0;
   const limit = seatLimit(plan);

@@ -5,6 +5,7 @@ const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
 const { tenantSeatInfo } = require("../lib/plans");
 const { writeAudit } = require("../lib/audit");
+const { addMembership } = require("../lib/memberships");
 
 // Super-admin console API (Users / Organisation / Subscription tabs). Org &
 // subscription endpoints operate on a target tenant (?tenant_id) so the super
@@ -39,6 +40,7 @@ router.post("/users/invite", async (req, res) => {
     `INSERT INTO users(email,password,role,tenant_id,subscription_plan) VALUES($1,$2,$3,$4,$5) RETURNING ${USER_COLS}`,
     [e, hash, role, tid, plan]
   );
+  await addMembership(rows[0].id, tid, role);
   writeAudit(req.user.id, "user.invite", "user", rows[0].id, { email: e, role, plan, tenant_id: tid });
   res.status(201).json({ ...rows[0], tempPassword: tempPass });
 });
