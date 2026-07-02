@@ -893,6 +893,8 @@ router.patch("/assets/:id/it-block", canPost, async (req, res) => { try { const 
 // Income-Tax Act block depreciation for a FY (dual-book). GET computes; POST commits the rollforward.
 router.get("/assets/it-depreciation", async (req, res) => { try { res.json(await assets.itActDepreciation(tenantOf(req), req.query.fy)); } catch (e) { fail(res, e); } });
 router.post("/assets/it-depreciation/close", canPost, async (req, res) => { try { res.json(await assets.itActDepreciation(tenantOf(req), (req.body || {}).fy, { commit: true })); } catch (e) { fail(res, e); } });
+// Exit / diligence readiness score (books hygiene + compliance + receivables + documentation).
+router.get("/exit-readiness", async (req, res) => { try { res.json(await require("../../lib/exitReadiness").exitReadiness(tenantOf(req))); } catch (e) { fail(res, e); } });
 // Profitability reports + Tally XML export + numbering audit.
 router.get("/reports/profitability/party", async (req, res) => { try { res.json(await reports.profitabilityByParty(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
 router.get("/reports/profitability/item", async (req, res) => { try { res.json(await reports.profitabilityByItem(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });

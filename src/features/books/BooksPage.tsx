@@ -490,6 +490,48 @@ function EmptyState({ onSeed, seeding, canWrite }: { onSeed: () => void; seeding
 // ─────────────────────────────────────────────────────────────────────────────
 // OVERVIEW TAB
 // ─────────────────────────────────────────────────────────────────────────────
+interface ExitReadiness { score: number; grade: string; summary: string; dimensions: { name: string; score: number }[]; gaps: { dimension: string; fix: string }[] }
+
+// Exit / diligence readiness — a synthesised 0-100 score (books hygiene + compliance +
+// receivables + documentation) with the top gaps to close. Self-contained fetch.
+function ExitReadinessCard() {
+  const [r, setR] = useState<ExitReadiness | null>(null);
+  const [busy, setBusy] = useState(true);
+  useEffect(() => {
+    let c = false;
+    api.get<ExitReadiness>("/api/books/exit-readiness").then((d) => { if (!c) setR(d); }).catch(() => {}).finally(() => { if (!c) setBusy(false); });
+    return () => { c = true; };
+  }, []);
+  if (busy || !r) return null;
+  const gc = r.grade === "A" || r.grade === "B" ? "text-green-400" : r.grade === "C" ? "text-yellow-400" : "text-red-400";
+  return (
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2"><Scale size={16} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Exit / diligence readiness</h3></div>
+        <div className="flex items-baseline gap-1.5"><span className={`text-2xl font-bold ${gc}`}>{r.score}</span><span className="text-xs text-[var(--color-muted)]">/100 · grade {r.grade}</span></div>
+      </div>
+      <p className="text-xs text-[var(--color-muted)] mt-1">{r.summary}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+        {r.dimensions.map((d) => (
+          <div key={d.name} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+            <p className="text-[10px] text-[var(--color-muted)]">{d.name}</p>
+            <p className="font-semibold tabular-nums">{d.score}<span className="text-[10px] text-[var(--color-muted)]">/100</span></p>
+            <div className="h-1 bg-[var(--color-border)]/50 rounded-full mt-1 overflow-hidden"><div className="h-full bg-[var(--color-primary)]" style={{ width: `${d.score}%` }} /></div>
+          </div>
+        ))}
+      </div>
+      {r.gaps.length > 0 && (
+        <div className="mt-3">
+          <p className="text-[11px] font-semibold text-[var(--color-muted)] mb-1">To raise your score:</p>
+          <ul className="space-y-1">{r.gaps.slice(0, 4).map((g, i) => (
+            <li key={i} className="text-xs text-[var(--color-muted)] flex gap-2"><span className="text-amber-400">•</span><span><span className="text-[var(--color-text)]">{g.dimension}:</span> {g.fix}</span></li>
+          ))}</ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OverviewTab({ loading }: { loading: boolean }) {
   const fy = currentFy();
   const [tb, setTb] = useState<TrialBalance | null>(null);
@@ -527,6 +569,7 @@ function OverviewTab({ loading }: { loading: boolean }) {
   return (
     <div className="space-y-5">
       <BooksHealthCard />
+      <ExitReadinessCard />
       <div
         className={`rounded-lg px-4 py-3 text-sm font-medium border ${
           balanced
