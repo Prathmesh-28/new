@@ -934,6 +934,9 @@ router.get("/documents/:id/schedule", async (req, res) => { try { res.json(await
 router.get("/parties/:id/unapplied", async (req, res) => { try { res.json(await payterms.unappliedForParty(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.post("/parties/:id/auto-apply", canPost, async (req, res) => { try { res.status(201).json(await payterms.autoApply(tenantOf(req), req.user.id, { partyLedgerId: req.params.id })); } catch (e) { fail(res, e); } });
 router.post("/expenses", canPost, async (req, res) => { try { res.status(201).json(await ops.createExpense(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/advances", async (req, res) => { try { res.json(await ops.listAdvances(tenantOf(req), req.query.status)); } catch (e) { fail(res, e); } });
+router.post("/advances", canPost, async (req, res) => { try { res.status(201).json(await ops.grantAdvance(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/advances/:id/settle", canPost, async (req, res) => { try { res.json(await ops.settleAdvance(tenantOf(req), req.user.id, { advanceId: req.params.id, ...(req.body || {}) })); } catch (e) { fail(res, e); } });
 router.post("/projects", canPost, async (req, res) => { try { res.status(201).json(await ops.createProject(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/projects", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_projects WHERE tenant_id=$1 ORDER BY name", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });
 router.post("/timesheets", canPost, async (req, res) => { try { res.status(201).json(await ops.logTime(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });

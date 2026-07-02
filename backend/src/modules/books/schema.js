@@ -520,6 +520,27 @@ const BOOKS_SCHEMA = `
     note            TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
   );
+
+  -- Employee/staff expense ADVANCES: money given up front (Dr Employee Advances / Cr Bank),
+  -- later SETTLED against an actual expense report (Dr expense categories / Cr Advances) with
+  -- the balance refunded (employee returns cash) or reimbursed (spent more than advanced).
+  CREATE TABLE IF NOT EXISTS book_expense_advances (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id          TEXT NOT NULL,
+    person             TEXT NOT NULL,             -- employee / staff name
+    purpose            TEXT,
+    amount             NUMERIC(19,4) NOT NULL,    -- advanced
+    settled_amount     NUMERIC(19,4) NOT NULL DEFAULT 0,   -- actual expenses booked at settle
+    refund_amount      NUMERIC(19,4) NOT NULL DEFAULT 0,   -- cash returned by the employee
+    reimburse_amount   NUMERIC(19,4) NOT NULL DEFAULT 0,   -- extra paid to the employee
+    status             TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','settled')),
+    advance_voucher_id UUID REFERENCES book_vouchers(id),
+    settle_voucher_id  UUID REFERENCES book_vouchers(id),
+    created_by         UUID,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    settled_at         TIMESTAMPTZ
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_expense_advances ON book_expense_advances(tenant_id, status, created_at DESC);
 `;
 
 module.exports = { BOOKS_SCHEMA };
