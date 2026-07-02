@@ -966,6 +966,8 @@ router.post("/expenses", canPost, async (req, res) => { try { res.status(201).js
 router.get("/advances", async (req, res) => { try { res.json(await ops.listAdvances(tenantOf(req), req.query.status)); } catch (e) { fail(res, e); } });
 // Voice / natural-language expense parse → a structured draft (rule parser + optional LLM refine).
 router.post("/expenses/parse", canPost, async (req, res) => { try { res.json(await require("./voiceExpense").parseExpenseText(tenantOf(req), (req.body || {}).text)); } catch (e) { fail(res, e); } });
+// Agreement obligation extraction → lock-ins/renewals/escalations/notice/payments (rule + LLM).
+router.post("/agreements/extract", canPost, async (req, res) => { try { res.json(await require("./agreements").extractObligations(tenantOf(req), (req.body || {}).text)); } catch (e) { fail(res, e); } });
 router.post("/advances", canPost, async (req, res) => { try { res.status(201).json(await ops.grantAdvance(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/advances/:id/settle", canPost, async (req, res) => { try { res.json(await ops.settleAdvance(tenantOf(req), req.user.id, { advanceId: req.params.id, ...(req.body || {}) })); } catch (e) { fail(res, e); } });
 router.post("/projects", canPost, async (req, res) => { try { res.status(201).json(await ops.createProject(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });

@@ -19,6 +19,9 @@ export default function BooksRenewalsTab() {
   const [f, setF] = useState({ kind: "license", name: "", identifier: "", counterparty: "", expires_on: "", amount: "" });
   const [renewing, setRenewing] = useState<string | null>(null);
   const [renewDate, setRenewDate] = useState("");
+  // Agreement obligation extraction (#182).
+  const [agText, setAgText] = useState(""); const [exBusy, setExBusy] = useState(false);
+  const [obligations, setObligations] = useState<{ type: string; description: string; date: string | null; amount: number | null; term: string | null }[] | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -41,6 +44,25 @@ export default function BooksRenewalsTab() {
   };
   const cancel = async (id: string) => { try { await api.delete(`/api/books/expiry-items/${id}`); toast.success("Removed"); await load(); } catch (e) { toast.error(errMsg(e)); } };
 
+  const toIso = (d: string | null) => {
+    if (!d) return null;
+    const m = d.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+    if (m) { let [, dd, mm, yy] = m; if (yy.length === 2) yy = "20" + yy; return `${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`; }
+    const t = Date.parse(d); return isNaN(t) ? null : new Date(t).toISOString().slice(0, 10);
+  };
+  const extract = async () => {
+    if (agText.trim().length < 10) { toast.error("Paste the agreement text"); return; }
+    setExBusy(true);
+    try { const r = await api.post<{ obligations: typeof obligations }>("/api/books/agreements/extract", { text: agText }); setObligations(r.obligations || []); }
+    catch (e) { toast.error(errMsg(e)); } finally { setExBusy(false); }
+  };
+  const addObligation = async (ob: { type: string; description: string; date: string | null }) => {
+    const iso = toIso(ob.date);
+    if (!iso) { toast.error("No usable date on this obligation"); return; }
+    try { await api.post("/api/books/expiry-items", { kind: "agreement", name: ob.description.slice(0, 80), expires_on: iso }); toast.success("Added to renewals"); await load(); }
+    catch (e) { toast.error(errMsg(e)); }
+  };
+
   const badge = (s: string) => s === "expired" ? "bg-red-900/30 text-red-400" : s === "due" ? "bg-amber-900/30 text-amber-400" : "bg-green-900/30 text-green-400";
   const dueCount = items.filter((i) => i.expiry_status === "due" || i.expiry_status === "expired").length;
 
@@ -62,6 +84,27 @@ export default function BooksRenewalsTab() {
           <div><label className={label}>Amount ₹</label><input className={input} type="number" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} placeholder="optional" /></div>
         </div>
         <button onClick={add} className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add</button>
+      </div>
+
+      {/* Agreement obligation extractor (#182) */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-2">Extract obligations from an agreement</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-2">Paste a lease/contract — we pull out lock-ins, renewals, escalations, notice periods, payments and penalties, and you can push dated ones into the renewals tracker above.</p>
+        <textarea className={input} rows={3} value={agText} onChange={(e) => setAgText(e.target.value)} placeholder="Paste agreement text…" />
+        <button onClick={extract} disabled={exBusy} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold border border-[var(--color-border)] px-3 py-2 rounded-lg hover:bg-[var(--color-accent)]">{exBusy ? "Extracting…" : "Extract obligations"}</button>
+        {obligations && (
+          obligations.length === 0 ? <p className="text-xs text-[var(--color-muted)] mt-3">No obligations detected.</p> : (
+            <div className="mt-3 space-y-1.5">
+              {obligations.map((o, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs border-t border-[var(--color-border)] pt-1.5">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-accent)] text-[var(--color-muted)] uppercase shrink-0">{o.type}</span>
+                  <span className="flex-1">{o.description}{o.term ? ` · ${o.term}` : ""}{o.amount ? ` · ₹${o.amount.toLocaleString("en-IN")}` : ""}{o.date ? ` · ${o.date}` : ""}</span>
+                  {o.date && <button onClick={() => addObligation(o)} className="text-[var(--color-primary)] hover:underline shrink-0">+ track</button>}
+                </div>
+              ))}
+            </div>
+          )
+        )}
       </div>
 
       {busy ? <p className="text-sm text-[var(--color-muted)] py-6 text-center">Loading…</p>
