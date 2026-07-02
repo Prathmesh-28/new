@@ -99,6 +99,25 @@ const kn: Record<string, string> = {
   "CA Console": "CA ಕನ್ಸೋಲ್",
   "Investors": "ಹೂಡಿಕೆದಾರರು",
   "Admin Console": "ಅಡ್ಮಿನ್ ಕನ್ಸೋಲ್",
-  "All Data": "ಎಲ್ಲಾ ಡೇಟಾ"
+  "All Data": "ಎಲ್ಲಾ ಡೇಟಾ",
+  "dash.greetMorning": "ಶುಭೋದಯ",
+  "dash.greetAfternoon": "ಶುಭ ಮಧ್ಯಾಹ್ನ",
+  "dash.greetEvening": "ಶುಭ ಸಂಜೆ",
+  "dash.yourBrief": "ನಿಮ್ಮ ಸಾರಾಂಶ",
+  "dash.simpleView": "ಸರಳ ನೋಟ",
+  "dash.simpleViewHint": "ದೈನಂದಿನ ಕೆಲಸಗಳಿಗೆ ದೊಡ್ಡ ಬಟನ್‌ಗಳಿರುವ ಸರಳ ನೋಟ",
+  "dash.today": "ಇಂದು",
+  "dash.insights": "ಒಳನೋಟಗಳು",
+  "simple.balance": "ನಿಮ್ಮ ಖಾತೆಗಳಲ್ಲಿರುವ ಹಣ",
+  "simple.newBill": "ಹೊಸ ಬಿಲ್",
+  "simple.newBill.hint": "ಇನ್‌ವಾಯ್ಸ್ ಮಾಡಿ",
+  "simple.gotPaid": "ಹಣ ಬಂತು",
+  "simple.gotPaid.hint": "ಪಾವತಿ ದಾಖಲಿಸಿ",
+  "simple.spent": "ನಾನು ಹಣ ಖರ್ಚು ಮಾಡಿದೆ",
+  "simple.spent.hint": "ಖರ್ಚು ಸೇರಿಸಿ",
+  "simple.myMoney": "ನನ್ನ ಹಣ",
+  "simple.myMoney.hint": "ನಗದು ಮತ್ತು ಬಾಕಿ",
+  "simple.getHelp": "ಸಹಾಯ ಪಡೆಯಿರಿ",
+  "simple.fullView": "ಪೂರ್ಣ ನೋಟಕ್ಕೆ ಬದಲಿಸಿ"
 };
 export default kn;

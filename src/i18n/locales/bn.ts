@@ -99,6 +99,25 @@ const bn: Record<string, string> = {
   "CA Console": "CA কনসোল",
   "Investors": "বিনিয়োগকারী",
   "Admin Console": "অ্যাডমিন কনসোল",
-  "All Data": "সমস্ত ডেটা"
+  "All Data": "সমস্ত ডেটা",
+  "dash.greetMorning": "শুভ সকাল",
+  "dash.greetAfternoon": "শুভ অপরাহ্ন",
+  "dash.greetEvening": "শুভ সন্ধ্যা",
+  "dash.yourBrief": "আপনার সংক্ষিপ্ত ঝলক",
+  "dash.simpleView": "সরল দৃশ্য",
+  "dash.simpleViewHint": "দৈনন্দিন কাজের জন্য বড় বোতামসহ সহজ একটি দৃশ্য",
+  "dash.today": "আজ",
+  "dash.insights": "বিশ্লেষণ",
+  "simple.balance": "আপনার অ্যাকাউন্টের টাকা",
+  "simple.newBill": "নতুন বিল",
+  "simple.newBill.hint": "একটি চালান তৈরি করুন",
+  "simple.gotPaid": "টাকা পেয়েছি",
+  "simple.gotPaid.hint": "একটি পেমেন্ট লিখে রাখুন",
+  "simple.spent": "টাকা খরচ করেছি",
+  "simple.spent.hint": "একটি খরচ যোগ করুন",
+  "simple.myMoney": "আমার টাকা",
+  "simple.myMoney.hint": "নগদ ও ব্যালেন্স",
+  "simple.getHelp": "সাহায্য নিন",
+  "simple.fullView": "সম্পূর্ণ দৃশ্যে যান"
 };
 export default bn;

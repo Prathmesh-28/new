@@ -99,6 +99,25 @@ const pa: Record<string, string> = {
   "CA Console": "CA ਕੰਸੋਲ",
   "Investors": "ਨਿਵੇਸ਼ਕ",
   "Admin Console": "ਐਡਮਿਨ ਕੰਸੋਲ",
-  "All Data": "ਸਾਰਾ ਡੇਟਾ"
+  "All Data": "ਸਾਰਾ ਡੇਟਾ",
+  "dash.greetMorning": "ਸ਼ੁਭ ਸਵੇਰ",
+  "dash.greetAfternoon": "ਸ਼ੁਭ ਦੁਪਹਿਰ",
+  "dash.greetEvening": "ਸ਼ੁਭ ਸ਼ਾਮ",
+  "dash.yourBrief": "ਤੁਹਾਡਾ ਖ਼ੁਲਾਸਾ",
+  "dash.simpleView": "ਸੌਖਾ ਦ੍ਰਿਸ਼",
+  "dash.simpleViewHint": "ਰੋਜ਼ ਦੇ ਕੰਮਾਂ ਲਈ ਵੱਡੇ ਬਟਨਾਂ ਵਾਲਾ ਸੌਖਾ ਦ੍ਰਿਸ਼",
+  "dash.today": "ਅੱਜ",
+  "dash.insights": "ਜਾਣਕਾਰੀ",
+  "simple.balance": "ਤੁਹਾਡੇ ਖਾਤਿਆਂ ਵਿੱਚ ਪੈਸਾ",
+  "simple.newBill": "ਨਵਾਂ ਬਿੱਲ",
+  "simple.newBill.hint": "ਬਿੱਲ ਬਣਾਓ",
+  "simple.gotPaid": "ਪੈਸੇ ਮਿਲੇ",
+  "simple.gotPaid.hint": "ਭੁਗਤਾਨ ਦਰਜ ਕਰੋ",
+  "simple.spent": "ਮੈਂ ਪੈਸੇ ਖ਼ਰਚੇ",
+  "simple.spent.hint": "ਖ਼ਰਚਾ ਜੋੜੋ",
+  "simple.myMoney": "ਮੇਰਾ ਪੈਸਾ",
+  "simple.myMoney.hint": "ਨਕਦੀ ਤੇ ਬਕਾਇਆ",
+  "simple.getHelp": "ਮਦਦ ਲਓ",
+  "simple.fullView": "ਪੂਰੇ ਦ੍ਰਿਸ਼ 'ਤੇ ਜਾਓ"
 };
 export default pa;

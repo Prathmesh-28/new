@@ -99,6 +99,25 @@ const ml: Record<string, string> = {
   "CA Console": "CA കൺസോൾ",
   "Investors": "നിക്ഷേപകർ",
   "Admin Console": "അഡ്മിൻ കൺസോൾ",
-  "All Data": "എല്ലാ ഡാറ്റയും"
+  "All Data": "എല്ലാ ഡാറ്റയും",
+  "dash.greetMorning": "സുപ്രഭാതം",
+  "dash.greetAfternoon": "ശുഭ ഉച്ചനേരം",
+  "dash.greetEvening": "ശുഭ സന്ധ്യ",
+  "dash.yourBrief": "ഇന്നത്തെ ചുരുക്കം",
+  "dash.simpleView": "ലളിത കാഴ്ച",
+  "dash.simpleViewHint": "ദിവസേനയുള്ള ജോലികൾക്ക് വലിയ ബട്ടണുകളുള്ള ലളിതമായ കാഴ്ച",
+  "dash.today": "ഇന്ന്",
+  "dash.insights": "വിവരങ്ങൾ",
+  "simple.balance": "നിങ്ങളുടെ അക്കൗണ്ടുകളിലെ പണം",
+  "simple.newBill": "പുതിയ ബിൽ",
+  "simple.newBill.hint": "ഇൻവോയ്സ് ഉണ്ടാക്കൂ",
+  "simple.gotPaid": "പണം കിട്ടി",
+  "simple.gotPaid.hint": "പേയ്മെന്റ് രേഖപ്പെടുത്തൂ",
+  "simple.spent": "ഞാൻ പണം ചെലവാക്കി",
+  "simple.spent.hint": "ചെലവ് ചേർക്കൂ",
+  "simple.myMoney": "എന്റെ പണം",
+  "simple.myMoney.hint": "പണവും ബാലൻസും",
+  "simple.getHelp": "സഹായം നേടൂ",
+  "simple.fullView": "പൂർണ്ണ കാഴ്ചയിലേക്ക് മാറൂ"
 };
 export default ml;

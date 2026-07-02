@@ -99,6 +99,25 @@ const te: Record<string, string> = {
   "CA Console": "CA కన్సోల్",
   "Investors": "పెట్టుబడిదారులు",
   "Admin Console": "అడ్మిన్ కన్సోల్",
-  "All Data": "మొత్తం డేటా"
+  "All Data": "మొత్తం డేటా",
+  "dash.greetMorning": "శుభోదయం",
+  "dash.greetAfternoon": "శుభ మధ్యాహ్నం",
+  "dash.greetEvening": "శుభ సాయంత్రం",
+  "dash.yourBrief": "మీ సారాంశం",
+  "dash.simpleView": "సులభ వీక్షణ",
+  "dash.simpleViewHint": "రోజువారీ పనుల కోసం పెద్ద బటన్‌లతో సులభమైన వీక్షణ",
+  "dash.today": "ఈరోజు",
+  "dash.insights": "విశ్లేషణలు",
+  "simple.balance": "మీ ఖాతాలలోని డబ్బు",
+  "simple.newBill": "కొత్త బిల్లు",
+  "simple.newBill.hint": "ఇన్‌వాయిస్ చేయండి",
+  "simple.gotPaid": "డబ్బు వచ్చింది",
+  "simple.gotPaid.hint": "చెల్లింపును నమోదు చేయండి",
+  "simple.spent": "నేను డబ్బు ఖర్చు చేశాను",
+  "simple.spent.hint": "ఖర్చును జోడించండి",
+  "simple.myMoney": "నా డబ్బు",
+  "simple.myMoney.hint": "నగదు & నిల్వలు",
+  "simple.getHelp": "సహాయం పొందండి",
+  "simple.fullView": "పూర్తి వీక్షణకు మారండి"
 };
 export default te;

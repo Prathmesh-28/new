@@ -99,6 +99,25 @@ const ta: Record<string, string> = {
   "CA Console": "CA பலகை",
   "Investors": "முதலீட்டாளர்கள்",
   "Admin Console": "நிர்வாக பலகை",
-  "All Data": "அனைத்து தரவு"
+  "All Data": "அனைத்து தரவு",
+  "dash.greetMorning": "காலை வணக்கம்",
+  "dash.greetAfternoon": "மதிய வணக்கம்",
+  "dash.greetEvening": "மாலை வணக்கம்",
+  "dash.yourBrief": "இன்றைய சுருக்கம்",
+  "dash.simpleView": "எளிய பார்வை",
+  "dash.simpleViewHint": "தினசரி வேலைகளுக்கு பெரிய பட்டன்களுடன் எளிய பார்வை",
+  "dash.today": "இன்று",
+  "dash.insights": "பார்வைகள்",
+  "simple.balance": "உங்கள் கணக்குகளில் உள்ள பணம்",
+  "simple.newBill": "புதிய பில்",
+  "simple.newBill.hint": "இன்வாய்ஸ் உருவாக்கு",
+  "simple.gotPaid": "பணம் வந்தது",
+  "simple.gotPaid.hint": "பணம் பெற்றதைப் பதிவு செய்",
+  "simple.spent": "பணம் செலவழித்தேன்",
+  "simple.spent.hint": "செலவைச் சேர்",
+  "simple.myMoney": "என் பணம்",
+  "simple.myMoney.hint": "பணம் & இருப்பு",
+  "simple.getHelp": "உதவி பெறு",
+  "simple.fullView": "முழு பார்வைக்கு மாறு"
 };
 export default ta;

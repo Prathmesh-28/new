@@ -99,6 +99,25 @@ const mr: Record<string, string> = {
   "CA Console": "CA कन्सोल",
   "Investors": "गुंतवणूकदार",
   "Admin Console": "अ‍ॅडमिन कन्सोल",
-  "All Data": "सर्व डेटा"
+  "All Data": "सर्व डेटा",
+  "dash.greetMorning": "शुभ सकाळ",
+  "dash.greetAfternoon": "शुभ दुपार",
+  "dash.greetEvening": "शुभ संध्याकाळ",
+  "dash.yourBrief": "तुमचा आढावा",
+  "dash.simpleView": "सोपा नमुना",
+  "dash.simpleViewHint": "रोजच्या कामांसाठी मोठ्या बटणांचा सोपा नमुना",
+  "dash.today": "आज",
+  "dash.insights": "माहिती",
+  "simple.balance": "तुमच्या खात्यातील पैसे",
+  "simple.newBill": "नवीन बिल",
+  "simple.newBill.hint": "बिल तयार करा",
+  "simple.gotPaid": "पैसे मिळाले",
+  "simple.gotPaid.hint": "पेमेंट नोंदवा",
+  "simple.spent": "मी पैसे खर्च केले",
+  "simple.spent.hint": "खर्च जोडा",
+  "simple.myMoney": "माझे पैसे",
+  "simple.myMoney.hint": "रोकड व शिल्लक",
+  "simple.getHelp": "मदत घ्या",
+  "simple.fullView": "संपूर्ण नमुना पाहा"
 };
 export default mr;

@@ -99,6 +99,25 @@ const gu: Record<string, string> = {
   "CA Console": "CA કન્સોલ",
   "Investors": "રોકાણકારો",
   "Admin Console": "એડમિન કન્સોલ",
-  "All Data": "બધો ડેટા"
+  "All Data": "બધો ડેટા",
+  "dash.greetMorning": "સુપ્રભાત",
+  "dash.greetAfternoon": "શુભ બપોર",
+  "dash.greetEvening": "શુભ સાંજ",
+  "dash.yourBrief": "તમારી ઝલક",
+  "dash.simpleView": "સરળ દેખાવ",
+  "dash.simpleViewHint": "રોજના કામ માટે મોટા બટન સાથેનો સરળ દેખાવ",
+  "dash.today": "આજે",
+  "dash.insights": "માહિતી",
+  "simple.balance": "તમારા ખાતામાં પૈસા",
+  "simple.newBill": "નવું બિલ",
+  "simple.newBill.hint": "ઇન્વૉઇસ બનાવો",
+  "simple.gotPaid": "પૈસા મળ્યા",
+  "simple.gotPaid.hint": "ચુકવણી નોંધો",
+  "simple.spent": "મેં પૈસા ખર્ચ્યા",
+  "simple.spent.hint": "ખર્ચ ઉમેરો",
+  "simple.myMoney": "મારા પૈસા",
+  "simple.myMoney.hint": "રોકડ અને બાકી રકમ",
+  "simple.getHelp": "મદદ મેળવો",
+  "simple.fullView": "પૂરા દેખાવ પર જાઓ"
 };
 export default gu;
