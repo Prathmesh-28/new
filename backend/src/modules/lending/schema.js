@@ -106,6 +106,46 @@ CREATE TABLE IF NOT EXISTS loan_servicing_events (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_loan_servicing_events_loan ON loan_servicing_events(loan_id, as_of DESC);
+
+-- e-NACH / UPI-Autopay auto-collection mandates. State machine: initiated → active →
+-- paused/revoked/failed. The actual debit is provider-gated (Razorpay/Digio); this models the
+-- mandate lifecycle + presentation scheduling against the repayment schedule. On a successful
+-- presentation we record a repayment; on a bounce the installment stays unpaid so servicing DPD
+-- picks it up.
+CREATE TABLE IF NOT EXISTS loan_mandates (
+  id            UUID PRIMARY KEY DEFAULT collab_uuidv7(),
+  loan_id       UUID NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
+  tenant_id     TEXT NOT NULL,
+  provider      TEXT NOT NULL DEFAULT 'manual',   -- 'razorpay' | 'digio' | 'manual'
+  max_amount    NUMERIC(15,2) NOT NULL DEFAULT 0,  -- per-debit cap
+  frequency     TEXT NOT NULL DEFAULT 'as_presented',
+  status        TEXT NOT NULL DEFAULT 'initiated'
+                  CHECK (status IN ('initiated','active','paused','revoked','failed')),
+  provider_ref  TEXT,                              -- UMRN / provider mandate id
+  debit_account TEXT,                              -- masked (e.g. ••1234)
+  created_by    UUID,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  activated_at  TIMESTAMPTZ,
+  revoked_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_loan_mandates_loan ON loan_mandates(loan_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS loan_mandate_presentations (
+  id            UUID PRIMARY KEY DEFAULT collab_uuidv7(),
+  mandate_id    UUID NOT NULL REFERENCES loan_mandates(id) ON DELETE CASCADE,
+  loan_id       UUID NOT NULL,
+  tenant_id     TEXT NOT NULL,
+  installment_no INT NOT NULL,
+  amount        NUMERIC(15,2) NOT NULL,
+  due_date      DATE,
+  status        TEXT NOT NULL DEFAULT 'scheduled'
+                  CHECK (status IN ('scheduled','success','bounced','skipped')),
+  provider_ref  TEXT,
+  result_at     TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (mandate_id, installment_no)   -- one presentation per installment (idempotent)
+);
+CREATE INDEX IF NOT EXISTS idx_loan_presentations_mandate ON loan_mandate_presentations(mandate_id, installment_no);
 `;
 
 module.exports = { LENDING_SCHEMA };

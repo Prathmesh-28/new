@@ -13,12 +13,14 @@ interface Offer { id: string; kind: string; principal: number; processing_fee: n
 interface ScheduleRow { installment_no: number; due_date: string; total_due: number; status: string }
 interface Loan { id: string; kind: string; principal: number; outstanding_principal: number; status: string; dpd_bucket?: string; asset_class?: string; dpd?: number; penal_accrued?: number; settled_at?: string; schedule?: ScheduleRow[] }
 interface Servicing { active: number; byClass: { standard: number; overdue: number; npa: number }; overdueAmount: number; npaAmount: number; penalAccrued: number; outstanding: number }
+interface Mandate { id: string; loan_id: string; status: string; provider: string; provider_configured: boolean; collected: number; bounced: number }
 
 export default function EmbeddedFinancing() {
   const [elig, setElig] = useState<Eligibility | null>(null);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [svc, setSvc] = useState<Servicing | null>(null);
+  const [mandates, setMandates] = useState<Mandate[]>([]);
   const [settling, setSettling] = useState<string | null>(null);
   const [settleAmt, setSettleAmt] = useState("");
   const [loading, setLoading] = useState(true);
@@ -29,13 +31,14 @@ export default function EmbeddedFinancing() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [e, o, l, s] = await Promise.all([
+      const [e, o, l, s, mn] = await Promise.all([
         api.get<Eligibility>("/api/lending/eligibility").catch(() => null),
         api.get<Offer[]>("/api/lending/offers").catch(() => []),
         api.get<Loan[]>("/api/lending/loans").catch(() => []),
         api.get<Servicing>("/api/lending/servicing").catch(() => null),
+        api.get<Mandate[]>("/api/lending/mandates").catch(() => []),
       ]);
-      setElig(e); setOffers(o || []); setLoans(l || []); setSvc(s);
+      setElig(e); setOffers(o || []); setLoans(l || []); setSvc(s); setMandates(mn || []);
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -65,6 +68,14 @@ export default function EmbeddedFinancing() {
     if (!(amt >= 0)) { toast.error("Enter a settlement amount"); return; }
     await act(() => api.post(`/api/lending/loans/${id}/settle`, { settlement_amount: amt }), "Loan settled");
     setSettling(null); setSettleAmt("");
+  };
+
+  const liveMandate = (loanId: string) => mandates.find((m) => m.loan_id === loanId && ["initiated", "active", "paused"].includes(m.status));
+  const setupMandate = async (loanId: string, outstanding: number) => {
+    await act(async () => {
+      const m = await api.post<{ id: string }>(`/api/lending/loans/${loanId}/mandate`, { provider: "manual", max_amount: outstanding });
+      await api.post(`/api/lending/mandates/${m.id}/activate`, {});
+    }, "Auto-collect (e-NACH) set up");
   };
 
   if (loading) return <p className="text-sm text-[var(--color-muted)] flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Loading…</p>;
@@ -165,6 +176,23 @@ export default function EmbeddedFinancing() {
               )}
               {l.status === "closed" && <span className="text-xs text-green-400">{l.settled_at ? "Settled" : "Closed"}</span>}
             </div>
+            {l.status === "active" && (() => {
+              const mn = liveMandate(l.id);
+              return (
+                <div className="mt-2 flex items-center gap-2 flex-wrap text-xs border-t border-[var(--color-border)] pt-2">
+                  {mn ? (
+                    <>
+                      <span className={`px-2 py-0.5 rounded-full ${mn.status === "active" ? "bg-green-900/30 text-green-400" : mn.status === "paused" ? "bg-amber-900/30 text-amber-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>Auto-collect (e-NACH): {mn.status}</span>
+                      <span className="text-[var(--color-muted)]">{mn.collected} collected · {mn.bounced} bounced{!mn.provider_configured ? " · manual mode" : ""}</span>
+                      {mn.status === "active" && <button onClick={() => act(() => api.post(`/api/lending/mandates/${mn.id}/pause`, {}), "Mandate paused")} disabled={busy} className="text-[var(--color-muted)] hover:text-[var(--color-text)] underline">pause</button>}
+                      {mn.status === "paused" && <button onClick={() => act(() => api.post(`/api/lending/mandates/${mn.id}/activate`, {}), "Mandate resumed")} disabled={busy} className="text-[var(--color-primary)] underline">resume</button>}
+                    </>
+                  ) : (
+                    <button onClick={() => setupMandate(l.id, l.outstanding_principal)} disabled={busy} className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]">Set up auto-collect (e-NACH)</button>
+                  )}
+                </div>
+              );
+            })()}
             {settling === l.id && (
               <div className="mt-3 flex items-center gap-2 border-t border-[var(--color-border)] pt-3 flex-wrap">
                 <input value={settleAmt} onChange={e => setSettleAmt(e.target.value)} type="number" placeholder="Settlement amount ₹" className="flex-1 min-w-[140px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" />

@@ -495,9 +495,12 @@ initDb()
     cron.schedule("0 2 * * *", () => {
       require("./modules/books/documents").runAllRecurring().catch(err => console.error("[books-recurring]", err.message));
     }, { timezone: "UTC" });
-    // Lending: daily loan servicing (DPD refresh, NPA classification, penal-interest accrual)
-    // at 08:00 IST (02:30 UTC), after recurring docs post.
-    cron.schedule("30 2 * * *", () => {
+    // Lending: daily loan servicing at 08:00 IST (02:30 UTC), after recurring docs post.
+    // First schedule any due e-NACH mandate presentations, then run servicing (DPD refresh,
+    // NPA classification, penal-interest accrual) so a bounce escalates the same day.
+    cron.schedule("30 2 * * *", async () => {
+      try { const m = await require("./modules/lending/mandates").presentDueAll(); if (m && m.scheduled) console.log(`[lending-mandates] scheduled ${m.scheduled} presentation(s)`); }
+      catch (err) { console.error("[lending-mandates]", err.message); }
       require("./modules/lending/servicing").runServicingDue()
         .then(r => { if (r && r.serviced) console.log(`[lending-servicing] serviced ${r.serviced} loan(s), ${r.penalPosted} penal accrual(s)`); })
         .catch(err => console.error("[lending-servicing]", err.message));

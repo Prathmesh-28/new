@@ -6,6 +6,7 @@ const router = require("express").Router();
 const { authenticate } = require("../../middleware/auth");
 const lending = require("./index");
 const servicing = require("./servicing");
+const mandates = require("./mandates");
 let capabilities; try { capabilities = require("../../routes/capabilities").capabilities; } catch { capabilities = () => ({}); }
 
 router.use(authenticate);
@@ -72,6 +73,34 @@ router.post("/servicing/run", canWrite, async (req, res) => {
 // Settle/waive a loan (borrower pays part, lender forgives the rest of the principal).
 router.post("/loans/:id/settle", canWrite, async (req, res) => {
   try { res.json(await servicing.settleLoan(tenantOf(req), req.params.id, { settlementAmount: req.body?.settlement_amount, note: req.body?.note, actorId: req.user.id })); } catch (e) { fail(res, e); }
+});
+
+// ── e-NACH / UPI-Autopay mandates (auto-collection) ───────────────────────────
+router.get("/mandates", async (req, res) => {
+  try { res.json(await mandates.listMandates(tenantOf(req), req.query.loan_id)); } catch (e) { fail(res, e); }
+});
+router.get("/mandates/:id/presentations", async (req, res) => {
+  try { res.json(await mandates.listPresentations(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); }
+});
+router.post("/loans/:id/mandate", canWrite, async (req, res) => {
+  try { const b = req.body || {}; res.status(201).json(await mandates.createMandate(tenantOf(req), req.params.id, { provider: b.provider, maxAmount: b.max_amount, frequency: b.frequency, debitAccount: b.debit_account, actorId: req.user.id })); } catch (e) { fail(res, e); }
+});
+router.post("/mandates/:id/activate", canWrite, async (req, res) => {
+  try { res.json(await mandates.activateMandate(tenantOf(req), req.params.id, { providerRef: (req.body || {}).provider_ref })); } catch (e) { fail(res, e); }
+});
+router.post("/mandates/:id/pause", canWrite, async (req, res) => {
+  try { res.json(await mandates.pauseMandate(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); }
+});
+router.post("/mandates/:id/revoke", canWrite, async (req, res) => {
+  try { res.json(await mandates.revokeMandate(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); }
+});
+// Schedule presentations for this tenant's active mandates (the daily cron does it too).
+router.post("/mandates/present", canWrite, async (req, res) => {
+  try { res.json(await mandates.presentDue(tenantOf(req))); } catch (e) { fail(res, e); }
+});
+// Resolve a scheduled presentation (webhook or operator): success → repayment; bounced → DPD.
+router.post("/presentations/:id/result", canWrite, async (req, res) => {
+  try { res.json(await mandates.recordPresentationResult(tenantOf(req), req.params.id, (req.body || {}).result, { ref: (req.body || {}).ref, actorId: req.user.id })); } catch (e) { fail(res, e); }
 });
 
 module.exports = router;
