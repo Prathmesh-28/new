@@ -10,6 +10,7 @@ import EmptyState from "@/components/EmptyState";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { differenceInCalendarDays, format } from "date-fns";
+import { useT } from "@/i18n";
 import type { CapitalRaise } from "@/data/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -767,6 +768,7 @@ function SyndicatesTab({ user }: { user: { email: string } }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function InvestorPage() {
+  const tr = useT();
   const { user } = useAuth();
   const { store, addCapitalInvestment } = useApp();
   const { capitalInvestments } = store;
@@ -820,14 +822,14 @@ export default function InvestorPage() {
   const TABS = [
     { id: "portfolio"       as const, label: `Portfolio${portfolio.length > 0 ? ` (${portfolio.length})` : ""}`, badge: portfolio.filter(c => c.last_alert?.severity === "critical").length || undefined },
     { id: "dealflow"        as const, label: `Deal Flow${publicRaises.length > 0 ? ` (${publicRaises.length})` : ""}`, badge: undefined },
-    { id: "syndicates"      as const, label: "Syndicates",        badge: undefined },
-    { id: "update-composer" as const, label: "Investor Update",   badge: undefined },
-    { id: "data-room"       as const, label: "Data Room",         badge: undefined },
-    { id: "tearsheet"       as const, label: "KPI Tearsheet",     badge: undefined },
-    { id: "exit-waterfall"  as const, label: "Exit Waterfall",    badge: undefined },
-    { id: "mrr-movement"      as const, label: "MRR Movement",       badge: undefined },
-    { id: "burn-efficiency"   as const, label: "Burn Efficiency",    badge: undefined },
-    { id: "cohort-retention"  as const, label: "Cohort Retention",   badge: undefined },
+    { id: "syndicates"      as const, label: tr("investor.tabSyndicates"),        badge: undefined },
+    { id: "update-composer" as const, label: tr("investor.tabInvestorUpdate"),   badge: undefined },
+    { id: "data-room"       as const, label: tr("investor.tabDataRoom"),         badge: undefined },
+    { id: "tearsheet"       as const, label: tr("investor.tabKpiTearsheet"),     badge: undefined },
+    { id: "exit-waterfall"  as const, label: tr("investor.tabExitWaterfall"),    badge: undefined },
+    { id: "mrr-movement"      as const, label: tr("investor.tabMrrMovement"),       badge: undefined },
+    { id: "burn-efficiency"   as const, label: tr("investor.tabBurnEfficiency"),    badge: undefined },
+    { id: "cohort-retention"  as const, label: tr("investor.tabCohortRetention"),   badge: undefined },
     { id: "fundraise-pipeline" as const, label: "Raise Pipeline",    badge: undefined },
     { id: "board-agenda"      as const, label: "Board Agenda",       badge: undefined },
     { id: "runway-timing"     as const, label: "Next-Raise Timing",  badge: undefined },
@@ -837,7 +839,7 @@ export default function InvestorPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-bold">Investor Portal</h1>
+        <h1 className="text-xl font-bold">{tr("investor.title")}</h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
           AA-verified portfolio monitoring · Live deal flow · Syndicates · {user.email}
         </p>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useT } from "@/i18n";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
@@ -79,6 +80,7 @@ function safeFormatDate(d: string): string {
 }
 
 export default function SecurityPage() {
+  const tr = useT();
   const { store } = useApp();
   const txns = store.transactions as Txn[];
   const [tab, setTab] = useState<TabId>("overview");
@@ -122,10 +124,10 @@ export default function SecurityPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <ShieldAlert size={18} className="text-[var(--color-primary)]" /> Fraud, Security &amp; Trust
+            <ShieldAlert size={18} className="text-[var(--color-primary)]" /> {tr("sec.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Self-checks on your ledger - anomaly, duplicate, round-trip and new-payee detection plus access &amp; hygiene reviews, all computed from live data.
+            {tr("sec.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -142,10 +144,10 @@ export default function SecurityPage() {
         <div className="space-y-5">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              { label: "Payment Anomalies", value: counts.anomalies, color: counts.anomalies > 0 ? "text-orange-400" : "text-green-400", sub: "σ-outlier outflows (>2σ)" },
-              { label: "Duplicate Suspects", value: counts.dupes, color: counts.dupes > 0 ? "text-red-400" : "text-green-400", sub: "same payee + amount ≤7d" },
-              { label: "New Payees (30d)", value: counts.newPayees, color: counts.newPayees > 0 ? "text-yellow-400" : "text-green-400", sub: "first-time counterparties" },
-              { label: "Transactions Scanned", value: counts.total, color: "text-[var(--color-text)]", sub: "live ledger size" },
+              { label: tr("sec.cardAnomalies"), value: counts.anomalies, color: counts.anomalies > 0 ? "text-orange-400" : "text-green-400", sub: "σ-outlier outflows (>2σ)" },
+              { label: tr("sec.cardDupes"), value: counts.dupes, color: counts.dupes > 0 ? "text-red-400" : "text-green-400", sub: "same payee + amount ≤7d" },
+              { label: tr("sec.cardNewPayees"), value: counts.newPayees, color: counts.newPayees > 0 ? "text-yellow-400" : "text-green-400", sub: "first-time counterparties" },
+              { label: tr("sec.cardScanned"), value: counts.total, color: "text-[var(--color-text)]", sub: "live ledger size" },
             ].map(c => (
               <div key={c.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>

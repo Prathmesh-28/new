@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useT } from "@/i18n";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
@@ -65,6 +66,7 @@ const TABS = [
 ] as const;
 
 export default function PrivacyPage() {
+  const tr = useT();
   const [tab, setTab] = useState<TabId>("overview");
 
   return (
@@ -72,10 +74,10 @@ export default function PrivacyPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <ShieldCheck size={18} className="text-[var(--color-primary)]" /> Privacy & Consent
+            <ShieldCheck size={18} className="text-[var(--color-primary)]" /> {tr("priv.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            DEPA / Account Aggregator consents, DPDP Act 2023 compliance, data-rights tracking and breach response - one control centre.
+            {tr("priv.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -153,6 +155,7 @@ const STATUS_PILL: Record<AAStatus, string> = {
 
 // ── Overview ─────────────────────────────────────────────────────────────────────
 function Overview({ onJump }: { onJump: (t: TabId) => void }) {
+  const tr = useT();
   const [aa] = useFeatureState<AAConsent[]>("priv-aa-consents", []);
   const [dpdp] = useFeatureState<DpdpEntry[]>("priv-dpdp-log", []);
   const [dsr] = useFeatureState<DsrRequest[]>("priv-dsr", []);
@@ -170,10 +173,10 @@ function Overview({ onJump }: { onJump: (t: TabId) => void }) {
   const hygieneScore = Math.round((hygieneDone / HYGIENE_ITEMS.length) * 100);
 
   const cards = [
-    { label: "Active AA consents", value: String(activeAA), color: "text-green-400", sub: `${aa.length} total in register`, tab: "aa" as TabId },
-    { label: "DPDP consents logged", value: String(dpdp.length), color: "text-blue-400", sub: `${dpdp.filter(d => d.granted && !d.withdrawnOn).length} currently live`, tab: "dpdp-log" as TabId },
-    { label: "Open data requests", value: String(openDsr), color: openDsr > 0 ? "text-yellow-400" : "text-green-400", sub: "Right to access / erasure", tab: "dsr" as TabId },
-    { label: "DPDP readiness", value: `${hygieneScore}%`, color: hygieneScore >= 80 ? "text-green-400" : hygieneScore >= 50 ? "text-yellow-400" : "text-red-400", sub: `${hygieneDone}/${HYGIENE_ITEMS.length} controls in place`, tab: "hygiene" as TabId },
+    { label: tr("priv.cardActiveAa"), value: String(activeAA), color: "text-green-400", sub: `${aa.length} total in register`, tab: "aa" as TabId },
+    { label: tr("priv.cardDpdpLogged"), value: String(dpdp.length), color: "text-blue-400", sub: `${dpdp.filter(d => d.granted && !d.withdrawnOn).length} currently live`, tab: "dpdp-log" as TabId },
+    { label: tr("priv.cardOpenRequests"), value: String(openDsr), color: openDsr > 0 ? "text-yellow-400" : "text-green-400", sub: "Right to access / erasure", tab: "dsr" as TabId },
+    { label: tr("priv.cardDpdpReadiness"), value: `${hygieneScore}%`, color: hygieneScore >= 80 ? "text-green-400" : hygieneScore >= 50 ? "text-yellow-400" : "text-red-400", sub: `${hygieneDone}/${HYGIENE_ITEMS.length} controls in place`, tab: "hygiene" as TabId },
   ];
 
   const alerts: { tone: "red" | "yellow"; text: string; tab: TabId }[] = [];
@@ -208,7 +211,7 @@ function Overview({ onJump }: { onJump: (t: TabId) => void }) {
       )}
 
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1">Your privacy obligations under Indian law</h2>
+        <h2 className="text-sm font-semibold mb-1">{tr("priv.obligationsHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)] mb-4">
           The Digital Personal Data Protection Act 2023 makes your firm a Data Fiduciary for any personal data you hold. DEPA and the RBI's Account Aggregator framework govern how you fetch financial data with consent. This centre keeps the durable proof - registers, logs and request trails - that an audit or the Data Protection Board can ask for.
         </p>

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { useT } from "@/i18n";
 import { formatCurrency } from "@/lib/utils";
 import { format, differenceInCalendarDays } from "date-fns";
 
@@ -1032,6 +1033,7 @@ function ClientCard({ client, onUnlink, onNavigate, onReport }: {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function AdvisorPage() {
+  const tr = useT();
   const { user } = useAuth();
   const { setSelectedClient } = useApp();
   const navigate = useNavigate();
@@ -1115,9 +1117,9 @@ export default function AdvisorPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold">CA Practice</h1>
+          <h1 className="text-xl font-bold">{tr("adv.title")}</h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Clients · Bulk GST · Compliance · Lead marketplace · Billing
+            {tr("adv.subtitle")}
             {firmProfile.name && <span className="ml-2 text-[var(--color-primary)]">· {firmProfile.name}</span>}
           </p>
         </div>
@@ -1125,11 +1127,11 @@ export default function AdvisorPage() {
           <button onClick={() => setShowFirmSetup(true)}
             title="Set firm branding for reports"
             className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] px-2.5 py-1.5 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/40">
-            <Settings2 size={11} /> Firm Setup
+            <Settings2 size={11} /> {tr("adv.firmSetup")}
           </button>
           <button onClick={() => setShowForm(v => !v)}
             className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
-            <Plus size={12} /> Add Client
+            <Plus size={12} /> {tr("adv.addClient")}
           </button>
         </div>
       </div>
@@ -1184,10 +1186,10 @@ export default function AdvisorPage() {
       {clients.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: "Total Clients",    value: clients.length.toString(),                                   color: "text-[var(--color-primary)]" },
-            { label: "Need Attention",   value: atRisk.length.toString(),                                    color: atRisk.length > 0 ? "text-red-400" : "text-green-400" },
-            { label: "Active Alerts",    value: highAlerts.toString(),                                       color: highAlerts > 0 ? "text-orange-400" : "text-[var(--color-muted)]" },
-            { label: "Pre-qualified",    value: clients.filter(c => c.credit_prequalified).length.toString(), color: "text-green-400" },
+            { label: tr("adv.statTotalClients"),  value: clients.length.toString(),                                   color: "text-[var(--color-primary)]" },
+            { label: tr("adv.statNeedAttention"), value: atRisk.length.toString(),                                    color: atRisk.length > 0 ? "text-red-400" : "text-green-400" },
+            { label: tr("adv.statActiveAlerts"),  value: highAlerts.toString(),                                       color: highAlerts > 0 ? "text-orange-400" : "text-[var(--color-muted)]" },
+            { label: tr("adv.statPrequalified"),  value: clients.filter(c => c.credit_prequalified).length.toString(), color: "text-green-400" },
           ].map(({ label, value, color }) => (
             <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
@@ -1201,14 +1203,14 @@ export default function AdvisorPage() {
       {!loading && clients.length === 0 && tab === "clients" && (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <Users size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
-          <h2 className="text-base font-semibold mb-1">No clients yet</h2>
+          <h2 className="text-base font-semibold mb-1">{tr("adv.emptyTitle")}</h2>
           <p className="text-sm text-[var(--color-muted)] mb-5 max-w-sm mx-auto">
             Add your first client using their Tenant ID, or browse the{" "}
             <button onClick={() => setTab("marketplace")} className="text-[var(--color-primary)] underline">Marketplace</button>{" "}
             - Headroom brings you new clients.
           </p>
           <button onClick={() => setShowForm(true)} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">
-            Add First Client
+            {tr("adv.emptyAddFirst")}
           </button>
         </div>
       )}
