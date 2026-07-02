@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
@@ -65,6 +66,7 @@ function computeTaxCalendar(today: Date): TaxDeadline[] {
 }
 
 export default function TaxPage() {
+  const tr = useT();
   const { store, addObligation } = useApp();
   const { transactions, firm } = store;
   const navigate = useNavigate();
@@ -145,12 +147,12 @@ export default function TaxPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <ShieldCheck size={18} className="text-[var(--color-primary)]" /> Tax Autopilot
+            <ShieldCheck size={18} className="text-[var(--color-primary)]" /> {tr("tax.title")}
           </h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Advance tax · GST · TDS · ITR - computed from your live P&L</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("tax.subtitle")}</p>
         </div>
         <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {([["overview", "Overview", ShieldCheck], ["regime", "Regime Optimizer", Scale], ["advtax", "Advance Tax", Clock], ["44ad", "Presumptive (44AD)", Calculator], ["cg", "Capital Gains", TrendingUp], ["audit", "Tax Audit (44AB)", AlertTriangle], ["tcs", "TCS Tracker", FileText], ["mat", "MAT Check", AlertTriangle], ["angel", "Angel Tax", AlertTriangle],
+          {([["overview", tr("tax.tab.overview"), ShieldCheck], ["regime", tr("tax.tab.regime"), Scale], ["advtax", tr("tax.tab.advtax"), Clock], ["44ad", tr("tax.tab.presumptive44ad"), Calculator], ["cg", tr("tax.tab.capitalGains"), TrendingUp], ["audit", tr("tax.tab.audit44ab"), AlertTriangle], ["tcs", tr("tax.tab.tcsTracker"), FileText], ["mat", tr("tax.tab.matCheck"), AlertTriangle], ["angel", "Angel Tax", AlertTriangle],
             ["tds-return", "TDS Return (24Q/26Q)", Receipt], ["form26as", "26AS / AIS Recon", FileSearch], ["tds-finder", "TDS Section Finder", Search], ["ldc-197", "Lower-Deduction (197)", FileCheck], ["depreciation", "Depreciation Schedule", Layers], ["loss-setoff", "Loss Set-off & C/F", Repeat], ["itr-prefill", "ITR Pre-Fill Pack", FilePlus2], ["form15ca", "Form 15CA/CB", Globe], ["sec80", "Sec 80 Maximiser", PiggyBank], ["eq-levy", "Equalisation Levy / 194O", ShoppingCart], ["advtax-calendar", "Adv. Tax Calendar", CalendarClock], ["tax-notice", "Notice / Demand 143(1)", Gavel],
             ["hra", "HRA Exemption 10(13A)", Home], ["house-prop", "House Property 24(b)", Building2], ["44ae", "Presumptive 44AE (Transport)", Truck], ["gratuity", "Gratuity / Leave Encash", Umbrella], ["relief-89", "Arrears Relief 89(1)", Banknote], ["donation-80g", "Donations 80G", Heart], ["cg-exempt", "CG Exemption 54/54EC/54F", Coins], ["interest-234", "Interest 234A/B/C", Percent],
             ["115ba", "Corporate Rate 115BAA/BAB", Landmark], ["partner-remun", "Partner Remuneration 40(b)", Users], ["80jjaa", "New-Employee 80JJAA", UserPlus], ["esop-tax", "ESOP Tax", Gift], ["buyback", "Share Buyback 115QA", Wallet],

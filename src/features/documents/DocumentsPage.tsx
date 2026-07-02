@@ -6,6 +6,7 @@ import { format, differenceInCalendarDays } from "date-fns";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import { API_BASE } from "@/lib/apiBase";
+import { useT } from "@/i18n";
 
 type DocCategory = "gst" | "banking" | "legal" | "tax" | "payroll" | "other";
 type DocStatus = "valid" | "expiring" | "expired" | "uploaded";
@@ -235,6 +236,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
 type DocTab = "vault" | "ocr" | "esign" | "expiry" | "stmt-parser" | "audit-trail" | "checklist" | "templates" | "share" | "kyc" | "contract-dates" | "filing" | "approval" | "gstin-check" | "doc-requests" | "naming" | "compliance-cal" | "bundles" | "storage" | "access-matrix" | "watermark" | "statutory-pack" | "version-log" | "signatory-register" | "redaction-log" | "retention-policy" | "obligation-tracker";
 
 export default function DocumentsPage() {
+  const tr = useT();
   const [docTab, setDocTab]       = useState<DocTab>("vault");
   const [docs, setDocs]           = useState<Doc[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -316,10 +318,10 @@ export default function DocumentsPage() {
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
             <FolderOpen size={20} className="text-[var(--color-primary)]" />
-            Document Vault
+            {tr("docs.title")}
           </h1>
           <p className="text-sm text-[var(--color-muted)] mt-1">
-            GST certificates, bank statements, legal docs - stored securely on your account.
+            {tr("docs.subtitle")}
           </p>
         </div>
         {docTab === "vault" && (
@@ -327,14 +329,14 @@ export default function DocumentsPage() {
             onClick={() => setShowUpload(true)}
             className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-semibold hover:opacity-90 transition-all"
           >
-            <Plus size={13} /> Upload document
+            <Plus size={13} /> {tr("docs.upload")}
           </button>
         )}
       </div>
 
       {/* Section selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-        {([["vault", "Vault", FolderOpen], ["ocr", "Receipt OCR Capture", ScanLine], ["esign", "e-Sign Workflow", PenTool], ["expiry", "Expiry / Renewal Vault", CalendarClock], ["stmt-parser", "Bank Statement Parser", FileSpreadsheet], ["audit-trail", "Audit Trail", History], ["checklist", "Document Checklist", ListChecks], ["templates", "Template Library", Files], ["share", "Share-Link Tracker", Link2], ["kyc", "KYC Collector", UserCheck], ["contract-dates", "Contract Key-Dates", CalendarRange], ["filing", "Bill Filing Tracker", Archive], ["approval", "Approval Flow", ClipboardCheck], ["gstin-check", "GSTIN Validator", BadgeCheck], ["doc-requests", "Document Requests", Inbox], ["naming", "Naming Helper", Wand2], ["compliance-cal", "Compliance Calendar", CalendarDays], ["bundles", "Document Bundles", Layers], ["storage", "Storage Summary", HardDrive], ["access-matrix", "Access Matrix", KeyRound], ["watermark", "Watermark Note", Stamp], ["statutory-pack", "Statutory Pack", PackageCheck], ["version-log", "Version Log", GitBranch], ["signatory-register", "Signatory Register", Signature], ["redaction-log", "Redaction Checklist", EyeOff], ["retention-policy", "Retention Policy", CalendarX], ["obligation-tracker", "Obligation Tracker", ListTodo]] as const).map(([id, label, Icon]) => (
+        {([["vault", tr("docs.tab.vault"), FolderOpen], ["ocr", tr("docs.tab.ocr"), ScanLine], ["esign", tr("docs.tab.esign"), PenTool], ["expiry", tr("docs.tab.expiry"), CalendarClock], ["stmt-parser", tr("docs.tab.stmtParser"), FileSpreadsheet], ["audit-trail", tr("docs.tab.auditTrail"), History], ["checklist", tr("docs.tab.checklist"), ListChecks], ["templates", tr("docs.tab.templates"), Files], ["share", "Share-Link Tracker", Link2], ["kyc", "KYC Collector", UserCheck], ["contract-dates", "Contract Key-Dates", CalendarRange], ["filing", "Bill Filing Tracker", Archive], ["approval", "Approval Flow", ClipboardCheck], ["gstin-check", "GSTIN Validator", BadgeCheck], ["doc-requests", "Document Requests", Inbox], ["naming", "Naming Helper", Wand2], ["compliance-cal", "Compliance Calendar", CalendarDays], ["bundles", "Document Bundles", Layers], ["storage", "Storage Summary", HardDrive], ["access-matrix", "Access Matrix", KeyRound], ["watermark", "Watermark Note", Stamp], ["statutory-pack", "Statutory Pack", PackageCheck], ["version-log", "Version Log", GitBranch], ["signatory-register", "Signatory Register", Signature], ["redaction-log", "Redaction Checklist", EyeOff], ["retention-policy", "Retention Policy", CalendarX], ["obligation-tracker", "Obligation Tracker", ListTodo]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setDocTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${docTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -377,21 +379,21 @@ export default function DocumentsPage() {
           <CheckCircle2 size={18} className="text-green-400 shrink-0" />
           <div>
             <p className="text-lg font-bold">{totalDocs}</p>
-            <p className="text-xs text-[var(--color-muted)]">documents stored</p>
+            <p className="text-xs text-[var(--color-muted)]">{tr("docs.stat.stored")}</p>
           </div>
         </div>
         <div className={`bg-[var(--color-surface)] border rounded-lg p-4 flex items-center gap-3 ${expiring > 0 ? "border-yellow-800/40" : "border-[var(--color-border)]"}`}>
           <AlertTriangle size={18} className={expiring > 0 ? "text-yellow-400" : "text-[var(--color-muted)]"} />
           <div>
             <p className="text-lg font-bold">{expiring}</p>
-            <p className="text-xs text-[var(--color-muted)]">expiring soon</p>
+            <p className="text-xs text-[var(--color-muted)]">{tr("docs.stat.expiringSoon")}</p>
           </div>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center gap-3">
           <Lock size={18} className="text-[var(--color-primary)] shrink-0" />
           <div>
-            <p className="text-xs font-semibold">Encrypted in transit</p>
-            <p className="text-xs text-[var(--color-muted)]">scoped to your tenant</p>
+            <p className="text-xs font-semibold">{tr("docs.stat.encrypted")}</p>
+            <p className="text-xs text-[var(--color-muted)]">{tr("docs.stat.tenantScoped")}</p>
           </div>
         </div>
       </div>
@@ -451,13 +453,13 @@ export default function DocumentsPage() {
           </div>
 
           {loading ? (
-            <div className="py-12 text-center text-sm text-[var(--color-muted)]">Loading documents…</div>
+            <div className="py-12 text-center text-sm text-[var(--color-muted)]">{tr("docs.loading")}</div>
           ) : docs.length === 0 ? (
             <EmptyState
               icon={FolderOpen}
-              title="No documents yet"
-              description="Upload your GST certificate, bank statements, PAN, licenses and payroll registers to keep every compliance document in one searchable place."
-              ctaText="Upload document"
+              title={tr("docs.empty.title")}
+              description={tr("docs.empty.desc")}
+              ctaText={tr("docs.empty.cta")}
               onCta={() => setShowUpload(true)}
             />
           ) : filtered.length === 0 && (

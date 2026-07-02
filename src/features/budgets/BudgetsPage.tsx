@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import AiInsight from "@/components/ai/AiInsight";
@@ -76,6 +77,7 @@ function AddBudgetModal({ existing, onSave, onClose }: {
 }
 
 export default function BudgetsPage() {
+  const tr = useT();
   const { store, addBudget, updateBudget, deleteBudget } = useApp();
   const { transactions, budgets } = store;
   const [adding,  setAdding]  = useState(false);
@@ -129,21 +131,21 @@ export default function BudgetsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Budgets</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">{monthLabel} · spend vs limits</p>
+          <h1 className="text-xl font-bold">{tr("budg.title")}</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{monthLabel} · {tr("budg.subtitle")}</p>
         </div>
         <button onClick={() => setAdding(true)}
           className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
-          <Plus size={12} /> New Budget
+          <Plus size={12} /> {tr("budg.new")}
         </button>
       </div>
 
       {budgets.length === 0 ? (
         <EmptyState
           icon={PiggyBank}
-          title="No budgets yet"
-          description="Set monthly limits by category to track budget vs actual - we'll flag overspends and categories trending up versus last month, live from your transactions."
-          ctaText="Create your first budget"
+          title={tr("budg.empty.title")}
+          description={tr("budg.empty.desc")}
+          ctaText={tr("budg.empty.cta")}
           onCta={() => setAdding(true)}
         />
       ) : (
@@ -151,9 +153,9 @@ export default function BudgetsPage() {
       {/* Summary row */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Total Budget",   value: formatCurrency(totalBudget),    color: "text-[var(--color-primary)]" },
-          { label: "Spent This Month", value: formatCurrency(totalSpent),   color: totalSpent > totalBudget ? "text-red-400" : "text-[var(--color-text)]" },
-          { label: "Budget Alerts",  value: `${overCount} over, ${warnCount} near`, color: overCount > 0 ? "text-red-400" : warnCount > 0 ? "text-yellow-400" : "text-green-400" },
+          { label: tr("budg.card.total"),   value: formatCurrency(totalBudget),    color: "text-[var(--color-primary)]" },
+          { label: tr("budg.card.spent"), value: formatCurrency(totalSpent),   color: totalSpent > totalBudget ? "text-red-400" : "text-[var(--color-text)]" },
+          { label: tr("budg.card.alerts"),  value: `${overCount} over, ${warnCount} near`, color: overCount > 0 ? "text-red-400" : warnCount > 0 ? "text-yellow-400" : "text-green-400" },
         ].map(s => (
           <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
@@ -188,7 +190,7 @@ export default function BudgetsPage() {
       {/* Overall progress bar */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <div className="flex items-center justify-between text-sm mb-2">
-          <span className="font-semibold">Total spend vs budget</span>
+          <span className="font-semibold">{tr("budg.progress")}</span>
           <span className={`font-bold tabular-nums ${totalSpent > totalBudget ? "text-red-400" : "text-[var(--color-text)]"}`}>
             {totalBudget > 0 ? ((totalSpent / totalBudget) * 100).toFixed(0) : 0}%
           </span>
@@ -274,7 +276,7 @@ export default function BudgetsPage() {
         <button onClick={() => setAdding(true)}
           className="border-2 border-dashed border-[var(--color-border)] rounded-lg p-6 flex flex-col items-center justify-center gap-2 hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-primary)]/5 transition-all group">
           <Plus size={20} className="text-[var(--color-muted)] group-hover:text-[var(--color-primary)]" />
-          <p className="text-sm text-[var(--color-muted)] group-hover:text-[var(--color-text)]">Add budget category</p>
+          <p className="text-sm text-[var(--color-muted)] group-hover:text-[var(--color-text)]">{tr("budg.addCard")}</p>
         </button>
       </div>
       </>

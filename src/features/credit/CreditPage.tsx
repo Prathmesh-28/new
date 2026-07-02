@@ -1,5 +1,6 @@
 import { useState, useMemo, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 import FinancingReadiness from "@/features/credit/FinancingReadiness";
 import EmbeddedFinancing from "@/features/credit/EmbeddedFinancing";
 import { useFeatureState } from "@/hooks/useFeatureState";
@@ -38,6 +39,7 @@ const SCORE_FACTORS = [
 ];
 
 export default function CreditPage() {
+  const tr = useT();
   const {
     store, addCreditApplication, updateCreditApplication, addCreditOffer,
     addActiveLoan, updateActiveLoan,
@@ -176,20 +178,20 @@ export default function CreditPage() {
       )}
 
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold flex items-center gap-2">Credit & Loans <PreviewBadge capability="creditDisbursement" /></h1>
+        <h1 className="text-xl font-bold flex items-center gap-2">{tr("credit.title")} <PreviewBadge capability="creditDisbursement" /></h1>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
         {([
-          ["overview", "Overview"],
-          ["apply",    "Apply"],
-          ["loans",    `Active Loans${activeLoans.length > 0 ? ` (${activeLoans.length})` : ""}`],
-          ["notyet",   "Not yet"],
-          ["wc",       "WC Sizing"],
-          ["equip",    "Finance vs Lease"],
-          ["cc",       "CC Utilization"],
-          ["fd",       "FD / RD"],
+          ["overview", tr("credit.tab.overview")],
+          ["apply",    tr("credit.tab.apply")],
+          ["loans",    `${tr("credit.tab.loans")}${activeLoans.length > 0 ? ` (${activeLoans.length})` : ""}`],
+          ["notyet",   tr("credit.tab.notyet")],
+          ["wc",       tr("credit.tab.wc")],
+          ["equip",    tr("credit.tab.equip")],
+          ["cc",       tr("credit.tab.cc")],
+          ["fd",       tr("credit.tab.fd")],
           ["wcscore",  "WC Health Score"],
           ["captable", "Cap Table"],
           ["valuation","Valuation"],
@@ -233,9 +235,9 @@ export default function CreditPage() {
           {/* Stats */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "UW Score",      value: bestScore > 0 ? `${bestScore}/100` : "-", color: bestScore >= 70 ? "text-green-400" : bestScore >= 50 ? "text-yellow-400" : "text-[var(--color-muted)]" },
-              { label: "Max Approved",  value: bestApp ? formatCurrency(bestApp.approvedAmount) : "-", color: "text-[var(--color-primary)]" },
-              { label: "Active Loans",  value: activeLoans.length.toString(), color: "text-[var(--color-text)]" },
+              { label: tr("credit.stat.uwScore"),     value: bestScore > 0 ? `${bestScore}/100` : "-", color: bestScore >= 70 ? "text-green-400" : bestScore >= 50 ? "text-yellow-400" : "text-[var(--color-muted)]" },
+              { label: tr("credit.stat.maxApproved"), value: bestApp ? formatCurrency(bestApp.approvedAmount) : "-", color: "text-[var(--color-primary)]" },
+              { label: tr("credit.stat.activeLoans"), value: activeLoans.length.toString(), color: "text-[var(--color-text)]" },
             ].map(({ label, value, color }) => (
               <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                 <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
@@ -261,7 +263,7 @@ export default function CreditPage() {
           {/* Real lender offers from the underwriting backend */}
           {realOffers.length > 0 ? (
             <div>
-              <h2 className="text-sm font-semibold mb-3">Your Pre-Qualified Offers</h2>
+              <h2 className="text-sm font-semibold mb-3">{tr("credit.preQualifiedOffers")}</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {realOffers.map(o => (
                   <div key={o.id} className={`rounded-lg border p-4 relative ${o.id === topOfferId ? "border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5" : "border-[var(--color-border)]"}`}>
@@ -293,9 +295,9 @@ export default function CreditPage() {
           ) : (
             <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
               <CreditCard size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-              <h2 className="text-base font-semibold mb-1">No offers yet</h2>
-              <p className="text-sm text-[var(--color-muted)] mb-4 max-w-sm mx-auto">Complete an application to see your pre-qualified offers. The engine scores your business instantly based on 9 signals.</p>
-              <button onClick={() => setTab("apply")} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">Apply Now</button>
+              <h2 className="text-base font-semibold mb-1">{tr("credit.empty.title")}</h2>
+              <p className="text-sm text-[var(--color-muted)] mb-4 max-w-sm mx-auto">{tr("credit.empty.desc")}</p>
+              <button onClick={() => setTab("apply")} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">{tr("credit.apply")}</button>
             </div>
           )}
 
