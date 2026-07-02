@@ -180,6 +180,11 @@ router.get("/pending", authenticate, async (req, res) => {
   })));
 });
 
+// Counterparty PAN-dedupe / entity-group detection (same PAN across GSTINs or name variants).
+router.get("/entity-groups", authenticate, async (req, res) => {
+  try { res.json(await require("../lib/counterpartyDedupe").entityGroups(req.user.tenant_id)); }
+  catch (e) { console.error("[collections] entity-groups", e.message); res.status(500).json({ error: "Internal error" }); }
+});
 // Per-customer payment-behaviour scores (worst payers first) + a portfolio receivables-quality
 // summary — the collections work-list, and a signal underwriting can fold in.
 router.get("/customer-scores", authenticate, async (req, res) => {
