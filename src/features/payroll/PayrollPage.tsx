@@ -830,6 +830,22 @@ export default function PayrollPage() {
           URL.revokeObjectURL(url);
         };
 
+        // Authoritative Part B for ALL employees, straight from posted payslips + the TDS
+        // true-up + declarations + decrypted PAN (vs. the local single-employee estimate above).
+        const downloadFromBooks = async () => {
+          try {
+            type F16 = { pan: string | null; name: string; regime: string; gross_salary_17: number; exemptions_u_s_10: number | null; deductions_u_s_16: { standard_deduction: number; professional_tax: number }; chapter_vi_a_total: number; total_taxable_income: number | null; total_tax: number | null; tds_deducted: number; balance_tax_payable: number | null };
+            const r = await api.get<{ employees: F16[]; financial_year: string }>(`/api/hrms/tds/form16b?fy=${slipFY}`);
+            if (!r.employees?.length) { toast.error("No posted payslips for this FY yet - run payroll first."); return; }
+            const header = ["PAN", "Name", "Regime", "Gross Salary 17(1)", "Exemptions u/s 10", "Standard Deduction", "Professional Tax", "Chapter VI-A", "Taxable Income", "Total Tax", "TDS Deducted", "Balance Payable"];
+            const body = r.employees.map(e => [e.pan || "", e.name, e.regime, e.gross_salary_17, e.exemptions_u_s_10 ?? "", e.deductions_u_s_16?.standard_deduction ?? "", e.deductions_u_s_16?.professional_tax ?? "", e.chapter_vi_a_total, e.total_taxable_income ?? "", e.total_tax ?? "", e.tds_deducted, e.balance_tax_payable ?? ""]);
+            const csv = [header, ...body].map(row => row.join(",")).join("\n");
+            const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob); const a = document.createElement("a");
+            a.href = url; a.download = `Form16B_AllEmployees_${r.financial_year}.csv`; a.click(); URL.revokeObjectURL(url);
+            toast.success(`Form 16 Part B for ${r.employees.length} employee(s) - from posted books`);
+          } catch (e) { toast.error((e as { message?: string })?.message || "Couldn't generate from books"); }
+        };
+
         return (
           <div className="space-y-4">
             {/* Controls */}
@@ -848,6 +864,11 @@ export default function PayrollPage() {
                 onClick={handleDownloadCSV}
                 className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
                 <Download size={12} /> Download CSV
+              </button>
+              <button
+                onClick={downloadFromBooks} title="Authoritative Part B for all employees, from posted payslips + the annual TDS true-up"
+                className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-text)] font-semibold px-3 py-2 rounded-lg hover:bg-[var(--color-accent)]">
+                <FileCheck size={12} /> Part B from books (all)
               </button>
             </div>
 

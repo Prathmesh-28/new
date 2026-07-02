@@ -55,6 +55,7 @@ router.get("/payroll/:id/payslips", async (req, res) => { try { res.json(await h
 router.get("/payroll/:id/ecr", canWrite, async (req, res) => { try { res.json(await hr.generateEcr(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } }); // exposes UAN → owner/finance only
 router.get("/payroll/:id/esic", canWrite, async (req, res) => { try { res.json(await hr.generateEsicReturn(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } }); // exposes ESIC-IP → owner/finance only
 router.get("/tds/24q", canWrite, async (req, res) => { try { res.json(await hr.generateForm24QStatement(tenantOf(req), req.query.fy, req.query.quarter)); } catch (e) { fail(res, e); } }); // exposes decrypted PAN + salary/TDS → owner/finance only
+router.get("/tds/form16b", canWrite, async (req, res) => { try { res.json(await hr.generateForm16B(tenantOf(req), req.query.fy)); } catch (e) { fail(res, e); } }); // Form 16 Part B: decrypted PAN + salary breakup → owner/finance only
 router.post("/payroll/link-legacy", canWrite, async (req, res) => { try { res.json(await hr.linkPayrollEmployees(tenantOf(req))); } catch (e) { fail(res, e); } }); // link HRMS ↔ legacy payroll employees (PAN) by email
 
 // ── (3) Formula-driven salary components ────────────────────────────────────────

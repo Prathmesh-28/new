@@ -1604,12 +1604,101 @@ async function generateForm24QStatement(tenantId, fyStartYear, quarter) {
   };
 }
 
+// Form 16 Part B — the EMPLOYER-generated salary-TDS annexure (Part A, with the TRACES
+// digital signature, is downloaded from TRACES and attached; Part B is NOT filed anywhere,
+// so this is a complete, non-gated deliverable). Assembles the annual breakup per employee
+// straight from the figures the TDS true-up already computed (hrms_tds_projections) + actual
+// FY payslip totals + the investment declaration. The §10 exemption is derived as the residual
+// so the statement always reconciles to the engine's own taxable-income figure.
+const fyMonthList = (y) => [4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => `${y}-${String(m).padStart(2, "0")}`)
+  .concat([1, 2, 3].map((m) => `${y + 1}-${String(m).padStart(2, "0")}`));
+
+async function generateForm16B(tenantId, fyStartYear) {
+  const y = parseInt(fyStartYear, 10);
+  if (!(y > 1900)) throw new HrError("valid fyStartYear (e.g. 2024) required", 400);
+  const fy = `${y}-${String(y + 1).slice(-2)}`;               // '2024-25'
+  const months = fyMonthList(y);
+  const R = (x) => Math.round(Number(x) || 0);
+
+  const [paid, projs, decls, pt, periods] = await Promise.all([
+    q(tenantId,
+      `SELECT e.id, e.name AS employee_name, le.pan AS pan_enc,
+              COALESCE(SUM(ps.gross),0) AS gross_paid, COALESCE(SUM(ps.tds),0) AS tds_deducted
+         FROM hrms_employees e
+         LEFT JOIN hrms_payroll_runs r ON r.tenant_id=e.tenant_id AND r.run_month = ANY($2::text[])
+         LEFT JOIN hrms_payslips ps ON ps.run_id=r.id AND ps.employee_id=e.id AND ps.tenant_id=e.tenant_id
+         LEFT JOIN employees le ON le.id=e.legacy_employee_id AND le.tenant_id=e.tenant_id
+        WHERE e.tenant_id=$1
+        GROUP BY e.id, e.name, le.pan
+        HAVING COALESCE(SUM(ps.gross),0) > 0
+        ORDER BY e.name`, [tenantId, months]),
+    q(tenantId, "SELECT employee_id, regime, projected_gross, chapter_via, projected_taxable, annual_tax FROM hrms_tds_projections WHERE tenant_id=$1 AND fy=$2", [tenantId, fy]),
+    q(tenantId, "SELECT employee_id, monthly_rent, is_metro, status, declared, proofs FROM hrms_investment_declarations WHERE tenant_id=$1 AND fy=$2", [tenantId, fy]),
+    q(tenantId,
+      `SELECT ps.employee_id, COALESCE(SUM((d->>'amount')::numeric),0) AS pt
+         FROM hrms_payslips ps
+         JOIN hrms_payroll_runs r ON r.id=ps.run_id AND r.tenant_id=ps.tenant_id
+         CROSS JOIN LATERAL jsonb_array_elements(ps.deductions) d
+        WHERE ps.tenant_id=$1 AND r.run_month = ANY($2::text[])
+          AND (d->>'component_name' ILIKE '%professional%' OR d->>'name' ILIKE '%professional%' OR upper(COALESCE(d->>'abbr','')) = 'PT')
+        GROUP BY ps.employee_id`, [tenantId, months]),
+    q(tenantId, "SELECT standard_deduction, assessment_year, regime FROM hrms_payroll_periods WHERE tenant_id=$1 AND fy=$2", [tenantId, fy]),
+  ]);
+
+  const projBy = new Map(projs.rows.map((r) => [r.employee_id, r]));
+  const declBy = new Map(decls.rows.map((r) => [r.employee_id, r]));
+  const ptBy = new Map(pt.rows.map((r) => [r.employee_id, Number(r.pt) || 0]));
+  const period = periods.rows[0] || {};
+  const stdDed = R(period.standard_deduction) || 50000;
+
+  let withoutPan = 0;
+  const employees = paid.rows.map((r) => {
+    const pan = r.pan_enc ? String(fc.decrypt(r.pan_enc)).trim() || null : null;
+    if (!pan) withoutPan += 1;
+    const p = projBy.get(r.id) || {};
+    const d = declBy.get(r.id) || null;
+    const grossAnnual = R(p.projected_gross) > 0 ? R(p.projected_gross) : R(r.gross_paid);
+    const chapterVia = R(p.chapter_via);
+    const taxable = p.projected_taxable != null ? R(p.projected_taxable) : null;
+    const employmentTax = R(ptBy.get(r.id));
+    // §10 exemptions (HRA/LTA etc) as the residual so the statement reconciles to `taxable`.
+    const exemptions10 = taxable != null ? Math.max(0, grossAnnual - stdDed - employmentTax - chapterVia - taxable) : null;
+    const chapterViaDetail = d ? (d.status === "VERIFIED" && d.proofs && Object.keys(d.proofs).length ? d.proofs : d.declared) : {};
+    const totalTax = p.annual_tax != null ? R(p.annual_tax) : null;
+    return {
+      pan, name: r.employee_name, regime: p.regime || period.regime || "new",
+      gross_salary_17: grossAnnual,               // §17(1) salary
+      exemptions_u_s_10: exemptions10,             // HRA/LTA etc (derived residual)
+      deductions_u_s_16: { standard_deduction: stdDed, professional_tax: employmentTax },
+      income_from_salary: exemptions10 != null ? Math.max(0, grossAnnual - exemptions10 - stdDed - employmentTax) : null,
+      chapter_vi_a_total: chapterVia,
+      chapter_vi_a_detail: chapterViaDetail,       // {80C, 80D, 80CCD1B, ...}
+      total_taxable_income: taxable,
+      total_tax: totalTax,                         // tax + rebate 87A + cess, as computed by the engine
+      tds_deducted: R(r.tds_deducted),             // actual TDS deducted across the FY
+      balance_tax_payable: totalTax != null ? totalTax - R(r.tds_deducted) : null,
+      hra: d ? { monthly_rent: R(d.monthly_rent), metro: !!d.is_metro } : null,
+    };
+  });
+
+  return {
+    form: "16", part: "B",
+    financial_year: `${y}-${y + 1}`,
+    assessment_year: period.assessment_year || `${y + 1}-${y + 2}`,
+    employees,
+    employee_count: employees.length,
+    employees_without_pan: withoutPan,   // run POST /payroll/link-legacy, or add the PAN on the record
+    note: "Part B is employer-generated. Download Part A (carrying the TRACES digital signature) from the TRACES portal and attach it. Figures are from the annual TDS true-up; §10 exemptions are derived so the statement reconciles to the computed taxable income — verify against final proofs before issuing.",
+  };
+}
+
 module.exports = {
   HrError,
   ptAmount, // per-state Professional Tax (exported for tests)
   generateEcr, // EPFO ECR file generation
   generateEsicReturn, // ESIC monthly contribution file
   generateForm24QStatement, // 24Q quarterly deductee TDS statement
+  generateForm16B, // Form 16 Part B (employer-generated salary-TDS annexure)
   linkPayrollEmployees, // link hrms_employees ↔ legacy employees (PAN) by email
   // pure logic (exported for asserts/tests)
   evalExpr, evalCondition, evaluateComponents, computeSlip, workingDayDetails,
