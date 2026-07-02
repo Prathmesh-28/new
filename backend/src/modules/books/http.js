@@ -270,6 +270,7 @@ router.post("/documents/receipt", canPost, async (req, res) => {
 router.get("/reports/trial-balance", async (req, res) => { try { res.json(await reports.trialBalance(tenantOf(req), fyOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
 router.get("/reports/profit-loss", async (req, res) => { try { res.json(await reports.profitLoss(tenantOf(req), fyOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
 router.get("/reports/balance-sheet", async (req, res) => { try { res.json(await reports.balanceSheet(tenantOf(req), fyOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
+router.get("/reports/owner-capital", async (req, res) => { try { res.json(await reports.ownerCapital(tenantOf(req), fyOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
 router.get("/reports/schedule-iii", async (req, res) => { try { res.json(await reports.scheduleIII(tenantOf(req), fyOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
 router.get("/reports/branch-trial-balance", async (req, res) => { try { if (!req.query.branchId) return res.status(400).json({ error: "branchId required" }); res.json(await reports.branchTrialBalance(tenantOf(req), fyOf(req), req.query.branchId, req.query.asOf)); } catch (e) { fail(res, e); } });
 router.get("/reports/branch-pl", async (req, res) => { try { if (!req.query.branchId) return res.status(400).json({ error: "branchId required" }); res.json(await reports.branchPL(tenantOf(req), fyOf(req), req.query.branchId, req.query.asOf)); } catch (e) { fail(res, e); } });

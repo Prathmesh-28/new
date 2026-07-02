@@ -1102,4 +1102,45 @@ async function tallyXml(tenantId, fy) {
   return parts.join("\n");
 }
 
-module.exports = { trialBalance, profitLoss, balanceSheet, dayBook, ledgerStatement, cashFlow, cashFlowActivity, comparativePL, byTag, createTag, createBudget, budgetVsActual, arAging, apAging, partyStatement, stockSummary, scheduleIII, branchTrialBalance, branchPL, profitabilityByParty, profitabilityByItem, profitabilityByProject, tallyXml };
+// §10.x - Owner's capital & net-worth (roadmap #185 drawings-vs-capital, #188 net-worth).
+// Business net worth = equity (assets − liabilities) from the balance sheet; capital-account
+// movements (fresh capital introduced = credits to equity ledgers; drawings = debits) for the FY;
+// and the key proprietor signal — are drawings outstripping profit (eroding capital)?
+async function ownerCapital(tenantId, fy, asOf) {
+  const [bs, pl] = await Promise.all([balanceSheet(tenantId, fy, asOf), profitLoss(tenantId, fy, asOf)]);
+  const y = parseInt(String(fy).slice(0, 4), 10);
+  const from = `${y}-04-01`, to = asOf || `${y + 1}-03-31`;
+  const { rows } = await pool.query(
+    `SELECT l.name,
+            COALESCE(SUM(e.debit)  FILTER (WHERE v.id IS NOT NULL), 0) AS dr,
+            COALESCE(SUM(e.credit) FILTER (WHERE v.id IS NOT NULL), 0) AS cr
+       FROM book_ledgers l
+       JOIN book_account_groups g ON g.id = l.group_id AND g.nature = 'EQUITY'
+       LEFT JOIN book_voucher_entries e ON e.ledger_id = l.id AND e.tenant_id = l.tenant_id
+       LEFT JOIN book_vouchers v ON v.id = e.voucher_id AND v.is_cancelled = false AND v.voucher_date BETWEEN $2 AND $3
+      WHERE l.tenant_id = $1
+      GROUP BY l.id, l.name ORDER BY l.name`, [tenantId, from, to]);
+  let introduced = money(0), drawings = money(0);
+  const accounts = rows.map((r) => {
+    introduced = introduced.plus(money(r.cr)); drawings = drawings.plus(money(r.dr));
+    return { name: r.name, introduced: toRupees(r.cr), drawings: toRupees(r.dr) };
+  });
+  const netProfit = money(pl.netProfit);
+  const drawingsExceedProfit = gt(drawings, netProfit) && gt(drawings, 0);
+  return {
+    financialYear: fy,
+    net_worth: bs.totalEquity,                 // owner's funds in the business (equity)
+    total_assets: bs.totalAssets, total_liabilities: bs.totalLiabilities,
+    net_profit: pl.netProfit,
+    capital_introduced: toRupees(introduced),
+    drawings: toRupees(drawings),
+    capital_accounts: accounts,
+    drawings_exceed_profit: drawingsExceedProfit,
+    health: drawingsExceedProfit
+      ? "Drawings exceed profit for the period — you are drawing down capital. Consider trimming withdrawals or booking them as a loan."
+      : gt(drawings, 0) ? "Drawings are within profit — capital is intact." : "No drawings recorded this period.",
+    note: "Net worth is the BUSINESS equity (assets − liabilities). Personal assets/liabilities are outside the books; add them separately for a combined owner net worth.",
+  };
+}
+
+module.exports = { trialBalance, profitLoss, balanceSheet, dayBook, ledgerStatement, cashFlow, cashFlowActivity, comparativePL, byTag, createTag, createBudget, budgetVsActual, arAging, apAging, partyStatement, stockSummary, scheduleIII, branchTrialBalance, branchPL, profitabilityByParty, profitabilityByItem, profitabilityByProject, tallyXml, ownerCapital };

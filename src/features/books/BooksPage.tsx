@@ -538,6 +538,35 @@ function ExitReadinessCard() {
   );
 }
 
+interface OwnerCapital { net_worth: string; net_profit: string; capital_introduced: string; drawings: string; drawings_exceed_profit: boolean; health: string }
+
+// Owner's capital & net worth (roadmap #185/#188): net worth (= business equity), capital
+// introduced vs drawings for the year, and the proprietor signal — are drawings eroding capital?
+function OwnerCapitalCard() {
+  const [r, setR] = useState<OwnerCapital | null>(null);
+  const [busy, setBusy] = useState(true);
+  useEffect(() => {
+    let c = false;
+    api.get<OwnerCapital>("/api/books/reports/owner-capital").then((d) => { if (!c) setR(d); }).catch(() => {}).finally(() => { if (!c) setBusy(false); });
+    return () => { c = true; };
+  }, []);
+  if (busy || !r) return null;
+  const hasCapital = Number(r.net_worth) !== 0 || Number(r.capital_introduced) !== 0 || Number(r.drawings) !== 0;
+  if (!hasCapital) return null;
+  return (
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+      <div className="flex items-center gap-2 mb-3"><HandCoins size={16} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Owner's capital &amp; net worth</h3></div>
+      <div className="flex flex-wrap gap-3">
+        <StatCard label="Net worth (equity)" value={rupee(r.net_worth)} tint="green" />
+        <StatCard label="Capital introduced" value={rupee(r.capital_introduced)} />
+        <StatCard label="Drawings" value={rupee(r.drawings)} tint={r.drawings_exceed_profit ? "red" : undefined} />
+        <StatCard label="Net profit" value={rupee(r.net_profit)} />
+      </div>
+      <p className={`text-xs mt-3 ${r.drawings_exceed_profit ? "text-amber-400" : "text-[var(--color-muted)]"}`}>{r.health}</p>
+    </div>
+  );
+}
+
 function OverviewTab({ loading }: { loading: boolean }) {
   const fy = currentFy();
   const [tb, setTb] = useState<TrialBalance | null>(null);
@@ -576,6 +605,7 @@ function OverviewTab({ loading }: { loading: boolean }) {
     <div className="space-y-5">
       <BooksHealthCard />
       <ExitReadinessCard />
+      <OwnerCapitalCard />
       <div
         className={`rounded-lg px-4 py-3 text-sm font-medium border ${
           balanced
