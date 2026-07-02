@@ -2,8 +2,11 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import {
-  Landmark, Plus, RefreshCw, Calculator, Tag, Trash2, Layers, FolderTree,
+  Landmark, Plus, RefreshCw, Calculator, Tag, Trash2, Layers, FolderTree, Scale,
 } from "lucide-react";
+
+interface ItBlockRow { block: string; rate: number; opening_wdv: number; additions: number; additions_lt180: number; disposals: number; depreciation: number; closing_wdv: number; stcg: number; stcl: number }
+interface ItDep { fy: string; blocks: ItBlockRow[]; total: { opening_wdv: number; additions: number; disposals: number; it_depreciation: number; closing_wdv: number; stcg: number; stcl: number }; book_depreciation_fy: number; timing_difference: number; committed: boolean; warnings: string[] }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES - mirror backend/src/modules/books/assets.js (loose; columns are snake_case)
@@ -150,6 +153,13 @@ export default function BooksAssetsTab() {
   const [running, setRunning] = useState(false);
   const [asOf, setAsOf] = useState(todayIso());
   const [lastRun, setLastRun] = useState<DepResult | null>(null);
+  const nowFy = useMemo(() => { const d = new Date(); return d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1; }, []);
+  const [itFy, setItFy] = useState<number>(nowFy);
+  const [itDep, setItDep] = useState<ItDep | null>(null);
+  const [itBusy, setItBusy] = useState(false);
+  const [clsAsset, setClsAsset] = useState("");
+  const [clsBlock, setClsBlock] = useState("");
+  const [clsRate, setClsRate] = useState("");
 
   const load = useCallback(async (st: string) => {
     setBusy(true);
@@ -200,6 +210,30 @@ export default function BooksAssetsTab() {
     } finally {
       setRunning(false);
     }
+  };
+
+  const loadItDep = useCallback(async (fy: number) => {
+    setItBusy(true);
+    try { setItDep(await api.get<ItDep>(`/api/books/assets/it-depreciation?fy=${fy}`)); }
+    catch { setItDep(null); }
+    finally { setItBusy(false); }
+  }, []);
+  useEffect(() => { void loadItDep(itFy); }, [itFy, loadItDep]);
+
+  const closeItFy = async () => {
+    setItBusy(true);
+    try { const r = await api.post<ItDep>("/api/books/assets/it-depreciation/close", { fy: itFy }); setItDep(r); toast.success(`FY ${r.fy} closed - closing WDV carried forward`); }
+    catch (e) { toast.error(errMsg(e)); }
+    finally { setItBusy(false); }
+  };
+  const classify = async () => {
+    if (!clsAsset || clsRate.trim() === "" || !Number.isFinite(Number(clsRate))) { toast.error("Pick an asset and enter an IT rate"); return; }
+    try {
+      await api.patch(`/api/books/assets/${clsAsset}/it-block`, { itBlock: clsBlock.trim() || undefined, itRate: Number(clsRate) });
+      toast.success("Asset classified for IT Act");
+      setClsBlock(""); setClsRate("");
+      await loadItDep(itFy);
+    } catch (e) { toast.error(errMsg(e)); }
   };
 
   return (
@@ -370,6 +404,79 @@ export default function BooksAssetsTab() {
               <div><p className="text-[11px] text-[var(--color-muted)]">Net block (WDV)</p><p className="font-bold tabular-nums text-[var(--color-primary)]">{rupee(register!.total.wdv)}</p></div>
             </div>
           </div>
+        )}
+      </Card>
+
+      {/* INCOME-TAX ACT (BLOCK-OF-ASSETS) DEPRECIATION - dual book */}
+      <Card
+        title="Income-Tax Act depreciation (block-of-assets)"
+        icon={<Scale size={15} />}
+        action={
+          <div className="flex items-center gap-2">
+            <select value={itFy} onChange={(e) => setItFy(Number(e.target.value))} className={`${inputCls} !w-auto`}>
+              {[nowFy - 2, nowFy - 1, nowFy, nowFy + 1].map((y) => <option key={y} value={y}>FY {y}-{String(y + 1).slice(2)}</option>)}
+            </select>
+            <button type="button" onClick={() => void loadItDep(itFy)} className={btnGhost} title="Recompute"><RefreshCw size={14} className={itBusy ? "animate-spin" : ""} /></button>
+          </div>
+        }
+      >
+        <p className="text-sm text-[var(--color-muted)] mb-3 max-w-3xl">
+          Block-of-assets WDV depreciation for income tax - separate from the Companies-Act book depreciation above.
+          Additions put to use for under 180 days get half the block rate; a block that empties on disposal stops
+          depreciating (residual WDV becomes a short-term capital loss/gain). Classify each asset's IT block, then
+          Close each year in sequence to carry the closing WDV forward as next year's opening.
+        </p>
+        {/* Classify an asset for IT Act */}
+        <div className="flex flex-wrap items-end gap-2 mb-4 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+          <div><label className={labelCls}>Asset</label>
+            <select value={clsAsset} onChange={(e) => setClsAsset(e.target.value)} className={inputCls}>
+              <option value="">Select…</option>{assets.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select></div>
+          <div><label className={labelCls}>IT block</label><input value={clsBlock} onChange={(e) => setClsBlock(e.target.value)} placeholder="e.g. Plant & Machinery" className={inputCls} /></div>
+          <div><label className={labelCls}>IT rate %</label><input value={clsRate} onChange={(e) => setClsRate(e.target.value)} type="number" placeholder="15" className={`${inputCls} !w-24`} /></div>
+          <button type="button" onClick={classify} className={btnPrimary}>Classify</button>
+        </div>
+        {itBusy ? (
+          <p className="text-sm text-[var(--color-muted)] py-6 text-center">Computing…</p>
+        ) : !itDep || itDep.blocks.length === 0 ? (
+          <p className="text-sm text-[var(--color-muted)] py-6 text-center border border-dashed border-[var(--color-border)] rounded-lg">No assets classified for IT Act yet - classify one above.</p>
+        ) : (
+          <>
+            <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">
+              <table className="w-full text-sm border-collapse min-w-[820px]">
+                <thead><tr className="border-b border-[var(--color-border)]">
+                  <th className={thCls}>Block</th><th className={thR}>Rate</th><th className={thR}>Opening WDV</th><th className={thR}>Additions</th><th className={thR}>Disposals</th><th className={thR}>Depreciation</th><th className={thR}>Closing WDV</th><th className={thR}>STCG / STCL</th>
+                </tr></thead>
+                <tbody>
+                  {itDep.blocks.map((b) => (
+                    <tr key={b.block} className="border-b border-[var(--color-border)] last:border-b-0">
+                      <td className="px-3 py-2.5 font-medium">{b.block}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-muted)]">{b.rate}%</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{rupee(b.opening_wdv)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{rupee(b.additions)}{b.additions_lt180 > 0 && <span className="text-[10px] text-[var(--color-muted)]"> ({rupee(b.additions_lt180)} @½)</span>}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{b.disposals > 0 ? rupee(b.disposals) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-red-400">{rupee(b.depreciation)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-[var(--color-primary)]">{rupee(b.closing_wdv)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-xs">{b.stcg > 0 ? <span className="text-green-400">+{rupee(b.stcg)}</span> : b.stcl > 0 ? <span className="text-red-400">−{rupee(b.stcl)}</span> : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <StatCard label="IT Act depreciation" value={rupee(itDep.total.it_depreciation)} tint="red" />
+              <StatCard label="Book depreciation (FY)" value={rupee(itDep.book_depreciation_fy)} />
+              <StatCard label="Timing difference (book − IT)" value={rupee(itDep.timing_difference)} tint={itDep.timing_difference >= 0 ? "green" : "red"} />
+              <StatCard label="Closing WDV (IT)" value={rupee(itDep.total.closing_wdv)} tint="green" />
+            </div>
+            {itDep.warnings?.length > 0 && (
+              <div className="mt-3 text-[11px] text-amber-400 space-y-1">{itDep.warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}</div>
+            )}
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              <button type="button" onClick={closeItFy} disabled={itBusy || itDep.committed} className={btnPrimary}>{itDep.committed ? "FY closed ✓" : "Close FY (save rollforward)"}</button>
+              <span className="text-[11px] text-[var(--color-muted)]">Saves this FY's closing WDV as next year's opening. Run earlier years first.</span>
+            </div>
+          </>
         )}
       </Card>
 
