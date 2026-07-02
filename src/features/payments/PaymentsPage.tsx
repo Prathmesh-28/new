@@ -5,6 +5,7 @@ import TabStrip from "@/components/TabStrip";
 import { api } from "@/lib/api";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
+import { useT } from "@/i18n";
 import {
   QrCode, Link2, CalendarClock, Percent, Wallet, RotateCcw, Split,
   Activity, MessageCircle, PieChart, Smartphone, Copy, Plus, CheckCircle2,
@@ -45,25 +46,26 @@ async function copy(text: string, label = "Copied") {
 
 export default function PaymentsPage() {
   const [tab, setTab] = useState<Tab>("overview");
+  const tr = useT();
 
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <IndianRupee size={18} className="text-[var(--color-primary)]" /> Payments &amp; UPI
+            <IndianRupee size={18} className="text-[var(--color-primary)]" /> {tr("pay.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Collect over UPI &amp; cards, build payment links, track autopay mandates, reconcile settlements and watch success rate - India-first money movement.
+            {tr("pay.subtitle")}
           </p>
         </div>
         <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
-            ["overview", "Overview", IndianRupee],
-            ["qr", "UPI QR / Intent", QrCode],
-            ["links", "Payment Links", Link2],
-            ["mandates", "AutoPay Mandates", CalendarClock],
-            ["mdr", "MDR / Surcharge", Percent],
-            ["settlement", "Settlement Recon", Wallet],
+            ["overview", tr("pay.tab.overview"), IndianRupee],
+            ["qr", tr("pay.tab.qr"), QrCode],
+            ["links", tr("pay.tab.links"), Link2],
+            ["mandates", tr("pay.tab.mandates"), CalendarClock],
+            ["mdr", tr("pay.tab.mdr"), Percent],
+            ["settlement", tr("pay.tab.settlement"), Wallet],
             ["refunds", "Refund Tracker", RotateCcw],
             ["split", "Split Payment", Split],
             ["success", "Success Rate", Activity],
@@ -151,6 +153,7 @@ export default function PaymentsPage() {
 
 // ── Overview ─────────────────────────────────────────────────────────────────────
 function Overview({ onJump }: { onJump: (t: Tab) => void }) {
+  const tr = useT();
   const { store } = useApp();
   const [mandates] = useFeatureState<MandateRow[]>("pay-mandates", []);
   const [refunds] = useFeatureState<RefundRow[]>("pay-refunds", []);
@@ -167,10 +170,10 @@ function Overview({ onJump }: { onJump: (t: Tab) => void }) {
   const pendingRefundValue = pendingRefunds.reduce((s, r) => s + r.amount, 0);
 
   const cards = [
-    { label: "Collected this month", value: formatAmount(collected), color: "text-green-400", sub: `${inbound.length} inbound payment(s)`, tab: "mix" as Tab },
-    { label: "Active AutoPay mandates", value: String(activeMandates.length), color: "text-blue-400", sub: `${formatAmount(monthlyMandateValue)}/mo capped`, tab: "mandates" as Tab },
-    { label: "Refunds pending", value: String(pendingRefunds.length), color: pendingRefunds.length ? "text-orange-400" : "text-green-400", sub: formatAmount(pendingRefundValue), tab: "refunds" as Tab },
-    { label: "Avg blended MDR", value: "~0.9%", color: "text-yellow-400", sub: "UPI 0% · cards ~2% - tune in MDR tool", tab: "mdr" as Tab },
+    { label: tr("pay.card.collected"), value: formatAmount(collected), color: "text-green-400", sub: `${inbound.length} inbound payment(s)`, tab: "mix" as Tab },
+    { label: tr("pay.card.activeMandates"), value: String(activeMandates.length), color: "text-blue-400", sub: `${formatAmount(monthlyMandateValue)}/mo capped`, tab: "mandates" as Tab },
+    { label: tr("pay.card.refundsPending"), value: String(pendingRefunds.length), color: pendingRefunds.length ? "text-orange-400" : "text-green-400", sub: formatAmount(pendingRefundValue), tab: "refunds" as Tab },
+    { label: tr("pay.card.avgMdr"), value: "~0.9%", color: "text-yellow-400", sub: "UPI 0% · cards ~2% - tune in MDR tool", tab: "mdr" as Tab },
   ];
 
   const quick: { id: Tab; label: string; desc: string; Icon: typeof QrCode }[] = [

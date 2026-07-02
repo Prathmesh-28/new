@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 import { formatCurrency, monthlyBurn } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { api } from "@/lib/api";
@@ -27,6 +28,7 @@ const SEV: Record<string, { color: string; bg: string; icon: React.ElementType; 
 };
 
 export default function AlertsPage() {
+  const tr = useT();
   const { store, markAlertRead, deleteAlert, updateFirm, resolveAlert } = useApp();
   const { alerts, transactions } = store;
   const safetyDays = store.firm.safetyThresholdDays ?? 14;
@@ -205,7 +207,7 @@ export default function AlertsPage() {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold">Alerts Centre</h1>
+            <h1 className="text-xl font-bold">{tr("alerts.title")}</h1>
             {synced === true && (
               <span title={`Synced to your account${serverUnread != null ? ` · ${serverUnread} unread server-side` : ""}`}
                 className="inline-flex items-center gap-1 text-[10px] text-green-400 border border-green-800/40 bg-green-950/20 px-1.5 py-0.5 rounded-full">
@@ -225,12 +227,12 @@ export default function AlertsPage() {
           {active.length > 0 && (
             <button onClick={markAllRead} disabled={markingAll}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 disabled:opacity-50">
-              <CheckCheck size={12} /> Mark all read
+              <CheckCheck size={12} /> {tr("alerts.markAllRead")}
             </button>
           )}
           <button onClick={() => setShowConfig(v => !v)}
             className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
-            <Settings2 size={12} /> Configure
+            <Settings2 size={12} /> {tr("alerts.configure")}
           </button>
         </div>
       </div>
@@ -267,8 +269,8 @@ export default function AlertsPage() {
       {/* Tabs */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit">
         {([
-          ["active",     `Active (${active.length})`,     Bell],
-          ["history",    `Resolved (${history.length})`,  CheckCircle2],
+          ["active",     `${tr("alerts.tab.active")} (${active.length})`,     Bell],
+          ["history",    `${tr("alerts.tab.resolved")} (${history.length})`,  CheckCircle2],
           ["thresholds", "Threshold Builder",             SlidersHorizontal],
           ["compliance", "Compliance Due-Dates",          CalendarClock],
           ["liquidity",  "Cash-Low / Overdraft",          Droplets],
@@ -302,8 +304,8 @@ export default function AlertsPage() {
           {active.length === 0 ? (
             <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
               <CheckCircle2 size={28} className="mx-auto mb-3 text-green-400 opacity-50" />
-              <h2 className="text-base font-semibold mb-1">All clear</h2>
-              <p className="text-sm text-[var(--color-muted)]">No active alerts. The system checks your cash position every 4 hours.</p>
+              <h2 className="text-base font-semibold mb-1">{tr("alerts.empty.title")}</h2>
+              <p className="text-sm text-[var(--color-muted)]">{tr("alerts.empty.subtitle")}</p>
             </div>
           ) : (
             <div className="space-y-5">

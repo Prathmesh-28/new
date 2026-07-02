@@ -8,6 +8,7 @@ import { format } from "date-fns";
 import type { Transaction, Invoice } from "@/data/types";
 import { capturePhoto } from "@/lib/nativeFeatures";
 import { api } from "@/lib/api";
+import { useT } from "@/i18n";
 import ReconcileModal from "./ReconcileModal";
 
 const CATEGORIES = ["revenue", "expense", "payroll", "loan", "tax", "transfer"] as const;
@@ -130,6 +131,7 @@ function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: 
 }
 
 export default function TransactionsPage() {
+  const tr = useT();
   const { store, setStore, updateTransaction, addTransaction, deleteTransaction, canExport, canEdit } = useApp();
   const { transactions, bankAccounts } = store;
 
@@ -457,7 +459,7 @@ export default function TransactionsPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold">Transactions</h1>
+            <h1 className="text-xl font-bold">{tr("txn.title")}</h1>
             {apiState === "offline" && (
               <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-orange-800/40 bg-orange-900/20 text-orange-400" title="The server is unreachable - showing locally cached data. Changes are kept on this device and will not sync until you reconnect.">
                 <CloudOff size={10} /> Offline
@@ -472,7 +474,7 @@ export default function TransactionsPage() {
           <button onClick={() => void loadFromServer()} disabled={apiState === "loading"}
             className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors disabled:opacity-50"
             title="Reload transactions from the server">
-            <RefreshCw size={12} className={apiState === "loading" ? "animate-spin" : ""} /> Refresh
+            <RefreshCw size={12} className={apiState === "loading" ? "animate-spin" : ""} /> {tr("txn.refresh")}
           </button>
           {canEdit() && (
             <button onClick={handleScanReceipt} disabled={scanning}
@@ -482,17 +484,17 @@ export default function TransactionsPage() {
           )}
           <button onClick={() => setShowReconcile(true)}
             className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
-            <CheckCheck size={12} /> Reconcile
+            <CheckCheck size={12} /> {tr("txn.reconcile")}
           </button>
           <button onClick={() => setView(v => v === "cash-application" ? "transactions" : "cash-application")}
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === "cash-application" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}
             title="Match received cash to open customer invoices and mark them paid">
-            <Link2 size={12} /> Cash Application
+            <Link2 size={12} /> {tr("txn.cashApplication")}
           </button>
           {canExport() && (
             <button onClick={() => { exportCsv(filtered, bankAccounts); toast.success("CSV downloaded"); }}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
-              <Download size={12} /> Export CSV
+              <Download size={12} /> {tr("txn.exportCsv")}
             </button>
           )}
           <button onClick={() => setView(v => v === "pdc" ? "transactions" : "pdc")}
@@ -520,7 +522,7 @@ export default function TransactionsPage() {
 
       {/* Advanced tools tab strip */}
       <div className="flex items-center gap-1.5 flex-wrap border-t border-[var(--color-border)] pt-3">
-        <span className="text-[10px] uppercase tracking-wider text-[var(--color-muted)] font-semibold mr-1">Tools</span>
+        <span className="text-[10px] uppercase tracking-wider text-[var(--color-muted)] font-semibold mr-1">{tr("txn.tools")}</span>
         {([
           ["cat-rules",        "Auto-Categorise",  Wand2],
           ["recon-workbench",  "Recon Workbench",  GitCompareArrows],
@@ -585,25 +587,25 @@ export default function TransactionsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {([
           {
-            label: "Spend Velocity (7d vs 30d avg)",
+            label: tr("txn.stat.velocity"),
             value: intelligence.daily7 > 0 ? `${formatCurrency(intelligence.daily7)}/day` : "-",
             sub: intelligence.velChange === 0 ? "Stable spending pattern" : intelligence.velChange > 0 ? `+${intelligence.velChange}% acceleration - watch` : `${intelligence.velChange}% slowing down`,
             color: intelligence.velChange > 20 ? "text-red-400" : intelligence.velChange > 10 ? "text-yellow-400" : "text-green-400",
           },
           {
-            label: "Largest Expense This Month",
+            label: tr("txn.stat.largestExpense"),
             value: intelligence.biggestExpense ? formatCurrency(Math.abs(intelligence.biggestExpense.amount)) : "-",
             sub: intelligence.biggestExpense?.description ?? "No expenses this month",
             color: "text-red-400",
           },
           {
-            label: "Potential Duplicates Detected",
+            label: tr("txn.stat.duplicates"),
             value: intelligence.dupCount.toString(),
             sub: intelligence.dupCount > 0 ? "Same amount + party within 3 days" : "No duplicates found",
             color: intelligence.dupCount > 0 ? "text-yellow-400" : "text-green-400",
           },
           {
-            label: "Category Spend Spike",
+            label: tr("txn.stat.spike"),
             value: intelligence.spike ? `${intelligence.spike.cat.charAt(0).toUpperCase() + intelligence.spike.cat.slice(1)} +${intelligence.spike.pct}%` : "None",
             sub: intelligence.spike ? `${formatCurrency(intelligence.spike.val)} vs ${formatCurrency(intelligence.spike.prev)} last month` : "All categories normal",
             color: intelligence.spike ? "text-yellow-400" : "text-green-400",
@@ -681,10 +683,10 @@ export default function TransactionsPage() {
       {filtered.length === 0 ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-lg p-10 text-center text-sm text-[var(--color-muted)]">
           {apiState === "loading" && transactions.length === 0
-            ? "Loading transactions from the server…"
+            ? tr("txn.loading")
             : transactions.length === 0
-              ? "No transactions yet. Scan a receipt above, or add an account and import transactions from the Dashboard."
-              : "No transactions match your filters."}
+              ? tr("txn.empty")
+              : tr("txn.noMatch")}
         </div>
       ) : (
         <div className="rounded-lg border border-[var(--color-border)] overflow-hidden">
