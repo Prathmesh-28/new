@@ -545,6 +545,44 @@ interface OwnerCapital { net_worth: string; net_profit: string; capital_introduc
 
 // Owner's capital & net worth (roadmap #185/#188): net worth (= business equity), capital
 // introduced vs drawings for the year, and the proprietor signal — are drawings eroding capital?
+interface ProfileSettings { public_slug: string | null; public_enabled: boolean; public_about: string | null; company_name: string | null }
+
+// Public company profile / digital business card settings (roadmap #166): pick a link, write a
+// short about, toggle it live, and share /p/:slug.
+function PublicProfileCard() {
+  const [s, setS] = useState<ProfileSettings | null>(null);
+  const [slug, setSlug] = useState(""); const [about, setAbout] = useState("");
+  const [busy, setBusy] = useState(true); const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    let c = false;
+    api.get<ProfileSettings>("/api/profile/settings").then((d) => { if (!c) { setS(d); setSlug(d.public_slug || ""); setAbout(d.public_about || ""); } }).catch(() => {}).finally(() => { if (!c) setBusy(false); });
+    return () => { c = true; };
+  }, []);
+  const save = async (enabled?: boolean) => {
+    setSaving(true);
+    try { const r = await api.put<ProfileSettings>("/api/profile/settings", { slug: slug.trim() || undefined, about, ...(enabled !== undefined ? { enabled } : {}) }); setS(r); setSlug(r.public_slug || ""); toast.success("Saved"); }
+    catch (e) { toast.error(errMsg(e)); } finally { setSaving(false); }
+  };
+  if (busy || !s) return null;
+  const url = s.public_slug ? `${window.location.origin}/p/${s.public_slug}` : null;
+  return (
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+      <div className="flex items-center gap-2 mb-3"><Building2 size={16} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Public profile / business card</h3>
+        <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full ${s.public_enabled ? "bg-green-900/30 text-green-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{s.public_enabled ? "Live" : "Off"}</span>
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex-1 min-w-[180px]"><label className="text-xs text-[var(--color-muted)] block mb-1">Public link</label>
+          <div className="flex items-center gap-1 text-sm"><span className="text-[var(--color-muted)]">/p/</span><input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="your-company" className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 outline-none focus:border-[var(--color-primary)]" /></div>
+        </div>
+        <button onClick={() => save()} disabled={saving} className="text-xs font-semibold border border-[var(--color-border)] px-3 py-2 rounded-lg hover:bg-[var(--color-accent)]">Save</button>
+        <button onClick={() => save(!s.public_enabled)} disabled={saving || !s.public_slug} className="text-xs font-semibold bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg hover:opacity-90 disabled:opacity-40">{s.public_enabled ? "Turn off" : "Publish"}</button>
+      </div>
+      <textarea value={about} onChange={(e) => setAbout(e.target.value)} rows={2} placeholder="Short about — what your business does" className="w-full mt-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+      {url && s.public_enabled && <p className="text-xs text-[var(--color-muted)] mt-2">Live at <a href={url} target="_blank" rel="noopener noreferrer" className="text-[var(--color-primary)] hover:underline">{url}</a></p>}
+    </div>
+  );
+}
+
 function OwnerCapitalCard() {
   const [r, setR] = useState<OwnerCapital | null>(null);
   const [busy, setBusy] = useState(true);
@@ -609,6 +647,7 @@ function OverviewTab({ loading }: { loading: boolean }) {
       <BooksHealthCard />
       <ExitReadinessCard />
       <OwnerCapitalCard />
+      <PublicProfileCard />
       <div
         className={`rounded-lg px-4 py-3 text-sm font-medium border ${
           balanced

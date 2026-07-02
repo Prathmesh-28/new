@@ -39,6 +39,7 @@ const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage"));
 const SetPasswordPage    = lazy(() => import("@/pages/SetPasswordPage"));
 const NotFoundPage       = lazy(() => import("@/pages/NotFoundPage"));
 const PublicCampaignPage = lazy(() => import("@/pages/PublicCampaignPage"));
+const PublicProfilePage  = lazy(() => import("@/pages/PublicProfilePage"));
 const Dashboard          = lazy(() => import("@/features/dashboard/DashboardPage"));
 const Credit             = lazy(() => import("@/features/credit/CreditPage"));
 const Capital            = lazy(() => import("@/features/capital/CapitalPage"));
@@ -338,6 +339,7 @@ export default function App() {
                 <Route path="/signup-advisor" element={<SignupAdvisorPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/c/:token"        element={<PublicCampaignPage />} />{/* PUBLIC: backer pledge page */}
+                <Route path="/p/:slug"         element={<PublicProfilePage />} />{/* PUBLIC: company profile / business card */}
                 <Route path="/*"               element={<RequireAuth><AppLockGate><AppShell /></AppLockGate></RequireAuth>} />
               </Routes>
             </Suspense>

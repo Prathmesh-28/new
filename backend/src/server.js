@@ -155,6 +155,7 @@ app.use("/api/campaigns",          require("./modules/crowdfunding/http")); // R
 app.use("/api/lending",            require("./modules/lending/http")); // SMB embedded lending (LOS/LMS + invoice financing)
 app.use("/api/analytics",          require("./modules/analytics/http")); // Product analytics: events + onboarding profile + dashboard
 app.use("/api/pub",                require("./routes/studiopublic")); // PUBLIC: serve published App Builder apps (sandboxed, token-addressed)
+app.use("/api/profile",            require("./routes/publicProfile")); // PUBLIC company profile (/p/:slug) + owner-gated settings
 app.use("/api/agent-bridge",       require("./routes/agentbridge")); // PUBLIC: published apps call their granted Agent Studio agents (scoped, metered)
 app.use("/api/account",            require("./routes/account")); // DPDP consent/export/erasure
 app.use("/api/notes",              require("./routes/notes"));
