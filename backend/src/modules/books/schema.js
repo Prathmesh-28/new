@@ -565,6 +565,27 @@ const BOOKS_SCHEMA = `
     settled_at         TIMESTAMPTZ
   );
   CREATE INDEX IF NOT EXISTS idx_book_expense_advances ON book_expense_advances(tenant_id, status, created_at DESC);
+
+  -- Generic renewals/expiry registry: licenses, DSCs, AMCs, agreements, registrations,
+  -- insurance — anything with an expiry date that needs a renewal reminder. One engine drives
+  -- the days-to-expiry + due/expired status + the "renewals due" list.
+  CREATE TABLE IF NOT EXISTS book_expiry_items (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     TEXT NOT NULL,
+    kind          TEXT NOT NULL,             -- license|dsc|amc|agreement|registration|insurance|other
+    name          TEXT NOT NULL,
+    identifier    TEXT,                       -- license no / cert serial / contract no
+    counterparty  TEXT,
+    amount        NUMERIC(19,2),
+    issued_on     DATE,
+    expires_on    DATE NOT NULL,
+    reminder_days INT NOT NULL DEFAULT 30,
+    status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','renewed','cancelled')),
+    notes         TEXT,
+    created_by    UUID,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_expiry_items ON book_expiry_items(tenant_id, status, expires_on);
 `;
 
 module.exports = { BOOKS_SCHEMA };
