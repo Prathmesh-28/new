@@ -118,6 +118,17 @@ const gu: Record<string, string> = {
   "simple.myMoney": "મારા પૈસા",
   "simple.myMoney.hint": "રોકડ અને બાકી રકમ",
   "simple.getHelp": "મદદ મેળવો",
-  "simple.fullView": "પૂરા દેખાવ પર જાઓ"
+  "simple.fullView": "પૂરા દેખાવ પર જાઓ",
+  "quickcreate.new": "નવું",
+  "quickcreate.invoice": "નવું ઇન્વોઇસ",
+  "quickcreate.payment": "ચુકવણી નોંધો",
+  "quickcreate.expense": "ખર્ચ ઉમેરો",
+  "quickcreate.bill": "નવું બિલ",
+  "quickcreate.customer": "ગ્રાહક ઉમેરો",
+  "mobilenav.home": "હોમ",
+  "mobilenav.invoices": "ઇન્વોઇસ",
+  "mobilenav.money": "પૈસા",
+  "mobilenav.sales": "વેચાણ",
+  "mobilenav.more": "વધુ"
 };
 export default gu;

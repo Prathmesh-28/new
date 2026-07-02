@@ -118,6 +118,17 @@ const pa: Record<string, string> = {
   "simple.myMoney": "ਮੇਰਾ ਪੈਸਾ",
   "simple.myMoney.hint": "ਨਕਦੀ ਤੇ ਬਕਾਇਆ",
   "simple.getHelp": "ਮਦਦ ਲਓ",
-  "simple.fullView": "ਪੂਰੇ ਦ੍ਰਿਸ਼ 'ਤੇ ਜਾਓ"
+  "simple.fullView": "ਪੂਰੇ ਦ੍ਰਿਸ਼ 'ਤੇ ਜਾਓ",
+  "quickcreate.new": "ਨਵਾਂ",
+  "quickcreate.invoice": "ਨਵਾਂ ਇਨਵੌਇਸ",
+  "quickcreate.payment": "ਭੁਗਤਾਨ ਦਰਜ ਕਰੋ",
+  "quickcreate.expense": "ਖਰਚਾ ਜੋੜੋ",
+  "quickcreate.bill": "ਨਵਾਂ ਬਿੱਲ",
+  "quickcreate.customer": "ਗਾਹਕ ਜੋੜੋ",
+  "mobilenav.home": "ਹੋਮ",
+  "mobilenav.invoices": "ਇਨਵੌਇਸ",
+  "mobilenav.money": "ਪੈਸਾ",
+  "mobilenav.sales": "ਵਿਕਰੀ",
+  "mobilenav.more": "ਹੋਰ"
 };
 export default pa;

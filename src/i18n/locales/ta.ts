@@ -118,6 +118,17 @@ const ta: Record<string, string> = {
   "simple.myMoney": "என் பணம்",
   "simple.myMoney.hint": "பணம் & இருப்பு",
   "simple.getHelp": "உதவி பெறு",
-  "simple.fullView": "முழு பார்வைக்கு மாறு"
+  "simple.fullView": "முழு பார்வைக்கு மாறு",
+  "quickcreate.new": "புதியது",
+  "quickcreate.invoice": "புதிய இன்வாய்ஸ்",
+  "quickcreate.payment": "பணம் பதிவு",
+  "quickcreate.expense": "செலவு சேர்",
+  "quickcreate.bill": "புதிய பில்",
+  "quickcreate.customer": "வாடிக்கையாளர் சேர்",
+  "mobilenav.home": "முகப்பு",
+  "mobilenav.invoices": "இன்வாய்ஸ்",
+  "mobilenav.money": "பணம்",
+  "mobilenav.sales": "விற்பனை",
+  "mobilenav.more": "மேலும்"
 };
 export default ta;

@@ -118,6 +118,17 @@ const bn: Record<string, string> = {
   "simple.myMoney": "আমার টাকা",
   "simple.myMoney.hint": "নগদ ও ব্যালেন্স",
   "simple.getHelp": "সাহায্য নিন",
-  "simple.fullView": "সম্পূর্ণ দৃশ্যে যান"
+  "simple.fullView": "সম্পূর্ণ দৃশ্যে যান",
+  "quickcreate.new": "নতুন",
+  "quickcreate.invoice": "নতুন ইনভয়েস",
+  "quickcreate.payment": "পেমেন্ট রেকর্ড",
+  "quickcreate.expense": "খরচ যোগ করুন",
+  "quickcreate.bill": "নতুন বিল",
+  "quickcreate.customer": "গ্রাহক যোগ করুন",
+  "mobilenav.home": "হোম",
+  "mobilenav.invoices": "ইনভয়েস",
+  "mobilenav.money": "টাকা",
+  "mobilenav.sales": "বিক্রি",
+  "mobilenav.more": "আরও"
 };
 export default bn;

@@ -118,6 +118,17 @@ const mr: Record<string, string> = {
   "simple.myMoney": "माझे पैसे",
   "simple.myMoney.hint": "रोकड व शिल्लक",
   "simple.getHelp": "मदत घ्या",
-  "simple.fullView": "संपूर्ण नमुना पाहा"
+  "simple.fullView": "संपूर्ण नमुना पाहा",
+  "quickcreate.new": "नवीन",
+  "quickcreate.invoice": "नवीन इनव्हॉइस",
+  "quickcreate.payment": "पेमेंट नोंदवा",
+  "quickcreate.expense": "खर्च जोडा",
+  "quickcreate.bill": "नवीन बिल",
+  "quickcreate.customer": "ग्राहक जोडा",
+  "mobilenav.home": "होम",
+  "mobilenav.invoices": "इनव्हॉइस",
+  "mobilenav.money": "पैसे",
+  "mobilenav.sales": "विक्री",
+  "mobilenav.more": "अधिक"
 };
 export default mr;

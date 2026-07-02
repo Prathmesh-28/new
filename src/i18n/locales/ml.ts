@@ -118,6 +118,17 @@ const ml: Record<string, string> = {
   "simple.myMoney": "എന്റെ പണം",
   "simple.myMoney.hint": "പണവും ബാലൻസും",
   "simple.getHelp": "സഹായം നേടൂ",
-  "simple.fullView": "പൂർണ്ണ കാഴ്ചയിലേക്ക് മാറൂ"
+  "simple.fullView": "പൂർണ്ണ കാഴ്ചയിലേക്ക് മാറൂ",
+  "quickcreate.new": "പുതിയത്",
+  "quickcreate.invoice": "പുതിയ ഇൻവോയ്‌സ്",
+  "quickcreate.payment": "പേയ്‌മെന്റ് രേഖപ്പെടുത്തുക",
+  "quickcreate.expense": "ചെലവ് ചേർക്കുക",
+  "quickcreate.bill": "പുതിയ ബിൽ",
+  "quickcreate.customer": "ഉപഭോക്താവിനെ ചേർക്കുക",
+  "mobilenav.home": "ഹോം",
+  "mobilenav.invoices": "ഇൻവോയ്‌സുകൾ",
+  "mobilenav.money": "പണം",
+  "mobilenav.sales": "വിൽപ്പന",
+  "mobilenav.more": "കൂടുതൽ"
 };
 export default ml;

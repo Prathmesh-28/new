@@ -118,6 +118,17 @@ const te: Record<string, string> = {
   "simple.myMoney": "నా డబ్బు",
   "simple.myMoney.hint": "నగదు & నిల్వలు",
   "simple.getHelp": "సహాయం పొందండి",
-  "simple.fullView": "పూర్తి వీక్షణకు మారండి"
+  "simple.fullView": "పూర్తి వీక్షణకు మారండి",
+  "quickcreate.new": "కొత్తది",
+  "quickcreate.invoice": "కొత్త ఇన్‌వాయిస్",
+  "quickcreate.payment": "చెల్లింపు నమోదు",
+  "quickcreate.expense": "ఖర్చు జోడించు",
+  "quickcreate.bill": "కొత్త బిల్లు",
+  "quickcreate.customer": "కస్టమర్‌ను జోడించు",
+  "mobilenav.home": "హోమ్",
+  "mobilenav.invoices": "ఇన్‌వాయిస్‌లు",
+  "mobilenav.money": "డబ్బు",
+  "mobilenav.sales": "అమ్మకాలు",
+  "mobilenav.more": "మరిన్ని"
 };
 export default te;

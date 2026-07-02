@@ -118,6 +118,17 @@ const kn: Record<string, string> = {
   "simple.myMoney": "ನನ್ನ ಹಣ",
   "simple.myMoney.hint": "ನಗದು ಮತ್ತು ಬಾಕಿ",
   "simple.getHelp": "ಸಹಾಯ ಪಡೆಯಿರಿ",
-  "simple.fullView": "ಪೂರ್ಣ ನೋಟಕ್ಕೆ ಬದಲಿಸಿ"
+  "simple.fullView": "ಪೂರ್ಣ ನೋಟಕ್ಕೆ ಬದಲಿಸಿ",
+  "quickcreate.new": "ಹೊಸದು",
+  "quickcreate.invoice": "ಹೊಸ ಇನ್‌ವಾಯ್ಸ್",
+  "quickcreate.payment": "ಪಾವತಿ ದಾಖಲಿಸಿ",
+  "quickcreate.expense": "ಖರ್ಚು ಸೇರಿಸಿ",
+  "quickcreate.bill": "ಹೊಸ ಬಿಲ್",
+  "quickcreate.customer": "ಗ್ರಾಹಕ ಸೇರಿಸಿ",
+  "mobilenav.home": "ಮುಖಪುಟ",
+  "mobilenav.invoices": "ಇನ್‌ವಾಯ್ಸ್",
+  "mobilenav.money": "ಹಣ",
+  "mobilenav.sales": "ಮಾರಾಟ",
+  "mobilenav.more": "ಇನ್ನಷ್ಟು"
 };
 export default kn;
