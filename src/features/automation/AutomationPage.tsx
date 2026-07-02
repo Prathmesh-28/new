@@ -81,7 +81,7 @@ export default function AutomationPage() {
             <Workflow size={18} className="text-[var(--color-primary)]" /> Automation &amp; Workflows
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Define IF-THEN rules, approval chains, reminders and notification logic - previewed against your live data. Execution is client-side preview; no backend scheduler runs these yet.
+            Define IF-THEN rules, approval chains, reminders and notification logic - previewed against your live data. Preview evaluates a rule against your live records instantly; hit <strong>Activate</strong> on a rule to convert it into a real Flow that the backend engine runs automatically.
           </p>
         </div>
         <TabStrip
@@ -231,6 +231,25 @@ function RuleBuilder() {
   const [value, setValue] = useState("");
   const [action, setAction] = useState<RuleAction>("flag");
   const [previewId, setPreviewId] = useState<string | null>(null);
+  // rule.id → the Flow id it was converted into (persisted, so the "running on backend"
+  // state survives reloads). Activating a rule POSTs it to /api/flows/from-rule, which
+  // builds a real event-triggered Flow the cron-wired engine actually executes.
+  const [activated, setActivated] = useFeatureState<Record<string, string>>("auto-rule-flows", {});
+  const [activating, setActivating] = useState<string | null>(null);
+
+  const activate = async (r: RuleRow) => {
+    setActivating(r.id);
+    try {
+      const flow = await api.post<{ id: string }>("/api/flows/from-rule", { rule: r });
+      setActivated(prev => ({ ...prev, [r.id]: flow.id }));
+      pushActivity({ tool: "Rule Builder", kind: "create", message: `Rule "${r.name}" activated on the Flows engine` });
+      toast.success("Rule is now running on the backend");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message.replace(/^\d+:\s*/, "") : "Could not activate this rule");
+    } finally {
+      setActivating(null);
+    }
+  };
 
   const fieldsFor: Record<RuleSubject, { id: RuleField; label: string }[]> = {
     transaction: [
@@ -295,7 +314,7 @@ function RuleBuilder() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><Zap size={14} className="text-[var(--color-primary)]" /> No-Code Rule Builder</h3>
-        <p className="text-xs text-[var(--color-muted)]">Compose an IF / THEN rule. Preview shows which live records match right now - actions are illustrative until a backend executor exists.</p>
+        <p className="text-xs text-[var(--color-muted)]">Compose an IF / THEN rule. Preview shows which live records match right now; <strong>Activate</strong> turns a rule into a real Flow that fires automatically when a matching transaction or invoice event occurs.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Rule name</label>
@@ -363,6 +382,15 @@ function RuleBuilder() {
                 <button onClick={() => setPreviewId(open ? null : r.id)} className="flex items-center gap-1 text-[10px] text-[var(--color-primary)] hover:underline">
                   <Play size={10} /> {open ? "Hide" : "Preview"}
                 </button>
+                {activated[r.id] ? (
+                  <a href="/flows" className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-semibold bg-green-900/30 text-green-400 border-green-800/40" title="This rule runs on the Flows engine. Click to view the flow.">
+                    <Zap size={10} /> Running on backend
+                  </a>
+                ) : (
+                  <button onClick={() => activate(r)} disabled={activating === r.id} className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-semibold bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent disabled:opacity-50" title="Convert this rule into a real Flow that runs automatically on the backend.">
+                    <Zap size={10} /> {activating === r.id ? "Activating…" : "Activate"}
+                  </button>
+                )}
                 <button onClick={() => { setRules(prev => prev.filter(x => x.id !== r.id)); pushActivity({ tool: "Rule Builder", kind: "delete", message: `Rule "${r.name}" removed` }); }} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
               </div>
             </div>

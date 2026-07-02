@@ -75,6 +75,15 @@ router.post("/", authenticate, canWrite, async (req, res) => {
     inserted.push(rows[0]);
   }
 
+  // Fire a transaction.created event ONLY for a single manual add (never on bulk import, to
+  // avoid flooding the Flows engine). Powers automation rules that watch new transactions.
+  if (items.length === 1 && inserted[0]) {
+    const t = inserted[0];
+    require("../modules/flows/runner").emitEvent(req.user.tenant_id, "transaction.created", {
+      transaction: { amount: Number(t.amount), category: t.category, counterparty: t.merchant_name || "", description: t.description_raw || "" },
+    }).catch(() => {});
+  }
+
   res.status(201).json(inserted.length === 1 ? inserted[0] : inserted);
 });
 

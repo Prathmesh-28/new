@@ -57,6 +57,13 @@ router.get("/catalog", async (req, res) => {
 
 router.get("/flows", async (req, res) => { try { res.json(await flows.listFlows(tenantOf(req), { limit: req.query.limit, before: req.query.before })); } catch (e) { fail(res, e); } });
 router.post("/flows", canWrite, async (req, res) => { try { res.status(201).json(await flows.createFlow(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+// Convert an /automation Rule-Builder rule into a real, event-triggered Flow (backend #20).
+router.post("/flows/from-rule", canWrite, async (req, res) => {
+  try {
+    const def = require("./ruleConvert").ruleToFlow((req.body || {}).rule || {});
+    res.status(201).json(await flows.createFlow(tenantOf(req), req.user.id, def));
+  } catch (e) { fail(res, e); }
+});
 router.get("/flows/:id", async (req, res) => { try { res.json(await flows.getFlow(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.patch("/flows/:id", canWrite, async (req, res) => { try { res.json(await flows.updateFlow(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.delete("/flows/:id", canWrite, async (req, res) => { try { res.json(await flows.deleteFlow(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });

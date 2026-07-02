@@ -527,6 +527,11 @@ initDb()
       require("./modules/flows/runner").runDailyCashEvents()
         .then(r => { if (r && r.fired) console.log(`[flows] cash.daily fired ${r.fired} flow(s)`); })
         .catch(err => console.error("[flows-cash-daily]", err.message));
+      // Flows: emit invoice.overdue for each still-unpaid past-due invoice, so activated
+      // "days overdue / status overdue" rules (converted from the Rule Builder) actually fire.
+      require("./modules/flows/runner").runOverdueInvoiceEvents()
+        .then(r => { if (r && r.fired) console.log(`[flows] invoice.overdue fired ${r.fired} event(s)`); })
+        .catch(err => console.error("[flows-overdue]", err.message));
       // Analytics win-back: nudge businesses that have gone quiet (WhatsApp → email →
       // in-app alert, gated; dedup'd by cooldown). Turns retention data into action.
       require("./modules/analytics").runWinback({})
