@@ -903,6 +903,8 @@ router.get("/assets/it-depreciation", async (req, res) => { try { res.json(await
 router.post("/assets/it-depreciation/close", canPost, async (req, res) => { try { res.json(await assets.itActDepreciation(tenantOf(req), (req.body || {}).fy, { commit: true })); } catch (e) { fail(res, e); } });
 // Exit / diligence readiness score (books hygiene + compliance + receivables + documentation).
 router.get("/exit-readiness", async (req, res) => { try { res.json(await require("../../lib/exitReadiness").exitReadiness(tenantOf(req))); } catch (e) { fail(res, e); } });
+// Diligence data-room: a manifest of financials/compliance/contracts/assets/ownership on file.
+router.get("/data-room", async (req, res) => { try { res.json(await require("../../lib/dataRoom").dataRoom(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
 // Renewals / expiry registry (licenses, DSC, AMC, agreements, registrations, insurance).
 const expiry = require("./expiry");
 router.get("/expiry-items", async (req, res) => { try { res.json(await expiry.listExpiryItems(tenantOf(req), { kind: req.query.kind, status: req.query.status })); } catch (e) { fail(res, e); } });

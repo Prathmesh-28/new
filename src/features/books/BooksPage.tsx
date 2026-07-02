@@ -608,6 +608,51 @@ function OwnerCapitalCard() {
   );
 }
 
+interface DataRoom { completeness: number; items_available: number; items_total: number; sections: { title: string; items: { name: string; available: boolean; count?: number }[] }[] }
+
+// Diligence data-room manifest (roadmap #198): what a lender/investor expects, on file vs missing.
+function DataRoomCard() {
+  const [r, setR] = useState<DataRoom | null>(null);
+  const [busy, setBusy] = useState(true);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    let c = false;
+    api.get<DataRoom>("/api/books/data-room").then((d) => { if (!c) setR(d); }).catch(() => {}).finally(() => { if (!c) setBusy(false); });
+    return () => { c = true; };
+  }, []);
+  if (busy || !r) return null;
+  return (
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2"><Files size={16} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Diligence data-room</h3></div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold tabular-nums">{r.completeness}%</span>
+          <span className="text-xs text-[var(--color-muted)]">{r.items_available}/{r.items_total} on file</span>
+          <button onClick={() => setOpen((o) => !o)} className="text-xs text-[var(--color-primary)] hover:underline">{open ? "Hide" : "Details"}</button>
+        </div>
+      </div>
+      <div className="h-1.5 bg-[var(--color-border)]/50 rounded-full mt-3 overflow-hidden"><div className="h-full bg-[var(--color-primary)]" style={{ width: `${r.completeness}%` }} /></div>
+      {open && (
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+          {r.sections.map((s) => (
+            <div key={s.title}>
+              <p className="text-[11px] font-semibold text-[var(--color-muted)] uppercase tracking-wide mb-1">{s.title}</p>
+              <ul className="space-y-1">
+                {s.items.map((it) => (
+                  <li key={it.name} className="text-xs flex items-center gap-2">
+                    {it.available ? <CheckCircle2 size={13} className="text-green-400 shrink-0" /> : <XCircle size={13} className="text-[var(--color-muted)] shrink-0" />}
+                    <span className={it.available ? "" : "text-[var(--color-muted)]"}>{it.name}{it.count ? ` (${it.count})` : ""}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OverviewTab({ loading }: { loading: boolean }) {
   const fy = currentFy();
   const [tb, setTb] = useState<TrialBalance | null>(null);
@@ -646,6 +691,7 @@ function OverviewTab({ loading }: { loading: boolean }) {
     <div className="space-y-5">
       <BooksHealthCard />
       <ExitReadinessCard />
+      <DataRoomCard />
       <OwnerCapitalCard />
       <PublicProfileCard />
       <div
