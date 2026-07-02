@@ -7,6 +7,7 @@ import { percentiles, cmgr, dso, dio, dpo, gstSummary } from "@/lib/finance";
 import { BarChart3, TrendingUp, TrendingDown, Minus, Award, AlertTriangle, ChevronDown, Info, Scale, PieChart, Gauge, Recycle, Percent, Receipt, UsersRound, Activity, Building2, Boxes, Coins, Layers, Waves, Wallet, Landmark, SlidersHorizontal, Banknote, Timer, HeartHandshake } from "lucide-react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from "recharts";
 import AiInsight from "@/components/ai/AiInsight";
+import { useT } from "@/i18n";
 
 const SECTORS = [
   "Manufacturing (SMB)",
@@ -89,6 +90,7 @@ type BmTab = "overview" | "ratios" | "cost-structure" | "growth-percentile" | "w
   | "net-margin" | "cash-runway" | "customer-retention";
 
 export default function BenchmarksPage() {
+  const tr = useT();
   const { store }    = useApp();
   const { transactions, bankAccounts } = store;
 
@@ -185,12 +187,12 @@ export default function BenchmarksPage() {
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
             <Award size={20} className="text-[var(--color-primary)]" />
-            Benchmarks
+            {tr("bench.title")}
           </h1>
           <p className="text-sm text-[var(--color-muted)] mt-1">
             {usingSelf
-              ? "Gross margin, payroll and growth are measured against your own trailing-12-month quartiles; the rest use typical sector reference ranges."
-              : "Typical reference ranges for your sector. Add 3+ months of data to benchmark against your own history."}
+              ? tr("bench.subtitleSelf")
+              : tr("bench.subtitleSector")}
           </p>
         </div>
 
@@ -278,8 +280,8 @@ export default function BenchmarksPage() {
       {!hasData && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6 text-center">
           <BarChart3 size={28} className="mx-auto mb-2 text-[var(--color-muted)] opacity-40" />
-          <p className="text-sm text-[var(--color-muted)]">Add transactions to see your metrics vs peers</p>
-          <p className="text-xs text-[var(--color-muted)] mt-1">Industry benchmarks are shown below based on your sector selection</p>
+          <p className="text-sm text-[var(--color-muted)]">{tr("bench.emptyTitle")}</p>
+          <p className="text-xs text-[var(--color-muted)] mt-1">{tr("bench.emptyHint")}</p>
         </div>
       )}
 
@@ -288,7 +290,7 @@ export default function BenchmarksPage() {
         {/* Radar */}
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
           <div className="flex items-center justify-between mb-1">
-            <h2 className="text-sm font-semibold">Overall position</h2>
+            <h2 className="text-sm font-semibold">{tr("bench.overallPosition")}</h2>
             {overallPct !== null && (
               <span className={`text-sm font-bold ${getLabel(overallPct).color}`}>
                 {getLabel(overallPct).label}
@@ -313,7 +315,7 @@ export default function BenchmarksPage() {
         {/* Score card */}
         {overallPct !== null && (
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-            <h2 className="text-sm font-semibold mb-4">Peer score</h2>
+            <h2 className="text-sm font-semibold mb-4">{tr("bench.peerScore")}</h2>
             <div className="flex items-center gap-4 mb-5">
               <div className="relative w-20 h-20 shrink-0">
                 <svg viewBox="0 0 36 36" className="w-20 h-20 -rotate-90">
@@ -354,7 +356,7 @@ export default function BenchmarksPage() {
 
       {/* Metric breakdown */}
       <div className="space-y-3">
-        <h2 className="text-sm font-semibold">Metric breakdown</h2>
+        <h2 className="text-sm font-semibold">{tr("bench.metricBreakdown")}</h2>
         {metrics.map(m => {
           const pct    = m.yours !== null ? getPercentile(m.yours, m.p25, m.p50, m.p75, m.higherIsBetter) : null;
           const status = pct !== null ? getLabel(pct) : null;

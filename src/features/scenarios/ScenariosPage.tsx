@@ -8,6 +8,7 @@ import { format, addDays } from "date-fns";
 import { toast } from "sonner";
 import { runForecast } from "@/lib/forecastEngine";
 import EmptyState from "@/components/EmptyState";
+import { useT } from "@/i18n";
 import type { Scenario } from "@/data/types";
 
 const HORIZON = 180; // 6-month planning window, driven by the real Monte-Carlo engine
@@ -65,6 +66,7 @@ type ScenarioTab = "planner" | "price-sim" | "headcount" | "dilution" | "breakev
 export default function ScenariosPage() {
   const { store } = useApp();
   const navigate  = useNavigate();
+  const tr = useT();
   const [scenTab, setScenTab] = useState<ScenarioTab>("planner");
   const [events, setEvents] = useState<ScenarioEvent[]>([]);
   const [newLabel, setNewLabel]  = useState("");
@@ -150,7 +152,7 @@ export default function ScenariosPage() {
       <div>
         <h1 className="text-xl font-bold flex items-center gap-2">
           <Sliders size={20} className="text-[var(--color-primary)]" />
-          Scenario Planner
+          {tr("scen.title")}
         </h1>
         <p className="text-sm text-[var(--color-muted)] mt-1">
           Model "what if" situations - hiring, new deals, loans, lost clients - and see the cash impact over the next 6 months, run through the same Monte-Carlo engine as your forecast.
@@ -213,7 +215,7 @@ export default function ScenariosPage() {
       {scenTab === "planner" && !hasLiveData && (
         <EmptyState
           icon={Sliders}
-          title="No scenarios yet"
+          title={tr("scen.emptyTitle")}
           description="Model best/worst-case cash outcomes from your live data. Connect a bank account and record a few transactions, then build a forecast - the planner runs your what-ifs through the same Monte-Carlo engine."
           ctaText="Go to Forecast"
           ctaHref="/forecast"
@@ -223,7 +225,7 @@ export default function ScenariosPage() {
       {scenTab === "planner" && hasLiveData && <>
       {/* Presets */}
       <div>
-        <p className="text-xs text-[var(--color-muted)] font-medium mb-2">Quick scenarios</p>
+        <p className="text-xs text-[var(--color-muted)] font-medium mb-2">{tr("scen.quickScenarios")}</p>
         <div className="flex flex-wrap gap-2">
           {PRESETS.map(p => (
             <button
@@ -321,7 +323,7 @@ export default function ScenariosPage() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h2 className="text-sm font-semibold">6-month cash projection</h2>
+            <h2 className="text-sm font-semibold">{tr("scen.cashProjection")}</h2>
             <p className="text-xs text-[var(--color-muted)]">Base vs scenario (median path) · scenario downside dashed · ₹ Lakhs</p>
           </div>
           {events.length > 0 && (
@@ -375,28 +377,28 @@ export default function ScenariosPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             {
-              label: "Base runway",
+              label: tr("scen.baseRunway"),
               value: baseRunway >= HORIZON ? `${HORIZON}+d` : `${baseRunway}d`,
               sub: "median (P50)",
               icon: TrendingUp,
               color: "text-[var(--color-muted)]",
             },
             {
-              label: "Scenario runway",
+              label: tr("scen.scenarioRunway"),
               value: scenRunway >= HORIZON ? `${HORIZON}+d` : `${Math.max(0, scenRunway)}d`,
               sub: "median, with events",
               icon: Sliders,
               color: scenRunway >= baseRunway ? "text-green-400" : "text-red-400",
             },
             {
-              label: "6-month base",
+              label: tr("scen.sixMonthBase"),
               value: formatCurrency(Math.max(0, finalBase)),
               sub: "ending cash (P50)",
               icon: TrendingDown,
               color: "text-[var(--color-muted)]",
             },
             {
-              label: "Scenario difference",
+              label: tr("scen.scenarioDifference"),
               value: `${scenDiff >= 0 ? "+" : ""}${formatCurrency(Math.abs(scenDiff))}`,
               sub: scenDiff >= 0 ? "better outcome" : "worse outcome",
               icon: scenDiff >= 0 ? TrendingUp : AlertTriangle,

@@ -9,6 +9,7 @@ import { useFeatureState } from "@/hooks/useFeatureState";
 import { Gem, Rocket, ArrowRight, Users, Building2, Sprout, SlidersHorizontal, FileSpreadsheet, Calculator, Dice5, Hourglass, Layers, PieChart, Repeat, Gift, CalendarClock, Activity, Scale, Receipt, TrendingDown, TrendingUp, GitBranch, Infinity as InfinityIcon, Timer } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import AiInsight from "@/components/ai/AiInsight";
+import { useT } from "@/i18n";
 
 const INDUSTRY_MULTIPLES: Record<string, number> = {
   "SaaS / Fintech": 8, "SaaS": 8, "Fintech": 6, "E-commerce": 2.5, "Manufacturing": 1.5,
@@ -35,6 +36,7 @@ const toNum = (v: number | string | null | undefined): number => {
 };
 
 export default function ValuationPage() {
+  const tr = useT();
   const { store } = useApp();
   const navigate = useNavigate();
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
@@ -114,9 +116,9 @@ export default function ValuationPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-bold flex items-center gap-2"><Gem size={18} className="text-[var(--color-primary)]" /> Valuation</h1>
+        <h1 className="text-xl font-bold flex items-center gap-2"><Gem size={18} className="text-[var(--color-primary)]" /> {tr("val.title")}</h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
-          Revenue-multiple and discounted-cash-flow valuation from your live financials, plus dilution maths for the active raise.
+          {tr("val.subtitle")}
         </p>
       </div>
 
@@ -154,10 +156,10 @@ export default function ValuationPage() {
       {/* Headline */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Annual Revenue (run-rate)", value: formatAmount(annualRevenue), sub: "3-month average × 12", color: "text-[var(--color-text)]" },
-          { label: "Indicative Valuation", value: formatAmount(range.mid), sub: `Range ${formatAmount(range.low)} - ${formatAmount(range.high)}`, color: "text-[var(--color-primary)]" },
-          { label: "Implied Multiple", value: annualRevenue > 0 ? `${(range.mid / annualRevenue).toFixed(1)}x` : "-", sub: `Industry median ${defaultMultiple}x (${store.firm.industry || "general"})`, color: "text-blue-400" },
-          { label: "Raised So Far", value: formatAmount(raisedSoFar), sub: raisesCountLabel, color: "text-green-400" },
+          { label: tr("val.annualRevenue"), value: formatAmount(annualRevenue), sub: "3-month average × 12", color: "text-[var(--color-text)]" },
+          { label: tr("val.indicativeValuation"), value: formatAmount(range.mid), sub: `Range ${formatAmount(range.low)} - ${formatAmount(range.high)}`, color: "text-[var(--color-primary)]" },
+          { label: tr("val.impliedMultiple"), value: annualRevenue > 0 ? `${(range.mid / annualRevenue).toFixed(1)}x` : "-", sub: `Industry median ${defaultMultiple}x (${store.firm.industry || "general"})`, color: "text-blue-400" },
+          { label: tr("val.raisedSoFar"), value: formatAmount(raisedSoFar), sub: raisesCountLabel, color: "text-green-400" },
         ].map(k => (
           <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -319,10 +321,10 @@ export default function ValuationPage() {
         </p>
         <div className="flex gap-2 mt-3">
           <button onClick={() => navigate("/capital")} className="text-xs bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-1.5 rounded-lg hover:bg-[var(--color-primary)]/25 flex items-center gap-1.5">
-            <Rocket size={11} /> Start / manage raise
+            <Rocket size={11} /> {tr("val.startManageRaise")}
           </button>
           <button onClick={() => navigate("/credit")} className="text-xs bg-[var(--color-accent)] text-[var(--color-muted)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)]">
-            Compare with debt instead
+            {tr("val.compareWithDebt")}
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { termSheetMath, type RoundType } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
@@ -27,6 +28,7 @@ function Field({ label, children, hint }: { label: string; children: React.React
 const inputCls = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
 export default function TermSheetPage() {
+  const tr = useT();
   const { store } = useApp();
   const { firm } = store;
 
@@ -59,13 +61,13 @@ export default function TermSheetPage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold flex items-center gap-2"><ScrollText size={18} className="text-[var(--color-primary)]" /> Term Sheet Generator</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Model a fundraise and produce a ready-to-share, non-binding term sheet.</p>
+          <h1 className="text-xl font-bold flex items-center gap-2"><ScrollText size={18} className="text-[var(--color-primary)]" /> {tr("ts.title")}</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("ts.subtitle")}</p>
         </div>
         {tab === "generator" && (
           <button onClick={() => window.print()}
             className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
-            <Printer size={13} /> Print / PDF
+            <Printer size={13} /> {tr("ts.printPdf")}
           </button>
         )}
       </div>
@@ -112,7 +114,7 @@ export default function TermSheetPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* ── Inputs ── */}
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
-          <p className="text-sm font-semibold">Deal terms</p>
+          <p className="text-sm font-semibold">{tr("ts.dealTerms")}</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="Company"><input value={company} onChange={e => setCompany(e.target.value)} className={inputCls} /></Field>
             <Field label="Investor / Lead"><input value={investor} onChange={e => setInvestor(e.target.value)} placeholder="e.g. Acme Ventures" className={inputCls} /></Field>
@@ -170,15 +172,15 @@ export default function TermSheetPage() {
             {isEquity ? (
               <>
                 <div className="bg-[var(--color-bg)] rounded-lg p-3 border border-[var(--color-border)]">
-                  <p className="text-[10px] text-[var(--color-muted)]">Post-money</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{tr("ts.postMoney")}</p>
                   <p className="text-base font-bold text-[var(--color-primary)] tabular-nums">{formatAmount(result.postMoney)}</p>
                 </div>
                 <div className="bg-[var(--color-bg)] rounded-lg p-3 border border-[var(--color-border)]">
-                  <p className="text-[10px] text-[var(--color-muted)]">Investor stake</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{tr("ts.investorStake")}</p>
                   <p className="text-base font-bold text-green-400 tabular-nums">{result.investorPct}%</p>
                 </div>
                 <div className="bg-[var(--color-bg)] rounded-lg p-3 border border-[var(--color-border)]">
-                  <p className="text-[10px] text-[var(--color-muted)]">Founders after</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{tr("ts.foundersAfter")}</p>
                   <p className="text-base font-bold tabular-nums">{result.founderPctAfter}%</p>
                 </div>
               </>
