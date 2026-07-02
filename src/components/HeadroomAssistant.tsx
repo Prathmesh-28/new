@@ -68,6 +68,8 @@ export default function HeadroomAssistant() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  // Let other surfaces (e.g. Simple view's "Get help") open the assistant.
+  useEffect(() => { const h = () => setOpen(true); document.addEventListener("open-headroom-assistant", h); return () => document.removeEventListener("open-headroom-assistant", h); }, []);
   const [view, setView] = useState<"chat" | "browse">("chat");
   const [msgs, setMsgs] = useState<Msg[]>([GREETING]);
   const [input, setInput] = useState("");

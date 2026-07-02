@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import TransactionImportModal from "@/components/TransactionImportModal";
 import PreviewBadge from "@/components/PreviewBadge";
 import AiInsight from "@/components/ai/AiInsight";
+import SimpleHome from "@/components/SimpleHome";
 import { api } from "@/lib/api";
 import type { BankAccount } from "@/data/types";
 
@@ -1938,6 +1939,7 @@ export default function DashboardPage() {
   const [showAddTx, setShowAddTx]           = useState(false);
   const [showImport,    setShowImport]      = useState(false);
   const [dashView, setDashView]             = useState<"today" | "insights">("today");
+  const [simpleMode, setSimpleMode]         = useState(() => localStorage.getItem("hr_simple_mode") === "true");
   const [wizardDismissed, setWizardDismissed] = useState(
     () => localStorage.getItem("hr_onboarding_dismissed") === "true"
   );
@@ -2021,6 +2023,8 @@ export default function DashboardPage() {
     ? Math.round(lastMonthRevenue * (firm.gstRate / 100))
     : 0;
 
+  if (simpleMode) return <SimpleHome onExit={() => { localStorage.removeItem("hr_simple_mode"); setSimpleMode(false); }} />;
+
   return (
     <div className="space-y-6">
       <OnboardingChecklist />
@@ -2042,6 +2046,11 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Dashboard</h1>
         <div className="flex items-center gap-2">
+          <button onClick={() => { localStorage.setItem("hr_simple_mode", "true"); setSimpleMode(true); }}
+            title="A simpler view with big buttons for the daily jobs"
+            className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 transition-colors">
+            <LayoutGrid size={12} /> Simple view
+          </button>
           <button onClick={() => setShowAddAccount(true)}
             disabled={isReadOnly} title={isReadOnly ? "Read-only in client view" : undefined}
             className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
