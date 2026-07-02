@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 import { formatCurrency } from "@/lib/utils";
 import { TAB_CATALOG } from "@/data/roles";
 import {
@@ -100,6 +101,7 @@ interface Props {
 }
 
 export function CommandPalette({ open, onClose }: Props) {
+  const tr = useT();   // `t` is used as the transaction param in the search filter below
   const navigate  = useNavigate();
   const { store } = useApp();
   const [query, setQuery] = useState("");
@@ -163,7 +165,7 @@ export function CommandPalette({ open, onClose }: Props) {
 
   if (!open) return null;
 
-  const typeLabel: Record<string, string> = { fav: "Favorites", recent: "Recent", nav: "Pages", transaction: "Transactions", alert: "Alerts" };
+  const typeLabel: Record<string, string> = { fav: tr("cmdk.favorites"), recent: tr("cmdk.recent"), nav: tr("cmdk.pages"), transaction: tr("Transactions"), alert: tr("Alerts") };
   let lastType = "";
 
   return (
@@ -180,7 +182,7 @@ export function CommandPalette({ open, onClose }: Props) {
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Search pages, transactions, alerts…"
+            placeholder={tr("cmdk.placeholder")}
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--color-muted)]"
           />
           {query && (
@@ -193,7 +195,7 @@ export function CommandPalette({ open, onClose }: Props) {
 
         <ul ref={listRef} className="max-h-72 overflow-y-auto py-1">
           {results.length === 0 && (
-            <li className="px-4 py-6 text-center text-sm text-[var(--color-muted)]">No results for "{query}"</li>
+            <li className="px-4 py-6 text-center text-sm text-[var(--color-muted)]">{tr("cmdk.noResults", { query })}</li>
           )}
           {results.map((r, i) => {
             const showHeader = r.type !== lastType;
@@ -229,10 +231,10 @@ export function CommandPalette({ open, onClose }: Props) {
         </ul>
 
         <div className="flex items-center gap-3 px-4 py-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-muted)]">
-          <span><kbd className="font-mono">↑↓</kbd> navigate</span>
-          <span><kbd className="font-mono">↵</kbd> open</span>
-          <span><Star size={9} className="inline" /> pin</span>
-          <span><kbd className="font-mono">esc</kbd> close</span>
+          <span><kbd className="font-mono">↑↓</kbd> {tr("cmdk.navigate")}</span>
+          <span><kbd className="font-mono">↵</kbd> {tr("cmdk.open")}</span>
+          <span><Star size={9} className="inline" /> {tr("cmdk.pin")}</span>
+          <span><kbd className="font-mono">esc</kbd> {tr("cmdk.close")}</span>
         </div>
       </div>
     </div>

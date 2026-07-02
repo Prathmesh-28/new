@@ -90,6 +90,17 @@ const hi: Record<string, string> = {
   "mobilenav.sales": "सेल्स",
   "mobilenav.more": "और",
 
+  // Command palette (⌘K खोज)
+  "cmdk.placeholder": "पेज, लेन-देन, अलर्ट खोजें…",
+  "cmdk.noResults": "\"{query}\" के लिए कोई परिणाम नहीं",
+  "cmdk.favorites": "पसंदीदा",
+  "cmdk.recent": "हाल के",
+  "cmdk.pages": "पेज",
+  "cmdk.navigate": "नेविगेट करें",
+  "cmdk.open": "खोलें",
+  "cmdk.pin": "पिन करें",
+  "cmdk.close": "बंद करें",
+
   // Navigation (keyed by English label)
   "Home": "होम",
   "Get Paid & Sell": "भुगतान पाएँ और बेचें",

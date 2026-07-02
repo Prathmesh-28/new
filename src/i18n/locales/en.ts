@@ -96,6 +96,17 @@ const en: Record<string, string> = {
   "mobilenav.sales": "Sales",
   "mobilenav.more": "More",
 
+  // Command palette (⌘K search)
+  "cmdk.placeholder": "Search pages, transactions, alerts…",
+  "cmdk.noResults": "No results for \"{query}\"",
+  "cmdk.favorites": "Favorites",
+  "cmdk.recent": "Recent",
+  "cmdk.pages": "Pages",
+  "cmdk.navigate": "navigate",
+  "cmdk.open": "open",
+  "cmdk.pin": "pin",
+  "cmdk.close": "close",
+
   // Navigation labels (gettext-style: the key IS the English label, translated at render
   // in the Sidebar so the catalog keeps English as its stable expand/collapse identity).
   // Groups:
