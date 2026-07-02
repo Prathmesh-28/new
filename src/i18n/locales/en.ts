@@ -58,6 +58,29 @@ const en: Record<string, string> = {
   "firm.add": "Add a firm",
   "firm.switch": "Switch firm",
 
+  // Dashboard header + view switcher
+  "dash.greetMorning": "Good morning",
+  "dash.greetAfternoon": "Good afternoon",
+  "dash.greetEvening": "Good evening",
+  "dash.yourBrief": "your brief",
+  "dash.simpleView": "Simple view",
+  "dash.simpleViewHint": "A simpler view with big buttons for the daily jobs",
+  "dash.today": "Today",
+  "dash.insights": "Insights",
+
+  // Simple / assisted mode (#173) — the vernacular-first big-button home
+  "simple.balance": "Money in your accounts",
+  "simple.newBill": "New bill",
+  "simple.newBill.hint": "Make an invoice",
+  "simple.gotPaid": "Got paid",
+  "simple.gotPaid.hint": "Record a payment",
+  "simple.spent": "I spent money",
+  "simple.spent.hint": "Add an expense",
+  "simple.myMoney": "My money",
+  "simple.myMoney.hint": "Cash & balances",
+  "simple.getHelp": "Get help",
+  "simple.fullView": "Switch to full view",
+
   // Navigation labels (gettext-style: the key IS the English label, translated at render
   // in the Sidebar so the catalog keeps English as its stable expand/collapse identity).
   // Groups:

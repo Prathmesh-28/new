@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 import { formatCurrency, monthlyBurn, runwayDays, generateId } from "@/lib/utils";
 import { runForecast } from "@/lib/forecastEngine";
 import { updateWidgetData } from "@/lib/widgetBridge";
@@ -944,6 +945,7 @@ function MorningBriefCard() {
   const { store } = useApp();
   const { transactions, bankAccounts, alerts } = store;
   const navigate = useNavigate();
+  const tr = useT();   // `t` is used as the transaction param in filters below
 
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0];
@@ -983,7 +985,7 @@ function MorningBriefCard() {
   if (critical.length) items.push({ icon: AlertTriangle, tone: "text-red-400", text: `${critical.length} high-priority alert${critical.length > 1 ? "s" : ""} need attention: ${critical[0].message}` });
   else if (unread.length) items.push({ icon: Bell, tone: "text-yellow-400", text: `${unread.length} unread alert${unread.length > 1 ? "s" : ""} in your inbox.` });
 
-  const greeting = now.getHours() < 12 ? "Good morning" : now.getHours() < 17 ? "Good afternoon" : "Good evening";
+  const greeting = tr(now.getHours() < 12 ? "dash.greetMorning" : now.getHours() < 17 ? "dash.greetAfternoon" : "dash.greetEvening");
   const allClear = !critical.length && !dueToday.length && unread.length === 0;
 
   return (
@@ -991,7 +993,7 @@ function MorningBriefCard() {
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold flex items-center gap-1.5">
           <Sunrise size={14} className="text-[var(--color-primary)]" />
-          {greeting} - your brief
+          {greeting} - {tr("dash.yourBrief")}
         </h2>
         <span className="text-[10px] text-[var(--color-muted)]">{format(now, "EEE, d MMM · HH:mm")}</span>
       </div>
@@ -1935,6 +1937,7 @@ export default function DashboardPage() {
   const { store, markAlertRead, addBankAccount, addTransaction, isReadOnly } = useApp();
   const { bankAccounts, transactions, alerts, forecast, creditApplications, firm } = store;
   const navigate = useNavigate();
+  const tr = useT();   // `t` is used as the transaction param in filters below
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showAddTx, setShowAddTx]           = useState(false);
   const [showImport,    setShowImport]      = useState(false);
@@ -2044,12 +2047,12 @@ export default function DashboardPage() {
         </button>
       )}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Dashboard</h1>
+        <h1 className="text-xl font-bold">{tr("Dashboard")}</h1>
         <div className="flex items-center gap-2">
           <button onClick={() => { localStorage.setItem("hr_simple_mode", "true"); setSimpleMode(true); }}
-            title="A simpler view with big buttons for the daily jobs"
+            title={tr("dash.simpleViewHint")}
             className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 transition-colors">
-            <LayoutGrid size={12} /> Simple view
+            <LayoutGrid size={12} /> {tr("dash.simpleView")}
           </button>
           <button onClick={() => setShowAddAccount(true)}
             disabled={isReadOnly} title={isReadOnly ? "Read-only in client view" : undefined}
@@ -2241,10 +2244,10 @@ export default function DashboardPage() {
           {/* Dashboard views: Today (act now) vs Insights (analyse) - the home
               screen leads with what needs attention, not twenty charts at once. */}
           <div className="flex items-center gap-1 border-b border-[var(--color-border)]">
-            {([["today", "Today"], ["insights", "Insights"]] as const).map(([v, label]) => (
+            {([["today", "dash.today"], ["insights", "dash.insights"]] as const).map(([v, labelKey]) => (
               <button key={v} onClick={() => setDashView(v)}
                 className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${dashView === v ? "border-[var(--color-primary)] text-[var(--color-text)]" : "border-transparent text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-                {label}
+                {tr(labelKey)}
               </button>
             ))}
           </div>

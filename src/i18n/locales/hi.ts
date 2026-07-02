@@ -52,6 +52,29 @@ const hi: Record<string, string> = {
   "firm.add": "फर्म जोड़ें",
   "firm.switch": "फर्म बदलें",
 
+  // Dashboard header + view switcher
+  "dash.greetMorning": "सुप्रभात",
+  "dash.greetAfternoon": "नमस्कार",
+  "dash.greetEvening": "शुभ संध्या",
+  "dash.yourBrief": "आपका ब्रीफ",
+  "dash.simpleView": "सरल व्यू",
+  "dash.simpleViewHint": "रोज़मर्रा के कामों के लिए बड़े बटनों वाला सरल व्यू",
+  "dash.today": "आज",
+  "dash.insights": "अंतर्दृष्टि",
+
+  // Simple / assisted mode (#173)
+  "simple.balance": "आपके खातों में पैसा",
+  "simple.newBill": "नया बिल",
+  "simple.newBill.hint": "इनवॉइस बनाएँ",
+  "simple.gotPaid": "पैसा मिला",
+  "simple.gotPaid.hint": "भुगतान दर्ज करें",
+  "simple.spent": "मैंने पैसा खर्च किया",
+  "simple.spent.hint": "खर्च जोड़ें",
+  "simple.myMoney": "मेरा पैसा",
+  "simple.myMoney.hint": "नकद और बैलेंस",
+  "simple.getHelp": "मदद लें",
+  "simple.fullView": "पूर्ण व्यू पर जाएँ",
+
   // Navigation (keyed by English label)
   "Home": "होम",
   "Get Paid & Sell": "भुगतान पाएँ और बेचें",
