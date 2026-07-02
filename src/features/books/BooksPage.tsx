@@ -26,6 +26,7 @@ import BooksAssetsTab from "./BooksAssetsTab";
 import BooksExpensesTab from "./BooksExpensesTab";
 import BooksRenewalsTab from "./BooksRenewalsTab";
 import BooksRentTab from "./BooksRentTab";
+import BooksContinuityTab from "./BooksContinuityTab";
 import BooksAutomationTab from "./BooksAutomationTab";
 import BooksComplianceTab from "./BooksComplianceTab";
 import BooksSettlementTab from "./BooksSettlementTab";
@@ -133,7 +134,7 @@ interface DocumentRow {
   party_ledger_id: string | null;
 }
 
-type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls" | "taxfiling" | "pricing" | "payterms" | "subscriptions" | "closing" | "dimensions" | "finreports" | "fx" | "assets" | "expenses" | "renewals" | "rent" | "automation" | "compliance" | "settlement" | "documents" | "agents";
+type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls" | "taxfiling" | "pricing" | "payterms" | "subscriptions" | "closing" | "dimensions" | "finreports" | "fx" | "assets" | "expenses" | "renewals" | "rent" | "continuity" | "automation" | "compliance" | "settlement" | "documents" | "agents";
 type ReportId = "tb" | "pl" | "bs" | "cf";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -370,6 +371,7 @@ export default function BooksPage() {
     { id: "expenses",  label: "Expenses & Advances", icon: <HandCoins size={14} /> },
     { id: "renewals",  label: "Renewals",          icon: <CalendarClock size={14} /> },
     { id: "rent",      label: "Rent & 194-I",      icon: <Home size={14} /> },
+    { id: "continuity", label: "Continuity vault", icon: <ShieldCheck size={14} /> },
     { id: "compliance", label: "Compliance",       icon: <ShieldCheck size={14} /> },
     { id: "settlement", label: "Settlements",      icon: <Scale size={14} /> },
     { id: "automation", label: "Automation",       icon: <Workflow size={14} /> },
@@ -455,6 +457,7 @@ export default function BooksPage() {
             {tab === "expenses" && <BooksExpensesTab />}
             {tab === "renewals" && <BooksRenewalsTab />}
             {tab === "rent" && <BooksRentTab />}
+            {tab === "continuity" && <BooksContinuityTab />}
             {tab === "compliance" && <BooksComplianceTab canWrite={canWrite} />}
             {tab === "settlement" && <BooksSettlementTab />}
             {tab === "automation" && <BooksAutomationTab />}

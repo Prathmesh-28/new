@@ -271,6 +271,13 @@ router.get("/reports/trial-balance", async (req, res) => { try { res.json(await 
 router.get("/reports/profit-loss", async (req, res) => { try { res.json(await reports.profitLoss(tenantOf(req), fyOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
 router.get("/reports/balance-sheet", async (req, res) => { try { res.json(await reports.balanceSheet(tenantOf(req), fyOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
 router.get("/reports/owner-capital", async (req, res) => { try { res.json(await reports.ownerCapital(tenantOf(req), fyOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
+// Business-continuity vault — owner-only (holds sensitive emergency access details).
+const continuity = require("./continuity");
+const canOwner = (req, res, next) => (["owner", "super_admin"].includes(req.user.role) ? next() : res.status(403).json({ error: "Owner access only" }));
+router.get("/continuity", canOwner, async (req, res) => { try { res.json(await continuity.listContinuityItems(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/continuity", canOwner, async (req, res) => { try { res.status(201).json(await continuity.createContinuityItem(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.patch("/continuity/:id", canOwner, async (req, res) => { try { res.json(await continuity.updateContinuityItem(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.delete("/continuity/:id", canOwner, async (req, res) => { try { res.json(await continuity.removeContinuityItem(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.get("/reports/schedule-iii", async (req, res) => { try { res.json(await reports.scheduleIII(tenantOf(req), fyOf(req), req.query.asOf)); } catch (e) { fail(res, e); } });
 router.get("/reports/branch-trial-balance", async (req, res) => { try { if (!req.query.branchId) return res.status(400).json({ error: "branchId required" }); res.json(await reports.branchTrialBalance(tenantOf(req), fyOf(req), req.query.branchId, req.query.asOf)); } catch (e) { fail(res, e); } });
 router.get("/reports/branch-pl", async (req, res) => { try { if (!req.query.branchId) return res.status(400).json({ error: "branchId required" }); res.json(await reports.branchPL(tenantOf(req), fyOf(req), req.query.branchId, req.query.asOf)); } catch (e) { fail(res, e); } });

@@ -610,6 +610,23 @@ const BOOKS_SCHEMA = `
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_book_rent_agreements ON book_rent_agreements(tenant_id, status);
+
+  -- Business-continuity vault: emergency access instructions for family/partner if the owner
+  -- is unavailable — key contacts, bank/portal accounts, nominee details, where documents live.
+  -- Sensitive; the detail column is field-encrypted at rest and the routes are owner-gated.
+  CREATE TABLE IF NOT EXISTS book_continuity_items (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id   TEXT NOT NULL,
+    category    TEXT NOT NULL,             -- contact|account|instruction|document|nominee|other
+    title       TEXT NOT NULL,
+    holder      TEXT,                       -- who/where (bank, person, portal)
+    detail      TEXT,                       -- field-encrypted (fieldcrypto)
+    priority    INT NOT NULL DEFAULT 3,      -- 1 = act first
+    created_by  UUID,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_continuity ON book_continuity_items(tenant_id, priority);
 `;
 
 module.exports = { BOOKS_SCHEMA };
