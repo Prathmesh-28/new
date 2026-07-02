@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -25,6 +26,7 @@ type Tab =
   | "empintensity" | "renewmix" | "certs" | "ratingplan";
 
 export default function EsgPage() {
+  const tr = useT();
   const [tab, setTab] = useState<Tab>("overview");
 
   return (
@@ -32,22 +34,22 @@ export default function EsgPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <Leaf size={18} className="text-[var(--color-primary)]" /> Sustainability & ESG
+            <Leaf size={18} className="text-[var(--color-primary)]" /> {tr("esg.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Carbon footprint, Scope 1/2/3, BRSR-lite, green spend & ESG goals - estimated from your live books, India-aware (BRSR, SEBI, CBAM).
+            {tr("esg.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
           {([
-            ["overview", "Overview", Leaf],
-            ["footprint", "Carbon Footprint", Factory],
-            ["scopes", "Scope 1/2/3", Gauge],
-            ["energy", "Energy & Water", Zap],
-            ["scorecard", "ESG Scorecard", ClipboardCheck],
-            ["brsr", "BRSR-Lite", FileCheck2],
-            ["greenspend", "Green Spend", Recycle],
-            ["intensity", "Emission Intensity", TrendingDown],
+            ["overview", tr("esg.tab.overview"), Leaf],
+            ["footprint", tr("esg.tab.footprint"), Factory],
+            ["scopes", tr("esg.tab.scopes"), Gauge],
+            ["energy", tr("esg.tab.energy"), Zap],
+            ["scorecard", tr("esg.tab.scorecard"), ClipboardCheck],
+            ["brsr", tr("esg.tab.brsr"), FileCheck2],
+            ["greenspend", tr("esg.tab.greenspend"), Recycle],
+            ["intensity", tr("esg.tab.intensity"), TrendingDown],
             ["supplier", "Supplier Rating", Truck],
             ["offset", "Offset Cost", Trees],
             ["goals", "Goal Tracker", Target],

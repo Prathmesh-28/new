@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays } from "date-fns";
+import { useT } from "@/i18n";
 
 // shared styles - reused TaxPage/DebtPage input class string
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -31,6 +32,7 @@ type TabId =
   | "mc-pnl" | "wht-recovery" | "edpms-aging" | "bank-charge-recon";
 
 export default function GlobalPage() {
+  const tr = useT();
   const [tab, setTab] = useState<TabId>("overview");
 
   return (
@@ -38,10 +40,10 @@ export default function GlobalPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <Globe size={18} className="text-[var(--color-primary)]" /> Global &amp; Cross-Border
+            <Globe size={18} className="text-[var(--color-primary)]" /> {tr("glob.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            FX, exports &amp; FEMA toolkit - multi-currency maths, LUT invoicing, FIRC/BRC tracking, customs &amp; export-incentive estimators.
+            {tr("glob.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
@@ -125,6 +127,7 @@ export default function GlobalPage() {
 
 // ── Overview ─────────────────────────────────────────────────────────────────
 function Overview({ onJump }: { onJump: (t: TabId) => void }) {
+  const tr = useT();
   const { store } = useApp();
   const fircs = (store.featureData?.["glb-firc-brc"] as FircRow[] | undefined) ?? [];
   const lcs = (store.featureData?.["glb-lc"] as LcRow[] | undefined) ?? [];
@@ -132,10 +135,10 @@ function Overview({ onJump }: { onJump: (t: TabId) => void }) {
   const openLcValue = lcs.reduce((s, l) => s + (l.amount || 0), 0);
 
   const cards = [
-    { label: "Reference USD rate", value: `₹${DEFAULT_RATES.USD}`, color: "text-[var(--color-text)]", sub: "Manual - set in converter" },
-    { label: "FIRCs awaiting BRC", value: String(pendingBrc), color: pendingBrc > 0 ? "text-yellow-400" : "text-green-400", sub: `${fircs.length} remittance(s) tracked` },
-    { label: "Open LC value", value: openLcValue > 0 ? fmtUSD(openLcValue) : "-", color: "text-blue-400", sub: `${lcs.length} letter(s) of credit` },
-    { label: "FEMA realisation window", value: "9 months", color: "text-orange-400", sub: "From export date - track per shipment" },
+    { label: tr("glob.cardUsdRate"), value: `₹${DEFAULT_RATES.USD}`, color: "text-[var(--color-text)]", sub: "Manual - set in converter" },
+    { label: tr("glob.cardFircAwaiting"), value: String(pendingBrc), color: pendingBrc > 0 ? "text-yellow-400" : "text-green-400", sub: `${fircs.length} remittance(s) tracked` },
+    { label: tr("glob.cardOpenLc"), value: openLcValue > 0 ? fmtUSD(openLcValue) : "-", color: "text-blue-400", sub: `${lcs.length} letter(s) of credit` },
+    { label: tr("glob.cardFemaWindow"), value: "9 months", color: "text-orange-400", sub: "From export date - track per shipment" },
   ];
 
   const tools: { id: TabId; title: string; desc: string }[] = [

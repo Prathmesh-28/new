@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/i18n";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import {
@@ -194,6 +195,7 @@ function CostChip({ label, value }: { label: string; value: number | string | nu
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ErpPage() {
   const { user } = useAuth();
+  const tr = useT();
   const canWrite = WRITE_ROLES.has(user?.role ?? "");
 
   const [tab, setTab] = useState<TabId>("items");
@@ -230,10 +232,10 @@ export default function ErpPage() {
   useEffect(() => { void loadAll(); }, [loadAll]);
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: "items",    label: "Items",            icon: <Package size={14} /> },
-    { id: "boms",     label: "BOMs",             icon: <ListTree size={14} /> },
-    { id: "wos",      label: "Work Orders",      icon: <ClipboardList size={14} /> },
-    { id: "requests", label: "Material Requests", icon: <ShoppingCart size={14} />, badge: reorder.length || undefined },
+    { id: "items",    label: tr("erp.tabItems"),        icon: <Package size={14} /> },
+    { id: "boms",     label: tr("erp.tabBoms"),         icon: <ListTree size={14} /> },
+    { id: "wos",      label: tr("erp.tabWorkOrders"),   icon: <ClipboardList size={14} /> },
+    { id: "requests", label: tr("erp.tabRequests"),     icon: <ShoppingCart size={14} />, badge: reorder.length || undefined },
   ];
 
   return (
@@ -242,10 +244,10 @@ export default function ErpPage() {
       <div className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 sm:px-6 py-4">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <Factory size={20} className="text-[var(--color-primary)]" />
-          ERP - manufacturing
+          {tr("erp.title")}
         </h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
-          Multi-level BOMs · routing &amp; cost rollup · work-order lifecycle · material requests · built on Books inventory
+          {tr("erp.subtitle")}
         </p>
       </div>
 
@@ -293,6 +295,7 @@ export default function ErpPage() {
 function ItemsTab({
   loading, items, canWrite, onReload,
 }: { loading: boolean; items: InventoryItem[]; canWrite: boolean; onReload: () => Promise<void>; }) {
+  const tr = useT();
   const [openNew, setOpenNew] = useState(false);
   const [name, setName] = useState("");
   const [unit, setUnit] = useState("");
@@ -340,7 +343,7 @@ function ItemsTab({
         <p className="text-sm text-[var(--color-muted)] tabular-nums">{items.length} stock item(s)</p>
         {canWrite && (
           <button type="button" onClick={() => setOpenNew((o) => !o)} className={btnPrimary}>
-            <Plus size={14} /> New item
+            <Plus size={14} /> {tr("erp.newItem")}
           </button>
         )}
       </div>
@@ -454,6 +457,7 @@ interface DraftOperation { operation: string; workstation: string; timeMins: str
 function BomsTab({
   loading, boms, items, canWrite, onReload,
 }: { loading: boolean; boms: BomRow[]; items: InventoryItem[]; canWrite: boolean; onReload: () => Promise<void>; }) {
+  const tr = useT();
   const [openNew, setOpenNew] = useState(false);
   const [name, setName] = useState("");
   const [finishedItemId, setFinishedItemId] = useState("");
@@ -550,7 +554,7 @@ function BomsTab({
         <p className="text-sm text-[var(--color-muted)] tabular-nums">{boms.length} bill(s) of materials</p>
         {canWrite && (
           <button type="button" onClick={() => setOpenNew((o) => !o)} disabled={items.length === 0} className={btnPrimary} title={items.length === 0 ? "Add items first" : undefined}>
-            <Plus size={14} /> New BOM
+            <Plus size={14} /> {tr("erp.newBom")}
           </button>
         )}
       </div>
@@ -758,6 +762,7 @@ function BomsTab({
 function WorkOrdersTab({
   loading, wos, boms, items, canWrite, onReload,
 }: { loading: boolean; wos: WorkOrder[]; boms: BomRow[]; items: InventoryItem[]; canWrite: boolean; onReload: () => Promise<void>; }) {
+  const tr = useT();
   const [openNew, setOpenNew] = useState(false);
   const [bomId, setBomId] = useState("");
   const [qty, setQty] = useState("1");
@@ -819,7 +824,7 @@ function WorkOrdersTab({
         <p className="text-sm text-[var(--color-muted)] tabular-nums">{wos.length} work order(s)</p>
         {canWrite && (
           <button type="button" onClick={() => setOpenNew((o) => !o)} disabled={boms.length === 0} className={btnPrimary} title={boms.length === 0 ? "Create a BOM first" : undefined}>
-            <Plus size={14} /> New work order
+            <Plus size={14} /> {tr("erp.newWorkOrder")}
           </button>
         )}
       </div>
@@ -1006,6 +1011,7 @@ function OperationRow({
 function RequestsTab({
   loading, requests, reorder, items, canWrite, onReload,
 }: { loading: boolean; requests: MaterialRequest[]; reorder: ReorderRow[]; items: InventoryItem[]; canWrite: boolean; onReload: () => Promise<void>; }) {
+  const tr = useT();
   const [busy, setBusy] = useState(false);
   const [busyMr, setBusyMr] = useState<string | null>(null);
 
@@ -1085,7 +1091,7 @@ function RequestsTab({
           <h3 className="text-sm font-semibold flex items-center gap-2"><ShoppingCart size={15} className="text-[var(--color-primary)]" /> Material requests</h3>
           {canWrite && (
             <button type="button" onClick={() => setOpenNew((o) => !o)} disabled={items.length === 0} className={btnPrimary}>
-              <Plus size={14} /> New request
+              <Plus size={14} /> {tr("erp.newRequest")}
             </button>
           )}
         </div>

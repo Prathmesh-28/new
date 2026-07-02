@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
 import {
@@ -70,7 +71,21 @@ function gstinValid(g: string): boolean {
 
 export default function NetworkPage() {
   const { store } = useApp();
+  const tr = useT();
   const [tab, setTab] = useState<TabId>("overview");
+
+  // Translated labels for the primary (first ~8) tabs; keyed by tab id so the
+  // `TABS as const` tuple and its `TabId` union typing stay untouched.
+  const primaryTabLabels: Partial<Record<TabId, string>> = {
+    overview: tr("net.tab.overview"),
+    directory: tr("net.tab.directory"),
+    confirm: tr("net.tab.confirm"),
+    recon: tr("net.tab.recon"),
+    reference: tr("net.tab.reference"),
+    scorecard: tr("net.tab.scorecard"),
+    discovery: tr("net.tab.discovery"),
+    disputes: tr("net.tab.disputes"),
+  };
 
   // Derive a live counterparty list from transactions + invoices so the overview
   // and several tools are seeded with real names the user already trades with.
@@ -99,17 +114,17 @@ export default function NetworkPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <Network size={18} className="text-[var(--color-primary)]" /> B2B Network & Trade Graph
+            <Network size={18} className="text-[var(--color-primary)]" /> {tr("net.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Link every buyer and supplier into one trade graph - confirm invoices both ways, reconcile ledgers, score counterparties and discover new GST-verified partners across ONDC.
+            {tr("net.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
           {TABS.map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              <Icon size={11} />{label}
+              <Icon size={11} />{primaryTabLabels[id] ?? label}
             </button>
           ))}
         </div>
