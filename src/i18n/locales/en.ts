@@ -81,6 +81,21 @@ const en: Record<string, string> = {
   "simple.getHelp": "Get help",
   "simple.fullView": "Switch to full view",
 
+  // Global quick-create menu (top-right "New…")
+  "quickcreate.new": "New",
+  "quickcreate.invoice": "New Invoice",
+  "quickcreate.payment": "Record Payment",
+  "quickcreate.expense": "Add Expense",
+  "quickcreate.bill": "New Bill",
+  "quickcreate.customer": "Add Customer",
+
+  // Mobile bottom navigation (short tab labels)
+  "mobilenav.home": "Home",
+  "mobilenav.invoices": "Invoices",
+  "mobilenav.money": "Money",
+  "mobilenav.sales": "Sales",
+  "mobilenav.more": "More",
+
   // Navigation labels (gettext-style: the key IS the English label, translated at render
   // in the Sidebar so the catalog keeps English as its stable expand/collapse identity).
   // Groups:

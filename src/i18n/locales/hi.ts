@@ -75,6 +75,21 @@ const hi: Record<string, string> = {
   "simple.getHelp": "मदद लें",
   "simple.fullView": "पूर्ण व्यू पर जाएँ",
 
+  // Global quick-create menu
+  "quickcreate.new": "नया",
+  "quickcreate.invoice": "नया इनवॉइस",
+  "quickcreate.payment": "भुगतान दर्ज करें",
+  "quickcreate.expense": "खर्च जोड़ें",
+  "quickcreate.bill": "नया बिल",
+  "quickcreate.customer": "ग्राहक जोड़ें",
+
+  // Mobile bottom navigation
+  "mobilenav.home": "होम",
+  "mobilenav.invoices": "इनवॉइस",
+  "mobilenav.money": "पैसा",
+  "mobilenav.sales": "सेल्स",
+  "mobilenav.more": "और",
+
   // Navigation (keyed by English label)
   "Home": "होम",
   "Get Paid & Sell": "भुगतान पाएँ और बेचें",
