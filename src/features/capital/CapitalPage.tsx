@@ -7,6 +7,7 @@ import { Plus, Rocket, Gauge, FileSignature, Landmark, Wallet, Trash2, Megaphone
 import { toast } from "sonner";
 import AiInsight from "@/components/ai/AiInsight";
 import CampaignsTab from "@/features/capital/CampaignsTab";
+import { useT } from "@/i18n";
 
 // ── Backend-shaped types (rows from /api/capital/raises) ──────────────────────
 // Defined locally to avoid touching the shared data/types.ts. The Raises tab now
@@ -78,6 +79,7 @@ export default function CapitalPage() {
   // owner/super_admin-only endpoints - an `investor` role 403s. Gate the write
   // controls on the effective role; everyone keeps the read-only raises view.
   const { effectiveRole } = useApp();
+  const tr = useT();
   const canManageRaises = effectiveRole === "owner" || effectiveRole === "super_admin";
 
   const [capTab, setCapTab] = useState<"raises" | "campaigns" | "runway" | "safe" | "grants" | "use-of-funds">("raises");
@@ -181,18 +183,18 @@ export default function CapitalPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-bold">Capital</h1>
+        <h1 className="text-xl font-bold">{tr("cap.title")}</h1>
         {capTab === "raises" && canManageRaises && (
           <button onClick={() => setShowRaiseForm(v => !v)}
             className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
-            <Plus size={12} /> New Raise
+            <Plus size={12} /> {tr("cap.newRaise")}
           </button>
         )}
       </div>
 
       {/* Tab selector */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-        {([["raises", "Raises", Rocket], ["campaigns", "Crowdfunding", Megaphone], ["runway", "Runway Planner", Gauge], ["safe", "SAFE / Note Modeller", FileSignature], ["grants", "Grant / Subsidy Finder", Landmark], ["use-of-funds", "Use of Funds", Wallet]] as const).map(([id, label, Icon]) => (
+        {([["raises", tr("cap.tabRaises"), Rocket], ["campaigns", tr("cap.tabCrowdfunding"), Megaphone], ["runway", tr("cap.tabRunway"), Gauge], ["safe", tr("cap.tabSafe"), FileSignature], ["grants", tr("cap.tabGrants"), Landmark], ["use-of-funds", tr("cap.tabUseOfFunds"), Wallet]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setCapTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${capTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -229,7 +231,7 @@ export default function CapitalPage() {
       {raises.length === 0 && !showRaiseForm && (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <Rocket size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
-          <h2 className="text-base font-semibold mb-1">No capital raises yet</h2>
+          <h2 className="text-base font-semibold mb-1">{tr("cap.emptyTitle")}</h2>
           <p className="text-sm text-[var(--color-muted)] mb-5 max-w-sm mx-auto">
             {canManageRaises
               ? "Pick an instrument - Equity, CCPS, SAFE, Convertible Note or Revenue-Based Financing - set a target in ₹, and start tracking investor commitments."
@@ -238,7 +240,7 @@ export default function CapitalPage() {
           {canManageRaises && (
             <button onClick={() => setShowRaiseForm(true)}
               className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold px-5 py-2.5 rounded-lg text-sm hover:opacity-90">
-              Start a Capital Raise
+              {tr("cap.startRaise")}
             </button>
           )}
         </div>
@@ -248,9 +250,9 @@ export default function CapitalPage() {
       {raises.length > 0 && (
         <div className="grid grid-cols-3 gap-3 md:gap-4">
           {[
-            { label: "Active Raises",   value: raises.filter(r => r.status === "active").length.toString() },
-            { label: "Total Raised",    value: formatCurrency(totalRaised) },
-            { label: "Total Investors", value: totalInvestors.toString() },
+            { label: tr("cap.statActiveRaises"),   value: raises.filter(r => r.status === "active").length.toString() },
+            { label: tr("cap.statTotalRaised"),    value: formatCurrency(totalRaised) },
+            { label: tr("cap.statTotalInvestors"), value: totalInvestors.toString() },
           ].map(({ label, value }) => (
             <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>

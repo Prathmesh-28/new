@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { useT } from "@/i18n";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { Navigate, useNavigate } from "react-router-dom";
@@ -446,6 +447,7 @@ function PlatformSettingsAdmin() {
 }
 
 export default function AdminPage() {
+  const tr = useT();
   const { user } = useAuth();
   const { setSelectedClient } = useApp();
   const navigate = useNavigate();
@@ -600,12 +602,12 @@ export default function AdminPage() {
   if (user.role !== "super_admin") return <Navigate to="/dashboard" replace />;
 
   const NAV: { id: SectionId; label: string; icon: typeof ShieldCheck }[] = [
-    { id: "overview", label: "Overview", icon: ShieldCheck },
-    { id: "companies", label: "Companies", icon: Building2 },
-    { id: "users", label: "Users", icon: UsersIcon },
-    { id: "plans", label: "Plans & Billing", icon: CreditCard },
-    { id: "audit", label: "Audit Log", icon: ScrollText },
-    { id: "platform", label: "Platform", icon: Server },
+    { id: "overview", label: tr("admin.nav.overview"), icon: ShieldCheck },
+    { id: "companies", label: tr("admin.nav.companies"), icon: Building2 },
+    { id: "users", label: tr("admin.nav.users"), icon: UsersIcon },
+    { id: "plans", label: tr("admin.nav.plansBilling"), icon: CreditCard },
+    { id: "audit", label: tr("admin.nav.auditLog"), icon: ScrollText },
+    { id: "platform", label: tr("admin.nav.platform"), icon: Server },
   ];
 
   return (
@@ -615,9 +617,9 @@ export default function AdminPage() {
         <div className="hidden md:block px-2 pt-2 pb-4">
           <div className="flex items-center gap-2">
             <Zap size={16} className="text-green-400" />
-            <h2 className="text-sm font-bold">Admin Console</h2>
+            <h2 className="text-sm font-bold">{tr("admin.consoleTitle")}</h2>
           </div>
-          <span className="inline-block mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-900/40 text-green-300 border border-green-700/50">Super Admin</span>
+          <span className="inline-block mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-900/40 text-green-300 border border-green-700/50">{tr("admin.superAdmin")}</span>
         </div>
         {/* Mobile: horizontal scroll strip. Desktop: vertical nav. */}
         <nav className="flex md:flex-col gap-1 overflow-x-auto p-1.5 md:p-0">
@@ -696,6 +698,7 @@ export default function AdminPage() {
 // SECTION 1 - OVERVIEW
 // ─────────────────────────────────────────────────────────────────────────────
 function OverviewSection({ stats, metrics, loading }: { stats: Stats | null; metrics: Metrics | null; loading: boolean }) {
+  const tr = useT();
   if (loading || !stats || !metrics) {
     return (
       <div className="space-y-5">
@@ -725,15 +728,15 @@ function OverviewSection({ stats, metrics, loading }: { stats: Stats | null; met
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Companies" value={stats.companies.toLocaleString("en-IN")} sub={`${stats.activeCompanies} active`} icon={<Building2 size={13} />} />
-        <StatCard label="Total Users" value={stats.users.toLocaleString("en-IN")} sub="across all tenants" icon={<UsersIcon size={13} />} />
-        <StatCard label="Active 30d" value={metrics.activeUsers30d.toLocaleString("en-IN")} sub="users seen recently" icon={<Activity size={13} />} />
-        <StatCard label="MRR" value={fmtINR(metrics.mrr)} sub={`ARR ${fmtINR(metrics.arr)}`} icon={<TrendingUp size={13} />} />
+        <StatCard label={tr("admin.stat.totalCompanies")} value={stats.companies.toLocaleString("en-IN")} sub={`${stats.activeCompanies} active`} icon={<Building2 size={13} />} />
+        <StatCard label={tr("admin.stat.totalUsers")} value={stats.users.toLocaleString("en-IN")} sub="across all tenants" icon={<UsersIcon size={13} />} />
+        <StatCard label={tr("admin.stat.active30d")} value={metrics.activeUsers30d.toLocaleString("en-IN")} sub="users seen recently" icon={<Activity size={13} />} />
+        <StatCard label={tr("admin.stat.mrr")} value={fmtINR(metrics.mrr)} sub={`ARR ${fmtINR(metrics.arr)}`} icon={<TrendingUp size={13} />} />
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-          <p className="text-sm font-semibold mb-3">Signups by Month</p>
+          <p className="text-sm font-semibold mb-3">{tr("admin.chart.signupsByMonth")}</p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={metrics.signupsByMonth}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
@@ -745,7 +748,7 @@ function OverviewSection({ stats, metrics, loading }: { stats: Stats | null; met
           </ResponsiveContainer>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-          <p className="text-sm font-semibold mb-3">Plan Distribution</p>
+          <p className="text-sm font-semibold mb-3">{tr("admin.chart.planDistribution")}</p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={planMixData} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />

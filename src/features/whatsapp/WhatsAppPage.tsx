@@ -6,6 +6,7 @@ import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import { DEFAULT_WA_PREFS, type WhatsAppPreferences } from "@/data/types";
+import { useT } from "@/i18n";
 
 // Build a wa.me deep link that pre-fills a message (no backend call). If a
 // recipient phone is supplied, it opens that chat; otherwise WhatsApp asks who.
@@ -117,6 +118,7 @@ function ResponseBubble({ text }: { text: string }) {
 }
 
 export default function WhatsAppPage() {
+  const tr = useT();
   const [step, setStep]         = useState<"idle" | "phone" | "otp" | "done">("idle");
   const [phone, setPhone]       = useState("");
   const [otp, setOtp]           = useState("");
@@ -182,24 +184,24 @@ export default function WhatsAppPage() {
       <div>
         <h1 className="text-xl font-bold flex items-center gap-2">
           <MessageCircle size={20} className="text-green-400" />
-          WhatsApp Channel
+          {tr("wa.title")}
         </h1>
         <p className="text-sm text-[var(--color-muted)] mt-1">
-          Get your cash flow on WhatsApp - morning brief, instant alerts, and ask your numbers any time.
+          {tr("wa.subtitle")}
         </p>
       </div>
 
       {/* Tool selector */}
       <div className="flex flex-wrap gap-1.5">
         {([
-          ["overview", "Overview", MessageCircle],
-          ["wa-invoice-pay", "Invoice & Pay", Send],
-          ["wa-reminder-bot", "Reminder Bot", BellRing],
-          ["wa-sales-capture", "Sales Capture", PlusCircle],
-          ["wa-statement", "Statement", FileText],
-          ["wa-approvals", "Approvals", CheckSquare],
-          ["wa-broadcast", "Broadcast", Megaphone],
-          ["wa-order-status", "Order Status", PackageCheck],
+          ["overview", tr("wa.tab.overview"), MessageCircle],
+          ["wa-invoice-pay", tr("wa.tab.invoicePay"), Send],
+          ["wa-reminder-bot", tr("wa.tab.reminderBot"), BellRing],
+          ["wa-sales-capture", tr("wa.tab.salesCapture"), PlusCircle],
+          ["wa-statement", tr("wa.tab.statement"), FileText],
+          ["wa-approvals", tr("wa.tab.approvals"), CheckSquare],
+          ["wa-broadcast", tr("wa.tab.broadcast"), Megaphone],
+          ["wa-order-status", tr("wa.tab.orderStatus"), PackageCheck],
           ["wa-payment-confirm", "Pay Receipt", BadgeCheck],
           ["wa-festive", "Festive Offer", PartyPopper],
           ["wa-price-list", "Price List", Tag],
@@ -280,7 +282,7 @@ export default function WhatsAppPage() {
                 className="w-full bg-green-700 hover:bg-green-600 text-white font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors"
               >
                 <MessageCircle size={14} />
-                Connect WhatsApp
+                {tr("wa.connect")}
               </button>
             )}
 

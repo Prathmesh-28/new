@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { API_BASE } from "@/lib/apiBase";
 import { toast } from "sonner";
 import { humanizeAiError } from "@/components/ai/aiError";
+import { useT } from "@/i18n";
 import { MessageSquare, Hash, Plus, Send, Loader2, Users, X, AtSign, Search, Bell, SmilePlus, MessageCircle, Link2 } from "lucide-react";
 
 /**
@@ -24,6 +25,7 @@ interface Link { entity_type: string; entity_id: string }
 const QUICK_EMOJI = ["👍", "🎉", "❤️", "😄", "🙏", "🔥", "✅", "👀"];
 
 export default function CollabPage() {
+  const tr = useT();
   const [convos, setConvos] = useState<Convo[]>([]);
   const [activeId, setActiveId] = useState<string>("");
   const [msgsById, setMsgsById] = useState<Record<string, Msg[]>>({});
@@ -265,7 +267,7 @@ export default function CollabPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-2">
-        <h1 className="text-2xl font-bold flex items-center gap-2 mr-auto"><MessageSquare className="text-[var(--color-primary)]" size={24} /> Messages</h1>
+        <h1 className="text-2xl font-bold flex items-center gap-2 mr-auto"><MessageSquare className="text-[var(--color-primary)]" size={24} /> {tr("collab.title")}</h1>
         {/* Search */}
         <div className="relative">
           <div className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2">
@@ -294,8 +296,8 @@ export default function CollabPage() {
           {showNotifs && (
             <div className="absolute right-0 top-11 z-30 w-80 max-h-96 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl p-2">
               <div className="flex items-center justify-between px-1 pb-1.5">
-                <span className="text-xs font-semibold">Notifications</span>
-                {notifs.unread > 0 && <button onClick={() => api.post("/api/collab/notifications/read", {}).then(loadNotifs)} className="text-[11px] text-[var(--color-primary)] hover:underline">Mark all read</button>}
+                <span className="text-xs font-semibold">{tr("collab.notifications")}</span>
+                {notifs.unread > 0 && <button onClick={() => api.post("/api/collab/notifications/read", {}).then(loadNotifs)} className="text-[11px] text-[var(--color-primary)] hover:underline">{tr("collab.markAllRead")}</button>}
               </div>
               {notifs.notifications.length === 0 ? <p className="text-xs text-[var(--color-muted)] p-2">Nothing yet.</p> : notifs.notifications.map((n) => (
                 <button key={n.id} onClick={() => openNotif(n)} className={`w-full text-left px-2 py-1.5 rounded-md hover:bg-white/5 text-xs ${n.read_at ? "text-[var(--color-muted)]" : "text-[var(--color-text)]"}`}>
@@ -314,7 +316,7 @@ export default function CollabPage() {
           <div className="flex-1 overflow-y-auto p-2 space-y-3">
             <div>
               <div className="flex items-center justify-between px-2 py-1">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-muted)]/60">Channels</span>
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-muted)]/60">{tr("collab.channels")}</span>
                 <button onClick={createChannel} title="New channel" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Plus size={13} /></button>
               </div>
               {loading ? <p className="px-2 text-xs text-[var(--color-muted)]">Loading…</p> :
@@ -323,7 +325,7 @@ export default function CollabPage() {
             </div>
             <div>
               <div className="flex items-center justify-between px-2 py-1">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-muted)]/60">Direct messages</span>
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-muted)]/60">{tr("collab.directMessages")}</span>
                 <button onClick={() => setPicker("dm")} title="New direct message" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Plus size={13} /></button>
               </div>
               {dms.map((c) => <ConvBtn key={c.id} c={c} active={c.id === activeId} onClick={() => setActiveId(c.id)} label={title(c)} icon={<AtSign size={13} />} online={c.dm_peer_id ? online.has(c.dm_peer_id) : false} />)}
@@ -336,8 +338,8 @@ export default function CollabPage() {
           {!active ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
               <MessageSquare size={32} className="text-[var(--color-primary)] mb-3" />
-              <p className="text-sm font-semibold">Your team's messages</p>
-              <p className="text-xs text-[var(--color-muted)] mt-1 max-w-sm">Create a channel or start a direct message with a teammate.</p>
+              <p className="text-sm font-semibold">{tr("collab.emptyTitle")}</p>
+              <p className="text-xs text-[var(--color-muted)] mt-1 max-w-sm">{tr("collab.emptyBody")}</p>
             </div>
           ) : (
             <>
@@ -348,7 +350,7 @@ export default function CollabPage() {
                 {links.map((l) => <span key={l.entity_type + l.entity_id} className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border border-[var(--color-primary)]/40 text-[var(--color-primary)]"><Link2 size={10} /> {l.entity_type}</span>)}
                 <div className="ml-auto flex items-center gap-2">
                   <button onClick={linkInvoice} title="Link to a financial object" className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><Link2 size={14} /></button>
-                  {active.type !== "dm" && <button onClick={() => setPicker("channel")} className="flex items-center gap-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]"><Users size={13} /> Add</button>}
+                  {active.type !== "dm" && <button onClick={() => setPicker("channel")} className="flex items-center gap-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]"><Users size={13} /> {tr("collab.add")}</button>}
                 </div>
               </div>
               <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
@@ -380,7 +382,7 @@ export default function CollabPage() {
         {thread && (
           <section className="w-[22rem] max-w-[40vw] shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col hidden md:flex">
             <div className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-[var(--color-border)]">
-              <MessageCircle size={15} className="text-[var(--color-primary)]" /><span className="text-sm font-semibold">Thread</span>
+              <MessageCircle size={15} className="text-[var(--color-primary)]" /><span className="text-sm font-semibold">{tr("collab.thread")}</span>
               <button onClick={() => setThread(null)} className="ml-auto text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={15} /></button>
             </div>
             <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
