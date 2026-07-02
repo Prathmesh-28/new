@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { format, addDays, addMonths, differenceInCalendarDays } from "date-fns";
 import AiInsight from "@/components/ai/AiInsight";
 import TabStrip from "@/components/TabStrip";
+import { useT } from "@/i18n";
 
 // shared styles (reused from TaxPage/DebtPage input convention)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -108,6 +109,7 @@ type Tab =
   | "fdbreak" | "loanvssurplus" | "ppfnps" | "realyield" | "fdrenew";
 
 export default function TreasuryPage() {
+  const tr = useT();
   const { store } = useApp();
   const totalBalance = useMemo(
     () => store.bankAccounts.reduce((s, b) => s + (b.balance || 0), 0),
@@ -120,21 +122,21 @@ export default function TreasuryPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <Wallet size={18} className="text-[var(--color-primary)]" /> Wealth &amp; Treasury
+            <Wallet size={18} className="text-[var(--color-primary)]" /> {tr("treas.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Turn idle current-account cash into risk-graded, tax-efficient yield - sweeps, FD ladders, T-bills and goal buckets.
+            {tr("treas.subtitle")}
           </p>
         </div>
         <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
-            ["overview", "Overview", Wallet],
-            ["sweep", "Idle-Cash Sweep", Droplets],
-            ["ladder", "FD/RD Ladder", Layers],
-            ["compare", "Liquid vs FD", GitCompareArrows],
-            ["allocate", "Surplus Allocator", PieChart],
-            ["yield", "Yield Calculator", Calculator],
-            ["tbill", "T-Bill / G-Sec", Landmark],
-            ["goal", "Goal Planner", Target],
+            ["overview", tr("treas.tab.overview"), Wallet],
+            ["sweep", tr("treas.tab.sweep"), Droplets],
+            ["ladder", tr("treas.tab.ladder"), Layers],
+            ["compare", tr("treas.tab.compare"), GitCompareArrows],
+            ["allocate", tr("treas.tab.allocate"), PieChart],
+            ["yield", tr("treas.tab.yield"), Calculator],
+            ["tbill", tr("treas.tab.tbill"), Landmark],
+            ["goal", tr("treas.tab.goal"), Target],
             ["split", "Owner Split", Users],
             ["posttax", "Post-Tax Return", Percent],
             ["maturity", "Maturity Calendar", CalendarClock],

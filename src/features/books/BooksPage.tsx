@@ -37,6 +37,7 @@ import BooksHealthCard from "./BooksHealthCard";
 import BooksAgentsTab from "./BooksAgentsTab";
 import BulkUpload from "@/components/BulkUpload";
 import ExportMenu from "@/components/ExportMenu";
+import { useT } from "@/i18n";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES (response shapes inlined - backend confirmed)
@@ -301,6 +302,7 @@ const btnPrimary =
 // PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 export default function BooksPage() {
+  const tr = useT();
   const { user } = useAuth();
   const canWrite = WRITE_ROLES.has(user?.role ?? "");
 
@@ -350,13 +352,13 @@ export default function BooksPage() {
   const needsSetup = loaded && !loading && groups.length === 0;
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-    { id: "overview",  label: "Overview",          icon: <LayoutGrid size={14} /> },
-    { id: "coa",       label: "Chart of Accounts", icon: <ListTree size={14} /> },
-    { id: "entry",     label: "New entry",         icon: <FilePlus2 size={14} /> },
-    { id: "invoices",  label: "Invoices",          icon: <FileText size={14} /> },
-    { id: "reports",   label: "Reports",           icon: <BarChart3 size={14} /> },
-    { id: "reconcile", label: "Reconcile",         icon: <Repeat size={14} /> },
-    { id: "arap",      label: "Receivables/Payables", icon: <Receipt size={14} /> },
+    { id: "overview",  label: tr("books.tab.overview"),          icon: <LayoutGrid size={14} /> },
+    { id: "coa",       label: tr("books.tab.coa"), icon: <ListTree size={14} /> },
+    { id: "entry",     label: tr("books.tab.entry"),         icon: <FilePlus2 size={14} /> },
+    { id: "invoices",  label: tr("books.tab.invoices"),          icon: <FileText size={14} /> },
+    { id: "reports",   label: tr("books.tab.reports"),           icon: <BarChart3 size={14} /> },
+    { id: "reconcile", label: tr("books.tab.reconcile"),         icon: <Repeat size={14} /> },
+    { id: "arap",      label: tr("books.tab.arap"), icon: <Receipt size={14} /> },
     { id: "gst",       label: "GST & Tax",         icon: <Percent size={14} /> },
     { id: "inventory", label: "Inventory",         icon: <Boxes size={14} /> },
     { id: "controls",  label: "Controls",          icon: <SlidersHorizontal size={14} /> },
@@ -388,9 +390,9 @@ export default function BooksPage() {
       <div className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 sm:px-6 py-4">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <BookOpen size={20} className="text-[var(--color-primary)]" />
-          Books - double-entry ledger
+          {tr("books.title")}
         </h1>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Tally-grade GL · GST-ready</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("books.subtitle")}</p>
       </div>
 
       {/* PILL TAB BAR */}
@@ -479,19 +481,19 @@ export default function BooksPage() {
 // EMPTY STATE
 // ─────────────────────────────────────────────────────────────────────────────
 function EmptyState({ onSeed, seeding, canWrite }: { onSeed: () => void; seeding: boolean; canWrite: boolean }) {
+  const tr = useT();
   return (
     <div className="max-w-md mx-auto text-center bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-8 mt-8">
       <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/15 flex items-center justify-center mx-auto mb-4">
         <BookOpen size={24} className="text-[var(--color-primary)]" />
       </div>
-      <h2 className="text-lg font-semibold">Set up your books</h2>
+      <h2 className="text-lg font-semibold">{tr("books.empty.title")}</h2>
       <p className="text-sm text-[var(--color-muted)] mt-2">
-        Create the chart of accounts - 28 account groups and the default ledgers - so you can start
-        posting double-entry vouchers.
+        {tr("books.empty.subtitle")}
       </p>
       <button type="button" onClick={onSeed} disabled={seeding || !canWrite} className={`${btnPrimary} mt-5 mx-auto`}>
         {seeding ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
-        {seeding ? "Setting up…" : "Set up my books"}
+        {seeding ? tr("books.empty.settingUp") : tr("books.empty.action")}
       </button>
       {!canWrite && (
         <p className="text-[11px] text-[var(--color-muted)] mt-3">

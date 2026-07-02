@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths, setDate, isBefore, differenceInDays } from "date-fns";
+import { useT } from "@/i18n";
 
 type ComplianceTab =
   | "overview" | "roc-prep" | "kyc-dpt3" | "board-agm" | "registers"
@@ -42,6 +43,7 @@ const KIND_STYLE: Record<ComplianceEvent["kind"], { chip: string; label: string 
 };
 
 export default function CompliancePage() {
+  const tr = useT();
   const { store } = useApp();
   const navigate = useNavigate();
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
@@ -132,23 +134,23 @@ export default function CompliancePage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold flex items-center gap-2"><CalendarCheck size={18} className="text-[var(--color-primary)]" /> Compliance Calendar</h1>
+          <h1 className="text-xl font-bold flex items-center gap-2"><CalendarCheck size={18} className="text-[var(--color-primary)]" /> {tr("comp.title")}</h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Every statutory date - GST, TDS, advance tax, PF/ESI - derived from your firm profile and transactions, with cash amounts attached.
+            {tr("comp.subtitle")}
           </p>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
         {([
-          ["overview", "Overview", CalendarCheck],
-          ["roc-prep", "ROC Auto-Prep", FileStack],
-          ["kyc-dpt3", "DIR-3 KYC / DPT-3", UserCheck],
-          ["board-agm", "Board / AGM", Users],
-          ["registers", "Statutory Registers", BookMarked],
-          ["shop-license", "Shop & License Renewals", Store],
-          ["fssai-license", "FSSAI / Industry Licenses", BadgeCheck],
-          ["labour-calendar", "Labour-Law Calendar", CalendarClock],
+          ["overview", tr("comp.tab.overview"), CalendarCheck],
+          ["roc-prep", tr("comp.tab.rocPrep"), FileStack],
+          ["kyc-dpt3", tr("comp.tab.kycDpt3"), UserCheck],
+          ["board-agm", tr("comp.tab.boardAgm"), Users],
+          ["registers", tr("comp.tab.registers"), BookMarked],
+          ["shop-license", tr("comp.tab.shopLicense"), Store],
+          ["fssai-license", tr("comp.tab.fssai"), BadgeCheck],
+          ["labour-calendar", tr("comp.tab.labourCal"), CalendarClock],
           ["templates", "Agreement Templates", FileSignature],
           ["posh-policy", "POSH / Policies", ScrollText],
           ["penalty-multi", "Penalty Estimator", Gavel],
@@ -205,10 +207,10 @@ export default function CompliancePage() {
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Deadlines · next 30 days", value: `${next30.length}`, sub: "Statutory + your own obligations", color: "text-[var(--color-text)]" },
-          { label: "Cash due · next 30 days", value: formatAmount(cashDue30), sub: "Known amounts only", color: cashDue30 > snap.cash ? "text-red-400" : "text-yellow-400" },
-          { label: "GST payable this month", value: formatAmount(snap.gstThisMonth.netPayable), sub: `Output ${formatAmount(snap.gstThisMonth.outputTax)} − ITC ${formatAmount(snap.gstThisMonth.inputCredit)}`, color: "text-blue-400" },
-          { label: "Est. annual tax", value: formatAmount(snap.advanceTax[3]?.cumulativeTax ?? 0), sub: "25% on estimated profit", color: "text-orange-400" },
+          { label: tr("comp.kpi.deadlines"), value: `${next30.length}`, sub: "Statutory + your own obligations", color: "text-[var(--color-text)]" },
+          { label: tr("comp.kpi.cashDue"), value: formatAmount(cashDue30), sub: "Known amounts only", color: cashDue30 > snap.cash ? "text-red-400" : "text-yellow-400" },
+          { label: tr("comp.kpi.gstPayable"), value: formatAmount(snap.gstThisMonth.netPayable), sub: `Output ${formatAmount(snap.gstThisMonth.outputTax)} − ITC ${formatAmount(snap.gstThisMonth.inputCredit)}`, color: "text-blue-400" },
+          { label: tr("comp.kpi.estAnnualTax"), value: formatAmount(snap.advanceTax[3]?.cumulativeTax ?? 0), sub: "25% on estimated profit", color: "text-orange-400" },
         ].map(k => (
           <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -260,7 +262,7 @@ export default function CompliancePage() {
             <p className="text-sm font-semibold">Next 6 Months</p>
           </div>
           <div className="divide-y divide-[var(--color-border)] max-h-[460px] overflow-y-auto">
-            {events.length === 0 && <p className="p-6 text-sm text-[var(--color-muted)] text-center">No upcoming deadlines.</p>}
+            {events.length === 0 && <p className="p-6 text-sm text-[var(--color-muted)] text-center">{tr("comp.empty")}</p>}
             {events.map((e, i) => {
               const days = differenceInDays(e.date, new Date());
               const urgent = days <= 7;

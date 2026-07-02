@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useT } from "@/i18n";
 import { track } from "@/lib/analytics";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
@@ -32,6 +33,7 @@ import { api } from "@/lib/api";
 import type { Scenario, Transaction } from "@/data/types";
 
 export default function ForecastPage() {
+  const tr = useT();
   const { store: rawStore, addScenario, deleteScenario, updateScenario, addObligation, deleteObligation, setStore, isReadOnly } = useApp();
   useEffect(() => { track("forecast_run"); }, []);   // funnel: engaged with forecasting
   // Overlay REAL backend drivers (Books cash, open invoices, loan schedule) so the
@@ -179,12 +181,12 @@ export default function ForecastPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Cash Flow Forecast</h1>
+        <h1 className="text-xl font-bold">{tr("fc.title")}</h1>
         <div className="flex items-center gap-2">
           {forecast.length > 0 && (
             <button onClick={handleAiExplain}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg font-medium hover:text-[var(--color-text)] hover:border-[var(--color-primary)]">
-              <Sparkles size={12} /> Ask AI
+              <Sparkles size={12} /> {tr("fc.askAi")}
             </button>
           )}
           {isNative() && obligations.length > 0 && (
@@ -197,7 +199,7 @@ export default function ForecastPage() {
             title={isReadOnly ? "Read-only in client view" : undefined}
             className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
             <RefreshCw size={12} className={generating ? "animate-spin" : ""} />
-            {generating ? "Generating…" : forecast.length ? "Refresh" : "Generate Forecast"}
+            {generating ? tr("fc.generating") : forecast.length ? tr("fc.refresh") : tr("fc.generate")}
           </button>
         </div>
       </div>
@@ -208,13 +210,13 @@ export default function ForecastPage() {
       {/* Tool tab selector */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 overflow-x-auto">
         {([
-          ["main", "Probabilistic", TrendingUp],
-          ["13week", "13-Week Rolling", CalendarRange],
-          ["ar-inflow", "AR Inflow Projection", Coins],
-          ["seasonality", "Seasonality", Waves],
-          ["three-line", "Best / Base / Worst", GitBranch],
-          ["buffer-alert", "Buffer Alert", ShieldAlert],
-          ["revenue-forecast", "Revenue Forecast", LineChart],
+          ["main", tr("fc.tab.probabilistic"), TrendingUp],
+          ["13week", tr("fc.tab.13week"), CalendarRange],
+          ["ar-inflow", tr("fc.tab.arInflow"), Coins],
+          ["seasonality", tr("fc.tab.seasonality"), Waves],
+          ["three-line", tr("fc.tab.threeLine"), GitBranch],
+          ["buffer-alert", tr("fc.tab.bufferAlert"), ShieldAlert],
+          ["revenue-forecast", tr("fc.tab.revenueForecast"), LineChart],
           ["expense-forecast", "Expense Forecast", Receipt],
           ["headcount-cost", "Headcount Cost", Users],
           ["burn-zero-cash", "Burn & Zero-Cash", Flame],
@@ -302,7 +304,7 @@ export default function ForecastPage() {
         transactions.length === 0 ? (
           <EmptyState
             icon={TrendingUp}
-            title="No forecast yet"
+            title={tr("fc.empty")}
             description="Connect a bank account and record a few transactions - we'll project your cash 13 weeks out with P10/P50/P90 bands."
             ctaText="Add transactions"
             ctaHref="/transactions"
@@ -310,7 +312,7 @@ export default function ForecastPage() {
         ) : (
           <EmptyState
             icon={TrendingUp}
-            title="No forecast yet"
+            title={tr("fc.empty")}
             description="You have transactions ready. Generate your 90-day probabilistic forecast (P10/P50/P90) to see your projected cash and runway."
             ctaText={generating ? "Generating…" : "Generate Forecast"}
             onCta={generating ? undefined : handleGenerate}
@@ -321,10 +323,10 @@ export default function ForecastPage() {
           {/* Risk strip - calibrated probabilities from the Monte-Carlo paths */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: "Breach probability", value: `${Math.round(risk.probBreach * 100)}%`, sub: `of dipping below your ${firm.safetyThresholdDays}-day buffer`, danger: risk.probBreach >= 0.3 },
-              { label: "Expected time to pressure", value: pressureDay != null ? `${pressureDay}d` : "90+d", sub: risk.p10TimeToBreachDays != null ? `as early as ${risk.p10TimeToBreachDays}d (worst 10%)` : "no breach in 90d", danger: pressureDay != null && pressureDay <= 45 },
-              { label: "Cash-Flow-at-Risk (95%)", value: `₹${(risk.cfar95 / 100000).toFixed(1)}L`, sub: "worst-case drawdown to the trough", danger: false },
-              { label: "Likely runway", value: risk.runwayDist.p50 >= 90 ? "90+ days" : `${risk.runwayDist.p50} days`, sub: `worst-case ${risk.runwayDist.p10 >= 90 ? "90+" : risk.runwayDist.p10}d`, danger: risk.runwayDist.p10 < 30 },
+              { label: tr("fc.card.breachProb"), value: `${Math.round(risk.probBreach * 100)}%`, sub: `of dipping below your ${firm.safetyThresholdDays}-day buffer`, danger: risk.probBreach >= 0.3 },
+              { label: tr("fc.card.timeToPressure"), value: pressureDay != null ? `${pressureDay}d` : "90+d", sub: risk.p10TimeToBreachDays != null ? `as early as ${risk.p10TimeToBreachDays}d (worst 10%)` : "no breach in 90d", danger: pressureDay != null && pressureDay <= 45 },
+              { label: tr("fc.card.cfar"), value: `₹${(risk.cfar95 / 100000).toFixed(1)}L`, sub: "worst-case drawdown to the trough", danger: false },
+              { label: tr("fc.card.likelyRunway"), value: risk.runwayDist.p50 >= 90 ? "90+ days" : `${risk.runwayDist.p50} days`, sub: `worst-case ${risk.runwayDist.p10 >= 90 ? "90+" : risk.runwayDist.p10}d`, danger: risk.runwayDist.p10 < 30 },
             ].map(m => (
               <div key={m.label} className={`rounded-lg border p-3 ${m.danger ? "border-red-800/40 bg-red-950/20" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
                 <p className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]">{m.label}</p>
