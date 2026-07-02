@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import AiDraft from "@/components/ai/AiDraft";
+import { useT } from "@/i18n";
 
 type Aging = "current" | "1-30" | "31-60" | "61-90" | "90+";
 
@@ -256,6 +257,7 @@ function UpiLinkModal({
 
 export default function CollectionsPage() {
   const { store } = useApp();
+  const tr = useT();
 
   const [view, setView]           = useState<"collections" | "profitability" | "clv" | "score" | "statement" | "dunning" | "dso" | "promise" | "agents" | "settlement" | "cei" | "provision" | "plan" | "interest" | "forecast" | "worklist" | "discount" | "legal" | "kpi" | "dispute" | "concentration" | "defaulters" | "behavior" | "abtest" | "letters" | "interestinv" | "nach" | "byrep" | "partpay" | "unapplied" | "creditlimit" | "goal" | "recoveryroi">("collections");
   const [filter, setFilter]       = useState<Aging | "all">("all");
@@ -396,21 +398,21 @@ export default function CollectionsPage() {
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
             <PhoneCall size={20} className="text-[var(--color-primary)]" />
-            Collections
+            {tr("coll.title")}
           </h1>
           <p className="text-sm text-[var(--color-muted)] mt-1">
-            Active AR chase - send reminders, track follow-ups, close overdue faster.
+            {tr("coll.subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
             {([
-              { id: "collections",   label: "Collections",   icon: <PhoneCall size={10} /> },
-              { id: "profitability", label: "Profitability",  icon: <BarChart2 size={10} /> },
-              { id: "clv",           label: "CLV",            icon: <Star size={10} /> },
-              { id: "score",         label: "Risk Score",     icon: <AlertTriangle size={10} /> },
-              { id: "statement",     label: "Statement",      icon: <FileText size={10} /> },
-              { id: "dunning",       label: "Dunning",        icon: <Layers size={10} /> },
+              { id: "collections",   label: tr("coll.tab.collections"),   icon: <PhoneCall size={10} /> },
+              { id: "profitability", label: tr("coll.tab.profitability"),  icon: <BarChart2 size={10} /> },
+              { id: "clv",           label: tr("coll.tab.clv"),            icon: <Star size={10} /> },
+              { id: "score",         label: tr("coll.tab.score"),     icon: <AlertTriangle size={10} /> },
+              { id: "statement",     label: tr("coll.tab.statement"),      icon: <FileText size={10} /> },
+              { id: "dunning",       label: tr("coll.tab.dunning"),        icon: <Layers size={10} /> },
               { id: "dso",           label: "DSO Trend",      icon: <LineChart size={10} /> },
               { id: "promise",       label: "Promise-to-Pay", icon: <HandCoins size={10} /> },
               { id: "agents",        label: "Agents",         icon: <Users size={10} /> },
@@ -446,7 +448,7 @@ export default function CollectionsPage() {
             ))}
           </div>
           <Link to="/invoices" className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40 transition-colors">
-            <RefreshCw size={12} /> Invoices
+            <RefreshCw size={12} /> {tr("coll.action.invoices")}
           </Link>
         </div>
       </div>
@@ -523,10 +525,10 @@ export default function CollectionsPage() {
       {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Total overdue",    value: formatCurrency(totalOverdue), icon: TrendingDown,  color: "text-red-400" },
-          { label: "Accounts overdue", value: displayData.filter(r => r.aging !== "current").length.toString(), icon: AlertTriangle, color: "text-orange-400" },
-          { label: "Avg days overdue", value: `${avgDays}d`,               icon: Clock,          color: "text-yellow-400" },
-          { label: "Critical (60d+)",  value: formatCurrency(critical.reduce((s, r) => s + r.amount, 0)), icon: Zap, color: "text-red-400" },
+          { label: tr("coll.kpi.totalOverdue"),    value: formatCurrency(totalOverdue), icon: TrendingDown,  color: "text-red-400" },
+          { label: tr("coll.kpi.accountsOverdue"), value: displayData.filter(r => r.aging !== "current").length.toString(), icon: AlertTriangle, color: "text-orange-400" },
+          { label: tr("coll.kpi.avgDaysOverdue"), value: `${avgDays}d`,               icon: Clock,          color: "text-yellow-400" },
+          { label: tr("coll.kpi.critical"),  value: formatCurrency(critical.reduce((s, r) => s + r.amount, 0)), icon: Zap, color: "text-red-400" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
@@ -540,7 +542,7 @@ export default function CollectionsPage() {
 
       {/* Aging buckets */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-        <h2 className="text-sm font-semibold mb-3">Aging summary</h2>
+        <h2 className="text-sm font-semibold mb-3">{tr("coll.agingSummary")}</h2>
         <div className="grid grid-cols-5 gap-2">
           {(["current", "1-30", "31-60", "61-90", "90+"] as Aging[]).map(age => {
             const { count, amount } = agingSummary[age];
@@ -604,7 +606,7 @@ export default function CollectionsPage() {
           {sorted.length === 0 && displayData.length === 0 && (
             <EmptyState
               icon={PhoneCall}
-              title="Nothing overdue right now"
+              title={tr("coll.empty")}
               description="Collections tracks unpaid and overdue invoices so you can chase the customers who owe you. Raise an invoice and it shows up here as it ages past its due date."
               ctaText="Go to Invoices"
               ctaHref="/invoices"

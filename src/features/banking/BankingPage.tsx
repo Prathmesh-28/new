@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
 import AiInsight from "@/components/ai/AiInsight";
+import { useT } from "@/i18n";
 
 // ── shared styles (mirrors TaxPage/DebtPage input + card classes) ────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -32,6 +33,7 @@ type Tab =
   | "fd-ladder" | "early-pay" | "wc-cycle" | "drawing-power" | "bank-scorecard";
 
 export default function BankingPage() {
+  const tr = useT();
   const { store } = useApp();
   const accounts = store.bankAccounts;
   const [tab, setTab] = useState<Tab>("overview");
@@ -57,22 +59,22 @@ export default function BankingPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <Landmark size={18} className="text-[var(--color-primary)]" /> Banking &amp; Cash
+            <Landmark size={18} className="text-[var(--color-primary)]" /> {tr("bank.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Every rupee across every bank - balances, reconciliation, rail choice, fees and idle-cash, India-first (NEFT/RTGS/IMPS/UPI).
+            {tr("bank.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
           {([
-            ["overview", "Overview", Landmark],
-            ["balances", "Multi-Bank Balances", Wallet],
-            ["reconcile", "Reconciliation", GitCompareArrows],
-            ["cash-position", "Daily Cash Position", Banknote],
-            ["sweep", "Sweep Planner", Coins],
-            ["virtual-accounts", "Virtual Accounts", Hash],
-            ["fees", "Bank-Fee Analyzer", Receipt],
-            ["rail", "Payment Rail", Route],
+            ["overview", tr("bank.tab.overview"), Landmark],
+            ["balances", tr("bank.tab.balances"), Wallet],
+            ["reconcile", tr("bank.tab.reconcile"), GitCompareArrows],
+            ["cash-position", tr("bank.tab.cashPosition"), Banknote],
+            ["sweep", tr("bank.tab.sweep"), Coins],
+            ["virtual-accounts", tr("bank.tab.virtualAccounts"), Hash],
+            ["fees", tr("bank.tab.fees"), Receipt],
+            ["rail", tr("bank.tab.rail"), Route],
             ["cheques", "Cheque Register", FileCheck2],
             ["charge-recovery", "Charge Recovery", ShieldAlert],
             ["idle-alert", "Idle-Balance Alert", Clock],
@@ -134,10 +136,10 @@ export default function BankingPage() {
         <div className="space-y-5">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              { label: "Total Cash (all banks)", value: formatCurrency(totalBalance), color: "text-[var(--color-text)]", sub: `${accounts.length} account(s)` },
-              { label: "Connected Feeds", value: `${connected}/${accounts.length}`, color: connected === accounts.length ? "text-green-400" : "text-yellow-400", sub: "Live balance feeds" },
-              { label: "Feed Issues", value: `${issues}`, color: issues > 0 ? "text-red-400" : "text-green-400", sub: issues > 0 ? "Re-consent needed" : "All healthy" },
-              { label: "Largest Balance", value: accounts.length ? formatAmount(Math.max(...accounts.map(a => a.balance))) : "-", color: "text-blue-400", sub: "Concentration check" },
+              { label: tr("bank.card.totalCash"), value: formatCurrency(totalBalance), color: "text-[var(--color-text)]", sub: `${accounts.length} account(s)` },
+              { label: tr("bank.card.connectedFeeds"), value: `${connected}/${accounts.length}`, color: connected === accounts.length ? "text-green-400" : "text-yellow-400", sub: "Live balance feeds" },
+              { label: tr("bank.card.feedIssues"), value: `${issues}`, color: issues > 0 ? "text-red-400" : "text-green-400", sub: issues > 0 ? "Re-consent needed" : "All healthy" },
+              { label: tr("bank.card.largestBalance"), value: accounts.length ? formatAmount(Math.max(...accounts.map(a => a.balance))) : "-", color: "text-blue-400", sub: "Concentration check" },
             ].map(c => (
               <div key={c.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
@@ -156,7 +158,7 @@ export default function BankingPage() {
           {accounts.length === 0 ? (
             <EmptyState
               icon={Landmark}
-              title="No bank accounts yet"
+              title={tr("bank.empty.title")}
               description="Add a bank account or import a statement to see consolidated balances, reconciliation and idle-cash alerts across every bank."
               ctaText="Add a bank account or import a statement"
               ctaHref="/data"

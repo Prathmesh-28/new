@@ -5,6 +5,7 @@ import TabStrip from "@/components/TabStrip";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { useT } from "@/i18n";
 import {
   Briefcase, KanbanSquare, FileText, ShoppingCart, Coins, UserCircle2,
   TrendingUp, BellRing, Trophy, Target, ClipboardList, Plus, Trash2,
@@ -33,6 +34,7 @@ type TabId =
   | "negotiation" | "lead-response" | "loyalty" | "reorder-reminder" | "revenue-region";
 
 export default function SalesPage() {
+  const tr = useT();
   const [tab, setTab] = useState<TabId>("overview");
 
   return (
@@ -40,19 +42,19 @@ export default function SalesPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <Briefcase size={18} className="text-[var(--color-primary)]" /> Sales &amp; CRM
+            <Briefcase size={18} className="text-[var(--color-primary)]" /> {tr("sales.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Capture leads, run a pipeline, quote with GST, track commissions and targets - built for India's SMB sales teams.
+            {tr("sales.subtitle")}
           </p>
         </div>
         <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as TabId)} tabs={([
-            ["overview", "Overview", Briefcase],
-            ["pipeline", "Pipeline", KanbanSquare],
-            ["deals", "Deal Tracker", ClipboardList],
-            ["quote", "Quote → Order", FileText],
-            ["commission", "Commissions", Coins],
-            ["customer360", "Customer 360", UserCircle2],
+            ["overview", tr("sales.tab.overview"), Briefcase],
+            ["pipeline", tr("sales.tab.pipeline"), KanbanSquare],
+            ["deals", tr("sales.tab.deals"), ClipboardList],
+            ["quote", tr("sales.tab.quote"), FileText],
+            ["commission", tr("sales.tab.commission"), Coins],
+            ["customer360", tr("sales.tab.customer360"), UserCircle2],
             ["forecast", "Sales Forecast", TrendingUp],
             ["leads", "Leads & Follow-ups", BellRing],
             ["winloss", "Win / Loss", Trophy],

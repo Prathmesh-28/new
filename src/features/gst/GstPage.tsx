@@ -5,6 +5,7 @@ import { formatCurrency, formatAmount } from "@/lib/utils";
 import { useApp } from "@/context/AppContext";
 import AiInsight from "@/components/ai/AiInsight";
 import TabStrip from "@/components/TabStrip";
+import { useT } from "@/i18n";
 import { gstLedger } from "@/lib/finance";
 import { Calculator, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Search, ShieldCheck, XCircle, RefreshCw, BookOpen, GitCompare, Upload, Download, Receipt, Truck, X, TrendingUp, MapPin, Building2, Percent, Ban, Divide, Star, Banknote, Wallet, Globe, Activity, Timer, Gauge, Scale, RotateCcw, CalendarClock, Coins, FileMinus, Flame, ClipboardCheck, Hammer, Network, ArrowLeftRight, Split, Users, Gift, UserCheck, ListChecks } from "lucide-react";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ interface RcmEntry   { id: string; desc: string; supplier: string; amount: numbe
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 export default function GstPage() {
+  const tr = useT();
   const { store } = useApp();
   const firm = store.firm;
   const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp" | "tdsgst" | "einvoice" | "notice" | "gstr3b-prep" | "itc-recon" | "liability-forecast" | "place-supply" | "multi-gstin" | "rate-impact" | "blocked-credit" | "itc-reversal" | "vendor-score" | "drc03" | "gst-advances" | "zero-rated" | "health-score" | "interest-fee" | "threshold" | "gstr1-3b" | "rule180" | "einv30" | "inverted" | "cdn-register" | "cess" | "gstr9c" | "jobwork" | "isd" | "branch-transfer" | "pmt09" | "cross-charge" | "free-samples" | "pure-agent" | "audit-ready">("calculator");
@@ -235,7 +237,7 @@ export default function GstPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-bold">GST</h1>
+        <h1 className="text-xl font-bold">{tr("gst.title")}</h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
           {firm.gstRegistered ? `GSTIN: ${firm.gstNumber || "-"} · GST rate: ${firm.gstRate ?? 18}%` : "Not GST registered - update in Settings"}
         </p>
@@ -249,7 +251,7 @@ export default function GstPage() {
       )}
 
       {/* Tabs */}
-      <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as typeof tab)} tabs={([["calculator", "Calculator", Calculator], ["ledger", "Ledger", BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `Returns (${returns.length})`, FileText], ["match", "2B Match", GitCompare], ["calendar", "Calendar", Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2], ["notice", "Notice Reply", AlertTriangle], ["gstr3b-prep", "3B Auto-Prep", FileText], ["itc-recon", "2B vs Books", GitCompare], ["liability-forecast", "Liability Forecast", TrendingUp], ["place-supply", "Place of Supply", MapPin], ["multi-gstin", "Multi-GSTIN", Building2], ["rate-impact", "Rate-Change", Percent], ["blocked-credit", "Blocked Credit", Ban], ["itc-reversal", "ITC Reversal", Divide], ["vendor-score", "Vendor Score", Star], ["drc03", "DRC-03", Banknote], ["gst-advances", "GST on Advances", Wallet], ["zero-rated", "Export/SEZ Kit", Globe], ["health-score", "Health Score", Activity], ["interest-fee", "Interest & Late Fee", Timer], ["threshold", "Registration Advisor", Gauge], ["gstr1-3b", "GSTR-1 vs 3B", Scale], ["rule180", "180-Day Reversal", RotateCcw], ["einv30", "e-Invoice 30-Day", CalendarClock], ["inverted", "Inverted-Duty Refund", Coins], ["cdn-register", "Credit/Debit Notes", FileMinus], ["cess", "Cess Calculator", Flame], ["gstr9c", "GSTR-9C Recon", ClipboardCheck], ["jobwork", "Job-Work ITC-04", Hammer], ["isd", "ISD Distributor", Network], ["branch-transfer", "Branch Transfer", ArrowLeftRight], ["pmt09", "PMT-09 Transfer", Split], ["cross-charge", "Cross-Charge", Users], ["free-samples", "Free Samples/Gifts", Gift], ["pure-agent", "Pure Agent", UserCheck], ["audit-ready", "Audit-Readiness", ListChecks]] as const).map(([id, label, icon]) => ({ id, label, icon }))} />
+      <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as typeof tab)} tabs={([["calculator", tr("gst.tab.calculator"), Calculator], ["ledger", tr("gst.tab.ledger"), BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `${tr("gst.tab.returns")} (${returns.length})`, FileText], ["match", tr("gst.tab.match"), GitCompare], ["calendar", tr("gst.tab.calendar"), Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2], ["notice", "Notice Reply", AlertTriangle], ["gstr3b-prep", "3B Auto-Prep", FileText], ["itc-recon", "2B vs Books", GitCompare], ["liability-forecast", "Liability Forecast", TrendingUp], ["place-supply", "Place of Supply", MapPin], ["multi-gstin", "Multi-GSTIN", Building2], ["rate-impact", "Rate-Change", Percent], ["blocked-credit", "Blocked Credit", Ban], ["itc-reversal", "ITC Reversal", Divide], ["vendor-score", "Vendor Score", Star], ["drc03", "DRC-03", Banknote], ["gst-advances", "GST on Advances", Wallet], ["zero-rated", "Export/SEZ Kit", Globe], ["health-score", "Health Score", Activity], ["interest-fee", "Interest & Late Fee", Timer], ["threshold", "Registration Advisor", Gauge], ["gstr1-3b", "GSTR-1 vs 3B", Scale], ["rule180", "180-Day Reversal", RotateCcw], ["einv30", "e-Invoice 30-Day", CalendarClock], ["inverted", "Inverted-Duty Refund", Coins], ["cdn-register", "Credit/Debit Notes", FileMinus], ["cess", "Cess Calculator", Flame], ["gstr9c", "GSTR-9C Recon", ClipboardCheck], ["jobwork", "Job-Work ITC-04", Hammer], ["isd", "ISD Distributor", Network], ["branch-transfer", "Branch Transfer", ArrowLeftRight], ["pmt09", "PMT-09 Transfer", Split], ["cross-charge", "Cross-Charge", Users], ["free-samples", "Free Samples/Gifts", Gift], ["pure-agent", "Pure Agent", UserCheck], ["audit-ready", "Audit-Readiness", ListChecks]] as const).map(([id, label, icon]) => ({ id, label, icon }))} />
 
       <AiInsight
         collapsed
@@ -278,10 +280,10 @@ export default function GstPage() {
           {/* Summary strip */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: "Output tax (12 mo)", value: ledgerTotals.output, color: "text-red-400", sub: "GST collected on sales" },
-              { label: "Input tax credit",   value: ledgerTotals.input,  color: "text-green-400", sub: "ITC on purchases" },
-              { label: "Cash paid / payable", value: ledgerTotals.cash,   color: "text-[var(--color-text)]", sub: "After using credit" },
-              { label: "ITC carry-forward",   value: ledgerTotals.carry,  color: "text-[var(--color-primary)]", sub: "Unused credit balance" },
+              { label: tr("gst.card.outputTax"), value: ledgerTotals.output, color: "text-red-400", sub: "GST collected on sales" },
+              { label: tr("gst.card.inputTaxCredit"),   value: ledgerTotals.input,  color: "text-green-400", sub: "ITC on purchases" },
+              { label: tr("gst.card.cashPayable"), value: ledgerTotals.cash,   color: "text-[var(--color-text)]", sub: "After using credit" },
+              { label: tr("gst.card.itcCarryForward"),   value: ledgerTotals.carry,  color: "text-[var(--color-primary)]", sub: "Unused credit balance" },
             ].map(k => (
               <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
