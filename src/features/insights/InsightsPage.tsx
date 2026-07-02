@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/i18n";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import AiInsight from "@/components/ai/AiInsight";
@@ -382,6 +383,7 @@ function SavedChartCard({ chart, onDelete }: { chart: SavedChart; onDelete: (id:
 // ─────────────────────────────────────────────────────────────────────────────
 export default function InsightsPage() {
   const { user } = useAuth();
+  const tr = useT();
 
   const [fy, setFy] = useState<string>(currentFY());
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -665,7 +667,7 @@ export default function InsightsPage() {
           <div>
             <h1 className="text-xl font-bold flex items-center gap-2">
               <BarChart3 size={20} className="text-[var(--color-primary)]" />
-              Insights
+              {tr("rep.insights")}
             </h1>
             <p className="text-xs text-[var(--color-muted)] mt-0.5">
               Cross-module analytics{user?.email ? ` · ${user.email}` : ""}
@@ -684,7 +686,7 @@ export default function InsightsPage() {
               onClick={() => void loadOverview(fy)}
               className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] hover:border-[var(--color-primary)] transition-colors"
             >
-              <RefreshCw size={13} className={ovLoading ? "animate-spin" : ""} /> Refresh
+              <RefreshCw size={13} className={ovLoading ? "animate-spin" : ""} /> {tr("rep.refresh")}
             </button>
           </div>
         </div>
@@ -692,7 +694,7 @@ export default function InsightsPage() {
 
       <div className="px-4 sm:px-6 py-4 pb-10">
         {/* COMPANY AT A GLANCE */}
-        <h2 className="text-sm font-semibold">Company at a glance</h2>
+        <h2 className="text-sm font-semibold">{tr("rep.companyAtAGlance")}</h2>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
           {overview ? `Financial year ${overview.financialYear}` : `Financial year ${fy}`}
         </p>
@@ -711,7 +713,7 @@ export default function InsightsPage() {
         />
 
         {/* Finance */}
-        <SectionLabel>Finance</SectionLabel>
+        <SectionLabel>{tr("rep.finance")}</SectionLabel>
         <div className="flex flex-wrap gap-2">
           {ovLoading ? (
             <><KpiSkeleton /><KpiSkeleton /><KpiSkeleton /><KpiSkeleton /></>
@@ -726,7 +728,7 @@ export default function InsightsPage() {
         </div>
 
         {/* Sales */}
-        <SectionLabel>Sales</SectionLabel>
+        <SectionLabel>{tr("rep.sales")}</SectionLabel>
         <div className="flex flex-wrap gap-2">
           {ovLoading ? (
             <><KpiSkeleton /><KpiSkeleton /><KpiSkeleton /></>
@@ -740,7 +742,7 @@ export default function InsightsPage() {
         </div>
 
         {/* People */}
-        <SectionLabel>People</SectionLabel>
+        <SectionLabel>{tr("rep.people")}</SectionLabel>
         <div className="flex flex-wrap gap-2">
           {ovLoading ? (
             <><KpiSkeleton /><KpiSkeleton /></>
@@ -1084,7 +1086,7 @@ export default function InsightsPage() {
             className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold hover:opacity-90 transition-opacity"
           >
             {showForm ? <X size={13} /> : <Plus size={13} />}
-            {showForm ? "Cancel" : "New dashboard"}
+            {showForm ? tr("rep.cancel") : tr("rep.newDashboard")}
           </button>
         </div>
 
@@ -1185,9 +1187,9 @@ export default function InsightsPage() {
           {dashboards.length === 0 ? (
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6 text-center">
               <LayoutDashboard size={26} className="mx-auto text-[var(--color-muted)] mb-2" />
-              <p className="text-sm font-medium">No saved dashboards yet</p>
+              <p className="text-sm font-medium">{tr("rep.noDashboardsYet")}</p>
               <p className="text-xs text-[var(--color-muted)] mt-1">
-                Create one to pin the metrics and charts you care about.
+                {tr("rep.noDashboardsHint")}
               </p>
             </div>
           ) : (

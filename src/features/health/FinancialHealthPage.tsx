@@ -17,6 +17,7 @@ import {
 } from "recharts";
 import { format, addMonths } from "date-fns";
 import AiInsight from "@/components/ai/AiInsight";
+import { useT } from "@/i18n";
 
 const COMPONENT_ICON: Record<string, React.ElementType> = {
   liquidity: Droplets, profitability: PiggyBank, collections: Receipt,
@@ -49,6 +50,7 @@ function ScoreRing({ score, grade }: { score: number; grade: string }) {
 }
 
 export default function FinancialHealthPage() {
+  const tr = useT();
   const { store } = useApp();
   const navigate = useNavigate();
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
@@ -116,9 +118,9 @@ export default function FinancialHealthPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-bold flex items-center gap-2"><HeartPulse size={18} className="text-[var(--color-primary)]" /> Financial Health</h1>
+        <h1 className="text-xl font-bold flex items-center gap-2"><HeartPulse size={18} className="text-[var(--color-primary)]" /> {tr("hlth.title")}</h1>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
-          One composite score from cash, receivables, debt, growth and compliance - recomputed live from every module.
+          {tr("hlth.subtitle")}
         </p>
         <div className="flex flex-wrap gap-1 mt-3">
           {sections.map(([id, label, Icon]) => (
@@ -141,7 +143,7 @@ export default function FinancialHealthPage() {
         </div>
 
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-          <p className="text-sm font-semibold mb-2">Score Profile</p>
+          <p className="text-sm font-semibold mb-2">{tr("hlth.scoreProfile")}</p>
           <ResponsiveContainer width="100%" height={210}>
             <RadarChart data={radarData} outerRadius={80}>
               <PolarGrid stroke="var(--color-border)" />
@@ -152,7 +154,7 @@ export default function FinancialHealthPage() {
         </div>
 
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-          <p className="text-sm font-semibold mb-3">What's dragging the score</p>
+          <p className="text-sm font-semibold mb-3">{tr("hlth.draggingScore")}</p>
           <div className="space-y-3">
             {weakest.map(c => {
               const Icon = COMPONENT_ICON[c.key] ?? HeartPulse;
@@ -205,7 +207,7 @@ export default function FinancialHealthPage() {
 
       {/* Component breakdown */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-        <p className="text-sm font-semibold mb-4">Component Breakdown</p>
+        <p className="text-sm font-semibold mb-4">{tr("hlth.componentBreakdown")}</p>
         <div className="space-y-4">
           {health.components.map(c => {
             const Icon = COMPONENT_ICON[c.key] ?? HeartPulse;
@@ -236,7 +238,7 @@ export default function FinancialHealthPage() {
 
       {/* Ratio grid */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-        <p className="text-sm font-semibold mb-1">Key Ratios vs Lender Benchmarks</p>
+        <p className="text-sm font-semibold mb-1">{tr("hlth.keyRatios")}</p>
         <p className="text-xs text-[var(--color-muted)] mb-4">Click any ratio to open the module that drives it.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {ratios.map(r => (
@@ -253,10 +255,10 @@ export default function FinancialHealthPage() {
       {/* Snapshot strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Cash on Hand", value: formatAmount(snap.cash), path: "/transactions" },
-          { label: "Open Receivables", value: formatAmount(snap.accountsReceivable), path: "/receivables" },
-          { label: "Debt Outstanding", value: formatAmount(snap.debtOutstanding), path: "/debt" },
-          { label: "Working-Capital Gap", value: formatAmount(snap.workingCapitalGap), path: "/working-capital" },
+          { label: tr("hlth.cashOnHand"), value: formatAmount(snap.cash), path: "/transactions" },
+          { label: tr("hlth.openReceivables"), value: formatAmount(snap.accountsReceivable), path: "/receivables" },
+          { label: tr("hlth.debtOutstanding"), value: formatAmount(snap.debtOutstanding), path: "/debt" },
+          { label: tr("hlth.workingCapitalGap"), value: formatAmount(snap.workingCapitalGap), path: "/working-capital" },
         ].map(s => (
           <button key={s.label} onClick={() => navigate(s.path)}
             className="text-left bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-primary)]/40 transition-colors">

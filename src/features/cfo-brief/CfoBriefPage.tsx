@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { useT } from "@/i18n";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount, monthlyBurn, runwayDays } from "@/lib/utils";
@@ -61,12 +62,13 @@ const SECTION_STYLE: Record<BriefSection["type"], string> = {
 type CfoView = "ai-brief" | "variance" | "board-deck" | "watchlist" | "scorecard" | "cash-snapshot" | "margins" | "calendar" | "actions" | "one-pager" | "ratios" | "trend" | "expense-control" | "covenant" | "what-changed" | "liquidity" | "growth-burn" | "top-accounts" | "working-capital";
 
 export default function CfoBriefPage() {
+  const tr = useT();
   const [view, setView] = useState<CfoView>("ai-brief");
 
   return (
     <div className="space-y-5">
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-        {([["ai-brief", "AI Brief", Sparkles], ["variance", "Variance Commentary", FileText], ["board-deck", "Board-Deck Generator", Presentation], ["watchlist", "Risk & Watchlist", ShieldAlert], ["scorecard", "KPI Scorecard", Gauge], ["cash-snapshot", "Cash Snapshot", Wallet], ["margins", "Margin Snapshot", Percent], ["calendar", "Financial Calendar", CalendarClock], ["actions", "Top Actions", ListChecks], ["one-pager", "One-Page Summary", FileText], ["ratios", "Financial Ratios", Scale], ["trend", "Profitability Trend", LineChart], ["expense-control", "Expense Control", Receipt], ["covenant", "Loan & Covenant", Banknote], ["what-changed", "What Changed", GitCompareArrows], ["liquidity", "Liquidity Position", Droplets], ["growth-burn", "Growth vs Burn", Rocket], ["top-accounts", "Top Accounts", Users], ["working-capital", "Working Capital", Coins]] as const).map(([id, label, Icon]) => (
+        {([["ai-brief", tr("cfo.tab.aiBrief"), Sparkles], ["variance", tr("cfo.tab.variance"), FileText], ["board-deck", tr("cfo.tab.boardDeck"), Presentation], ["watchlist", tr("cfo.tab.watchlist"), ShieldAlert], ["scorecard", tr("cfo.tab.scorecard"), Gauge], ["cash-snapshot", tr("cfo.tab.cashSnapshot"), Wallet], ["margins", tr("cfo.tab.margins"), Percent], ["calendar", tr("cfo.tab.calendar"), CalendarClock], ["actions", "Top Actions", ListChecks], ["one-pager", "One-Page Summary", FileText], ["ratios", "Financial Ratios", Scale], ["trend", "Profitability Trend", LineChart], ["expense-control", "Expense Control", Receipt], ["covenant", "Loan & Covenant", Banknote], ["what-changed", "What Changed", GitCompareArrows], ["liquidity", "Liquidity Position", Droplets], ["growth-burn", "Growth vs Burn", Rocket], ["top-accounts", "Top Accounts", Users], ["working-capital", "Working Capital", Coins]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setView(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${view === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -98,6 +100,7 @@ export default function CfoBriefPage() {
 }
 
 function AiBriefView() {
+  const tr = useT();
   const { store, canExport } = useApp();
   const { transactions, bankAccounts, firm, alerts, activeLoans } = store;
 
@@ -221,10 +224,10 @@ Be specific with numbers. Use ₹ for amounts. Max 400 words total. Speak direct
   };
 
   const quickStats = [
-    { label: "Cash Balance",    value: formatAmount(balance),     color: balance > burn * 3 ? "text-green-400" : "text-red-400" },
-    { label: "Runway",          value: `${runway}d`,              color: runway > 90 ? "text-green-400" : runway > 45 ? "text-yellow-400" : "text-red-400" },
-    { label: "MoM Revenue",     value: lastMRev > 0 ? `${thisMRev >= lastMRev ? "+" : ""}${Math.round(((thisMRev-lastMRev)/lastMRev)*100)}%` : "-", color: thisMRev >= lastMRev ? "text-green-400" : "text-red-400" },
-    { label: "Active Alerts",   value: unreadAlerts.length.toString(), color: unreadAlerts.length > 0 ? "text-orange-400" : "text-green-400" },
+    { label: tr("cfo.stat.cashBalance"),    value: formatAmount(balance),     color: balance > burn * 3 ? "text-green-400" : "text-red-400" },
+    { label: tr("cfo.stat.runway"),          value: `${runway}d`,              color: runway > 90 ? "text-green-400" : runway > 45 ? "text-yellow-400" : "text-red-400" },
+    { label: tr("cfo.stat.momRevenue"),     value: lastMRev > 0 ? `${thisMRev >= lastMRev ? "+" : ""}${Math.round(((thisMRev-lastMRev)/lastMRev)*100)}%` : "-", color: thisMRev >= lastMRev ? "text-green-400" : "text-red-400" },
+    { label: tr("cfo.stat.activeAlerts"),   value: unreadAlerts.length.toString(), color: unreadAlerts.length > 0 ? "text-orange-400" : "text-green-400" },
   ];
 
   return (
@@ -241,7 +244,7 @@ Be specific with numbers. Use ₹ for amounts. Max 400 words total. Speak direct
         <div className="flex items-center gap-2">
           {brief && canExport() && (
             <button onClick={downloadTxt} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg">
-              <Download size={12} /> Export
+              <Download size={12} /> {tr("cfo.export")}
             </button>
           )}
           <button onClick={generate} disabled={loading}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useT } from "@/i18n";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
@@ -107,27 +108,40 @@ const TABS = [
 ] as const;
 
 export default function FieldPage() {
+  const tr = useT();
   const [tab, setTab] = useState<FieldTab>("overview");
   const online = useOnline();
   const [queue] = useFeatureState<QueueItem[]>("field-queue", []);
   const pending = queue.filter(q => !q.synced).length;
+
+  // Translated labels for the primary tabs only; the rest of the tool catalog
+  // keeps its static English label.
+  const PRIMARY_TAB_LABELS: Partial<Record<FieldTab, string>> = {
+    overview: tr("field.tab.overview"),
+    connectivity: tr("field.tab.connectivity"),
+    queue: tr("field.tab.queue"),
+    quickbill: tr("field.tab.quickbill"),
+    collection: tr("field.tab.collection"),
+    daysheet: tr("field.tab.daysheet"),
+    lowdata: tr("field.tab.lowdata"),
+  };
 
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <Smartphone size={18} className="text-[var(--color-primary)]" /> Field &amp; Offline
+            <Smartphone size={18} className="text-[var(--color-primary)]" /> {tr("field.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Bill, collect and reconcile at the counter, in the van, on a weak signal - then sync when the network returns.
+            {tr("field.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
           {TABS.map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              <Icon size={11} />{label}
+              <Icon size={11} />{PRIMARY_TAB_LABELS[id] ?? label}
             </button>
           ))}
         </div>
