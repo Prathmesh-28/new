@@ -586,6 +586,30 @@ const BOOKS_SCHEMA = `
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_book_expiry_items ON book_expiry_items(tenant_id, status, expires_on);
+
+  -- Rent register with §194-I TDS + escalation schedules. Tracks rent agreements (paid), the
+  -- escalated current rent, the 194-I TDS (10% land/building, 2% plant/mach; 20% if no PAN;
+  -- only above the annual threshold), and a forward schedule.
+  CREATE TABLE IF NOT EXISTS book_rent_agreements (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id         TEXT NOT NULL,
+    landlord          TEXT NOT NULL,
+    landlord_pan      TEXT,
+    property          TEXT,
+    monthly_rent      NUMERIC(15,2) NOT NULL,
+    deposit           NUMERIC(15,2) NOT NULL DEFAULT 0,
+    start_date        DATE NOT NULL,
+    end_date          DATE,
+    escalation_pct    NUMERIC(6,2) NOT NULL DEFAULT 0,   -- % increase each escalation period
+    escalation_months INT NOT NULL DEFAULT 12,            -- escalate every N months (0 = never)
+    tds_rate          NUMERIC(5,2) NOT NULL DEFAULT 10,   -- §194-I base rate (10 building / 2 plant)
+    direction         TEXT NOT NULL DEFAULT 'paid' CHECK (direction IN ('paid','received')),
+    status            TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','ended')),
+    notes             TEXT,
+    created_by        UUID,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_rent_agreements ON book_rent_agreements(tenant_id, status);
 `;
 
 module.exports = { BOOKS_SCHEMA };

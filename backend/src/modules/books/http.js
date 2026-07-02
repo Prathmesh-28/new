@@ -902,6 +902,12 @@ router.get("/expiry-items/due", async (req, res) => { try { res.json(await expir
 router.post("/expiry-items", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await expiry.createExpiryItem(tenantOf(req), req.user.id, { kind: b.kind, name: b.name, identifier: b.identifier, counterparty: b.counterparty, amount: b.amount, issuedOn: b.issued_on, expiresOn: b.expires_on, reminderDays: b.reminder_days, notes: b.notes })); } catch (e) { fail(res, e); } });
 router.post("/expiry-items/:id/renew", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await expiry.renewExpiryItem(tenantOf(req), req.params.id, { newExpiresOn: b.new_expires_on, amount: b.amount, issuedOn: b.issued_on })); } catch (e) { fail(res, e); } });
 router.delete("/expiry-items/:id", canPost, async (req, res) => { try { res.json(await expiry.removeExpiryItem(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+// Rent register + §194-I TDS + escalation schedules.
+const rent = require("./rent");
+router.get("/rent", async (req, res) => { try { res.json(await rent.listRentAgreements(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.get("/rent/:id/schedule", async (req, res) => { try { res.json(await rent.rentSchedule(tenantOf(req), req.params.id, Number(req.query.months) || 12)); } catch (e) { fail(res, e); } });
+router.post("/rent", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await rent.createRentAgreement(tenantOf(req), req.user.id, { landlord: b.landlord, landlordPan: b.landlord_pan, property: b.property, monthlyRent: b.monthly_rent, deposit: b.deposit, startDate: b.start_date, endDate: b.end_date, escalationPct: b.escalation_pct, escalationMonths: b.escalation_months, tdsRate: b.tds_rate, direction: b.direction, notes: b.notes })); } catch (e) { fail(res, e); } });
+router.post("/rent/:id/end", canPost, async (req, res) => { try { res.json(await rent.endRentAgreement(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 // Profitability reports + Tally XML export + numbering audit.
 router.get("/reports/profitability/party", async (req, res) => { try { res.json(await reports.profitabilityByParty(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
 router.get("/reports/profitability/item", async (req, res) => { try { res.json(await reports.profitabilityByItem(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });

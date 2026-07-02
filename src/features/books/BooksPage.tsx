@@ -8,7 +8,7 @@ import {
   Plus, RefreshCw, CheckCircle2, XCircle, Undo2, Sparkles, ArrowDownToLine,
   FileText, Trash2, Printer, Send, Receipt, Percent, SlidersHorizontal, Boxes,
   Landmark, Tag, CalendarClock, Layers,
-  Lock, Split, FileBarChart, Coins, Building2, Workflow, ShieldCheck, Scale, Files, Bot, HandCoins,
+  Lock, Split, FileBarChart, Coins, Building2, Workflow, ShieldCheck, Scale, Files, Bot, HandCoins, Home,
 } from "lucide-react";
 import BooksReceivablesTab from "./BooksReceivablesTab";
 import BooksGstTab from "./BooksGstTab";
@@ -25,6 +25,7 @@ import BooksFxTab from "./BooksFxTab";
 import BooksAssetsTab from "./BooksAssetsTab";
 import BooksExpensesTab from "./BooksExpensesTab";
 import BooksRenewalsTab from "./BooksRenewalsTab";
+import BooksRentTab from "./BooksRentTab";
 import BooksAutomationTab from "./BooksAutomationTab";
 import BooksComplianceTab from "./BooksComplianceTab";
 import BooksSettlementTab from "./BooksSettlementTab";
@@ -132,7 +133,7 @@ interface DocumentRow {
   party_ledger_id: string | null;
 }
 
-type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls" | "taxfiling" | "pricing" | "payterms" | "subscriptions" | "closing" | "dimensions" | "finreports" | "fx" | "assets" | "expenses" | "renewals" | "automation" | "compliance" | "settlement" | "documents" | "agents";
+type TabId = "overview" | "coa" | "entry" | "invoices" | "reports" | "reconcile" | "arap" | "gst" | "inventory" | "controls" | "taxfiling" | "pricing" | "payterms" | "subscriptions" | "closing" | "dimensions" | "finreports" | "fx" | "assets" | "expenses" | "renewals" | "rent" | "automation" | "compliance" | "settlement" | "documents" | "agents";
 type ReportId = "tb" | "pl" | "bs" | "cf";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -368,6 +369,7 @@ export default function BooksPage() {
     { id: "assets",    label: "Fixed Assets",      icon: <Building2 size={14} /> },
     { id: "expenses",  label: "Expenses & Advances", icon: <HandCoins size={14} /> },
     { id: "renewals",  label: "Renewals",          icon: <CalendarClock size={14} /> },
+    { id: "rent",      label: "Rent & 194-I",      icon: <Home size={14} /> },
     { id: "compliance", label: "Compliance",       icon: <ShieldCheck size={14} /> },
     { id: "settlement", label: "Settlements",      icon: <Scale size={14} /> },
     { id: "automation", label: "Automation",       icon: <Workflow size={14} /> },
@@ -452,6 +454,7 @@ export default function BooksPage() {
             {tab === "assets" && <BooksAssetsTab />}
             {tab === "expenses" && <BooksExpensesTab />}
             {tab === "renewals" && <BooksRenewalsTab />}
+            {tab === "rent" && <BooksRentTab />}
             {tab === "compliance" && <BooksComplianceTab canWrite={canWrite} />}
             {tab === "settlement" && <BooksSettlementTab />}
             {tab === "automation" && <BooksAutomationTab />}
