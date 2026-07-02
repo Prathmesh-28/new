@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import EmptyState from "@/components/EmptyState";
 import AiInsight from "@/components/ai/AiInsight";
+import { useT } from "@/i18n";
 import type { Invoice } from "@/data/types";
 
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -189,6 +190,7 @@ function KanbanPipeline({ withDays, isReadOnly, onMarkPaid, onChase }: {
 type ReceivablesTab = "overview" | "risk-score" | "factoring" | "cash-app" | "concentration" | "ar-confirm" | "dso-trend" | "ar-turnover" | "ecl-matrix" | "credit-util" | "cash-timeline" | "overdue-heatmap" | "dunning-funnel" | "promise-to-pay" | "disputes" | "early-discount" | "credit-hold" | "write-off" | "pay-timeline" | "days-beyond-terms" | "reliability-rank" | "interest-accrual" | "collection-target" | "partial-pay" | "recovery-roi" | "payment-plan" | "stress-test" | "statement";
 
 export default function ReceivablesPage() {
+  const tr = useT();
   const { store, addInvoice, updateInvoice, deleteInvoice, isReadOnly } = useApp();
   const { invoices } = store;
   const [showAdd, setShowAdd] = useState(false);
@@ -262,8 +264,8 @@ export default function ReceivablesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Receivables</h1>
-          <p className="text-sm text-[var(--color-muted)] mt-0.5">Track outstanding invoices and follow up on overdue payments</p>
+          <h1 className="text-xl font-bold">{tr("recv.title")}</h1>
+          <p className="text-sm text-[var(--color-muted)] mt-0.5">{tr("recv.subtitle")}</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex gap-0.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-0.5">
@@ -279,7 +281,7 @@ export default function ReceivablesPage() {
           {!isReadOnly && (
             <button onClick={() => setShowAdd(true)}
               className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
-              <Plus size={13} /> Add Invoice
+              <Plus size={13} /> {tr("recv.addInvoice")}
             </button>
           )}
         </div>
@@ -287,7 +289,7 @@ export default function ReceivablesPage() {
 
       {/* Tab selector */}
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
-        {([["overview", "Overview", List], ["risk-score", "Customer Risk Scoring", Gauge], ["factoring", "Factoring / Discounting", Banknote], ["cash-app", "Cash Application", Link2], ["concentration", "Concentration Risk", PieChart], ["ar-confirm", "AR Confirmation Mailer", MailCheck], ["dso-trend", "DSO Trend", TrendingUp], ["ar-turnover", "AR Turnover", Repeat], ["ecl-matrix", "ECL Provisioning", ShieldAlert], ["credit-util", "Credit Utilization", Percent], ["cash-timeline", "Collection Forecast", CalendarClock], ["overdue-heatmap", "Overdue Heatmap", Flame], ["dunning-funnel", "Dunning Funnel", Layers], ["promise-to-pay", "Promise-to-Pay", CalendarCheck], ["disputes", "Dispute Tracker", FileWarning], ["early-discount", "Early-Pay Discount", TicketPercent], ["credit-hold", "Credit-Hold List", Ban], ["write-off", "Write-Off Policy", Eraser], ["pay-timeline", "Payment Timeline", History], ["days-beyond-terms", "Days Beyond Terms", Hourglass], ["reliability-rank", "Reliability Ranking", Trophy], ["interest-accrual", "Overdue Interest", Coins], ["collection-target", "Collection Target", Target], ["partial-pay", "Partial Payments", Wallet], ["recovery-roi", "Recovery ROI", Calculator], ["payment-plan", "Payment Plan", CalendarRange], ["stress-test", "Concentration Stress Test", Siren], ["statement", "Statement Generator", FileText]] as const).map(([id, label, Icon]) => (
+        {([["overview", tr("recv.tab.overview"), List], ["risk-score", tr("recv.tab.riskScore"), Gauge], ["factoring", tr("recv.tab.factoring"), Banknote], ["cash-app", tr("recv.tab.cashApp"), Link2], ["concentration", tr("recv.tab.concentration"), PieChart], ["ar-confirm", tr("recv.tab.arConfirm"), MailCheck], ["dso-trend", tr("recv.tab.dsoTrend"), TrendingUp], ["ar-turnover", tr("recv.tab.arTurnover"), Repeat], ["ecl-matrix", "ECL Provisioning", ShieldAlert], ["credit-util", "Credit Utilization", Percent], ["cash-timeline", "Collection Forecast", CalendarClock], ["overdue-heatmap", "Overdue Heatmap", Flame], ["dunning-funnel", "Dunning Funnel", Layers], ["promise-to-pay", "Promise-to-Pay", CalendarCheck], ["disputes", "Dispute Tracker", FileWarning], ["early-discount", "Early-Pay Discount", TicketPercent], ["credit-hold", "Credit-Hold List", Ban], ["write-off", "Write-Off Policy", Eraser], ["pay-timeline", "Payment Timeline", History], ["days-beyond-terms", "Days Beyond Terms", Hourglass], ["reliability-rank", "Reliability Ranking", Trophy], ["interest-accrual", "Overdue Interest", Coins], ["collection-target", "Collection Target", Target], ["partial-pay", "Partial Payments", Wallet], ["recovery-roi", "Recovery ROI", Calculator], ["payment-plan", "Payment Plan", CalendarRange], ["stress-test", "Concentration Stress Test", Siren], ["statement", "Statement Generator", FileText]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -356,7 +358,7 @@ export default function ReceivablesPage() {
       {totalOutstanding > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-5 py-4 flex items-center justify-between">
           <div>
-            <p className="text-xs text-[var(--color-muted)]">Total outstanding</p>
+            <p className="text-xs text-[var(--color-muted)]">{tr("recv.totalOutstanding")}</p>
             <p className="text-2xl font-bold text-[var(--color-primary)]">{formatCurrency(totalOutstanding)}</p>
           </div>
           {bucketTotals["90d"].amount > 0 && (
@@ -382,7 +384,7 @@ export default function ReceivablesPage() {
       {view === "list" && pending.length > 0 ? (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Outstanding Invoices</h2>
+            <h2 className="text-sm font-semibold">{tr("recv.outstandingInvoices")}</h2>
             <span className="text-xs text-[var(--color-muted)]">{pending.length} invoices</span>
           </div>
           <div className="divide-y divide-[var(--color-border)]">
@@ -426,8 +428,8 @@ export default function ReceivablesPage() {
       ) : pending.length === 0 ? (
         <EmptyState
           icon={Clock}
-          title="No outstanding receivables"
-          description="Once you raise an invoice it shows up here so you can track aging and chase overdue payments before they slip."
+          title={tr("recv.empty.title")}
+          description={tr("recv.empty.desc")}
           ctaText="Raise an invoice"
           ctaHref="/invoices"
         />

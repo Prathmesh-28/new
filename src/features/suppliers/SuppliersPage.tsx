@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import PreviewBadge from "@/components/PreviewBadge";
 import EmptyState from "@/components/EmptyState";
 import AiInsight from "@/components/ai/AiInsight";
+import { useT } from "@/i18n";
 
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
@@ -66,7 +67,17 @@ const SUP_TABS: { id: SupTab; label: string; Icon: typeof Package }[] = [
   { id: "tds-bills",             label: "TDS on Bills",       Icon: Receipt },
 ];
 
+const PRIMARY_TAB_LABELS: Partial<Record<SupTab, string>> = {
+  "early-pay":     "supp.tabEarlyPay",
+  "scorecard":     "supp.tabScorecard",
+  "reorder":       "supp.tabReorder",
+  "rate-contract": "supp.tabRateContract",
+  "msme-verify":   "supp.tabMsmeVerify",
+  "terms-optimizer": "supp.tabTermsOptimizer",
+};
+
 export default function SuppliersPage() {
+  const tr = useT();
   const [tab, setTab] = useState<SupTab>("early-pay");
   return (
     <div className="space-y-4">
@@ -74,7 +85,7 @@ export default function SuppliersPage() {
         {SUP_TABS.map(({ id, label, Icon }) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap border transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-            <Icon size={13} /> {label}
+            <Icon size={13} /> {PRIMARY_TAB_LABELS[id] ? tr(PRIMARY_TAB_LABELS[id]!) : label}
           </button>
         ))}
       </div>
@@ -109,6 +120,7 @@ export default function SuppliersPage() {
 }
 
 function EarlyPaySection() {
+  const tr = useT();
   const [offers, setOffers]   = useState<SupplierOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying]   = useState<Record<string, boolean>>({});
@@ -150,15 +162,15 @@ function EarlyPaySection() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-bold flex items-center gap-2">Supplier Early-Pay <PreviewBadge capability="supplierMarketplace" /></h1>
-        <p className="text-xs text-[var(--color-muted)] mt-0.5">Pay early, save on invoice cost · Suppliers get paid today</p>
+        <h1 className="text-xl font-bold flex items-center gap-2">{tr("supp.earlyPayTitle")} <PreviewBadge capability="supplierMarketplace" /></h1>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("supp.earlyPaySubtitle")}</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Open Offers",       value: offers.filter(o => !paid[o.id]).length.toString(), color: "text-[var(--color-primary)]" },
-          { label: "Total Payable",     value: formatCurrency(offers.reduce((s,o)=>s+o.invoice_amount,0)), color: "text-[var(--color-muted)]" },
-          { label: "Savings Available", value: formatCurrency(totalSavings), color: "text-green-400" },
+          { label: tr("supp.openOffers"),       value: offers.filter(o => !paid[o.id]).length.toString(), color: "text-[var(--color-primary)]" },
+          { label: tr("supp.totalPayable"),     value: formatCurrency(offers.reduce((s,o)=>s+o.invoice_amount,0)), color: "text-[var(--color-muted)]" },
+          { label: tr("supp.savingsAvailable"), value: formatCurrency(totalSavings), color: "text-green-400" },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
@@ -196,7 +208,7 @@ function EarlyPaySection() {
       ) : offers.length === 0 ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <Package size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-          <p className="text-sm text-[var(--color-muted)]">No early-pay offers available right now.</p>
+          <p className="text-sm text-[var(--color-muted)]">{tr("supp.noOffers")}</p>
         </div>
       ) : (
         <div className="space-y-3">

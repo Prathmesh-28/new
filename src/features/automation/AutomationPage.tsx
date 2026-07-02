@@ -5,6 +5,7 @@ import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import { api } from "@/lib/api";
 import TabStrip from "@/components/TabStrip";
+import { useT } from "@/i18n";
 import {
   Workflow, Zap, GitBranch, CheckSquare, BookOpen, Layers, BellRing,
   CalendarClock, ScrollText, Webhook, LayoutTemplate, Plus, Play,
@@ -70,7 +71,17 @@ const TABS = [
   ["triggerfilters", "Trigger Filters", SlidersHorizontal],
 ] as const;
 
+const PRIMARY_TAB_LABELS: Partial<Record<TabId, string>> = {
+  overview: "auto.tab.overview",
+  rules: "auto.tab.rules",
+  scheduler: "auto.tab.scheduler",
+  approvals: "auto.tab.approvals",
+  recipes: "auto.tab.recipes",
+  bulk: "auto.tab.bulk",
+};
+
 export default function AutomationPage() {
+  const tr = useT();
   const [tab, setTab] = useState<TabId>("overview");
 
   return (
@@ -78,14 +89,14 @@ export default function AutomationPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <Workflow size={18} className="text-[var(--color-primary)]" /> Automation &amp; Workflows
+            <Workflow size={18} className="text-[var(--color-primary)]" /> {tr("auto.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Define IF-THEN rules, approval chains, reminders and notification logic - previewed against your live data. Preview evaluates a rule against your live records instantly; hit <strong>Activate</strong> on a rule to convert it into a real Flow that the backend engine runs automatically.
+            {tr("auto.subtitle")}
           </p>
         </div>
         <TabStrip
-          tabs={TABS.map(([id, label, icon]) => ({ id, label, icon }))}
+          tabs={TABS.map(([id, label, icon]) => ({ id, label: PRIMARY_TAB_LABELS[id as TabId] ? tr(PRIMARY_TAB_LABELS[id as TabId]!) : label, icon }))}
           active={tab}
           onChange={(id) => setTab(id as TabId)}
           primaryCount={6}

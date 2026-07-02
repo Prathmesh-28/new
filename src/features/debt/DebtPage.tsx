@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { addMonths, format, parseISO } from "date-fns";
 import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import AiInsight from "@/components/ai/AiInsight";
+import { useT } from "@/i18n";
 
 type ActiveLoanLike = { id: string; lender: string; outstanding: number; rate: number; monthlyEmi: number };
 
@@ -31,6 +32,7 @@ function remainingMonths(loan: { outstanding: number; rate: number; monthlyEmi: 
 export default function DebtPage() {
   const { store } = useApp();
   const navigate = useNavigate();
+  const tr = useT();
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
   const loans = store.activeLoans;
 
@@ -74,19 +76,19 @@ export default function DebtPage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold flex items-center gap-2"><Scale size={18} className="text-[var(--color-primary)]" /> Debt Manager</h1>
+          <h1 className="text-xl font-bold flex items-center gap-2"><Scale size={18} className="text-[var(--color-primary)]" /> {tr("debt.title")}</h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Consolidated view of every loan - amortisation, prepayment savings, refinance maths, lender covenants.
+            {tr("debt.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
           {([
-            ["overview", "Overview", Scale],
-            ["amortise", "Amortise & Prepay", Calculator],
-            ["dscr", "DSCR / Coverage", ShieldAlert],
-            ["refinance", "Refinance Compare", GitCompareArrows],
-            ["moratorium", "Moratorium Re-cast", PauseCircle],
-            ["schedule", "Repayment Ladder", CalendarRange],
+            ["overview", tr("debt.tab.overview"), Scale],
+            ["amortise", tr("debt.tab.amortise"), Calculator],
+            ["dscr", tr("debt.tab.dscr"), ShieldAlert],
+            ["refinance", tr("debt.tab.refinance"), GitCompareArrows],
+            ["moratorium", tr("debt.tab.moratorium"), PauseCircle],
+            ["schedule", tr("debt.tab.schedule"), CalendarRange],
             ["optimizer", "Prepay Optimizer", Target],
             ["wacd", "Cost of Debt", Percent],
             ["foreclosure", "Foreclosure Calc", DoorClosed],
@@ -146,10 +148,10 @@ export default function DebtPage() {
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Total Outstanding", value: formatAmount(snap.debtOutstanding), color: "text-[var(--color-text)]", sub: `${loans.length} active loan(s)` },
-          { label: "Monthly Debt Service", value: formatAmount(snap.monthlyDebtService), color: "text-red-400", sub: `${formatAmount(snap.monthlyInterest)}/mo is pure interest` },
-          { label: "Weighted Avg Rate", value: snap.weightedAvgRatePct !== null ? `${snap.weightedAvgRatePct.toFixed(1)}%` : "-", color: "text-yellow-400", sub: "Across all loans" },
-          { label: "DSCR", value: snap.dscr !== null ? `${snap.dscr.toFixed(2)}x` : "No debt", color: dscrOk ? "text-green-400" : "text-red-400", sub: dscrOk ? "Above 1.25x lender bar" : "Below 1.25x - refinance risk" },
+          { label: tr("debt.kpi.totalOutstanding"), value: formatAmount(snap.debtOutstanding), color: "text-[var(--color-text)]", sub: `${loans.length} active loan(s)` },
+          { label: tr("debt.kpi.monthlyDebtService"), value: formatAmount(snap.monthlyDebtService), color: "text-red-400", sub: `${formatAmount(snap.monthlyInterest)}/mo is pure interest` },
+          { label: tr("debt.kpi.weightedAvgRate"), value: snap.weightedAvgRatePct !== null ? `${snap.weightedAvgRatePct.toFixed(1)}%` : "-", color: "text-yellow-400", sub: "Across all loans" },
+          { label: tr("debt.kpi.dscr"), value: snap.dscr !== null ? `${snap.dscr.toFixed(2)}x` : "No debt", color: dscrOk ? "text-green-400" : "text-red-400", sub: dscrOk ? "Above 1.25x lender bar" : "Below 1.25x - refinance risk" },
         ].map(k => (
           <div key={k.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -181,10 +183,10 @@ export default function DebtPage() {
       {loans.length === 0 ? (
         <div className="bg-[var(--color-surface)] border border-dashed border-[var(--color-border)] rounded-lg p-10 text-center">
           <Landmark size={24} className="mx-auto text-[var(--color-muted)] mb-3" />
-          <p className="text-sm font-medium mb-1">No active loans</p>
-          <p className="text-xs text-[var(--color-muted)] mb-4">When you accept a credit offer it appears here with its full amortisation schedule.</p>
+          <p className="text-sm font-medium mb-1">{tr("debt.empty.title")}</p>
+          <p className="text-xs text-[var(--color-muted)] mb-4">{tr("debt.empty.desc")}</p>
           <button onClick={() => navigate("/credit")} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-medium">
-            Explore credit options →
+            {tr("debt.empty.cta")}
           </button>
         </div>
       ) : (
