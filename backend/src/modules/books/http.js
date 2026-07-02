@@ -964,6 +964,8 @@ router.get("/parties/:id/unapplied", async (req, res) => { try { res.json(await 
 router.post("/parties/:id/auto-apply", canPost, async (req, res) => { try { res.status(201).json(await payterms.autoApply(tenantOf(req), req.user.id, { partyLedgerId: req.params.id })); } catch (e) { fail(res, e); } });
 router.post("/expenses", canPost, async (req, res) => { try { res.status(201).json(await ops.createExpense(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/advances", async (req, res) => { try { res.json(await ops.listAdvances(tenantOf(req), req.query.status)); } catch (e) { fail(res, e); } });
+// Voice / natural-language expense parse → a structured draft (rule parser + optional LLM refine).
+router.post("/expenses/parse", canPost, async (req, res) => { try { res.json(await require("./voiceExpense").parseExpenseText(tenantOf(req), (req.body || {}).text)); } catch (e) { fail(res, e); } });
 router.post("/advances", canPost, async (req, res) => { try { res.status(201).json(await ops.grantAdvance(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/advances/:id/settle", canPost, async (req, res) => { try { res.json(await ops.settleAdvance(tenantOf(req), req.user.id, { advanceId: req.params.id, ...(req.body || {}) })); } catch (e) { fail(res, e); } });
 router.post("/projects", canPost, async (req, res) => { try { res.status(201).json(await ops.createProject(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });

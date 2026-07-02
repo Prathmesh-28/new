@@ -24,6 +24,10 @@ export default function BooksExpensesTab() {
   const [busy, setBusy] = useState(true);
   const [gPerson, setGPerson] = useState(""); const [gAmount, setGAmount] = useState("");
   const [gDate, setGDate] = useState(today()); const [gPaid, setGPaid] = useState(""); const [gPurpose, setGPurpose] = useState("");
+  // Quick natural-language / voice capture (#172).
+  const [qText, setQText] = useState(""); const [qBusy, setQBusy] = useState(false);
+  const [qDraft, setQDraft] = useState<{ amount: number | null; description: string; category: string } | null>(null);
+  const [qCat, setQCat] = useState(""); const [qPaid, setQPaid] = useState("");
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -51,6 +55,24 @@ export default function BooksExpensesTab() {
     } catch (e) { toast.error(errMsg(e)); }
   };
 
+  const parse = async () => {
+    if (!qText.trim()) return;
+    setQBusy(true);
+    try {
+      const d = await api.post<{ amount: number | null; description: string; category: string }>("/api/books/expenses/parse", { text: qText });
+      setQDraft(d);
+      const m = expenseLedgers.find((l) => l.name.toLowerCase().includes(d.category.toLowerCase()) || d.category.toLowerCase().includes(l.name.toLowerCase()));
+      setQCat(m?.id || "");
+    } catch (e) { toast.error(errMsg(e)); } finally { setQBusy(false); }
+  };
+  const postQuick = async () => {
+    if (!qCat || !qDraft?.amount || !qPaid) { toast.error("Pick a category, amount and pay-from account"); return; }
+    try {
+      await api.post("/api/books/expenses", { categoryLedgerId: qCat, amount: qDraft.amount, date: today(), paidFromLedgerId: qPaid, note: qDraft.description });
+      toast.success("Expense posted"); setQText(""); setQDraft(null); setQCat("");
+    } catch (e) { toast.error(errMsg(e)); }
+  };
+
   const open = advances.filter((a) => a.status === "open");
   const settled = advances.filter((a) => a.status === "settled");
 
@@ -65,6 +87,24 @@ export default function BooksExpensesTab() {
           expense report. If they spent less, the balance is refunded; if more, the excess is reimbursed. Every step
           posts a balanced journal to the general ledger.
         </p>
+      </div>
+
+      {/* Quick capture — type or dictate a note; we parse it into an expense */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <h3 className="text-sm font-semibold mb-2">Quick capture</h3>
+        <div className="flex flex-wrap gap-2">
+          <input className={`${input} flex-1 min-w-[220px]`} value={qText} onChange={(e) => setQText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") parse(); }} placeholder='e.g. "aaj 5000 ka diesel" or "uber 350"' />
+          <button onClick={parse} disabled={qBusy} className="text-xs font-semibold border border-[var(--color-border)] px-3 py-2 rounded-lg hover:bg-[var(--color-accent)]">{qBusy ? "Parsing…" : "Parse"}</button>
+        </div>
+        {qDraft && (
+          <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-[var(--color-border)] pt-3">
+            <div><label className={label}>Amount ₹</label><input className={`${input} !w-32`} type="number" value={qDraft.amount ?? ""} onChange={(e) => setQDraft({ ...qDraft, amount: Number(e.target.value) })} /></div>
+            <div className="flex-1 min-w-[160px]"><label className={label}>Category ({qDraft.category})</label><select className={input} value={qCat} onChange={(e) => setQCat(e.target.value)}><option value="">Select expense ledger…</option>{expenseLedgers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
+            <div><label className={label}>Pay from</label><select className={input} value={qPaid} onChange={(e) => setQPaid(e.target.value)}><option value="">Select…</option>{payLedgers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
+            <button onClick={postQuick} className="inline-flex items-center gap-1.5 text-xs font-semibold bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Post expense</button>
+            <p className="w-full text-[11px] text-[var(--color-muted)]">Parsed: “{qDraft.description}”. Pick the matching ledger and account, then post.</p>
+          </div>
+        )}
       </div>
 
       {/* Grant an advance */}
