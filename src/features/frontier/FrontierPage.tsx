@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { useT } from "@/i18n";
 
 // ── shared styles (reuse TaxPage input class) ────────────────────────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -34,18 +35,39 @@ const TABS = [
   ["m2m", "Machine-to-Machine Pay", Zap, "preview"],
 ] as const satisfies ReadonlyArray<readonly [TabId, string, typeof Rocket, "today" | "preview"]>;
 
-const PreviewBadge = () => (
-  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-purple-950/40 text-purple-300 border border-purple-800/40">
-    Preview
-  </span>
-);
-const LiveBadge = () => (
-  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-green-950/40 text-green-300 border border-green-800/40">
-    Live tool
-  </span>
-);
+const PreviewBadge = () => {
+  const tr = useT();
+  return (
+    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-purple-950/40 text-purple-300 border border-purple-800/40">
+      {tr("front.badgePreview")}
+    </span>
+  );
+};
+const LiveBadge = () => {
+  const tr = useT();
+  return (
+    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-green-950/40 text-green-300 border border-green-800/40">
+      {tr("front.badgeLive")}
+    </span>
+  );
+};
+
+const TAB_LABEL_KEY: Record<TabId, string> = {
+  "overview": "front.tabOverview",
+  "alerts": "front.tabAlerts",
+  "ambient": "front.tabAmbient",
+  "supercompute": "front.tabSupercompute",
+  "quantum-ready": "front.tabQuantum",
+  "events": "front.tabEvents",
+  "radar": "front.tabRadar",
+  "request-to-pay": "front.tabRtp",
+  "streaming-payroll": "front.tabStreamingPayroll",
+  "autonomous-treasury": "front.tabAutoTreasury",
+  "m2m": "front.tabM2m",
+};
 
 export default function FrontierPage() {
+  const tr = useT();
   const [tab, setTab] = useState<TabId>("overview");
 
   return (
@@ -53,17 +75,17 @@ export default function FrontierPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <FlaskConical size={18} className="text-[var(--color-primary)]" /> Frontier Lab
+            <FlaskConical size={18} className="text-[var(--color-primary)]" /> {tr("front.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Where Headroom prototypes the next decade of SMB finance - real-time, ambient, autonomous and quantum-safe.
+            {tr("front.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {TABS.map(([id, label, Icon]) => (
+          {TABS.map(([id, , Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              <Icon size={11} />{label}
+              <Icon size={11} />{tr(TAB_LABEL_KEY[id])}
             </button>
           ))}
         </div>
@@ -72,8 +94,8 @@ export default function FrontierPage() {
       {/* Honest top note - shown on every tab */}
       <div className="rounded-lg px-4 py-2.5 border border-[var(--color-border)] bg-[var(--color-accent)]/40 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px text-yellow-400" />
-        Experimental &amp; forward-looking - real tools you can use today plus a preview of what's coming. Tools marked
-        <span className="inline-block"><PreviewBadge /></span> are honest interactive mockups, not live money rails.
+        {tr("front.topNote")}
+        <span className="inline-block"><PreviewBadge /></span> {tr("front.topNoteEnd")}
       </div>
 
       {tab === "overview" && <Overview onOpen={setTab} />}
@@ -93,41 +115,39 @@ export default function FrontierPage() {
 
 // ── Overview ─────────────────────────────────────────────────────────────────────
 function Overview({ onOpen }: { onOpen: (t: TabId) => void }) {
+  const tr = useT();
   const { store } = useApp();
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
 
   const cards: { id: TabId; title: string; desc: string; Icon: typeof Rocket; live: boolean }[] = [
-    { id: "alerts", title: "Alert Triggers", desc: "Define event → notification rules and store them.", Icon: Bell, live: true },
-    { id: "ambient", title: "Ambient Rules", desc: "Background \"if balance < X then alert\" rules, evaluated against your live data right now.", Icon: Radar, live: true },
-    { id: "supercompute", title: "Scenario Supercompute", desc: "Heavy Monte-Carlo over revenue/cost assumptions → percentile cash outcomes.", Icon: Cpu, live: true },
-    { id: "quantum-ready", title: "Quantum-Safe Readiness", desc: "Post-quantum migration checklist with a live readiness score.", Icon: ShieldCheck, live: true },
-    { id: "events", title: "Event Stream", desc: "Recent changes in your store summarised as an activity feed.", Icon: Activity, live: true },
-    { id: "radar", title: "Tech-Readiness Radar", desc: "Self-assess across AI, real-time, tokenisation and quantum.", Icon: Gauge, live: true },
-    { id: "request-to-pay", title: "Request-to-Pay", desc: "Design RTP request templates for the maturing UPI-RTP rail.", Icon: Banknote, live: false },
-    { id: "streaming-payroll", title: "Streaming Payroll", desc: "Simulate per-second wage accrual vs monthly payout.", Icon: Workflow, live: false },
-    { id: "autonomous-treasury", title: "Autonomous Treasury", desc: "Configure the guardrails a self-driving treasury would obey.", Icon: Sparkles, live: false },
-    { id: "m2m", title: "Machine-to-Machine Pay", desc: "Model device-to-device micro-settlement economics.", Icon: Zap, live: false },
+    { id: "alerts", title: tr("front.tabAlerts"), desc: tr("front.cardAlertsDesc"), Icon: Bell, live: true },
+    { id: "ambient", title: tr("front.tabAmbient"), desc: tr("front.cardAmbientDesc"), Icon: Radar, live: true },
+    { id: "supercompute", title: tr("front.tabSupercompute"), desc: tr("front.cardSupercomputeDesc"), Icon: Cpu, live: true },
+    { id: "quantum-ready", title: tr("front.tabQuantum"), desc: tr("front.cardQuantumDesc"), Icon: ShieldCheck, live: true },
+    { id: "events", title: tr("front.tabEvents"), desc: tr("front.cardEventsDesc"), Icon: Activity, live: true },
+    { id: "radar", title: tr("front.tabRadar"), desc: tr("front.cardRadarDesc"), Icon: Gauge, live: true },
+    { id: "request-to-pay", title: tr("front.tabRtp"), desc: tr("front.cardRtpDesc"), Icon: Banknote, live: false },
+    { id: "streaming-payroll", title: tr("front.tabStreamingPayroll"), desc: tr("front.cardStreamingPayrollDesc"), Icon: Workflow, live: false },
+    { id: "autonomous-treasury", title: tr("front.tabAutoTreasury"), desc: tr("front.cardAutoTreasuryDesc"), Icon: Sparkles, live: false },
+    { id: "m2m", title: tr("front.tabM2m"), desc: tr("front.cardM2mDesc"), Icon: Zap, live: false },
   ];
 
   return (
     <div className="space-y-5">
       <div className={`${CARD} p-5`}>
-        <p className="text-sm font-semibold mb-1">What this lab is for</p>
+        <p className="text-sm font-semibold mb-1">{tr("front.whatFor")}</p>
         <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-          Headroom's roadmap points at finance that senses, decides and settles in the moment - and stays secure against
-          tomorrow's quantum computers. Some of that is buildable on today's data and is shipped here as working tools.
-          The rest depends on rails (RTP, programmable CBDC, streaming payroll) that are still maturing - those appear as
-          honest, interactive previews so you can shape the design without us faking live money movement.
+          {tr("front.whatForBody")}
         </p>
       </div>
 
       {/* Live snapshot the lab reasons over */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Cash on hand", value: formatCurrency(Math.round(snap.cash)), sub: `${store.bankAccounts.length} account(s)` },
-          { label: "Monthly net", value: formatCurrency(Math.round(snap.monthlyNet)), sub: snap.monthlyNet >= 0 ? "cash generative" : "burning cash" },
-          { label: "Runway", value: snap.runwayDays >= 999 ? "∞" : `${snap.runwayDays}d`, sub: snap.runwayDays >= 999 ? "cash-flow positive" : "at current burn" },
-          { label: "Debt outstanding", value: formatCurrency(Math.round(snap.debtOutstanding)), sub: `${store.activeLoans.length} loan(s)` },
+          { label: tr("front.statCash"), value: formatCurrency(Math.round(snap.cash)), sub: `${store.bankAccounts.length} account(s)` },
+          { label: tr("front.statMonthlyNet"), value: formatCurrency(Math.round(snap.monthlyNet)), sub: snap.monthlyNet >= 0 ? "cash generative" : "burning cash" },
+          { label: tr("front.statRunway"), value: snap.runwayDays >= 999 ? "∞" : `${snap.runwayDays}d`, sub: snap.runwayDays >= 999 ? "cash-flow positive" : "at current burn" },
+          { label: tr("front.statDebt"), value: formatCurrency(Math.round(snap.debtOutstanding)), sub: `${store.activeLoans.length} loan(s)` },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -148,7 +168,7 @@ function Overview({ onOpen }: { onOpen: (t: TabId) => void }) {
             <p className="text-sm font-semibold flex items-center gap-1.5">{c.title}</p>
             <p className="text-xs text-[var(--color-muted)] mt-1 leading-relaxed">{c.desc}</p>
             <span className="mt-2 inline-flex items-center gap-1 text-[10px] text-[var(--color-primary)] opacity-0 group-hover:opacity-100 transition-opacity">
-              Open <ArrowRight size={10} />
+              {tr("front.open")} <ArrowRight size={10} />
             </span>
           </button>
         ))}
@@ -178,6 +198,7 @@ const EVENT_LABEL: Record<AlertEvent, string> = {
 const isMoneyEvent = (e: AlertEvent) => e === "low_balance" || e === "large_expense" || e === "new_revenue";
 
 function AlertTriggers() {
+  const tr = useT();
   const [rules, setRules] = useFeatureState<TriggerRule[]>("frnt-alert-rules", []);
   const [name, setName] = useState("");
   const [event, setEvent] = useState<AlertEvent>("low_balance");
@@ -186,10 +207,10 @@ function AlertTriggers() {
 
   const add = () => {
     const t = parseFloat(threshold);
-    if (!name.trim() || isNaN(t)) { toast.error("Enter a rule name and numeric threshold"); return; }
+    if (!name.trim() || isNaN(t)) { toast.error(tr("front.errRuleName")); return; }
     setRules([...rules, { id: crypto.randomUUID(), name: name.trim(), event, threshold: t, channel, enabled: true }]);
     setName("");
-    toast.success("Trigger saved");
+    toast.success(tr("front.toastTriggerSaved"));
   };
   const toggle = (id: string) => setRules(rules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
   const remove = (id: string) => setRules(rules.filter(r => r.id !== id));
@@ -198,27 +219,27 @@ function AlertTriggers() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold flex items-center gap-2"><Bell size={14} className="text-[var(--color-primary)]" /> Event → Notification Rules</h3>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Bell size={14} className="text-[var(--color-primary)]" /> {tr("front.alertsHeading")}</h3>
           <LiveBadge />
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Define which business events should ping you and where. Rules are saved to your account and sync across devices.</p>
+        <p className="text-xs text-[var(--color-muted)]">{tr("front.alertsBlurb")}</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Rule name</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{tr("front.fldRuleName")}</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Cash buffer" className={INP} />
           </div>
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">When</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{tr("front.fldWhen")}</label>
             <select value={event} onChange={e => setEvent(e.target.value as AlertEvent)} className={INP}>
               {(Object.keys(EVENT_LABEL) as AlertEvent[]).map(e => <option key={e} value={e}>{EVENT_LABEL[e]}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">{isMoneyEvent(event) ? "Amount (₹)" : "Days"}</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{isMoneyEvent(event) ? tr("front.fldAmount") : tr("front.fldDays")}</label>
             <input type="number" value={threshold} onChange={e => setThreshold(e.target.value)} className={INP} />
           </div>
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Notify via</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{tr("front.fldNotifyVia")}</label>
             <select value={channel} onChange={e => setChannel(e.target.value as AlertChannel)} className={INP}>
               <option value="in_app">In-app</option>
               <option value="whatsapp">WhatsApp</option>
@@ -226,18 +247,18 @@ function AlertTriggers() {
             </select>
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
-            <Plus size={13} /> Add
+            <Plus size={13} /> {tr("front.btnAdd")}
           </button>
         </div>
       </div>
 
       {rules.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No trigger rules yet. Add one above - start with a low-cash-balance alert.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">{tr("front.alertsEmpty")}</p>
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <table className="w-full text-sm">
             <thead className="border-b border-[var(--color-border)]">
-              <tr>{["Rule", "Condition", "Channel", "Status", ""].map(h =>
+              <tr>{[tr("front.colRule"), tr("front.colCondition"), tr("front.colChannel"), tr("front.colStatus"), ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
               </tr>
             </thead>
@@ -252,7 +273,7 @@ function AlertTriggers() {
                   <td className="px-4 py-3">
                     <button onClick={() => toggle(r.id)}
                       className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${r.enabled ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
-                      {r.enabled ? "Active" : "Paused"}
+                      {r.enabled ? tr("front.statusActive") : tr("front.statusPaused")}
                     </button>
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -264,7 +285,7 @@ function AlertTriggers() {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Rules are stored now and evaluated by the Ambient Rules engine. WhatsApp/email delivery activates as those channels are connected for your tenant.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">{tr("front.alertsFootnote")}</p>
     </div>
   );
 }
@@ -287,6 +308,7 @@ const METRIC_LABEL: Record<AmbientMetric, string> = {
 };
 
 function AmbientRules() {
+  const tr = useT();
   const { store } = useApp();
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
   const [rules, setRules] = useFeatureState<AmbientRule[]>("frnt-ambient-rules", []);
@@ -306,10 +328,10 @@ function AmbientRules() {
 
   const add = () => {
     const t = parseFloat(threshold);
-    if (isNaN(t) || !action.trim()) { toast.error("Enter a threshold and an action to take"); return; }
+    if (isNaN(t) || !action.trim()) { toast.error(tr("front.errAmbient")); return; }
     setRules([...rules, { id: crypto.randomUUID(), metric, op, threshold: t, action: action.trim() }]);
     setAction("");
-    toast.success("Ambient rule armed");
+    toast.success(tr("front.toastAmbientArmed"));
   };
   const fmt = (m: AmbientMetric, v: number) => m === "runway" ? `${Math.round(v)}d` : formatCurrency(Math.round(v));
 
@@ -317,34 +339,34 @@ function AmbientRules() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold flex items-center gap-2"><Radar size={14} className="text-[var(--color-primary)]" /> Background Watch Rules</h3>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Radar size={14} className="text-[var(--color-primary)]" /> {tr("front.ambientHeading")}</h3>
           <LiveBadge />
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Arm "if &lt;metric&gt; &lt;op&gt; &lt;value&gt; then &lt;action&gt;" rules. They evaluate live against your current financials below - no waiting for a batch job.</p>
+        <p className="text-xs text-[var(--color-muted)]">{tr("front.ambientBlurb")}</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">If</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{tr("front.fldIf")}</label>
             <select value={metric} onChange={e => setMetric(e.target.value as AmbientMetric)} className={INP}>
               {(Object.keys(METRIC_LABEL) as AmbientMetric[]).map(m => <option key={m} value={m}>{METRIC_LABEL[m]}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Is</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{tr("front.fldIs")}</label>
             <select value={op} onChange={e => setOp(e.target.value as AmbientOp)} className={INP}>
-              <option value="<">below (&lt;)</option>
-              <option value=">">above (&gt;)</option>
+              <option value="<">{tr("front.opBelow")}</option>
+              <option value=">">{tr("front.opAbove")}</option>
             </select>
           </div>
           <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Value</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{tr("front.fldValue")}</label>
             <input type="number" value={threshold} onChange={e => setThreshold(e.target.value)} className={INP} />
           </div>
           <div className="col-span-2 md:col-span-1">
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Then</label>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">{tr("front.fldThen")}</label>
             <input value={action} onChange={e => setAction(e.target.value)} placeholder="e.g. Draw ₹2L credit line" className={INP} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
-            <Plus size={13} /> Arm
+            <Plus size={13} /> {tr("front.btnArm")}
           </button>
         </div>
       </div>
@@ -360,7 +382,7 @@ function AmbientRules() {
 
       {firing.length > 0 && (
         <div className="rounded-lg p-4 border border-orange-800/40 bg-orange-950/20 space-y-1.5">
-          <p className="text-sm font-bold text-orange-400 flex items-center gap-2"><AlertTriangle size={14} /> {firing.length} rule(s) firing right now</p>
+          <p className="text-sm font-bold text-orange-400 flex items-center gap-2"><AlertTriangle size={14} /> {tr("front.ambientFiringNow", { count: String(firing.length) })}</p>
           {firing.map(r => (
             <p key={r.id} className="text-xs text-orange-300">
               {METRIC_LABEL[r.metric].replace(" (₹)", "").replace(" (days)", "")} {r.op} {fmt(r.metric, r.threshold)} → <strong>{r.action}</strong>
@@ -370,12 +392,12 @@ function AmbientRules() {
       )}
 
       {rules.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No ambient rules armed. The classic first rule: "if cash &lt; ₹2L then draw credit line".</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">{tr("front.ambientEmpty")}</p>
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <table className="w-full text-sm">
             <thead className="border-b border-[var(--color-border)]">
-              <tr>{["Condition", "Action", "Current", "State", ""].map(h =>
+              <tr>{[tr("front.colCondition"), tr("front.colAction"), tr("front.colCurrent"), tr("front.colState"), ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
               </tr>
             </thead>
@@ -389,8 +411,8 @@ function AmbientRules() {
                     <td className="px-4 py-3 tabular-nums text-xs">{r.metric === "runway" && snap.runwayDays >= 999 ? "∞" : fmt(r.metric, metricValue(r.metric))}</td>
                     <td className="px-4 py-3">
                       {on
-                        ? <span className="inline-flex items-center gap-1 text-xs text-orange-400 font-semibold"><AlertTriangle size={12} /> Firing</span>
-                        : <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={12} /> Quiet</span>}
+                        ? <span className="inline-flex items-center gap-1 text-xs text-orange-400 font-semibold"><AlertTriangle size={12} /> {tr("front.stateFiring")}</span>
+                        : <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={12} /> {tr("front.stateQuiet")}</span>}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => setRules(rules.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
@@ -410,6 +432,7 @@ function AmbientRules() {
 interface SimResult { p10: number; p50: number; p90: number; pNegative: number; runs: number; min: number; max: number }
 
 function ScenarioSupercompute() {
+  const tr = useT();
   const { store } = useApp();
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
   const [startCash, setStartCash] = useState(String(Math.round(snap.cash)));
@@ -438,7 +461,7 @@ function ScenarioSupercompute() {
     const cv = (parseFloat(costVol) || 0) / 100;
     const n = Math.max(1, Math.min(36, Math.round(parseFloat(months) || 12)));
     const R = Math.max(1000, Math.min(100000, runs));
-    if (rev <= 0) { toast.error("Enter a monthly revenue assumption"); return; }
+    if (rev <= 0) { toast.error(tr("front.errRevenue")); return; }
 
     setBusy(true);
     // defer so the spinner paints before the heavy loop
@@ -459,7 +482,7 @@ function ScenarioSupercompute() {
       const pct = (p: number) => ending[Math.min(R - 1, Math.floor(p * R))];
       setResult({ p10: pct(0.1), p50: pct(0.5), p90: pct(0.9), pNegative: (neg / R) * 100, runs: R, min: ending[0], max: ending[R - 1] });
       setBusy(false);
-      toast.success(`${R.toLocaleString()} scenarios simulated`);
+      toast.success(tr("front.toastSimulated", { count: R.toLocaleString() }));
     }, 30);
   };
 
@@ -467,23 +490,23 @@ function ScenarioSupercompute() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold flex items-center gap-2"><Cpu size={14} className="text-[var(--color-primary)]" /> Scenario Supercompute (Monte-Carlo)</h3>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Cpu size={14} className="text-[var(--color-primary)]" /> {tr("front.supercomputeHeading")}</h3>
           <LiveBadge />
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Runs thousands of randomised futures over your revenue/cost assumptions to bound where cash lands. Prefilled with your live cash position.</p>
+        <p className="text-xs text-[var(--color-muted)]">{tr("front.supercomputeBlurb")}</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Starting cash (₹)</label><input type="number" value={startCash} onChange={e => setStartCash(e.target.value)} className={INP} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly revenue (₹)</label><input type="number" value={revenue} onChange={e => setRevenue(e.target.value)} className={INP} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Revenue volatility (%)</label><input type="number" value={revVol} onChange={e => setRevVol(e.target.value)} className={INP} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly cost (₹)</label><input type="number" value={cost} onChange={e => setCost(e.target.value)} className={INP} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Cost volatility (%)</label><input type="number" value={costVol} onChange={e => setCostVol(e.target.value)} className={INP} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Horizon (months)</label><input type="number" value={months} onChange={e => setMonths(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">{tr("front.fldStartingCash")}</label><input type="number" value={startCash} onChange={e => setStartCash(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">{tr("front.fldMonthlyRevenue")}</label><input type="number" value={revenue} onChange={e => setRevenue(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">{tr("front.fldRevVol")}</label><input type="number" value={revVol} onChange={e => setRevVol(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">{tr("front.fldMonthlyCost")}</label><input type="number" value={cost} onChange={e => setCost(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">{tr("front.fldCostVol")}</label><input type="number" value={costVol} onChange={e => setCostVol(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">{tr("front.fldHorizon")}</label><input type="number" value={months} onChange={e => setMonths(e.target.value)} className={INP} /></div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <label className="text-xs text-[var(--color-muted)]">Runs: <strong className="text-[var(--color-text)]">{runs.toLocaleString()}</strong></label>
+          <label className="text-xs text-[var(--color-muted)]">{tr("front.runsLabel")} <strong className="text-[var(--color-text)]">{runs.toLocaleString()}</strong></label>
           <input type="range" min={1000} max={100000} step={1000} value={runs} onChange={e => setRuns(Number(e.target.value))} className="flex-1 min-w-[160px] accent-[var(--color-primary)]" />
           <button onClick={run} disabled={busy} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50">
-            {busy ? <><Clock size={13} className="animate-spin" /> Computing…</> : <><Cpu size={13} /> Run simulation</>}
+            {busy ? <><Clock size={13} className="animate-spin" /> {tr("front.computing")}</> : <><Cpu size={13} /> {tr("front.btnRunSim")}</>}
           </button>
         </div>
       </div>
@@ -492,10 +515,10 @@ function ScenarioSupercompute() {
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: "P10 (pessimistic)", value: formatCurrency(Math.round(result.p10)), color: result.p10 < 0 ? "text-red-400" : "text-yellow-400" },
-              { label: "P50 (median)", value: formatCurrency(Math.round(result.p50)), color: result.p50 < 0 ? "text-red-400" : "text-[var(--color-text)]" },
-              { label: "P90 (optimistic)", value: formatCurrency(Math.round(result.p90)), color: "text-green-400" },
-              { label: "Chance of negative cash", value: `${result.pNegative.toFixed(1)}%`, color: result.pNegative > 10 ? "text-red-400" : "text-green-400" },
+              { label: tr("front.p10"), value: formatCurrency(Math.round(result.p10)), color: result.p10 < 0 ? "text-red-400" : "text-yellow-400" },
+              { label: tr("front.p50"), value: formatCurrency(Math.round(result.p50)), color: result.p50 < 0 ? "text-red-400" : "text-[var(--color-text)]" },
+              { label: tr("front.p90"), value: formatCurrency(Math.round(result.p90)), color: "text-green-400" },
+              { label: tr("front.chanceNeg"), value: `${result.pNegative.toFixed(1)}%`, color: result.pNegative > 10 ? "text-red-400" : "text-green-400" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -511,7 +534,7 @@ function ScenarioSupercompute() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Each run draws monthly revenue and cost from a normal distribution around your assumptions. Higher run counts give smoother percentiles at the cost of compute time. Indicative planning tool, not a guarantee.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">{tr("front.supercomputeFootnote")}</p>
     </div>
   );
 }
@@ -530,26 +553,27 @@ const PQC_ITEMS: ReadonlyArray<PqcItem> = [
 ] as const;
 
 function QuantumReadiness() {
+  const tr = useT();
   const [done, setDone] = useFeatureState<string[]>("frnt-pqc-done", []);
   const toggle = (id: string) => setDone(done.includes(id) ? done.filter(x => x !== id) : [...done, id]);
   const score = Math.round((done.length / PQC_ITEMS.length) * 100);
-  const band = score >= 80 ? { t: "Quantum-ready", c: "text-green-400", b: "border-green-800/40 bg-green-950/20" }
-    : score >= 40 ? { t: "In migration", c: "text-yellow-400", b: "border-yellow-800/40 bg-yellow-950/20" }
-    : { t: "Exposed", c: "text-red-400", b: "border-red-800/40 bg-red-950/20" };
+  const band = score >= 80 ? { t: tr("front.bandReady"), c: "text-green-400", b: "border-green-800/40 bg-green-950/20" }
+    : score >= 40 ? { t: tr("front.bandMigration"), c: "text-yellow-400", b: "border-yellow-800/40 bg-yellow-950/20" }
+    : { t: tr("front.bandExposed"), c: "text-red-400", b: "border-red-800/40 bg-red-950/20" };
 
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 flex items-center justify-between flex-wrap gap-3`}>
         <div>
-          <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldCheck size={14} className="text-[var(--color-primary)]" /> Post-Quantum Migration Readiness</h3>
-          <p className="text-xs text-[var(--color-muted)] mt-1">Track the steps to make your finance stack safe against quantum decryption. Progress is saved.</p>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldCheck size={14} className="text-[var(--color-primary)]" /> {tr("front.quantumHeading")}</h3>
+          <p className="text-xs text-[var(--color-muted)] mt-1">{tr("front.quantumBlurb")}</p>
         </div>
         <LiveBadge />
       </div>
 
       <div className={`rounded-lg p-4 border ${band.b} flex items-center justify-between`}>
         <div>
-          <p className="text-xs text-[var(--color-muted)]">Readiness score</p>
+          <p className="text-xs text-[var(--color-muted)]">{tr("front.readinessScore")}</p>
           <p className={`text-2xl font-bold tabular-nums ${band.c}`}>{score}%</p>
           <p className={`text-xs font-semibold ${band.c}`}>{band.t}</p>
         </div>
@@ -557,7 +581,7 @@ function QuantumReadiness() {
           <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden">
             <div className="h-full rounded-full transition-all" style={{ width: `${score}%`, background: score >= 80 ? "#22c55e" : score >= 40 ? "#eab308" : "#ef4444" }} />
           </div>
-          <p className="text-[10px] text-[var(--color-muted)] mt-1 text-right">{done.length}/{PQC_ITEMS.length} steps complete</p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1 text-right">{tr("front.stepsComplete", { done: String(done.length), total: String(PQC_ITEMS.length) })}</p>
         </div>
       </div>
 
@@ -577,7 +601,7 @@ function QuantumReadiness() {
           );
         })}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Based on NIST PQC guidance (Kyber/Dilithium/SPHINCS+). "Harvest-now-decrypt-later" means data exfiltrated today can be decrypted once quantum computers mature - long-lived financial records are the priority.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">{tr("front.quantumFootnote")}</p>
     </div>
   );
 }
@@ -586,6 +610,7 @@ function QuantumReadiness() {
 interface FeedEvent { ts: number; label: string; detail: string; tone: "pos" | "neg" | "neutral" | "warn" }
 
 function EventStream() {
+  const tr = useT();
   const { store } = useApp();
   const events = useMemo<FeedEvent[]>(() => {
     const out: FeedEvent[] = [];
@@ -628,14 +653,14 @@ function EventStream() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 flex items-center justify-between`}>
         <div>
-          <h3 className="text-sm font-semibold flex items-center gap-2"><Activity size={14} className="text-[var(--color-primary)]" /> Live Event Stream</h3>
-          <p className="text-xs text-[var(--color-muted)] mt-1">Recent changes across your store, rendered as an "event bus" feed - a preview of event-driven finance.</p>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Activity size={14} className="text-[var(--color-primary)]" /> {tr("front.eventsHeading")}</h3>
+          <p className="text-xs text-[var(--color-muted)] mt-1">{tr("front.eventsBlurb")}</p>
         </div>
         <LiveBadge />
       </div>
 
       {events.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No events yet. Add transactions or invoices and they will stream here.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">{tr("front.eventsEmpty")}</p>
       ) : (
         <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
           {events.map((e, i) => (
@@ -661,6 +686,7 @@ const AXES: ReadonlyArray<readonly [Axis, string, string]> = [
 ] as const;
 
 function TechReadinessRadar() {
+  const tr = useT();
   const [scores, setScores] = useFeatureState<Record<Axis, number>>("frnt-radar", { ai: 2, realtime: 2, tokenization: 1, quantum: 1 });
   const set = (a: Axis, v: number) => setScores({ ...scores, [a]: v });
   const overall = Math.round((AXES.reduce((s, [a]) => s + scores[a], 0) / (AXES.length * 5)) * 100);
@@ -669,14 +695,14 @@ function TechReadinessRadar() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 flex items-center justify-between`}>
         <div>
-          <h3 className="text-sm font-semibold flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Tech-Readiness Radar</h3>
-          <p className="text-xs text-[var(--color-muted)] mt-1">Rate where your finance operation sits today across four frontiers (0 = not started, 5 = leading). Saved to your account.</p>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> {tr("front.radarHeading")}</h3>
+          <p className="text-xs text-[var(--color-muted)] mt-1">{tr("front.radarBlurb")}</p>
         </div>
         <LiveBadge />
       </div>
 
       <div className={`rounded-lg p-4 border border-[var(--color-border)] bg-[var(--color-accent)]/40 flex items-center justify-between`}>
-        <p className="text-xs text-[var(--color-muted)]">Overall frontier readiness</p>
+        <p className="text-xs text-[var(--color-muted)]">{tr("front.radarOverall")}</p>
         <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">{overall}%</p>
       </div>
 
@@ -697,13 +723,14 @@ function TechReadinessRadar() {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A self-assessment to focus your roadmap - the lowest axis is usually the best next investment. Headroom ships tools against each as they become buildable on Indian rails.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">{tr("front.radarFootnote")}</p>
     </div>
   );
 }
 
 // ── Preview: Request-to-Pay designer ─────────────────────────────────────────────
 function RequestToPayDesigner() {
+  const tr = useT();
   const [payer, setPayer] = useState("");
   const [amount, setAmount] = useState("");
   const [purpose, setPurpose] = useState("");
@@ -713,19 +740,19 @@ function RequestToPayDesigner() {
 
   return (
     <div className="space-y-4">
-      <PreviewHeader Icon={Banknote} title="Request-to-Pay Designer"
-        blurb="Design the structured RTP object a vendor would receive once UPI Request-to-Pay rails mature for businesses. This builds a preview payload - it does not send a real payment request yet." />
+      <PreviewHeader Icon={Banknote} title={tr("front.rtpTitle")}
+        blurb={tr("front.rtpBlurb")} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className={`${CARD} p-4 space-y-3`}>
-          <p className="text-sm font-semibold">Compose request</p>
+          <p className="text-sm font-semibold">{tr("front.rtpCompose")}</p>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Payer name / VPA</label><input value={payer} onChange={e => setPayer(e.target.value)} placeholder="acme@okhdfcbank" className={INP} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="125000" className={INP} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Purpose</label><input value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="Invoice INV-2026-044" className={INP} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Expiry (hours)</label><input type="number" value={expiry} onChange={e => setExpiry(e.target.value)} className={INP} /></div>
         </div>
         <div className={`${CARD} p-4`}>
-          <p className="text-sm font-semibold mb-2">RTP payload preview</p>
+          <p className="text-sm font-semibold mb-2">{tr("front.rtpPayloadPreview")}</p>
           <pre className="text-[11px] text-[var(--color-muted)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 overflow-x-auto leading-relaxed">{JSON.stringify({
             type: "REQUEST_TO_PAY",
             payer: payer || "<payer-vpa>",
@@ -744,6 +771,7 @@ function RequestToPayDesigner() {
 
 // ── Preview: Streaming-payroll simulator ─────────────────────────────────────────
 function StreamingPayroll() {
+  const tr = useT();
   const [monthly, setMonthly] = useState("60000");
   const [headcount, setHeadcount] = useState("5");
   const [hoursPerDay, setHoursPerDay] = useState("8");
@@ -756,8 +784,8 @@ function StreamingPayroll() {
 
   return (
     <div className="space-y-4">
-      <PreviewHeader Icon={Workflow} title="Streaming-Payroll Simulator"
-        blurb="Model wages accruing per second instead of monthly. Illustrative maths only - real continuous payout needs streaming rails and is not wired to your payroll." />
+      <PreviewHeader Icon={Workflow} title={tr("front.streamingTitle")}
+        blurb={tr("front.streamingBlurb")} />
       <div className={`${CARD} p-4 grid grid-cols-1 md:grid-cols-3 gap-3`}>
         <div><label className="text-xs text-[var(--color-muted)] block mb-1">Monthly wage / head (₹)</label><input type="number" value={monthly} onChange={e => setMonthly(e.target.value)} className={INP} /></div>
         <div><label className="text-xs text-[var(--color-muted)] block mb-1">Headcount</label><input type="number" value={headcount} onChange={e => setHeadcount(e.target.value)} className={INP} /></div>
@@ -782,6 +810,7 @@ function StreamingPayroll() {
 
 // ── Preview: Autonomous-treasury policy config ───────────────────────────────────
 function AutonomousTreasury() {
+  const tr = useT();
   const [policy, setPolicy] = useFeatureState("frnt-treasury-policy", {
     minBuffer: "200000", maxSweep: "70", yieldFloor: "6.5", autoDraw: false, autoSweep: false,
   });
@@ -789,8 +818,8 @@ function AutonomousTreasury() {
 
   return (
     <div className="space-y-4">
-      <PreviewHeader Icon={Sparkles} title="Autonomous-Treasury Policy"
-        blurb="Define the guardrails a self-driving treasury agent would obey - minimum buffer, sweep limits, yield floor. Saved as your intended policy; no funds move until autonomous treasury is enabled." />
+      <PreviewHeader Icon={Sparkles} title={tr("front.treasuryTitle")}
+        blurb={tr("front.treasuryBlurb")} />
       <div className={`${CARD} p-4 grid grid-cols-1 md:grid-cols-3 gap-4`}>
         <div><label className="text-xs text-[var(--color-muted)] block mb-1">Minimum cash buffer (₹)</label><input type="number" value={policy.minBuffer} onChange={e => upd("minBuffer", e.target.value)} className={INP} /></div>
         <div><label className="text-xs text-[var(--color-muted)] block mb-1">Max % of surplus to sweep</label><input type="number" value={policy.maxSweep} onChange={e => upd("maxSweep", e.target.value)} className={INP} /></div>
@@ -819,6 +848,7 @@ function AutonomousTreasury() {
 
 // ── Preview: Machine-to-machine payment concept ──────────────────────────────────
 function MachineToMachine() {
+  const tr = useT();
   const [device, setDevice] = useState("Delivery EV #1");
   const [perUnit, setPerUnit] = useState("2.5");
   const [units, setUnits] = useState("400");
@@ -828,8 +858,8 @@ function MachineToMachine() {
 
   return (
     <div className="space-y-4">
-      <PreviewHeader Icon={Zap} title="Machine-to-Machine Payment Concept"
-        blurb="Model an IoT device paying per unit it consumes (e.g. an EV settling per km, a meter per kWh) over programmable money. Conceptual calculator - no device or CBDC rail is connected." />
+      <PreviewHeader Icon={Zap} title={tr("front.m2mTitle")}
+        blurb={tr("front.m2mBlurb")} />
       <div className={`${CARD} p-4 grid grid-cols-2 md:grid-cols-4 gap-3`}>
         <div className="col-span-2 md:col-span-1"><label className="text-xs text-[var(--color-muted)] block mb-1">Device</label><input value={device} onChange={e => setDevice(e.target.value)} className={INP} /></div>
         <div><label className="text-xs text-[var(--color-muted)] block mb-1">Price / unit (₹)</label><input type="number" value={perUnit} onChange={e => setPerUnit(e.target.value)} className={INP} /></div>

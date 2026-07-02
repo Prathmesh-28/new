@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { useT } from "@/i18n";
 import { toast } from "sonner";
 import { Wand2, Sparkles, Loader2, Bot, ShieldCheck, Cpu, MessageSquare, Settings2, Store, Plus } from "lucide-react";
 import { useEffect } from "react";
@@ -18,6 +19,7 @@ interface ToolDef { name: string; description?: string; scope?: "read" | "write"
  * (engine config, template store, editor, knowledge, playground) reused as-is.
  */
 export default function AgentStudioPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const tr = useT();
   // Bumping this remounts the manager so a freshly-built agent shows up immediately.
   const [reloadKey, setReloadKey] = useState(0);
   // The just-built agent - its row auto-opens its Run panel so it's ready to test.
@@ -35,13 +37,13 @@ export default function AgentStudioPage({ embedded = false }: { embedded?: boole
       <div className="flex items-center gap-2">
         {!embedded && (
           <h1 className="text-2xl font-bold flex items-center gap-2 mr-auto">
-            <Bot className="text-[var(--color-primary)]" size={24} /> Agent Studio
+            <Bot className="text-[var(--color-primary)]" size={24} /> {tr("agst.title")}
           </h1>
         )}
         <div className={`flex rounded-lg border border-[var(--color-border)] p-0.5 text-sm ${embedded ? "ml-auto" : ""}`}>
-          {tabBtn("workspace", MessageSquare, "Workspace")}
-          {tabBtn("store", Store, "App Store")}
-          {tabBtn("build", Settings2, "Build & manage")}
+          {tabBtn("workspace", MessageSquare, tr("agst.tabWorkspace"))}
+          {tabBtn("store", Store, tr("agst.tabAppStore"))}
+          {tabBtn("build", Settings2, tr("agst.tabBuild"))}
         </div>
       </div>
 
@@ -59,9 +61,9 @@ export default function AgentStudioPage({ embedded = false }: { embedded?: boole
           instantly; anything that changes your data waits for your approval.
         </p>
         <div className="flex flex-wrap gap-2 mt-3 text-[11px]">
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]"><Cpu size={12} /> Your engine, your key</span>
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]"><ShieldCheck size={12} /> Writes need approval</span>
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]"><Sparkles size={12} /> Reads the whole business</span>
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]"><Cpu size={12} /> {tr("agst.pillEngine")}</span>
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]"><ShieldCheck size={12} /> {tr("agst.pillApproval")}</span>
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]"><Sparkles size={12} /> {tr("agst.pillReads")}</span>
         </div>
       </header>
 
@@ -82,6 +84,7 @@ const EXAMPLES = [
 ];
 
 function NaturalLanguageBuilder({ onCreated }: { onCreated: (createdId?: string) => void }) {
+  const tr = useT();
   const [desc, setDesc] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -124,14 +127,14 @@ function NaturalLanguageBuilder({ onCreated }: { onCreated: (createdId?: string)
     <div className="rounded-xl border border-[var(--color-primary)]/30 bg-gradient-to-br from-[var(--color-primary)]/10 to-transparent p-5">
       <div className="flex items-center gap-2 mb-2.5">
         <Sparkles size={18} className="text-[var(--color-primary)]" />
-        <h2 className="text-base font-semibold">Describe what you want - we'll build the agent</h2>
+        <h2 className="text-base font-semibold">{tr("agst.builderHeading")}</h2>
       </div>
       <textarea
         value={desc}
         onChange={(e) => setDesc(e.target.value)}
         rows={3}
         disabled={busy}
-        placeholder="e.g. Every Monday, check overdue invoices and draft polite reminders for the customers who owe the most."
+        placeholder={tr("agst.builderPlaceholder")}
         className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] resize-y disabled:opacity-60"
         onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") build(); }}
       />
@@ -150,7 +153,7 @@ function NaturalLanguageBuilder({ onCreated }: { onCreated: (createdId?: string)
       </div>
       <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
         <p className="text-[11px] text-[var(--color-muted)] max-w-md">
-          Your agent can read across cash, transactions, receivables, GST, books, inventory &amp; more - and only acts with your approval.
+          {tr("agst.builderHelp")}
         </p>
         <button
           type="button"
@@ -158,7 +161,7 @@ function NaturalLanguageBuilder({ onCreated }: { onCreated: (createdId?: string)
           disabled={busy || !desc.trim()}
           className="inline-flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity shrink-0"
         >
-          {busy ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />} {busy ? "Building…" : "Build my agent"}
+          {busy ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />} {busy ? tr("agst.building") : tr("agst.buildBtn")}
         </button>
       </div>
     </div>
@@ -171,6 +174,7 @@ function NaturalLanguageBuilder({ onCreated }: { onCreated: (createdId?: string)
 interface Template { id: string; name: string; description: string; tools: string[]; suggestedModel?: string | null }
 
 function AgentAppStore({ onAdded }: { onAdded: () => void }) {
+  const tr = useT();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState<string | null>(null);
@@ -195,12 +199,12 @@ function AgentAppStore({ onAdded }: { onAdded: () => void }) {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-[var(--color-primary)]/30 bg-gradient-to-br from-[var(--color-primary)]/10 to-transparent p-5">
-        <h2 className="text-base font-semibold flex items-center gap-2"><Store size={18} className="text-[var(--color-primary)]" /> AI App Store</h2>
-        <p className="text-sm text-[var(--color-muted)] mt-1 max-w-2xl">Ready-to-deploy agents for your business - collections, cash, GST, payables, ops. Add one to your workspaces and start chatting; everything runs on your own engine, writes need your approval.</p>
+        <h2 className="text-base font-semibold flex items-center gap-2"><Store size={18} className="text-[var(--color-primary)]" /> {tr("agst.storeHeading")}</h2>
+        <p className="text-sm text-[var(--color-muted)] mt-1 max-w-2xl">{tr("agst.storeSubtitle")}</p>
       </div>
 
       {loading ? (
-        <p className="text-sm text-[var(--color-muted)]">Loading apps…</p>
+        <p className="text-sm text-[var(--color-muted)]">{tr("agst.loadingApps")}</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {templates.map(t => (
@@ -216,7 +220,7 @@ function AgentAppStore({ onAdded }: { onAdded: () => void }) {
               </div>
               <button onClick={() => install(t)} disabled={adding === t.id}
                 className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold py-2 hover:opacity-90 disabled:opacity-50">
-                {adding === t.id ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add to workspace
+                {adding === t.id ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {tr("agst.addToWorkspace")}
               </button>
             </div>
           ))}

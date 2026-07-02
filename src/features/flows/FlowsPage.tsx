@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useT } from "@/i18n";
 import { api } from "@/lib/api";
 import { API_BASE } from "@/lib/apiBase";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ interface FlowRun { id: string; status: string; trigger_kind?: string; error?: s
 const TRIGGER_ICON: Record<TriggerType, typeof Zap> = { manual: Zap, schedule: Clock, webhook: Webhook, event: Activity };
 
 export default function FlowsPage() {
+  const tr = useT();
   const [flows, setFlows] = useState<FlowListItem[]>([]);
   const [activeId, setActiveId] = useState<string>("");
   const [catalog, setCatalog] = useState<Catalog | null>(null);
@@ -64,7 +66,7 @@ export default function FlowsPage() {
     try {
       const f = await api.post<FullFlow>("/api/flows/flows", { name: t.name, trigger: t.trigger, graph: t.graph });
       await loadFlows(); setActiveId(f.id);
-      toast.success(`Created "${t.name}" - review and run it`);
+      toast.success(tr("flow.createdToast", { name: t.name }));
     } catch (e) { toast.error(humanizeAiError(e)); }
   };
 
@@ -73,30 +75,30 @@ export default function FlowsPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-2">
-        <h1 className="text-2xl font-bold flex items-center gap-2 mr-auto"><Workflow className="text-[var(--color-primary)]" size={24} /> Flows</h1>
-        <span className="text-[11px] px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]">Your automation engine - no n8n</span>
+        <h1 className="text-2xl font-bold flex items-center gap-2 mr-auto"><Workflow className="text-[var(--color-primary)]" size={24} /> {tr("flow.title")}</h1>
+        <span className="text-[11px] px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]">{tr("flow.badge")}</span>
       </div>
-      <p className="text-sm text-[var(--color-muted)] max-w-3xl">Build automations from triggers and nodes - read/write your business data, ask AI, branch on conditions, call APIs, raise alerts. Runs on Headroom; nothing leaves to a third party.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-3xl">{tr("flow.subtitle")}</p>
 
       <div className="flex h-[calc(100vh-15rem)] min-h-[30rem] rounded-xl border border-[var(--color-border)] overflow-hidden bg-[var(--color-bg)]">
         <aside className="w-56 shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col">
           <div className="p-3 border-b border-[var(--color-border)]">
-            <button onClick={createFlow} className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold py-2 hover:opacity-90"><Plus size={15} /> New flow</button>
+            <button onClick={createFlow} className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold py-2 hover:opacity-90"><Plus size={15} /> {tr("flow.newFlow")}</button>
             <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2">
               <Search size={13} className="text-[var(--color-muted)]" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className="flex-1 bg-transparent py-1.5 text-xs outline-none" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("flow.searchPlaceholder")} className="flex-1 bg-transparent py-1.5 text-xs outline-none" />
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-2">
-            {loading ? <p className="px-2 py-2 text-xs text-[var(--color-muted)]">Loading…</p> :
-              filtered.length === 0 ? <p className="px-2 py-2 text-xs text-[var(--color-muted)]">No flows yet - create one.</p> :
+            {loading ? <p className="px-2 py-2 text-xs text-[var(--color-muted)]">{tr("flow.loading")}</p> :
+              filtered.length === 0 ? <p className="px-2 py-2 text-xs text-[var(--color-muted)]">{tr("flow.noFlows")}</p> :
               filtered.map((f) => {
                 const I = TRIGGER_ICON[f.trigger?.type] || Zap;
                 return (
                   <button key={f.id} onClick={() => setActiveId(f.id)} className={`w-full text-left flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${f.id === activeId ? "bg-[var(--color-primary)]/15 text-[var(--color-text)]" : "text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-text)]"}`}>
                     <I size={13} className="shrink-0 text-[var(--color-primary)]" />
-                    <span className="truncate flex-1">{f.name || "Untitled"}</span>
-                    {!f.enabled && <span className="text-[9px] text-[var(--color-muted)] border border-[var(--color-border)] rounded px-1">off</span>}
+                    <span className="truncate flex-1">{f.name || tr("flow.untitled")}</span>
+                    {!f.enabled && <span className="text-[9px] text-[var(--color-muted)] border border-[var(--color-border)] rounded px-1">{tr("flow.off")}</span>}
                   </button>
                 );
               })}
@@ -108,8 +110,8 @@ export default function FlowsPage() {
             <div className="h-full overflow-y-auto px-6 py-6">
               <div className="text-center mb-5">
                 <Workflow size={30} className="text-[var(--color-primary)] mb-2 mx-auto" />
-                <p className="text-sm font-semibold">Start from a template - or build your own</p>
-                <p className="text-xs text-[var(--color-muted)] mt-1 max-w-md mx-auto">One click installs a working automation you can review and run. Or hit “New flow” for a blank canvas.</p>
+                <p className="text-sm font-semibold">{tr("flow.templateHeading")}</p>
+                <p className="text-xs text-[var(--color-muted)] mt-1 max-w-md mx-auto">{tr("flow.templateHint")}</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-2xl mx-auto">
                 {(catalog?.templates || []).map((t) => {
@@ -139,6 +141,7 @@ let nodeSeq = 0;
 const newNodeId = () => `n${Date.now().toString(36)}${(nodeSeq++).toString(36)}`;
 
 function FlowEditor({ flowId, catalog, onSaved, onDeleted }: { flowId: string; catalog: Catalog; onSaved: () => void; onDeleted: () => void }) {
+  const tr = useT();
   const [flow, setFlow] = useState<FullFlow | null>(null);
   const [name, setName] = useState("");
   const [enabled, setEnabled] = useState(true);
@@ -167,11 +170,11 @@ function FlowEditor({ flowId, catalog, onSaved, onDeleted }: { flowId: string; c
   const catFor = (type: string) => catalog.nodes.find((c) => c.type === type);
 
   const save = async () => {
-    if (Object.values(jsonErr).some(Boolean)) { toast.error("Fix the invalid JSON fields first."); return; }
+    if (Object.values(jsonErr).some(Boolean)) { toast.error(tr("flow.fixJsonToast")); return; }
     setSaving(true);
     try {
       await api.patch(`/api/flows/flows/${flowId}`, { name, enabled, trigger, graph: { nodes, edges } });
-      toast.success("Saved"); onSaved();
+      toast.success(tr("flow.savedToast")); onSaved();
     } catch (e) { toast.error(humanizeAiError(e)); }
     finally { setSaving(false); }
   };
@@ -183,13 +186,13 @@ function FlowEditor({ flowId, catalog, onSaved, onDeleted }: { flowId: string; c
       if (!Object.values(jsonErr).some(Boolean)) await api.patch(`/api/flows/flows/${flowId}`, { name, enabled, trigger, graph: { nodes, edges } });
       const run = await api.post<FlowRun>(`/api/flows/flows/${flowId}/run`, { input: {} });
       setLastRun(run);
-      run.status === "success" ? toast.success("Flow ran successfully") : toast.error("Flow run failed - see the log");
+      run.status === "success" ? toast.success(tr("flow.ranOkToast")) : toast.error(tr("flow.ranFailToast"));
       onSaved();
     } catch (e) { toast.error(humanizeAiError(e)); }
     finally { setRunning(false); }
   };
 
-  const del = async () => { if (!confirm("Delete this flow?")) return; try { await api.delete(`/api/flows/flows/${flowId}`); onDeleted(); } catch (e) { toast.error(humanizeAiError(e)); } };
+  const del = async () => { if (!confirm(tr("flow.deleteConfirm"))) return; try { await api.delete(`/api/flows/flows/${flowId}`); onDeleted(); } catch (e) { toast.error(humanizeAiError(e)); } };
   const loadHistory = async () => { try { const r = await api.get<{ runs: FlowRun[] }>(`/api/flows/flows/${flowId}/runs`); setHistory(r.runs || []); setShowHistory(true); } catch (e) { toast.error(humanizeAiError(e)); } };
 
   const addNode = (type: string) => { setNodes((ns) => [...ns, { id: newNodeId(), type, config: {} }]); setAddOpen(false); };
@@ -200,7 +203,7 @@ function FlowEditor({ flowId, catalog, onSaved, onDeleted }: { flowId: string; c
 
   const webhookUrl = useMemo(() => (flow?.webhook_token ? `${API_BASE || window.location.origin}/api/flows/webhook/${flow.webhook_token}` : ""), [flow]);
 
-  if (!flow) return <div className="p-6 text-sm text-[var(--color-muted)]"><Loader2 size={14} className="animate-spin inline mr-1.5" /> Loading…</div>;
+  if (!flow) return <div className="p-6 text-sm text-[var(--color-muted)]"><Loader2 size={14} className="animate-spin inline mr-1.5" /> {tr("flow.loading")}</div>;
 
   return (
     <div className="p-4 space-y-4">
@@ -208,17 +211,17 @@ function FlowEditor({ flowId, catalog, onSaved, onDeleted }: { flowId: string; c
       <div className="flex items-center gap-2 flex-wrap">
         <input value={name} onChange={(e) => setName(e.target.value)} className="text-lg font-semibold bg-transparent border-b border-transparent hover:border-[var(--color-border)] focus:border-[var(--color-primary)] outline-none px-1 min-w-0 flex-1" />
         <label className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] cursor-pointer">
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Enabled
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> {tr("flow.enabled")}
         </label>
-        <button onClick={loadHistory} className="flex items-center gap-1 text-xs rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)]"><History size={13} /> Runs</button>
+        <button onClick={loadHistory} className="flex items-center gap-1 text-xs rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)]"><History size={13} /> {tr("flow.runs")}</button>
         <button onClick={del} className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
-        <button onClick={save} disabled={saving} className="flex items-center gap-1.5 text-xs rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-50">{saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save</button>
-        <button onClick={runNow} disabled={running} className="flex items-center gap-1.5 text-sm rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3.5 py-1.5 hover:opacity-90 disabled:opacity-50">{running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} Run now</button>
+        <button onClick={save} disabled={saving} className="flex items-center gap-1.5 text-xs rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-50">{saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} {tr("flow.save")}</button>
+        <button onClick={runNow} disabled={running} className="flex items-center gap-1.5 text-sm rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3.5 py-1.5 hover:opacity-90 disabled:opacity-50">{running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} {tr("flow.runNow")}</button>
       </div>
 
       {/* Trigger */}
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <div className="flex items-center gap-2 text-xs font-semibold text-[var(--color-muted)] mb-2">TRIGGER</div>
+        <div className="flex items-center gap-2 text-xs font-semibold text-[var(--color-muted)] mb-2">{tr("flow.triggerHeading")}</div>
         <div className="flex items-center gap-2 flex-wrap">
           {(["manual", "event", "schedule", "webhook"] as TriggerType[]).map((t) => {
             const I = TRIGGER_ICON[t];
@@ -238,16 +241,16 @@ function FlowEditor({ flowId, catalog, onSaved, onDeleted }: { flowId: string; c
               {trigger.config?.frequency !== "hourly" && <>at <input type="number" min={0} max={23} value={trigger.config?.hour ?? 9} onChange={(e) => setTrigger({ type: "schedule", config: { ...trigger.config, hour: Number(e.target.value) } })} className="w-14 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-1.5 py-1 outline-none" />:00 UTC</>}
             </div>
           )}
-          {trigger.type === "webhook" && (webhookUrl ? <span className="text-[11px] text-[var(--color-muted)]">POST to <code className="text-[var(--color-primary)]">{webhookUrl}</code></span> : <span className="text-[11px] text-[var(--color-muted)]">Save to generate the webhook URL.</span>)}
+          {trigger.type === "webhook" && (webhookUrl ? <span className="text-[11px] text-[var(--color-muted)]">POST to <code className="text-[var(--color-primary)]">{webhookUrl}</code></span> : <span className="text-[11px] text-[var(--color-muted)]">{tr("flow.webhookSaveHint")}</span>)}
         </div>
       </div>
 
       {/* Nodes */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-[var(--color-muted)]">NODES</span>
+          <span className="text-xs font-semibold text-[var(--color-muted)]">{tr("flow.nodesHeading")}</span>
           <div className="relative">
-            <button onClick={() => setAddOpen((v) => !v)} className="flex items-center gap-1 text-xs rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)]"><Plus size={13} /> Add node</button>
+            <button onClick={() => setAddOpen((v) => !v)} className="flex items-center gap-1 text-xs rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)]"><Plus size={13} /> {tr("flow.addNode")}</button>
             {addOpen && (
               <div className="absolute right-0 top-9 z-20 w-64 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl p-1">
                 {catalog.nodes.map((c) => (
@@ -259,7 +262,7 @@ function FlowEditor({ flowId, catalog, onSaved, onDeleted }: { flowId: string; c
             )}
           </div>
         </div>
-        {nodes.length === 0 ? <p className="text-xs text-[var(--color-muted)] py-3 text-center border border-dashed border-[var(--color-border)] rounded-lg">No nodes - add one. Root nodes (no incoming connection) run first.</p> :
+        {nodes.length === 0 ? <p className="text-xs text-[var(--color-muted)] py-3 text-center border border-dashed border-[var(--color-border)] rounded-lg">{tr("flow.noNodes")}</p> :
           nodes.map((n) => (
             <NodeCard key={n.id} node={n} def={catFor(n.type)} catalog={catalog} allNodes={nodes} edges={edges} nodeName={nodeName}
               result={lastRun?.results?.[n.id]} jsonErr={jsonErr} setJsonErr={setJsonErr}
@@ -276,9 +279,9 @@ function FlowEditor({ flowId, catalog, onSaved, onDeleted }: { flowId: string; c
         <>
           <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setShowHistory(false)} />
           <div className="fixed right-0 top-0 z-50 h-full w-[26rem] max-w-[92vw] bg-[var(--color-surface)] border-l border-[var(--color-border)] shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]"><h3 className="text-sm font-semibold">Run history</h3><button onClick={() => setShowHistory(false)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button></div>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]"><h3 className="text-sm font-semibold">{tr("flow.runHistory")}</h3><button onClick={() => setShowHistory(false)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button></div>
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {history.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No runs yet.</p> : history.map((r) => (
+              {history.length === 0 ? <p className="text-xs text-[var(--color-muted)]">{tr("flow.noRuns")}</p> : history.map((r) => (
                 <button key={r.id} onClick={async () => { try { setLastRun(await api.get<FlowRun>(`/api/flows/runs/${r.id}`)); setShowHistory(false); } catch (e) { toast.error(humanizeAiError(e)); } }}
                   className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-white/5 text-left text-xs">
                   <StatusDot status={r.status} />
@@ -302,9 +305,10 @@ function StatusDot({ status }: { status: string }) {
 }
 
 function RunLog({ run, nodeName }: { run: FlowRun; nodeName: (id: string) => string }) {
+  const tr = useT();
   return (
     <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-      <div className="flex items-center gap-2 text-xs font-semibold mb-2"><StatusDot status={run.status} /> Execution log {run.error && <span className="text-red-400 font-normal">· {run.error}</span>}</div>
+      <div className="flex items-center gap-2 text-xs font-semibold mb-2"><StatusDot status={run.status} /> {tr("flow.executionLog")} {run.error && <span className="text-red-400 font-normal">· {run.error}</span>}</div>
       <div className="space-y-1.5">
         {Object.entries(run.results || {}).map(([id, r]) => (
           <details key={id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">

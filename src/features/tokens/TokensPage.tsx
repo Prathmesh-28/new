@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -83,25 +84,23 @@ const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rou
 const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg";
 
 const TABS = [
-  ["overview", "Overview", Coins],
-  ["erupee", "e-Rupee Ledger", Wallet],
-  ["rule", "Payment Rule Designer", GitBranch],
-  ["escrow", "Escrow Designer", Lock],
-  ["invoice", "Tokenized Invoice", Layers],
-  ["registry", "Asset Registry", Boxes],
-  ["atomic", "Atomic Settlement", ArrowLeftRight],
-  ["disbursal", "Conditional Disbursal", CalendarClock],
-  ["captable", "Token Cap-Table", PieChart],
-  ["readiness", "Settlement Readiness", ClipboardCheck],
-  ["glossary", "Glossary", BookOpen],
+  ["overview", "Overview", Coins, "tok.tabOverview"],
+  ["erupee", "e-Rupee Ledger", Wallet, "tok.tabErupee"],
+  ["rule", "Payment Rule Designer", GitBranch, "tok.tabRule"],
+  ["escrow", "Escrow Designer", Lock, "tok.tabEscrow"],
+  ["invoice", "Tokenized Invoice", Layers, "tok.tabInvoice"],
+  ["registry", "Asset Registry", Boxes, "tok.tabRegistry"],
+  ["atomic", "Atomic Settlement", ArrowLeftRight, "tok.tabAtomic"],
+  ["disbursal", "Conditional Disbursal", CalendarClock, "tok.tabDisbursal"],
+  ["captable", "Token Cap-Table", PieChart, "tok.tabCaptable"],
+  ["readiness", "Settlement Readiness", ClipboardCheck, "tok.tabReadiness"],
+  ["glossary", "Glossary", BookOpen, "tok.tabGlossary"],
 ] as const;
 
 type TabId = (typeof TABS)[number][0];
 
-const HONEST_NOTE =
-  "Design and simulate today; settlement activates as CBDC / tokenization rails go live. Everything here computes real specs, splits and balances locally - there are no live blockchain or e-rupee network calls.";
-
 export default function TokensPage() {
+  const tr = useT();
   const [tab, setTab] = useState<TabId>("overview");
 
   return (
@@ -109,17 +108,17 @@ export default function TokensPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <Coins size={18} className="text-[var(--color-primary)]" /> Tokens & Programmable Money
+            <Coins size={18} className="text-[var(--color-primary)]" /> {tr("tok.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Design programmable-payment rules, escrows and tokenized assets for RBI e-rupee & GIFT-City rails - before they go live.
+            {tr("tok.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {TABS.map(([id, label, Icon]) => (
+          {TABS.map(([id, , Icon, labelKey]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              <Icon size={11} />{label}
+              <Icon size={11} />{tr(labelKey)}
             </button>
           ))}
         </div>
@@ -127,7 +126,7 @@ export default function TokensPage() {
 
       <div className="rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2 bg-[var(--color-accent)]/40 border border-[var(--color-border)]">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
-        <span>{HONEST_NOTE}</span>
+        <span>{tr("tok.honestNote")}</span>
       </div>
 
       {tab === "overview" && <Overview onPick={setTab} />}
@@ -147,26 +146,25 @@ export default function TokensPage() {
 
 // ── Overview ─────────────────────────────────────────────────────────────────────
 function Overview({ onPick }: { onPick: (t: TabId) => void }) {
+  const tr = useT();
   const cards: { id: TabId; title: string; desc: string; Icon: typeof Coins }[] = [
-    { id: "erupee", title: "e-Rupee (CBDC) Ledger", desc: "Manually record wallet balance and in/out entries with a running balance.", Icon: Wallet },
-    { id: "rule", title: "Payment Rule Designer", desc: "Compose 'release ₹X to vendor WHEN milestone Y' conditional-payment specs.", Icon: GitBranch },
-    { id: "escrow", title: "Smart-Contract Escrow", desc: "Parties, amount, release conditions and arbiter → a draft escrow spec.", Icon: Lock },
-    { id: "invoice", title: "Tokenized Invoice", desc: "Fractionalize an invoice into N tokens; see per-token value and investor split.", Icon: Layers },
-    { id: "registry", title: "Tokenized-Asset Registry", desc: "Log invoice / inventory / equity assets 'tokenized' with face value & token count.", Icon: Boxes },
-    { id: "atomic", title: "Atomic Settlement", desc: "Two-leg pay-vs-deliver swap preview with all-or-nothing logic.", Icon: ArrowLeftRight },
-    { id: "disbursal", title: "Conditional Disbursal", desc: "Build a milestone-based payout schedule that sums to the total.", Icon: CalendarClock },
-    { id: "captable", title: "Token Cap-Table", desc: "Track tokens issued and held per holder, with ownership %.", Icon: PieChart },
-    { id: "readiness", title: "Settlement Readiness", desc: "Checklist of what's needed before real rails can settle.", Icon: ClipboardCheck },
-    { id: "glossary", title: "Glossary", desc: "Plain-English explainer cards for programmable-money terms.", Icon: BookOpen },
+    { id: "erupee", title: tr("tok.ovErupeeTitle"), desc: tr("tok.ovErupeeDesc"), Icon: Wallet },
+    { id: "rule", title: tr("tok.ovRuleTitle"), desc: tr("tok.ovRuleDesc"), Icon: GitBranch },
+    { id: "escrow", title: tr("tok.ovEscrowTitle"), desc: tr("tok.ovEscrowDesc"), Icon: Lock },
+    { id: "invoice", title: tr("tok.ovInvoiceTitle"), desc: tr("tok.ovInvoiceDesc"), Icon: Layers },
+    { id: "registry", title: tr("tok.ovRegistryTitle"), desc: tr("tok.ovRegistryDesc"), Icon: Boxes },
+    { id: "atomic", title: tr("tok.ovAtomicTitle"), desc: tr("tok.ovAtomicDesc"), Icon: ArrowLeftRight },
+    { id: "disbursal", title: tr("tok.ovDisbursalTitle"), desc: tr("tok.ovDisbursalDesc"), Icon: CalendarClock },
+    { id: "captable", title: tr("tok.ovCaptableTitle"), desc: tr("tok.ovCaptableDesc"), Icon: PieChart },
+    { id: "readiness", title: tr("tok.ovReadinessTitle"), desc: tr("tok.ovReadinessDesc"), Icon: ClipboardCheck },
+    { id: "glossary", title: tr("tok.ovGlossaryTitle"), desc: tr("tok.ovGlossaryDesc"), Icon: BookOpen },
   ];
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1">What you can build today</h2>
+        <h2 className="text-sm font-semibold mb-1">{tr("tok.buildTodayHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Programmable money lets a rupee carry rules: it can be locked to a purpose, released only when a condition
-          is met, or settled atomically against a delivery. India's e-rupee (RBI CBDC) and GIFT-City tokenization rails
-          are still maturing - so here you design and simulate the specs now, and they become deployable as the rails open.
+          {tr("tok.buildTodayBody")}
         </p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -189,6 +187,7 @@ function Overview({ onPick }: { onPick: (t: TabId) => void }) {
 type ERupeeEntry = { id: string; date: string; direction: "in" | "out"; amount: number; note: string };
 
 function ERupeeLedger() {
+  const tr = useT();
   const [opening, setOpening] = useFeatureState<number>("tok-erupee-opening", 0);
   const [entries, setEntries] = useFeatureState<ERupeeEntry[]>("tok-erupee-entries", []);
   const [openingInput, setOpeningInput] = useState("");
@@ -229,23 +228,23 @@ function ERupeeLedger() {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> e-Rupee Wallet Ledger</h3>
-        <p className="text-xs text-[var(--color-muted)]">Manually mirror your e-rupee wallet balance and movements. A running balance is computed from your opening figure.</p>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> {tr("tok.erupeeHeading")}</h3>
+        <p className="text-xs text-[var(--color-muted)]">{tr("tok.erupeeDesc")}</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Opening balance (₹) - current set: {formatCurrency(opening)}</label>
             <input type="number" value={openingInput} onChange={e => setOpeningInput(e.target.value)} placeholder="e.g. 50000" className={INP} />
           </div>
-          <button onClick={setOpeningBal} className="bg-[var(--color-accent)] border border-[var(--color-border)] text-[var(--color-text)] rounded-lg px-3 py-2 text-sm font-medium hover:border-[var(--color-primary)]/40">Set opening</button>
+          <button onClick={setOpeningBal} className="bg-[var(--color-accent)] border border-[var(--color-border)] text-[var(--color-text)] rounded-lg px-3 py-2 text-sm font-medium hover:border-[var(--color-primary)]/40">{tr("tok.setOpening")}</button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Current Balance", value: formatCurrency(balance), color: balance >= 0 ? "text-[var(--color-text)]" : "text-red-400" },
-          { label: "Opening", value: formatCurrency(opening), color: "text-[var(--color-muted)]" },
-          { label: "Total In", value: formatCurrency(totalIn), color: "text-green-400" },
-          { label: "Total Out", value: formatCurrency(totalOut), color: "text-red-400" },
+          { label: tr("tok.currentBalance"), value: formatCurrency(balance), color: balance >= 0 ? "text-[var(--color-text)]" : "text-red-400" },
+          { label: tr("tok.opening"), value: formatCurrency(opening), color: "text-[var(--color-muted)]" },
+          { label: tr("tok.totalIn"), value: formatCurrency(totalIn), color: "text-green-400" },
+          { label: tr("tok.totalOut"), value: formatCurrency(totalOut), color: "text-red-400" },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -255,7 +254,7 @@ function ERupeeLedger() {
       </div>
 
       <div className={`${CARD} p-4 space-y-3`}>
-        <p className="text-sm font-semibold">Record a movement</p>
+        <p className="text-sm font-semibold">{tr("tok.recordMovement")}</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Direction</label>
@@ -276,12 +275,12 @@ function ERupeeLedger() {
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
             <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
           </div>
-          <button onClick={addEntry} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+          <button onClick={addEntry} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> {tr("tok.add")}</button>
         </div>
       </div>
 
       {withRunning.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No movements yet. Add credits and debits to see the running balance.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">{tr("tok.erupeeEmpty")}</p>
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
@@ -328,6 +327,7 @@ function JsonBlock({ data }: { data: unknown }) {
 
 // ── Programmable-Payment Rule Designer ─────────────────────────────────────────────
 function RuleDesigner() {
+  const tr = useT();
   const [vendor, setVendor] = useState("");
   const [amount, setAmount] = useState("");
   const [trigger, setTrigger] = useState<"milestone" | "date" | "delivery" | "approval">("milestone");
@@ -380,8 +380,8 @@ function RuleDesigner() {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2"><GitBranch size={14} className="text-[var(--color-primary)]" /> Programmable-Payment Rule Designer</h3>
-        <p className="text-xs text-[var(--color-muted)]">Compose a conditional-payment rule. Pick a real outstanding invoice to pre-fill it, or a real counterparty - it outputs a plain-English statement plus a copyable JSON spec you can hand to a rail once it's live.</p>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><GitBranch size={14} className="text-[var(--color-primary)]" /> {tr("tok.ruleHeading")}</h3>
+        <p className="text-xs text-[var(--color-muted)]">{tr("tok.ruleDesc")}</p>
         {outstanding.length > 0 && (
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Pre-fill from a real outstanding invoice</label>
@@ -423,7 +423,7 @@ function RuleDesigner() {
             <input value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="raw-material purchase only" className={INP} />
           </div>
         </div>
-        <button onClick={save} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium w-fit"><Plus size={13} /> Save rule</button>
+        <button onClick={save} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium w-fit"><Plus size={13} /> {tr("tok.saveRule")}</button>
       </div>
 
       {readable && (
@@ -435,7 +435,7 @@ function RuleDesigner() {
 
       {saved.length > 0 && (
         <div className={`${CARD} overflow-hidden`}>
-          <div className="px-4 py-2.5 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Saved rules</p></div>
+          <div className="px-4 py-2.5 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{tr("tok.savedRules")}</p></div>
           <div className="divide-y divide-[var(--color-border)]">
             {saved.map(r => (
               <div key={r.id} className="px-4 py-3 flex items-center justify-between gap-3">
@@ -455,6 +455,7 @@ type EscrowStatus = "draft" | "funded" | "released";
 type Escrow = { id: string; payer: string; payee: string; amount: number; arbiter: string; conditions: string; status: EscrowStatus };
 
 function EscrowDesigner() {
+  const tr = useT();
   const [payer, setPayer] = useState("");
   const [payee, setPayee] = useState("");
   const [amount, setAmount] = useState("");
@@ -488,8 +489,8 @@ function EscrowDesigner() {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2"><Lock size={14} className="text-[var(--color-primary)]" /> Smart-Contract Escrow Designer</h3>
-        <p className="text-xs text-[var(--color-muted)]">Define parties, amount, release conditions and an optional arbiter. Status transitions (draft → funded → released) are simulated locally.</p>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Lock size={14} className="text-[var(--color-primary)]" /> {tr("tok.escrowHeading")}</h3>
+        <p className="text-xs text-[var(--color-muted)]">{tr("tok.escrowDesc")}</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Payer</label>
@@ -512,7 +513,7 @@ function EscrowDesigner() {
             <input value={conditions} onChange={e => setConditions(e.target.value)} placeholder="Goods delivered & inspected within 30 days" className={INP} />
           </div>
         </div>
-        <button onClick={create} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium w-fit"><Plus size={13} /> Draft escrow</button>
+        <button onClick={create} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium w-fit"><Plus size={13} /> {tr("tok.draftEscrow")}</button>
       </div>
 
       {draftSpec && <JsonBlock data={draftSpec} />}
@@ -542,7 +543,7 @@ function EscrowDesigner() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">No funds move - this models the escrow lifecycle so the spec is ready when on-chain escrow rails support it.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">{tr("tok.escrowNote")}</p>
     </div>
   );
 }
@@ -551,6 +552,7 @@ function EscrowDesigner() {
 type InvestorSplit = { name: string; tokens: number };
 
 function InvoiceTokenizer() {
+  const tr = useT();
   const [face, setFace] = useState("");
   const [tokenCount, setTokenCount] = useState("100");
   const [discountPct, setDiscountPct] = useState("0");
@@ -594,8 +596,8 @@ function InvoiceTokenizer() {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> Tokenized-Invoice Simulator</h3>
-        <p className="text-xs text-[var(--color-muted)]">Pick a real outstanding invoice to fractionalize, or enter a face value by hand. Split it into N tokens across investors who fund it early at a discount.</p>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Layers size={14} className="text-[var(--color-primary)]" /> {tr("tok.invoiceHeading")}</h3>
+        <p className="text-xs text-[var(--color-muted)]">{tr("tok.invoiceDesc")}</p>
         {outstanding.length > 0 && (
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Tokenize a real outstanding invoice{sourceLabel ? ` - loaded: ${sourceLabel}` : ""}</label>
@@ -627,10 +629,10 @@ function InvoiceTokenizer() {
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: "Tokens minted", value: `${tokens}`, color: "text-[var(--color-text)]" },
-              { label: "Per-token face", value: formatCurrency(perToken), color: "text-[var(--color-text)]" },
-              { label: "Per-token price", value: formatCurrency(perTokenPrice), color: "text-green-400" },
-              { label: "Investor outlay (all)", value: formatCurrency(perTokenPrice * tokens), color: "text-blue-400" },
+              { label: tr("tok.tokensMinted"), value: `${tokens}`, color: "text-[var(--color-text)]" },
+              { label: tr("tok.perTokenFace"), value: formatCurrency(perToken), color: "text-[var(--color-text)]" },
+              { label: tr("tok.perTokenPrice"), value: formatCurrency(perTokenPrice), color: "text-green-400" },
+              { label: tr("tok.investorOutlay"), value: formatCurrency(perTokenPrice * tokens), color: "text-blue-400" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -650,7 +652,7 @@ function InvoiceTokenizer() {
                 <label className="text-xs text-[var(--color-muted)] block mb-1">Tokens</label>
                 <input type="number" value={invTokens} onChange={e => setInvTokens(e.target.value)} placeholder="25" className={INP} />
               </div>
-              <button onClick={addInvestor} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+              <button onClick={addInvestor} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> {tr("tok.add")}</button>
             </div>
 
             {investors.length > 0 && (
@@ -688,6 +690,7 @@ type AssetKind = "invoice" | "inventory" | "equity";
 type TokenAsset = { id: string; name: string; kind: AssetKind; faceValue: number; tokenCount: number; date: string };
 
 function AssetRegistry() {
+  const tr = useT();
   const [assets, setAssets] = useFeatureState<TokenAsset[]>("tok-assets", []);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<AssetKind>("invoice");
@@ -710,8 +713,8 @@ function AssetRegistry() {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Tokenized-Asset Registry</h3>
-        <p className="text-xs text-[var(--color-muted)]">Log assets you've "tokenized" with their face value and token count. This is a record-keeping ledger, not an on-chain mint.</p>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> {tr("tok.registryHeading")}</h3>
+        <p className="text-xs text-[var(--color-muted)]">{tr("tok.registryDesc")}</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Asset name</label>
@@ -733,19 +736,19 @@ function AssetRegistry() {
             <label className="text-xs text-[var(--color-muted)] block mb-1">Token count</label>
             <input type="number" value={tokenCount} onChange={e => setTokenCount(e.target.value)} placeholder="500" className={INP} />
           </div>
-          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Tokenize</button>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> {tr("tok.tokenize")}</button>
         </div>
       </div>
 
       {assets.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No assets logged yet.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">{tr("tok.registryEmpty")}</p>
       ) : (
         <>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Assets", value: `${assets.length}`, color: "text-[var(--color-text)]" },
-              { label: "Total face value", value: formatCurrency(totalFace), color: "text-green-400" },
-              { label: "Total tokens", value: `${totalTokens}`, color: "text-blue-400" },
+              { label: tr("tok.assets"), value: `${assets.length}`, color: "text-[var(--color-text)]" },
+              { label: tr("tok.totalFaceValue"), value: formatCurrency(totalFace), color: "text-green-400" },
+              { label: tr("tok.totalTokens"), value: `${totalTokens}`, color: "text-blue-400" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -785,6 +788,7 @@ function AssetRegistry() {
 
 // ── Atomic-Settlement Simulator ─────────────────────────────────────────────────────
 function AtomicSettlement() {
+  const tr = useT();
   const [partyA, setPartyA] = useState("");
   const [legAItem, setLegAItem] = useState("");
   const [legAValue, setLegAValue] = useState("");
@@ -803,17 +807,17 @@ function AtomicSettlement() {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /> Atomic-Settlement Simulator</h3>
-        <p className="text-xs text-[var(--color-muted)]">A two-leg swap (e.g. payment vs delivery) settles all-or-nothing: both legs clear together, or neither does.</p>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /> {tr("tok.atomicHeading")}</h3>
+        <p className="text-xs text-[var(--color-muted)]">{tr("tok.atomicDesc")}</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <p className="text-xs font-semibold">Leg A - pays / delivers</p>
+            <p className="text-xs font-semibold">{tr("tok.legA")}</p>
             <input value={partyA} onChange={e => setPartyA(e.target.value)} placeholder="Party A (e.g. Buyer)" className={INP} />
             <input value={legAItem} onChange={e => setLegAItem(e.target.value)} placeholder="What A gives (e.g. ₹ e-rupee)" className={INP} />
             <input type="number" value={legAValue} onChange={e => setLegAValue(e.target.value)} placeholder="Value (₹)" className={INP} />
           </div>
           <div className="space-y-2">
-            <p className="text-xs font-semibold">Leg B - pays / delivers</p>
+            <p className="text-xs font-semibold">{tr("tok.legB")}</p>
             <input value={partyB} onChange={e => setPartyB(e.target.value)} placeholder="Party B (e.g. Seller)" className={INP} />
             <input value={legBItem} onChange={e => setLegBItem(e.target.value)} placeholder="What B gives (e.g. goods)" className={INP} />
             <input type="number" value={legBValue} onChange={e => setLegBValue(e.target.value)} placeholder="Value (₹)" className={INP} />
@@ -861,6 +865,7 @@ function AtomicSettlement() {
 type Milestone = { id: string; name: string; pct: number };
 
 function ConditionalDisbursal() {
+  const tr = useT();
   const [total, setTotal] = useState("");
   const [milestones, setMilestones] = useFeatureState<Milestone[]>("tok-milestones", []);
   const [mName, setMName] = useState("");
@@ -881,8 +886,8 @@ function ConditionalDisbursal() {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Conditional-Disbursal Builder</h3>
-        <p className="text-xs text-[var(--color-muted)]">Split a total payout across milestones. Each tranche releases when its milestone is verified (simulated).</p>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> {tr("tok.disbursalHeading")}</h3>
+        <p className="text-xs text-[var(--color-muted)]">{tr("tok.disbursalDesc")}</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Total payout (₹)</label>
@@ -898,14 +903,14 @@ function ConditionalDisbursal() {
             <label className="text-xs text-[var(--color-muted)] block mb-1">% of total ({remainingPct}% left)</label>
             <input type="number" value={mPct} onChange={e => setMPct(e.target.value)} placeholder="25" className={INP} />
           </div>
-          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> {tr("tok.add")}</button>
         </div>
       </div>
 
       {milestones.length > 0 && (
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-4 py-2.5 border-b border-[var(--color-border)] flex items-center justify-between">
-            <p className="text-sm font-semibold">Disbursal schedule</p>
+            <p className="text-sm font-semibold">{tr("tok.disbursalSchedule")}</p>
             <span className={`text-[10px] font-semibold ${allocatedPct === 100 ? "text-green-400" : "text-yellow-400"}`}>{allocatedPct}% allocated</span>
           </div>
           <div className="overflow-x-auto">
@@ -938,6 +943,7 @@ function ConditionalDisbursal() {
 type Holder = { id: string; name: string; tokens: number };
 
 function TokenCapTable() {
+  const tr = useT();
   const [issued, setIssued] = useFeatureState<number>("tok-captable-issued", 0);
   const [holders, setHolders] = useFeatureState<Holder[]>("tok-captable-holders", []);
   const [issuedInput, setIssuedInput] = useState("");
@@ -965,22 +971,22 @@ function TokenCapTable() {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> Token Cap-Table</h3>
-        <p className="text-xs text-[var(--color-muted)]">Set total tokens issued, then assign holdings. Ownership % is computed against issued supply.</p>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><PieChart size={14} className="text-[var(--color-primary)]" /> {tr("tok.captableHeading")}</h3>
+        <p className="text-xs text-[var(--color-muted)]">{tr("tok.captableDesc")}</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Total tokens issued - current: {issued}</label>
             <input type="number" value={issuedInput} onChange={e => setIssuedInput(e.target.value)} placeholder="10000" className={INP} />
           </div>
-          <button onClick={setIssuedTotal} className="bg-[var(--color-accent)] border border-[var(--color-border)] text-[var(--color-text)] rounded-lg px-3 py-2 text-sm font-medium hover:border-[var(--color-primary)]/40">Set issued</button>
+          <button onClick={setIssuedTotal} className="bg-[var(--color-accent)] border border-[var(--color-border)] text-[var(--color-text)] rounded-lg px-3 py-2 text-sm font-medium hover:border-[var(--color-primary)]/40">{tr("tok.setIssued")}</button>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Issued", value: `${issued}`, color: "text-[var(--color-text)]" },
-          { label: "Held", value: `${held}`, color: "text-blue-400" },
-          { label: "Unissued", value: `${unissued}`, color: "text-[var(--color-muted)]" },
+          { label: tr("tok.issued"), value: `${issued}`, color: "text-[var(--color-text)]" },
+          { label: tr("tok.held"), value: `${held}`, color: "text-blue-400" },
+          { label: tr("tok.unissued"), value: `${unissued}`, color: "text-[var(--color-muted)]" },
         ].map(k => (
           <div key={k.label} className={`${CARD} p-4`}>
             <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -990,7 +996,7 @@ function TokenCapTable() {
       </div>
 
       <div className={`${CARD} p-4 space-y-3`}>
-        <p className="text-sm font-semibold">Add holder</p>
+        <p className="text-sm font-semibold">{tr("tok.addHolder")}</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Holder</label>
@@ -1000,7 +1006,7 @@ function TokenCapTable() {
             <label className="text-xs text-[var(--color-muted)] block mb-1">Tokens</label>
             <input type="number" value={hTokens} onChange={e => setHTokens(e.target.value)} placeholder="2500" className={INP} />
           </div>
-          <button onClick={addHolder} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
+          <button onClick={addHolder} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> {tr("tok.add")}</button>
         </div>
       </div>
 
@@ -1045,6 +1051,7 @@ const READINESS_ITEMS: CheckItem[] = [
 ];
 
 function ReadinessChecklist() {
+  const tr = useT();
   const [done, setDone] = useFeatureState<string[]>("tok-readiness", []);
   // Read-only access to the other tabs' saved specs so we can bundle a shareable brief.
   const [savedRules] = useFeatureState<{ id: string; vendor: string; amount: number; trigger: string; condition: string; purpose: string }[]>("tok-rules", []);
@@ -1136,10 +1143,10 @@ function ReadinessChecklist() {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-          <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> Settlement-Readiness Checklist</h3>
+          <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> {tr("tok.readinessHeading")}</h3>
           <div className="flex items-center gap-2">
-            <button onClick={exportDesigns} className="flex items-center gap-1.5 text-[10px] bg-[var(--color-accent)] border border-[var(--color-border)] px-2.5 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40"><Download size={11} /> Export designs</button>
-            <button onClick={printBrief} className="flex items-center gap-1.5 text-[10px] bg-[var(--color-accent)] border border-[var(--color-border)] px-2.5 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40"><Printer size={11} /> Print brief</button>
+            <button onClick={exportDesigns} className="flex items-center gap-1.5 text-[10px] bg-[var(--color-accent)] border border-[var(--color-border)] px-2.5 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40"><Download size={11} /> {tr("tok.exportDesigns")}</button>
+            <button onClick={printBrief} className="flex items-center gap-1.5 text-[10px] bg-[var(--color-accent)] border border-[var(--color-border)] px-2.5 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40"><Printer size={11} /> {tr("tok.printBrief")}</button>
             <span className="text-xs font-bold tabular-nums">{completed}/{READINESS_ITEMS.length} · {pct}%</span>
           </div>
         </div>

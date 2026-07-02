@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useT } from "@/i18n";
 
 // ── shared styles (mirrors TaxPage / DebtPage input + card conventions) ──────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -29,31 +30,31 @@ type TabId =
   | "this-week" | "kpi-explainer";
 
 const TABS = [
-  ["overview", "Overview", Bot],
-  ["brief", "Daily CFO Brief", Sparkles],
-  ["actions", "Recommended Actions", ListChecks],
-  ["launcher", "Quick-Action Launcher", Send],
-  ["qa", "Ask the Copilot", MessageSquareText],
-  ["goal", "Runway Goal Planner", Target],
-  ["close", "Month-End Close", ClipboardCheck],
-  ["explain", "Explain a Number", Calculator],
-  ["prioritize", "Payment Prioritizer", Wallet],
-  ["compliance-digest", "Due This Week", CalendarClock],
-  ["risks", "Top Risks", ShieldAlert],
-  ["savings", "Savings Finder", Scissors],
-  ["targets", "KPI Targets", Gauge],
-  ["eod", "End-of-Day Brief", Presentation],
-  ["cash-watch", "Cash Early-Warning", LineChart],
-  ["collect-first", "Collect-First", HandCoins],
-  ["invoice-now", "Invoice Now", FilePlus2],
-  ["vendor-timing", "Pay Now vs Later", Timer],
-  ["this-week", "This Week", ListTodo],
-  ["kpi-explainer", "Off-Track KPI", Lightbulb],
-  ["attention", "Attention Feed", Bell],
-  ["guardrails", "Guardrails & Limits", ShieldCheck],
-  ["autopilot", "Autopilot Toggles", ToggleRight],
-  ["audit", "Action Log", ScrollText],
-  ["review", "Weekly Review", CalendarRange],
+  ["overview", "cop.tabOverview", Bot],
+  ["brief", "cop.tabBrief", Sparkles],
+  ["actions", "cop.tabActions", ListChecks],
+  ["launcher", "cop.tabLauncher", Send],
+  ["qa", "cop.tabQa", MessageSquareText],
+  ["goal", "cop.tabGoal", Target],
+  ["close", "cop.tabClose", ClipboardCheck],
+  ["explain", "cop.tabExplain", Calculator],
+  ["prioritize", "cop.tabPrioritize", Wallet],
+  ["compliance-digest", "cop.tabComplianceDigest", CalendarClock],
+  ["risks", "cop.tabRisks", ShieldAlert],
+  ["savings", "cop.tabSavings", Scissors],
+  ["targets", "cop.tabTargets", Gauge],
+  ["eod", "cop.tabEod", Presentation],
+  ["cash-watch", "cop.tabCashWatch", LineChart],
+  ["collect-first", "cop.tabCollectFirst", HandCoins],
+  ["invoice-now", "cop.tabInvoiceNow", FilePlus2],
+  ["vendor-timing", "cop.tabVendorTiming", Timer],
+  ["this-week", "cop.tabThisWeek", ListTodo],
+  ["kpi-explainer", "cop.tabKpiExplainer", Lightbulb],
+  ["attention", "cop.tabAttention", Bell],
+  ["guardrails", "cop.tabGuardrails", ShieldCheck],
+  ["autopilot", "cop.tabAutopilot", ToggleRight],
+  ["audit", "cop.tabAudit", ScrollText],
+  ["review", "cop.tabReview", CalendarRange],
 ] as const;
 
 // Live signals the rule engine reads from the store snapshot.
@@ -81,6 +82,7 @@ function runwayLabel(days: number): string {
 }
 
 export default function CopilotPage() {
+  const tr = useT();
   const { store } = useApp();
   const navigate = useNavigate();
   const [tab, setTab] = useState<TabId>("overview");
@@ -115,17 +117,17 @@ export default function CopilotPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <Bot size={18} className="text-[var(--color-primary)]" /> AI CFO Copilot
+            <Bot size={18} className="text-[var(--color-primary)]" /> {tr("cop.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            An assistive layer over your live numbers - daily briefs, recommended actions and plain-language answers, all computed from your own data.
+            {tr("cop.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
           {TABS.map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              <Icon size={11} />{label}
+              <Icon size={11} />{tr(label)}
             </button>
           ))}
         </div>
@@ -134,7 +136,7 @@ export default function CopilotPage() {
       <div className="flex items-start gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-accent)]/40 px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
         <Info size={13} className="shrink-0 mt-px text-[var(--color-primary)]" />
         <span>
-          The copilot is <strong className="text-[var(--color-text)]">assistive, not autonomous</strong>. Every suggestion is a rule-based read of your live data and every "action" is a preview that links you to the right page - nothing moves money or files anything on its own.
+          {tr("cop.assistiveLead")} <strong className="text-[var(--color-text)]">{tr("cop.assistiveBold")}</strong>. {tr("cop.assistiveRest")}
         </span>
       </div>
 
@@ -171,11 +173,12 @@ type Nav = ReturnType<typeof useNavigate>;
 
 // ── Overview ─────────────────────────────────────────────────────────────────
 function Overview({ signals, navigate }: { signals: Signals; navigate: Nav }) {
+  const tr = useT();
   const cards = [
-    { label: "Cash on hand", value: formatAmount(signals.cash), color: "text-[var(--color-text)]", sub: "Across all bank accounts" },
-    { label: "Runway", value: runwayLabel(signals.runwayDays), color: signals.runwayDays >= 999 ? "text-green-400" : signals.runwayDays < 90 ? "text-red-400" : "text-yellow-400", sub: signals.monthlyNet >= 0 ? "Net cash positive" : `Burning ${formatAmount(-signals.monthlyNet)}/mo` },
-    { label: "Overdue receivables", value: formatAmount(signals.overdueReceivable), color: signals.overdueReceivable > 0 ? "text-red-400" : "text-green-400", sub: `${signals.overdueInvoiceCount} invoice(s) past due` },
-    { label: "Health score", value: `${Math.round(signals.healthScore)} · ${signals.healthGrade}`, color: signals.healthScore >= 65 ? "text-green-400" : signals.healthScore >= 45 ? "text-yellow-400" : "text-red-400", sub: "Composite financial health" },
+    { label: tr("cop.cardCash"), value: formatAmount(signals.cash), color: "text-[var(--color-text)]", sub: tr("cop.cardCashSub") },
+    { label: tr("cop.cardRunway"), value: runwayLabel(signals.runwayDays), color: signals.runwayDays >= 999 ? "text-green-400" : signals.runwayDays < 90 ? "text-red-400" : "text-yellow-400", sub: signals.monthlyNet >= 0 ? tr("cop.cardRunwayPositive") : `Burning ${formatAmount(-signals.monthlyNet)}/mo` },
+    { label: tr("cop.cardOverdue"), value: formatAmount(signals.overdueReceivable), color: signals.overdueReceivable > 0 ? "text-red-400" : "text-green-400", sub: `${signals.overdueInvoiceCount} invoice(s) past due` },
+    { label: tr("cop.cardHealth"), value: `${Math.round(signals.healthScore)} · ${signals.healthGrade}`, color: signals.healthScore >= 65 ? "text-green-400" : signals.healthScore >= 45 ? "text-yellow-400" : "text-red-400", sub: tr("cop.cardHealthSub") },
   ];
   return (
     <div className="space-y-4">
@@ -190,18 +193,18 @@ function Overview({ signals, navigate }: { signals: Signals; navigate: Nav }) {
       </div>
 
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Sparkles size={14} className="text-[var(--color-primary)]" /> What the copilot does</h2>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Sparkles size={14} className="text-[var(--color-primary)]" /> {tr("cop.whatHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)] mb-4">
-          Think of it as a finance analyst that has read every number in your workspace. It summarises, ranks, and answers - then hands you to the page that does the real work.
+          {tr("cop.whatDesc")}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {[
-            ["Daily CFO Brief", "A one-screen digest of cash, runway, overdue and what's due today.", "brief"],
-            ["Recommended Actions", "Heuristic next-best-steps ranked by cash impact, each deep-linking to the right tool.", "actions"],
-            ["Quick-Action Launcher", "Type what you want ('chase overdue', 'forecast') and jump straight there.", "launcher"],
-            ["Ask the Copilot", "Plain-language answers to 'why is cash down?' grounded only in your metrics.", "qa"],
-            ["Runway Goal Planner", "Set a runway target; the planner proposes a mix of collect / cut / borrow.", "goal"],
-            ["Attention Feed", "Anomalies and risks surfaced from your data, newest first.", "attention"],
+            [tr("cop.tabBrief"), tr("cop.featBriefDesc"), "brief"],
+            [tr("cop.tabActions"), tr("cop.featActionsDesc"), "actions"],
+            [tr("cop.tabLauncher"), tr("cop.featLauncherDesc"), "launcher"],
+            [tr("cop.tabQa"), tr("cop.featQaDesc"), "qa"],
+            [tr("cop.tabGoal"), tr("cop.featGoalDesc"), "goal"],
+            [tr("cop.tabAttention"), tr("cop.featAttentionDesc"), "attention"],
           ].map(([title, desc]) => (
             <button key={title} onClick={() => navigate("/copilot") /* in-page */}
               className="text-left bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 hover:border-[var(--color-primary)]/40 transition-colors">
@@ -213,7 +216,7 @@ function Overview({ signals, navigate }: { signals: Signals; navigate: Nav }) {
       </div>
 
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-3">Jump to a related module</h2>
+        <h2 className="text-sm font-semibold mb-3">{tr("cop.jumpHeading")}</h2>
         <div className="flex flex-wrap gap-2">
           {[
             ["Forecast", "/forecast"], ["Collections", "/collections"], ["Receivables", "/receivables"],
@@ -232,6 +235,7 @@ function Overview({ signals, navigate }: { signals: Signals; navigate: Nav }) {
 
 // ── Daily CFO Brief ────────────────────────────────────────────────────────────
 function DailyBrief({ signals, navigate }: { signals: Signals; navigate: Nav }) {
+  const tr = useT();
   const today = new Date();
   const lines: { text: string; tone: "good" | "warn" | "bad" | "info" }[] = [];
 
@@ -252,10 +256,10 @@ function DailyBrief({ signals, navigate }: { signals: Signals; navigate: Nav }) 
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
-          <h2 className="text-sm font-semibold flex items-center gap-2"><Sparkles size={14} className="text-[var(--color-primary)]" /> Daily CFO Brief</h2>
-          <span className="text-[10px] text-[var(--color-muted)]">{format(today, "EEEE, d MMM yyyy")} · auto-computed</span>
+          <h2 className="text-sm font-semibold flex items-center gap-2"><Sparkles size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabBrief")}</h2>
+          <span className="text-[10px] text-[var(--color-muted)]">{format(today, "EEEE, d MMM yyyy")} · {tr("cop.autoComputed")}</span>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-4">A plain-language digest of the numbers that matter today. Refreshes automatically as your data changes.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">{tr("cop.briefDesc")}</p>
         <ul className="space-y-2.5">
           {lines.map((l, i) => (
             <li key={i} className="flex items-start gap-2.5 text-sm">
@@ -266,11 +270,11 @@ function DailyBrief({ signals, navigate }: { signals: Signals; navigate: Nav }) 
         </ul>
         <div className="mt-5 flex flex-wrap gap-2">
           <button onClick={() => navigate("/cfo-brief")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">
-            Open full CFO Brief <ArrowRight size={11} />
+            {tr("cop.openFullBrief")} <ArrowRight size={11} />
           </button>
-          <button onClick={() => { navigator.clipboard?.writeText(lines.map(l => `• ${l.text}`).join("\n")); toast.success("Brief copied to clipboard"); }}
+          <button onClick={() => { navigator.clipboard?.writeText(lines.map(l => `• ${l.text}`).join("\n")); toast.success(tr("cop.briefCopied")); }}
             className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">
-            Copy brief
+            {tr("cop.copyBrief")}
           </button>
         </div>
       </div>
@@ -295,6 +299,7 @@ function buildRecs(s: Signals): ActionRec[] {
 }
 
 function RecommendedActions({ signals, navigate }: { signals: Signals; navigate: Nav }) {
+  const tr = useT();
   const recs = useMemo(() => buildRecs(signals), [signals]);
   const [done, setDone] = useFeatureState<string[]>("cop-actions-dismissed", []);
   const sevColor: Record<string, string> = {
@@ -304,7 +309,7 @@ function RecommendedActions({ signals, navigate }: { signals: Signals; navigate:
   };
   return (
     <div className="space-y-3">
-      <p className="text-xs text-[var(--color-muted)] px-1">Heuristic next-best-steps, ranked by urgency and cash impact. Acting on one opens the page that actually does it - the copilot never executes by itself.</p>
+      <p className="text-xs text-[var(--color-muted)] px-1">{tr("cop.actionsDesc")}</p>
       {recs.map(r => {
         const isDone = done.includes(r.id);
         return (
@@ -315,7 +320,7 @@ function RecommendedActions({ signals, navigate }: { signals: Signals; navigate:
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">{r.title}</p>
               <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{r.why}</p>
-              {r.impact > 0 && <p className="text-[11px] font-semibold text-green-400 mt-1">Potential cash impact: {formatCurrency(Math.round(r.impact))}</p>}
+              {r.impact > 0 && <p className="text-[11px] font-semibold text-green-400 mt-1">{tr("cop.potentialImpact")} {formatCurrency(Math.round(r.impact))}</p>}
             </div>
             <div className="flex flex-col items-end gap-1.5 shrink-0">
               <button onClick={() => navigate(r.path)} className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-medium whitespace-nowrap">
@@ -323,7 +328,7 @@ function RecommendedActions({ signals, navigate }: { signals: Signals; navigate:
               </button>
               <button onClick={() => setDone(isDone ? done.filter(x => x !== r.id) : [...done, r.id])}
                 className="text-[10px] text-[var(--color-muted)] hover:text-[var(--color-text)]">
-                {isDone ? "Restore" : "Mark handled"}
+                {isDone ? tr("cop.restore") : tr("cop.markHandled")}
               </button>
             </div>
           </div>
@@ -351,6 +356,7 @@ const COMMANDS: Command[] = [
 ];
 
 function QuickActionLauncher({ navigate }: { navigate: Nav }) {
+  const tr = useT();
   const [q, setQ] = useState("");
   const matches = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -365,15 +371,15 @@ function QuickActionLauncher({ navigate }: { navigate: Nav }) {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Send size={14} className="text-[var(--color-primary)]" /> Quick-Action Launcher</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Type what you want to do in plain words - the launcher matches keywords and takes you straight to the right module. It only navigates; it doesn't perform the task for you.</p>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Send size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabLauncher")}</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">{tr("cop.launcherDesc")}</p>
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
-          <input value={q} onChange={e => setQ(e.target.value)} autoFocus placeholder="e.g. chase overdue, run a what-if, file GST…" className={`${INP} pl-9`} />
+          <input value={q} onChange={e => setQ(e.target.value)} autoFocus placeholder={tr("cop.launcherPlaceholder")} className={`${INP} pl-9`} />
         </div>
       </div>
       {matches.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No matching action. Try words like “collect”, “forecast”, “spend” or “tax”.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">{tr("cop.launcherNoMatch")}</p>
       ) : (
         <div className="space-y-2">
           {matches.map(m => (
@@ -422,6 +428,7 @@ function buildSnapshotBlock(s: Signals): string {
 interface QaEntry { q: string; a: string; source: "ai" | "offline" }
 
 function CopilotQA({ signals }: { signals: Signals }) {
+  const tr = useT();
   const [q, setQ] = useState("");
   const [log, setLog] = useState<QaEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -446,7 +453,7 @@ function CopilotQA({ signals }: { signals: Signals }) {
       setLog(prev => [{ q: question, a: answer || answerQuestion(question, signals), source: answer ? "ai" : "offline" }, ...prev]);
     } catch (err) {
       // Graceful degradation to the deterministic, rule-based answer.
-      toast.error(err instanceof Error && err.message.startsWith("503") ? "AI not configured - using offline answer" : "Couldn't reach the AI - using offline answer");
+      toast.error(err instanceof Error && err.message.startsWith("503") ? tr("cop.aiNotConfigured") : tr("cop.aiUnreachable"));
       setLog(prev => [{ q: question, a: answerQuestion(question, signals), source: "offline" }, ...prev]);
     } finally {
       setLoading(false);
@@ -457,12 +464,12 @@ function CopilotQA({ signals }: { signals: Signals }) {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><MessageSquareText size={14} className="text-[var(--color-primary)]" /> Ask the Copilot</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Ask anything in plain language. The AI reasons over <strong className="text-[var(--color-text)]">only your live financial snapshot</strong> - cash, runway, receivables, debt and health. If the AI is unavailable, you'll get an instant offline answer from the same numbers.</p>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><MessageSquareText size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabQa")}</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">{tr("cop.qaDescLead")} <strong className="text-[var(--color-text)]">{tr("cop.qaDescBold")}</strong> {tr("cop.qaDescRest")}</p>
         <div className="flex gap-2">
-          <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && ask()} disabled={loading} placeholder="Ask about your finances…" className={INP} />
+          <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && ask()} disabled={loading} placeholder={tr("cop.qaPlaceholder")} className={INP} />
           <button onClick={() => ask()} disabled={loading} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium shrink-0 disabled:opacity-60">
-            {loading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} {loading ? "Thinking…" : "Ask"}
+            {loading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} {loading ? tr("cop.thinking") : tr("cop.ask")}
           </button>
         </div>
         <div className="flex flex-wrap gap-1.5 mt-3">
@@ -476,7 +483,7 @@ function CopilotQA({ signals }: { signals: Signals }) {
       </div>
       {loading && (
         <div className={`${CARD} p-4 flex items-center gap-2 text-sm text-[var(--color-muted)]`}>
-          <Loader2 size={14} className="animate-spin text-[var(--color-primary)]" /> Reasoning over your live numbers…
+          <Loader2 size={14} className="animate-spin text-[var(--color-primary)]" /> {tr("cop.qaReasoning")}
         </div>
       )}
       {log.length > 0 && (
@@ -486,7 +493,7 @@ function CopilotQA({ signals }: { signals: Signals }) {
               <p className="text-sm font-medium flex items-start gap-2"><MessageSquareText size={13} className="text-[var(--color-primary)] mt-0.5 shrink-0" /> {entry.q}</p>
               <p className="text-sm text-[var(--color-muted)] mt-2 pl-5 whitespace-pre-wrap">{entry.a}</p>
               {entry.source === "offline" && (
-                <p className="text-[10px] text-[var(--color-muted)] mt-2 pl-5 flex items-center gap-1"><Info size={10} /> Offline answer - computed from your metrics without the AI.</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-2 pl-5 flex items-center gap-1"><Info size={10} /> {tr("cop.offlineNote")}</p>
               )}
             </div>
           ))}
@@ -498,6 +505,7 @@ function CopilotQA({ signals }: { signals: Signals }) {
 
 // ── Runway Goal Planner ───────────────────────────────────────────────────────
 function RunwayGoalPlanner({ signals, navigate }: { signals: Signals; navigate: Nav }) {
+  const tr = useT();
   const [targetMonths, setTargetMonths] = useState(12);
   const monthlyBurn = Math.max(0, -signals.monthlyNet);
   const currentMonths = signals.runwayDays >= 999 ? 999 : signals.runwayDays / 30;
@@ -517,29 +525,29 @@ function RunwayGoalPlanner({ signals, navigate }: { signals: Signals; navigate: 
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Target size={14} className="text-[var(--color-primary)]" /> Runway Goal Planner</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Set a runway target and the planner proposes a heuristic mix of collecting, cutting and borrowing to close the gap. It's a suggestion to act on - not an instruction to anything.</p>
-        <label className="text-xs text-[var(--color-muted)] block mb-1">Target runway: <strong className="text-[var(--color-text)]">{targetMonths} months</strong></label>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Target size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabGoal")}</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">{tr("cop.goalDesc")}</p>
+        <label className="text-xs text-[var(--color-muted)] block mb-1">{tr("cop.goalTargetLabel")} <strong className="text-[var(--color-text)]">{targetMonths} {tr("cop.months")}</strong></label>
         <input type="range" min={3} max={24} step={1} value={targetMonths} onChange={e => setTargetMonths(Number(e.target.value))} className="w-full accent-[var(--color-primary)]" />
         <p className="text-[11px] text-[var(--color-muted)] mt-2">Today: {currentMonths >= 999 ? "cash-flow positive" : `${currentMonths.toFixed(1)} months`} of runway on {formatCurrency(Math.round(signals.cash))}.</p>
       </div>
 
       {monthlyBurn <= 0 ? (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> You're net cash positive - runway is effectively unlimited. No funding gap to plan for.</p>
+          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> {tr("cop.goalNetPositive")}</p>
         </div>
       ) : plan && plan.gap === 0 ? (
         <div className="rounded-lg p-4 border border-green-800/40 bg-green-950/20">
-          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> Your current cash already covers {targetMonths} months of burn - no gap to close.</p>
+          <p className="text-sm font-bold text-green-400 flex items-center gap-2"><CheckCircle2 size={14} /> {tr("cop.goalNoGap", { months: targetMonths })}</p>
         </div>
       ) : plan && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: "Cash needed", value: formatAmount(plan.cashNeeded), color: "text-[var(--color-text)]" },
-              { label: "Funding gap", value: formatAmount(plan.gap), color: "text-red-400" },
-              { label: "Monthly burn", value: formatAmount(monthlyBurn), color: "text-yellow-400" },
-              { label: "Target", value: `${targetMonths} mo`, color: "text-[var(--color-text)]" },
+              { label: tr("cop.goalCashNeeded"), value: formatAmount(plan.cashNeeded), color: "text-[var(--color-text)]" },
+              { label: tr("cop.goalFundingGap"), value: formatAmount(plan.gap), color: "text-red-400" },
+              { label: tr("cop.goalMonthlyBurn"), value: formatAmount(monthlyBurn), color: "text-yellow-400" },
+              { label: tr("cop.goalTargetStat"), value: `${targetMonths} mo`, color: "text-[var(--color-text)]" },
             ].map(k => (
               <div key={k.label} className={`${CARD} p-4`}>
                 <p className="text-xs text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -548,11 +556,11 @@ function RunwayGoalPlanner({ signals, navigate }: { signals: Signals; navigate: 
             ))}
           </div>
           <div className={`${CARD} p-5 space-y-3`}>
-            <p className="text-sm font-semibold">Suggested plan to close the {formatCurrency(Math.round(plan.gap))} gap</p>
+            <p className="text-sm font-semibold">{tr("cop.goalPlanHeading", { gap: formatCurrency(Math.round(plan.gap)) })}</p>
             {[
-              { label: "Collect overdue receivables", amt: plan.collect, path: "/collections", cta: "Chase now" },
-              { label: "Trim ~10% of discretionary spend", amt: plan.cut, path: "/spend", cta: "Review spend" },
-              { label: "Arrange working-capital credit", amt: plan.borrow, path: "/credit", cta: "Explore credit" },
+              { label: tr("cop.goalStepCollect"), amt: plan.collect, path: "/collections", cta: tr("cop.chaseNow") },
+              { label: tr("cop.goalStepCut"), amt: plan.cut, path: "/spend", cta: tr("cop.reviewSpend") },
+              { label: tr("cop.goalStepBorrow"), amt: plan.borrow, path: "/credit", cta: tr("cop.exploreCredit") },
             ].filter(step => step.amt > 0).map(step => (
               <div key={step.label} className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] pb-3 last:border-0 last:pb-0">
                 <div>
@@ -573,6 +581,7 @@ function RunwayGoalPlanner({ signals, navigate }: { signals: Signals; navigate: 
 
 // ── Attention Feed (anomalies / risks) ────────────────────────────────────────
 function AttentionFeed({ signals, navigate }: { signals: Signals; navigate: Nav }) {
+  const tr = useT();
   const { store } = useApp();
   const items = useMemo(() => {
     const out: { id: string; severity: "high" | "med" | "low"; text: string; path: string }[] = [];
@@ -599,12 +608,12 @@ function AttentionFeed({ signals, navigate }: { signals: Signals; navigate: Nav 
   };
   return (
     <div className="space-y-3">
-      <p className="text-xs text-[var(--color-muted)] px-1">Things the copilot flagged from your data, most urgent first. These are heuristic detections - review before acting.</p>
+      <p className="text-xs text-[var(--color-muted)] px-1">{tr("cop.attentionDesc")}</p>
       {items.length === 0 ? (
         <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
           <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
-          <p className="text-sm font-medium">Nothing needs your attention</p>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">No anomalies or risks in your current data.</p>
+          <p className="text-sm font-medium">{tr("cop.attentionEmptyTitle")}</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("cop.attentionEmptyBody")}</p>
         </div>
       ) : items.map(it => (
         <div key={it.id} className={`${CARD} p-4 flex items-start gap-3`}>
@@ -613,7 +622,7 @@ function AttentionFeed({ signals, navigate }: { signals: Signals; navigate: Nav 
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${sevColor[it.severity]}`}>{it.severity.toUpperCase()}</span>
             <p className="text-sm mt-1.5">{it.text}</p>
           </div>
-          <button onClick={() => navigate(it.path)} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline shrink-0 mt-1">Investigate <ArrowRight size={11} /></button>
+          <button onClick={() => navigate(it.path)} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline shrink-0 mt-1">{tr("cop.investigate")} <ArrowRight size={11} /></button>
         </div>
       ))}
     </div>
@@ -631,21 +640,22 @@ interface Guardrails {
 const DEFAULT_GUARDRAILS: Guardrails = { perActionLimit: 25000, dailyLimit: 100000, requireApprovalOver: 10000, allowlistOnly: true, quietHours: true };
 
 function GuardrailsConfig() {
+  const tr = useT();
   const [g, setG] = useFeatureState<Guardrails>("cop-guardrails", DEFAULT_GUARDRAILS);
   const set = <K extends keyof Guardrails>(k: K, v: Guardrails[K]) => setG({ ...g, [k]: v });
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-2 rounded-lg border border-yellow-800/40 bg-yellow-950/20 px-4 py-2.5 text-[11px] text-yellow-300">
         <Info size={13} className="shrink-0 mt-px" />
-        These limits are saved as <strong>your stated policy</strong>. Because the copilot is assistive only, nothing enforces them automatically yet - they document the boundaries any future automation must respect.
+        <span>{tr("cop.guardrailsBannerLead")} <strong>{tr("cop.guardrailsBannerBold")}</strong>. {tr("cop.guardrailsBannerRest")}</span>
       </div>
       <div className={`${CARD} p-5 space-y-4`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><ShieldCheck size={14} className="text-[var(--color-primary)]" /> Guardrails & Spending Limits</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ShieldCheck size={14} className="text-[var(--color-primary)]" /> {tr("cop.guardrailsHeading")}</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {([
-            ["perActionLimit", "Per-action limit (₹)"],
-            ["dailyLimit", "Daily total limit (₹)"],
-            ["requireApprovalOver", "Require approval over (₹)"],
+            ["perActionLimit", tr("cop.guardrailsPerAction")],
+            ["dailyLimit", tr("cop.guardrailsDaily")],
+            ["requireApprovalOver", tr("cop.guardrailsApproval")],
           ] as const).map(([k, label]) => (
             <div key={k}>
               <label className="text-xs text-[var(--color-muted)] block mb-1">{label}</label>
@@ -656,23 +666,23 @@ function GuardrailsConfig() {
         <div className="space-y-2 pt-1">
           <label className="flex items-center gap-2 text-xs cursor-pointer">
             <input type="checkbox" checked={g.allowlistOnly} onChange={e => set("allowlistOnly", e.target.checked)} className="accent-[var(--color-primary)]" />
-            Restrict any payments to approved counterparties only (allowlist)
+            {tr("cop.guardrailsAllowlist")}
           </label>
           <label className="flex items-center gap-2 text-xs cursor-pointer">
             <input type="checkbox" checked={g.quietHours} onChange={e => set("quietHours", e.target.checked)} className="accent-[var(--color-primary)]" />
-            Defer non-urgent suggestions and nudges to working hours
+            {tr("cop.guardrailsQuietHours")}
           </label>
         </div>
-        <button onClick={() => { setG(DEFAULT_GUARDRAILS); toast.success("Guardrails reset to safe defaults"); }}
+        <button onClick={() => { setG(DEFAULT_GUARDRAILS); toast.success(tr("cop.guardrailsResetToast")); }}
           className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">
-          Reset to safe defaults
+          {tr("cop.guardrailsReset")}
         </button>
       </div>
       <div className={`${CARD} p-4 grid grid-cols-2 md:grid-cols-3 gap-3`}>
         {[
-          { label: "Per-action cap", value: formatCurrency(g.perActionLimit) },
-          { label: "Daily cap", value: formatCurrency(g.dailyLimit) },
-          { label: "Approval threshold", value: formatCurrency(g.requireApprovalOver) },
+          { label: tr("cop.guardrailsPerActionCap"), value: formatCurrency(g.perActionLimit) },
+          { label: tr("cop.guardrailsDailyCap"), value: formatCurrency(g.dailyLimit) },
+          { label: tr("cop.guardrailsApprovalThreshold"), value: formatCurrency(g.requireApprovalOver) },
         ].map(k => (
           <div key={k.label}>
             <p className="text-[10px] text-[var(--color-muted)] mb-0.5">{k.label}</p>
@@ -695,20 +705,21 @@ const AUTOPILOT_META: { key: keyof AutopilotState; label: string; desc: string }
 ];
 
 function AutopilotToggles() {
+  const tr = useT();
   const [state, setState] = useFeatureState<AutopilotState>("cop-autopilot", { brief: true, collections: false, spend: true, compliance: true, forecast: true });
   const toggle = (k: keyof AutopilotState) => setState({ ...state, [k]: !state[k] });
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-2 rounded-lg border border-yellow-800/40 bg-yellow-950/20 px-4 py-2.5 text-[11px] text-yellow-300">
         <Info size={13} className="shrink-0 mt-px" />
-        <span><strong>Simulated preview.</strong> These toggles record which assists you'd want on. They only control which suggestions and feeds the copilot prepares - none of them move money, send messages, or file anything automatically.</span>
+        <span><strong>{tr("cop.autopilotBannerBold")}</strong> {tr("cop.autopilotBannerRest")}</span>
       </div>
       <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
         {AUTOPILOT_META.map(m => (
           <div key={m.key} className="flex items-center justify-between gap-4 p-4">
             <div>
-              <p className="text-sm font-medium">{m.label}</p>
-              <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{m.desc}</p>
+              <p className="text-sm font-medium">{tr(`cop.autopilot_${m.key}_label`)}</p>
+              <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{tr(`cop.autopilot_${m.key}_desc`)}</p>
             </div>
             <button onClick={() => toggle(m.key)} role="switch" aria-checked={state[m.key]}
               className={`relative h-6 w-11 rounded-full transition-colors shrink-0 ${state[m.key] ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}>
@@ -724,26 +735,27 @@ function AutopilotToggles() {
 // ── Action / Audit Log ────────────────────────────────────────────────────────
 interface LogEntry { id: string; ts: string; text: string }
 function ActionLog() {
+  const tr = useT();
   const [log, setLog] = useFeatureState<LogEntry[]>("cop-audit-log", []);
   const [note, setNote] = useState("");
   const add = () => {
-    if (!note.trim()) { toast.error("Describe the action you took"); return; }
+    if (!note.trim()) { toast.error(tr("cop.logDescribeError")); return; }
     setLog([{ id: crypto.randomUUID(), ts: new Date().toISOString(), text: note.trim() }, ...log]);
     setNote("");
-    toast.success("Logged");
+    toast.success(tr("cop.logged"));
   };
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ScrollText size={14} className="text-[var(--color-primary)]" /> Action Log</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">A manual record of actions you took on the copilot's advice - your own assistive audit trail. Useful for CA review and for tracking what worked.</p>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><ScrollText size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabAudit")}</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">{tr("cop.logDesc")}</p>
         <div className="flex gap-2">
-          <input value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="e.g. Chased 3 overdue invoices after the daily brief" className={INP} />
-          <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium shrink-0"><Plus size={13} /> Log</button>
+          <input value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder={tr("cop.logPlaceholder")} className={INP} />
+          <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium shrink-0"><Plus size={13} /> {tr("cop.log")}</button>
         </div>
       </div>
       {log.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No entries yet. Anything you log here is stored with your workspace.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">{tr("cop.logEmpty")}</p>
       ) : (
         <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
           {log.map(e => (
@@ -753,7 +765,7 @@ function ActionLog() {
                 <p className="text-sm">{e.text}</p>
                 <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{format(new Date(e.ts), "d MMM yyyy, h:mm a")}</p>
               </div>
-              <button onClick={() => setLog(log.filter(x => x.id !== e.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400 shrink-0">Remove</button>
+              <button onClick={() => setLog(log.filter(x => x.id !== e.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400 shrink-0">{tr("cop.remove")}</button>
             </div>
           ))}
         </div>
@@ -764,6 +776,7 @@ function ActionLog() {
 
 // ── Weekly Review generator ────────────────────────────────────────────────────
 function WeeklyReview({ signals }: { signals: Signals }) {
+  const tr = useT();
   const today = new Date();
   const review = useMemo(() => {
     const lines: string[] = [];
@@ -791,13 +804,13 @@ function WeeklyReview({ signals }: { signals: Signals }) {
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
-          <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarRange size={14} className="text-[var(--color-primary)]" /> Weekly Review</h2>
-          <button onClick={() => { navigator.clipboard?.writeText(review); toast.success("Weekly review copied"); }}
+          <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarRange size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabReview")}</h2>
+          <button onClick={() => { navigator.clipboard?.writeText(review); toast.success(tr("cop.reviewCopied")); }}
             className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40 flex items-center gap-1.5">
-            <TrendingDown size={11} className="rotate-180" /> Copy
+            <TrendingDown size={11} className="rotate-180" /> {tr("cop.copy")}
           </button>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-4">An auto-generated wins / watch-outs summary built from this week's numbers. Paste it into your team update or board notes.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">{tr("cop.reviewDesc")}</p>
         <pre className="text-xs whitespace-pre-wrap bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 leading-relaxed text-[var(--color-text)] font-sans">{review}</pre>
       </div>
     </div>
@@ -809,6 +822,7 @@ function WeeklyReview({ signals }: { signals: Signals }) {
 // can answer it, and manually tickable where only you can. Assistive only - it
 // tells you what looks done vs. open; it doesn't post or file anything.
 function MonthEndClose({ snap, navigate }: { snap: FinancialSnapshot; navigate: Nav }) {
+  const tr = useT();
   const { store } = useApp();
   const monthLabel = format(new Date(), "MMMM yyyy");
 
@@ -819,27 +833,27 @@ function MonthEndClose({ snap, navigate }: { snap: FinancialSnapshot; navigate: 
     const overdueObl = store.obligations.filter(o => o.dueDate < new Date().toISOString().split("T")[0]).length;
     const items: { id: string; label: string; detail: string; status: "done" | "open" | "review"; path?: string }[] = [
       {
-        id: "txns", label: "All transactions categorised",
+        id: "txns", label: tr("cop.closeTxns"),
         detail: unflagged === 0 ? "Every transaction this month has a counterparty." : `${unflagged} transaction(s) this month have no counterparty - label them.`,
         status: unflagged === 0 ? "done" : "review", path: "/transactions",
       },
       {
-        id: "ar", label: "Receivables reviewed",
+        id: "ar", label: tr("cop.closeAr"),
         detail: snap.overdueReceivable === 0 ? "No overdue invoices outstanding." : `${formatCurrency(Math.round(snap.overdueReceivable))} overdue - chase or write-off before close.`,
         status: snap.overdueReceivable === 0 ? "done" : "review", path: "/receivables",
       },
       {
-        id: "ap", label: "Payables / POs settled",
+        id: "ap", label: tr("cop.closeAp"),
         detail: draftPo === 0 ? "No draft purchase orders pending." : `${draftPo} draft PO(s) awaiting approval.`,
         status: draftPo === 0 ? "done" : "open", path: "/spend",
       },
       {
-        id: "obl", label: "Obligations current",
+        id: "obl", label: tr("cop.closeObl"),
         detail: overdueObl === 0 ? "No overdue obligations on the calendar." : `${overdueObl} obligation(s) past due.`,
         status: overdueObl === 0 ? "done" : "review", path: "/compliance",
       },
       {
-        id: "gst", label: "GST position computed",
+        id: "gst", label: tr("cop.closeGst"),
         detail: `Net GST payable this month ≈ ${formatCurrency(snap.gstThisMonth.netPayable)} (ITC ${formatCurrency(snap.gstThisMonth.inputCredit)}).`,
         status: "review", path: "/tax",
       },
@@ -849,10 +863,10 @@ function MonthEndClose({ snap, navigate }: { snap: FinancialSnapshot; navigate: 
 
   // Manual sign-offs the data can't verify (durable).
   const MANUAL = [
-    { id: "bank", label: "Bank statements reconciled" },
-    { id: "depr", label: "Depreciation & accruals posted" },
-    { id: "payroll", label: "Payroll & statutory dues run" },
-    { id: "review", label: "Owner / CA sign-off on numbers" },
+    { id: "bank", label: tr("cop.closeBank") },
+    { id: "depr", label: tr("cop.closeDepr") },
+    { id: "payroll", label: tr("cop.closePayroll") },
+    { id: "review", label: tr("cop.closeSignoff") },
   ];
   const [checked, setChecked] = useFeatureState<string[]>("cop-close-checklist", []);
   const toggle = (id: string) => setChecked(checked.includes(id) ? checked.filter(x => x !== id) : [...checked, id]);
@@ -869,10 +883,10 @@ function MonthEndClose({ snap, navigate }: { snap: FinancialSnapshot; navigate: 
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
-          <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> Month-End Close · {monthLabel}</h2>
-          <span className="text-[10px] text-[var(--color-muted)]">{done}/{total} steps · {pct}%</span>
+          <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardCheck size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabClose")} · {monthLabel}</h2>
+          <span className="text-[10px] text-[var(--color-muted)]">{done}/{total} {tr("cop.steps")} · {pct}%</span>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Status is auto-read from your data where possible and tickable where only you can confirm. This is a checklist, not an automation - nothing closes the books for you.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">{tr("cop.closeDesc")}</p>
         <div className="h-1.5 w-full rounded-full bg-[var(--color-border)] overflow-hidden">
           <div className="h-full bg-[var(--color-primary)] transition-all" style={{ width: `${pct}%` }} />
         </div>
@@ -885,11 +899,11 @@ function MonthEndClose({ snap, navigate }: { snap: FinancialSnapshot; navigate: 
               ? <CheckCircle2 size={15} className="text-green-400 shrink-0 mt-0.5" />
               : <AlertTriangle size={15} className={`shrink-0 mt-0.5 ${statusDot[a.status]}`} />}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">{a.label} <span className="text-[10px] text-[var(--color-muted)] font-normal">· auto</span></p>
+              <p className="text-sm font-medium">{a.label} <span className="text-[10px] text-[var(--color-muted)] font-normal">· {tr("cop.auto")}</span></p>
               <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{a.detail}</p>
             </div>
             {a.path && a.status !== "done" && (
-              <button onClick={() => navigate(a.path!)} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline shrink-0 mt-0.5">Open <ArrowRight size={11} /></button>
+              <button onClick={() => navigate(a.path!)} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline shrink-0 mt-0.5">{tr("cop.open")} <ArrowRight size={11} /></button>
             )}
           </div>
         ))}
@@ -899,7 +913,7 @@ function MonthEndClose({ snap, navigate }: { snap: FinancialSnapshot; navigate: 
             <button key={m.id} onClick={() => toggle(m.id)} className="w-full flex items-start gap-3 p-4 text-left hover:bg-[var(--color-accent)]/40 transition-colors">
               {isDone ? <CheckCircle2 size={15} className="text-green-400 shrink-0 mt-0.5" /> : <Circle size={15} className="text-[var(--color-muted)] shrink-0 mt-0.5" />}
               <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium ${isDone ? "line-through text-[var(--color-muted)]" : ""}`}>{m.label} <span className="text-[10px] text-[var(--color-muted)] font-normal no-underline">· manual sign-off</span></p>
+                <p className={`text-sm font-medium ${isDone ? "line-through text-[var(--color-muted)]" : ""}`}>{m.label} <span className="text-[10px] text-[var(--color-muted)] font-normal no-underline">· {tr("cop.manualSignoff")}</span></p>
               </div>
             </button>
           );
@@ -913,6 +927,7 @@ function MonthEndClose({ snap, navigate }: { snap: FinancialSnapshot; navigate: 
 // Pick a headline metric and the copilot shows how it was built from your data -
 // the inputs, the formula in words, and where to dig further. Read-only.
 function ExplainNumber({ snap, signals, navigate }: { snap: FinancialSnapshot; signals: Signals; navigate: Nav }) {
+  const tr = useT();
   type Metric = { id: string; label: string; value: string; formula: string; rows: { k: string; v: string }[]; path: string };
   const metrics = useMemo<Metric[]>(() => [
     {
@@ -966,8 +981,8 @@ function ExplainNumber({ snap, signals, navigate }: { snap: FinancialSnapshot; s
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> Explain a Number</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Pick a headline figure and see exactly how it was computed from your data - the inputs, the formula in plain words, and where to dig in. Nothing here changes a value.</p>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabExplain")}</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">{tr("cop.explainDesc")}</p>
         <div className="flex flex-wrap gap-1.5">
           {metrics.map(x => (
             <button key={x.id} onClick={() => setSel(x.id)}
@@ -993,7 +1008,7 @@ function ExplainNumber({ snap, signals, navigate }: { snap: FinancialSnapshot; s
           ))}
         </div>
         <button onClick={() => navigate(m.path)} className="mt-4 flex items-center gap-1.5 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">
-          See the underlying detail <ArrowRight size={11} />
+          {tr("cop.explainSeeDetail")} <ArrowRight size={11} />
         </button>
       </div>
     </div>
@@ -1004,6 +1019,7 @@ function ExplainNumber({ snap, signals, navigate }: { snap: FinancialSnapshot; s
 // Ranks upcoming obligations and approved POs by urgency, then walks down the
 // list spending only the cash you have - a suggestion to triage, never a payment.
 function PaymentPrioritizer({ signals, navigate }: { signals: Signals; navigate: Nav }) {
+  const tr = useT();
   const { store } = useApp();
   const [reserve, setReserve] = useFeatureState<number>("cop-pay-reserve", 0);
 
@@ -1043,14 +1059,14 @@ function PaymentPrioritizer({ signals, navigate }: { signals: Signals; navigate:
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> Payment Prioritizer</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">When cash is tight, this ranks what's due in the next 30 days - statutory dues and payroll first - and walks down the list spending only the cash you have. It's triage advice; it never releases a payment.</p>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabPrioritize")}</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">{tr("cop.prioritizeDesc")}</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: "Cash on hand", value: formatAmount(signals.cash), color: "text-[var(--color-text)]" },
-            { label: "Spendable now", value: formatAmount(spendable), color: "text-green-400" },
-            { label: "Due (30 days)", value: formatAmount(totalDue), color: "text-yellow-400" },
-            { label: "Shortfall", value: formatAmount(shortfall), color: shortfall > 0 ? "text-red-400" : "text-green-400" },
+            { label: tr("cop.cardCash"), value: formatAmount(signals.cash), color: "text-[var(--color-text)]" },
+            { label: tr("cop.spendableNow"), value: formatAmount(spendable), color: "text-green-400" },
+            { label: tr("cop.due30"), value: formatAmount(totalDue), color: "text-yellow-400" },
+            { label: tr("cop.shortfall"), value: formatAmount(shortfall), color: shortfall > 0 ? "text-red-400" : "text-green-400" },
           ].map(k => (
             <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
               <p className="text-[10px] text-[var(--color-muted)] mb-0.5">{k.label}</p>
@@ -1058,15 +1074,15 @@ function PaymentPrioritizer({ signals, navigate }: { signals: Signals; navigate:
             </div>
           ))}
         </div>
-        <label className="text-xs text-[var(--color-muted)] block mt-4 mb-1">Keep a cash reserve untouched (₹)</label>
+        <label className="text-xs text-[var(--color-muted)] block mt-4 mb-1">{tr("cop.keepReserve")}</label>
         <input type="number" value={reserve} onChange={e => setReserve(Math.max(0, Number(e.target.value) || 0))} className={INP} />
       </div>
 
       {plan.length === 0 ? (
         <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
           <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
-          <p className="text-sm font-medium">Nothing due in the next 30 days</p>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">No obligations or approved POs to prioritise.</p>
+          <p className="text-sm font-medium">{tr("cop.prioritizeEmptyTitle")}</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("cop.prioritizeEmptyBody")}</p>
         </div>
       ) : (
         <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
@@ -1089,7 +1105,7 @@ function PaymentPrioritizer({ signals, navigate }: { signals: Signals; navigate:
       )}
       {shortfall > 0 && (
         <button onClick={() => navigate("/credit")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">
-          {formatCurrency(Math.round(shortfall))} short - explore working capital <ArrowRight size={11} />
+          {tr("cop.shortfallCta", { amount: formatCurrency(Math.round(shortfall)) })} <ArrowRight size={11} />
         </button>
       )}
     </div>
@@ -1100,6 +1116,7 @@ function PaymentPrioritizer({ signals, navigate }: { signals: Signals; navigate:
 // Pulls the advance-tax schedule and obligation calendar into one "what's due
 // soon" list. Surfaces deadlines; filing still happens on the relevant page.
 function ComplianceDigest({ snap, navigate }: { snap: FinancialSnapshot; navigate: Nav }) {
+  const tr = useT();
   const { store } = useApp();
   const [horizon, setHorizon] = useState(7);
 
@@ -1122,28 +1139,28 @@ function ComplianceDigest({ snap, navigate }: { snap: FinancialSnapshot; navigat
     const txt = `Due in the next ${horizon} days (total ${formatCurrency(Math.round(total))}):\n` +
       items.map(i => `• ${format(new Date(i.dueDate), "d MMM")} - ${i.name}: ${formatCurrency(Math.round(i.amount))}${i.overdue ? " (OVERDUE)" : ""}`).join("\n");
     navigator.clipboard?.writeText(txt);
-    toast.success("Digest copied");
+    toast.success(tr("cop.digestCopied"));
   };
 
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
-          <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Due This Week</h2>
+          <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabComplianceDigest")}</h2>
           <div className="flex gap-1">
             {[7, 14, 30].map(d => (
               <button key={d} onClick={() => setHorizon(d)} className={`text-[10px] px-2 py-1 rounded border ${horizon === d ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{d}d</button>
             ))}
           </div>
         </div>
-        <p className="text-xs text-[var(--color-muted)]">Tax, statutory and obligation deadlines landing in your chosen window, soonest first - plus the advance-tax installments from your schedule. It reminds you; the actual filing/payment happens on its own page.</p>
-        {items.length > 0 && <p className="text-sm font-semibold mt-3">Total due: <span className="tabular-nums">{formatCurrency(Math.round(total))}</span></p>}
+        <p className="text-xs text-[var(--color-muted)]">{tr("cop.digestDesc")}</p>
+        {items.length > 0 && <p className="text-sm font-semibold mt-3">{tr("cop.totalDue")} <span className="tabular-nums">{formatCurrency(Math.round(total))}</span></p>}
       </div>
 
       {items.length === 0 ? (
         <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
           <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
-          <p className="text-sm font-medium">Nothing due in the next {horizon} days</p>
+          <p className="text-sm font-medium">{tr("cop.nothingDueDays", { days: horizon })}</p>
         </div>
       ) : (
         <>
@@ -1160,8 +1177,8 @@ function ComplianceDigest({ snap, navigate }: { snap: FinancialSnapshot; navigat
             ))}
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => navigate("/compliance")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">Open compliance calendar <ArrowRight size={11} /></button>
-            <button onClick={copy} className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">Copy digest</button>
+            <button onClick={() => navigate("/compliance")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">{tr("cop.openComplianceCalendar")} <ArrowRight size={11} /></button>
+            <button onClick={copy} className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">{tr("cop.copyDigest")}</button>
           </div>
         </>
       )}
@@ -1173,6 +1190,7 @@ function ComplianceDigest({ snap, navigate }: { snap: FinancialSnapshot; navigat
 // Distils the seven health drivers plus a couple of live signals into the three
 // things most worth your attention, each with a one-line "why" and a fix link.
 function TopRisks({ snap, signals, navigate }: { snap: FinancialSnapshot; signals: Signals; navigate: Nav }) {
+  const tr = useT();
   const risks = useMemo(() => {
     type Risk = { id: string; title: string; why: string; weight: number; path: string; cta: string };
     const out: Risk[] = [];
@@ -1191,12 +1209,12 @@ function TopRisks({ snap, signals, navigate }: { snap: FinancialSnapshot; signal
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-[var(--color-muted)] px-1">The three issues that most drag on your financial health right now, ranked by how much they cost your score and cash. A focusing aid - review before acting.</p>
+      <p className="text-xs text-[var(--color-muted)] px-1">{tr("cop.risksDesc")}</p>
       {risks.length === 0 ? (
         <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
           <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
-          <p className="text-sm font-medium">No material risks flagged</p>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Every health driver is scoring above 60 and no acute signals are firing.</p>
+          <p className="text-sm font-medium">{tr("cop.risksEmptyTitle")}</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("cop.risksEmptyBody")}</p>
         </div>
       ) : risks.map((r, i) => (
         <div key={r.id} className={`${CARD} p-4 flex items-start gap-3`}>
@@ -1216,6 +1234,7 @@ function TopRisks({ snap, signals, navigate }: { snap: FinancialSnapshot; signal
 // Groups outflows by counterparty to surface recurring spend and likely
 // duplicates worth reviewing to cut. It flags candidates; you decide what to cut.
 function SavingsFinder({ navigate }: { navigate: Nav }) {
+  const tr = useT();
   const { store } = useApp();
   const [cut, setCut] = useFeatureState<string[]>("cop-savings-cut", []);
 
@@ -1251,18 +1270,18 @@ function SavingsFinder({ navigate }: { navigate: Nav }) {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scissors size={14} className="text-[var(--color-primary)]" /> Savings Finder</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Recurring and frequently-repeated outflows over the last 90 days, ranked by monthly cost - the usual place to find subscriptions and duplicate spend to trim. Tick what you'd cut to tally the saving; it doesn't cancel anything.</p>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Scissors size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabSavings")}</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-3">{tr("cop.savingsDesc")}</p>
         {targetedMonthly > 0 && (
-          <p className="text-sm font-semibold text-green-400">Earmarked to cut: {formatCurrency(Math.round(targetedMonthly))}/mo <span className="text-[var(--color-muted)] font-normal">(≈ {formatCurrency(Math.round(targetedMonthly * 12))}/yr)</span></p>
+          <p className="text-sm font-semibold text-green-400">{tr("cop.earmarkedToCut")} {formatCurrency(Math.round(targetedMonthly))}/mo <span className="text-[var(--color-muted)] font-normal">(≈ {formatCurrency(Math.round(targetedMonthly * 12))}/yr)</span></p>
         )}
       </div>
 
       {findings.length === 0 ? (
         <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
           <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
-          <p className="text-sm font-medium">No recurring spend over ₹5,000/mo found</p>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Either spend is well spread or there isn't enough labelled history yet.</p>
+          <p className="text-sm font-medium">{tr("cop.savingsEmptyTitle")}</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("cop.savingsEmptyBody")}</p>
         </div>
       ) : (
         <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
@@ -1286,7 +1305,7 @@ function SavingsFinder({ navigate }: { navigate: Nav }) {
           })}
         </div>
       )}
-      <button onClick={() => navigate("/spend")} className="flex items-center gap-1.5 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">Review full spend <ArrowRight size={11} /></button>
+      <button onClick={() => navigate("/spend")} className="flex items-center gap-1.5 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">{tr("cop.reviewFullSpend")} <ArrowRight size={11} /></button>
     </div>
   );
 }
@@ -1298,6 +1317,7 @@ interface KpiTargetState { runwayMonths: number; marginPct: number; dsoDays: num
 const DEFAULT_KPI_TARGETS: KpiTargetState = { runwayMonths: 12, marginPct: 20, dsoDays: 45, healthScore: 70 };
 
 function KpiTargets({ snap, signals }: { snap: FinancialSnapshot; signals: Signals }) {
+  const tr = useT();
   const [t, setT] = useFeatureState<KpiTargetState>("cop-kpi-targets", DEFAULT_KPI_TARGETS);
   const set = <K extends keyof KpiTargetState>(k: K, v: number) => setT({ ...t, [k]: v });
 
@@ -1305,18 +1325,18 @@ function KpiTargets({ snap, signals }: { snap: FinancialSnapshot; signals: Signa
     const runwayMonths = signals.runwayDays >= 999 ? 999 : signals.runwayDays / 30;
     const margin = snap.grossMarginPct ?? 0;
     return [
-      { id: "runwayMonths", label: "Runway (months)", target: t.runwayMonths, actual: runwayMonths, fmt: (n: number) => n >= 999 ? "∞" : n.toFixed(1), higherBetter: true },
-      { id: "marginPct", label: "Gross margin (%)", target: t.marginPct, actual: margin, fmt: (n: number) => `${n.toFixed(0)}%`, higherBetter: true },
-      { id: "dsoDays", label: "DSO (days)", target: t.dsoDays, actual: snap.dsoDays, fmt: (n: number) => `${Math.round(n)}d`, higherBetter: false },
-      { id: "healthScore", label: "Health score", target: t.healthScore, actual: signals.healthScore, fmt: (n: number) => `${Math.round(n)}`, higherBetter: true },
+      { id: "runwayMonths", label: tr("cop.kpiRunway"), target: t.runwayMonths, actual: runwayMonths, fmt: (n: number) => n >= 999 ? "∞" : n.toFixed(1), higherBetter: true },
+      { id: "marginPct", label: tr("cop.kpiMargin"), target: t.marginPct, actual: margin, fmt: (n: number) => `${n.toFixed(0)}%`, higherBetter: true },
+      { id: "dsoDays", label: tr("cop.kpiDso"), target: t.dsoDays, actual: snap.dsoDays, fmt: (n: number) => `${Math.round(n)}d`, higherBetter: false },
+      { id: "healthScore", label: tr("cop.kpiHealth"), target: t.healthScore, actual: signals.healthScore, fmt: (n: number) => `${Math.round(n)}`, higherBetter: true },
     ] as const;
-  }, [t, snap, signals]);
+  }, [t, snap, signals, tr]);
 
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> KPI Targets</h2>
-        <p className="text-xs text-[var(--color-muted)]">Set a target for each core KPI; the tracker compares it to the live value and nudges you on the gap. Targets are saved with your workspace - the actuals are read straight from your data.</p>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabTargets")}</h2>
+        <p className="text-xs text-[var(--color-muted)]">{tr("cop.targetsDesc")}</p>
       </div>
 
       <div className="space-y-3">
@@ -1334,12 +1354,12 @@ function KpiTargets({ snap, signals }: { snap: FinancialSnapshot; signals: Signa
                     {met ? <CheckCircle2 size={13} className="text-green-400" /> : <AlertTriangle size={13} className="text-yellow-400" />} {r.label}
                   </p>
                   <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
-                    Now <strong className="text-[var(--color-text)]">{r.fmt(r.actual)}</strong> · target {r.fmt(r.target)}
-                    {met ? <span className="text-green-400"> · on target</span> : <span className="text-yellow-400"> · {r.fmt(Math.abs(gap))} {r.higherBetter ? "below" : "above"}</span>}
+                    {tr("cop.now")} <strong className="text-[var(--color-text)]">{r.fmt(r.actual)}</strong> · {tr("cop.targetLower")} {r.fmt(r.target)}
+                    {met ? <span className="text-green-400"> · {tr("cop.onTarget")}</span> : <span className="text-yellow-400"> · {r.fmt(Math.abs(gap))} {r.higherBetter ? tr("cop.below") : tr("cop.above")}</span>}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-[var(--color-muted)]">Target</span>
+                  <span className="text-[10px] text-[var(--color-muted)]">{tr("cop.targetCap")}</span>
                   <input type="number" value={r.target} onChange={e => set(r.id, Math.max(0, Number(e.target.value) || 0))} className="w-20 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1 text-sm text-right tabular-nums outline-none focus:border-[var(--color-primary)]" />
                 </div>
               </div>
@@ -1350,9 +1370,9 @@ function KpiTargets({ snap, signals }: { snap: FinancialSnapshot; signals: Signa
           );
         })}
       </div>
-      <button onClick={() => { setT(DEFAULT_KPI_TARGETS); toast.success("Targets reset to defaults"); }}
+      <button onClick={() => { setT(DEFAULT_KPI_TARGETS); toast.success(tr("cop.targetsResetToast")); }}
         className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">
-        Reset targets
+        {tr("cop.resetTargets")}
       </button>
     </div>
   );
@@ -1362,6 +1382,7 @@ function KpiTargets({ snap, signals }: { snap: FinancialSnapshot; signals: Signa
 // A copy-ready end-of-day or meeting-prep summary: the position, what moved
 // today, and the open items. Generated from the same live numbers.
 function EndOfDayBrief({ snap, signals }: { snap: FinancialSnapshot; signals: Signals }) {
+  const tr = useT();
   const { store } = useApp();
   const today = new Date();
 
@@ -1394,13 +1415,13 @@ function EndOfDayBrief({ snap, signals }: { snap: FinancialSnapshot; signals: Si
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
-          <h2 className="text-sm font-semibold flex items-center gap-2"><Presentation size={14} className="text-[var(--color-primary)]" /> End-of-Day / Meeting-Prep Brief</h2>
-          <button onClick={() => { navigator.clipboard?.writeText(brief); toast.success("Brief copied"); }}
+          <h2 className="text-sm font-semibold flex items-center gap-2"><Presentation size={14} className="text-[var(--color-primary)]" /> {tr("cop.eodHeading")}</h2>
+          <button onClick={() => { navigator.clipboard?.writeText(brief); toast.success(tr("cop.eodCopied")); }}
             className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40">
-            Copy
+            {tr("cop.copy")}
           </button>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-4">A copy-ready wrap of where the business stands, what moved today and what's still open - paste it into a standup, a WhatsApp update or your meeting notes. Built from your live numbers.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">{tr("cop.eodDesc")}</p>
         <pre className="text-xs whitespace-pre-wrap bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 leading-relaxed text-[var(--color-text)] font-sans">{brief}</pre>
       </div>
     </div>
@@ -1412,6 +1433,7 @@ function EndOfDayBrief({ snap, signals }: { snap: FinancialSnapshot; signals: Si
 // and open invoices due, plus the operating run-rate. Flags the first week cash
 // would dip below your safety buffer. Read-only forecast - moves nothing.
 function CashEarlyWarning({ snap, signals, navigate }: { snap: FinancialSnapshot; signals: Signals; navigate: Nav }) {
+  const tr = useT();
   const { store } = useApp();
   const buffer = Math.round(snap.monthlyExpense * 0.5); // ~2 weeks of expense as a safety floor
 
@@ -1443,17 +1465,17 @@ function CashEarlyWarning({ snap, signals, navigate }: { snap: FinancialSnapshot
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><LineChart size={14} className="text-[var(--color-primary)]" /> Cash Early-Warning</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-3">An 8-week projection of your closing cash - opening balance plus operating run-rate, expected collections and dated obligations. It warns when cash would dip below a ~2-week expense buffer. A preview, not a guarantee; nothing here moves money.</p>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><LineChart size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabCashWatch")}</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-3">{tr("cop.cashWatchDesc")}</p>
         {firstBreach ? (
           <div className="rounded-lg p-3 border border-red-800/40 bg-red-950/20 text-sm text-red-300 flex items-start gap-2">
             <AlertTriangle size={15} className="shrink-0 mt-0.5" />
-            <span>Projected cash falls below your {formatCurrency(buffer)} buffer in week of <strong>{format(new Date(firstBreach.start), "d MMM")}</strong> (closing ≈ {formatCurrency(Math.round(firstBreach.close))}). Act before then.</span>
+            <span>{tr("cop.cashWatchBreachLead", { buffer: formatCurrency(buffer) })} <strong>{format(new Date(firstBreach.start), "d MMM")}</strong> ({tr("cop.closing")} ≈ {formatCurrency(Math.round(firstBreach.close))}). {tr("cop.actBeforeThen")}</span>
           </div>
         ) : (
           <div className="rounded-lg p-3 border border-green-800/40 bg-green-950/20 text-sm text-green-300 flex items-start gap-2">
             <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
-            <span>Cash stays above your {formatCurrency(buffer)} buffer across the next 8 weeks. Lowest point ≈ {formatCurrency(Math.round(lowest.close))} (week of {format(new Date(lowest.start), "d MMM")}).</span>
+            <span>{tr("cop.cashWatchOk", { buffer: formatCurrency(buffer) })} {tr("cop.lowestPoint")} ≈ {formatCurrency(Math.round(lowest.close))} ({tr("cop.weekOf")} {format(new Date(lowest.start), "d MMM")}).</span>
           </div>
         )}
       </div>
@@ -1463,7 +1485,7 @@ function CashEarlyWarning({ snap, signals, navigate }: { snap: FinancialSnapshot
           <div key={w.idx} className={`flex items-center gap-3 p-3.5 ${w.breach ? "bg-red-950/10" : ""}`}>
             <span className="text-[11px] text-[var(--color-muted)] w-24 shrink-0">{format(new Date(w.start), "d MMM")}-{format(new Date(w.end), "d MMM")}</span>
             <div className="flex-1 min-w-0 text-[11px] text-[var(--color-muted)]">
-              <span className="text-green-400">+{formatCurrency(Math.round(w.inflow))}</span> in · <span className="text-red-400">−{formatCurrency(Math.round(w.outflow))}</span> due
+              <span className="text-green-400">+{formatCurrency(Math.round(w.inflow))}</span> {tr("cop.inLabel")} · <span className="text-red-400">−{formatCurrency(Math.round(w.outflow))}</span> {tr("cop.dueLabel")}
             </div>
             <span className={`text-sm font-semibold tabular-nums shrink-0 ${w.breach ? "text-red-400" : w.close < buffer * 1.5 ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{formatCurrency(Math.round(w.close))}</span>
           </div>
@@ -1472,8 +1494,8 @@ function CashEarlyWarning({ snap, signals, navigate }: { snap: FinancialSnapshot
 
       {firstBreach && (
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => navigate("/collections")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">Pull collections forward <ArrowRight size={11} /></button>
-          <button onClick={() => navigate("/forecast")} className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">Open full forecast</button>
+          <button onClick={() => navigate("/collections")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">{tr("cop.pullCollectionsForward")} <ArrowRight size={11} /></button>
+          <button onClick={() => navigate("/forecast")} className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">{tr("cop.openFullForecast")}</button>
         </div>
       )}
     </div>
@@ -1485,6 +1507,7 @@ function CashEarlyWarning({ snap, signals, navigate }: { snap: FinancialSnapshot
 // they are - so you chase the biggest, oldest balances first. Suggests an order;
 // the actual chasing happens in Collections.
 function CollectFirstWorklist({ navigate }: { navigate: Nav }) {
+  const tr = useT();
   const { store } = useApp();
   const [done, setDone] = useFeatureState<string[]>("cop-collect-first-done", []);
 
@@ -1511,16 +1534,16 @@ function CollectFirstWorklist({ navigate }: { navigate: Nav }) {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><HandCoins size={14} className="text-[var(--color-primary)]" /> Collect-First Worklist</h2>
-        <p className="text-xs text-[var(--color-muted)]">Your open invoices ranked by collection priority - bigger balances and the longest-overdue ones rise to the top, so a morning of chasing recovers the most cash. Tick as you work through them; the copilot never contacts anyone for you.</p>
-        {outstanding > 0 && <p className="text-sm font-semibold mt-3">Still to chase: <span className="tabular-nums">{formatCurrency(Math.round(outstanding))}</span></p>}
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><HandCoins size={14} className="text-[var(--color-primary)]" /> {tr("cop.collectHeading")}</h2>
+        <p className="text-xs text-[var(--color-muted)]">{tr("cop.collectDesc")}</p>
+        {outstanding > 0 && <p className="text-sm font-semibold mt-3">{tr("cop.stillToChase")} <span className="tabular-nums">{formatCurrency(Math.round(outstanding))}</span></p>}
       </div>
 
       {worklist.length === 0 ? (
         <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
           <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
-          <p className="text-sm font-medium">No open invoices to chase</p>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Everything is paid - collections are clean.</p>
+          <p className="text-sm font-medium">{tr("cop.collectEmptyTitle")}</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("cop.collectEmptyBody")}</p>
         </div>
       ) : (
         <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
@@ -1545,7 +1568,7 @@ function CollectFirstWorklist({ navigate }: { navigate: Nav }) {
           })}
         </div>
       )}
-      <button onClick={() => navigate("/collections")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">Open Collections <ArrowRight size={11} /></button>
+      <button onClick={() => navigate("/collections")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">{tr("cop.openCollections")} <ArrowRight size={11} /></button>
     </div>
   );
 }
@@ -1555,6 +1578,7 @@ function CollectFirstWorklist({ navigate }: { navigate: Nav }) {
 // earned but haven't billed. Surfaces the gap; raising the invoice happens on the
 // Receivables page.
 function InvoiceNowCandidates({ navigate }: { navigate: Nav }) {
+  const tr = useT();
   const { store } = useApp();
 
   const candidates = useMemo(() => {
@@ -1580,16 +1604,16 @@ function InvoiceNowCandidates({ navigate }: { navigate: Nav }) {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FilePlus2 size={14} className="text-[var(--color-primary)]" /> Invoice-Now Candidates</h2>
-        <p className="text-xs text-[var(--color-muted)]">Delivered and dispatched orders matched against your invoice list - anything fulfilled but seemingly unbilled is revenue waiting to be raised. It points out the gap; you raise the invoice on Receivables.</p>
-        {unbilledTotal > 0 && <p className="text-sm font-semibold mt-3 text-yellow-400">Likely unbilled: <span className="tabular-nums">{formatCurrency(Math.round(unbilledTotal))}</span></p>}
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><FilePlus2 size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabInvoiceNow")}</h2>
+        <p className="text-xs text-[var(--color-muted)]">{tr("cop.invoiceNowDesc")}</p>
+        {unbilledTotal > 0 && <p className="text-sm font-semibold mt-3 text-yellow-400">{tr("cop.likelyUnbilled")} <span className="tabular-nums">{formatCurrency(Math.round(unbilledTotal))}</span></p>}
       </div>
 
       {candidates.length === 0 ? (
         <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
           <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
-          <p className="text-sm font-medium">No fulfilled orders pending an invoice</p>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Either nothing is delivered yet or it all appears to be billed.</p>
+          <p className="text-sm font-medium">{tr("cop.invoiceNowEmptyTitle")}</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("cop.invoiceNowEmptyBody")}</p>
         </div>
       ) : (
         <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
@@ -1608,7 +1632,7 @@ function InvoiceNowCandidates({ navigate }: { navigate: Nav }) {
           ))}
         </div>
       )}
-      <button onClick={() => navigate("/receivables")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">Raise invoices on Receivables <ArrowRight size={11} /></button>
+      <button onClick={() => navigate("/receivables")} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium">{tr("cop.raiseInvoices")} <ArrowRight size={11} /></button>
     </div>
   );
 }
@@ -1618,6 +1642,7 @@ function InvoiceNowCandidates({ navigate }: { navigate: Nav }) {
 // and "can wait", given your spendable cash. A timing suggestion to preserve
 // cash - it never schedules or releases a payment.
 function PayNowVsLater({ signals, navigate }: { signals: Signals; navigate: Nav }) {
+  const tr = useT();
   const { store } = useApp();
   const [windowDays, setWindowDays] = useState(7);
 
@@ -1659,19 +1684,19 @@ function PayNowVsLater({ signals, navigate }: { signals: Signals; navigate: Nav 
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
-          <h2 className="text-sm font-semibold flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> Pay Now vs Later</h2>
+          <h2 className="text-sm font-semibold flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> {tr("cop.tabVendorTiming")}</h2>
           <div className="flex gap-1">
             {[3, 7, 14].map(d => (
               <button key={d} onClick={() => setWindowDays(d)} className={`text-[10px] px-2 py-1 rounded border ${windowDays === d ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{d}d</button>
             ))}
           </div>
         </div>
-        <p className="text-xs text-[var(--color-muted)] mb-3">Splits upcoming obligations into what genuinely needs paying within {windowDays} days - statutory dues, payroll, loans and anything overdue - versus what can safely wait, so you hold onto cash without missing a deadline. Timing advice only; it releases nothing.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">{tr("cop.vendorTimingDesc", { days: windowDays })}</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {[
-            { label: "Pay now", value: formatAmount(payNowTotal), color: "text-red-400" },
-            { label: "Can wait", value: formatAmount(canWaitTotal), color: "text-[var(--color-text)]" },
-            { label: "Cash on hand", value: formatAmount(signals.cash), color: coversNow ? "text-green-400" : "text-yellow-400" },
+            { label: tr("cop.payNow"), value: formatAmount(payNowTotal), color: "text-red-400" },
+            { label: tr("cop.canWait"), value: formatAmount(canWaitTotal), color: "text-[var(--color-text)]" },
+            { label: tr("cop.cardCash"), value: formatAmount(signals.cash), color: coversNow ? "text-green-400" : "text-yellow-400" },
           ].map(k => (
             <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
               <p className="text-[10px] text-[var(--color-muted)] mb-0.5">{k.label}</p>
@@ -1680,36 +1705,36 @@ function PayNowVsLater({ signals, navigate }: { signals: Signals; navigate: Nav 
           ))}
         </div>
         {!coversNow && payNowTotal > 0 && (
-          <p className="text-[11px] text-yellow-400 mt-3">Pay-now total exceeds cash on hand - open the Payment Prioritizer to sequence within available funds.</p>
+          <p className="text-[11px] text-yellow-400 mt-3">{tr("cop.payNowExceedsCash")}</p>
         )}
       </div>
 
       {groups.payNow.length === 0 && groups.canWait.length === 0 ? (
         <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
           <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
-          <p className="text-sm font-medium">No obligations in the next 45 days</p>
+          <p className="text-sm font-medium">{tr("cop.vendorTimingEmpty")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className={`${CARD} overflow-hidden`}>
-            <p className="text-xs font-semibold px-4 pt-3 pb-2 text-red-400 flex items-center gap-1.5"><AlertTriangle size={12} /> Pay now ({groups.payNow.length})</p>
+            <p className="text-xs font-semibold px-4 pt-3 pb-2 text-red-400 flex items-center gap-1.5"><AlertTriangle size={12} /> {tr("cop.payNow")} ({groups.payNow.length})</p>
             <div className="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)]">
               {groups.payNow.length === 0
-                ? <p className="text-[11px] text-[var(--color-muted)] p-4">Nothing due in the next {windowDays} days.</p>
+                ? <p className="text-[11px] text-[var(--color-muted)] p-4">{tr("cop.nothingDueDays", { days: windowDays })}</p>
                 : groups.payNow.map(i => <Row key={i.id} name={i.name} amount={i.amount} dueDate={i.dueDate} kind={i.kind} overdue={i.dueDate < new Date().toISOString().split("T")[0]} />)}
             </div>
           </div>
           <div className={`${CARD} overflow-hidden`}>
-            <p className="text-xs font-semibold px-4 pt-3 pb-2 text-[var(--color-muted)] flex items-center gap-1.5"><Timer size={12} /> Can wait ({groups.canWait.length})</p>
+            <p className="text-xs font-semibold px-4 pt-3 pb-2 text-[var(--color-muted)] flex items-center gap-1.5"><Timer size={12} /> {tr("cop.canWait")} ({groups.canWait.length})</p>
             <div className="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)]">
               {groups.canWait.length === 0
-                ? <p className="text-[11px] text-[var(--color-muted)] p-4">Nothing deferrable in this window.</p>
+                ? <p className="text-[11px] text-[var(--color-muted)] p-4">{tr("cop.nothingDeferrable")}</p>
                 : groups.canWait.map(i => <Row key={i.id} name={i.name} amount={i.amount} dueDate={i.dueDate} kind={i.kind} overdue={false} />)}
             </div>
           </div>
         </div>
       )}
-      <button onClick={() => navigate("/spend")} className="flex items-center gap-1.5 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">Review payables on Spend <ArrowRight size={11} /></button>
+      <button onClick={() => navigate("/spend")} className="flex items-center gap-1.5 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-2 rounded-lg hover:border-[var(--color-primary)]/40">{tr("cop.reviewPayables")} <ArrowRight size={11} /></button>
     </div>
   );
 }
@@ -1719,6 +1744,7 @@ function PayNowVsLater({ signals, navigate }: { signals: Signals; navigate: Nav 
 // renders them as a tickable, copy-ready list. A focusing aid built from the same
 // signals the rest of the copilot reads.
 function ThisWeekFocus({ snap, signals, navigate }: { snap: FinancialSnapshot; signals: Signals; navigate: Nav }) {
+  const tr = useT();
   const { store } = useApp();
   const [done, setDone] = useFeatureState<string[]>("cop-this-week-done", []);
 
@@ -1748,7 +1774,7 @@ function ThisWeekFocus({ snap, signals, navigate }: { snap: FinancialSnapshot; s
   const copy = () => {
     const txt = `This week's focus - ${format(new Date(), "d MMM yyyy")}\n` + tasks.map(t => `• ${t.text}`).join("\n");
     navigator.clipboard?.writeText(txt);
-    toast.success("Focus list copied");
+    toast.success(tr("cop.focusCopied"));
   };
   const remaining = tasks.filter(t => !done.includes(t.id)).length;
 
@@ -1756,11 +1782,11 @@ function ThisWeekFocus({ snap, signals, navigate }: { snap: FinancialSnapshot; s
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
         <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
-          <h2 className="text-sm font-semibold flex items-center gap-2"><ListTodo size={14} className="text-[var(--color-primary)]" /> This Week's Focus</h2>
-          <button onClick={copy} className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40">Copy list</button>
+          <h2 className="text-sm font-semibold flex items-center gap-2"><ListTodo size={14} className="text-[var(--color-primary)]" /> {tr("cop.thisWeekHeading")}</h2>
+          <button onClick={copy} className="text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg hover:border-[var(--color-primary)]/40">{tr("cop.copyList")}</button>
         </div>
-        <p className="text-xs text-[var(--color-muted)]">The handful of moves most worth your time this week, ranked by impact and read straight from your numbers. Tick them off as you go - it's a to-do list, not an executor.</p>
-        <p className="text-[11px] text-[var(--color-muted)] mt-2">{remaining} of {tasks.length} remaining</p>
+        <p className="text-xs text-[var(--color-muted)]">{tr("cop.thisWeekDesc")}</p>
+        <p className="text-[11px] text-[var(--color-muted)] mt-2">{tr("cop.remainingCount", { remaining, total: tasks.length })}</p>
       </div>
 
       <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
@@ -1772,7 +1798,7 @@ function ThisWeekFocus({ snap, signals, navigate }: { snap: FinancialSnapshot; s
                 {isDone ? <CheckCircle2 size={16} className="text-green-400" /> : <Circle size={16} className="text-[var(--color-muted)]" />}
               </button>
               <p className={`flex-1 min-w-0 text-sm ${isDone ? "line-through text-[var(--color-muted)]" : ""}`}>{t.text}</p>
-              <button onClick={() => navigate(t.path)} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline shrink-0">Open <ArrowRight size={11} /></button>
+              <button onClick={() => navigate(t.path)} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline shrink-0">{tr("cop.open")} <ArrowRight size={11} /></button>
             </div>
           );
         })}
@@ -1786,6 +1812,7 @@ function ThisWeekFocus({ snap, signals, navigate }: { snap: FinancialSnapshot; s
 // words why it's off and which levers move it. Read-only; it links to the page
 // where each lever actually lives.
 function KpiOffTrackExplainer({ snap, signals, navigate }: { snap: FinancialSnapshot; signals: Signals; navigate: Nav }) {
+  const tr = useT();
   const [targets] = useFeatureState<KpiTargetState>("cop-kpi-targets", DEFAULT_KPI_TARGETS);
 
   const analysis = useMemo(() => {
@@ -1832,27 +1859,27 @@ function KpiOffTrackExplainer({ snap, signals, navigate }: { snap: FinancialSnap
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Lightbulb size={14} className="text-[var(--color-primary)]" /> Off-Track KPI Explainer</h2>
-        <p className="text-xs text-[var(--color-muted)]">Compares your saved KPI targets to live values, picks the one furthest off, and explains in plain words why it's off and which levers move it. Diagnosis only - set targets on the KPI Targets tab; act via the linked pages.</p>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Lightbulb size={14} className="text-[var(--color-primary)]" /> {tr("cop.kpiExplainerHeading")}</h2>
+        <p className="text-xs text-[var(--color-muted)]">{tr("cop.kpiExplainerDesc")}</p>
       </div>
 
       {!analysis.worst ? (
         <div className="rounded-lg p-6 text-center border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]">
           <CheckCircle2 size={22} className="mx-auto text-green-400 mb-2" />
-          <p className="text-sm font-medium">Every tracked KPI is on or above target</p>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Nothing off-track against your saved targets right now.</p>
+          <p className="text-sm font-medium">{tr("cop.kpiExplainerEmptyTitle")}</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("cop.kpiExplainerEmptyBody")}</p>
         </div>
       ) : (
         <div className={`${CARD} p-5 space-y-4`}>
           <div className="flex items-baseline justify-between flex-wrap gap-2">
-            <p className="text-sm font-semibold flex items-center gap-1.5"><AlertTriangle size={14} className="text-yellow-400" /> {analysis.worst.label} is your most off-track KPI</p>
-            <span className="text-[10px] text-[var(--color-muted)]">{analysis.offTrackCount} of {analysis.total} KPIs off target</span>
+            <p className="text-sm font-semibold flex items-center gap-1.5"><AlertTriangle size={14} className="text-yellow-400" /> {tr("cop.mostOffTrack", { label: analysis.worst.label })}</p>
+            <span className="text-[10px] text-[var(--color-muted)]">{tr("cop.kpisOffTarget", { count: analysis.offTrackCount, total: analysis.total })}</span>
           </div>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Now", value: fmt(analysis.worst.id, analysis.worst.actual), color: "text-yellow-400" },
-              { label: "Target", value: fmt(analysis.worst.id, analysis.worst.target), color: "text-[var(--color-text)]" },
-              { label: "Gap", value: `${Math.round(Math.abs(analysis.worst.gapPct))}%`, color: "text-red-400" },
+              { label: tr("cop.now"), value: fmt(analysis.worst.id, analysis.worst.actual), color: "text-yellow-400" },
+              { label: tr("cop.targetCap"), value: fmt(analysis.worst.id, analysis.worst.target), color: "text-[var(--color-text)]" },
+              { label: tr("cop.gap"), value: `${Math.round(Math.abs(analysis.worst.gapPct))}%`, color: "text-red-400" },
             ].map(k => (
               <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
                 <p className="text-[10px] text-[var(--color-muted)] mb-0.5">{k.label}</p>
@@ -1861,11 +1888,11 @@ function KpiOffTrackExplainer({ snap, signals, navigate }: { snap: FinancialSnap
             ))}
           </div>
           <div>
-            <p className="text-[11px] font-semibold text-[var(--color-muted)] uppercase tracking-wide mb-1">Why it's off</p>
+            <p className="text-[11px] font-semibold text-[var(--color-muted)] uppercase tracking-wide mb-1">{tr("cop.whyItsOff")}</p>
             <p className="text-sm">{analysis.worst.why}</p>
           </div>
           <div>
-            <p className="text-[11px] font-semibold text-[var(--color-muted)] uppercase tracking-wide mb-2">Levers that move it</p>
+            <p className="text-[11px] font-semibold text-[var(--color-muted)] uppercase tracking-wide mb-2">{tr("cop.leversThatMoveIt")}</p>
             <div className="space-y-2">
               {analysis.worst.levers.map(l => (
                 <button key={l.path + l.text} onClick={() => navigate(l.path)} className="w-full flex items-center justify-between gap-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 hover:border-[var(--color-primary)]/40 text-left">

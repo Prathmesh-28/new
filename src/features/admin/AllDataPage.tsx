@@ -5,6 +5,7 @@ import { useApp } from "@/context/AppContext";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { api } from "@/lib/api";
+import { useT } from "@/i18n";
 import {
   Database, RefreshCw, Download, Search, Copy, X, LogIn, Zap, Power,
   Pencil, KeyRound, Crown, Trash2, Building2, Users as UsersIcon,
@@ -291,6 +292,7 @@ export default function AllDataPage() {
   const { user } = useAuth();
   if (user?.role !== "super_admin") return <Navigate to="/dashboard" replace />;
 
+  const tr = useT();
   const { setSelectedClient } = useApp();
   const navigate = useNavigate();
 
@@ -371,11 +373,11 @@ export default function AllDataPage() {
 
   // ── Tab counts ───────────────────────────────────────────────────────────────
   const tabs: { id: TabId; label: string; count: number; icon: ReactNode }[] = [
-    { id: "companies",    label: "Companies",    count: companies.length, icon: <Building2 size={14} /> },
-    { id: "users",        label: "Users",        count: users.length,     icon: <UsersIcon size={14} /> },
-    { id: "transactions", label: "Transactions", count: sumTransactions,  icon: <Receipt size={14} /> },
-    { id: "invoices",     label: "Invoices",     count: invoiceCompanies, icon: <FileText size={14} /> },
-    { id: "activity",     label: "Activity",     count: audit.length,     icon: <Activity size={14} /> },
+    { id: "companies",    label: tr("alld.tabCompanies"),    count: companies.length, icon: <Building2 size={14} /> },
+    { id: "users",        label: tr("alld.tabUsers"),        count: users.length,     icon: <UsersIcon size={14} /> },
+    { id: "transactions", label: tr("alld.tabTransactions"), count: sumTransactions,  icon: <Receipt size={14} /> },
+    { id: "invoices",     label: tr("alld.tabInvoices"),     count: invoiceCompanies, icon: <FileText size={14} /> },
+    { id: "activity",     label: tr("alld.tabActivity"),     count: audit.length,     icon: <Activity size={14} /> },
   ];
 
   // ── Filtering / sorting (per tab) ─────────────────────────────────────────────
@@ -581,8 +583,8 @@ export default function AllDataPage() {
 
   const sortOptions =
     tab === "users"
-      ? [["newest", "Newest"], ["active", "Last active"], ["users", "Most logins"]]
-      : [["newest", "Newest"], ["users", "Most users"], ["cash", "Highest cash"], ["active", "Last active"]];
+      ? [["newest", tr("alld.sortNewest")], ["active", tr("alld.sortLastActive")], ["users", tr("alld.sortMostLogins")]]
+      : [["newest", tr("alld.sortNewest")], ["users", tr("alld.sortMostUsers")], ["cash", tr("alld.sortHighestCash")], ["active", tr("alld.sortLastActive")]];
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
@@ -593,9 +595,9 @@ export default function AllDataPage() {
           <div>
             <h1 className="text-xl font-bold flex items-center gap-2">
               <Database size={20} className="text-[var(--color-primary)]" />
-              All Data
+              {tr("alld.title")}
             </h1>
-            <p className="text-xs text-[var(--color-muted)] mt-0.5">Platform-wide · every company, user and record</p>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("alld.subtitle")}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -603,26 +605,26 @@ export default function AllDataPage() {
               onClick={() => void loadAll()}
               className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] hover:border-[var(--color-primary)] transition-colors"
             >
-              <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Refresh
+              <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> {tr("alld.refresh")}
             </button>
             <button
               type="button"
               onClick={exportAll}
               className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold hover:opacity-90 transition-opacity"
             >
-              <Download size={13} /> Export all
+              <Download size={13} /> {tr("alld.exportAll")}
             </button>
           </div>
         </div>
 
         {/* KPI TILES */}
         <div className="flex flex-wrap gap-2 mt-4">
-          <KpiTile label="Companies" value={fmtNum(stats?.companies ?? companies.length)} sub={`${stats?.activeCompanies ?? 0} active`} icon={<Building2 size={13} />} />
-          <KpiTile label="Users" value={fmtNum(stats?.users ?? users.length)} sub={`${pendingUsers} pending setup`} icon={<UsersIcon size={13} />} />
-          <KpiTile label="Platform cash" value={fmtINR(stats?.totalCash ?? 0)} icon={<Wallet size={13} />} />
-          <KpiTile label="Total revenue" value={fmtINR(stats?.totalRevenue ?? 0)} icon={<TrendingUp size={13} />} />
-          <KpiTile label="MRR" value={fmtINR(mrr)} sub="recurring" icon={<TrendingUp size={13} />} />
-          <KpiTile label="Transactions" value={fmtNum(stats?.totalTransactions ?? sumTransactions)} icon={<Receipt size={13} />} />
+          <KpiTile label={tr("alld.kpiCompanies")} value={fmtNum(stats?.companies ?? companies.length)} sub={tr("alld.kpiCompaniesSub", { count: String(stats?.activeCompanies ?? 0) })} icon={<Building2 size={13} />} />
+          <KpiTile label={tr("alld.kpiUsers")} value={fmtNum(stats?.users ?? users.length)} sub={tr("alld.kpiUsersSub", { count: String(pendingUsers) })} icon={<UsersIcon size={13} />} />
+          <KpiTile label={tr("alld.kpiPlatformCash")} value={fmtINR(stats?.totalCash ?? 0)} icon={<Wallet size={13} />} />
+          <KpiTile label={tr("alld.kpiTotalRevenue")} value={fmtINR(stats?.totalRevenue ?? 0)} icon={<TrendingUp size={13} />} />
+          <KpiTile label={tr("alld.kpiMrr")} value={fmtINR(mrr)} sub={tr("alld.kpiMrrSub")} icon={<TrendingUp size={13} />} />
+          <KpiTile label={tr("alld.kpiTransactions")} value={fmtNum(stats?.totalTransactions ?? sumTransactions)} icon={<Receipt size={13} />} />
         </div>
       </div>
 
@@ -659,7 +661,7 @@ export default function AllDataPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search…"
+            placeholder={tr("alld.searchPlaceholder")}
             className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md bg-[var(--color-surface)] border border-[var(--color-border)] focus:border-[var(--color-primary)] outline-none"
           />
         </div>
@@ -668,7 +670,7 @@ export default function AllDataPage() {
           onChange={(e) => setPlanFilter(e.target.value as "all" | PlanTier)}
           className="text-sm px-2 py-1.5 rounded-md bg-[var(--color-surface)] border border-[var(--color-border)] outline-none"
         >
-          <option value="all">All plans</option>
+          <option value="all">{tr("alld.allPlans")}</option>
           {PLAN_ORDER.map((p) => <option key={p} value={p}>{PLAN_STYLE[p].label}</option>)}
         </select>
         <select
@@ -676,7 +678,7 @@ export default function AllDataPage() {
           onChange={(e) => setStatusFilter(e.target.value)}
           className="text-sm px-2 py-1.5 rounded-md bg-[var(--color-surface)] border border-[var(--color-border)] outline-none capitalize"
         >
-          {statusOptions.map((s) => <option key={s} value={s}>{s === "all" ? "All statuses" : s}</option>)}
+          {statusOptions.map((s) => <option key={s} value={s}>{s === "all" ? tr("alld.allStatuses") : s}</option>)}
         </select>
         <select
           value={sort}
@@ -686,11 +688,14 @@ export default function AllDataPage() {
           {sortOptions.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
         <span className="ml-auto text-xs text-[var(--color-muted)] tabular-nums">
-          Showing {Math.min(totalForTab, pageStart + (
-            tab === "companies" ? pagedCompanies.length :
-            tab === "users" ? pagedUsers.length :
-            tab === "activity" ? pagedAudit.length : 0
-          ))} of {tab === "transactions" || tab === "invoices" ? companies.length : totalForTab}
+          {tr("alld.showingOf", {
+            shown: String(Math.min(totalForTab, pageStart + (
+              tab === "companies" ? pagedCompanies.length :
+              tab === "users" ? pagedUsers.length :
+              tab === "activity" ? pagedAudit.length : 0
+            ))),
+            total: String(tab === "transactions" || tab === "invoices" ? companies.length : totalForTab),
+          })}
         </span>
       </div>
 
@@ -731,7 +736,7 @@ export default function AllDataPage() {
         {(tab === "companies" || tab === "users" || tab === "activity") && totalForTab > 0 && (
           <div className="flex items-center justify-between mt-3 text-xs text-[var(--color-muted)]">
             <span className="tabular-nums">
-              Showing {pageStart + 1}-{Math.min(pageEnd, totalForTab)} of {totalForTab}
+              {tr("alld.showingRange", { from: String(pageStart + 1), to: String(Math.min(pageEnd, totalForTab)), total: String(totalForTab) })}
             </span>
             <div className="flex gap-2">
               <button
@@ -740,7 +745,7 @@ export default function AllDataPage() {
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 className="px-3 py-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] disabled:opacity-40 hover:border-[var(--color-primary)] transition-colors"
               >
-                Prev
+                {tr("alld.prev")}
               </button>
               <button
                 type="button"
@@ -748,7 +753,7 @@ export default function AllDataPage() {
                 onClick={() => setPage((p) => p + 1)}
                 className="px-3 py-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] disabled:opacity-40 hover:border-[var(--color-primary)] transition-colors"
               >
-                Next
+                {tr("alld.next")}
               </button>
             </div>
           </div>
@@ -798,18 +803,19 @@ function CompaniesTable({
   onChangePlan: (tid: string, p: PlanTier) => void;
   onToggleSuspend: (c: Company) => void;
 }) {
+  const tr = useT();
   return (
     <table className="w-full text-sm border-collapse">
       <thead className="sticky top-0 z-[1]">
         <tr className="border-b border-[var(--color-border)]">
-          <Th>Company</Th><Th>Owner email</Th><Th className="text-right">Users</Th>
-          <Th>Plan</Th><Th className="text-right">Cash</Th><Th className="text-right">Revenue</Th>
-          <Th className="text-right">Txns</Th><Th>Last active</Th><Th>Status</Th><Th className="text-right">Actions</Th>
+          <Th>{tr("alld.colCompany")}</Th><Th>{tr("alld.colOwnerEmail")}</Th><Th className="text-right">{tr("alld.colUsers")}</Th>
+          <Th>{tr("alld.colPlan")}</Th><Th className="text-right">{tr("alld.colCash")}</Th><Th className="text-right">{tr("alld.colRevenue")}</Th>
+          <Th className="text-right">{tr("alld.colTxns")}</Th><Th>{tr("alld.colLastActive")}</Th><Th>{tr("alld.colStatus")}</Th><Th className="text-right">{tr("alld.colActions")}</Th>
         </tr>
       </thead>
       <tbody>
         {loading ? <SkeletonRows cols={10} /> : rows.length === 0 ? (
-          <tr><td colSpan={10} className="px-3 py-10 text-center text-[var(--color-muted)]">No companies match.</td></tr>
+          <tr><td colSpan={10} className="px-3 py-10 text-center text-[var(--color-muted)]">{tr("alld.noCompaniesMatch")}</td></tr>
         ) : rows.map((c) => {
           const label = c.company_name || c.owner_email || c.tenant_id;
           const st = companyStatus(c);
@@ -879,17 +885,18 @@ function UsersTable({
   onMakeOwner: (u: AdminUser) => void;
   onDelete: (u: AdminUser) => void;
 }) {
+  const tr = useT();
   return (
     <table className="w-full text-sm border-collapse">
       <thead className="sticky top-0 z-[1]">
         <tr className="border-b border-[var(--color-border)]">
-          <Th>User</Th><Th>User id</Th><Th>Tenant</Th><Th>Role</Th><Th>Plan</Th>
-          <Th>Last seen</Th><Th className="text-right">Logins</Th><Th>Status</Th><Th className="text-right">Actions</Th>
+          <Th>{tr("alld.colUser")}</Th><Th>{tr("alld.colUserId")}</Th><Th>{tr("alld.colTenant")}</Th><Th>{tr("alld.colRole")}</Th><Th>{tr("alld.colPlan")}</Th>
+          <Th>{tr("alld.colLastSeen")}</Th><Th className="text-right">{tr("alld.colLogins")}</Th><Th>{tr("alld.colStatus")}</Th><Th className="text-right">{tr("alld.colActions")}</Th>
         </tr>
       </thead>
       <tbody>
         {loading ? <SkeletonRows cols={9} /> : rows.length === 0 ? (
-          <tr><td colSpan={9} className="px-3 py-10 text-center text-[var(--color-muted)]">No users match.</td></tr>
+          <tr><td colSpan={9} className="px-3 py-10 text-center text-[var(--color-muted)]">{tr("alld.noUsersMatch")}</td></tr>
         ) : rows.map((u) => {
           const label = u.display_name || u.email || u.id;
           const st = userStatus(u);
@@ -940,7 +947,9 @@ function UsersTable({
 // PLACEHOLDER TAB (transactions / invoices)
 // ─────────────────────────────────────────────────────────────────────────────
 function PlaceholderTab({ kind, companies, loading }: { kind: "transactions" | "invoices"; companies: Company[]; loading: boolean }) {
+  const tr = useT();
   const isTxn = kind === "transactions";
+  const kindLabel = isTxn ? tr("alld.kindTransactions") : tr("alld.kindInvoices");
   const rows = useMemo(() => {
     const list = isTxn
       ? companies.filter((c) => (c.transactions ?? 0) > 0)
@@ -952,26 +961,26 @@ function PlaceholderTab({ kind, companies, loading }: { kind: "transactions" | "
     <div className="p-6">
       <div className="max-w-md mx-auto text-center bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-6 mb-6">
         {isTxn ? <Receipt size={28} className="mx-auto text-[var(--color-muted)] mb-2" /> : <FileText size={28} className="mx-auto text-[var(--color-muted)] mb-2" />}
-        <p className="text-sm font-medium">No platform-wide {kind} feed</p>
+        <p className="text-sm font-medium">{tr("alld.noPlatformFeed", { kind: kindLabel })}</p>
         <p className="text-xs text-[var(--color-muted)] mt-1">
-          These load per company. Enter a company from the Companies tab to view its {kind}.
+          {tr("alld.perCompanyHint", { kind: kindLabel })}
         </p>
-        <p className="text-xs text-[var(--color-primary)] mt-3 inline-flex items-center gap-1">Enter a company <ArrowRight size={12} /></p>
+        <p className="text-xs text-[var(--color-primary)] mt-3 inline-flex items-center gap-1">{tr("alld.enterCompany")} <ArrowRight size={12} /></p>
       </div>
 
       <p className="text-[11px] uppercase tracking-wide text-[var(--color-muted)] mb-2">
-        By company {isTxn ? "(transaction count)" : "(open receivables)"}
+        {isTxn ? tr("alld.byCompanyTxn") : tr("alld.byCompanyReceivables")}
       </p>
       <table className="w-full text-sm border-collapse">
         <thead className="sticky top-0 z-[1]">
           <tr className="border-b border-[var(--color-border)]">
-            <Th>Company</Th><Th>Plan</Th>
-            <Th className="text-right">{isTxn ? "Transactions" : "Open receivables"}</Th>
+            <Th>{tr("alld.colCompany")}</Th><Th>{tr("alld.colPlan")}</Th>
+            <Th className="text-right">{isTxn ? tr("alld.colTransactions") : tr("alld.colOpenReceivables")}</Th>
           </tr>
         </thead>
         <tbody>
           {loading ? <SkeletonRows cols={3} /> : rows.length === 0 ? (
-            <tr><td colSpan={3} className="px-3 py-8 text-center text-[var(--color-muted)]">No companies with {kind} yet.</td></tr>
+            <tr><td colSpan={3} className="px-3 py-8 text-center text-[var(--color-muted)]">{tr("alld.noCompaniesWithKind", { kind: kindLabel })}</td></tr>
           ) : rows.map((c) => {
             const label = c.company_name || c.owner_email || c.tenant_id;
             return (
@@ -1004,16 +1013,17 @@ function ActivityTable({
   rows: AuditRow[]; loading: boolean;
   expanded: string | null; setExpanded: (id: string | null) => void;
 }) {
+  const tr = useT();
   return (
     <table className="w-full text-sm border-collapse">
       <thead className="sticky top-0 z-[1]">
         <tr className="border-b border-[var(--color-border)]">
-          <Th>Time</Th><Th>Actor</Th><Th>Action</Th><Th>Entity</Th><Th>Detail</Th>
+          <Th>{tr("alld.colTime")}</Th><Th>{tr("alld.colActor")}</Th><Th>{tr("alld.colAction")}</Th><Th>{tr("alld.colEntity")}</Th><Th>{tr("alld.colDetail")}</Th>
         </tr>
       </thead>
       <tbody>
         {loading ? <SkeletonRows cols={5} /> : rows.length === 0 ? (
-          <tr><td colSpan={5} className="px-3 py-10 text-center text-[var(--color-muted)]">No activity recorded.</td></tr>
+          <tr><td colSpan={5} className="px-3 py-10 text-center text-[var(--color-muted)]">{tr("alld.noActivity")}</td></tr>
         ) : rows.map((r) => {
           const open = expanded === r.id;
           const d = new Date(r.created_at);
@@ -1073,6 +1083,7 @@ function DetailDrawer({
   drawer: { kind: "company" | "user"; data: Company | AdminUser };
   raw: boolean; setRaw: (b: boolean) => void; onClose: () => void;
 }) {
+  const tr = useT();
   const isCompany = drawer.kind === "company";
   const data = drawer.data as unknown as Record<string, unknown>;
   const title = isCompany
@@ -1088,7 +1099,7 @@ function DetailDrawer({
             <Avatar seed={isCompany ? (drawer.data as Company).tenant_id : (drawer.data as AdminUser).email || (drawer.data as AdminUser).id} label={title} />
             <div className="min-w-0">
               <p className="font-semibold truncate">{title}</p>
-              <p className="text-[10px] text-[var(--color-muted)] capitalize">{drawer.kind} record</p>
+              <p className="text-[10px] text-[var(--color-muted)] capitalize">{isCompany ? tr("alld.companyRecord") : tr("alld.userRecord")}</p>
             </div>
           </div>
           <button type="button" onClick={onClose} className="p-1.5 rounded-md hover:bg-[var(--color-bg)] text-[var(--color-muted)]"><X size={16} /></button>
@@ -1099,7 +1110,7 @@ function DetailDrawer({
 
           <button type="button" onClick={() => setRaw(!raw)}
             className="mt-4 inline-flex items-center gap-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">
-            <ChevronDown size={13} className={`transition-transform ${raw ? "rotate-180" : ""}`} /> Raw JSON
+            <ChevronDown size={13} className={`transition-transform ${raw ? "rotate-180" : ""}`} /> {tr("alld.rawJson")}
           </button>
           {raw && (
             <pre className="mt-2 text-[11px] bg-[var(--color-bg)] p-3 rounded-lg border border-[var(--color-border)] overflow-x-auto whitespace-pre-wrap break-all">
@@ -1113,44 +1124,46 @@ function DetailDrawer({
 }
 
 function CompanyKVs({ c }: { c: Company }) {
+  const tr = useT();
   const st = companyStatus(c);
   return (
     <div>
-      <KV k="Company name" v={c.company_name || "-"} />
-      <KV k="Tenant id" v={<CopyId id={c.tenant_id} chars={20} />} />
-      <KV k="Owner email" v={c.owner_email || "-"} />
-      <KV k="Plan" v={<PlanPill plan={c.plan} />} />
-      <KV k="Status" v={<StatusDot tone={st.tone} text={st.text} />} />
-      <KV k="Users" v={<span className="tabular-nums">{fmtNum(c.user_count)}</span>} />
-      <KV k="Cash" v={<span className="tabular-nums">{fmtINR(c.cash)}</span>} />
-      <KV k="Revenue" v={<span className="tabular-nums">{fmtINR(c.revenue)}</span>} />
-      <KV k="Expense" v={<span className="tabular-nums">{fmtINR(c.expense)}</span>} />
-      <KV k="Transactions" v={<span className="tabular-nums">{fmtNum(c.transactions)}</span>} />
-      <KV k="Open receivables" v={<span className="tabular-nums">{fmtINR(c.openReceivables)}</span>} />
-      <KV k="MRR" v={<span className="tabular-nums">{fmtINR(PLAN_PRICE[c.plan] ?? 0)}</span>} />
-      <KV k="Created" v={c.created_at ? format(new Date(c.created_at), "dd MMM yyyy") : "-"} />
-      <KV k="Last login" v={relTime(c.last_login_at)} />
-      <KV k="Last activity" v={relTime(c.last_activity)} />
+      <KV k={tr("alld.kvCompanyName")} v={c.company_name || "-"} />
+      <KV k={tr("alld.kvTenantId")} v={<CopyId id={c.tenant_id} chars={20} />} />
+      <KV k={tr("alld.kvOwnerEmail")} v={c.owner_email || "-"} />
+      <KV k={tr("alld.kvPlan")} v={<PlanPill plan={c.plan} />} />
+      <KV k={tr("alld.kvStatus")} v={<StatusDot tone={st.tone} text={st.text} />} />
+      <KV k={tr("alld.kvUsers")} v={<span className="tabular-nums">{fmtNum(c.user_count)}</span>} />
+      <KV k={tr("alld.kvCash")} v={<span className="tabular-nums">{fmtINR(c.cash)}</span>} />
+      <KV k={tr("alld.kvRevenue")} v={<span className="tabular-nums">{fmtINR(c.revenue)}</span>} />
+      <KV k={tr("alld.kvExpense")} v={<span className="tabular-nums">{fmtINR(c.expense)}</span>} />
+      <KV k={tr("alld.kvTransactions")} v={<span className="tabular-nums">{fmtNum(c.transactions)}</span>} />
+      <KV k={tr("alld.kvOpenReceivables")} v={<span className="tabular-nums">{fmtINR(c.openReceivables)}</span>} />
+      <KV k={tr("alld.kvMrr")} v={<span className="tabular-nums">{fmtINR(PLAN_PRICE[c.plan] ?? 0)}</span>} />
+      <KV k={tr("alld.kvCreated")} v={c.created_at ? format(new Date(c.created_at), "dd MMM yyyy") : "-"} />
+      <KV k={tr("alld.kvLastLogin")} v={relTime(c.last_login_at)} />
+      <KV k={tr("alld.kvLastActivity")} v={relTime(c.last_activity)} />
     </div>
   );
 }
 
 function UserKVs({ u }: { u: AdminUser }) {
+  const tr = useT();
   const st = userStatus(u);
   return (
     <div>
-      <KV k="Display name" v={u.display_name || "-"} />
-      <KV k="Email" v={u.email || "-"} />
-      <KV k="User id" v={<CopyId id={u.id} chars={20} />} />
-      <KV k="Tenant id" v={<CopyId id={u.tenant_id} chars={20} />} />
-      <KV k="Role" v={<RolePill role={u.role} />} />
-      <KV k="Plan" v={<PlanPill plan={u.subscription_plan} />} />
-      <KV k="Status" v={<StatusDot tone={st.tone} text={st.text} />} />
-      <KV k="Login count" v={<span className="tabular-nums">{fmtNum(u.login_count)}</span>} />
-      <KV k="First login pending" v={u.first_login ? "Yes" : "No"} />
-      <KV k="Created" v={u.created_at ? format(new Date(u.created_at), "dd MMM yyyy") : "-"} />
-      <KV k="Last login" v={relTime(u.last_login_at)} />
-      <KV k="Last active" v={relTime(u.last_active_at)} />
+      <KV k={tr("alld.kvDisplayName")} v={u.display_name || "-"} />
+      <KV k={tr("alld.kvEmail")} v={u.email || "-"} />
+      <KV k={tr("alld.kvUserId")} v={<CopyId id={u.id} chars={20} />} />
+      <KV k={tr("alld.kvTenantId")} v={<CopyId id={u.tenant_id} chars={20} />} />
+      <KV k={tr("alld.kvRole")} v={<RolePill role={u.role} />} />
+      <KV k={tr("alld.kvPlan")} v={<PlanPill plan={u.subscription_plan} />} />
+      <KV k={tr("alld.kvStatus")} v={<StatusDot tone={st.tone} text={st.text} />} />
+      <KV k={tr("alld.kvLoginCount")} v={<span className="tabular-nums">{fmtNum(u.login_count)}</span>} />
+      <KV k={tr("alld.kvFirstLoginPending")} v={u.first_login ? tr("alld.yes") : tr("alld.no")} />
+      <KV k={tr("alld.kvCreated")} v={u.created_at ? format(new Date(u.created_at), "dd MMM yyyy") : "-"} />
+      <KV k={tr("alld.kvLastLogin")} v={relTime(u.last_login_at)} />
+      <KV k={tr("alld.kvLastActive")} v={relTime(u.last_active_at)} />
     </div>
   );
 }
@@ -1169,6 +1182,7 @@ function EditUserModal({
   onClose: () => void;
   onSave: (orig: AdminUser, next: { display_name: string; role: string; plan: PlanTier }) => void;
 }) {
+  const tr = useT();
   const [name, setName] = useState(user.display_name || "");
   const [role, setRole] = useState<string>(user.role || "viewer");
   const [plan, setPlan] = useState<PlanTier>(user.subscription_plan || "free");
@@ -1178,22 +1192,22 @@ function EditUserModal({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative w-full max-w-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 shadow-2xl">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold">Edit user</h3>
+          <h3 className="font-semibold">{tr("alld.editUser")}</h3>
           <button type="button" onClick={onClose} className="p-1 rounded hover:bg-[var(--color-bg)] text-[var(--color-muted)]"><X size={16} /></button>
         </div>
         <p className="text-xs text-[var(--color-muted)] mb-3 truncate">{user.email || user.id}</p>
 
-        <label className="block text-xs text-[var(--color-muted)] mb-1">Display name</label>
+        <label className="block text-xs text-[var(--color-muted)] mb-1">{tr("alld.fieldDisplayName")}</label>
         <input value={name} onChange={(e) => setName(e.target.value)}
           className="w-full mb-3 px-2.5 py-1.5 text-sm rounded-md bg-[var(--color-bg)] border border-[var(--color-border)] focus:border-[var(--color-primary)] outline-none" />
 
-        <label className="block text-xs text-[var(--color-muted)] mb-1">Role</label>
+        <label className="block text-xs text-[var(--color-muted)] mb-1">{tr("alld.fieldRole")}</label>
         <select value={role} onChange={(e) => setRole(e.target.value)}
           className="w-full mb-3 px-2.5 py-1.5 text-sm rounded-md bg-[var(--color-bg)] border border-[var(--color-border)] outline-none capitalize">
           {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
         </select>
 
-        <label className="block text-xs text-[var(--color-muted)] mb-1">Plan (workspace)</label>
+        <label className="block text-xs text-[var(--color-muted)] mb-1">{tr("alld.fieldPlanWorkspace")}</label>
         <select value={plan} onChange={(e) => setPlan(e.target.value as PlanTier)}
           className="w-full mb-4 px-2.5 py-1.5 text-sm rounded-md bg-[var(--color-bg)] border border-[var(--color-border)] outline-none">
           {PLAN_ORDER.map((p) => <option key={p} value={p}>{PLAN_STYLE[p].label}</option>)}
@@ -1201,9 +1215,9 @@ function EditUserModal({
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose}
-            className="px-3 py-1.5 text-sm rounded-md border border-[var(--color-border)] hover:bg-[var(--color-bg)]">Cancel</button>
+            className="px-3 py-1.5 text-sm rounded-md border border-[var(--color-border)] hover:bg-[var(--color-bg)]">{tr("alld.cancel")}</button>
           <button type="button" onClick={() => onSave(user, { display_name: name.trim(), role, plan })}
-            className="px-3 py-1.5 text-sm rounded-md bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold hover:opacity-90">Save</button>
+            className="px-3 py-1.5 text-sm rounded-md bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold hover:opacity-90">{tr("alld.save")}</button>
         </div>
       </div>
     </div>
@@ -1214,6 +1228,7 @@ function EditUserModal({
 // RESET PASSWORD MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 function ResetModal({ data, onClose }: { data: { email: string; password: string }; onClose: () => void }) {
+  const tr = useT();
   const copy = () => {
     navigator.clipboard?.writeText(data.password).then(
       () => toast.success("Copied"),
@@ -1225,11 +1240,11 @@ function ResetModal({ data, onClose }: { data: { email: string; password: string
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative w-full max-w-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 shadow-2xl">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold flex items-center gap-2"><KeyRound size={16} className="text-[var(--color-primary)]" /> Password reset</h3>
+          <h3 className="font-semibold flex items-center gap-2"><KeyRound size={16} className="text-[var(--color-primary)]" /> {tr("alld.passwordReset")}</h3>
           <button type="button" onClick={onClose} className="p-1 rounded hover:bg-[var(--color-bg)] text-[var(--color-muted)]"><X size={16} /></button>
         </div>
         <p className="text-xs text-[var(--color-muted)] mb-3">
-          New password for <span className="text-[var(--color-text)]">{data.email}</span>. Share it securely - it is not emailed.
+          {tr("alld.newPasswordFor")} <span className="text-[var(--color-text)]">{data.email}</span>. {tr("alld.shareSecurely")}
         </p>
         <div className="flex items-center gap-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md px-3 py-2">
           <code className="flex-1 font-mono text-sm break-all">{data.password || "-"}</code>
@@ -1238,7 +1253,7 @@ function ResetModal({ data, onClose }: { data: { email: string; password: string
         </div>
         <div className="flex justify-end mt-4">
           <button type="button" onClick={onClose}
-            className="px-3 py-1.5 text-sm rounded-md bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold hover:opacity-90">Done</button>
+            className="px-3 py-1.5 text-sm rounded-md bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold hover:opacity-90">{tr("alld.done")}</button>
         </div>
       </div>
     </div>

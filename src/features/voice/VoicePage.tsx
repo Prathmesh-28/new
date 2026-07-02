@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
 import {
@@ -104,47 +105,48 @@ export default function VoicePage() {
     | "payreminder" | "whatsapp" | "glossary" | "calc" | "greeting"
     | "askbalance" | "spellout" | "spokendate" | "quicklog"
   >("overview");
+  const tr = useT();
 
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <Mic size={18} className="text-[var(--color-primary)]" /> Voice &amp; Vernacular
+            <Mic size={18} className="text-[var(--color-primary)]" /> {tr("voi.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            Run your books by speaking, listen to summaries aloud, and tune the app for any language or ability - built on your browser&apos;s own speech engine.
+            {tr("voi.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
           {([
-            ["overview", "Overview", Mic],
-            ["capture", "Voice Capture", Mic],
-            ["language", "Language", Languages],
-            ["reader", "Read Aloud", Volume2],
-            ["cheatsheet", "Commands", BookOpen],
-            ["access", "Accessibility", Eye],
-            ["numbers", "Lakh / Crore", Hash],
-            ["audiostmt", "Audio Statement", AudioLines],
-            ["voiceauth", "Voice Auth", Fingerprint],
-            ["scratchpad", "Dictation Pad", NotebookPen],
-            ["expense", "Expense Logger", Receipt],
-            ["invoice", "Spoken Invoice", FileText],
-            ["txnsearch", "Voice Search", Search],
-            ["uipreview", "UI Language", Globe],
-            ["digest", "My Day", Sun],
-            ["reminder", "Reminders", Bell],
-            ["words", "Amount in Words", Type],
-            ["translit", "Transliterate", ArrowRightLeft],
-            ["payreminder", "Payment Reminder", PhoneCall],
-            ["whatsapp", "Voice to WhatsApp", MessageCircle],
-            ["glossary", "Audio Glossary", BookMarked],
-            ["calc", "Speak Total", Calculator],
-            ["greeting", "Greeting Recorder", PartyPopper],
-            ["askbalance", "Ask Balance", HelpCircle],
-            ["spellout", "Spell It Out", SpellCheck2],
-            ["spokendate", "Spoken Date", CalendarClock],
-            ["quicklog", "Work Log", ClipboardList],
+            ["overview", tr("voi.tabOverview"), Mic],
+            ["capture", tr("voi.tabCapture"), Mic],
+            ["language", tr("voi.tabLanguage"), Languages],
+            ["reader", tr("voi.tabReader"), Volume2],
+            ["cheatsheet", tr("voi.tabCommands"), BookOpen],
+            ["access", tr("voi.tabAccessibility"), Eye],
+            ["numbers", tr("voi.tabNumbers"), Hash],
+            ["audiostmt", tr("voi.tabAudioStatement"), AudioLines],
+            ["voiceauth", tr("voi.tabVoiceAuth"), Fingerprint],
+            ["scratchpad", tr("voi.tabDictationPad"), NotebookPen],
+            ["expense", tr("voi.tabExpenseLogger"), Receipt],
+            ["invoice", tr("voi.tabSpokenInvoice"), FileText],
+            ["txnsearch", tr("voi.tabVoiceSearch"), Search],
+            ["uipreview", tr("voi.tabUiLanguage"), Globe],
+            ["digest", tr("voi.tabMyDay"), Sun],
+            ["reminder", tr("voi.tabReminders"), Bell],
+            ["words", tr("voi.tabAmountInWords"), Type],
+            ["translit", tr("voi.tabTransliterate"), ArrowRightLeft],
+            ["payreminder", tr("voi.tabPaymentReminder"), PhoneCall],
+            ["whatsapp", tr("voi.tabWhatsApp"), MessageCircle],
+            ["glossary", tr("voi.tabAudioGlossary"), BookMarked],
+            ["calc", tr("voi.tabSpeakTotal"), Calculator],
+            ["greeting", tr("voi.tabGreetingRecorder"), PartyPopper],
+            ["askbalance", tr("voi.tabAskBalance"), HelpCircle],
+            ["spellout", tr("voi.tabSpellItOut"), SpellCheck2],
+            ["spokendate", tr("voi.tabSpokenDate"), CalendarClock],
+            ["quicklog", tr("voi.tabWorkLog"), ClipboardList],
           ] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -187,21 +189,21 @@ export default function VoicePage() {
 
 // ── Overview ─────────────────────────────────────────────────────────────────────
 function Overview() {
+  const tr = useT();
   const capabilities: { icon: typeof Mic; title: string; body: string; ok: boolean }[] = [
-    { icon: Mic, title: "Speech recognition", body: "Dictate transactions and notes. Uses the browser's Web Speech API.", ok: SPEECH_IN },
-    { icon: Volume2, title: "Text-to-speech", body: "Hear summaries and statements read aloud via speechSynthesis.", ok: SPEECH_OUT },
-    { icon: Languages, title: "22 Indian languages", body: "Pick a preferred language; speech APIs are hinted with the right locale.", ok: true },
-    { icon: Eye, title: "Accessibility", body: "Large-text and high-contrast modes for low-vision users.", ok: true },
-    { icon: Hash, title: "Vernacular numbers", body: "Lakh / crore grouping instead of millions/billions.", ok: true },
-    { icon: AudioLines, title: "Audio statements", body: "Compose a spoken financial summary and play it back.", ok: SPEECH_OUT },
+    { icon: Mic, title: tr("voi.capSpeechRecTitle"), body: tr("voi.capSpeechRecBody"), ok: SPEECH_IN },
+    { icon: Volume2, title: tr("voi.capTtsTitle"), body: tr("voi.capTtsBody"), ok: SPEECH_OUT },
+    { icon: Languages, title: tr("voi.capLangsTitle"), body: tr("voi.capLangsBody"), ok: true },
+    { icon: Eye, title: tr("voi.capA11yTitle"), body: tr("voi.capA11yBody"), ok: true },
+    { icon: Hash, title: tr("voi.capNumbersTitle"), body: tr("voi.capNumbersBody"), ok: true },
+    { icon: AudioLines, title: tr("voi.capAudioStmtTitle"), body: tr("voi.capAudioStmtBody"), ok: SPEECH_OUT },
   ];
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5`}>
-        <h2 className="text-sm font-semibold mb-1">Voice-first finance, honestly scoped</h2>
+        <h2 className="text-sm font-semibold mb-1">{tr("voi.overviewHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-          Everything here works <strong className="text-[var(--color-text)]">today, in your browser</strong> - no cloud speech service required.
-          Each tool feature-detects the underlying API and falls back to typing when it is unavailable.
+          {tr("voi.overviewBody")}
         </p>
       </div>
 
@@ -211,7 +213,7 @@ function Overview() {
             <div className="flex items-center justify-between mb-1.5">
               <c.icon size={16} className="text-[var(--color-primary)]" />
               <span className={`text-[10px] px-2 py-0.5 rounded-full border ${c.ok ? "bg-green-950/30 text-green-400 border-green-800/40" : "bg-yellow-950/30 text-yellow-400 border-yellow-800/40"}`}>
-                {c.ok ? "Available" : "Fallback only"}
+                {c.ok ? tr("voi.badgeAvailable") : tr("voi.badgeFallbackOnly")}
               </span>
             </div>
             <p className="text-sm font-semibold">{c.title}</p>
@@ -221,8 +223,7 @@ function Overview() {
       </div>
 
       <FallbackNote>
-        Voice quality depends entirely on your device and browser. Web Speech recognition works best in Chrome/Edge on desktop and Android WebViews;
-        Safari/iOS support is partial. Accent and vernacular accuracy vary by the OS speech engine installed - when recognition is unavailable, every tool here accepts typed input instead.
+        {tr("voi.overviewFallback")}
       </FallbackNote>
     </div>
   );
@@ -266,6 +267,7 @@ function suggestLedgerCategory(direction: "in" | "out", raw: string): LedgerCate
 }
 
 function VoiceCapture() {
+  const tr = useT();
   const { store, addTransaction, isReadOnly } = useApp();
   const [listening, setListening] = useState(false);
   const [text, setText] = useState("");
@@ -373,43 +375,43 @@ function VoiceCapture() {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Mic size={14} className="text-[var(--color-primary)]" /> Voice note → transaction draft</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Mic size={14} className="text-[var(--color-primary)]" /> {tr("voi.captureHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
           Say or type a line like <em className="text-[var(--color-text)]">&ldquo;received 5000 from Sharma&rdquo;</em> or <em className="text-[var(--color-text)]">&ldquo;paid 1200 to electricity&rdquo;</em>. We parse it into a draft you can review and post straight to your ledger.
         </p>
-        {!SPEECH_IN && <FallbackNote>Microphone dictation isn&apos;t available in this browser. Type the line in the box below - parsing works exactly the same.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>{tr("voi.captureFallback")}</FallbackNote>}
         <div className="flex gap-2">
           <input value={text} onChange={e => setText(e.target.value)} placeholder="received 5000 from Sharma" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
-            {listening ? <><Square size={13} /> Stop</> : <><Mic size={13} /> Speak</>}
+            {listening ? <><Square size={13} /> {tr("voi.stop")}</> : <><Mic size={13} /> {tr("voi.speak")}</>}
           </button>
         </div>
-        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… speak now.</p>}
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">{tr("voi.listeningSpeakNow")}</p>}
       </div>
 
       {text.trim() && (
         <div className={`${CARD} p-5`}>
-          <p className="text-sm font-semibold mb-3">Confirm &amp; post</p>
+          <p className="text-sm font-semibold mb-3">{tr("voi.confirmAndPost")}</p>
           {draft ? (
             <>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
-                  <p className="text-[10px] text-[var(--color-muted)] mb-1">Direction</p>
+                  <p className="text-[10px] text-[var(--color-muted)] mb-1">{tr("voi.direction")}</p>
                   <div className="flex gap-1">
                     <button type="button" onClick={() => setDirection("in")}
-                      className={`flex-1 px-2 py-1 rounded-md text-xs font-bold transition-colors ${direction === "in" ? "bg-green-500/20 text-green-400 border border-green-500/40" : "text-[var(--color-muted)] border border-[var(--color-border)] hover:text-[var(--color-text)]"}`}>Money in</button>
+                      className={`flex-1 px-2 py-1 rounded-md text-xs font-bold transition-colors ${direction === "in" ? "bg-green-500/20 text-green-400 border border-green-500/40" : "text-[var(--color-muted)] border border-[var(--color-border)] hover:text-[var(--color-text)]"}`}>{tr("voi.moneyIn")}</button>
                     <button type="button" onClick={() => setDirection("out")}
-                      className={`flex-1 px-2 py-1 rounded-md text-xs font-bold transition-colors ${direction === "out" ? "bg-red-500/20 text-red-400 border border-red-500/40" : "text-[var(--color-muted)] border border-[var(--color-border)] hover:text-[var(--color-text)]"}`}>Money out</button>
+                      className={`flex-1 px-2 py-1 rounded-md text-xs font-bold transition-colors ${direction === "out" ? "bg-red-500/20 text-red-400 border border-red-500/40" : "text-[var(--color-muted)] border border-[var(--color-border)] hover:text-[var(--color-text)]"}`}>{tr("voi.moneyOut")}</button>
                   </div>
                 </div>
                 <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
-                  <p className="text-[10px] text-[var(--color-muted)] mb-1">Amount</p>
+                  <p className="text-[10px] text-[var(--color-muted)] mb-1">{tr("voi.amount")}</p>
                   <input type="number" inputMode="decimal" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0"
                     className="w-full bg-transparent text-base font-bold tabular-nums text-[var(--color-text)] outline-none placeholder:text-[var(--color-muted)]" />
                 </div>
                 <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
-                  <p className="text-[10px] text-[var(--color-muted)] mb-1">Date</p>
+                  <p className="text-[10px] text-[var(--color-muted)] mb-1">{tr("voi.date")}</p>
                   <input type="date" value={date} onChange={e => setDate(e.target.value)}
                     className="w-full bg-transparent text-sm font-bold tabular-nums text-[var(--color-text)] outline-none" />
                 </div>
@@ -417,7 +419,7 @@ function VoiceCapture() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                 <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
-                  <p className="text-[10px] text-[var(--color-muted)] mb-1">Party</p>
+                  <p className="text-[10px] text-[var(--color-muted)] mb-1">{tr("voi.party")}</p>
                   <input value={party} onChange={e => setParty(e.target.value)} list="voice-known-parties" placeholder="Unknown party"
                     className="w-full bg-transparent text-sm font-semibold text-[var(--color-text)] outline-none placeholder:text-[var(--color-muted)]" />
                   <datalist id="voice-known-parties">
@@ -436,7 +438,7 @@ function VoiceCapture() {
                   )}
                 </div>
                 <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
-                  <p className="text-[10px] text-[var(--color-muted)] mb-1">Category</p>
+                  <p className="text-[10px] text-[var(--color-muted)] mb-1">{tr("voi.category")}</p>
                   <select value={category} onChange={e => setCategory(e.target.value as LedgerCategory)}
                     className="w-full bg-transparent text-sm font-semibold text-[var(--color-text)] outline-none capitalize">
                     {LEDGER_CATEGORIES.map(c => <option key={c} value={c} className="bg-[var(--color-surface)]">{c}</option>)}
@@ -447,11 +449,11 @@ function VoiceCapture() {
               <div className="flex items-center gap-3 mt-4">
                 <button onClick={post} disabled={posting || isReadOnly}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-[var(--color-primary)] text-[var(--color-bg)] disabled:opacity-50">
-                  <CheckCircle2 size={14} /> {posting ? "Posting…" : "Post to ledger"}
+                  <CheckCircle2 size={14} /> {posting ? tr("voi.posting") : tr("voi.postToLedger")}
                 </button>
                 <button onClick={() => { setText(""); lastSeed.current = ""; }} disabled={posting}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-50">
-                  <X size={13} /> Discard
+                  <X size={13} /> {tr("voi.discard")}
                 </button>
               </div>
               <p className="text-[11px] text-[var(--color-muted)] mt-2">
@@ -471,13 +473,14 @@ function VoiceCapture() {
 
 // ── Tool 2 · Language preference ──────────────────────────────────────────────────
 function LanguagePreference() {
+  const tr = useT();
   const [lang, setLang] = useFeatureState<string>("voice-language", "Hindi");
   const selected = LANGUAGES.find(l => l.name === lang) ?? LANGUAGES[5];
 
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Languages size={14} className="text-[var(--color-primary)]" /> Preferred language</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Languages size={14} className="text-[var(--color-primary)]" /> {tr("voi.languageHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
           Pick the language Headroom should prefer for voice prompts and read-aloud. We pass the matching locale ({selected.bcp47}) to the speech engine; actual coverage depends on the voices installed on your device.
         </p>
@@ -492,19 +495,20 @@ function LanguagePreference() {
         </div>
       </div>
       <div className={`${CARD} p-4 flex items-center justify-between gap-3`}>
-        <p className="text-sm">Test voice in <strong>{selected.name}</strong></p>
+        <p className="text-sm">{tr("voi.testVoiceIn")} <strong>{selected.name}</strong></p>
         <button onClick={() => { if (!speak(`This is a sample in ${selected.name}.`, selected.bcp47)) toast.error("Text-to-speech not supported here"); }}
           className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-1.5 rounded-lg">
-          <Play size={12} /> Play sample
+          <Play size={12} /> {tr("voi.playSample")}
         </button>
       </div>
-      {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available, so the language choice only affects on-screen labels for now. It is saved and synced across your devices.</FallbackNote>}
+      {!SPEECH_OUT && <FallbackNote>{tr("voi.languageFallback")}</FallbackNote>}
     </div>
   );
 }
 
 // ── Tool 3 · Text-to-speech reader ────────────────────────────────────────────────
 function SummaryReader() {
+  const tr = useT();
   const { store } = useApp();
   const [lang] = useFeatureState<string>("voice-language", "Hindi");
   const [rate, setRate] = useState(1);
@@ -524,13 +528,13 @@ function SummaryReader() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Volume2 size={14} className="text-[var(--color-primary)]" /> Read my summary aloud</h2>
-        <p className="text-xs text-[var(--color-muted)]">A spoken walkthrough of your live cash position, useful when you can&apos;t look at a screen.</p>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Volume2 size={14} className="text-[var(--color-primary)]" /> {tr("voi.readerHeading")}</h2>
+        <p className="text-xs text-[var(--color-muted)]">{tr("voi.readerSubtitle")}</p>
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: "Money in", value: formatCurrency(summary.inflow), color: "text-green-400" },
-            { label: "Money out", value: formatCurrency(summary.outflow), color: "text-red-400" },
-            { label: "Net", value: formatCurrency(summary.net), color: summary.net >= 0 ? "text-green-400" : "text-red-400" },
+            { label: tr("voi.moneyIn"), value: formatCurrency(summary.inflow), color: "text-green-400" },
+            { label: tr("voi.moneyOut"), value: formatCurrency(summary.outflow), color: "text-red-400" },
+            { label: tr("voi.net"), value: formatCurrency(summary.net), color: summary.net >= 0 ? "text-green-400" : "text-red-400" },
           ].map(k => (
             <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
               <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -539,20 +543,20 @@ function SummaryReader() {
           ))}
         </div>
         <div>
-          <label className="text-xs text-[var(--color-muted)]">Speech rate: <strong className="text-[var(--color-text)]">{rate.toFixed(1)}x</strong></label>
+          <label className="text-xs text-[var(--color-muted)]">{tr("voi.speechRate")} <strong className="text-[var(--color-text)]">{rate.toFixed(1)}x</strong></label>
           <input type="range" min={0.5} max={1.5} step={0.1} value={rate} onChange={e => setRate(Number(e.target.value))} className="w-full mt-1 accent-[var(--color-primary)]" />
         </div>
         <div className="flex gap-2">
           <button onClick={() => { if (!speak(summary.script, bcp47, rate)) toast.error("Text-to-speech not supported here"); }} disabled={!SPEECH_OUT}
             className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40">
-            <Play size={13} /> Read aloud
+            <Play size={13} /> {tr("voi.readAloud")}
           </button>
           <button onClick={() => { if (SPEECH_OUT) window.speechSynthesis.cancel(); }} disabled={!SPEECH_OUT}
             className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg disabled:opacity-40">
-            <Square size={13} /> Stop
+            <Square size={13} /> {tr("voi.stop")}
           </button>
         </div>
-        {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available - the script is shown below so a screen reader can read it instead.</FallbackNote>}
+        {!SPEECH_OUT && <FallbackNote>{tr("voi.readerFallback")}</FallbackNote>}
         <p className="text-[11px] text-[var(--color-muted)] italic border-t border-[var(--color-border)] pt-2">&ldquo;{summary.script}&rdquo;</p>
       </div>
     </div>
@@ -561,23 +565,24 @@ function SummaryReader() {
 
 // ── Tool 4 · Voice-command cheat-sheet ────────────────────────────────────────────
 function CommandCheatSheet() {
+  const tr = useT();
   const groups: { title: string; phrases: { say: string; does: string }[] }[] = [
     {
-      title: "Capture entries", phrases: [
+      title: tr("voi.cheatCaptureEntries"), phrases: [
         { say: "received 5000 from Sharma", does: "Drafts a money-in entry" },
         { say: "paid 1200 to electricity", does: "Drafts a money-out entry" },
         { say: "sold 30 bags cement for 9000", does: "Drafts a sale" },
       ],
     },
     {
-      title: "Ask questions", phrases: [
+      title: tr("voi.cheatAskQuestions"), phrases: [
         { say: "what is my balance", does: "Reads cash position aloud" },
         { say: "how much does Ramesh owe", does: "Reads outstanding for a party" },
         { say: "read my summary", does: "Plays the spoken P&L summary" },
       ],
     },
     {
-      title: "Navigate & control", phrases: [
+      title: tr("voi.cheatNavigateControl"), phrases: [
         { say: "set language to Tamil", does: "Switches preferred language" },
         { say: "turn on large text", does: "Enables accessibility mode" },
         { say: "stop", does: "Stops listening / reading" },
@@ -587,8 +592,8 @@ function CommandCheatSheet() {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><BookOpen size={14} className="text-[var(--color-primary)]" /> Supported phrases</h2>
-        <p className="text-xs text-[var(--color-muted)] mt-1">A reference of phrasings the parser understands. Phrasing is flexible - these are examples, not exact commands.</p>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><BookOpen size={14} className="text-[var(--color-primary)]" /> {tr("voi.commandsHeading")}</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-1">{tr("voi.commandsSubtitle")}</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {groups.map(g => (
@@ -611,6 +616,7 @@ function CommandCheatSheet() {
 
 // ── Tool 5 · Accessibility settings ───────────────────────────────────────────────
 function AccessibilitySettings() {
+  const tr = useT();
   const [largeText, setLargeText] = useFeatureState<boolean>("voice-a11y-large-text", false);
   const [highContrast, setHighContrast] = useFeatureState<boolean>("voice-a11y-high-contrast", false);
 
@@ -622,15 +628,15 @@ function AccessibilitySettings() {
   };
 
   const toggles: { label: string; desc: string; value: boolean; set: (v: boolean) => void }[] = [
-    { label: "Large text", desc: "Increase font size for easier reading", value: largeText, set: setLargeText },
-    { label: "High contrast", desc: "Black background, white text, bold borders", value: highContrast, set: setHighContrast },
+    { label: tr("voi.largeText"), desc: tr("voi.largeTextDesc"), value: largeText, set: setLargeText },
+    { label: tr("voi.highContrast"), desc: tr("voi.highContrastDesc"), value: highContrast, set: setHighContrast },
   ];
 
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Eye size={14} className="text-[var(--color-primary)]" /> Accessibility</h2>
-        <p className="text-xs text-[var(--color-muted)]">Preferences are saved and synced. The preview below applies them live; app-wide rollout is wired separately.</p>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Eye size={14} className="text-[var(--color-primary)]" /> {tr("voi.accessibilityHeading")}</h2>
+        <p className="text-xs text-[var(--color-muted)]">{tr("voi.accessibilitySubtitle")}</p>
         {toggles.map(t => (
           <label key={t.label} className="flex items-center justify-between gap-3 py-2 border-b border-[var(--color-border)] last:border-0 cursor-pointer">
             <div>
@@ -642,9 +648,9 @@ function AccessibilitySettings() {
         ))}
       </div>
       <div className={`${CARD} p-4`}>
-        <p className="text-xs text-[var(--color-muted)] mb-2">Live preview</p>
+        <p className="text-xs text-[var(--color-muted)] mb-2">{tr("voi.livePreview")}</p>
         <div style={previewStyle} className="rounded-lg p-4 transition-all">
-          <p className="font-bold">Net cash position</p>
+          <p className="font-bold">{tr("voi.netCashPosition")}</p>
           <p className="tabular-nums">{formatCurrency(247500)} this month</p>
           <p style={{ fontSize: largeText ? "1rem" : "0.75rem" }} className="mt-1 opacity-80">Sample text rendered with your current settings.</p>
         </div>
@@ -655,6 +661,7 @@ function AccessibilitySettings() {
 
 // ── Tool 6 · Vernacular number formatting ─────────────────────────────────────────
 function VernacularNumbers() {
+  const tr = useT();
   const [indian, setIndian] = useFeatureState<boolean>("voice-number-indian", true);
   const [raw, setRaw] = useState("1234567");
   const n = parseFloat(raw.replace(/,/g, "")) || 0;
@@ -664,10 +671,10 @@ function VernacularNumbers() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Hash size={14} className="text-[var(--color-primary)]" /> Number formatting</h2>
-        <p className="text-xs text-[var(--color-muted)]">Display amounts the way Indians actually read them - lakh and crore with 2-digit grouping - or switch to the international system.</p>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Hash size={14} className="text-[var(--color-primary)]" /> {tr("voi.numbersHeading")}</h2>
+        <p className="text-xs text-[var(--color-muted)]">{tr("voi.numbersSubtitle")}</p>
         <div className="flex gap-2">
-          {([["indian", "Indian (lakh / crore)"], ["intl", "International (million / billion)"]] as const).map(([id, label]) => {
+          {([["indian", tr("voi.numberIndian")], ["intl", tr("voi.numberIntl")]] as const).map(([id, label]) => {
             const on = (id === "indian") === indian;
             return (
               <button key={id} onClick={() => setIndian(id === "indian")}
@@ -678,19 +685,19 @@ function VernacularNumbers() {
           })}
         </div>
         <div>
-          <label className="text-xs text-[var(--color-muted)] block mb-1">Enter an amount</label>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">{tr("voi.enterAmount")}</label>
           <input value={raw} onChange={e => setRaw(e.target.value)} className={INP} placeholder="1234567" />
         </div>
         <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
-          <p className="text-[10px] text-[var(--color-muted)] mb-1">Formatted</p>
+          <p className="text-[10px] text-[var(--color-muted)] mb-1">{tr("voi.formatted")}</p>
           <p className="text-2xl font-bold tabular-nums">{indian ? `₹${formatIndianGrouping(n)}` : n.toLocaleString("en-US")}</p>
           <p className="text-xs text-[var(--color-primary)] mt-1">{indian ? lakhCrore(n) : `${(n / 1e6).toFixed(2)} million`}</p>
         </div>
       </div>
       <div className={`${CARD} p-4`}>
-        <p className="text-sm font-semibold mb-2">Side-by-side</p>
+        <p className="text-sm font-semibold mb-2">{tr("voi.sideBySide")}</p>
         <table className="w-full text-sm">
-          <thead><tr>{["Raw", "Indian", "International"].map(h => <th key={h} className="text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider pb-2">{h}</th>)}</tr></thead>
+          <thead><tr>{[tr("voi.colRaw"), tr("voi.colIndian"), tr("voi.colInternational")].map(h => <th key={h} className="text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider pb-2">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-[var(--color-border)]">
             {samples.map(s => (
               <tr key={s}>
@@ -709,6 +716,7 @@ function VernacularNumbers() {
 // ── Tool 7 · Audio statement builder ──────────────────────────────────────────────
 type ScriptLine = { id: string; text: string };
 function AudioStatementBuilder() {
+  const tr = useT();
   const { store } = useApp();
   const [lang] = useFeatureState<string>("voice-language", "Hindi");
   const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
@@ -735,11 +743,11 @@ function AudioStatementBuilder() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><AudioLines size={14} className="text-[var(--color-primary)]" /> Audio statement builder</h2>
-        <p className="text-xs text-[var(--color-muted)]">Compose a spoken-summary script line by line, then play the whole thing back as one narration.</p>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><AudioLines size={14} className="text-[var(--color-primary)]" /> {tr("voi.audioStmtHeading")}</h2>
+        <p className="text-xs text-[var(--color-muted)]">{tr("voi.audioStmtSubtitle")}</p>
         <div className="flex gap-2">
           <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter") add(draft); }} placeholder="Add a line to narrate…" className={INP} />
-          <button onClick={() => add(draft)} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg text-sm font-medium"><Plus size={13} /> Add</button>
+          <button onClick={() => add(draft)} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg text-sm font-medium"><Plus size={13} /> {tr("voi.add")}</button>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {suggestions.map(s => (
@@ -759,11 +767,11 @@ function AudioStatementBuilder() {
           ))}
           <div className="flex gap-2 pt-2">
             <button onClick={() => { if (!speak(fullScript, bcp47)) toast.error("Text-to-speech not supported here"); }} disabled={!SPEECH_OUT}
-              className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Play size={13} /> Play statement</button>
+              className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Play size={13} /> {tr("voi.playStatement")}</button>
             <button onClick={() => { if (SPEECH_OUT) window.speechSynthesis.cancel(); }} disabled={!SPEECH_OUT}
-              className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg disabled:opacity-40"><Square size={13} /> Stop</button>
+              className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg disabled:opacity-40"><Square size={13} /> {tr("voi.stop")}</button>
           </div>
-          {!SPEECH_OUT && <FallbackNote>Playback needs text-to-speech support. The full script is assembled above so it can be copied or read by a screen reader.</FallbackNote>}
+          {!SPEECH_OUT && <FallbackNote>{tr("voi.audioStmtFallback")}</FallbackNote>}
         </div>
       )}
     </div>
@@ -780,6 +788,7 @@ async function hashPhrase(s: string): Promise<string> {
 }
 
 function VoiceAuthSetup() {
+  const tr = useT();
   const [stored, setStored] = useFeatureState<string | null>("voice-auth-hash", null);
   const [phrase, setPhrase] = useState("");
   const [busy, setBusy] = useState(false);
@@ -798,16 +807,16 @@ function VoiceAuthSetup() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Fingerprint size={14} className="text-[var(--color-primary)]" /> Voice-auth setup</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Fingerprint size={14} className="text-[var(--color-primary)]" /> {tr("voi.voiceAuthHeading")}</h2>
         <FallbackNote>
           Setup stub only. This captures a spoken/typed passphrase and stores a one-way SHA-256 hash - it does <strong>not</strong> perform real voiceprint biometrics or gate any action yet. True voice-liveness auth needs a server-side model.
         </FallbackNote>
         <div>
-          <label className="text-xs text-[var(--color-muted)] block mb-1">Passphrase</label>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">{tr("voi.passphrase")}</label>
           <input type="password" value={phrase} onChange={e => setPhrase(e.target.value)} placeholder="e.g. open my books" className={INP} />
         </div>
         <button onClick={save} disabled={busy} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
-          <CheckCircle2 size={13} /> {busy ? "Enrolling…" : stored ? "Re-enroll passphrase" : "Enroll passphrase"}
+          <CheckCircle2 size={13} /> {busy ? tr("voi.enrolling") : stored ? tr("voi.reEnrollPassphrase") : tr("voi.enrollPassphrase")}
         </button>
         {stored && (
           <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-[11px] text-[var(--color-muted)] break-all">
@@ -823,6 +832,7 @@ function VoiceAuthSetup() {
 
 // ── Tool 9 · Dictation scratchpad ─────────────────────────────────────────────────
 function DictationScratchpad() {
+  const tr = useT();
   const [notes, setNotes] = useFeatureState<string>("voice-scratchpad", "");
   const [listening, setListening] = useState(false);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
@@ -854,23 +864,23 @@ function DictationScratchpad() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><NotebookPen size={14} className="text-[var(--color-primary)]" /> Dictation scratchpad</h2>
-        <p className="text-xs text-[var(--color-muted)]">Speak freely and your words append to the notes below. Notes are saved and synced. Works for vendor memos, to-dos, anything.</p>
-        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available in this browser - type directly into the notes field.</FallbackNote>}
+        <h2 className="text-sm font-semibold flex items-center gap-2"><NotebookPen size={14} className="text-[var(--color-primary)]" /> {tr("voi.scratchpadHeading")}</h2>
+        <p className="text-xs text-[var(--color-muted)]">{tr("voi.scratchpadSubtitle")}</p>
+        {!SPEECH_IN && <FallbackNote>{tr("voi.scratchpadFallback")}</FallbackNote>}
         <div className="flex gap-2">
           <button onClick={toggleListen} disabled={!SPEECH_IN}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
-            {listening ? <><Square size={13} /> Stop dictation</> : <><Mic size={13} /> Start dictation</>}
+            {listening ? <><Square size={13} /> {tr("voi.stopDictation")}</> : <><Mic size={13} /> {tr("voi.startDictation")}</>}
           </button>
           <button onClick={() => { navigator.clipboard?.writeText(notes); toast.success("Notes copied"); }} disabled={!notes}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border border-[var(--color-border)] text-[var(--color-muted)] disabled:opacity-40"><Copy size={13} /> Copy</button>
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border border-[var(--color-border)] text-[var(--color-muted)] disabled:opacity-40"><Copy size={13} /> {tr("voi.copy")}</button>
           <button onClick={() => setNotes("")} disabled={!notes}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border border-[var(--color-border)] text-[var(--color-muted)] disabled:opacity-40"><Trash2 size={13} /> Clear</button>
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border border-[var(--color-border)] text-[var(--color-muted)] disabled:opacity-40"><Trash2 size={13} /> {tr("voi.clear")}</button>
         </div>
-        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… speak in {lang}.</p>}
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">{tr("voi.listeningSpeakIn", { lang })}</p>}
         <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={8} placeholder="Your dictated notes appear here…"
           className={`${INP} resize-y leading-relaxed`} />
-        <p className="text-[10px] text-[var(--color-muted)]">{notes.trim() ? `${notes.trim().split(/\s+/).length} words` : "Empty"}</p>
+        <p className="text-[10px] text-[var(--color-muted)]">{notes.trim() ? `${notes.trim().split(/\s+/).length} words` : tr("voi.empty")}</p>
       </div>
     </div>
   );
@@ -912,6 +922,7 @@ function parseExpenses(text: string): ExpenseDraft[] {
 }
 
 function VoiceExpenseLogger() {
+  const tr = useT();
   const [text, setText] = useState("");
   const [listening, setListening] = useState(false);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
@@ -934,19 +945,19 @@ function VoiceExpenseLogger() {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> Voice expense logger</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Receipt size={14} className="text-[var(--color-primary)]" /> {tr("voi.expenseHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
           Rattle off petty cash in one breath - <em className="text-[var(--color-text)]">&ldquo;paid 200 for tea, 1500 diesel, 300 packing&rdquo;</em> - and each item is split out and auto-categorised into a draft.
         </p>
-        {!SPEECH_IN && <FallbackNote>Microphone dictation isn&apos;t available here. Type the items below - splitting and categorising work identically.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>{tr("voi.expenseFallback")}</FallbackNote>}
         <div className="flex gap-2">
           <input value={text} onChange={e => setText(e.target.value)} placeholder="200 tea, 1500 diesel, 300 packing" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
-            {listening ? <><Square size={13} /> Stop</> : <><Mic size={13} /> Speak</>}
+            {listening ? <><Square size={13} /> {tr("voi.stop")}</> : <><Mic size={13} /> {tr("voi.speak")}</>}
           </button>
         </div>
-        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… speak now.</p>}
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">{tr("voi.listeningSpeakNow")}</p>}
       </div>
 
       {drafts.length > 0 && (
@@ -997,6 +1008,7 @@ function parseInvoice(text: string): InvoiceDraft | null {
 }
 
 function SpokenInvoiceCreator() {
+  const tr = useT();
   const [text, setText] = useState("");
   const [listening, setListening] = useState(false);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
@@ -1019,19 +1031,19 @@ function SpokenInvoiceCreator() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> Spoken invoice creator</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> {tr("voi.invoiceHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
           Say <em className="text-[var(--color-text)]">&ldquo;invoice Sharma 5000 for consulting&rdquo;</em> and we draft the invoice header, amount, and an indicative 18% GST line.
         </p>
-        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available - type the invoice line; parsing is identical.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>{tr("voi.invoiceFallback")}</FallbackNote>}
         <div className="flex gap-2">
           <input value={text} onChange={e => setText(e.target.value)} placeholder="invoice Sharma 5000 for consulting" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
-            {listening ? <><Square size={13} /> Stop</> : <><Mic size={13} /> Speak</>}
+            {listening ? <><Square size={13} /> {tr("voi.stop")}</> : <><Mic size={13} /> {tr("voi.speak")}</>}
           </button>
         </div>
-        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… speak now.</p>}
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">{tr("voi.listeningSpeakNow")}</p>}
       </div>
 
       {text.trim() && (
@@ -1040,16 +1052,16 @@ function SpokenInvoiceCreator() {
             <>
               <div className="flex items-start justify-between border-b border-[var(--color-border)] pb-3 mb-3">
                 <div>
-                  <p className="text-[10px] text-[var(--color-muted)]">Bill to</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{tr("voi.billTo")}</p>
                   <p className="text-base font-bold">{draft.customer}</p>
                   <p className="text-xs text-[var(--color-muted)] mt-0.5">{draft.description}</p>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-950/30 text-yellow-400 border border-yellow-800/40">Draft</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-950/30 text-yellow-400 border border-yellow-800/40">{tr("voi.draft")}</span>
               </div>
               <div className="space-y-1.5 text-sm">
-                <div className="flex justify-between"><span className="text-[var(--color-muted)]">Taxable value</span><span className="tabular-nums">{formatCurrency(draft.amount)}</span></div>
-                <div className="flex justify-between"><span className="text-[var(--color-muted)]">GST @ 18% (indicative)</span><span className="tabular-nums">{formatCurrency(gst)}</span></div>
-                <div className="flex justify-between font-bold border-t border-[var(--color-border)] pt-1.5 mt-1.5"><span>Total</span><span className="tabular-nums text-[var(--color-primary)]">{formatCurrency(draft.amount + gst)}</span></div>
+                <div className="flex justify-between"><span className="text-[var(--color-muted)]">{tr("voi.taxableValue")}</span><span className="tabular-nums">{formatCurrency(draft.amount)}</span></div>
+                <div className="flex justify-between"><span className="text-[var(--color-muted)]">{tr("voi.gstIndicative")}</span><span className="tabular-nums">{formatCurrency(gst)}</span></div>
+                <div className="flex justify-between font-bold border-t border-[var(--color-border)] pt-1.5 mt-1.5"><span>{tr("voi.total")}</span><span className="tabular-nums text-[var(--color-primary)]">{formatCurrency(draft.amount + gst)}</span></div>
               </div>
               <p className="text-[11px] text-[var(--color-muted)] mt-3">Preview only. Rate, HSN, and place-of-supply are placeholders - finalise and issue from <strong className="text-[var(--color-text)]">Invoices</strong>.</p>
             </>
@@ -1064,6 +1076,7 @@ function SpokenInvoiceCreator() {
 
 // ── Tool 12 · Voice transaction search ────────────────────────────────────────────
 function VoiceTransactionSearch() {
+  const tr = useT();
   const { store } = useApp();
   const [query, setQuery] = useState("");
   const [listening, setListening] = useState(false);
@@ -1113,25 +1126,25 @@ function VoiceTransactionSearch() {
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Search size={14} className="text-[var(--color-primary)]" /> Voice search across your books</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Search size={14} className="text-[var(--color-primary)]" /> {tr("voi.searchHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
           Speak or type a query like <em className="text-[var(--color-text)]">&ldquo;cash sales above 5000&rdquo;</em> or <em className="text-[var(--color-text)]">&ldquo;rent paid&rdquo;</em>. We filter your live transactions by direction, amount, and keywords.
         </p>
-        {!SPEECH_IN && <FallbackNote>Voice query isn&apos;t available - type your filter; it works the same.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>{tr("voi.searchFallback")}</FallbackNote>}
         <div className="flex gap-2">
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="sales above 5000" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
-            {listening ? <><Square size={13} /> Stop</> : <><Mic size={13} /> Speak</>}
+            {listening ? <><Square size={13} /> {tr("voi.stop")}</> : <><Mic size={13} /> {tr("voi.speak")}</>}
           </button>
         </div>
-        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… speak now.</p>}
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">{tr("voi.listeningSpeakNow")}</p>}
       </div>
 
       <div className={`${CARD} p-4`}>
         <p className="text-xs text-[var(--color-muted)] mb-3">{results.length} match{results.length === 1 ? "" : "es"}{query.trim() ? "" : " (showing recent)"}</p>
         {results.length === 0 ? (
-          <p className="text-xs text-[var(--color-muted)]">No transactions match. Try a broader query, or check you have transactions recorded.</p>
+          <p className="text-xs text-[var(--color-muted)]">{tr("voi.searchNoResults")}</p>
         ) : (
           <div className="space-y-1.5">
             {results.map(t => (
@@ -1170,6 +1183,7 @@ const UI_TRANSLATIONS: Record<string, Record<string, string>> = {
   Kannada: { dashboard: "ಡ್ಯಾಶ್‌ಬೋರ್ಡ್", money_in: "ಜಮಾ", money_out: "ಖರ್ಚು", new_invoice: "ಹೊಸ ಬಿಲ್", pending: "ಬಾಕಿ ಪಾವತಿ", save: "ಉಳಿಸಿ" },
 };
 function UiLanguagePreview() {
+  const tr = useT();
   const [lang] = useFeatureState<string>("voice-language", "Hindi");
   const [previewLang, setPreviewLang] = useState<string>(
     UI_TRANSLATIONS[lang] ? lang : "Hindi",
@@ -1181,7 +1195,7 @@ function UiLanguagePreview() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Globe size={14} className="text-[var(--color-primary)]" /> UI language preview</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Globe size={14} className="text-[var(--color-primary)]" /> {tr("voi.uiPreviewHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
           See how core interface labels read in your language before switching the whole app. Bundled samples below cover the most widely-spoken scripts; the other 22 languages roll out as translation packs land.
         </p>
@@ -1215,6 +1229,7 @@ function UiLanguagePreview() {
 
 // ── Tool 14 · Read-my-day audio digest ────────────────────────────────────────────
 function ReadMyDayDigest() {
+  const tr = useT();
   const { store } = useApp();
   const [lang] = useFeatureState<string>("voice-language", "Hindi");
   const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
@@ -1238,13 +1253,13 @@ function ReadMyDayDigest() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Sun size={14} className="text-[var(--color-primary)]" /> Read my day</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Sun size={14} className="text-[var(--color-primary)]" /> {tr("voi.digestHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">A spoken digest of today ({format(today, "d MMM yyyy")}) drawn live from your books - meant for the end-of-day glance you skip when you can&apos;t read the dashboard.</p>
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: "In today", value: formatCurrency(digest.inflow), color: "text-green-400" },
-            { label: "Out today", value: formatCurrency(digest.outflow), color: "text-red-400" },
-            { label: "Balance", value: formatCurrency(digest.balance), color: digest.balance >= 0 ? "text-green-400" : "text-red-400" },
+            { label: tr("voi.inToday"), value: formatCurrency(digest.inflow), color: "text-green-400" },
+            { label: tr("voi.outToday"), value: formatCurrency(digest.outflow), color: "text-red-400" },
+            { label: tr("voi.balance"), value: formatCurrency(digest.balance), color: digest.balance >= 0 ? "text-green-400" : "text-red-400" },
           ].map(k => (
             <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
               <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
@@ -1254,11 +1269,11 @@ function ReadMyDayDigest() {
         </div>
         <div className="flex gap-2">
           <button onClick={() => { if (!speak(digest.script, bcp47)) toast.error("Text-to-speech not supported here"); }} disabled={!SPEECH_OUT}
-            className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Play size={13} /> Play digest</button>
+            className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Play size={13} /> {tr("voi.playDigest")}</button>
           <button onClick={() => { if (SPEECH_OUT) window.speechSynthesis.cancel(); }} disabled={!SPEECH_OUT}
-            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg disabled:opacity-40"><Square size={13} /> Stop</button>
+            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg disabled:opacity-40"><Square size={13} /> {tr("voi.stop")}</button>
         </div>
-        {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available - the digest script is shown below for a screen reader.</FallbackNote>}
+        {!SPEECH_OUT && <FallbackNote>{tr("voi.digestFallback")}</FallbackNote>}
         <p className="text-[11px] text-[var(--color-muted)] italic border-t border-[var(--color-border)] pt-2">&ldquo;{digest.script}&rdquo;</p>
       </div>
     </div>
@@ -1268,6 +1283,7 @@ function ReadMyDayDigest() {
 // ── Tool 15 · Voice reminder setter ───────────────────────────────────────────────
 type Reminder = { id: string; text: string; when: string; created: string };
 function VoiceReminderSetter() {
+  const tr = useT();
   const [reminders, setReminders] = useFeatureState<Reminder[]>("voice-reminders", []);
   const [text, setText] = useState("");
   const [when, setWhen] = useState("");
@@ -1299,21 +1315,21 @@ function VoiceReminderSetter() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Bell size={14} className="text-[var(--color-primary)]" /> Voice reminders</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Bell size={14} className="text-[var(--color-primary)]" /> {tr("voi.reminderHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">Speak a reminder - <em className="text-[var(--color-text)]">&ldquo;collect 5000 from Ramesh&rdquo;</em> - pick a date, and it&apos;s saved and synced. These are personal notes shown here; they don&apos;t trigger push notifications yet.</p>
-        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available - type the reminder text instead.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>{tr("voi.reminderFallback")}</FallbackNote>}
         <div className="flex gap-2">
           <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") add(); }} placeholder="collect payment from Ramesh" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
-            {listening ? <><Square size={13} /> Stop</> : <><Mic size={13} /> Speak</>}
+            {listening ? <><Square size={13} /> {tr("voi.stop")}</> : <><Mic size={13} /> {tr("voi.speak")}</>}
           </button>
         </div>
         <div className="flex gap-2">
           <input type="date" value={when} onChange={e => setWhen(e.target.value)} className={INP} />
-          <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap"><Plus size={13} /> Add</button>
+          <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap"><Plus size={13} /> {tr("voi.add")}</button>
         </div>
-        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… speak now.</p>}
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">{tr("voi.listeningSpeakNow")}</p>}
       </div>
 
       {sorted.length > 0 && (
@@ -1323,7 +1339,7 @@ function VoiceReminderSetter() {
               <Bell size={13} className="text-[var(--color-primary)] shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{r.text}</p>
-                <p className="text-[10px] text-[var(--color-muted)]">Due {r.when}</p>
+                <p className="text-[10px] text-[var(--color-muted)]">{tr("voi.due", { when: r.when })}</p>
               </div>
               <button onClick={() => setReminders(reminders.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
             </div>
@@ -1366,6 +1382,7 @@ function numberToIndianWords(num: number): string {
   return (neg ? "minus " : "") + words;
 }
 function AmountInWords() {
+  const tr = useT();
   const [lang] = useFeatureState<string>("voice-language", "Hindi");
   const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
   const [raw, setRaw] = useState("125000");
@@ -1379,10 +1396,10 @@ function AmountInWords() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Type size={14} className="text-[var(--color-primary)]" /> Amount in words (Indian)</h2>
-        <p className="text-xs text-[var(--color-muted)]">Spell out any amount the way it must appear on cheques and invoices - using lakh and crore, not millions. Includes paise.</p>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Type size={14} className="text-[var(--color-primary)]" /> {tr("voi.wordsHeading")}</h2>
+        <p className="text-xs text-[var(--color-muted)]">{tr("voi.wordsSubtitle")}</p>
         <div>
-          <label className="text-xs text-[var(--color-muted)] block mb-1">Enter an amount</label>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">{tr("voi.enterAmount")}</label>
           <input value={raw} onChange={e => setRaw(e.target.value)} className={INP} placeholder="125000.50" inputMode="decimal" />
         </div>
         <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
@@ -1392,11 +1409,11 @@ function AmountInWords() {
         </div>
         <div className="flex gap-2">
           <button onClick={() => { navigator.clipboard?.writeText(capped); toast.success("Copied"); }}
-            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg"><Copy size={13} /> Copy</button>
+            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg"><Copy size={13} /> {tr("voi.copy")}</button>
           <button onClick={() => { if (!speak(capped, bcp47)) toast.error("Text-to-speech not supported here"); }} disabled={!SPEECH_OUT}
-            className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Play size={13} /> Read aloud</button>
+            className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Play size={13} /> {tr("voi.readAloud")}</button>
         </div>
-        {!SPEECH_OUT && <FallbackNote>Read-aloud needs text-to-speech support; the words are shown above to copy onto a cheque.</FallbackNote>}
+        {!SPEECH_OUT && <FallbackNote>{tr("voi.wordsFallback")}</FallbackNote>}
       </div>
     </div>
   );
@@ -1430,6 +1447,7 @@ function transliterate(input: string): string {
   }).join("");
 }
 function TransliterationHelper() {
+  const tr = useT();
   const [roman, setRoman] = useState("");
   const dev = useMemo(() => transliterate(roman), [roman]);
   const examples = ["ramesh ko 5000 dena hai", "dukaan band", "bill banao"];
@@ -1437,12 +1455,12 @@ function TransliterationHelper() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><ArrowRightLeft size={14} className="text-[var(--color-primary)]" /> Transliteration helper</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ArrowRightLeft size={14} className="text-[var(--color-primary)]" /> {tr("voi.translitHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
           Type a note in Roman letters (e.g. <em className="text-[var(--color-text)]">&ldquo;ramesh ko 5000 dena hai&rdquo;</em>) and preview it in Devanagari. This is a quick phonetic approximation for jotting vernacular notes - not a precise linguistic transliteration.
         </p>
         <div>
-          <label className="text-xs text-[var(--color-muted)] block mb-1">Roman input</label>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">{tr("voi.romanInput")}</label>
           <textarea value={roman} onChange={e => setRoman(e.target.value)} rows={3} placeholder="ramesh ko 5000 dena hai" className={`${INP} resize-y`} />
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -1451,14 +1469,14 @@ function TransliterationHelper() {
           ))}
         </div>
         <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4 min-h-[3rem]">
-          <p className="text-[10px] text-[var(--color-muted)] mb-1">Devanagari preview</p>
-          <p className="text-lg leading-snug">{dev || <span className="text-[var(--color-muted)] text-sm">Preview appears here…</span>}</p>
+          <p className="text-[10px] text-[var(--color-muted)] mb-1">{tr("voi.devanagariPreview")}</p>
+          <p className="text-lg leading-snug">{dev || <span className="text-[var(--color-muted)] text-sm">{tr("voi.previewAppearsHere")}</span>}</p>
         </div>
         {dev && (
           <button onClick={() => { navigator.clipboard?.writeText(dev); toast.success("Copied"); }}
-            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg"><Copy size={13} /> Copy Devanagari</button>
+            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg"><Copy size={13} /> {tr("voi.copyDevanagari")}</button>
         )}
-        <FallbackNote>Phonetic approximation only - vowel matras and conjuncts won&apos;t always be exact. Use it for rough notes, not for printing official documents.</FallbackNote>
+        <FallbackNote>{tr("voi.translitFallback")}</FallbackNote>
       </div>
     </div>
   );
@@ -1472,6 +1490,7 @@ const REMINDER_TEMPLATES: { id: string; label: string; build: (firm: string, par
   { id: "festive", label: "Warm & festive", build: (firm, party, amt, days) => `Namaste ${party}, greetings from ${firm}. We hope business is good. A small balance of ${amt} rupees is open for ${days} day${days === 1 ? "" : "s"}. Do settle it when you can, and thank you for your continued trust.` },
 ];
 function PaymentReminderDictation() {
+  const tr = useT();
   const { store } = useApp();
   const [lang] = useFeatureState<string>("voice-language", "Hindi");
   const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
@@ -1502,9 +1521,9 @@ function PaymentReminderDictation() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><PhoneCall size={14} className="text-[var(--color-primary)]" /> Payment-reminder dictation</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PhoneCall size={14} className="text-[var(--color-primary)]" /> {tr("voi.payReminderHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Pick an overdue bill (or fill it in), choose a tone, and Headroom drafts a polite spoken reminder you can read aloud, copy, or repeat over a call. Nothing is sent automatically.
+          {tr("voi.payReminderSubtitle")}
         </p>
 
         {overdue.length > 0 && (
@@ -1519,9 +1538,9 @@ function PaymentReminderDictation() {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <input value={party} onChange={e => setParty(e.target.value)} placeholder="Customer name" className={INP} />
-          <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" inputMode="decimal" className={INP} />
-          <input value={days} onChange={e => setDays(e.target.value)} placeholder="Days overdue" inputMode="numeric" className={INP} />
+          <input value={party} onChange={e => setParty(e.target.value)} placeholder={tr("voi.customerName")} className={INP} />
+          <input value={amount} onChange={e => setAmount(e.target.value)} placeholder={tr("voi.amount")} inputMode="decimal" className={INP} />
+          <input value={days} onChange={e => setDays(e.target.value)} placeholder={tr("voi.daysOverdue")} inputMode="numeric" className={INP} />
         </div>
         <div className="flex flex-wrap gap-2">
           {REMINDER_TEMPLATES.map(t => (
@@ -1534,17 +1553,17 @@ function PaymentReminderDictation() {
       </div>
 
       <div className={`${CARD} p-5 space-y-3`}>
-        <p className="text-xs text-[var(--color-muted)]">Reminder script</p>
+        <p className="text-xs text-[var(--color-muted)]">{tr("voi.reminderScript")}</p>
         <p className="text-sm leading-relaxed bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">&ldquo;{message}&rdquo;</p>
         <div className="flex gap-2">
           <button onClick={() => { if (!speak(message, bcp47)) toast.error("Text-to-speech not supported here"); }} disabled={!SPEECH_OUT}
-            className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Play size={13} /> Read aloud</button>
+            className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Play size={13} /> {tr("voi.readAloud")}</button>
           <button onClick={() => { if (SPEECH_OUT) window.speechSynthesis.cancel(); }} disabled={!SPEECH_OUT}
-            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg disabled:opacity-40"><Square size={13} /> Stop</button>
+            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg disabled:opacity-40"><Square size={13} /> {tr("voi.stop")}</button>
           <button onClick={() => { navigator.clipboard?.writeText(message); toast.success("Reminder copied"); }}
-            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg"><Copy size={13} /> Copy</button>
+            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg"><Copy size={13} /> {tr("voi.copy")}</button>
         </div>
-        {!SPEECH_OUT && <FallbackNote>Read-aloud needs text-to-speech support; copy the script above and read or send it manually instead.</FallbackNote>}
+        {!SPEECH_OUT && <FallbackNote>{tr("voi.payReminderFallback")}</FallbackNote>}
       </div>
     </div>
   );
@@ -1553,6 +1572,7 @@ function PaymentReminderDictation() {
 // ── Tool 19 · Voice-to-WhatsApp message ───────────────────────────────────────────
 // Dictates a message, then hands off to WhatsApp's wa.me deep link (no API sends here).
 function VoiceToWhatsApp() {
+  const tr = useT();
   const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
   const [listening, setListening] = useState(false);
@@ -1589,28 +1609,28 @@ function VoiceToWhatsApp() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><MessageCircle size={14} className="text-[var(--color-primary)]" /> Voice to WhatsApp</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><MessageCircle size={14} className="text-[var(--color-primary)]" /> {tr("voi.whatsappHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Speak a message in your language, then hand it straight to WhatsApp pre-filled. We open WhatsApp&apos;s share link - your unsent draft, your number - so you tap send yourself. No message is sent in the background.
+          {tr("voi.whatsappSubtitle")}
         </p>
-        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available - type the message; the WhatsApp hand-off works the same.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>{tr("voi.whatsappFallback")}</FallbackNote>}
         <div>
-          <label className="text-xs text-[var(--color-muted)] block mb-1">Recipient number (optional, with country code)</label>
+          <label className="text-xs text-[var(--color-muted)] block mb-1">{tr("voi.recipientNumber")}</label>
           <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="91XXXXXXXXXX" inputMode="tel" className={INP} />
-          <p className="text-[10px] text-[var(--color-muted)] mt-1">Leave blank to pick the contact inside WhatsApp.</p>
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">{tr("voi.recipientHint")}</p>
         </div>
         <div className="flex gap-2">
           <button onClick={toggleListen} disabled={!SPEECH_IN}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
-            {listening ? <><Square size={13} /> Stop dictation</> : <><Mic size={13} /> Dictate message</>}
+            {listening ? <><Square size={13} /> {tr("voi.stopDictation")}</> : <><Mic size={13} /> {tr("voi.dictateMessage")}</>}
           </button>
           <button onClick={() => setMessage("")} disabled={!message}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border border-[var(--color-border)] text-[var(--color-muted)] disabled:opacity-40"><X size={13} /> Clear</button>
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border border-[var(--color-border)] text-[var(--color-muted)] disabled:opacity-40"><X size={13} /> {tr("voi.clear")}</button>
         </div>
-        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… speak in {lang}.</p>}
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">{tr("voi.listeningSpeakIn", { lang })}</p>}
         <textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} placeholder="Your message appears here…" className={`${INP} resize-y leading-relaxed`} />
         <button onClick={openWhatsApp} disabled={!message.trim()}
-          className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Send size={13} /> Open in WhatsApp</button>
+          className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Send size={13} /> {tr("voi.openInWhatsApp")}</button>
       </div>
     </div>
   );
@@ -1630,6 +1650,7 @@ const GLOSSARY: { term: string; plain: string }[] = [
   { term: "Reconciliation", plain: "Matching your own records against the bank or GST statement so every rupee is accounted for and nothing is missed." },
 ];
 function FinanceGlossary() {
+  const tr = useT();
   const [lang] = useFeatureState<string>("voice-language", "Hindi");
   const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
   const [q, setQ] = useState("");
@@ -1644,7 +1665,7 @@ function FinanceGlossary() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><BookMarked size={14} className="text-[var(--color-primary)]" /> Audio finance glossary</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><BookMarked size={14} className="text-[var(--color-primary)]" /> {tr("voi.glossaryHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
           Plain-language explanations of the jargon that trips up owners - tap any term to expand it, or hear it read aloud. The voice uses your preferred language locale ({bcp47}); the explanation text is in simple English for now.
         </p>
@@ -1653,7 +1674,7 @@ function FinanceGlossary() {
 
       <div className={`${CARD} p-4 space-y-2`}>
         {filtered.length === 0 ? (
-          <p className="text-xs text-[var(--color-muted)]">No term matches &ldquo;{q}&rdquo;.</p>
+          <p className="text-xs text-[var(--color-muted)]">{tr("voi.glossaryNoResults", { q })}</p>
         ) : filtered.map(g => {
           const open = openTerm === g.term;
           return (
@@ -1673,7 +1694,7 @@ function FinanceGlossary() {
             </div>
           );
         })}
-        {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available - every explanation is shown on screen so a screen reader can read it.</FallbackNote>}
+        {!SPEECH_OUT && <FallbackNote>{tr("voi.glossaryFallback")}</FallbackNote>}
       </div>
     </div>
   );
@@ -1691,6 +1712,7 @@ function parseAmounts(text: string): number[] {
   return out;
 }
 function SpeakTheTotal() {
+  const tr = useT();
   const [lang] = useFeatureState<string>("voice-language", "Hindi");
   const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
   const [text, setText] = useState("");
@@ -1722,19 +1744,19 @@ function SpeakTheTotal() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> Speak the total</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Calculator size={14} className="text-[var(--color-primary)]" /> {tr("voi.calcHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
           Rattle off amounts - <em className="text-[var(--color-text)]">&ldquo;200 plus 1500 and 300&rdquo;</em> - and Headroom adds them up and reads the total back to you, so you can tally cash without looking. Say <em className="text-[var(--color-text)]">&ldquo;minus&rdquo;</em> anywhere to subtract the rest.
         </p>
-        {!SPEECH_IN && <FallbackNote>Microphone dictation isn&apos;t available here - type the numbers; the totalling works identically.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>{tr("voi.calcFallback")}</FallbackNote>}
         <div className="flex gap-2">
           <input value={text} onChange={e => setText(e.target.value)} placeholder="200 plus 1500 and 300" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
-            {listening ? <><Square size={13} /> Stop</> : <><Mic size={13} /> Speak</>}
+            {listening ? <><Square size={13} /> {tr("voi.stop")}</> : <><Mic size={13} /> {tr("voi.speak")}</>}
           </button>
         </div>
-        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… speak now.</p>}
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">{tr("voi.listeningSpeakNow")}</p>}
       </div>
 
       {amounts.length > 0 && (
@@ -1752,8 +1774,8 @@ function SpeakTheTotal() {
             <p className="text-xs text-[var(--color-primary)] mt-1">{lakhCrore(total)}</p>
           </div>
           <button onClick={speakTotal} disabled={!SPEECH_OUT}
-            className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Volume2 size={13} /> Speak the total</button>
-          {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available - the total is shown above instead.</FallbackNote>}
+            className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Volume2 size={13} /> {tr("voi.speakTotal")}</button>
+          {!SPEECH_OUT && <FallbackNote>{tr("voi.calcFallbackOut")}</FallbackNote>}
         </div>
       )}
     </div>
@@ -1770,6 +1792,7 @@ const GREETING_TEMPLATES: GreetingTemplate[] = [
   { id: "newyear", label: "New year", text: (f) => `A very happy new year from ${f}. Thank you for being with us - here is to a successful year ahead together.` },
 ];
 function GreetingRecorder() {
+  const tr = useT();
   const { store } = useApp();
   const [lang] = useFeatureState<string>("voice-language", "Hindi");
   const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
@@ -1823,9 +1846,9 @@ function GreetingRecorder() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><PartyPopper size={14} className="text-[var(--color-primary)]" /> Greeting recorder</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><PartyPopper size={14} className="text-[var(--color-primary)]" /> {tr("voi.greetingHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Record a short voice greeting in your own language to send customers on WhatsApp or play at the counter. Pick a starter script, hear it read, then record your own take. Recording stays on your device - nothing uploads.
+          {tr("voi.greetingSubtitle")}
         </p>
         <div className="flex flex-wrap gap-2">
           {GREETING_TEMPLATES.map(t => (
@@ -1838,27 +1861,27 @@ function GreetingRecorder() {
         <p className="text-sm leading-relaxed bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 italic">&ldquo;{script}&rdquo;</p>
         <div className="flex flex-wrap gap-2">
           <button onClick={() => { if (!speak(script, bcp47)) toast.error("Text-to-speech not supported here"); }} disabled={!SPEECH_OUT}
-            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg disabled:opacity-40"><Play size={13} /> Hear script</button>
+            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg disabled:opacity-40"><Play size={13} /> {tr("voi.hearScript")}</button>
           {!recording ? (
             <button onClick={startRecording} disabled={!CAN_RECORD}
-              className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Mic size={13} /> Record my voice</button>
+              className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Mic size={13} /> {tr("voi.recordMyVoice")}</button>
           ) : (
             <button onClick={stopRecording}
-              className="flex items-center gap-1.5 text-sm bg-red-500/20 text-red-400 border border-red-500/40 px-3 py-2 rounded-lg font-medium"><Square size={13} /> Stop recording</button>
+              className="flex items-center gap-1.5 text-sm bg-red-500/20 text-red-400 border border-red-500/40 px-3 py-2 rounded-lg font-medium"><Square size={13} /> {tr("voi.stopRecording")}</button>
           )}
         </div>
-        {recording && <p className="text-[11px] text-red-400 animate-pulse">Recording… read the script aloud, then press stop.</p>}
-        {!CAN_RECORD && <FallbackNote>Audio recording isn&apos;t supported here. You can still hear the script read aloud (if text-to-speech is available) and copy it to record on your phone&apos;s own recorder.</FallbackNote>}
+        {recording && <p className="text-[11px] text-red-400 animate-pulse">{tr("voi.recordingStatus")}</p>}
+        {!CAN_RECORD && <FallbackNote>{tr("voi.greetingFallback")}</FallbackNote>}
 
         {audioUrl && (
           <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 space-y-2">
-            <p className="text-[10px] text-[var(--color-muted)]">Your recording</p>
+            <p className="text-[10px] text-[var(--color-muted)]">{tr("voi.yourRecording")}</p>
             <audio src={audioUrl} controls className="w-full" />
             <div className="flex gap-2">
               <a href={audioUrl} download="greeting.webm"
-                className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg"><Send size={12} /> Download</a>
+                className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] px-3 py-1.5 rounded-lg"><Send size={12} /> {tr("voi.download")}</a>
               <button onClick={() => { URL.revokeObjectURL(audioUrl); setAudioUrl(null); }}
-                className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-400 px-3 py-1.5 rounded-lg"><Trash2 size={12} /> Discard</button>
+                className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-400 px-3 py-1.5 rounded-lg"><Trash2 size={12} /> {tr("voi.discard")}</button>
             </div>
           </div>
         )}
@@ -1895,6 +1918,7 @@ function answerQuestion(q: string, store: ReturnType<typeof useApp>["store"]): B
 }
 
 function AskBalanceAloud() {
+  const tr = useT();
   const { store } = useApp();
   const [lang] = useFeatureState<string>("voice-language", "Hindi");
   const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
@@ -1927,24 +1951,24 @@ function AskBalanceAloud() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><HelpCircle size={14} className="text-[var(--color-primary)]" /> Ask about your books</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><HelpCircle size={14} className="text-[var(--color-primary)]" /> {tr("voi.askBalanceHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
           Ask a question like <em className="text-[var(--color-text)]">&ldquo;what is my balance&rdquo;</em> or <em className="text-[var(--color-text)]">&ldquo;how much money out&rdquo;</em>. We answer from your live transactions and read it back aloud.
         </p>
-        {!SPEECH_IN && <FallbackNote>Microphone questions aren&apos;t available here - type your question and we&apos;ll answer below.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>{tr("voi.askBalanceFallback")}</FallbackNote>}
         <div className="flex gap-2">
           <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === "Enter") ask(SPEECH_OUT); }} placeholder="what is my balance" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
-            {listening ? <><Square size={13} /> Stop</> : <><Mic size={13} /> Ask</>}
+            {listening ? <><Square size={13} /> {tr("voi.stop")}</> : <><Mic size={13} /> {tr("voi.ask")}</>}
           </button>
         </div>
-        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… ask your question.</p>}
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">{tr("voi.listeningAskQuestion")}</p>}
         <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
-          <p className="text-[10px] text-[var(--color-muted)] mb-1">Answer</p>
+          <p className="text-[10px] text-[var(--color-muted)] mb-1">{tr("voi.answer")}</p>
           <p className="text-sm">{ans.text}</p>
           <button onClick={() => { if (!speak(ans.text, bcp47)) toast.error("Text-to-speech not supported here"); }} disabled={!SPEECH_OUT}
-            className="mt-2 flex items-center gap-1.5 text-xs bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-1.5 rounded-lg disabled:opacity-40"><Volume2 size={12} /> Read aloud</button>
+            className="mt-2 flex items-center gap-1.5 text-xs bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-1.5 rounded-lg disabled:opacity-40"><Volume2 size={12} /> {tr("voi.readAloud")}</button>
         </div>
       </div>
     </div>
@@ -1965,6 +1989,7 @@ function phonetic(ch: string): string {
   return ch;
 }
 function SpellItOut() {
+  const tr = useT();
   const [lang] = useFeatureState<string>("voice-language", "Hindi");
   const bcp47 = LANGUAGES.find(l => l.name === lang)?.bcp47 ?? "en-IN";
   const [raw, setRaw] = useState("");
@@ -1974,7 +1999,7 @@ function SpellItOut() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><SpellCheck2 size={14} className="text-[var(--color-primary)]" /> Spell it out</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><SpellCheck2 size={14} className="text-[var(--color-primary)]" /> {tr("voi.spellHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
           Paste an IFSC, GSTIN, account number or reference and have it read back <strong className="text-[var(--color-text)]">character by character</strong> - letters with NATO phonetics - so it&apos;s unmistakable over a phone call.
         </p>
@@ -1991,13 +2016,13 @@ function SpellItOut() {
             </div>
             <div className="flex gap-2">
               <button onClick={() => { if (!speak(phoneticScript, bcp47, 0.85)) toast.error("Text-to-speech not supported here"); }} disabled={!SPEECH_OUT}
-                className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Play size={13} /> Read aloud</button>
+                className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-medium disabled:opacity-40"><Play size={13} /> {tr("voi.readAloud")}</button>
               <button onClick={() => { navigator.clipboard?.writeText(phoneticScript); toast.success("Phonetic spelling copied"); }}
-                className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg"><Copy size={13} /> Copy</button>
+                className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg"><Copy size={13} /> {tr("voi.copy")}</button>
             </div>
           </>
         )}
-        {!SPEECH_OUT && <FallbackNote>Text-to-speech isn&apos;t available here - the phonetic breakdown above can be read out or copied instead.</FallbackNote>}
+        {!SPEECH_OUT && <FallbackNote>{tr("voi.spellFallback")}</FallbackNote>}
       </div>
     </div>
   );
@@ -2033,6 +2058,7 @@ function parseSpokenDate(text: string, today: Date): Date | null {
   return null;
 }
 function SpokenDateEntry() {
+  const tr = useT();
   const today = useMemo(() => new Date(), []);
   const [text, setText] = useState("");
   const [listening, setListening] = useState(false);
@@ -2055,31 +2081,31 @@ function SpokenDateEntry() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Spoken date entry</h2>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> {tr("voi.spokenDateHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
           Say or type a date the way you&apos;d speak it - <em className="text-[var(--color-text)]">&ldquo;yesterday&rdquo;</em>, <em className="text-[var(--color-text)]">&ldquo;3 days ago&rdquo;</em>, <em className="text-[var(--color-text)]">&ldquo;15 march&rdquo;</em> - and we resolve it to a calendar date you can reuse.
         </p>
-        {!SPEECH_IN && <FallbackNote>Microphone input isn&apos;t available here - type the date phrase instead; parsing is identical.</FallbackNote>}
+        {!SPEECH_IN && <FallbackNote>{tr("voi.spokenDateFallback")}</FallbackNote>}
         <div className="flex gap-2">
           <input value={text} onChange={e => setText(e.target.value)} placeholder="yesterday / 3 days ago / 15 march" className={INP} />
           <button onClick={toggleListen} disabled={!SPEECH_IN}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-[var(--color-primary)] text-[var(--color-bg)]"}`}>
-            {listening ? <><Square size={13} /> Stop</> : <><Mic size={13} /> Speak</>}
+            {listening ? <><Square size={13} /> {tr("voi.stop")}</> : <><Mic size={13} /> {tr("voi.speak")}</>}
           </button>
         </div>
-        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… say a date.</p>}
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">{tr("voi.listeningSayDate")}</p>}
         {text.trim() && (
           <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
-            <p className="text-[10px] text-[var(--color-muted)] mb-1">Resolved date</p>
+            <p className="text-[10px] text-[var(--color-muted)] mb-1">{tr("voi.resolvedDate")}</p>
             {parsed ? (
               <>
                 <p className="text-xl font-bold">{format(parsed, "EEEE, d MMMM yyyy")}</p>
                 <p className="text-xs text-[var(--color-primary)] mt-1">ISO: {format(parsed, "yyyy-MM-dd")}</p>
                 <button onClick={() => { navigator.clipboard?.writeText(format(parsed, "yyyy-MM-dd")); toast.success("Date copied"); }}
-                  className="mt-2 flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg"><Copy size={12} /> Copy ISO date</button>
+                  className="mt-2 flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg"><Copy size={12} /> {tr("voi.copyIsoDate")}</button>
               </>
             ) : (
-              <p className="text-xs text-[var(--color-muted)]">Couldn&apos;t understand that date. Try &ldquo;yesterday&rdquo;, &ldquo;5 days ago&rdquo;, &ldquo;12 june&rdquo; or &ldquo;15/03/2025&rdquo;.</p>
+              <p className="text-xs text-[var(--color-muted)]">{tr("voi.spokenDateNoParse")}</p>
             )}
           </div>
         )}
@@ -2091,6 +2117,7 @@ function SpokenDateEntry() {
 // ── Tool · Voice work log (timestamped dictated activity entries) ─────────────────
 type WorkLogEntry = { id: string; at: string; text: string };
 function VoiceWorkLog() {
+  const tr = useT();
   const [entries, setEntries] = useFeatureState<WorkLogEntry[]>("voice-work-log", []);
   const [draft, setDraft] = useState("");
   const [listening, setListening] = useState(false);
@@ -2120,25 +2147,25 @@ function VoiceWorkLog() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} className="text-[var(--color-primary)]" /> Voice work log</h2>
-        <p className="text-xs text-[var(--color-muted)]">Dictate what you did and when - each entry is timestamped automatically. Handy for site visits, billable hours, or a daily diary. Entries are saved and synced.</p>
-        {!SPEECH_IN && <FallbackNote>Dictation isn&apos;t available here - type each entry and press Add; timestamps are still recorded.</FallbackNote>}
+        <h2 className="text-sm font-semibold flex items-center gap-2"><ClipboardList size={14} className="text-[var(--color-primary)]" /> {tr("voi.workLogHeading")}</h2>
+        <p className="text-xs text-[var(--color-muted)]">{tr("voi.workLogSubtitle")}</p>
+        {!SPEECH_IN && <FallbackNote>{tr("voi.workLogFallback")}</FallbackNote>}
         <div className="flex gap-2">
           <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter") add(draft); }} placeholder="Visited Sharma's shop, collected payment…" className={INP} />
-          <button onClick={() => add(draft)} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg text-sm font-medium"><Plus size={13} /> Add</button>
+          <button onClick={() => add(draft)} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg text-sm font-medium"><Plus size={13} /> {tr("voi.add")}</button>
           <button onClick={toggleListen} disabled={!SPEECH_IN}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap disabled:opacity-40 ${listening ? "bg-red-500/20 text-red-400 border border-red-500/40" : "border border-[var(--color-border)] text-[var(--color-muted)]"}`}>
-            {listening ? <><Square size={13} /> Stop</> : <><Mic size={13} /> Speak</>}
+            {listening ? <><Square size={13} /> {tr("voi.stop")}</> : <><Mic size={13} /> {tr("voi.speak")}</>}
           </button>
         </div>
-        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">Listening… describe what you did.</p>}
+        {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">{tr("voi.listeningDescribe")}</p>}
       </div>
 
       {entries.length > 0 && (
         <div className={`${CARD} p-4 space-y-2`}>
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-semibold">{entries.length} log entr{entries.length > 1 ? "ies" : "y"}</p>
-            <button onClick={() => setEntries([])} className="text-[11px] text-[var(--color-muted)] hover:text-red-400 flex items-center gap-1"><Trash2 size={11} /> Clear all</button>
+            <button onClick={() => setEntries([])} className="text-[11px] text-[var(--color-muted)] hover:text-red-400 flex items-center gap-1"><Trash2 size={11} /> {tr("voi.clearAll")}</button>
           </div>
           {entries.map(en => (
             <div key={en.id} className="flex items-start gap-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">

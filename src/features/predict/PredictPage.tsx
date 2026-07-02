@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -156,6 +157,7 @@ function ModelNote({ text }: { text: string }) {
 }
 
 export default function PredictPage() {
+  const tr = useT();
   const [tab, setTab] = useState<TabId>("overview");
 
   return (
@@ -163,17 +165,17 @@ export default function PredictPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <Sparkles size={18} className="text-[var(--color-primary)]" /> Predict &amp; Simulate
+            <Sparkles size={18} className="text-[var(--color-primary)]" /> {tr("pred.title")}
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            A model-based digital twin of your business - war-game decisions, stress-test cash and surface risk before it bites. All figures are estimates from your own data, not guarantees.
+            {tr("pred.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 flex-wrap">
           {TABS.map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              <Icon size={11} />{label}
+              <Icon size={11} />{tr(`pred.tab_${id}`)}
             </button>
           ))}
         </div>
@@ -212,13 +214,14 @@ export default function PredictPage() {
 
 // ── Overview ─────────────────────────────────────────────────────────────────────
 function OverviewTab({ onJump }: { onJump: (t: TabId) => void }) {
+  const tr = useT();
   const m = useTwinMetrics();
 
   const cards = [
-    { label: "Avg Monthly Revenue", value: formatCurrency(Math.round(m.monthlyRevenue)), color: "text-green-400", sub: `over ${m.months} active month(s)` },
-    { label: "Avg Monthly Net", value: formatCurrency(Math.round(m.monthlyNet)), color: m.monthlyNet >= 0 ? "text-green-400" : "text-red-400", sub: m.monthlyNet >= 0 ? "cash-generative" : "burning cash" },
-    { label: "Cash Runway (est.)", value: m.runwayMonths === null ? "Profitable" : `${m.runwayMonths.toFixed(1)} mo`, color: m.runwayMonths === null ? "text-green-400" : m.runwayMonths < 6 ? "text-red-400" : "text-yellow-400", sub: m.runwayMonths === null ? "net cash positive" : "at current burn" },
-    { label: "Revenue Volatility", value: `${Math.round(m.revVolatility * 100)}%`, color: m.revVolatility > 0.4 ? "text-red-400" : m.revVolatility > 0.2 ? "text-yellow-400" : "text-green-400", sub: "month-to-month swing" },
+    { label: tr("pred.cardAvgRevenue"), value: formatCurrency(Math.round(m.monthlyRevenue)), color: "text-green-400", sub: `over ${m.months} active month(s)` },
+    { label: tr("pred.cardAvgNet"), value: formatCurrency(Math.round(m.monthlyNet)), color: m.monthlyNet >= 0 ? "text-green-400" : "text-red-400", sub: m.monthlyNet >= 0 ? "cash-generative" : "burning cash" },
+    { label: tr("pred.cardRunway"), value: m.runwayMonths === null ? "Profitable" : `${m.runwayMonths.toFixed(1)} mo`, color: m.runwayMonths === null ? "text-green-400" : m.runwayMonths < 6 ? "text-red-400" : "text-yellow-400", sub: m.runwayMonths === null ? "net cash positive" : "at current burn" },
+    { label: tr("pred.cardVolatility"), value: `${Math.round(m.revVolatility * 100)}%`, color: m.revVolatility > 0.4 ? "text-red-400" : m.revVolatility > 0.2 ? "text-yellow-400" : "text-green-400", sub: "month-to-month swing" },
   ];
 
   return (
@@ -237,8 +240,8 @@ function OverviewTab({ onJump }: { onJump: (t: TabId) => void }) {
 
       {m.revSeries.some(d => d.revenue > 0 || d.expense > 0) ? (
         <div className={`${CARD} p-5`}>
-          <p className="text-sm font-semibold mb-1">Last 12 months - the twin's training window</p>
-          <p className="text-xs text-[var(--color-muted)] mb-4">Every simulation below is fitted on this history. The cleaner your transaction data, the sharper the estimate.</p>
+          <p className="text-sm font-semibold mb-1">{tr("pred.trainingWindow")}</p>
+          <p className="text-xs text-[var(--color-muted)] mb-4">{tr("pred.trainingWindowSub")}</p>
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={m.revSeries}>
               <XAxis dataKey="month" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
@@ -252,8 +255,8 @@ function OverviewTab({ onJump }: { onJump: (t: TabId) => void }) {
       ) : (
         <div className={`${CARD} border-dashed p-10 text-center`}>
           <Boxes size={24} className="mx-auto text-[var(--color-muted)] mb-3" />
-          <p className="text-sm font-medium mb-1">Not enough history yet</p>
-          <p className="text-xs text-[var(--color-muted)]">Import or add transactions and invoices - the simulations populate automatically as data arrives.</p>
+          <p className="text-sm font-medium mb-1">{tr("pred.noHistoryTitle")}</p>
+          <p className="text-xs text-[var(--color-muted)]">{tr("pred.noHistoryBody")}</p>
         </div>
       )}
 
@@ -261,7 +264,7 @@ function OverviewTab({ onJump }: { onJump: (t: TabId) => void }) {
         {TABS.filter(([id]) => id !== "overview").map(([id, label, Icon]) => (
           <button key={id} onClick={() => onJump(id as TabId)}
             className={`${CARD} p-4 text-left hover:border-[var(--color-primary)]/50 transition-colors`}>
-            <p className="text-sm font-semibold flex items-center gap-2"><Icon size={14} className="text-[var(--color-primary)]" /> {label}</p>
+            <p className="text-sm font-semibold flex items-center gap-2"><Icon size={14} className="text-[var(--color-primary)]" /> {tr(`pred.tab_${id}`)}</p>
             <p className="text-[11px] text-[var(--color-muted)] mt-1">{TOOL_BLURB[id as keyof typeof TOOL_BLURB]}</p>
           </button>
         ))}
@@ -408,6 +411,7 @@ function WhatIfSliders() {
 
 // ── 3. Monte-Carlo-lite cash simulation ──────────────────────────────────────────
 function MonteCarloCash() {
+  const tr = useT();
   const m = useTwinMetrics();
   const [runs, setRuns] = useState(2000);
   const [horizon, setHorizon] = useState(6);
@@ -476,12 +480,12 @@ function MonteCarloCash() {
           <Slider label="Horizon" value={horizon} min={3} max={18} step={1} suffix=" mo" onChange={setHorizon} />
         </div>
         <button onClick={simulate} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
-          <Dices size={14} /> Run simulation
+          <Dices size={14} /> {tr("pred.runSimulation")}
         </button>
       </div>
 
       {!output ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">Press “Run simulation” to generate randomized cash paths and their percentile bands.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">{tr("pred.runSimulationHint")}</p>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -520,6 +524,7 @@ function MonteCarloCash() {
 // ── 4. Scenario comparison ─────────────────────────────────────────────────────────
 type ScenarioRow = { id: string; name: string; revDelta: number; costDelta: number };
 function ScenarioCompare() {
+  const tr = useT();
   const m = useTwinMetrics();
   const [scenarios, setScenarios] = useFeatureState<ScenarioRow[]>("pred-scenarios", [
     { id: "optimistic", name: "Optimistic", revDelta: 20, costDelta: 5 },
@@ -548,7 +553,7 @@ function ScenarioCompare() {
     <div className="space-y-4">
       <ModelNote text="Each scenario applies a revenue and cost % shift to your current run-rate. Compare projected monthly and annual net side by side. Estimates, not commitments." />
       <div className={`${CARD} p-4 space-y-3`}>
-        <p className="text-sm font-semibold">Add a scenario</p>
+        <p className="text-sm font-semibold">{tr("pred.addScenario")}</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Name</label>
@@ -562,7 +567,7 @@ function ScenarioCompare() {
             <label className="text-xs text-[var(--color-muted)] block mb-1">Cost Δ %</label>
             <input type="number" value={cost} onChange={e => setCost(e.target.value)} className={INP} />
           </div>
-          <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2.5 text-sm font-medium">Add</button>
+          <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2.5 text-sm font-medium">{tr("pred.addBtn")}</button>
         </div>
       </div>
 
@@ -936,6 +941,7 @@ function SensitivityTornado() {
 
 // ── 10. Stress test + goal probability ────────────────────────────────────────────
 function GoalProbability() {
+  const tr = useT();
   const m = useTwinMetrics();
   const [target, setTarget] = useState("1000000");
   const [months, setMonths] = useState(6);
@@ -979,7 +985,7 @@ function GoalProbability() {
           <Slider label="Revenue stress (drop)" value={stressDrop} min={0} max={60} step={5} suffix="%" onChange={setStressDrop} />
         </div>
         <button onClick={run} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
-          <Gauge size={14} /> Estimate probability
+          <Gauge size={14} /> {tr("pred.estimateProbability")}
         </button>
       </div>
 
