@@ -10,11 +10,17 @@ function seatLimit(plan) {
   return PLAN_SEATS[plan] || PLAN_SEATS.free;
 }
 
-// A tenant's plan is the highest plan held by any of its users (super-admin
-// overrides write the same plan onto every user, so MAX is correct).
+// A tenant's plan comes from tenant_billing (the authoritative per-tenant record written
+// on every upgrade in server.js / billing.js). users.subscription_plan is a denormalized
+// mirror; reading tenant_billing first means a firm created via /auth/create-firm — which
+// has no users row of its own — still carries the plan it was upgraded to (#197 follow-up).
+// Falls back to the users mirror (covers any tenant seeded without a billing row), then free.
 async function tenantPlan(tenant_id) {
   const { rows } = await pool.query(
-    "SELECT COALESCE(MAX(subscription_plan), 'free') AS plan FROM users WHERE tenant_id=$1",
+    `SELECT COALESCE(
+       (SELECT plan FROM tenant_billing WHERE tenant_id=$1),
+       (SELECT MAX(subscription_plan) FROM users WHERE tenant_id=$1),
+       'free') AS plan`,
     [tenant_id]
   );
   return rows[0]?.plan || "free";

@@ -25,7 +25,7 @@ async function authenticate(req, res, next) {
       req.user = { ...rows[0], tenant_id: String(target) };
       // Reflect the impersonated tenant's plan so entitlement checks gate on THEIR
       // plan, not the admin's (else a super_admin would mis-gate the tenant).
-      try { const pr = await pool.query("SELECT COALESCE(MAX(subscription_plan),'free') AS plan FROM users WHERE tenant_id=$1", [String(target)]); req.user.subscription_plan = pr.rows[0].plan; } catch { req.user.subscription_plan = "free"; }
+      try { req.user.subscription_plan = await require("../lib/plans").tenantPlan(String(target)); } catch { req.user.subscription_plan = "free"; }
       if (req.method !== "GET" && req.method !== "HEAD") {
         res.on("finish", () => {
           if (res.statusCode < 400) {
@@ -56,7 +56,7 @@ async function authenticate(req, res, next) {
           req.switchedTenantId = String(active);
           req.user = { ...rows[0], tenant_id: String(active), role: m.rows[0].role };
           // Gate entitlements on the TARGET firm's plan, not the user's home plan.
-          try { const pr = await pool.query("SELECT COALESCE(MAX(subscription_plan),'free') AS plan FROM users WHERE tenant_id=$1", [String(active)]); req.user.subscription_plan = pr.rows[0].plan; } catch { req.user.subscription_plan = "free"; }
+          try { req.user.subscription_plan = await require("../lib/plans").tenantPlan(String(active)); } catch { req.user.subscription_plan = "free"; }
           if (req.method !== "GET" && req.method !== "HEAD") {
             res.on("finish", () => {
               if (res.statusCode < 400) {
