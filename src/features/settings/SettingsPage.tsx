@@ -10,6 +10,7 @@ import { formatCurrency } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { ROLE_META, ASSIGNABLE_ROLES, CONFIGURABLE_ROLES, TAB_CATALOG, TAB_GROUPS, roleLabel, roleBadge } from "@/data/roles";
 import type { UserRole } from "@/data/types";
+import { useT } from "@/i18n";
 import BillingCard from "./BillingCard";
 import AppLockCard from "./AppLockCard";
 import SecurityCard from "./SecurityCard";
@@ -1787,6 +1788,7 @@ const SETTINGS_SECTIONS: { id: string; label: string }[] = [
 ];
 
 export default function SettingsPage() {
+  const tr = useT();
   const { user }  = useAuth();
   const { store, updateFirm, setPreviewRole, roleTabs, setRoleTabs, resetRole } = useApp();
   const navigate = useNavigate();
@@ -1985,8 +1987,8 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold">Settings</h1>
-        <p className="text-sm text-[var(--color-muted)] mt-0.5">Your personal &amp; workspace preferences - appearance, notifications, and document defaults.</p>
+        <h1 className="text-xl font-bold">{tr("set.title")}</h1>
+        <p className="text-sm text-[var(--color-muted)] mt-0.5">{tr("set.subtitle")}</p>
       </div>
 
       {/* Sticky jump-nav - quick access to any section without scrolling the whole page */}
@@ -2011,8 +2013,8 @@ export default function SettingsPage() {
           <Users size={16} className="text-[var(--color-primary)]" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">Organization</p>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Manage company members &amp; roles, billing, company identity and audit - now in its own console.</p>
+          <p className="text-sm font-semibold">{tr("set.orgLabel")}</p>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("set.orgDesc")}</p>
         </div>
         <ChevronRight size={16} className="text-[var(--color-muted)] group-hover:text-[var(--color-primary)] shrink-0" />
       </button>
@@ -2072,7 +2074,7 @@ export default function SettingsPage() {
       <div id="whatsapp" className="scroll-mt-24 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
         <div className="flex items-center gap-2 mb-1">
           <MessageCircle size={15} className="text-green-400" />
-          <h2 className="text-sm font-semibold">WhatsApp Alerts</h2>
+          <h2 className="text-sm font-semibold">{tr("set.whatsappTitle")}</h2>
         </div>
         <p className="text-xs text-[var(--color-muted)] mb-5">
           Get a 7am cash snapshot every morning and ask your numbers anytime - reply <strong className="text-[var(--color-text)]">cash</strong>, <strong className="text-[var(--color-text)]">runway</strong>, <strong className="text-[var(--color-text)]">alerts</strong>, or anything in plain language.
@@ -2108,7 +2110,7 @@ export default function SettingsPage() {
             </div>
             <button type="submit" disabled={waConnecting}
               className="flex items-center gap-1.5 bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-green-600 disabled:opacity-40 shrink-0">
-              <MessageCircle size={13} /> {waConnecting ? "Connecting…" : "Connect WhatsApp"}
+              <MessageCircle size={13} /> {waConnecting ? "Connecting…" : tr("set.connectWhatsapp")}
             </button>
           </form>
         )}

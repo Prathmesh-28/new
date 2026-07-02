@@ -7,6 +7,7 @@ import { CheckCircle2, Clock, AlertCircle, PlugZap, RefreshCw, Trash2, X, Bankno
 import { toast } from "sonner";
 import type { BankConnector, ConnectorProvider } from "@/data/types";
 import PreviewBadge from "@/components/PreviewBadge";
+import { useT } from "@/i18n";
 
 const PROVIDERS: {
   id: ConnectorProvider;
@@ -109,6 +110,7 @@ const STATUS_UI = {
 };
 
 export default function ConnectorsPage() {
+  const tr = useT();
   const { store, addConnector, updateConnector, deleteConnector } = useApp();
   const { connectors } = store;
   const [setupFor, setSetupFor] = useState<ConnectorProvider | null>(null);
@@ -193,9 +195,9 @@ export default function ConnectorsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold flex items-center gap-2">Bank & Accounting Connectors <PreviewBadge capability="bankSync" /></h1>
+        <h1 className="text-xl font-bold flex items-center gap-2">{tr("conn.title")} <PreviewBadge capability="bankSync" /></h1>
         <p className="text-sm text-[var(--color-muted)] mt-1">
-          Connect your bank accounts and accounting tools so Headroom can sync transactions automatically.
+          {tr("conn.subtitle")}
         </p>
       </div>
 
@@ -203,9 +205,9 @@ export default function ConnectorsPage() {
       {connectors.length > 0 && (
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: "Connected", value: connectors.filter(c => c.status === "connected").length },
-            { label: "Pending",   value: connectors.filter(c => c.status === "pending").length },
-            { label: "Total",     value: connectors.length },
+            { label: tr("conn.statConnected"), value: connectors.filter(c => c.status === "connected").length },
+            { label: tr("conn.statPending"),   value: connectors.filter(c => c.status === "pending").length },
+            { label: tr("conn.statTotal"),     value: connectors.length },
           ].map(({ label, value }) => (
             <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
@@ -218,7 +220,7 @@ export default function ConnectorsPage() {
       {/* Active connectors */}
       {connectors.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-sm font-semibold">Active Connections</h2>
+          <h2 className="text-sm font-semibold">{tr("conn.activeConnections")}</h2>
           {connectors.map(c => {
             const ui = STATUS_UI[c.status];
             const Icon = ui.icon;
@@ -284,7 +286,7 @@ export default function ConnectorsPage() {
 
       {/* Provider catalogue */}
       <div>
-        <h2 className="text-sm font-semibold mb-3">Available Connectors</h2>
+        <h2 className="text-sm font-semibold mb-3">{tr("conn.availableConnectors")}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {PROVIDERS.map(p => {
             const existing = connectedMap.get(p.id);

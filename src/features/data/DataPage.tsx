@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { generateDemoData } from "@/lib/demoData";
 import { api } from "@/lib/api";
@@ -22,6 +23,7 @@ function downloadCsv(name: string, content: string) {
 
 export default function DataPage() {
   const { store, setStore, canAccess, canEdit } = useApp();
+  const tr = useT();
   const navigate = useNavigate();
   const [showImport, setShowImport] = useState(false);
   const [showMigrate, setShowMigrate] = useState(false);
@@ -79,10 +81,10 @@ export default function DataPage() {
   const invTemplate = "customer,amount,invoice_number,invoice_date,due_date,status\nMehta Corp,250000,INV-001,01/06/2026,01/07/2026,pending\n";
 
   const stats = [
-    { label: "Transactions", value: store.transactions.length },
-    { label: "Invoices", value: store.invoices.length },
-    { label: "Bank accounts", value: store.bankAccounts.length },
-    { label: "Active loans", value: store.activeLoans.length },
+    { label: tr("data.statTransactions"), value: store.transactions.length },
+    { label: tr("data.statInvoices"), value: store.invoices.length },
+    { label: tr("data.statBankAccounts"), value: store.bankAccounts.length },
+    { label: tr("data.statActiveLoans"), value: store.activeLoans.length },
   ];
 
   return (
@@ -92,14 +94,14 @@ export default function DataPage() {
           <Database size={16} className="text-[var(--color-primary)]" />
         </div>
         <div>
-          <h1 className="text-xl font-bold">Data &amp; Import</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Bring your numbers in fast - upload a CSV, load sample data, or edit in bulk.</p>
+          <h1 className="text-xl font-bold">{tr("data.title")}</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("data.subtitle")}</p>
         </div>
       </div>
 
       {/* Tool selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-        {([["overview", "Overview", Database], ["tally", "Tally Bridge", ArrowLeftRight], ["mapper", "CSV Mapper", Columns3], ["consolidate", "Consolidation", Building2], ["backup", "Backup & Export", ShieldCheck], ["quality", "Data Quality", CheckCircle2], ["dedupe", "Dedupe", Copy], ["replace", "Find & Replace", Replace], ["templates-store", "Mapping Templates", Bookmark], ["filings", "Filing Templates", FileDown], ["archive", "Archive & Purge", Archive], ["profiler", "Column Profiler", BarChart3], ["csv-json", "CSV ↔ JSON", Braces], ["number-clean", "Number Cleanup", Coins], ["gstin-check", "GSTIN Validator", BadgeCheck], ["pivot", "Pivot Builder", Table2], ["statement-parse", "Statement Parser", ReceiptText], ["range-export", "Date-Range Export", CalendarRange], ["paste-dupes", "Paste Dedupe", ScanSearch], ["json-fmt", "JSON Formatter", FileJson]] as const).map(([id, label, Icon]) => (
+        {([["overview", tr("data.tabOverview"), Database], ["tally", tr("data.tabTallyBridge"), ArrowLeftRight], ["mapper", tr("data.tabCsvMapper"), Columns3], ["consolidate", tr("data.tabConsolidation"), Building2], ["backup", tr("data.tabBackupExport"), ShieldCheck], ["quality", tr("data.tabDataQuality"), CheckCircle2], ["dedupe", "Dedupe", Copy], ["replace", "Find & Replace", Replace], ["templates-store", "Mapping Templates", Bookmark], ["filings", "Filing Templates", FileDown], ["archive", "Archive & Purge", Archive], ["profiler", "Column Profiler", BarChart3], ["csv-json", "CSV ↔ JSON", Braces], ["number-clean", "Number Cleanup", Coins], ["gstin-check", "GSTIN Validator", BadgeCheck], ["pivot", "Pivot Builder", Table2], ["statement-parse", "Statement Parser", ReceiptText], ["range-export", "Date-Range Export", CalendarRange], ["paste-dupes", "Paste Dedupe", ScanSearch], ["json-fmt", "JSON Formatter", FileJson]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -155,7 +157,7 @@ export default function DataPage() {
           <div className="flex flex-wrap gap-2">
             <button disabled={!editable} onClick={() => setShowImport(true)}
               className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold hover:opacity-90 disabled:opacity-40">
-              <Upload size={13} /> Upload CSV
+              <Upload size={13} /> {tr("data.uploadCsv")}
             </button>
             <button onClick={() => downloadCsv("transactions-template.csv", txnTemplate)}
               className="flex items-center gap-1.5 text-sm bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)]">
@@ -174,7 +176,7 @@ export default function DataPage() {
           <div className="flex flex-wrap gap-2">
             <button disabled={!editable} onClick={loadDemo}
               className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold hover:opacity-90 disabled:opacity-40">
-              <Sparkles size={13} /> Load demo data
+              <Sparkles size={13} /> {tr("data.loadDemoData")}
             </button>
             <button disabled={!editable} onClick={clearAll}
               className="flex items-center gap-1.5 text-sm bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-red-400 disabled:opacity-40">

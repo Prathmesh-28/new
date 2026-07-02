@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useT } from "@/i18n";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
@@ -34,6 +35,7 @@ const TABS: { id: OrgTab; label: string; icon: React.ElementType; desc: string }
 ];
 
 export default function OrganizationPage() {
+  const tr = useT();
   const { user } = useAuth();
   const { store, updateFirm, setPreviewRole, roleTabs, setRoleTabs, resetRole } = useApp();
   const navigate = useNavigate();
@@ -155,7 +157,7 @@ export default function OrganizationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold">Organization</h1>
+        <h1 className="text-xl font-bold">{tr("org.title")}</h1>
         <p className="text-sm text-[var(--color-muted)] mt-0.5">Manage the people, access, billing and identity of your company. For your own preferences, see <button onClick={() => navigate("/settings")} className="text-[var(--color-primary)] hover:underline">Settings</button>.</p>
       </div>
 
@@ -197,13 +199,13 @@ export default function OrganizationPage() {
                       <Users size={16} className="text-[var(--color-primary)]" />
                     </div>
                     <div>
-                      <h2 className="text-sm font-semibold">Your Team{users.length > 0 ? ` · ${users.length}` : ""}</h2>
+                      <h2 className="text-sm font-semibold">{tr("org.yourTeam")}{users.length > 0 ? ` · ${users.length}` : ""}</h2>
                       <p className="text-xs text-[var(--color-muted)] mt-0.5">Bring your finance person, CA, sales and ops staff in - each sees only their part of Headroom.</p>
                     </div>
                   </div>
                   {user.role !== "super_admin" && (
                     <button onClick={leaveTeam} className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-400 hover:border-red-400/50 px-3 py-1.5 rounded-lg font-semibold transition-colors">
-                      <LogIn size={13} className="rotate-180" /> Leave team
+                      <LogIn size={13} className="rotate-180" /> {tr("org.leaveTeam")}
                     </button>
                   )}
                 </div>
@@ -292,7 +294,7 @@ export default function OrganizationPage() {
                     <SlidersHorizontal size={15} className="text-[var(--color-primary)]" />
                   </div>
                   <div>
-                    <h2 className="text-sm font-semibold">Stakeholder Views &amp; Permissions</h2>
+                    <h2 className="text-sm font-semibold">{tr("org.stakeholderViews")}</h2>
                     <p className="text-xs text-[var(--color-muted)] mt-0.5">See the app exactly as each role does, and control which pages each one can open.</p>
                   </div>
                 </div>
@@ -370,7 +372,7 @@ export default function OrganizationPage() {
 
               {/* Role reference */}
               <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
-                <h2 className="text-sm font-semibold mb-1">What each role can do</h2>
+                <h2 className="text-sm font-semibold mb-1">{tr("org.whatEachRoleCanDo")}</h2>
                 <p className="text-xs text-[var(--color-muted)] mb-4">Pick the role that matches the person's job. You can change it anytime from the Members list.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {ASSIGNABLE_ROLES.map(meta => (
@@ -407,7 +409,7 @@ export default function OrganizationPage() {
 
               {/* Business profile (industry / risk threshold) */}
               <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
-                <h2 className="text-sm font-semibold mb-1">Business Profile</h2>
+                <h2 className="text-sm font-semibold mb-1">{tr("org.businessProfile")}</h2>
                 <p className="text-xs text-[var(--color-muted)] mb-5">Used in credit underwriting and advisor reports.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -440,13 +442,13 @@ export default function OrganizationPage() {
                 </div>
                 <button onClick={handleSaveFirm} disabled={firmSaving}
                   className="mt-5 flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40">
-                  <Save size={13} /> {firmSaving ? "Saving…" : "Save Profile"}
+                  <Save size={13} /> {firmSaving ? "Saving…" : tr("org.saveProfile")}
                 </button>
               </div>
 
               {/* GST */}
               <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
-                <h2 className="text-sm font-semibold mb-1">GST Settings</h2>
+                <h2 className="text-sm font-semibold mb-1">{tr("org.gstSettings")}</h2>
                 <p className="text-xs text-[var(--color-muted)] mb-5">
                   Used to estimate your monthly GSTR-3B liability from revenue transactions and surface it in the tax calendar and forecast.
                 </p>
@@ -492,13 +494,13 @@ export default function OrganizationPage() {
                 </div>
                 <button onClick={handleSaveGst} disabled={gstSaving}
                   className="mt-5 flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40">
-                  <Save size={13} /> {gstSaving ? "Saving…" : "Save GST Settings"}
+                  <Save size={13} /> {gstSaving ? "Saving…" : tr("org.saveGstSettings")}
                 </button>
               </div>
 
               {/* Tenant ID */}
               <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
-                <h2 className="text-sm font-semibold mb-1">Your Tenant ID</h2>
+                <h2 className="text-sm font-semibold mb-1">{tr("org.tenantId")}</h2>
                 <p className="text-xs text-[var(--color-muted)] mb-4">Share this with your CA, CFO, or banker so they can link your account to their Advisor Portal and get live cash visibility.</p>
                 <div className="flex items-center gap-3">
                   <code className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-sm font-mono tracking-wide truncate">
