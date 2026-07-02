@@ -129,6 +129,15 @@ const kn: Record<string, string> = {
   "mobilenav.invoices": "ಇನ್‌ವಾಯ್ಸ್",
   "mobilenav.money": "ಹಣ",
   "mobilenav.sales": "ಮಾರಾಟ",
-  "mobilenav.more": "ಇನ್ನಷ್ಟು"
+  "mobilenav.more": "ಇನ್ನಷ್ಟು",
+  "cmdk.placeholder": "ಪುಟಗಳು, ವಹಿವಾಟುಗಳು, ಎಚ್ಚರಿಕೆಗಳನ್ನು ಹುಡುಕಿ…",
+  "cmdk.noResults": "\"{query}\" ಗೆ ಫಲಿತಾಂಶಗಳಿಲ್ಲ",
+  "cmdk.favorites": "ಮೆಚ್ಚಿನವು",
+  "cmdk.recent": "ಇತ್ತೀಚಿನವು",
+  "cmdk.pages": "ಪುಟಗಳು",
+  "cmdk.navigate": "ಸಾಗಿಸಿ",
+  "cmdk.open": "ತೆರೆ",
+  "cmdk.pin": "ಪಿನ್",
+  "cmdk.close": "ಮುಚ್ಚಿ"
 };
 export default kn;

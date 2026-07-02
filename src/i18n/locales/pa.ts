@@ -129,6 +129,15 @@ const pa: Record<string, string> = {
   "mobilenav.invoices": "ਇਨਵੌਇਸ",
   "mobilenav.money": "ਪੈਸਾ",
   "mobilenav.sales": "ਵਿਕਰੀ",
-  "mobilenav.more": "ਹੋਰ"
+  "mobilenav.more": "ਹੋਰ",
+  "cmdk.placeholder": "ਪੇਜ, ਲੈਣ-ਦੇਣ, ਅਲਰਟ ਖੋਜੋ…",
+  "cmdk.noResults": "\"{query}\" ਲਈ ਕੋਈ ਨਤੀਜਾ ਨਹੀਂ",
+  "cmdk.favorites": "ਮਨਪਸੰਦ",
+  "cmdk.recent": "ਹਾਲੀਆ",
+  "cmdk.pages": "ਪੇਜ",
+  "cmdk.navigate": "ਜਾਓ",
+  "cmdk.open": "ਖੋਲ੍ਹੋ",
+  "cmdk.pin": "ਪਿੰਨ",
+  "cmdk.close": "ਬੰਦ"
 };
 export default pa;

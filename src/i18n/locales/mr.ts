@@ -129,6 +129,15 @@ const mr: Record<string, string> = {
   "mobilenav.invoices": "इनव्हॉइस",
   "mobilenav.money": "पैसे",
   "mobilenav.sales": "विक्री",
-  "mobilenav.more": "अधिक"
+  "mobilenav.more": "अधिक",
+  "cmdk.placeholder": "पेज, व्यवहार, सूचना शोधा…",
+  "cmdk.noResults": "\"{query}\" साठी कोणतेही निकाल नाहीत",
+  "cmdk.favorites": "आवडते",
+  "cmdk.recent": "अलीकडील",
+  "cmdk.pages": "पेज",
+  "cmdk.navigate": "जा",
+  "cmdk.open": "उघडा",
+  "cmdk.pin": "पिन",
+  "cmdk.close": "बंद"
 };
 export default mr;

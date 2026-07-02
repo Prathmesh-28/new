@@ -129,6 +129,15 @@ const ta: Record<string, string> = {
   "mobilenav.invoices": "இன்வாய்ஸ்",
   "mobilenav.money": "பணம்",
   "mobilenav.sales": "விற்பனை",
-  "mobilenav.more": "மேலும்"
+  "mobilenav.more": "மேலும்",
+  "cmdk.placeholder": "பக்கங்கள், பரிவர்த்தனைகள், எச்சரிக்கைகளைத் தேடுங்கள்…",
+  "cmdk.noResults": "\"{query}\" க்கு முடிவுகள் இல்லை",
+  "cmdk.favorites": "பிடித்தவை",
+  "cmdk.recent": "சமீபத்தியவை",
+  "cmdk.pages": "பக்கங்கள்",
+  "cmdk.navigate": "செல்",
+  "cmdk.open": "திற",
+  "cmdk.pin": "பின்",
+  "cmdk.close": "மூடு"
 };
 export default ta;

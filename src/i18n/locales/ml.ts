@@ -129,6 +129,15 @@ const ml: Record<string, string> = {
   "mobilenav.invoices": "ഇൻവോയ്‌സുകൾ",
   "mobilenav.money": "പണം",
   "mobilenav.sales": "വിൽപ്പന",
-  "mobilenav.more": "കൂടുതൽ"
+  "mobilenav.more": "കൂടുതൽ",
+  "cmdk.placeholder": "പേജുകൾ, ഇടപാടുകൾ, അലേർട്ടുകൾ തിരയുക…",
+  "cmdk.noResults": "\"{query}\" എന്നതിന് ഫലങ്ങളില്ല",
+  "cmdk.favorites": "പ്രിയപ്പെട്ടവ",
+  "cmdk.recent": "സമീപകാലം",
+  "cmdk.pages": "പേജുകൾ",
+  "cmdk.navigate": "നീങ്ങുക",
+  "cmdk.open": "തുറക്കുക",
+  "cmdk.pin": "പിൻ ചെയ്യുക",
+  "cmdk.close": "അടയ്ക്കുക"
 };
 export default ml;

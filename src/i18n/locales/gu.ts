@@ -129,6 +129,15 @@ const gu: Record<string, string> = {
   "mobilenav.invoices": "ઇન્વોઇસ",
   "mobilenav.money": "પૈસા",
   "mobilenav.sales": "વેચાણ",
-  "mobilenav.more": "વધુ"
+  "mobilenav.more": "વધુ",
+  "cmdk.placeholder": "પેજ, ટ્રાન્ઝેક્શન, અલર્ટ શોધો…",
+  "cmdk.noResults": "\"{query}\" માટે કોઈ પરિણામ નથી",
+  "cmdk.favorites": "મનપસંદ",
+  "cmdk.recent": "તાજેતરના",
+  "cmdk.pages": "પેજ",
+  "cmdk.navigate": "જાઓ",
+  "cmdk.open": "ખોલો",
+  "cmdk.pin": "પિન કરો",
+  "cmdk.close": "બંધ કરો"
 };
 export default gu;

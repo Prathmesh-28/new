@@ -129,6 +129,15 @@ const te: Record<string, string> = {
   "mobilenav.invoices": "ఇన్‌వాయిస్‌లు",
   "mobilenav.money": "డబ్బు",
   "mobilenav.sales": "అమ్మకాలు",
-  "mobilenav.more": "మరిన్ని"
+  "mobilenav.more": "మరిన్ని",
+  "cmdk.placeholder": "పేజీలు, లావాదేవీలు, హెచ్చరికలు వెతకండి…",
+  "cmdk.noResults": "\"{query}\" కోసం ఫలితాలు లేవు",
+  "cmdk.favorites": "ఇష్టమైనవి",
+  "cmdk.recent": "ఇటీవలివి",
+  "cmdk.pages": "పేజీలు",
+  "cmdk.navigate": "వెళ్లు",
+  "cmdk.open": "తెరువు",
+  "cmdk.pin": "పిన్",
+  "cmdk.close": "మూసివేయి"
 };
 export default te;

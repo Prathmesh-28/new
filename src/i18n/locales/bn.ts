@@ -129,6 +129,15 @@ const bn: Record<string, string> = {
   "mobilenav.invoices": "ইনভয়েস",
   "mobilenav.money": "টাকা",
   "mobilenav.sales": "বিক্রি",
-  "mobilenav.more": "আরও"
+  "mobilenav.more": "আরও",
+  "cmdk.placeholder": "পেজ, লেনদেন, অ্যালার্ট খুঁজুন…",
+  "cmdk.noResults": "\"{query}\"-এর কোনো ফলাফল নেই",
+  "cmdk.favorites": "প্রিয়",
+  "cmdk.recent": "সাম্প্রতিক",
+  "cmdk.pages": "পেজ",
+  "cmdk.navigate": "যান",
+  "cmdk.open": "খুলুন",
+  "cmdk.pin": "পিন",
+  "cmdk.close": "বন্ধ"
 };
 export default bn;
