@@ -107,6 +107,22 @@ const en: Record<string, string> = {
   "cmdk.pin": "pin",
   "cmdk.close": "close",
 
+  // Invoices page (main list chrome)
+  "inv.subtitle": "GST-compliant · UPI collections · Auto-reconcile",
+  "inv.stat.pending": "Pending",
+  "inv.stat.overdue": "Overdue",
+  "inv.stat.paidAll": "Paid (all time)",
+  "inv.tab.all": "All",
+  "inv.tab.pending": "Pending",
+  "inv.tab.paid": "Paid",
+  "inv.tab.autoCollect": "Auto-Collect",
+  "inv.createInvoice": "Create Invoice",
+  "inv.creating": "Creating…",
+  "inv.loading": "Loading invoices",
+  "inv.errorTitle": "Couldn't load invoices",
+  "inv.errorMsg": "We couldn't reach the invoice service. Check your connection and try again.",
+  "inv.empty": "No invoices yet. Create your first GST-compliant invoice.",
+
   // Navigation labels (gettext-style: the key IS the English label, translated at render
   // in the Sidebar so the catalog keeps English as its stable expand/collapse identity).
   // Groups:

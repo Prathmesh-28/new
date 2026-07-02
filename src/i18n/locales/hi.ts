@@ -101,6 +101,22 @@ const hi: Record<string, string> = {
   "cmdk.pin": "पिन करें",
   "cmdk.close": "बंद करें",
 
+  // Invoices page (main list chrome)
+  "inv.subtitle": "GST-अनुरूप · UPI वसूली · ऑटो-रिकंसाइल",
+  "inv.stat.pending": "बकाया",
+  "inv.stat.overdue": "अतिदेय",
+  "inv.stat.paidAll": "भुगतान (कुल)",
+  "inv.tab.all": "सभी",
+  "inv.tab.pending": "बकाया",
+  "inv.tab.paid": "भुगतान हुआ",
+  "inv.tab.autoCollect": "ऑटो-कलेक्ट",
+  "inv.createInvoice": "इनवॉइस बनाएँ",
+  "inv.creating": "बन रहा है…",
+  "inv.loading": "इनवॉइस लोड हो रहे हैं",
+  "inv.errorTitle": "इनवॉइस लोड नहीं हो सके",
+  "inv.errorMsg": "हम इनवॉइस सेवा तक नहीं पहुँच सके। अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+  "inv.empty": "अभी कोई इनवॉइस नहीं। अपना पहला GST-अनुरूप इनवॉइस बनाएँ।",
+
   // Navigation (keyed by English label)
   "Home": "होम",
   "Get Paid & Sell": "भुगतान पाएँ और बेचें",

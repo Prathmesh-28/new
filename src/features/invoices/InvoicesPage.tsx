@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useApp } from "@/context/AppContext";
+import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import type { Invoice as StoreInvoice } from "@/data/types";
 import { formatCurrency } from "@/lib/utils";
@@ -36,6 +37,7 @@ const AGING_COLOR: Record<string, string> = {
 };
 
 function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void; onCreated: () => void; initial?: { customer?: string; amount?: string; desc?: string } }) {
+  const tr = useT();
   const [customerName, setCustomerName] = useState(initial?.customer ?? "");
   const [customerGstin, setCustomerGstin] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -90,7 +92,7 @@ function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void;
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 overflow-y-auto py-8 px-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl w-full max-w-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
-          <h2 className="text-base font-bold">New Invoice</h2>
+          <h2 className="text-base font-bold">{tr("quickcreate.invoice")}</h2>
           <button onClick={onClose}><X size={16} className="text-[var(--color-muted)]" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -168,7 +170,7 @@ function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void;
 
           <div className="flex gap-2 pt-2">
             <button type="submit" disabled={saving} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">
-              {saving ? "Creating…" : "Create Invoice"}
+              {saving ? tr("inv.creating") : tr("inv.createInvoice")}
             </button>
             <button type="button" onClick={onClose} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
           </div>
@@ -353,6 +355,7 @@ const TOOL_TAB_GROUP: Record<ToolTabId, ToolGroupKey> = TOOL_GROUPS.reduce(
 );
 
 export default function InvoicesPage() {
+  const tr = useT();   // `t` is used as a tab-id map param below
   const { setStore } = useApp();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -485,20 +488,20 @@ export default function InvoicesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Invoices</h1>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">GST-compliant · UPI collections · Auto-reconcile</p>
+          <h1 className="text-xl font-bold">{tr("Invoices")}</h1>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("inv.subtitle")}</p>
         </div>
         <button onClick={() => setShowNew(true)}
           className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
-          <Plus size={13} /> New Invoice
+          <Plus size={13} /> {tr("quickcreate.invoice")}
         </button>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Pending",  value: totalPending, color: "text-yellow-400" },
-          { label: "Overdue",  value: totalOverdue, color: "text-red-400" },
-          { label: "Paid (all time)", value: totalPaid, color: "text-green-400" },
+          { label: tr("inv.stat.pending"),  value: totalPending, color: "text-yellow-400" },
+          { label: tr("inv.stat.overdue"),  value: totalOverdue, color: "text-red-400" },
+          { label: tr("inv.stat.paidAll"), value: totalPaid, color: "text-green-400" },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
@@ -512,7 +515,7 @@ export default function InvoicesPage() {
           <button key={t} onClick={() => setTab(t)}
             className={`px-3 py-1.5 text-xs rounded font-medium capitalize transition-colors flex items-center gap-1.5 ${tab === t ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             {t === "collection" && <Zap size={10} />}
-            {t === "collection" ? "Auto-Collect" : t}
+            {t === "collection" ? tr("inv.tab.autoCollect") : tr("inv.tab." + t)}
             {t === "collection" && overdueCount > 0 && (
               <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${tab === t ? "bg-white/20 text-white" : "bg-red-900/40 text-red-400"}`}>{overdueCount}</span>
             )}
@@ -577,14 +580,14 @@ export default function InvoicesPage() {
        tab === "collection" ? (
         <CollectionAutoPanel invoices={invoices} onRefresh={load} />
       ) : loading ? (
-        <LoadingState rows={5} label="Loading invoices" />
+        <LoadingState rows={5} label={tr("inv.loading")} />
       ) : loadError ? (
-        <ErrorState title="Couldn't load invoices" message="We couldn't reach the invoice service. Check your connection and try again." onRetry={load} />
+        <ErrorState title={tr("inv.errorTitle")} message={tr("inv.errorMsg")} onRetry={load} />
       ) : filtered.length === 0 ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-lg p-12 text-center">
           <FileText size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-          <p className="text-sm text-[var(--color-muted)]">No invoices yet. Create your first GST-compliant invoice.</p>
-          <button onClick={() => setShowNew(true)} className="mt-4 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg">Create Invoice</button>
+          <p className="text-sm text-[var(--color-muted)]">{tr("inv.empty")}</p>
+          <button onClick={() => setShowNew(true)} className="mt-4 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg">{tr("inv.createInvoice")}</button>
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
