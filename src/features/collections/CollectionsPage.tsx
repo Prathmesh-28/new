@@ -3016,6 +3016,63 @@ function TopDefaulters() {
 // ── CUSTOMER PAYMENT BEHAVIOR TIMELINE ──────────────────────────────────────
 // Per-customer history of every invoice and how many days it took (or is taking)
 // to pay - a quick read on whether a buyer is getting better or worse.
+interface ScoreRow { customer: string; gstin: string | null; score: number; grade: string; label: string; on_time_rate: number | null; avg_days_to_pay: number | null; outstanding: number; overdue_amount: number; invoices: number }
+interface ScorePortfolio { customers: number; at_risk_customers: number; weighted_on_time_rate: number | null; avg_days_to_pay: number | null; total_outstanding: number; total_overdue: number }
+
+const GRADE_CLR: Record<string, string> = { A: "bg-green-900/30 text-green-400", B: "bg-green-900/20 text-green-300", C: "bg-yellow-900/30 text-yellow-400", D: "bg-orange-900/30 text-orange-400", E: "bg-red-900/30 text-red-400" };
+
+// Authoritative, records-based per-customer payment scores (from posted invoice pay history),
+// ranked worst-first — the collections work-list. Complements the local per-customer drill-down.
+function CustomerScores() {
+  const [data, setData] = useState<{ customers: ScoreRow[]; portfolio: ScorePortfolio } | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    api.get<{ customers: ScoreRow[]; portfolio: ScorePortfolio }>("/api/collections/customer-scores")
+      .then(setData).catch(() => setData(null)).finally(() => setLoading(false));
+  }, []);
+  if (loading) return <div className="text-sm text-[var(--color-muted)] py-6 text-center">Scoring customers from payment history…</div>;
+  if (!data || data.customers.length === 0) return null;
+  const p = data.portfolio;
+  const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v * 100)}%`);
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {[
+          { label: "Customers", v: String(p.customers) },
+          { label: "At risk", v: String(p.at_risk_customers), warn: p.at_risk_customers > 0 },
+          { label: "On-time rate", v: pct(p.weighted_on_time_rate) },
+          { label: "Avg days to pay", v: p.avg_days_to_pay == null ? "—" : `${p.avg_days_to_pay}d` },
+        ].map(c => (
+          <div key={c.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2">
+            <p className="text-[10px] text-[var(--color-muted)]">{c.label}</p>
+            <p className={`font-semibold ${c.warn ? "text-red-400" : ""}`}>{c.v}</p>
+          </div>
+        ))}
+      </div>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[560px]">
+          <thead className="border-b border-[var(--color-border)]">
+            <tr>{["Customer", "Score", "On-time", "Avg days", "Outstanding", "Overdue"].map(h =>
+              <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {data.customers.map(c => (
+              <tr key={c.customer + (c.gstin ?? "")} className="hover:bg-white/2">
+                <td className="px-3 py-2.5"><p className="font-medium truncate max-w-[180px]">{c.customer}</p>{c.gstin && <p className="text-[10px] text-[var(--color-muted)]">{c.gstin}</p>}</td>
+                <td className="px-3 py-2.5"><span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full ${GRADE_CLR[c.grade] ?? ""}`}>{c.grade} · {c.score}</span> <span className="text-[10px] text-[var(--color-muted)] ml-1">{c.label}</span></td>
+                <td className="px-3 py-2.5 tabular-nums">{pct(c.on_time_rate)}</td>
+                <td className="px-3 py-2.5 tabular-nums">{c.avg_days_to_pay == null ? "—" : `${c.avg_days_to_pay}d`}</td>
+                <td className="px-3 py-2.5 tabular-nums">{formatCurrency(c.outstanding)}</td>
+                <td className={`px-3 py-2.5 tabular-nums ${c.overdue_amount > 0 ? "text-red-400 font-medium" : "text-[var(--color-muted)]"}`}>{c.overdue_amount > 0 ? formatCurrency(c.overdue_amount) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function PaymentBehavior() {
   const { store } = useApp();
   const invoices = store.invoices ?? [];
@@ -3049,15 +3106,19 @@ function PaymentBehavior() {
 
   if (customers.length === 0) {
     return (
-      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
-        <History size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-        <p className="text-sm text-[var(--color-muted)]">Add invoices to view per-customer payment behavior over time.</p>
+      <div className="space-y-4">
+        <CustomerScores />
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <History size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">Add invoices to drill into a single customer's payment history over time.</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      <CustomerScores />
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap items-end gap-4">
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>

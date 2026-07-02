@@ -180,4 +180,17 @@ router.get("/pending", authenticate, async (req, res) => {
   })));
 });
 
+// Per-customer payment-behaviour scores (worst payers first) + a portfolio receivables-quality
+// summary — the collections work-list, and a signal underwriting can fold in.
+router.get("/customer-scores", authenticate, async (req, res) => {
+  try {
+    const cs = require("../lib/customerScore");
+    const [customers, portfolio] = await Promise.all([
+      cs.customerScores(req.user.tenant_id),
+      cs.receivablesQuality(req.user.tenant_id),
+    ]);
+    res.json({ customers, portfolio });
+  } catch (e) { console.error("[collections] customer-scores", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
 module.exports = router;
