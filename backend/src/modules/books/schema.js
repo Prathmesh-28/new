@@ -627,6 +627,25 @@ const BOOKS_SCHEMA = `
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_book_continuity ON book_continuity_items(tenant_id, priority);
+
+  -- Statutory compliance register (roadmap #21: promote the compliance calendar off the KV bag
+  -- to a real, queryable/reportable table). Filings, board meetings, resolutions, registers - with
+  -- a pending -> done workflow and recurrence (a completed recurring item spawns the next one).
+  CREATE TABLE IF NOT EXISTS book_compliance_items (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id    TEXT NOT NULL,
+    kind         TEXT NOT NULL,             -- filing|meeting|resolution|register|payment|other
+    title        TEXT NOT NULL,
+    authority    TEXT,                       -- ROC | GST | Income Tax | EPFO | ESIC | ...
+    due_date     DATE NOT NULL,
+    frequency    TEXT NOT NULL DEFAULT 'one_time',  -- one_time|monthly|quarterly|annual
+    status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','done')),
+    completed_on DATE,
+    notes        TEXT,
+    created_by   UUID,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_compliance_items ON book_compliance_items(tenant_id, status, due_date);
 `;
 
 module.exports = { BOOKS_SCHEMA };

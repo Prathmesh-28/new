@@ -968,6 +968,13 @@ router.get("/advances", async (req, res) => { try { res.json(await ops.listAdvan
 router.post("/expenses/parse", canPost, async (req, res) => { try { res.json(await require("./voiceExpense").parseExpenseText(tenantOf(req), (req.body || {}).text)); } catch (e) { fail(res, e); } });
 // Agreement obligation extraction → lock-ins/renewals/escalations/notice/payments (rule + LLM).
 router.post("/agreements/extract", canPost, async (req, res) => { try { res.json(await require("./agreements").extractObligations(tenantOf(req), (req.body || {}).text)); } catch (e) { fail(res, e); } });
+// Statutory compliance register (real table; queryable/reportable). Filings, meetings, registers.
+const compliance = require("./compliance");
+router.get("/compliance-items", async (req, res) => { try { res.json(await compliance.listComplianceItems(tenantOf(req), { status: req.query.status, kind: req.query.kind })); } catch (e) { fail(res, e); } });
+router.get("/compliance-items/due", async (req, res) => { try { res.json(await compliance.dueSoon(tenantOf(req), Number(req.query.within) || 30)); } catch (e) { fail(res, e); } });
+router.post("/compliance-items", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await compliance.createComplianceItem(tenantOf(req), req.user.id, { kind: b.kind, title: b.title, authority: b.authority, dueDate: b.due_date, frequency: b.frequency, notes: b.notes })); } catch (e) { fail(res, e); } });
+router.post("/compliance-items/:id/complete", canPost, async (req, res) => { try { res.json(await compliance.completeComplianceItem(tenantOf(req), req.params.id, { completedOn: (req.body || {}).completed_on, actorId: req.user.id })); } catch (e) { fail(res, e); } });
+router.delete("/compliance-items/:id", canPost, async (req, res) => { try { res.json(await compliance.removeComplianceItem(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.post("/advances", canPost, async (req, res) => { try { res.status(201).json(await ops.grantAdvance(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/advances/:id/settle", canPost, async (req, res) => { try { res.json(await ops.settleAdvance(tenantOf(req), req.user.id, { advanceId: req.params.id, ...(req.body || {}) })); } catch (e) { fail(res, e); } });
 router.post("/projects", canPost, async (req, res) => { try { res.status(201).json(await ops.createProject(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
