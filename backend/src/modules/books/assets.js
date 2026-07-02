@@ -186,4 +186,111 @@ async function setAssetGroup(tenantId, assetId, group) {
   return rows[0];
 }
 
-module.exports = { depreciationMonthly, createAsset, runDepreciation, disposeAsset, assetRegister, setAssetGroup };
+// Classify an asset for Income-Tax Act depreciation (its block + rate).
+async function setAssetItBlock(tenantId, assetId, { itBlock, itRate }) {
+  if (itRate == null) throw new PostError("BAD_INPUT", "itRate required", 400);
+  const { rows } = await pool.query(
+    "UPDATE book_fixed_assets SET it_block=$3, it_rate=$4 WHERE tenant_id=$1 AND id=$2 RETURNING id,name,it_block,it_rate",
+    [tenantId, assetId, itBlock || null, toDb(itRate)]);
+  if (!rows[0]) throw new PostError("NOT_FOUND", "Asset not found", 404);
+  return rows[0];
+}
+
+// Income-Tax Act block-of-assets depreciation for a financial year (WDV method, block-wise).
+// Opening WDV = prior FY's closing (run years in sequence with commit); + additions − disposals;
+// additions put to use for <180 days in the FY get HALF the block rate. Returns the per-block
+// rollforward + a Companies-Act-vs-IT-Act comparison (the timing difference drives deferred tax).
+async function itActDepreciation(tenantId, fyStartYear, opts = {}) {
+  const y = parseInt(fyStartYear, 10);
+  if (!(y > 1900)) throw new PostError("BAD_INPUT", "valid fyStartYear (e.g. 2024) required", 400);
+  const fy = `${y}-${String(y + 1).slice(-2)}`;
+  const prevFy = `${y - 1}-${String(y).slice(-2)}`;
+  const fyStart = `${y}-04-01`, fyEnd = `${y + 1}-03-31`;
+  const fyEndMs = new Date(fyEnd + "T00:00:00Z").getTime();
+  const out = (m) => Number(money(m).toFixed(2));
+  const iso = (d) => new Date(d).toISOString().slice(0, 10);
+
+  const { rows: assets } = await pool.query(
+    "SELECT name,cost,acquired_on,disposed_on,disposal_value,it_block,it_rate FROM book_fixed_assets WHERE tenant_id=$1 AND it_rate IS NOT NULL", [tenantId]);
+  const { rows: prevRows } = await pool.query(
+    "SELECT block, rate, closing_wdv FROM book_it_dep_blocks WHERE tenant_id=$1 AND fy=$2", [tenantId, prevFy]);
+  const prev = new Map(prevRows.map((r) => [r.block, { closing: money(r.closing_wdv), rate: Number(r.rate) }]));
+
+  const blocks = new Map();
+  for (const a of assets) {
+    const key = a.it_block || `IT ${Number(a.it_rate)}%`;
+    if (!blocks.has(key)) blocks.set(key, { block: key, rate: Number(a.it_rate), addFull: money(0), addHalf: money(0), disposals: money(0), older: false, held: 0 });
+    const b = blocks.get(key);
+    const acq = iso(a.acquired_on);
+    if (acq >= fyStart && acq <= fyEnd) {
+      const days = Math.floor((fyEndMs - new Date(acq + "T00:00:00Z").getTime()) / 86400000) + 1;
+      if (days >= 180) b.addFull = b.addFull.plus(money(a.cost)); else b.addHalf = b.addHalf.plus(money(a.cost));
+    } else if (acq < fyStart) { b.older = true; }
+    if (a.disposed_on) {
+      const dis = iso(a.disposed_on);
+      if (dis >= fyStart && dis <= fyEnd) b.disposals = b.disposals.plus(money(a.disposal_value || 0));
+    }
+    // Held at FY-end = acquired on/before FY-end and not disposed by then (drives the empty-block rule).
+    if (acq <= fyEnd && (!a.disposed_on || iso(a.disposed_on) > fyEnd)) b.held += 1;
+  }
+  // Blocks surviving only via a prior-year closing WDV (all assets disposed, WDV remained).
+  for (const [key, p] of prev) if (!blocks.has(key)) blocks.set(key, { block: key, rate: p.rate, addFull: money(0), addHalf: money(0), disposals: money(0), older: true, held: 0 });
+
+  const warnings = [];
+  const rows = [];
+  let tOpen = money(0), tAdd = money(0), tHalf = money(0), tDisp = money(0), tDep = money(0), tClose = money(0), tStcg = money(0), tStcl = money(0);
+  for (const b of blocks.values()) {
+    const opening = prev.get(b.block) ? prev.get(b.block).closing : money(0);
+    if (b.older && !prev.has(b.block)) warnings.push(`Block "${b.block}" has assets from earlier years but no ${prevFy} rollforward — run the prior year(s) first so the opening WDV is accurate.`);
+    const base = opening.plus(b.addFull).plus(b.addHalf).minus(b.disposals);
+    const r = money(b.rate).div(100);
+    let dep = money(0), closing = money(0), stcg = money(0), stcl = money(0);
+    if (b.held === 0) {
+      // Block empty at FY-end (all assets sold): no depreciation. Residual WDV is a short-term
+      // capital LOSS; if sale proceeds exceeded the WDV, the excess is a short-term capital GAIN.
+      if (base.greaterThan(0)) stcl = base;
+      else if (base.lessThan(0)) stcg = base.abs();
+    } else if (base.greaterThan(0)) {
+      let fullBase = opening.plus(b.addFull).minus(b.disposals);
+      if (fullBase.lessThan(0)) fullBase = money(0);
+      let remHalf = base.minus(fullBase);
+      if (remHalf.lessThan(0)) remHalf = money(0);
+      const halfBase = remHalf.greaterThan(b.addHalf) ? b.addHalf : remHalf; // min(addHalf, remHalf)
+      dep = fullBase.mul(r).plus(halfBase.mul(r).div(2));
+      if (dep.greaterThan(base)) dep = base;
+      closing = base.minus(dep);
+    } else if (base.lessThan(0)) {
+      stcg = base.abs(); // proceeds exceeded the block WDV → short-term capital gain
+    }
+    rows.push({ block: b.block, rate: b.rate, opening_wdv: out(opening), additions: out(b.addFull.plus(b.addHalf)), additions_lt180: out(b.addHalf), disposals: out(b.disposals), depreciation: out(dep), closing_wdv: out(closing), stcg: out(stcg), stcl: out(stcl) });
+    tOpen = tOpen.plus(opening); tAdd = tAdd.plus(b.addFull).plus(b.addHalf); tHalf = tHalf.plus(b.addHalf); tDisp = tDisp.plus(b.disposals); tDep = tDep.plus(dep); tClose = tClose.plus(closing); tStcg = tStcg.plus(stcg); tStcl = tStcl.plus(stcl);
+  }
+  rows.sort((a, b) => a.block.localeCompare(b.block));
+
+  // Companies-Act book depreciation actually posted in this FY (the dual-book comparison).
+  const { rows: bd } = await pool.query(
+    `SELECT COALESCE(SUM(e.debit),0) d FROM book_voucher_entries e JOIN book_vouchers v ON v.id=e.voucher_id JOIN book_ledgers l ON l.id=e.ledger_id
+       WHERE e.tenant_id=$1 AND l.name='Depreciation' AND v.is_cancelled=false AND v.voucher_date BETWEEN $2 AND $3`, [tenantId, fyStart, fyEnd]);
+  const bookDep = out(money(bd[0].d));
+
+  if (opts.commit) {
+    for (const rr of rows) {
+      await pool.query(
+        `INSERT INTO book_it_dep_blocks(tenant_id,fy,block,rate,opening_wdv,additions,additions_lt180,disposals,depreciation,closing_wdv)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         ON CONFLICT(tenant_id,fy,block) DO UPDATE SET rate=EXCLUDED.rate, opening_wdv=EXCLUDED.opening_wdv, additions=EXCLUDED.additions, additions_lt180=EXCLUDED.additions_lt180, disposals=EXCLUDED.disposals, depreciation=EXCLUDED.depreciation, closing_wdv=EXCLUDED.closing_wdv, computed_at=now()`,
+        [tenantId, fy, rr.block, rr.rate, rr.opening_wdv, rr.additions, rr.additions_lt180, rr.disposals, rr.depreciation, rr.closing_wdv]);
+    }
+  }
+
+  return {
+    fy, blocks: rows,
+    total: { opening_wdv: out(tOpen), additions: out(tAdd), additions_lt180: out(tHalf), disposals: out(tDisp), it_depreciation: out(tDep), closing_wdv: out(tClose), stcg: out(tStcg), stcl: out(tStcl) },
+    book_depreciation_fy: bookDep,
+    timing_difference: out(money(bookDep).minus(tDep)), // book − IT; +ve → book higher (deferred tax asset)
+    committed: !!opts.commit, warnings,
+    note: "IT Act block-of-assets depreciation (WDV; <180-day additions at half rate). Opening WDV carries from the prior year's closing — run years in sequence with commit. Separate from the Companies-Act book depreciation posted to the GL; the timing difference feeds deferred tax.",
+  };
+}
+
+module.exports = { depreciationMonthly, createAsset, runDepreciation, disposeAsset, assetRegister, setAssetGroup, setAssetItBlock, itActDepreciation };

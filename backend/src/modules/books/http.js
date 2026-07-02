@@ -889,6 +889,10 @@ router.post("/assets/depreciation/run", canPost, async (req, res) => { try { res
 router.get("/assets/register", async (req, res) => { try { res.json(await assets.assetRegister(tenantOf(req), { status: req.query.status })); } catch (e) { fail(res, e); } });
 router.post("/assets/:id/dispose", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await assets.disposeAsset(tenantOf(req), req.user.id, { assetId: req.params.id, disposalValue: b.disposalValue, date: b.date, bankLedgerId: b.bankLedgerId })); } catch (e) { fail(res, e); } });
 router.patch("/assets/:id/group", canPost, async (req, res) => { try { res.json(await assets.setAssetGroup(tenantOf(req), req.params.id, (req.body || {}).group)); } catch (e) { fail(res, e); } });
+router.patch("/assets/:id/it-block", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await assets.setAssetItBlock(tenantOf(req), req.params.id, { itBlock: b.itBlock ?? b.it_block, itRate: b.itRate ?? b.it_rate })); } catch (e) { fail(res, e); } });
+// Income-Tax Act block depreciation for a FY (dual-book). GET computes; POST commits the rollforward.
+router.get("/assets/it-depreciation", async (req, res) => { try { res.json(await assets.itActDepreciation(tenantOf(req), req.query.fy)); } catch (e) { fail(res, e); } });
+router.post("/assets/it-depreciation/close", canPost, async (req, res) => { try { res.json(await assets.itActDepreciation(tenantOf(req), (req.body || {}).fy, { commit: true })); } catch (e) { fail(res, e); } });
 // Profitability reports + Tally XML export + numbering audit.
 router.get("/reports/profitability/party", async (req, res) => { try { res.json(await reports.profitabilityByParty(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
 router.get("/reports/profitability/item", async (req, res) => { try { res.json(await reports.profitabilityByItem(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });

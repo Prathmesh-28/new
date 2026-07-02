@@ -414,6 +414,30 @@ const BOOKS_SCHEMA = `
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_book_assets ON book_fixed_assets(tenant_id, is_active);
+  -- Income-Tax Act classification (block-of-assets). Distinct from the Companies-Act rate
+  -- above (that drives the book depreciation posted to the GL). it_rate NULL = unclassified.
+  ALTER TABLE book_fixed_assets ADD COLUMN IF NOT EXISTS it_block TEXT;
+  ALTER TABLE book_fixed_assets ADD COLUMN IF NOT EXISTS it_rate  NUMERIC(6,2);
+
+  -- Income-Tax Act block-of-assets depreciation rollforward (WDV, block-wise). One row per
+  -- (tenant, FY, block): opening (= prior FY closing) + additions − disposals, then dep with
+  -- the <180-day half-rate rule; closing carries forward as next year's opening. The gap vs
+  -- the Companies-Act book depreciation drives deferred tax.
+  CREATE TABLE IF NOT EXISTS book_it_dep_blocks (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       TEXT NOT NULL,
+    fy              TEXT NOT NULL,            -- 'YYYY-YY'
+    block           TEXT NOT NULL,           -- block label (grouping key)
+    rate            NUMERIC(6,2) NOT NULL,
+    opening_wdv     NUMERIC(19,2) NOT NULL DEFAULT 0,
+    additions       NUMERIC(19,2) NOT NULL DEFAULT 0,
+    additions_lt180 NUMERIC(19,2) NOT NULL DEFAULT 0,
+    disposals       NUMERIC(19,2) NOT NULL DEFAULT 0,
+    depreciation    NUMERIC(19,2) NOT NULL DEFAULT 0,
+    closing_wdv     NUMERIC(19,2) NOT NULL DEFAULT 0,
+    computed_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, fy, block)
+  );
 
   -- ── M8: automation (approvals, numbering, late fees, expenses, projects) ──
   CREATE TABLE IF NOT EXISTS book_approval_rules (
