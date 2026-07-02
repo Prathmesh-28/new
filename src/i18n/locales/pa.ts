@@ -138,6 +138,20 @@ const pa: Record<string, string> = {
   "cmdk.navigate": "ਜਾਓ",
   "cmdk.open": "ਖੋਲ੍ਹੋ",
   "cmdk.pin": "ਪਿੰਨ",
-  "cmdk.close": "ਬੰਦ"
+  "cmdk.close": "ਬੰਦ",
+  "inv.subtitle": "GST-ਅਨੁਕੂਲ · UPI ਵਸੂਲੀ · ਆਟੋ-ਮਿਲਾਨ",
+  "inv.stat.pending": "ਬਕਾਇਆ",
+  "inv.stat.overdue": "ਮਿਆਦ ਲੰਘੀ",
+  "inv.stat.paidAll": "ਭੁਗਤਾਨ (ਹੁਣ ਤੱਕ)",
+  "inv.tab.all": "ਸਾਰੇ",
+  "inv.tab.pending": "ਬਕਾਇਆ",
+  "inv.tab.paid": "ਭੁਗਤਾਨ ਹੋਏ",
+  "inv.tab.autoCollect": "ਆਟੋ-ਵਸੂਲੀ",
+  "inv.createInvoice": "ਇਨਵਾਇਸ ਬਣਾਓ",
+  "inv.creating": "ਬਣ ਰਿਹਾ ਹੈ…",
+  "inv.loading": "ਇਨਵਾਇਸ ਲੋਡ ਹੋ ਰਹੇ ਹਨ",
+  "inv.errorTitle": "ਇਨਵਾਇਸ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕੇ",
+  "inv.errorMsg": "ਅਸੀਂ ਇਨਵਾਇਸ ਸੇਵਾ ਤੱਕ ਨਹੀਂ ਪਹੁੰਚ ਸਕੇ। ਆਪਣਾ ਕਨੈਕਸ਼ਨ ਜਾਂਚੋ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  "inv.empty": "ਹਾਲੇ ਕੋਈ ਇਨਵਾਇਸ ਨਹੀਂ। ਆਪਣਾ ਪਹਿਲਾ GST-ਅਨੁਕੂਲ ਇਨਵਾਇਸ ਬਣਾਓ।"
 };
 export default pa;

@@ -138,6 +138,20 @@ const ta: Record<string, string> = {
   "cmdk.navigate": "செல்",
   "cmdk.open": "திற",
   "cmdk.pin": "பின்",
-  "cmdk.close": "மூடு"
+  "cmdk.close": "மூடு",
+  "inv.subtitle": "GST-இணக்கம் · UPI வசூல் · தானியங்கு சரிகட்டல்",
+  "inv.stat.pending": "நிலுவை",
+  "inv.stat.overdue": "தாமதம்",
+  "inv.stat.paidAll": "செலுத்தியது (மொத்தம்)",
+  "inv.tab.all": "அனைத்தும்",
+  "inv.tab.pending": "நிலுவை",
+  "inv.tab.paid": "செலுத்தியது",
+  "inv.tab.autoCollect": "தானியங்கு வசூல்",
+  "inv.createInvoice": "விலைப்பட்டியல் உருவாக்கு",
+  "inv.creating": "உருவாக்குகிறது…",
+  "inv.loading": "விலைப்பட்டியல்களை ஏற்றுகிறது",
+  "inv.errorTitle": "விலைப்பட்டியல்களை ஏற்ற முடியவில்லை",
+  "inv.errorMsg": "விலைப்பட்டியல் சேவையை அணுக முடியவில்லை. உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.",
+  "inv.empty": "இன்னும் விலைப்பட்டியல்கள் இல்லை. உங்கள் முதல் GST-இணக்க விலைப்பட்டியலை உருவாக்குங்கள்."
 };
 export default ta;

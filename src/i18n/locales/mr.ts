@@ -138,6 +138,20 @@ const mr: Record<string, string> = {
   "cmdk.navigate": "जा",
   "cmdk.open": "उघडा",
   "cmdk.pin": "पिन",
-  "cmdk.close": "बंद"
+  "cmdk.close": "बंद",
+  "inv.subtitle": "GST-अनुरूप · UPI वसुली · स्वयं-ताळमेळ",
+  "inv.stat.pending": "प्रलंबित",
+  "inv.stat.overdue": "थकीत",
+  "inv.stat.paidAll": "भरलेले (एकूण)",
+  "inv.tab.all": "सर्व",
+  "inv.tab.pending": "प्रलंबित",
+  "inv.tab.paid": "भरलेले",
+  "inv.tab.autoCollect": "स्वयं-वसुली",
+  "inv.createInvoice": "बीजक तयार करा",
+  "inv.creating": "तयार करत आहे…",
+  "inv.loading": "बीजके लोड होत आहेत",
+  "inv.errorTitle": "बीजके लोड करता आली नाहीत",
+  "inv.errorMsg": "बीजक सेवेशी संपर्क होऊ शकला नाही. तुमचे कनेक्शन तपासा आणि पुन्हा प्रयत्न करा.",
+  "inv.empty": "अद्याप कोणतेही बीजक नाही. तुमचे पहिले GST-अनुरूप बीजक तयार करा."
 };
 export default mr;

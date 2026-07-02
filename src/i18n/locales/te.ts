@@ -138,6 +138,20 @@ const te: Record<string, string> = {
   "cmdk.navigate": "వెళ్లు",
   "cmdk.open": "తెరువు",
   "cmdk.pin": "పిన్",
-  "cmdk.close": "మూసివేయి"
+  "cmdk.close": "మూసివేయి",
+  "inv.subtitle": "GST-కంప్లయింట్ · UPI వసూళ్లు · ఆటో-రీకన్‌సైల్",
+  "inv.stat.pending": "పెండింగ్",
+  "inv.stat.overdue": "గడువు దాటినవి",
+  "inv.stat.paidAll": "చెల్లించినవి (మొత్తం)",
+  "inv.tab.all": "అన్నీ",
+  "inv.tab.pending": "పెండింగ్",
+  "inv.tab.paid": "చెల్లించినవి",
+  "inv.tab.autoCollect": "ఆటో-కలెక్ట్",
+  "inv.createInvoice": "ఇన్‌వాయిస్ సృష్టించండి",
+  "inv.creating": "సృష్టిస్తోంది…",
+  "inv.loading": "ఇన్‌వాయిస్‌లు లోడ్ అవుతున్నాయి",
+  "inv.errorTitle": "ఇన్‌వాయిస్‌లు లోడ్ కాలేదు",
+  "inv.errorMsg": "ఇన్‌వాయిస్ సేవను చేరుకోలేకపోయాం. మీ కనెక్షన్‌ను తనిఖీ చేసి మళ్లీ ప్రయత్నించండి.",
+  "inv.empty": "ఇంకా ఇన్‌వాయిస్‌లు లేవు. మీ మొదటి GST-కంప్లయింట్ ఇన్‌వాయిస్‌ను సృష్టించండి."
 };
 export default te;

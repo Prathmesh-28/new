@@ -138,6 +138,20 @@ const ml: Record<string, string> = {
   "cmdk.navigate": "നീങ്ങുക",
   "cmdk.open": "തുറക്കുക",
   "cmdk.pin": "പിൻ ചെയ്യുക",
-  "cmdk.close": "അടയ്ക്കുക"
+  "cmdk.close": "അടയ്ക്കുക",
+  "inv.subtitle": "GST-അനുസൃതം · UPI പിരിവുകൾ · സ്വയം-റീകൺസൈൽ",
+  "inv.stat.pending": "ബാക്കി",
+  "inv.stat.overdue": "കാലാവധി കഴിഞ്ഞു",
+  "inv.stat.paidAll": "അടച്ചത് (ആകെ)",
+  "inv.tab.all": "എല്ലാം",
+  "inv.tab.pending": "ബാക്കി",
+  "inv.tab.paid": "അടച്ചത്",
+  "inv.tab.autoCollect": "സ്വയം-പിരിവ്",
+  "inv.createInvoice": "ഇൻവോയ്സ് സൃഷ്ടിക്കുക",
+  "inv.creating": "സൃഷ്ടിക്കുന്നു…",
+  "inv.loading": "ഇൻവോയ്സുകൾ ലോഡ് ചെയ്യുന്നു",
+  "inv.errorTitle": "ഇൻവോയ്സുകൾ ലോഡ് ചെയ്യാനായില്ല",
+  "inv.errorMsg": "ഇൻവോയ്സ് സേവനവുമായി ബന്ധപ്പെടാനായില്ല. നിങ്ങളുടെ കണക്ഷൻ പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കുക.",
+  "inv.empty": "ഇതുവരെ ഇൻവോയ്സുകളൊന്നുമില്ല. നിങ്ങളുടെ ആദ്യത്തെ GST-അനുസൃത ഇൻവോയ്സ് സൃഷ്ടിക്കുക."
 };
 export default ml;

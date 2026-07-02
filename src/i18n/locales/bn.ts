@@ -138,6 +138,20 @@ const bn: Record<string, string> = {
   "cmdk.navigate": "যান",
   "cmdk.open": "খুলুন",
   "cmdk.pin": "পিন",
-  "cmdk.close": "বন্ধ"
+  "cmdk.close": "বন্ধ",
+  "inv.subtitle": "GST-সম্মত · UPI সংগ্রহ · স্বয়ংক্রিয় মিলকরণ",
+  "inv.stat.pending": "বকেয়া",
+  "inv.stat.overdue": "মেয়াদোত্তীর্ণ",
+  "inv.stat.paidAll": "পরিশোধিত (সর্বমোট)",
+  "inv.tab.all": "সব",
+  "inv.tab.pending": "বকেয়া",
+  "inv.tab.paid": "পরিশোধিত",
+  "inv.tab.autoCollect": "স্বয়ং-সংগ্রহ",
+  "inv.createInvoice": "চালান তৈরি করুন",
+  "inv.creating": "তৈরি হচ্ছে…",
+  "inv.loading": "চালান লোড হচ্ছে",
+  "inv.errorTitle": "চালান লোড করা গেল না",
+  "inv.errorMsg": "চালান পরিষেবায় পৌঁছানো গেল না। আপনার সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।",
+  "inv.empty": "এখনও কোনো চালান নেই। আপনার প্রথম GST-সম্মত চালান তৈরি করুন।"
 };
 export default bn;

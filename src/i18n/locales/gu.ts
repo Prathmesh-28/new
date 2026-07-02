@@ -138,6 +138,20 @@ const gu: Record<string, string> = {
   "cmdk.navigate": "જાઓ",
   "cmdk.open": "ખોલો",
   "cmdk.pin": "પિન કરો",
-  "cmdk.close": "બંધ કરો"
+  "cmdk.close": "બંધ કરો",
+  "inv.subtitle": "GST-સુસંગત · UPI વસૂલી · ઓટો-રિકન્સાઇલ",
+  "inv.stat.pending": "બાકી",
+  "inv.stat.overdue": "મુદત વીતી",
+  "inv.stat.paidAll": "ચૂકવાયેલ (કુલ)",
+  "inv.tab.all": "બધા",
+  "inv.tab.pending": "બાકી",
+  "inv.tab.paid": "ચૂકવાયેલ",
+  "inv.tab.autoCollect": "ઓટો-કલેક્ટ",
+  "inv.createInvoice": "ઇન્વૉઇસ બનાવો",
+  "inv.creating": "બનાવી રહ્યાં છીએ…",
+  "inv.loading": "ઇન્વૉઇસ લોડ થઈ રહ્યાં છે",
+  "inv.errorTitle": "ઇન્વૉઇસ લોડ ન થઈ શક્યાં",
+  "inv.errorMsg": "અમે ઇન્વૉઇસ સેવા સુધી પહોંચી શક્યા નહીં. તમારું કનેક્શન તપાસો અને ફરી પ્રયાસ કરો.",
+  "inv.empty": "હજી કોઈ ઇન્વૉઇસ નથી. તમારો પહેલો GST-સુસંગત ઇન્વૉઇસ બનાવો."
 };
 export default gu;

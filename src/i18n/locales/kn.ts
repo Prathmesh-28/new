@@ -138,6 +138,20 @@ const kn: Record<string, string> = {
   "cmdk.navigate": "ಸಾಗಿಸಿ",
   "cmdk.open": "ತೆರೆ",
   "cmdk.pin": "ಪಿನ್",
-  "cmdk.close": "ಮುಚ್ಚಿ"
+  "cmdk.close": "ಮುಚ್ಚಿ",
+  "inv.subtitle": "GST-ಅನುಸರಣೆ · UPI ಸಂಗ್ರಹ · ಸ್ವಯಂ-ಹೊಂದಾಣಿಕೆ",
+  "inv.stat.pending": "ಬಾಕಿ",
+  "inv.stat.overdue": "ಅವಧಿ ಮೀರಿದ",
+  "inv.stat.paidAll": "ಪಾವತಿಯಾದ (ಒಟ್ಟು)",
+  "inv.tab.all": "ಎಲ್ಲಾ",
+  "inv.tab.pending": "ಬಾಕಿ",
+  "inv.tab.paid": "ಪಾವತಿಯಾದ",
+  "inv.tab.autoCollect": "ಸ್ವಯಂ-ಸಂಗ್ರಹ",
+  "inv.createInvoice": "ಇನ್‌ವಾಯ್ಸ್ ರಚಿಸಿ",
+  "inv.creating": "ರಚಿಸಲಾಗುತ್ತಿದೆ…",
+  "inv.loading": "ಇನ್‌ವಾಯ್ಸ್‌ಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗುತ್ತಿದೆ",
+  "inv.errorTitle": "ಇನ್‌ವಾಯ್ಸ್‌ಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗಲಿಲ್ಲ",
+  "inv.errorMsg": "ಇನ್‌ವಾಯ್ಸ್ ಸೇವೆಯನ್ನು ತಲುಪಲಾಗಲಿಲ್ಲ. ನಿಮ್ಮ ಸಂಪರ್ಕವನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  "inv.empty": "ಇನ್ನೂ ಯಾವುದೇ ಇನ್‌ವಾಯ್ಸ್ ಇಲ್ಲ. ನಿಮ್ಮ ಮೊದಲ GST-ಅನುಸರಣೆ ಇನ್‌ವಾಯ್ಸ್ ರಚಿಸಿ."
 };
 export default kn;
