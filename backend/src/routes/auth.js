@@ -34,6 +34,12 @@ router.post("/signup", validateBody({
     [email.toLowerCase(), hash, role, tenant_id]
   );
   const user = rows[0];
+  // Record the founding membership (owner of their own new firm) so the multi-firm
+  // switcher (#197) lists it. users.tenant_id remains the home firm.
+  await pool.query(
+    "INSERT INTO tenant_memberships(user_id, tenant_id, role, status) VALUES($1,$2,$3,'active') ON CONFLICT (user_id, tenant_id) DO NOTHING",
+    [user.id, user.tenant_id, user.role]
+  ).catch(() => {});
   require("../modules/analytics").track(user.tenant_id, user.id, { event: "signup_completed", props: { role: user.role } }).catch(() => {});
   const payload = { sub: user.id, role: user.role, tenant: user.tenant_id };
   res.status(201).json({ access: signAccess(payload), refresh: signRefresh(payload), user });
@@ -155,8 +161,96 @@ router.post("/refresh", async (req, res) => {
 // POST /auth/logout - stateless, client drops tokens
 router.post("/logout", (_req, res) => res.json({ ok: true }));
 
+// ── Multi-firm switcher (#197) ────────────────────────────────────────────────
+// GET /auth/my-firms - the firms this user may act in (populates the switcher UI).
+router.get("/my-firms", authenticate, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT m.tenant_id, m.role, COALESCE(NULLIF(tp.company_name,''), m.tenant_id) AS name
+       FROM tenant_memberships m
+       LEFT JOIN tenant_profile tp ON tp.tenant_id = m.tenant_id
+      WHERE m.user_id=$1 AND m.status='active'
+      ORDER BY name ASC`,
+    [req.user.id]
+  );
+  // req.user.tenant_id is the currently-active firm (already resolved by authenticate,
+  // reflecting any X-Active-Tenant switch); the UI marks it as selected.
+  res.json({ firms: rows, active: req.user.tenant_id });
+});
+
+// POST /auth/switch-firm - authorize activating a firm the user is a member of. The
+// actual scope switch is driven by the X-Active-Tenant header (re-checked every request);
+// this endpoint gives the UI a clean 403 + the target firm's role/plan/name to display.
+router.post("/switch-firm", authenticate, validateBody({
+  tenant_id: { type: "string", required: true, maxLen: 120 },
+}), async (req, res) => {
+  const target = String(req.body.tenant_id);
+  const { rows } = await pool.query(
+    "SELECT role FROM tenant_memberships WHERE user_id=$1 AND tenant_id=$2 AND status='active'",
+    [req.user.id, target]
+  );
+  if (!rows[0]) return res.status(403).json({ error: "You are not a member of that firm" });
+  const { tenantPlan } = require("../lib/plans");
+  const plan = await tenantPlan(target).catch(() => "free");
+  const prof = await pool.query("SELECT company_name FROM tenant_profile WHERE tenant_id=$1", [target]).catch(() => ({ rows: [] }));
+  require("../lib/audit").writeAudit(req.user.id, "firm.switch", "tenant", target, { role: rows[0].role });
+  res.json({ ok: true, firm: { tenant_id: target, role: rows[0].role, plan, name: (prof.rows[0] && prof.rows[0].company_name) || target } });
+});
+
+// POST /auth/create-firm - spin up an ADDITIONAL firm under the same login (the owner
+// of multiple businesses). The user keeps their home firm and gains an owner membership
+// in the new one; email stays unique (no new users row). Capped to prevent abuse.
+const MAX_OWNED_FIRMS = 10;
+router.post("/create-firm", authenticate, validateBody({
+  company_name: { type: "string", required: true, minLen: 1, maxLen: 120 },
+}), async (req, res) => {
+  const owned = await pool.query(
+    "SELECT COUNT(*)::int AS n FROM tenant_memberships WHERE user_id=$1 AND role='owner' AND status='active'",
+    [req.user.id]
+  );
+  if ((owned.rows[0]?.n || 0) >= MAX_OWNED_FIRMS) {
+    return res.status(429).json({ error: `You can own at most ${MAX_OWNED_FIRMS} firms.` });
+  }
+  const slug = String(req.body.company_name).toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  // Generate an UNCLAIMED tenant_id. The membership INSERT's ON CONFLICT is on
+  // (user_id, tenant_id), so it would NOT stop a collision with a DIFFERENT firm's id —
+  // that would silently grant owner access to someone else's firm. So we must verify the
+  // id belongs to no existing firm (users / memberships / profile) before claiming it, and
+  // regenerate on the (astronomically rare) collision.
+  let tenant_id = null;
+  for (let attempt = 0; attempt < 5 && !tenant_id; attempt++) {
+    const cand = `${slug || "firm"}-${crypto.randomBytes(6).toString("hex")}`;
+    const clash = await pool.query(
+      `SELECT 1 WHERE EXISTS (SELECT 1 FROM users WHERE tenant_id=$1)
+                  OR EXISTS (SELECT 1 FROM tenant_memberships WHERE tenant_id=$1)
+                  OR EXISTS (SELECT 1 FROM tenant_profile WHERE tenant_id=$1) LIMIT 1`,
+      [cand]
+    );
+    if (!clash.rows.length) tenant_id = cand;
+  }
+  if (!tenant_id) return res.status(500).json({ error: "Could not allocate a firm id, please retry" });
+  await pool.query(
+    "INSERT INTO tenant_memberships(user_id, tenant_id, role, status) VALUES($1,$2,'owner','active') ON CONFLICT (user_id, tenant_id) DO NOTHING",
+    [req.user.id, tenant_id]
+  );
+  await pool.query(
+    "INSERT INTO tenant_profile(tenant_id, company_name) VALUES($1,$2) ON CONFLICT (tenant_id) DO NOTHING",
+    [tenant_id, String(req.body.company_name)]
+  ).catch(() => {});
+  require("../lib/audit").writeAudit(req.user.id, "firm.create", "tenant", tenant_id, { name: req.body.company_name });
+  res.status(201).json({ ok: true, firm: { tenant_id, role: "owner", name: String(req.body.company_name) } });
+});
+
 // GET /auth/me
 router.get("/me", authenticate, async (req, res) => {
+  // When the user has switched into a membership firm (authenticate set switchedTenantId),
+  // reflect that active firm's tenant/role/plan; otherwise report the home row unchanged.
+  if (req.switchedTenantId) {
+    return res.json({
+      id: req.user.id, email: req.user.email, role: req.user.role,
+      tenant_id: req.user.tenant_id, first_login: req.user.first_login,
+      display_name: req.user.display_name, plan: req.user.subscription_plan || "free",
+    });
+  }
   const { rows } = await pool.query(
     "SELECT id, email, role, tenant_id, first_login, display_name, subscription_plan AS plan FROM users WHERE id=$1",
     [req.user.id]

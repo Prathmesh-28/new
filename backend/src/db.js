@@ -276,6 +276,24 @@ async function initDb() {
       UNIQUE(advisor_id, client_tenant_id)
     );
 
+    -- ── Multi-firm membership (#197 firm switcher) ─────────────────────────────
+    -- The source of truth for "which firms may this user act in, and as what role".
+    -- users.tenant_id remains the HOME/default firm (authoritative when no switch
+    -- header is sent); this table is a superset that always contains the home row.
+    -- A switch is honored ONLY if an active row here matches (user, target) — checked
+    -- server-side in authenticate on every request, never trusted from a client value.
+    CREATE TABLE IF NOT EXISTS tenant_memberships (
+      id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      tenant_id  TEXT NOT NULL,
+      role       TEXT NOT NULL DEFAULT 'viewer',
+      status     TEXT NOT NULL DEFAULT 'active',   -- active | suspended
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(user_id, tenant_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_tenant_memberships_user   ON tenant_memberships(user_id);
+    CREATE INDEX IF NOT EXISTS idx_tenant_memberships_tenant ON tenant_memberships(tenant_id);
+
     -- ── Operations: Orders ────────────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS orders (
       id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -64,6 +64,19 @@ router.get("/stream", async (req, res) => {
   }
   req.user = user;
 
+  // Multi-firm switch (#197): the SSE URL can't send headers, so the active firm arrives
+  // as ?active_tenant. Honor it exactly like authenticate honors X-Active-Tenant — only
+  // if an active membership row exists — so a switched session's live channel follows the
+  // firm it is actually viewing (not the home firm).
+  const active = req.query.active_tenant;
+  if (active && String(active) !== user.tenant_id && user.role !== "super_admin") {
+    const m = await pool.query(
+      "SELECT role FROM tenant_memberships WHERE user_id=$1 AND tenant_id=$2 AND status='active'",
+      [user.id, String(active)]
+    );
+    if (m.rows[0]) req.user = { ...user, tenant_id: String(active), role: m.rows[0].role };
+  }
+
   // Subscribe to the caller's own tenant, or a client tenant they may view.
   const tenantId = await resolveTenantId(req);
   if (!tenantId) return res.status(403).end();

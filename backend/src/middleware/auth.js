@@ -36,6 +36,39 @@ async function authenticate(req, res, next) {
           }
         });
       }
+    } else {
+      // ── Multi-firm switch (#197) ─────────────────────────────────────────────
+      // A member (not super_admin) selects an active firm via X-Active-Tenant. It is
+      // honored ONLY when an active tenant_memberships row exists for (user, target) —
+      // verified here on EVERY request, never trusted from the header/token alone. No
+      // membership row ⇒ the header is silently ignored and the user stays on their home
+      // firm (exactly how a non-super_admin's X-Tenant-Id is dropped above). The role
+      // is taken from the membership row, so a user's reach in the target firm is that
+      // firm's assigned role — never their role elsewhere.
+      const active = req.headers["x-active-tenant"];
+      if (active && String(active) !== rows[0].tenant_id) {
+        const m = await pool.query(
+          "SELECT role FROM tenant_memberships WHERE user_id=$1 AND tenant_id=$2 AND status='active'",
+          [rows[0].id, String(active)]
+        );
+        if (m.rows[0]) {
+          req.realTenantId = rows[0].tenant_id;
+          req.switchedTenantId = String(active);
+          req.user = { ...rows[0], tenant_id: String(active), role: m.rows[0].role };
+          // Gate entitlements on the TARGET firm's plan, not the user's home plan.
+          try { const pr = await pool.query("SELECT COALESCE(MAX(subscription_plan),'free') AS plan FROM users WHERE tenant_id=$1", [String(active)]); req.user.subscription_plan = pr.rows[0].plan; } catch { req.user.subscription_plan = "free"; }
+          if (req.method !== "GET" && req.method !== "HEAD") {
+            res.on("finish", () => {
+              if (res.statusCode < 400) {
+                pool.query(
+                  "INSERT INTO audit_log(user_id, action, entity, entity_id, meta) VALUES($1,$2,$3,$4,$5)",
+                  [rows[0].id, "member_switch_write", "tenant", String(active), { method: req.method, path: req.path, realTenant: rows[0].tenant_id, role: m.rows[0].role }]
+                ).catch(() => {});
+              }
+            });
+          }
+        }
+      }
     }
     next();
   } catch {

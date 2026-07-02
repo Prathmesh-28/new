@@ -14,12 +14,104 @@ import {
   Handshake, IndianRupee, Umbrella, Coins,
   ShoppingCart, ShieldAlert, KeyRound, Banknote,
   Smartphone, FlaskConical, BookOpen, Factory, LineChart, UsersRound, Wand2, AppWindow, MessagesSquare, Waypoints,
-  BarChart3,
+  BarChart3, Check, Plus,
 } from "lucide-react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, PLAN_LABEL, type PlanTier } from "@/data/types";
 import { getFrequentPages } from "@/components/CommandPalette";
 import { usePlatformSettings } from "@/lib/usePlatformSettings";
+
+type Firm = { tenant_id: string; role: string; name: string };
+
+// Multi-firm switcher (#197). Shows the firms a user may act in and lets them switch the
+// active one (or, for owners, spin up another). Hidden entirely for ordinary single-firm
+// users (one firm, not an owner) so their sidebar is unchanged.
+function FirmSwitcher({ collapsed }: { collapsed: boolean }) {
+  const { user, switchFirm, createFirm } = useAuth();
+  const [firms, setFirms] = useState<Firm[]>([]);
+  const [active, setActive] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const canCreate = user?.role === "owner" || user?.role === "super_admin";
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get<{ firms: Firm[]; active: string }>("/api/auth/my-firms")
+      .then(r => { if (!cancelled) { setFirms(r.firms || []); setActive(r.active); } })
+      .catch(() => { /* non-fatal: switcher stays hidden */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Single-firm, non-owner → render nothing (zero change for ordinary users).
+  if (firms.length <= 1 && !canCreate) return null;
+  if (firms.length === 0) return null;
+
+  const current = firms.find(f => f.tenant_id === active) || firms[0];
+
+  const doSwitch = async (tid: string) => {
+    if (tid === active || busy) { setOpen(false); return; }
+    setBusy(true);
+    try { await switchFirm(tid); } // reloads on success
+    catch (e) { setBusy(false); toast.error(e instanceof Error ? e.message : "Could not switch firm"); }
+  };
+  const doCreate = async () => {
+    const name = window.prompt("Name of the new firm");
+    if (!name || !name.trim()) return;
+    setBusy(true);
+    try { await createFirm(name.trim()); } // reloads on success
+    catch (e) { setBusy(false); toast.error(e instanceof Error ? e.message : "Could not create firm"); }
+  };
+
+  if (collapsed) {
+    return (
+      <div className="mx-2 mb-1 flex items-center justify-center" title={current?.name}>
+        <Building2 size={14} className="text-[var(--color-primary)]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-2 mb-1.5 relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        disabled={busy}
+        className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md text-xs bg-[var(--color-bg)] border border-[var(--color-border)] hover:border-[var(--color-primary)]/40 transition-colors disabled:opacity-50"
+        title="Switch firm"
+      >
+        <Building2 size={13} className="text-[var(--color-primary)] shrink-0" />
+        <span className="flex-1 text-left truncate font-medium">{current?.name}</span>
+        <ChevronDown size={12} className={cn("shrink-0 text-[var(--color-muted)] transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-2 right-2 mb-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg overflow-hidden z-20 max-h-72 overflow-y-auto">
+          {firms.map(f => (
+            <button
+              key={f.tenant_id}
+              onClick={() => doSwitch(f.tenant_id)}
+              className="flex items-center gap-1.5 w-full px-2.5 py-2 text-xs hover:bg-white/5 transition-colors text-left"
+            >
+              <span className="w-3.5 shrink-0">{f.tenant_id === active && <Check size={12} className="text-[var(--color-primary)]" />}</span>
+              <span className="flex-1 min-w-0">
+                <span className="block truncate">{f.name}</span>
+                <span className="block text-[10px] text-[var(--color-muted)] capitalize">{f.role.replace("_", " ")}</span>
+              </span>
+            </button>
+          ))}
+          {canCreate && (
+            <button
+              onClick={doCreate}
+              className="flex items-center gap-1.5 w-full px-2.5 py-2 text-xs text-[var(--color-primary)] hover:bg-white/5 transition-colors border-t border-[var(--color-border)]"
+            >
+              <Plus size={12} className="shrink-0" /> Add a firm
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Maps a nav tab → its super-admin feature switch (Console → Platform → Features).
 // A tab not listed here is always on. Turning a switch off hides the module live.
@@ -404,6 +496,7 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
 
         {/* User + sign out */}
         <div className="border-t border-[var(--color-border)] p-2 shrink-0">
+          <FirmSwitcher collapsed={collapsed} />
           {!collapsed && (
             <div className="px-2 mb-1 min-w-0">
               <p className="text-xs text-[var(--color-text)] truncate">{user?.email}</p>
@@ -522,14 +615,17 @@ export default function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void })
               <NavItems groups={groups} collapsed={false} onNavigate={() => setMobileOpen(false)} badges={badges} expanded={shownGroups} onToggleGroup={toggleGroup} lockedPlan={lockedPlan} />
             </nav>
 
-            <div className="border-t border-[var(--color-border)] px-4 py-3 flex items-center justify-between shrink-0">
-              <div className="min-w-0 mr-3">
-                <p className="text-xs text-[var(--color-text)] truncate">{user?.email}</p>
-                <p className="text-[10px] text-[var(--color-muted)] capitalize">{role.replace("_", " ")}</p>
+            <div className="border-t border-[var(--color-border)] pt-2 shrink-0">
+              <FirmSwitcher collapsed={false} />
+              <div className="px-4 py-3 flex items-center justify-between">
+                <div className="min-w-0 mr-3">
+                  <p className="text-xs text-[var(--color-text)] truncate">{user?.email}</p>
+                  <p className="text-[10px] text-[var(--color-muted)] capitalize">{role.replace("_", " ")}</p>
+                </div>
+                <button onClick={handleLogout} className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-red-400 transition-colors shrink-0">
+                  <LogOut size={13} /> Sign out
+                </button>
               </div>
-              <button onClick={handleLogout} className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-red-400 transition-colors shrink-0">
-                <LogOut size={13} /> Sign out
-              </button>
             </div>
           </div>
         </div>

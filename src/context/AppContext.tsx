@@ -5,7 +5,7 @@ import type { AppStore, UserRole, RoleConfig } from "@/data/types";
 import { FIELD_NAMESPACE, ROLE_NAMESPACES } from "@/data/types";
 import { isReadOnlyRole } from "@/data/roles";
 import { defaultConfig } from "@/data/defaultConfig";
-import { api, clientId, setApiTenant } from "@/lib/api";
+import { api, clientId, setApiTenant, getActiveFirm } from "@/lib/api";
 import { API_BASE } from "@/lib/apiBase";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
@@ -313,8 +313,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const token = localStorage.getItem("hr_access");
       if (!token) return;
       const tenantId = clientIdRef.current;
+      const activeFirm = getActiveFirm();   // multi-firm switch (#197): keep the live channel on the active firm
       const url = `${API_BASE}/api/kv/stream?token=${encodeURIComponent(token)}`
-        + (tenantId ? `&tenant_id=${encodeURIComponent(tenantId)}` : "");
+        + (tenantId ? `&tenant_id=${encodeURIComponent(tenantId)}` : "")
+        + (activeFirm ? `&active_tenant=${encodeURIComponent(activeFirm)}` : "");
       es = new EventSource(url);
       es.onmessage = (ev) => {
         try {

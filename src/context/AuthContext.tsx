@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import type { AuthUser } from "@/data/types";
 import { API_BASE } from "@/lib/apiBase";
 import { secureGet, secureSet, secureRemove } from "@/lib/secureStorage";
+import { setActiveFirm, getActiveFirm } from "@/lib/api";
 
 export const BASE = API_BASE;
 
@@ -29,6 +30,8 @@ interface AuthCtx {
   login: (email: string, password: string, turnstileToken?: string, mfaCode?: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  switchFirm: (tenantId: string) => Promise<void>;
+  createFirm: (companyName: string) => Promise<{ tenant_id: string; role: string; name: string }>;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -49,8 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchMe = useCallback(async (token: string): Promise<AuthUser | null> => {
     try {
+      const active = getActiveFirm();
       const res = await fetchWithTimeout(`${BASE}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, ...(active ? { "X-Active-Tenant": active } : {}) },
       });
       if (!res.ok) return null;
       return res.json();
@@ -137,10 +141,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     await secureRemove("hr_access");
     await secureRemove("hr_refresh");
+    setActiveFirm(null);   // drop any multi-firm selection so the next login starts on home
     setUser(null);
   }, []);
 
-  return <Ctx.Provider value={{ user, loading, serverReady, login, logout, refreshUser }}>{children}</Ctx.Provider>;
+  // Multi-firm switcher (#197). switchFirm authorizes the target server-side, persists
+  // the selection, then hard-reloads so all tenant-scoped state re-fetches under the new
+  // firm (avoids stale cross-firm data). createFirm spins up an additional owned firm.
+  const switchFirm = useCallback(async (tenantId: string) => {
+    const token = await secureGet("hr_access");
+    const res = await fetch(`${BASE}/auth/switch-firm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ tenant_id: tenantId }),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({ error: "Could not switch firm" }));
+      throw new Error(e.error || "Could not switch firm");
+    }
+    setActiveFirm(tenantId);
+    window.location.reload();
+  }, []);
+
+  const createFirm = useCallback(async (companyName: string) => {
+    const token = await secureGet("hr_access");
+    const res = await fetch(`${BASE}/auth/create-firm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ company_name: companyName }),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({ error: "Could not create firm" }));
+      throw new Error(e.error || "Could not create firm");
+    }
+    const { firm } = await res.json();
+    setActiveFirm(firm.tenant_id);
+    window.location.reload();
+    return firm as { tenant_id: string; role: string; name: string };
+  }, []);
+
+  return <Ctx.Provider value={{ user, loading, serverReady, login, logout, refreshUser, switchFirm, createFirm }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() {

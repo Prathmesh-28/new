@@ -10,6 +10,10 @@ const { writeAudit } = require("../lib/audit");
 // Either way, accepting moves the person into the tenant with the agreed role.
 
 const ASSIGNABLE = ["owner", "finance_manager", "accountant", "sales", "operations_manager", "viewer", "investor"];
+// A person-initiated join REQUEST may only self-select a non-privileged seat — never
+// 'owner' (an approver clicking "approve" must not be tricked into granting ownership).
+// Adding a co-owner must go through the owner-initiated invite path, which uses ASSIGNABLE.
+const REQUESTABLE = ["finance_manager", "accountant", "sales", "operations_manager", "viewer", "investor"];
 
 function seatFullResponse(res, seat, who) {
   return res.status(402).json({
@@ -78,7 +82,7 @@ router.post("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
 router.post("/request", authenticate, async (req, res) => {
   const me = req.user;
   const tid = (req.body && req.body.tenant_id || "").toString().trim();
-  const role = ASSIGNABLE.includes(req.body && req.body.role) ? req.body.role : "viewer";
+  const role = REQUESTABLE.includes(req.body && req.body.role) ? req.body.role : "viewer";
   const message = ((req.body && req.body.message) || "").slice(0, 280);
   if (!tid) return res.status(400).json({ error: "tenant_id required" });
   if (tid === me.tenant_id) return res.status(400).json({ error: "You're already in this workspace" });
@@ -142,7 +146,17 @@ router.post("/:id/accept", authenticate, async (req, res) => {
   if (inv.status !== "pending") return res.status(409).json({ error: `Invite already ${inv.status}` });
   const seat = await tenantSeatInfo(inv.tenant_id);
   if (seat.full) return seatFullResponse(res, seat, "This team");
+  // Read the persistent HOME from the users table, NOT req.user.tenant_id — the latter
+  // may be a firm the user is merely switched INTO (X-Active-Tenant), which would drop the
+  // wrong membership.
+  const { rows: self } = await pool.query("SELECT tenant_id FROM users WHERE id=$1", [req.user.id]);
+  const oldHome = self[0] && self[0].tenant_id;
   await pool.query("UPDATE users SET tenant_id=$1, role=$2 WHERE id=$3", [inv.tenant_id, inv.role, req.user.id]);
+  // Keep the membership set consistent with the move: leave the old firm (drops any stale
+  // switch access to it) and join the new one (#197). Never strip a membership in a firm
+  // the user OWNS — a multi-firm owner accepting an invite elsewhere keeps their firms.
+  if (oldHome && oldHome !== inv.tenant_id) await pool.query("DELETE FROM tenant_memberships WHERE user_id=$1 AND tenant_id=$2 AND role <> 'owner'", [req.user.id, oldHome]);
+  await pool.query("INSERT INTO tenant_memberships(user_id, tenant_id, role, status) VALUES($1,$2,$3,'active') ON CONFLICT (user_id, tenant_id) DO UPDATE SET role=EXCLUDED.role, status='active'", [req.user.id, inv.tenant_id, inv.role]);
   await pool.query("UPDATE team_invites SET status='accepted', resolved_at=now(), invitee_user_id=$2 WHERE id=$1", [inv.id, req.user.id]);
   writeAudit(req.user.id, "invite.accept", "tenant", inv.tenant_id, { role: inv.role });
   res.json({ ok: true, tenant_id: inv.tenant_id, role: inv.role });
@@ -173,7 +187,13 @@ router.post("/:id/approve", authenticate, requireOwnerOrAdmin, async (req, res) 
   if (inv.status !== "pending") return res.status(409).json({ error: `Request already ${inv.status}` });
   const seat = await tenantSeatInfo(inv.tenant_id);
   if (seat.full) return seatFullResponse(res, seat, "Your team");
+  const { rows: tgt } = await pool.query("SELECT tenant_id FROM users WHERE id=$1", [inv.invitee_user_id]);
+  const oldHome = tgt[0] && tgt[0].tenant_id;
   await pool.query("UPDATE users SET tenant_id=$1, role=$2 WHERE id=$3", [inv.tenant_id, inv.role, inv.invitee_user_id]);
+  // Move the joining member's membership set to the new firm (drops the firm they left),
+  // but never strip a firm they OWN (keeps a multi-firm owner's firms intact).
+  if (oldHome && oldHome !== inv.tenant_id) await pool.query("DELETE FROM tenant_memberships WHERE user_id=$1 AND tenant_id=$2 AND role <> 'owner'", [inv.invitee_user_id, oldHome]);
+  await pool.query("INSERT INTO tenant_memberships(user_id, tenant_id, role, status) VALUES($1,$2,$3,'active') ON CONFLICT (user_id, tenant_id) DO UPDATE SET role=EXCLUDED.role, status='active'", [inv.invitee_user_id, inv.tenant_id, inv.role]);
   await pool.query("UPDATE team_invites SET status='accepted', resolved_at=now() WHERE id=$1", [inv.id]);
   writeAudit(req.user.id, "join.approve", "tenant", inv.tenant_id, { member: inv.invitee_email, role: inv.role });
   res.json({ ok: true });

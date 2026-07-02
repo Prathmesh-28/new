@@ -19,6 +19,20 @@ export function setApiTenant(tenantId: string | null) {
   impersonatedTenant = tenantId;
 }
 
+// Multi-firm switcher (#197): the active firm a member has switched into. Sent as
+// X-Active-Tenant on every request; the backend honors it ONLY if the user has an
+// active membership row for it (else it is ignored and the home firm is used). Kept
+// in localStorage so the selection survives reload.
+export function getActiveFirm(): string | null {
+  try { return localStorage.getItem("hr_active_tenant"); } catch { return null; }
+}
+export function setActiveFirm(tenantId: string | null) {
+  try {
+    if (tenantId) localStorage.setItem("hr_active_tenant", tenantId);
+    else localStorage.removeItem("hr_active_tenant");
+  } catch { /* ignore */ }
+}
+
 function getToken() {
   return localStorage.getItem("hr_access");
 }
@@ -28,9 +42,11 @@ function getToken() {
 // authFetch's JSON parsing.
 export function authHeaders(): Record<string, string> {
   const token = getToken();
+  const active = getActiveFirm();
   return {
     "X-Client-Id": CLIENT_ID,
     ...(impersonatedTenant ? { "X-Tenant-Id": impersonatedTenant } : {}),
+    ...(active ? { "X-Active-Tenant": active } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
@@ -40,12 +56,14 @@ export async function authFetch<T = unknown>(
   init?: RequestInit
 ): Promise<T> {
   const token = getToken();
+  const active = getActiveFirm();
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
       "X-Client-Id": CLIENT_ID,
       ...(impersonatedTenant ? { "X-Tenant-Id": impersonatedTenant } : {}),
+      ...(active ? { "X-Active-Tenant": active } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers as Record<string, string> ?? {}),
     },
