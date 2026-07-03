@@ -18,6 +18,7 @@ import TransactionImportModal from "@/components/TransactionImportModal";
 import PreviewBadge from "@/components/PreviewBadge";
 import AiInsight from "@/components/ai/AiInsight";
 import SimpleHome from "@/components/SimpleHome";
+import FinancingNudgeCard from "@/features/dashboard/FinancingNudgeCard";
 import { api } from "@/lib/api";
 import type { BankAccount } from "@/data/types";
 
@@ -2258,6 +2259,7 @@ export default function DashboardPage() {
               <CashThisWeekWidget />
               <SmartActionsPanel />
               <TreasuryBanner />
+              <FinancingNudgeCard />
               <MorningBriefCard />
               <DailyCashSnapshot />
               <OverdueInvoicesWidget />
