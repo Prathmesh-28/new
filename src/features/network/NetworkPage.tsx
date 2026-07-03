@@ -3141,20 +3141,37 @@ function NetworkIntelligence() {
   const [invites, setInvites] = useState<any[]>([]);
   const [ratings, setRatings] = useState<any[]>([]);
   const [rateForm, setRateForm] = useState({ counterparty: "", category: "overall", rating: "5", comment: "" });
+  const [mySignals, setMySignals] = useState<any[]>([]);
+  const [sigForm, setSigForm] = useState({ subject_gstin: "", subject_name: "", signal_type: "trade_reference", detail: "" });
+  const [lookupGstin, setLookupGstin] = useState("");
+  const [netResult, setNetResult] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const loadInvites = () => api.get<any[]>("/api/counterparty/invites").then(setInvites).catch(() => {});
   const loadRatings = () => api.get<any[]>("/api/counterparty/ratings/summary").then(setRatings).catch(() => {});
+  const loadSignals = () => api.get<any[]>("/api/counterparty/network/mine").then(setMySignals).catch(() => {});
   useEffect(() => {
     Promise.all([
       api.get("/api/counterparty/dedupe-groups"), api.get("/api/counterparty/scores"), api.get<Record<string, { configured: boolean; problem: string | null }>>("/api/counterparty/providers"),
     ]).then(([g, s, p]) => { setGroups(g); setScores(s); setProviders(p); }).catch((e) => setErr((e as Error).message));
     loadInvites();
     loadRatings();
+    loadSignals();
   }, []);
   const submitRating = async () => {
     if (!rateForm.counterparty.trim()) return toast.error("Enter the counterparty");
     try { await api.post("/api/counterparty/rate", { ...rateForm, rating: Number(rateForm.rating) }); toast.success("Rating recorded"); setRateForm({ counterparty: "", category: "overall", rating: "5", comment: "" }); loadRatings(); }
+    catch (e) { toast.error((e as Error).message); }
+  };
+  const publishSignal = async () => {
+    if (!sigForm.subject_gstin.trim() && !sigForm.subject_name.trim()) return toast.error("Enter the counterparty GSTIN or name");
+    try { await api.post("/api/counterparty/network/signal", sigForm); toast.success("Signal published to the network"); setSigForm({ subject_gstin: "", subject_name: "", signal_type: "trade_reference", detail: "" }); loadSignals(); }
+    catch (e) { toast.error((e as Error).message); }
+  };
+  const withdrawSignal = async (id: string) => { try { await api.delete(`/api/counterparty/network/signal/${id}`); loadSignals(); } catch (e) { toast.error((e as Error).message); } };
+  const doLookup = async () => {
+    if (!lookupGstin.trim()) return toast.error("Enter a GSTIN");
+    try { setNetResult(await api.get(`/api/counterparty/network/lookup?gstin=${encodeURIComponent(lookupGstin.trim().toUpperCase())}`)); }
     catch (e) { toast.error((e as Error).message); }
   };
 
@@ -3273,6 +3290,44 @@ function NetworkIntelligence() {
                 <td data-label="Avg" className="py-1.5 font-semibold text-amber-400">{r.avg_rating != null ? `${r.avg_rating.toFixed(1)}★` : "—"} <span className="text-[var(--color-muted)] font-normal">({r.n})</span></td>
                 <td data-label="Payment" className="py-1.5">{r.avg_payment != null ? `${Number(r.avg_payment).toFixed(1)}★` : "—"}</td>
                 <td data-label="Quality" className="py-1.5">{r.avg_quality != null ? `${Number(r.avg_quality).toFixed(1)}★` : "—"}</td>
+              </tr>
+            ))}
+          </tbody></table>
+        )}
+      </div>
+
+      {/* Cross-tenant trade-reference / default-flag network (#163/#164) */}
+      <div className={`${CARD} p-4`}>
+        <p className="text-sm font-semibold mb-1 flex items-center gap-2"><Network size={14} className="text-[var(--color-primary)]" /> Trade-reference network</p>
+        <p className="text-[11px] text-[var(--color-muted)] mb-3">Consent-based. Lookups return aggregate counts only — contributor identities are never disclosed.</p>
+        {/* Lookup */}
+        <div className="flex flex-wrap gap-2 items-end mb-3">
+          <input value={lookupGstin} onChange={(e) => setLookupGstin(e.target.value.toUpperCase())} placeholder="Look up a counterparty GSTIN" className={INP + " w-auto"} />
+          <button onClick={doLookup} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-semibold">Check reputation</button>
+        </div>
+        {netResult && (
+          <div className={`mb-3 text-xs rounded-lg p-3 ${netResult.signal === "caution" ? "bg-red-950/20 text-red-300" : netResult.signal === "positive" ? "bg-emerald-950/20 text-emerald-300" : "bg-[var(--color-bg)] text-[var(--color-muted)]"}`}>
+            <b>{netResult.subject}</b> — {netResult.trade_references} trade reference(s), {netResult.default_flags} default flag(s), {netResult.disputes} dispute(s) from {netResult.reporters} reporter(s). <span className="uppercase font-semibold">{String(netResult.signal).replace("_", " ")}</span>
+          </div>
+        )}
+        {/* Publish */}
+        {!isReadOnly && (
+          <div className="flex flex-wrap gap-2 items-end border-t border-[var(--color-border)] pt-3">
+            <input value={sigForm.subject_gstin} onChange={(e) => setSigForm({ ...sigForm, subject_gstin: e.target.value.toUpperCase() })} placeholder="Subject GSTIN" className={INP + " w-auto"} />
+            <input value={sigForm.subject_name} onChange={(e) => setSigForm({ ...sigForm, subject_name: e.target.value })} placeholder="or name" className={INP + " w-auto"} />
+            <select value={sigForm.signal_type} onChange={(e) => setSigForm({ ...sigForm, signal_type: e.target.value })} className={INP + " w-auto"}><option value="trade_reference">Trade reference (positive)</option><option value="default_flag">Default flag</option><option value="dispute">Dispute</option></select>
+            <input value={sigForm.detail} onChange={(e) => setSigForm({ ...sigForm, detail: e.target.value })} placeholder="Detail (private)" className={INP + " w-auto"} />
+            <button onClick={publishSignal} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-semibold">Publish</button>
+          </div>
+        )}
+        {mySignals.length > 0 && (
+          <table className="w-full text-sm rcard mt-3"><tbody>
+            {mySignals.map((s) => (
+              <tr key={s.id} className="border-t border-[var(--color-border)]">
+                <td data-label="Subject" className="py-1.5">{s.subject_name || s.subject_gstin}</td>
+                <td data-label="Type" className="py-1.5 capitalize">{String(s.signal_type).replace("_", " ")}</td>
+                <td data-label="Status" className="py-1.5 capitalize text-[var(--color-muted)]">{s.status}</td>
+                {!isReadOnly && s.status === "active" && <td className="py-1.5"><button onClick={() => withdrawSignal(s.id)} className="text-red-400 text-[11px]">Withdraw</button></td>}
               </tr>
             ))}
           </tbody></table>

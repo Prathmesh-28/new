@@ -3,6 +3,7 @@
 // dedup + payment-behaviour scores) as one surface, adds cached GATED external enrichment, and
 // runs anchor-led invites. counterparty_* tables are FORCE-RLS (migration 0019) → access via q().
 const crypto = require("crypto");
+const { pool } = require("../../db");
 const { q } = require("../../lib/tenantDb");
 const { enrichmentProvider, VALID } = require("./providers");
 const dedupe = require("../../lib/counterpartyDedupe");
@@ -101,10 +102,54 @@ async function listRatings(tenantId, { counterparty } = {}) {
   return rows;
 }
 
+// ── Cross-tenant network (#163/#164): trade references + default flags ──
+// network_signals is NOT RLS'd (cross-tenant by design). WRITES are always scoped to the
+// publisher; the aggregate lookup returns COUNTS ONLY — never publisher identity or raw detail.
+async function publishSignal(tenantId, actorId, { subjectGstin, subjectPan, subjectName, signalType, detail, amount, shared = true } = {}) {
+  if (!["trade_reference", "default_flag", "dispute"].includes(signalType)) throw new CounterpartyError("BAD_INPUT", "invalid signal_type", 400);
+  if (!subjectGstin && !subjectPan && !subjectName) throw new CounterpartyError("BAD_INPUT", "identify the counterparty (GSTIN / PAN / name)", 400);
+  const { rows } = await pool.query(
+    `INSERT INTO network_signals(publisher_tenant_id, subject_gstin, subject_pan, subject_name, signal_type, detail, amount, shared, created_by)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, signal_type, subject_gstin, subject_name, shared, status, created_at`,
+    [tenantId, subjectGstin ? String(subjectGstin).toUpperCase() : null, subjectPan ? String(subjectPan).toUpperCase() : null, subjectName || null, signalType, detail || null, amount != null ? Number(amount) : null, shared !== false, actorId || null]);
+  return rows[0];
+}
+async function withdrawSignal(tenantId, id) {
+  const { rowCount } = await pool.query("UPDATE network_signals SET status='withdrawn' WHERE publisher_tenant_id=$1 AND id=$2", [tenantId, id]); // scoped to publisher
+  if (!rowCount) throw new CounterpartyError("NOT_FOUND", "Signal not found", 404);
+  return { withdrawn: true };
+}
+async function mySignals(tenantId) {
+  const { rows } = await pool.query("SELECT id, subject_gstin, subject_name, signal_type, detail, amount, shared, status, created_at FROM network_signals WHERE publisher_tenant_id=$1 ORDER BY created_at DESC LIMIT 200", [tenantId]);
+  return rows.map((r) => ({ ...r, amount: r.amount == null ? null : Number(r.amount) }));
+}
+// Aggregate network reputation for a counterparty. COUNTS ONLY — no publisher identity/detail.
+async function networkLookup(tenantId, { gstin, pan } = {}) {
+  const g = gstin ? String(gstin).toUpperCase() : null;
+  const p = pan ? String(pan).toUpperCase() : null;
+  if (!g && !p) throw new CounterpartyError("BAD_INPUT", "gstin or pan required", 400);
+  // @tenant-safe: intentional cross-tenant aggregate (network reputation). Returns per-type COUNTS
+  // and a distinct-reporter count only — never publisher_tenant_id, identity, or raw detail.
+  const { rows } = await pool.query(
+    `SELECT signal_type, COUNT(*)::int AS n, COUNT(DISTINCT publisher_tenant_id)::int AS reporters
+       FROM network_signals
+      WHERE status='active' AND shared=true AND ( ($1 IS NOT NULL AND subject_gstin=$1) OR ($2 IS NOT NULL AND subject_pan=$2) )
+      GROUP BY signal_type`, [g, p]);
+  const agg = { trade_reference: 0, default_flag: 0, dispute: 0 };
+  let reporters = 0;
+  for (const r of rows) { agg[r.signal_type] = r.n; reporters = Math.max(reporters, r.reporters); }
+  return {
+    subject: g || p, trade_references: agg.trade_reference, default_flags: agg.default_flag, disputes: agg.dispute, reporters,
+    signal: agg.default_flag > 0 ? "caution" : agg.trade_reference > 0 ? "positive" : "no_data",
+    note: "Aggregate, consent-based network signal — counts only, contributor identities are never disclosed.",
+  };
+}
+
 module.exports = {
   CounterpartyError,
   dedupeGroups, customerScores, riskSummary,
   enrich, listEnrichments, providerStatus,
   inviteCounterparty, listInvites,
   rateCounterparty, ratingsSummary, listRatings,
+  publishSignal, withdrawSignal, mySignals, networkLookup,
 };

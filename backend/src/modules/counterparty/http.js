@@ -44,4 +44,13 @@ router.post("/rate", canWrite, async (req, res) => {
   try { const b = req.body || {}; res.status(201).json(await cp.rateCounterparty(tenantOf(req), req.user.id, { counterparty: b.counterparty, gstin: b.gstin, category: b.category, rating: b.rating, comment: b.comment, txnRef: b.txn_ref })); } catch (e) { fail(res, e); }
 });
 
+// Cross-tenant network (#163/#164): publish/withdraw a signal (scoped to publisher), see mine,
+// and look up a counterparty's consent-based aggregate reputation (counts only).
+router.get("/network/mine", async (req, res) => { try { res.json(await cp.mySignals(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.get("/network/lookup", async (req, res) => { try { res.json(await cp.networkLookup(tenantOf(req), { gstin: req.query.gstin, pan: req.query.pan })); } catch (e) { fail(res, e); } });
+router.post("/network/signal", canWrite, async (req, res) => {
+  try { const b = req.body || {}; res.status(201).json(await cp.publishSignal(tenantOf(req), req.user.id, { subjectGstin: b.subject_gstin, subjectPan: b.subject_pan, subjectName: b.subject_name, signalType: b.signal_type, detail: b.detail, amount: b.amount, shared: b.shared })); } catch (e) { fail(res, e); }
+});
+router.delete("/network/signal/:id", canWrite, async (req, res) => { try { res.json(await cp.withdrawSignal(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+
 module.exports = router;

@@ -52,6 +52,28 @@ CREATE TABLE IF NOT EXISTS counterparty_ratings (
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_counterparty_ratings ON counterparty_ratings(tenant_id, counterparty, created_at DESC);
+
+-- Cross-tenant trade-reference & default-flag NETWORK (#163/#164). Deliberately NOT RLS'd — a
+-- signal published (with consent) by one tenant about a counterparty (by GSTIN/PAN) must be
+-- readable in AGGREGATE by other tenants who trade with that counterparty. Privacy model: writes
+-- are always scoped to the publisher (publisher_tenant_id); reads are counts-only aggregates —
+-- the module NEVER returns publisher identity or raw detail across tenants. 'shared'=consent.
+CREATE TABLE IF NOT EXISTS network_signals (
+  id                  UUID PRIMARY KEY DEFAULT collab_uuidv7(),
+  publisher_tenant_id TEXT NOT NULL,
+  subject_gstin       TEXT,
+  subject_pan         TEXT,
+  subject_name        TEXT,
+  signal_type         TEXT NOT NULL CHECK (signal_type IN ('trade_reference','default_flag','dispute')),
+  detail              TEXT,
+  amount              NUMERIC(15,2),
+  shared              BOOLEAN NOT NULL DEFAULT true,        -- consent to contribute to the network aggregate
+  status              TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','withdrawn')),
+  created_by          UUID,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_network_signals_subject ON network_signals(subject_gstin) WHERE status='active' AND shared=true;
+CREATE INDEX IF NOT EXISTS idx_network_signals_publisher ON network_signals(publisher_tenant_id, created_at DESC);
 `;
 
 module.exports = { COUNTERPARTY_SCHEMA };
