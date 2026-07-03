@@ -31,7 +31,7 @@ export default function EmbeddedFinancing({ presetInvoiceId }: { presetInvoiceId
   const [kind, setKind] = useState<"invoice_finance" | "working_capital">("invoice_finance");
   const [invoiceAmt, setInvoiceAmt] = useState(""); const [principal, setPrincipal] = useState("");
   const [financeable, setFinanceable] = useState<FinInvoice[]>([]);
-  const [selInvoice, setSelInvoice] = useState<string>(""); // "" = custom amount
+  const [selectedIds, setSelectedIds] = useState<string[]>([]); // checked financeable invoices ([] = custom amount)
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,29 +53,44 @@ export default function EmbeddedFinancing({ presetInvoiceId }: { presetInvoiceId
   // applies once its row is present in the financeable list (so the picker can resolve it).
   useEffect(() => {
     if (presetInvoiceId && financeable.some((f) => f.id === presetInvoiceId)) {
-      setKind("invoice_finance"); setSelInvoice(presetInvoiceId);
+      setKind("invoice_finance"); setSelectedIds([presetInvoiceId]);
     }
   }, [presetInvoiceId, financeable]);
 
-  const createOffer = async () => {
+  const toggleInvoice = (id: string) => setSelectedIds((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
+  const submitAdvance = async () => {
     setBusy(true);
     try {
-      // When a real invoice is picked, send only invoice_id — the server derives the face
-      // value and tenor and sets source_invoice_id (self-liquidating). Custom amount is the
-      // fallback when no invoice is selected.
-      const body = kind === "invoice_finance"
-        ? (selInvoice
-            ? { kind, invoice_id: selInvoice, apr: 24 }
-            : { kind, invoice_amount: parseFloat(invoiceAmt) || 0, apr: 24, tenure_days: 60 })
-        : { kind, principal: parseFloat(principal) || 0, apr: 28, tenure_months: 12 };
-      await api.post("/api/lending/offers", body);
-      toast.success("Offer generated - review the Key Fact Statement");
-      setInvoiceAmt(""); setPrincipal(""); setSelInvoice(""); await load();
+      if (kind === "invoice_finance" && selectedIds.length > 0) {
+        // Bulk: one self-liquidating advance per selected invoice. Server derives each face
+        // value/tenor and sets source_invoice_id; a duplicate/paid invoice lands in failed[].
+        const r = await api.post<{ created: unknown[]; failed: unknown[] }>("/api/lending/offers/bulk", { invoice_ids: selectedIds, apr: 24 });
+        const c = r?.created?.length || 0, f = r?.failed?.length || 0;
+        if (c) toast.success(`${c} advance offer${c !== 1 ? "s" : ""} generated${f ? ` · ${f} skipped` : ""} - review below`);
+        else toast.error(f ? "Those invoices already have live advances" : "Couldn't generate offers");
+        setSelectedIds([]);
+      } else {
+        const body = kind === "invoice_finance"
+          ? { kind, invoice_amount: parseFloat(invoiceAmt) || 0, apr: 24, tenure_days: 60 }
+          : { kind, principal: parseFloat(principal) || 0, apr: 28, tenure_months: 12 };
+        await api.post("/api/lending/offers", body);
+        toast.success("Offer generated - review the Key Fact Statement");
+        setInvoiceAmt(""); setPrincipal("");
+      }
+      await load();
     } catch (e) { toast.error((e as { message?: string })?.message || "Couldn't generate an offer"); }
     finally { setBusy(false); }
   };
 
-  const selectedInv = financeable.find((f) => f.id === selInvoice);
+  const acceptAll = async () => {
+    const ids = offers.filter((o) => o.status === "offered").map((o) => o.id);
+    if (ids.length < 2) return;
+    await act(() => api.post("/api/lending/offers/accept-bulk", { ids }), `${ids.length} offers accepted`);
+  };
+
+  const selectedInvs = financeable.filter((f) => selectedIds.includes(f.id));
+  const selectedTotal = selectedInvs.reduce((s, f) => s + f.indicative_advance, 0);
   // Deep-linked an invoice that isn't financeable (already has a live advance, or not 'sent'):
   // explain instead of silently showing a blank picker.
   const presetUnresolved = !loading && !!presetInvoiceId && !financeable.some((f) => f.id === presetInvoiceId);
@@ -147,41 +162,53 @@ export default function EmbeddedFinancing({ presetInvoiceId }: { presetInvoiceId
             </button>
           ))}
         </div>
-        {/* Invoice financing: pick a real unpaid invoice → advance is computed from its face
-            value and auto-recovers when the invoice is paid. Falls back to a custom amount. */}
+        {/* Invoice financing: tick one or more real unpaid invoices → one self-liquidating
+            advance per invoice, each computed from its face value and recovered when that
+            invoice is paid. With no invoice ticked, fall back to a custom amount. */}
         {kind === "invoice_finance" && financeable.length > 0 && (
-          <select value={selInvoice} onChange={e => setSelInvoice(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
-            <option value="">Advance a custom amount…</option>
-            {financeable.map(f => (
-              <option key={f.id} value={f.id}>{f.invoice_number} · {f.customer_name} · {formatCurrency(f.total_amount)} → advance {formatCurrency(f.indicative_advance)}</option>
-            ))}
-          </select>
-        )}
-        {kind === "invoice_finance" && selectedInv && (
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 text-xs">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="font-semibold">{selectedInv.invoice_number} · {selectedInv.customer_name}</span>
-              {selectedInv.due_date && <span className="text-[var(--color-muted)]">due {selectedInv.due_date}</span>}
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] divide-y divide-[var(--color-border)]">
+            <div className="flex items-center justify-between px-3 py-2 text-[11px] text-[var(--color-muted)]">
+              <span>Advance your receivables — tick invoices to finance</span>
+              <button onClick={() => setSelectedIds(selectedIds.length === financeable.length ? [] : financeable.map((f) => f.id))} className="hover:text-[var(--color-text)] underline">
+                {selectedIds.length === financeable.length ? "Clear all" : "Select all"}
+              </button>
             </div>
-            <div className="mt-1.5 flex items-center gap-4 text-[var(--color-muted)]">
-              <span>Invoice <span className="text-[var(--color-text)] font-medium">{formatCurrency(selectedInv.total_amount)}</span></span>
-              <span>Advance ~<span className="text-[var(--color-primary)] font-semibold">{formatCurrency(selectedInv.indicative_advance)}</span></span>
+            <div className="max-h-56 overflow-y-auto">
+              {financeable.map((f) => (
+                <label key={f.id} className="flex items-center gap-2.5 px-3 py-2 text-xs cursor-pointer hover:bg-[var(--color-surface)]">
+                  <input type="checkbox" checked={selectedIds.includes(f.id)} onChange={() => toggleInvoice(f.id)} className="accent-[var(--color-primary)]" />
+                  <span className="flex-1 min-w-0 truncate"><span className="font-semibold">{f.invoice_number}</span> · {f.customer_name}{f.due_date ? ` · due ${f.due_date}` : ""}</span>
+                  <span className="text-[var(--color-muted)] shrink-0">{formatCurrency(f.total_amount)} → <span className="text-[var(--color-primary)] font-semibold">{formatCurrency(f.indicative_advance)}</span></span>
+                </label>
+              ))}
             </div>
-            <p className="mt-1.5 text-[11px] text-[var(--color-muted)]">↩ Auto-recovers when this invoice is marked paid.</p>
+            {selectedIds.length > 0 && (
+              <div className="px-3 py-2 flex items-center justify-between text-xs">
+                <span className="text-[var(--color-muted)]">{selectedIds.length} selected · auto-recover when each is paid</span>
+                <span className="font-semibold">Advance ~{formatCurrency(selectedTotal)}</span>
+              </div>
+            )}
           </div>
         )}
         <div className="flex gap-2">
           {kind === "invoice_finance"
-            ? (!selectedInv && <input value={invoiceAmt} onChange={e => setInvoiceAmt(e.target.value)} type="number" placeholder="Invoice amount ₹ (we advance ~80%)" className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" />)
+            ? (selectedIds.length === 0 && <input value={invoiceAmt} onChange={e => setInvoiceAmt(e.target.value)} type="number" placeholder={financeable.length ? "…or advance a custom amount ₹" : "Invoice amount ₹ (we advance ~80%)"} className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" />)
             : <input value={principal} onChange={e => setPrincipal(e.target.value)} type="number" placeholder="Amount needed ₹" className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" />}
-          <button onClick={createOffer} disabled={busy || (kind === "invoice_finance" && !selectedInv && !invoiceAmt)} className="text-xs px-4 py-2 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold disabled:opacity-50 whitespace-nowrap">{busy ? <Loader2 size={13} className="animate-spin inline" /> : selectedInv ? "Advance this invoice" : "Get offer"}</button>
+          <button onClick={submitAdvance} disabled={busy || (kind === "invoice_finance" && selectedIds.length === 0 && !invoiceAmt)} className="text-xs px-4 py-2 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold disabled:opacity-50 whitespace-nowrap">
+            {busy ? <Loader2 size={13} className="animate-spin inline" /> : kind === "invoice_finance" && selectedIds.length > 0 ? `Advance ${selectedIds.length} invoice${selectedIds.length !== 1 ? "s" : ""}` : "Get offer"}
+          </button>
         </div>
       </div>
 
       {/* Offers with KFS */}
       {offers.filter(o => o.status === "offered").length > 0 && (
         <div className="space-y-2">
-          <p className="text-[11px] uppercase tracking-wide text-[var(--color-muted)] flex items-center gap-1.5"><FileText size={12} /> Offers - Key Fact Statement</p>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] uppercase tracking-wide text-[var(--color-muted)] flex items-center gap-1.5"><FileText size={12} /> Offers - Key Fact Statement</p>
+            {offers.filter(o => o.status === "offered").length > 1 && (
+              <button onClick={acceptAll} disabled={busy} className="text-[11px] px-2.5 py-1 rounded-lg border border-[var(--color-primary)]/40 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 disabled:opacity-50 flex items-center gap-1"><Check size={11} /> Accept all</button>
+            )}
+          </div>
           {offers.filter(o => o.status === "offered").map(o => (
             <div key={o.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
               <div className="flex items-center justify-between mb-2">

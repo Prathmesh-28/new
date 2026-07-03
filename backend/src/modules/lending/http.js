@@ -44,6 +44,20 @@ router.post("/offers", canWrite, async (req, res) => {
     res.status(201).json({ offer, rails: rails() });
   } catch (e) { fail(res, e); }
 });
+// Bulk "advance your receivables book": one offer per selected invoice (best-effort).
+router.post("/offers/bulk", canWrite, async (req, res) => {
+  try {
+    const r = await lending.createOffersBulk(tenantOf(req), req.user.id, req.body || {});
+    require("../analytics").track(req.user.tenant_id, req.user.id, { event: "loan_offers_bulk", props: { created: r.created.length, failed: r.failed.length } }).catch(() => {});
+    res.status(201).json({ ...r, rails: rails() });
+  } catch (e) { fail(res, e); }
+});
+router.post("/offers/accept-bulk", canWrite, async (req, res) => {
+  try {
+    const r = await lending.acceptOffersBulk(tenantOf(req), (req.body && req.body.ids) || [], req.user.id);
+    res.json({ ...r, rails: rails() });
+  } catch (e) { fail(res, e); }
+});
 router.post("/offers/:id/accept", canWrite, async (req, res) => {
   try {
     const loan = await lending.acceptOffer(tenantOf(req), req.params.id, req.user.id);

@@ -156,6 +156,38 @@ async function createOffer(tenantId, userId, body = {}) {
   return { ...rows[0], principal: n(rows[0].principal), processing_fee: n(rows[0].processing_fee), apr: n(rows[0].apr), schedule_preview: sched.rows };
 }
 
+// Bulk "advance your receivables book": one action → an independent invoice-finance offer
+// per selected invoice. Each reuses the (verified) single-invoice createOffer, so each loan
+// self-liquidates on its own invoice's payment. Best-effort: a bad/duplicate invoice is
+// reported in `failed` and does not block the rest. De-dupes the input id list.
+async function createOffersBulk(tenantId, userId, { invoice_ids = [], apr, advance_rate } = {}) {
+  const ids = [...new Set((invoice_ids || []).filter(Boolean))];
+  if (!ids.length) throw new LendError("BAD_INPUT", "invoice_ids required", 400);
+  if (ids.length > 100) throw new LendError("BAD_INPUT", "too many invoices (max 100)", 400);
+  const created = [], failed = [];
+  for (const invoice_id of ids) {
+    try {
+      const offer = await createOffer(tenantId, userId, { kind: "invoice_finance", invoice_id, apr, advance_rate });
+      created.push(offer);
+    } catch (e) {
+      failed.push({ invoice_id, error: e.message, code: e.code || "ERROR" });
+    }
+  }
+  return { created, failed };
+}
+
+// Accept several offers in one action (e.g. after a bulk advance). Best-effort per offer.
+async function acceptOffersBulk(tenantId, offerIds = [], actorId) {
+  const ids = [...new Set((offerIds || []).filter(Boolean))];
+  if (!ids.length) throw new LendError("BAD_INPUT", "offer ids required", 400);
+  const accepted = [], failed = [];
+  for (const id of ids) {
+    try { accepted.push(await acceptOffer(tenantId, id, actorId)); }
+    catch (e) { failed.push({ id, error: e.message, code: e.code || "ERROR" }); }
+  }
+  return { accepted, failed };
+}
+
 async function listOffers(tenantId) {
   const { rows } = await q(tenantId,"SELECT * FROM loan_offers WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 100", [tenantId]);
   return rows.map((o) => ({ ...o, principal: n(o.principal), processing_fee: n(o.processing_fee), apr: n(o.apr) }));
@@ -382,7 +414,7 @@ async function postRepayment(tenantId, actorId, loan, principal, interest, repay
 
 module.exports = {
   LendError, eligibility,
-  createOffer, listOffers, getOffer, acceptOffer, declineOffer,
+  createOffer, createOffersBulk, listOffers, getOffer, acceptOffer, acceptOffersBulk, declineOffer,
   getLoan, listLoans, recordRepayment, onInvoicePaid, financeableInvoices,
   amortize, bullet, buildKFS, dpdBucket, // pure helpers exported for tests
   ledgerByName, firstBankLedger, ensureByNature, // GL helpers reused by servicing.js
