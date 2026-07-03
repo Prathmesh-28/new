@@ -118,7 +118,7 @@ function monthBounds(period) {
 async function branchTurnover(tenantId, period) {
   const { from, to } = monthBounds(period || new Date().toISOString().slice(0, 7));
   const { rows } = await pool.query(
-    `SELECT b.id, b.name, b.gstin, COALESCE(SUM(te.taxable_value),0) AS turnover
+    `SELECT b.id, b.name, b.gstin, COALESCE(SUM(te.taxable_value) FILTER (WHERE te.tax_kind IN ('CGST','IGST')),0) AS turnover
        FROM book_branches b
        LEFT JOIN book_vouchers v ON v.branch_id=b.id AND v.tenant_id=b.tenant_id AND v.is_cancelled=false AND v.voucher_date BETWEEN $2 AND $3
        LEFT JOIN book_tax_entries te ON te.voucher_id=v.id AND te.is_input=false

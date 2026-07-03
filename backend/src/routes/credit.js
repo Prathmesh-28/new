@@ -322,7 +322,7 @@ router.get("/lender-api/:tenantId", async (req, res) => {
     tenant_id:          req.params.tenantId,
     score:              result.score,
     approved_amount:    result.approved_amount,
-    recommendation:     result.recommendation,
+    recommendation:     result.recommended_product,
     breakdown:          result.breakdown,
     queried_at:         new Date().toISOString(),
     powered_by:         "Headroom Underwriting Engine v2",

@@ -3209,7 +3209,7 @@ function NetworkIntelligence() {
               <tr key={i} className="border-t border-[var(--color-border)]">
                 <td data-label="Customer" className="py-1.5">{c.name}</td>
                 <td data-label="Grade" className="py-1.5 font-semibold">{c.grade}</td>
-                <td data-label="On-time" className="py-1.5">{c.on_time_rate != null ? `${Math.round(c.on_time_rate)}%` : "—"}</td>
+                <td data-label="On-time" className="py-1.5">{c.on_time_rate != null ? `${Math.round(c.on_time_rate * 100)}%` : "—"}</td>
                 <td data-label="Outstanding" className="py-1.5">{formatCurrency(c.outstanding || 0)}</td>
               </tr>
             ))}

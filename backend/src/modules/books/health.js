@@ -23,7 +23,7 @@ async function booksHealth(tenantId) {
   // 2. Ledger integrity (duplicates + failed balance assertions + non-leaf postings).
   let integ = { duplicates: [], nonLeaf: [], assertions: [] };
   try { integ = await integrity.runChecks(tenantId); } catch { /* best-effort */ }
-  const issues = (integ.duplicates?.length || 0) + (integ.assertions?.length || 0) + (integ.nonLeaf?.length || 0);
+  const issues = (integ.duplicates?.length || 0) + (integ.failedAssertions?.length || 0) + (integ.nonLeafPostings?.length || 0);
   factors.push({ key: "integrity", label: "Ledger integrity", score: clamp(100 - issues * 10), weight: 0.20, detail: issues ? `${issues} issue(s) — duplicates / assertion failures / non-leaf postings` : "No integrity issues" });
 
   // 3. Party master completeness (GSTIN on party ledgers — drives ITC & 43B correctness).

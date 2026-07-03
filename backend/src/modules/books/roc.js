@@ -174,7 +174,7 @@ async function dpt3Prep(tenantId, fy) {
   const DEP_RE = /deposit|unsecured loan|loan from|borrow|debenture|director.*loan|inter.?corporate/i;
   const rows = (bs.liabilities || []).filter((l) => DEP_RE.test(l.name)).map((l) => ({ head: l.name, amount: n(l.amount) }));
   const total = rows.reduce((s, r) => s + r.amount, 0);
-  return { fy: useFy, items: rows, total_outstanding: r2(total), due_date: `${useFy.split("-")[0] + 1}-06-30`, note: "DPT-3: annual return of deposits & exempt receipts (loans from directors/related parties, ICDs, etc.) outstanding as at 31 Mar. Classify each head as deposit vs exempted before filing (due 30 Jun)." };
+  return { fy: useFy, items: rows, total_outstanding: r2(total), due_date: `${Number(useFy.split("-")[0]) + 1}-06-30`, note: "DPT-3: annual return of deposits & exempt receipts (loans from directors/related parties, ICDs, etc.) outstanding as at 31 Mar. Classify each head as deposit vs exempted before filing (due 30 Jun)." };
 }
 
 // #35 — Dividend + Sec 194 TDS: 10% on resident dividend above ₹5,000/shareholder (20% without PAN).

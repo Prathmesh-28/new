@@ -346,7 +346,7 @@ async function form3cd(tenantId, fy, opts = {}) {
   const pl = await reports.profitLoss(tenantId, fy);
   const turnover = Number(pl.totalIncome) || 0;
   const netProfit = Number(pl.netProfit) || 0;
-  const grossProfit = turnover - (Number(pl.totalExpense) || 0) + netProfit; // rough GP proxy; auditor refines
+  const grossProfit = turnover - (Number(pl.totalExpense) || 0); // rough GP proxy; auditor refines
 
   // Clause 21(b) / 40A(3): cash PAYMENT vouchers where a single payment credits the Cash
   // ledger by more than ₹10,000 (₹35,000 for transporters). Ledger-derived flag list.

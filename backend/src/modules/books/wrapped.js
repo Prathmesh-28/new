@@ -59,7 +59,7 @@ async function businessWrapped(tenantId, { fy } = {}) {
 
   // Collection punctuality from the receivables-quality signal (reused).
   let onTimePct = null;
-  try { const q = await require("../../lib/customerScore").receivablesQuality(tenantId); onTimePct = q.on_time_rate != null ? Math.round(q.on_time_rate) : (q.onTimeRate != null ? Math.round(q.onTimeRate) : null); } catch { /* optional */ }
+  try { const q = await require("../../lib/customerScore").receivablesQuality(tenantId); onTimePct = q.weighted_on_time_rate != null ? Math.round(q.weighted_on_time_rate * 100) : null; } catch { /* optional */ } // weighted_on_time_rate is a 0-1 fraction
 
   return {
     fy: useFy,

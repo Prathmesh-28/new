@@ -72,8 +72,13 @@ async function requestPayout(tenantId, {
         amountRupees: amt, account: beneficiary.account, ifsc: beneficiary.ifsc, upi: beneficiary.upi,
         name: beneficiary.name, referenceId: row.id, notes: { tenant_id: tenantId, payout_id: row.id },
       });
+      // Persist a NON-terminal status here even if the rail already settled — q() commits each
+      // statement in its own txn, so writing 'settled' now would trip recordPayoutResult's
+      // already-terminal guard and skip the settlement GL + settled_at. Clamp to 'processing'
+      // and let recordPayoutResult do the settled transition (GL + timestamp) below.
+      const railStatus = res.status === "settled" ? "processing" : res.status;
       await q(tenantId, "UPDATE payout_requests SET status=$2, provider_ref=$3, utr=COALESCE($4,utr), updated_at=now() WHERE tenant_id=$1 AND id=$5",
-        [tenantId, res.status, res.providerRef, res.utr, row.id]);
+        [tenantId, railStatus, res.providerRef, res.utr, row.id]);
       await logEvent(tenantId, row.id, "provider_queued", { provider, detail: { providerRef: res.providerRef, status: res.status } });
       // Some rails settle synchronously (IMPS same-second) — post GL immediately if so.
       if (res.status === "settled") await recordPayoutResult(tenantId, row.id, "settled", { utr: res.utr, actorId, via: "provider_sync" });

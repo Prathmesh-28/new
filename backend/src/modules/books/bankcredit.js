@@ -311,19 +311,20 @@ async function facilityOptimizer(tenantId) {
   const facilities = (await listFacilities(tenantId)).filter((f) => f.status === "active");
   const wc = facilities.filter((f) => ["CC", "OD"].includes(f.facility_type));
   const term = facilities.filter((f) => ["TERM", "WCDL"].includes(f.facility_type));
-  const headroom = wc.reduce((s, f) => s + Math.max(0, n(f.sanctioned_limit) - n(f.utilized)), 0);
+  const totalHeadroom = wc.reduce((s, f) => s + Math.max(0, n(f.sanctioned_limit) - n(f.utilized)), 0);
   const wcRate = wc.length ? wc.reduce((s, f) => s + n(f.interest_rate_pct || 0), 0) / wc.length : 0;
   const suggestions = [];
   let annualSaving = 0;
+  let remaining = totalHeadroom;  // the CC/OD headroom is a SHARED pool — deplete it across term loans
   for (const t of term) {
     const tRate = n(t.interest_rate_pct || 0);
-    if (tRate > wcRate && headroom > 0 && wcRate > 0) {
-      const shift = Math.min(headroom, n(t.utilized));
+    if (tRate > wcRate && remaining > 0 && wcRate > 0) {
+      const shift = Math.min(remaining, n(t.utilized));
       const saving = r2(shift * (tRate - wcRate) / 100);
-      if (saving > 0) { suggestions.push({ from: `${t.lender} ${t.facility_type} @ ${tRate}%`, shift_amount: r2(shift), to_cc_rate_pct: r2(wcRate), annual_saving: saving }); annualSaving += saving; }
+      if (saving > 0) { suggestions.push({ from: `${t.lender} ${t.facility_type} @ ${tRate}%`, shift_amount: r2(shift), to_cc_rate_pct: r2(wcRate), annual_saving: saving }); annualSaving += saving; remaining -= shift; }
     }
   }
-  return { cc_headroom: r2(headroom), avg_cc_rate_pct: r2(wcRate), suggestions, total_annual_saving: r2(annualSaving), note: "Retire dearer term debt with unused CC/OD headroom (subject to end-use rules). Indicative interest saving." };
+  return { cc_headroom: r2(totalHeadroom), avg_cc_rate_pct: r2(wcRate), suggestions, total_annual_saving: r2(annualSaving), note: "Retire dearer term debt with unused CC/OD headroom (subject to end-use rules). Indicative interest saving." };
 }
 
 // #19 — Bank interest reconciliation: booked interest expense vs a bank certificate figure.
