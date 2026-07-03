@@ -277,6 +277,9 @@ async function emitEvent(tenantId, event, payload = {}) {
   if (!tenantId || !event) return { ran: 0 };
   const store = als.getStore();
   if (store && store.inFlow) return { ran: 0, skipped: "in-flow" };
+  // Fan this top-level event out to any registered outbound webhooks (fire-and-forget; a failing
+  // subscriber never blocks the emitter). Lazy require avoids a load-time cycle.
+  require("../../lib/webhookDispatch").dispatch(tenantId, event, payload).catch(() => {});
   const list = await flows.listEventFlows(tenantId, event).catch(() => []);
   let ran = 0;
   for (const f of list) {
