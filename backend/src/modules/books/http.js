@@ -69,6 +69,7 @@ const stampreg = require("./stampregister");
 const insurance = require("./insurance");
 const taxdepth = require("./taxdepth");
 const gstadvanced = require("./gstadvanced");
+const fraudsentinel = require("./fraudsentinel");
 
 // GET /documents/:id/print is opened in a new browser tab (window.open) which can't
 // set an Authorization header - accept the short-lived access token as ?token= for
@@ -1074,6 +1075,9 @@ router.get("/roc/strike-off-risk", async (req, res) => { try { res.json(await ro
 router.get("/roc/dpt3", async (req, res) => { try { res.json(await roc.dpt3Prep(tenantOf(req), req.query.fy)); } catch (e) { fail(res, e); } });
 router.post("/roc/dividend-tds", async (req, res) => { try { const b = req.body || {}; res.json(roc.dividendTds({ totalDividend: b.total_dividend, perShareholderAvg: b.per_shareholder_avg, panAvailable: b.pan_available !== false })); } catch (e) { fail(res, e); } });
 router.post("/roc/board-minutes", canPost, async (req, res) => { try { res.json(roc.boardMinutes(req.body || {})); } catch (e) { fail(res, e); } });
+
+// Fraud Sentinel — read-only forensic scans over the ledger.
+router.get("/fraud-scan", async (req, res) => { try { res.json(await fraudsentinel.scan(tenantOf(req))); } catch (e) { fail(res, e); } });
 
 // ── Stamp / franking / notary / e-stamp register (in-house; scans link to the files vault) ──
 router.get("/stamp-register", async (req, res) => { try { res.json(await stampreg.listStamps(tenantOf(req), { status: req.query.status })); } catch (e) { fail(res, e); } });
