@@ -675,6 +675,88 @@ const BOOKS_SCHEMA = `
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_book_covenant_tests ON book_covenant_tests(covenant_id, as_of DESC);
+
+  -- ── Bank-credit paperwork (CC/OD renewal): drawing power, BG/LC, foreign remittance, 194N ──
+  -- Sanctioned working-capital facilities + the margins that drive the drawing-power calc.
+  CREATE TABLE IF NOT EXISTS book_credit_facilities (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id          TEXT NOT NULL,
+    lender             TEXT,
+    facility_type      TEXT NOT NULL DEFAULT 'CC' CHECK (facility_type IN ('CC','OD','TERM','BG_LIMIT','LC_LIMIT','WCDL')),
+    sanctioned_limit   NUMERIC(15,2) NOT NULL DEFAULT 0,
+    debtors_margin_pct NUMERIC(6,2)  NOT NULL DEFAULT 25,      -- haircut % on eligible book debts
+    stock_margin_pct   NUMERIC(6,2)  NOT NULL DEFAULT 25,      -- haircut % on stock
+    debtors_max_days   INT           NOT NULL DEFAULT 90,      -- book debts older than this are ineligible
+    deduct_creditors   BOOLEAN       NOT NULL DEFAULT true,    -- net sundry creditors out of stock (MPBF style)
+    utilized           NUMERIC(15,2) NOT NULL DEFAULT 0,
+    interest_rate_pct  NUMERIC(6,2),
+    review_date        DATE,
+    status             TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','closed')),
+    notes              TEXT,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_credit_facilities ON book_credit_facilities(tenant_id, status);
+
+  -- Bank guarantees + inland letters of credit: margin held, tenor, expiry (for alerting).
+  CREATE TABLE IF NOT EXISTS book_bank_guarantees (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       TEXT NOT NULL,
+    instrument      TEXT NOT NULL DEFAULT 'BG' CHECK (instrument IN ('BG','LC')),
+    kind            TEXT,                                      -- performance | financial | bid_bond | advance_payment | usance
+    reference_no    TEXT,
+    bank            TEXT,
+    beneficiary     TEXT,
+    amount          NUMERIC(15,2) NOT NULL DEFAULT 0,
+    margin_pct      NUMERIC(6,2)  NOT NULL DEFAULT 0,          -- cash margin held against it
+    commission_pct  NUMERIC(6,2),
+    issued_on       DATE,
+    expires_on      DATE,
+    claim_period_on DATE,                                      -- claim/expiry buffer date
+    status          TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','expired','released','invoked')),
+    notes           TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_bank_guarantees ON book_bank_guarantees(tenant_id, status, expires_on);
+
+  -- Foreign-remittance certificates (Form 15CA/15CB) with a CA sign-off workflow.
+  CREATE TABLE IF NOT EXISTS book_remittances (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id        TEXT NOT NULL,
+    beneficiary      TEXT,
+    country          TEXT,
+    currency         TEXT NOT NULL DEFAULT 'USD',
+    amount_fcy       NUMERIC(15,2) NOT NULL DEFAULT 0,
+    amount_inr       NUMERIC(15,2) NOT NULL DEFAULT 0,
+    purpose_code     TEXT,                                     -- RBI purpose code (e.g. S0301)
+    nature           TEXT,                                     -- royalty | technical_fee | import | dividend | ...
+    taxable          BOOLEAN NOT NULL DEFAULT true,
+    tds_section      TEXT,
+    tds_rate_pct     NUMERIC(6,2),
+    tds_amount       NUMERIC(15,2) NOT NULL DEFAULT 0,
+    part             TEXT NOT NULL DEFAULT 'A' CHECK (part IN ('A','B','C','D')),  -- 15CA part
+    cb_required      BOOLEAN NOT NULL DEFAULT false,           -- 15CB (CA cert) needed?
+    ca_name          TEXT,
+    ca_membership_no TEXT,
+    ca_signed_on     DATE,
+    status           TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','ca_certified','filed','remitted')),
+    ack_no           TEXT,
+    remitted_on      DATE,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_remittances ON book_remittances(tenant_id, status, created_at DESC);
+
+  -- Section 194N: cash-withdrawal ledger to monitor the FY-cumulative TDS threshold.
+  CREATE TABLE IF NOT EXISTS book_cash_withdrawals (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     TEXT NOT NULL,
+    bank          TEXT,
+    account_last4 TEXT,
+    withdrawn_on  DATE NOT NULL,
+    amount        NUMERIC(15,2) NOT NULL DEFAULT 0,
+    is_itr_filer  BOOLEAN NOT NULL DEFAULT true,               -- non-filers face the lower ₹20L threshold
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_cash_withdrawals ON book_cash_withdrawals(tenant_id, withdrawn_on);
 `;
 
 module.exports = { BOOKS_SCHEMA };

@@ -62,6 +62,7 @@ const einvoice = require("./einvoice");
 const ocr = require("./ocr");
 const portal = require("./portal");
 const cc = require("./costcentres");
+const bankcredit = require("./bankcredit");
 
 // GET /documents/:id/print is opened in a new browser tab (window.open) which can't
 // set an Authorization header - accept the short-lived access token as ?token= for
@@ -82,6 +83,7 @@ const tenantOf = (req) => (req.user.role === "super_admin" && req.query.tenant_i
 const fyOf = (req) => (req.query.fy ? String(req.query.fy) : financialYearFor(new Date()));
 const fail = (res, err) => {
   if (err instanceof PostError) return res.status(err.http).json({ error: err.message, code: err.code });
+  if (err && err.http && err.message) return res.status(err.http).json({ error: err.message, code: err.code }); // typed module errors (BankCreditError, …)
   console.error("[books]", err.message);
   return res.status(500).json({ error: "Internal error" });
 };
@@ -999,5 +1001,27 @@ router.post("/expenses/ocr", canPost, async (req, res) => { try { res.json(await
 // Mint a public portal link (the owner shares the returned URL with a customer/vendor).
 router.post("/portal/invoice-link", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.voucherId) return res.status(400).json({ error: "voucherId required" }); const token = portal.signToken({ kind: "invoice", tenant: tenantOf(req), voucherId: b.voucherId }); res.status(201).json({ token, path: `/api/portal/invoice/${token}` }); } catch (e) { fail(res, e); } });
 router.post("/portal/vendor-link", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.vendorLedgerId) return res.status(400).json({ error: "vendorLedgerId required" }); const token = portal.signToken({ kind: "vendor", tenant: tenantOf(req), vendorLedgerId: b.vendorLedgerId }); res.status(201).json({ token, path: `/api/portal/vendor-bill/${token}` }); } catch (e) { fail(res, e); } });
+
+// ── Bank-credit paperwork (CC/OD renewal): drawing power, stock stmt, CMA, BG/LC, 15CA/CB, 194N ──
+router.get("/credit-facilities", async (req, res) => { try { res.json(await bankcredit.listFacilities(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/credit-facilities", canPost, async (req, res) => { try { res.status(201).json(await bankcredit.createFacility(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.patch("/credit-facilities/:id", canPost, async (req, res) => { try { res.json(await bankcredit.updateFacility(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/drawing-power", async (req, res) => { try { res.json(await bankcredit.drawingPower(tenantOf(req), { asOf: req.query.as_of, facilityId: req.query.facility_id })); } catch (e) { fail(res, e); } });
+router.get("/stock-book-debt-statement", async (req, res) => { try { res.json(await bankcredit.stockBookDebtStatement(tenantOf(req), { month: req.query.month })); } catch (e) { fail(res, e); } });
+router.get("/cma-summary", async (req, res) => { try { const years = req.query.years ? String(req.query.years).split(",") : null; res.json(await bankcredit.cmaSummary(tenantOf(req), { years })); } catch (e) { fail(res, e); } });
+
+router.get("/bank-guarantees", async (req, res) => { try { res.json(await bankcredit.listGuarantees(tenantOf(req), { status: req.query.status })); } catch (e) { fail(res, e); } });
+router.get("/bank-guarantees/expiring", async (req, res) => { try { res.json(await bankcredit.expiringGuarantees(tenantOf(req), Number(req.query.within_days) || 90)); } catch (e) { fail(res, e); } });
+router.post("/bank-guarantees", canPost, async (req, res) => { try { res.status(201).json(await bankcredit.createGuarantee(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.patch("/bank-guarantees/:id", canPost, async (req, res) => { try { res.json(await bankcredit.updateGuarantee(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.delete("/bank-guarantees/:id", canPost, async (req, res) => { try { res.json(await bankcredit.removeGuarantee(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+
+router.get("/remittances", async (req, res) => { try { res.json(await bankcredit.listRemittances(tenantOf(req), { status: req.query.status })); } catch (e) { fail(res, e); } });
+router.post("/remittances", canPost, async (req, res) => { try { res.status(201).json(await bankcredit.createRemittance(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/remittances/:id/certify", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await bankcredit.certifyRemittance(tenantOf(req), req.params.id, { caName: b.ca_name, caMembershipNo: b.ca_membership_no, signedOn: b.signed_on })); } catch (e) { fail(res, e); } });
+router.post("/remittances/:id/file", canPost, async (req, res) => { try { res.json(await bankcredit.fileRemittance(tenantOf(req), req.params.id, { ackNo: (req.body || {}).ack_no })); } catch (e) { fail(res, e); } });
+
+router.get("/cash-withdrawals/194n", async (req, res) => { try { res.json(await bankcredit.monitor194N(tenantOf(req), { fy: req.query.fy })); } catch (e) { fail(res, e); } });
+router.post("/cash-withdrawals", canPost, async (req, res) => { try { res.status(201).json(await bankcredit.recordCashWithdrawal(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 
 module.exports = router;

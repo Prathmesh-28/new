@@ -181,6 +181,7 @@ const NAV_CATALOG: NavGroup[] = [
     { to: "/working-capital", label: "Working Capital",    icon: RefreshCcw,      tab: "working-capital" },
     { to: "/credit",          label: "Credit & Loans",     icon: CreditCard,      tab: "credit"          },
     { to: "/lenders",         label: "Loan Marketplace",   icon: Landmark,        tab: "lenders"         },
+    { to: "/bank-credit",     label: "Bank Credit",        icon: Banknote,        tab: "bank-credit"     },
     { to: "/capital",         label: "Fundraise",          icon: Rocket,          tab: "capital"         },
     { to: "/treasury",        label: "Treasury",           icon: Coins,           tab: "treasury"        },
     { to: "/insurance",       label: "Insurance",          icon: Umbrella,        tab: "insurance"       },

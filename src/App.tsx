@@ -84,6 +84,7 @@ const TermSheetPage      = lazy(() => import("@/features/termsheet/TermSheetPage
 const DataPage           = lazy(() => import("@/features/data/DataPage"));
 const PaymentsPage       = lazy(() => import("@/features/payments/PaymentsPage"));
 const PayoutsPage        = lazy(() => import("@/features/payouts/PayoutsPage"));
+const BankCreditPage     = lazy(() => import("@/features/bankcredit/BankCreditPage"));
 const InsurancePage      = lazy(() => import("@/features/insurance/InsurancePage"));
 const TreasuryPage       = lazy(() => import("@/features/treasury/TreasuryPage"));
 const EsgPage            = lazy(() => import("@/features/esg/EsgPage"));
@@ -135,7 +136,7 @@ const GUARDED_TABS = new Set([
   "gst", "payroll", "suppliers", "lenders", "analytics", "cfo-brief", "vendors", "budgets",
   "tax", "health", "working-capital", "debt", "valuation", "compliance", "spend", "whatsapp",
   "scenarios", "collections", "benchmarks", "documents", "statements", "term-sheet", "data",
-  "sales", "payments", "payouts", "insurance", "treasury", "esg", "global",
+  "sales", "payments", "payouts", "insurance", "treasury", "esg", "global", "bank-credit",
   "marketplace", "network", "automation", "copilot", "security", "privacy",
   "banking", "predict", "voice", "field", "tokens", "frontier", "product-analytics",
 ]);
@@ -289,6 +290,7 @@ function AppShell() {
                 <Route path="/sales"         element={<SalesHub />} />
                 <Route path="/payments"      element={<PaymentsPage />} />
                 <Route path="/payouts"       element={<PayoutsPage />} />
+                <Route path="/bank-credit"   element={<BankCreditPage />} />
                 <Route path="/insurance"     element={<InsurancePage />} />
                 <Route path="/treasury"      element={<TreasuryPage />} />
                 <Route path="/esg"           element={<EsgPage />} />
