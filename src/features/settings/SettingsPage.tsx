@@ -467,13 +467,27 @@ function CurrencyLocaleCard() {
 /* ── #176 Document Branding ────────────────────────────────────────────────
    Logo URL, signatory name and a footer line stamped on invoices, statements
    and exported PDFs. */
-type BrandingCfg = { logoUrl: string; signatory: string; footer: string };
-
+// Server-backed brand kit (#184): persists to the tenant profile (/api/company) and previews the
+// generated company seal. PUT replaces all profile fields, so we load the full profile and send it
+// back merged — brand edits never wipe the company identity.
 function DocumentBrandingCard() {
-  const [cfg, setCfg] = useFeatureState<BrandingCfg>("set-document-branding", { logoUrl: "", signatory: "", footer: "" });
-  const set = <K extends keyof BrandingCfg>(k: K, v: BrandingCfg[K]) => setCfg(c => ({ ...c, [k]: v }));
+  const [p, setP] = useState<Record<string, any>>({});
+  const [stamp, setStamp] = useState<string>("");
+  const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(false);
-
+  const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const loadStamp = () => api.get<{ svg: string }>("/api/company/brand/stamp").then(r => setStamp(r.svg)).catch(() => {});
+  useEffect(() => { api.get<Record<string, any>>("/api/company").then(pr => setP(pr || {})).catch(() => {}); loadStamp(); }, []);
+  const set = (k: string, v: string) => setP(prev => ({ ...prev, [k]: v }));
+  const save = async () => {
+    setSaving(true);
+    try {
+      const { seats, updated_at, tenant_id, status, suspend_reason, ...body } = p; // eslint-disable-line @typescript-eslint/no-unused-vars
+      await api.put("/api/company", body);
+      await loadStamp();
+      toast.success("Branding saved");
+    } catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
+  };
   return (
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
       <div className="flex items-center gap-2.5 mb-1">
@@ -481,36 +495,48 @@ function DocumentBrandingCard() {
           <Image size={16} className="text-[var(--color-primary)]" />
         </div>
         <div>
-          <h2 className="text-sm font-semibold">Document Branding</h2>
-          <p className="text-xs text-[var(--color-muted)] mt-0.5">Logo, signatory and footer stamped on invoices, statements and PDF exports.</p>
+          <h2 className="text-sm font-semibold">Document Branding &amp; Seal</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Logo, brand colours, signatory and a generated company seal — for invoices, statements and PDFs.</p>
         </div>
       </div>
 
-      <div className="mt-5 flex flex-col md:flex-row gap-4 items-start">
-        <div className="w-20 h-20 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-bg)] flex items-center justify-center overflow-hidden shrink-0">
-          {cfg.logoUrl && !err
-            ? <img src={cfg.logoUrl} alt="Logo preview" onError={() => setErr(true)} className="w-full h-full object-contain" />
-            : <Image size={20} className="text-[var(--color-muted)]" />}
+      <div className="mt-5 flex flex-col md:flex-row gap-5 items-start">
+        {/* Generated seal preview */}
+        <div className="w-28 shrink-0 text-center">
+          <div className="w-28 h-28 rounded-lg border border-dashed border-[var(--color-border)] bg-white flex items-center justify-center overflow-hidden" dangerouslySetInnerHTML={{ __html: stamp }} />
+          <p className="text-[10px] text-[var(--color-muted)] mt-1">Company seal (auto)</p>
         </div>
         <div className="flex-1 w-full space-y-4">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Logo URL</label>
-            <input value={cfg.logoUrl} onChange={e => { setErr(false); set("logoUrl", e.target.value); }}
-              placeholder="https://…/logo.png"
-              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            <input value={p.logo_url ?? ""} onChange={e => { setErr(false); set("logo_url", e.target.value); }} placeholder="https://…/logo.png" className={INP} />
+            {p.logo_url && !err && <img src={p.logo_url} alt="" onError={() => setErr(true)} className="mt-2 h-10 object-contain" />}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Brand colour</label>
+              <input type="color" value={p.brand_primary || "#1f6feb"} onChange={e => set("brand_primary", e.target.value)} className="w-full h-9 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg" />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Accent colour</label>
+              <input type="color" value={p.brand_accent || "#0d1117"} onChange={e => set("brand_accent", e.target.value)} className="w-full h-9 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg" />
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="text-xs text-[var(--color-muted)] block mb-1">Authorised signatory</label>
-              <input value={cfg.signatory} onChange={e => set("signatory", e.target.value)} placeholder="e.g. Raj Mehta, Director"
-                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+              <input value={p.signatory_name ?? ""} onChange={e => set("signatory_name", e.target.value)} placeholder="e.g. Raj Mehta" className={INP} />
             </div>
             <div>
-              <label className="text-xs text-[var(--color-muted)] block mb-1">Footer line</label>
-              <input value={cfg.footer} onChange={e => set("footer", e.target.value)} placeholder="Reg office · GSTIN · contact"
-                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Designation</label>
+              <input value={p.signatory_designation ?? ""} onChange={e => set("signatory_designation", e.target.value)} placeholder="Director" className={INP} />
             </div>
           </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Letterhead footer line</label>
+            <input value={p.letterhead_footer ?? ""} onChange={e => set("letterhead_footer", e.target.value)} placeholder="Reg office · GSTIN · contact" className={INP} />
+          </div>
+          <button onClick={save} disabled={saving} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold disabled:opacity-50">{saving ? "Saving…" : "Save & regenerate seal"}</button>
         </div>
       </div>
       {err && <p className="text-[10px] text-red-400 mt-2">Couldn't load that image - check the URL is public.</p>}

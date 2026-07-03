@@ -7,8 +7,12 @@ const { writeAudit } = require("../lib/audit");
 // Company / tenant profile - the identity of an SMB beyond its email-derived
 // tenant id: legal name, GSTIN, industry, address, etc. (gap B5).
 
+const { stampSvg, letterheadSvg } = require("../lib/brand");
+
 const FIELDS = ["company_name", "legal_name", "gstin", "pan", "industry", "company_size",
-  "address", "city", "state", "pincode", "phone", "website", "logo_url", "upi_id", "tan"];
+  "address", "city", "state", "pincode", "phone", "website", "logo_url", "upi_id", "tan",
+  // Brand kit (#184): document colours, letterhead lines, signatory (migration 0021)
+  "brand_primary", "brand_accent", "letterhead_header", "letterhead_footer", "signatory_name", "signatory_designation"];
 
 function scopeTenant(req) {
   // super_admin may target any tenant via ?tenant_id / body.tenant_id; others are scoped.
@@ -51,6 +55,24 @@ router.put("/", authenticate, requireOwnerOrAdmin, async (req, res) => {
   );
   writeAudit(req.user.id, "company.update", "tenant", tid, { fields: FIELDS.filter(f => req.body?.[f] != null) });
   res.json(rows[0]);
+});
+
+// Brand-kit generators (#184): a round company seal + a letterhead band, from the profile's brand
+// fields. ?format=svg returns raw SVG (embed as <img src>); default returns JSON { svg }.
+router.get("/brand/stamp", authenticate, async (req, res) => {
+  const p = await loadProfile(scopeTenant(req));
+  const svg = stampSvg({ companyName: p.company_name || "Company", gstin: p.gstin || "", city: p.city || "", primary: p.brand_primary || "#1f6feb" });
+  if (req.query.format === "svg") return res.type("image/svg+xml").send(svg);
+  res.json({ svg });
+});
+router.get("/brand/letterhead", authenticate, async (req, res) => {
+  const p = await loadProfile(scopeTenant(req));
+  const svg = letterheadSvg({
+    companyName: p.company_name || "Company", legalName: p.legal_name || "", address: [p.address, p.city, p.state, p.pincode].filter(Boolean).join(", "),
+    gstin: p.gstin || "", phone: p.phone || "", website: p.website || "", primary: p.brand_primary || "#1f6feb", accent: p.brand_accent || "#0d1117",
+  });
+  if (req.query.format === "svg") return res.type("image/svg+xml").send(svg);
+  res.json({ svg });
 });
 
 module.exports = router;
