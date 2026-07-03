@@ -112,10 +112,12 @@ router.post("/accept/:offerId", authenticate, canWrite, async (req, res) => {
   if (offerRows[0].app_tenant !== req.user.tenant_id) return res.status(403).json({ error: "Forbidden" });
   if (offerRows[0].status !== "active") return res.status(409).json({ error: "Offer no longer active" });
 
-  // Accept offer
-  await pool.query("UPDATE credit_offers SET status='accepted' WHERE id=$1", [req.params.offerId]);
-  await pool.query("UPDATE credit_offers SET status='expired' WHERE application_id=$1 AND id!=$2", [offerRows[0].application_id, req.params.offerId]);
-  await pool.query("UPDATE credit_applications SET status='accepted' WHERE id=$1", [offerRows[0].application_id]);
+  // Accept offer. The tenant is already verified above (app_tenant check); the tenant_id
+  // filters here are defense-in-depth so each write is self-safe (see check-tenant-scope).
+  const t = req.user.tenant_id;
+  await pool.query("UPDATE credit_offers SET status='accepted' WHERE id=$1 AND tenant_id=$2", [req.params.offerId, t]);
+  await pool.query("UPDATE credit_offers SET status='expired' WHERE application_id=$1 AND id!=$2 AND tenant_id=$3", [offerRows[0].application_id, req.params.offerId, t]);
+  await pool.query("UPDATE credit_applications SET status='accepted' WHERE id=$1 AND tenant_id=$2", [offerRows[0].application_id, t]);
 
   // Create active loan
   const { rows: loanRows } = await pool.query(
