@@ -22,6 +22,7 @@ const TABS = [
   { id: "remittances", label: "15CA / 15CB", icon: Globe2 },
   { id: "194n", label: "194N Monitor", icon: Banknote },
   { id: "covenants", label: "Covenants & Consortium", icon: Landmark },
+  { id: "passport", label: "Credit Passport", icon: ShieldCheck },
 ];
 
 export default function BankCreditPage() {
@@ -43,6 +44,7 @@ export default function BankCreditPage() {
       {tab === "remittances" && <Remittances />}
       {tab === "194n" && <Section194N />}
       {tab === "covenants" && <CovenantsConsortium />}
+      {tab === "passport" && <CreditPassport />}
     </div>
   );
 }
@@ -444,6 +446,54 @@ function CovenantsConsortium() {
           <p className="text-sm font-semibold mb-1">Interest-saving opportunity</p>
           <p className="text-xs text-[var(--color-muted)] mb-2">Unused CC headroom {INR(opt.cc_headroom)} could retire dearer term debt — est. saving <b className="text-emerald-400">{INR(opt.total_annual_saving)}/yr</b>.</p>
           {opt.suggestions.map((s, i) => <p key={i} className="text-xs text-[var(--color-muted)]">• {s.from} → shift {INR(s.shift_amount)} · save {INR(s.annual_saving)}/yr</p>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Credit Passport (#90): generate a shareable, verified creditworthiness link for lenders ── */
+function CreditPassport() {
+  const { isReadOnly } = useApp();
+  const [p, setP] = useState<{ token: string; link: string; include_score: boolean; include_financials: boolean; headline: string | null; status: string } | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [form, setForm] = useState({ include_score: true, include_financials: true, headline: "" });
+  const load = useCallback(() => { api.get<any>("/api/credit/passport").then((d) => { setP(d); if (d) setForm({ include_score: d.include_score, include_financials: d.include_financials, headline: d.headline || "" }); setLoaded(true); }).catch(() => setLoaded(true)); }, []);
+  useEffect(() => { load(); }, [load]);
+  const save = async (regenerate = false) => {
+    try { const d = await api.post<any>("/api/credit/passport", { ...form, regenerate }); setP(d); toast.success(regenerate ? "New link generated" : "Passport published"); }
+    catch (e) { toast.error((e as Error).message); }
+  };
+  const revoke = async () => { try { await api.post("/api/credit/passport/revoke", {}); toast.success("Passport revoked"); load(); } catch (e) { toast.error((e as Error).message); } };
+  const fullLink = p ? (p.link.startsWith("http") ? p.link : `${window.location.origin}${p.link}`) : "";
+  const copy = () => { navigator.clipboard.writeText(fullLink).then(() => toast.success("Link copied")); };
+
+  if (!loaded) return <LoadingState rows={3} />;
+  return (
+    <div className="space-y-4">
+      <div className={card}>
+        <p className="text-sm font-semibold mb-1">Shareable Credit Passport</p>
+        <p className="text-xs text-[var(--color-muted)] mb-3">A verified, read-only creditworthiness profile (score, factors, eligible limit) computed from your own books & GST — share the link with a lender instead of emailing statements. Revoke any time.</p>
+        {!isReadOnly && (
+          <div className="space-y-3">
+            <input value={form.headline} onChange={(e) => setForm({ ...form, headline: e.target.value })} placeholder="Headline (optional) — e.g. Seeking a ₹25L working-capital line" className={INP} />
+            <div className="flex gap-4 text-xs">
+              <label className="flex items-center gap-1.5"><input type="checkbox" checked={form.include_score} onChange={(e) => setForm({ ...form, include_score: e.target.checked })} /> Include score & factors</label>
+              <label className="flex items-center gap-1.5"><input type="checkbox" checked={form.include_financials} onChange={(e) => setForm({ ...form, include_financials: e.target.checked })} /> Include top-line financials</label>
+            </div>
+            <button onClick={() => save(false)} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold">{p && p.status === "active" ? "Update passport" : "Publish passport"}</button>
+          </div>
+        )}
+      </div>
+      {p && p.status === "active" && (
+        <div className={card}>
+          <p className="text-xs text-[var(--color-muted)] mb-1">Shareable link</p>
+          <div className="flex flex-wrap gap-2 items-center">
+            <code className="text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 flex-1 min-w-0 truncate">{fullLink}</code>
+            <button onClick={copy} className="text-xs border border-[var(--color-border)] px-3 py-1.5 rounded-lg">Copy</button>
+            <a href={fullLink} target="_blank" rel="noreferrer" className="text-xs border border-[var(--color-border)] px-3 py-1.5 rounded-lg">Preview</a>
+            {!isReadOnly && <><button onClick={() => save(true)} className="text-xs border border-[var(--color-border)] px-3 py-1.5 rounded-lg">New link</button><button onClick={revoke} className="text-xs text-red-400 border border-red-800/40 px-3 py-1.5 rounded-lg">Revoke</button></>}
+          </div>
         </div>
       )}
     </div>

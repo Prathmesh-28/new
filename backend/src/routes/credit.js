@@ -329,4 +329,73 @@ router.get("/lender-api/:tenantId", async (req, res) => {
   });
 });
 
+// ── Credit Passport (#90): a shareable, verified creditworthiness profile for lenders ──
+const crypto = require("crypto");
+// Curate what a lender sees from the underwriting engine + tenant profile — score factors and
+// (opt-in) top-line financials only. Never raw ledger rows.
+async function curatedPassport(tenantId, p) {
+  const { rows: prof } = await pool.query("SELECT company_name, city, state, industry, gstin FROM tenant_profile WHERE tenant_id=$1", [tenantId]).catch(() => ({ rows: [] }));
+  const t = prof[0] || {};
+  const uw = await underwrite(tenantId, pool).catch(() => null);
+  const out = {
+    headline: p.headline || null,
+    business: { name: t.company_name || "Business", city: t.city || null, state: t.state || null, industry: t.industry || null, gstin_verified: !!t.gstin },
+    generated_at: new Date().toISOString(),
+    verified_by: "Headroom Underwriting Engine — computed from the business's own books & GST filings.",
+  };
+  if (uw && p.include_score) {
+    out.score = uw.score; out.grade = uw.grade; out.approved_limit = uw.approved_amount;
+    out.decision = uw.decision?.outcome || uw.decision || null;
+    out.recommended_product = uw.recommended_product || null;
+    out.factors = (uw.factors || []).map((f) => ({ label: f.label, score: f.score }));
+  }
+  if (uw && p.include_financials) {
+    const b = uw.breakdown || {};
+    out.financials = {
+      monthly_revenue: b.monthly_revenue ?? null,
+      annual_turnover: b.monthly_revenue != null ? Math.round(b.monthly_revenue * 12) : null,
+      gst_filings_on_time: b.gst_filings_count ?? null,
+      business_vintage_months: b.age_months ?? null,
+    };
+  }
+  return out;
+}
+
+// Owner: fetch my passport (+ shareable link) or null.
+router.get("/passport", authenticate, async (req, res) => {
+  const { rows } = await pool.query("SELECT * FROM credit_passports WHERE tenant_id=$1", [req.user.tenant_id]);
+  if (!rows[0]) return res.json(null);
+  const base = (process.env.APP_BASE_URL || "").replace(/\/$/, "");
+  res.json({ ...rows[0], link: base ? `${base}/passport/${rows[0].token}` : `/passport/${rows[0].token}` });
+});
+// Owner: create/refresh the passport (upsert; optional token regen). Owner/finance only.
+router.post("/passport", authenticate, canWrite, async (req, res) => {
+  const b = req.body || {};
+  const tid = req.user.tenant_id;
+  const { rows: ex } = await pool.query("SELECT token FROM credit_passports WHERE tenant_id=$1", [tid]);
+  const token = (ex[0] && !b.regenerate) ? ex[0].token : crypto.randomBytes(18).toString("base64url");
+  const { rows } = await pool.query(
+    `INSERT INTO credit_passports(tenant_id, token, include_score, include_financials, headline, status, expires_at, created_by)
+     VALUES($1,$2,$3,$4,$5,'active',$6,$7)
+     ON CONFLICT (tenant_id) DO UPDATE SET token=$2, include_score=$3, include_financials=$4, headline=$5, status='active', expires_at=$6, updated_at=now()
+     RETURNING *`,
+    [tid, token, b.include_score !== false, b.include_financials !== false, b.headline || null, b.expires_at || null, req.user.id]);
+  const base = (process.env.APP_BASE_URL || "").replace(/\/$/, "");
+  res.status(201).json({ ...rows[0], link: base ? `${base}/passport/${rows[0].token}` : `/passport/${rows[0].token}` });
+});
+router.post("/passport/revoke", authenticate, canWrite, async (req, res) => {
+  await pool.query("UPDATE credit_passports SET status='revoked', updated_at=now() WHERE tenant_id=$1", [req.user.tenant_id]);
+  res.json({ revoked: true });
+});
+// PUBLIC (no auth): a lender opens the shared link. Token is the capability; respects revoke/expiry.
+router.get("/passport/public/:token", async (req, res) => {
+  try {
+    const { rows } = await pool.query("SELECT * FROM credit_passports WHERE token=$1", [String(req.params.token)]);
+    const p = rows[0];
+    if (!p || p.status !== "active") return res.status(404).json({ error: "This credit passport link is invalid or has been revoked." });
+    if (p.expires_at && new Date(p.expires_at) < new Date()) return res.status(404).json({ error: "This credit passport link has expired." });
+    res.json(await curatedPassport(p.tenant_id, p));
+  } catch (e) { console.error("[credit-passport]", e.message); res.status(500).json({ error: "Could not load the passport." }); }
+});
+
 module.exports = router;
