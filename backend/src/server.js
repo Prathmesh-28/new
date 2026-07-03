@@ -540,6 +540,10 @@ initDb()
       require("./modules/analytics").runWinback({})
         .then(r => { if (r && r.scanned) console.log(`[winback] nudged ${r.scanned} dormant biz`, r.channels); })
         .catch(err => console.error("[winback]", err.message));
+      // Expiry/renewal + DSC reminders: raise alerts as licenses/DSCs/AMCs/insurance near expiry.
+      require("./lib/reminders").runExpiryReminders()
+        .then(n => { if (n) console.log(`[reminders] raised ${n} expiry/renewal alert(s)`); })
+        .catch(err => console.error("[reminders-expiry]", err.message));
     }, { timezone: "UTC" });
     // Subscriptions: generate due recurring invoices daily at 07:45 IST (02:15 UTC).
     cron.schedule("15 2 * * *", async () => {

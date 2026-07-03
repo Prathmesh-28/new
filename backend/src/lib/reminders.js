@@ -59,4 +59,47 @@ async function runOverdueReminders() {
   return created;
 }
 
-module.exports = { runOverdueReminders };
+// Expiry/renewal reminders (#178/#183): scans book_expiry_items (licenses, DSCs, AMCs,
+// registrations, insurance) and raises an in-app alert as each nears/passes its expiry, within
+// its own reminder window. DSC items ('dsc' kind) get a distinct rule so the UI can style them.
+// Idempotent: at most one alert per item per 7 days. book_expiry_items is a non-RLS book_ table
+// (explicit tenant filter); alerts are written via q(tenantId) like runOverdueReminders.
+async function runExpiryReminders() {
+  const { rows: tenants } = await pool.query("SELECT DISTINCT tenant_id FROM users WHERE tenant_id IS NOT NULL");
+  let created = 0;
+  for (const { tenant_id: tenantId } of tenants) {
+    let due = [];
+    try {
+      ({ rows: due } = await pool.query(`
+        SELECT id, kind, name, identifier, expires_on, reminder_days
+        FROM book_expiry_items
+        WHERE tenant_id = $1 AND status = 'active'
+          AND expires_on <= CURRENT_DATE + ((COALESCE(reminder_days,30))::text || ' days')::interval
+          AND NOT EXISTS (
+            SELECT 1 FROM alerts a
+            WHERE a.tenant_id = $1 AND a.rule_id IN ('expiry.due','dsc.expiring')
+              AND a.meta->>'expiry_id' = id::text AND a.created_at > now() - interval '7 days')
+        ORDER BY expires_on LIMIT 1000`, [tenantId]));
+    } catch (e) { console.error("[reminders] expiry scan failed for tenant", tenantId, e.message); continue; }
+
+    for (const it of due) {
+      const days = Math.ceil((new Date(it.expires_on).getTime() - Date.now()) / 86400000);
+      const severity = days <= 7 ? "high" : "medium";
+      const isDsc = it.kind === "dsc";
+      const when = days < 0 ? `expired ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} ago` : `expires in ${days} day${days === 1 ? "" : "s"}`;
+      try {
+        await q(tenantId,
+          `INSERT INTO alerts (tenant_id, rule_id, severity, title, message, meta) VALUES ($1, $2, $3, $4, $5, $6)`,
+          [tenantId, isDsc ? "dsc.expiring" : "expiry.due", severity,
+            `${isDsc ? "DSC" : (it.kind || "Item")} ${it.name} ${days < 0 ? "expired" : "expiring"}`,
+            `${it.name}${it.identifier ? ` (${it.identifier})` : ""} ${when}. Renew it to stay compliant.`,
+            JSON.stringify({ expiry_id: it.id, kind: it.kind, days_to_expiry: days })]);
+        created++;
+        require("../modules/flows/runner").emitEvent(tenantId, isDsc ? "dsc.expiring" : "expiry.due", { item: it, days_to_expiry: days }).catch(() => {});
+      } catch (e) { console.error("[reminders] expiry alert insert failed for", it.id, e.message); }
+    }
+  }
+  return created;
+}
+
+module.exports = { runOverdueReminders, runExpiryReminders };

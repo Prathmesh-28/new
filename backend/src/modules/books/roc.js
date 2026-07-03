@@ -24,6 +24,20 @@ async function listRegister(tenantId, kind) {
   const { rows } = await pool.query(`SELECT * FROM ${r.table} WHERE tenant_id=$1 ORDER BY ${r.order}`, [tenantId]);
   return rows;
 }
+// #183: mirror a director's DSC validity into book_expiry_items (kind='dsc') so the universal
+// expiry engine + reminder cron cover it. Idempotent per director (linked via notes).
+async function mirrorDscExpiry(tenantId, director) {
+  if (!director) return;
+  const link = `director:${director.id}`;
+  await pool.query("DELETE FROM book_expiry_items WHERE tenant_id=$1 AND kind='dsc' AND notes=$2", [tenantId, link]).catch(() => {});
+  if (director.dsc_expires_on) {
+    await pool.query(
+      `INSERT INTO book_expiry_items(tenant_id, kind, name, identifier, expires_on, reminder_days, status, notes)
+       VALUES($1,'dsc',$2,$3,$4,30,'active',$5)`,
+      [tenantId, `DSC — ${director.name}`, director.din || null, director.dsc_expires_on, link]).catch(() => {});
+  }
+}
+
 async function addRegisterRow(tenantId, actorId, kind, body = {}) {
   const r = reg(kind);
   const cols = r.cols.filter((c) => body[c] !== undefined);
@@ -33,6 +47,7 @@ async function addRegisterRow(tenantId, actorId, kind, body = {}) {
     `INSERT INTO ${r.table}(tenant_id, ${cols.join(", ")}) VALUES($1, ${vals.join(", ")}) RETURNING *`,
     [tenantId, ...cols.map((c) => body[c])]);
   writeAudit(actorId, "roc.register.add", kind, rows[0].id, { table: r.table }).catch(() => {});
+  if (kind === "directors") await mirrorDscExpiry(tenantId, rows[0]);
   return rows[0];
 }
 async function updateRegisterRow(tenantId, actorId, kind, id, body = {}) {
@@ -45,6 +60,7 @@ async function updateRegisterRow(tenantId, actorId, kind, id, body = {}) {
     [tenantId, id, ...cols.map((c) => body[c])]);
   if (!rows[0]) throw new RocError("NOT_FOUND", "Row not found", 404);
   writeAudit(actorId, "roc.register.update", kind, id, { table: r.table }).catch(() => {});
+  if (kind === "directors") await mirrorDscExpiry(tenantId, rows[0]);
   return rows[0];
 }
 async function removeRegisterRow(tenantId, actorId, kind, id) {
