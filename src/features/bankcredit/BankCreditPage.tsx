@@ -21,6 +21,7 @@ const TABS = [
   { id: "bg-lc", label: "BG / LC Register", icon: ShieldCheck },
   { id: "remittances", label: "15CA / 15CB", icon: Globe2 },
   { id: "194n", label: "194N Monitor", icon: Banknote },
+  { id: "covenants", label: "Covenants & Consortium", icon: Landmark },
 ];
 
 export default function BankCreditPage() {
@@ -41,6 +42,7 @@ export default function BankCreditPage() {
       {tab === "bg-lc" && <Guarantees />}
       {tab === "remittances" && <Remittances />}
       {tab === "194n" && <Section194N />}
+      {tab === "covenants" && <CovenantsConsortium />}
     </div>
   );
 }
@@ -374,5 +376,76 @@ function Row({ k, v, bold }: { k: string; v: string; bold?: boolean }) {
       <td className="py-1.5 text-[var(--color-muted)]">{k}</td>
       <td className="py-1.5 text-right text-[var(--color-text)]">{v}</td>
     </tr>
+  );
+}
+
+/* ── Covenant health (#24) + consortium pack (#21) + CC-vs-term optimizer (#20) + interest recon (#19) ── */
+function CovenantsConsortium() {
+  const { data: cov } = useFetch<{ note?: string; ratios: Record<string, number | null>; covenants: Array<{ name: string; metric: string; operator: string; threshold: number; actual: number | null; status: string }>; breaches: any[] }>("/api/books/covenant-health");
+  const { data: cons } = useFetch<{ banks: string[]; facilities: Array<{ lender: string; facility_type: string; sanctioned: number; utilized: number; available: number; rate_pct: number }>; total_sanctioned: number; total_utilized: number; total_available: number; overall_utilization_pct: number; blended_rate_pct: number }>("/api/books/consortium-pack");
+  const { data: opt } = useFetch<{ cc_headroom: number; suggestions: Array<{ from: string; shift_amount: number; annual_saving: number }>; total_annual_saving: number }>("/api/books/facility-optimizer");
+  return (
+    <div className="space-y-4">
+      <div className={card}>
+        <p className="text-sm font-semibold mb-2">Covenant health (auto-computed)</p>
+        {!cov ? <LoadingState rows={3} /> : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              <Kpi label="Current ratio" value={cov.ratios.current_ratio != null ? String(cov.ratios.current_ratio) : "—"} />
+              <Kpi label="Quick ratio" value={cov.ratios.quick_ratio != null ? String(cov.ratios.quick_ratio) : "—"} />
+              <Kpi label="TOL / TNW" value={cov.ratios.tol_tnw != null ? String(cov.ratios.tol_tnw) : "—"} />
+              <Kpi label="Net worth" value={INR(cov.ratios.net_worth ?? 0)} />
+            </div>
+            {cov.covenants.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No covenants recorded (add them under Debt). Ratios above are computed from your books.</p> : (
+              <table className="w-full text-sm rcard"><tbody>
+                {cov.covenants.map((c, i) => (
+                  <tr key={i} className="border-t border-[var(--color-border)]">
+                    <td data-label="Covenant" className="py-1.5">{c.name} <span className="text-[var(--color-muted)]">({c.metric})</span></td>
+                    <td data-label="Threshold" className="py-1.5">{c.operator} {c.threshold}</td>
+                    <td data-label="Actual" className="py-1.5">{c.actual ?? "—"}</td>
+                    <td data-label="Status" className={`py-1.5 font-medium ${c.status === "breached" ? "text-red-400" : c.status === "met" ? "text-emerald-400" : "text-[var(--color-muted)]"}`}>{c.status}</td>
+                  </tr>
+                ))}
+              </tbody></table>
+            )}
+            <p className="text-[11px] text-[var(--color-muted)] mt-2">{(cov as any).note}</p>
+          </>
+        )}
+      </div>
+
+      <div className={card}>
+        <p className="text-sm font-semibold mb-2">Consortium / multiple-banking pack</p>
+        {!cons ? <LoadingState rows={2} /> : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              <Kpi label="Total sanctioned" value={INR(cons.total_sanctioned)} />
+              <Kpi label="Utilized" value={INR(cons.total_utilized)} />
+              <Kpi label="Available" value={INR(cons.total_available)} good={cons.total_available >= 0} />
+              <Kpi label="Blended rate" value={`${cons.blended_rate_pct}%`} />
+            </div>
+            {cons.facilities.length > 0 && (
+              <table className="w-full text-sm rcard"><tbody>
+                {cons.facilities.map((f, i) => (
+                  <tr key={i} className="border-t border-[var(--color-border)]">
+                    <td data-label="Bank" className="py-1.5">{f.lender || "—"} <span className="text-[var(--color-muted)]">({f.facility_type})</span></td>
+                    <td data-label="Sanctioned" className="py-1.5">{INR(f.sanctioned)}</td>
+                    <td data-label="Available" className="py-1.5">{INR(f.available)}</td>
+                    <td data-label="Rate" className="py-1.5">{f.rate_pct}%</td>
+                  </tr>
+                ))}
+              </tbody></table>
+            )}
+          </>
+        )}
+      </div>
+
+      {opt && opt.suggestions.length > 0 && (
+        <div className={card}>
+          <p className="text-sm font-semibold mb-1">Interest-saving opportunity</p>
+          <p className="text-xs text-[var(--color-muted)] mb-2">Unused CC headroom {INR(opt.cc_headroom)} could retire dearer term debt — est. saving <b className="text-emerald-400">{INR(opt.total_annual_saving)}/yr</b>.</p>
+          {opt.suggestions.map((s, i) => <p key={i} className="text-xs text-[var(--color-muted)]">• {s.from} → shift {INR(s.shift_amount)} · save {INR(s.annual_saving)}/yr</p>)}
+        </div>
+      )}
+    </div>
   );
 }

@@ -1022,6 +1022,10 @@ router.patch("/credit-facilities/:id", canPost, async (req, res) => { try { res.
 router.get("/drawing-power", async (req, res) => { try { res.json(await bankcredit.drawingPower(tenantOf(req), { asOf: req.query.as_of, facilityId: req.query.facility_id })); } catch (e) { fail(res, e); } });
 router.get("/stock-book-debt-statement", async (req, res) => { try { res.json(await bankcredit.stockBookDebtStatement(tenantOf(req), { month: req.query.month })); } catch (e) { fail(res, e); } });
 router.get("/cma-summary", async (req, res) => { try { const years = req.query.years ? String(req.query.years).split(",") : null; res.json(await bankcredit.cmaSummary(tenantOf(req), { years })); } catch (e) { fail(res, e); } });
+router.get("/covenant-health", async (req, res) => { try { res.json(await bankcredit.covenantHealth(tenantOf(req), { fy: req.query.fy })); } catch (e) { fail(res, e); } });
+router.get("/consortium-pack", async (req, res) => { try { res.json(await bankcredit.consortiumPack(tenantOf(req), { asOf: req.query.as_of })); } catch (e) { fail(res, e); } });
+router.get("/facility-optimizer", async (req, res) => { try { res.json(await bankcredit.facilityOptimizer(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.get("/interest-recon", async (req, res) => { try { res.json(await bankcredit.interestRecon(tenantOf(req), { fromDate: req.query.from, toDate: req.query.to, certificateAmount: req.query.certificate ? Number(req.query.certificate) : 0, bank: req.query.bank })); } catch (e) { fail(res, e); } });
 
 router.get("/bank-guarantees", async (req, res) => { try { res.json(await bankcredit.listGuarantees(tenantOf(req), { status: req.query.status })); } catch (e) { fail(res, e); } });
 router.get("/bank-guarantees/expiring", async (req, res) => { try { res.json(await bankcredit.expiringGuarantees(tenantOf(req), Number(req.query.within_days) || 90)); } catch (e) { fail(res, e); } });

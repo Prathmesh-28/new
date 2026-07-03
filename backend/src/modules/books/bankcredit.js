@@ -260,6 +260,89 @@ async function monitor194N(tenantId, { fy } = {}) {
   return { fy: b.fy, accounts, total_tds_exposure: r2(accounts.reduce((s, a) => s + a.tds_applicable, 0)) };
 }
 
+// #24 — Covenant health: auto-compute the key ratios from the ledger and test each stored
+// covenant. Current assets/liabilities are classified from the balance sheet by name (standard
+// heuristic); TOL/TNW is exact. Reuses covenants.evaluate for the pass/breach verdict.
+const CA_RE = /debtor|receivable|cash|bank|stock|inventory|advance|prepaid|loans? (and )?advances|deposit/i;
+const CL_RE = /creditor|payable|cash credit|overdraft|\bcc\b|\bod\b|duties|provision|tax payable|gst|tds payable|short.?term/i;
+async function covenantHealth(tenantId, { fy } = {}) {
+  const useFy = fy || (() => { const b = fyBounds(); return b.fy; })();
+  const bs = await reports.balanceSheet(tenantId, useFy);
+  let ca = 0, stock = 0, cl = 0;
+  for (const a of bs.assets || []) { if (CA_RE.test(a.name)) { ca += n(a.amount); if (/stock|inventory/i.test(a.name)) stock += n(a.amount); } }
+  for (const l of bs.liabilities || []) { if (CL_RE.test(l.name)) cl += n(l.amount); }
+  const totalLiab = n(bs.totalLiabilities), netWorth = n(bs.totalEquity);
+  const currentRatio = cl > 0 ? r2(ca / cl) : null;
+  const quickRatio = cl > 0 ? r2((ca - stock) / cl) : null;
+  const tolTnw = netWorth > 0 ? r2(totalLiab / netWorth) : null;
+  const ratios = { current_ratio: currentRatio, quick_ratio: quickRatio, tol_tnw: tolTnw, current_assets: r2(ca), current_liabilities: r2(cl), net_worth: r2(netWorth) };
+  // Test stored covenants against the matching computed ratio.
+  const { evaluate } = require("./covenants");
+  const { rows: covs } = await pool.query("SELECT id, name, lender, metric, operator, threshold FROM book_debt_covenants WHERE tenant_id=$1 AND status='active'", [tenantId]);
+  const metricVal = (m) => { const s = String(m).toLowerCase(); if (/current ratio/.test(s)) return currentRatio; if (/quick|acid/.test(s)) return quickRatio; if (/tol|leverage|tnw|debt.?equity|gearing/.test(s)) return tolTnw; return null; };
+  const covenants = covs.map((c) => { const actual = metricVal(c.metric); const met = actual == null ? null : evaluate(c.operator, actual, n(c.threshold)); return { name: c.name, lender: c.lender, metric: c.metric, operator: c.operator, threshold: n(c.threshold), actual, status: actual == null ? "no_data" : met ? "met" : "breached" }; });
+  return {
+    fy: useFy, ratios, covenants, breaches: covenants.filter((c) => c.status === "breached"),
+    note: "Current ratio & quick ratio are estimated by classifying balance-sheet ledgers by name; TOL/TNW is exact. Covenants are tested against the matching computed ratio.",
+  };
+}
+
+// #21 — Consortium / multiple-banking pack: aggregate every active facility across banks.
+async function consortiumPack(tenantId, { asOf } = {}) {
+  const facilities = (await listFacilities(tenantId)).filter((f) => f.status === "active");
+  const totalSanctioned = facilities.reduce((s, f) => s + n(f.sanctioned_limit), 0);
+  const totalUtilized = facilities.reduce((s, f) => s + n(f.utilized), 0);
+  const weighted = facilities.reduce((s, f) => s + n(f.sanctioned_limit) * n(f.interest_rate_pct || 0), 0);
+  let dp = null;
+  try { dp = await drawingPower(tenantId, { asOf }); } catch { /* optional */ }
+  return {
+    banks: [...new Set(facilities.map((f) => f.lender).filter(Boolean))],
+    facilities: facilities.map((f) => ({ lender: f.lender, facility_type: f.facility_type, sanctioned: n(f.sanctioned_limit), utilized: n(f.utilized), available: r2(n(f.sanctioned_limit) - n(f.utilized)), rate_pct: n(f.interest_rate_pct || 0), review_date: f.review_date })),
+    total_sanctioned: r2(totalSanctioned), total_utilized: r2(totalUtilized), total_available: r2(totalSanctioned - totalUtilized),
+    overall_utilization_pct: totalSanctioned > 0 ? r2((totalUtilized / totalSanctioned) * 100) : 0,
+    blended_rate_pct: totalSanctioned > 0 ? r2(weighted / totalSanctioned) : 0,
+    drawing_power: dp ? dp.drawing_power : null,
+    note: "Consolidated multiple-banking / consortium view across all active facilities. Share with each lender in a consortium arrangement.",
+  };
+}
+
+// #20 — CC-vs-term optimizer: unused (cheaper) CC/OD headroom that could retire (dearer) term debt.
+async function facilityOptimizer(tenantId) {
+  const facilities = (await listFacilities(tenantId)).filter((f) => f.status === "active");
+  const wc = facilities.filter((f) => ["CC", "OD"].includes(f.facility_type));
+  const term = facilities.filter((f) => ["TERM", "WCDL"].includes(f.facility_type));
+  const headroom = wc.reduce((s, f) => s + Math.max(0, n(f.sanctioned_limit) - n(f.utilized)), 0);
+  const wcRate = wc.length ? wc.reduce((s, f) => s + n(f.interest_rate_pct || 0), 0) / wc.length : 0;
+  const suggestions = [];
+  let annualSaving = 0;
+  for (const t of term) {
+    const tRate = n(t.interest_rate_pct || 0);
+    if (tRate > wcRate && headroom > 0 && wcRate > 0) {
+      const shift = Math.min(headroom, n(t.utilized));
+      const saving = r2(shift * (tRate - wcRate) / 100);
+      if (saving > 0) { suggestions.push({ from: `${t.lender} ${t.facility_type} @ ${tRate}%`, shift_amount: r2(shift), to_cc_rate_pct: r2(wcRate), annual_saving: saving }); annualSaving += saving; }
+    }
+  }
+  return { cc_headroom: r2(headroom), avg_cc_rate_pct: r2(wcRate), suggestions, total_annual_saving: r2(annualSaving), note: "Retire dearer term debt with unused CC/OD headroom (subject to end-use rules). Indicative interest saving." };
+}
+
+// #19 — Bank interest reconciliation: booked interest expense vs a bank certificate figure.
+async function interestRecon(tenantId, { fromDate, toDate, certificateAmount = 0, bank } = {}) {
+  const to = toDate || iso(new Date());
+  const from = fromDate || fyBounds(to).start;
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(e.debit - e.credit),0) AS booked
+       FROM book_voucher_entries e
+       JOIN book_vouchers v ON v.id=e.voucher_id AND v.is_cancelled=false
+       JOIN book_ledgers l ON l.id=e.ledger_id
+      WHERE e.tenant_id=$1 AND v.voucher_date BETWEEN $2 AND $3
+        AND (LOWER(l.name) LIKE '%interest%' OR LOWER(l.name) LIKE '%bank charge%')`,
+    [tenantId, from, to]).catch(() => ({ rows: [{ booked: 0 }] }));
+  const booked = r2(n(rows[0].booked));
+  const cert = n(certificateAmount);
+  return { from, to, bank: bank || null, booked_interest: booked, certificate_amount: r2(cert), variance: r2(booked - cert), matched: Math.abs(booked - cert) < 1, note: "Booked interest/bank charges vs the bank's interest certificate. A variance means a missing entry or a charge to query with the bank." };
+}
+
 module.exports = {
   BankCreditError,
   listFacilities, createFacility, updateFacility,
@@ -267,4 +350,5 @@ module.exports = {
   listGuarantees, createGuarantee, updateGuarantee, removeGuarantee, expiringGuarantees,
   listRemittances, createRemittance, certifyRemittance, fileRemittance,
   recordCashWithdrawal, monitor194N,
+  covenantHealth, consortiumPack, facilityOptimizer, interestRecon,
 };
