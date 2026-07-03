@@ -74,8 +74,11 @@ export default function PayoutsPage() {
   if (!rows) return <div className="space-y-6"><Header /><LoadingState rows={6} /></div>;
 
   const anyLiveRail = providers ? Object.entries(providers).some(([k, v]) => k !== "manual" && v.configured) : false;
-  const shown = filter === "all" ? rows : rows.filter((r) => r.status === filter);
-  const pendingCount = rows.filter((r) => ["pending", "queued", "processing"].includes(r.status)).length;
+  // "pending" is a bucket of not-yet-settled states, so the filter must match the same set the
+  // badge counts and the row actions gate on (else the count and the list disagree).
+  const PENDING_STATUSES = ["pending", "queued", "processing"];
+  const shown = filter === "all" ? rows : filter === "pending" ? rows.filter((r) => PENDING_STATUSES.includes(r.status)) : rows.filter((r) => r.status === filter);
+  const pendingCount = rows.filter((r) => PENDING_STATUSES.includes(r.status)).length;
 
   return (
     <div className="space-y-6">
