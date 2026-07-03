@@ -8,6 +8,7 @@ import { format } from "date-fns";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { API_BASE } from "@/lib/apiBase";
 import { ROLE_META, ASSIGNABLE_ROLES, CONFIGURABLE_ROLES, TAB_CATALOG, TAB_GROUPS, roleLabel, roleBadge } from "@/data/roles";
 import type { UserRole } from "@/data/types";
 import { useT } from "@/i18n";
@@ -1813,6 +1814,50 @@ const SETTINGS_SECTIONS: { id: string; label: string }[] = [
   { id: "whatsapp", label: "WhatsApp" },
 ];
 
+// SSO (#188): owner-configured OIDC. Opt-in, off by default; the password login is untouched.
+function SsoCard() {
+  const [cfg, setCfg] = useState<{ enabled: boolean; issuer?: string; client_id?: string; has_secret?: boolean; allowed_domains: string[]; default_role: string; jit_provision: boolean } | null>(null);
+  const [f, setF] = useState({ issuer: "", client_id: "", client_secret: "", allowed_domains: "", default_role: "finance_manager", jit_provision: true, enabled: false });
+  const [saving, setSaving] = useState(false);
+  const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  useEffect(() => { api.get<any>("/api/sso/config").then((c) => { setCfg(c); setF((p) => ({ ...p, issuer: c.issuer || "", client_id: c.client_id || "", allowed_domains: (c.allowed_domains || []).join(", "), default_role: c.default_role || "finance_manager", jit_provision: c.jit_provision !== false, enabled: !!c.enabled })); }).catch(() => {}); }, []);
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put("/api/sso/config", { issuer: f.issuer.trim(), client_id: f.client_id.trim(), client_secret: f.client_secret.trim() || undefined, allowed_domains: f.allowed_domains.split(",").map((d) => d.trim()).filter(Boolean), default_role: f.default_role, jit_provision: f.jit_provision, enabled: f.enabled });
+      toast.success("SSO settings saved"); setF((p) => ({ ...p, client_secret: "" }));
+    } catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
+  };
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)]/15 flex items-center justify-center shrink-0"><Lock size={16} className="text-[var(--color-primary)]" /></div>
+        <div>
+          <h2 className="text-sm font-semibold">Single Sign-On (OIDC)</h2>
+          <p className="text-xs text-[var(--color-muted)] mt-0.5">Let your team sign in via your identity provider. Opt-in — password login stays available.{cfg?.has_secret ? " Secret is set." : ""}</p>
+        </div>
+      </div>
+      <div className="mt-5 space-y-4">
+        <div className="grid md:grid-cols-2 gap-4">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Issuer URL</label><input className={INP} placeholder="https://your-idp.example.com" value={f.issuer} onChange={(e) => setF({ ...f, issuer: e.target.value })} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Client ID</label><input className={INP} value={f.client_id} onChange={(e) => setF({ ...f, client_id: e.target.value })} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Client secret {cfg?.has_secret && <span className="text-[10px]">(leave blank to keep)</span>}</label><input className={INP} type="password" placeholder="••••••••" value={f.client_secret} onChange={(e) => setF({ ...f, client_secret: e.target.value })} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Allowed email domains</label><input className={INP} placeholder="acme.com, acme.in" value={f.allowed_domains} onChange={(e) => setF({ ...f, allowed_domains: e.target.value })} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Default role (new users)</label>
+            <select className={INP} value={f.default_role} onChange={(e) => setF({ ...f, default_role: e.target.value })}>{["finance_manager", "accountant", "sales", "operations_manager", "viewer", "owner"].map((r) => <option key={r} value={r}>{r}</option>)}</select>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-4 text-xs">
+          <label className="flex items-center gap-1.5"><input type="checkbox" checked={f.jit_provision} onChange={(e) => setF({ ...f, jit_provision: e.target.checked })} /> Auto-create users on first SSO login</label>
+          <label className="flex items-center gap-1.5"><input type="checkbox" checked={f.enabled} onChange={(e) => setF({ ...f, enabled: e.target.checked })} /> Enable SSO</label>
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)]">Redirect / callback URL to register with your IdP: <code>{API_BASE}/api/sso/callback</code>. Test with your IdP before enabling.</p>
+        <button onClick={save} disabled={saving} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold disabled:opacity-50">{saving ? "Saving…" : "Save SSO settings"}</button>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const tr = useT();
   const { user }  = useAuth();
@@ -2065,6 +2110,8 @@ export default function SettingsPage() {
 
       {/* #176 Document branding */}
       <div id="branding" className="scroll-mt-24"><DocumentBrandingCard /></div>
+
+      <div id="sso" className="scroll-mt-24"><SsoCard /></div>
 
       {/* #177 Payment reminder cadence */}
       <div id="reminders" className="scroll-mt-24"><ReminderCadenceCard /></div>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSeo } from "@/lib/seo";
+import { API_BASE } from "@/lib/apiBase";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { ArrowLeft, Lock, ShieldCheck, KeyRound } from "lucide-react";
@@ -171,6 +172,16 @@ export default function LoginPage() {
               ) : (mfaRequired ? t("auth.verify") : t("auth.signIn"))}
             </button>
           </form>
+
+          {/* SSO (opt-in per organisation) — resolves your workspace by email domain */}
+          <button type="button"
+            onClick={() => { const e = email.trim(); if (!e.includes("@")) { setError("Enter your work email to sign in with SSO."); return; } window.location.href = `${API_BASE}/api/sso/start?email=${encodeURIComponent(e)}`; }}
+            className="w-full mt-3 border border-[var(--color-border)] text-[var(--color-text)] rounded-lg py-2.5 text-sm font-medium hover:bg-[var(--color-accent)] flex items-center justify-center gap-2">
+            <KeyRound size={14} /> Sign in with SSO
+          </button>
+          {typeof window !== "undefined" && new URLSearchParams(window.location.search).get("sso_error") && (
+            <p className="text-center text-xs text-red-400 mt-2">SSO sign-in didn't complete ({new URLSearchParams(window.location.search).get("sso_error")}). Try again or use your password.</p>
+          )}
 
           <p className="text-center text-xs text-[var(--color-muted)] mt-6">
             {t("auth.noAccount")}{" "}

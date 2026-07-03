@@ -157,6 +157,7 @@ app.use("/api/analytics",          require("./modules/analytics/http")); // Prod
 app.use("/api/payouts",            require("./modules/payouts/http")); // Shared payout rail (lending disbursal / BNPL / EWA / treasury)
 app.use("/webhook/payout",         require("./modules/payouts/http").webhook); // Provider payout settlement webhook (RazorpayX / Setu)
 app.use("/api/counterparty",       require("./modules/counterparty/http")); // Counterparty intelligence: dedup + scores + gated enrichment + anchor invites
+app.use("/api/sso",                require("./routes/sso")); // OIDC single sign-on (opt-in per tenant)
 app.use("/api/developer",          require("./routes/developer")); // Public-API key management (owner)
 app.use("/api/v1",                 require("./routes/publicApi")); // Public REST API v1 (API-key auth)
 app.use("/api/pub",                require("./routes/studiopublic")); // PUBLIC: serve published App Builder apps (sandboxed, token-addressed)
