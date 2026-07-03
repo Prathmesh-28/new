@@ -5,6 +5,7 @@
 // a failing webhook never blocks the emitting operation. Payloads are what the bus already carries.
 const crypto = require("crypto");
 const { pool } = require("../db");
+const { resolveIsPublic } = require("./ssrfGuard");
 
 async function deliver(w, event, body, attempt = 1) {
   const sig = crypto.createHmac("sha256", w.secret).update(body).digest("hex");
@@ -12,12 +13,19 @@ async function deliver(w, event, body, attempt = 1) {
   const timer = setTimeout(() => ctrl.abort(), 10000);
   let code = null, ok = false, err = null;
   try {
-    const r = await fetch(w.url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Headroom-Event": event, "X-Headroom-Signature": `sha256=${sig}` },
-      body, signal: ctrl.signal,
-    });
-    code = r.status; ok = r.ok;
+    // Authoritative SSRF check at delivery time: a public DNS name can resolve to a private IP,
+    // so re-validate every resolved address here (not just the literal check at registration).
+    let host; try { host = new URL(w.url).hostname; } catch { host = ""; }
+    if (!host || !(await resolveIsPublic(host))) { err = "blocked (private/unresolvable host)"; }
+    else {
+      const r = await fetch(w.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Headroom-Event": event, "X-Headroom-Signature": `sha256=${sig}` },
+        body, signal: ctrl.signal,
+        redirect: "manual", // never follow a 3xx to an unvetted (possibly private) host
+      });
+      code = r.status; ok = r.ok; // a 3xx is not ok → treated as a failed delivery, not followed
+    }
   } catch (e) { err = e.name === "AbortError" ? "timeout" : e.message; }
   finally { clearTimeout(timer); }
   await pool.query(

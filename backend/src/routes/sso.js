@@ -13,6 +13,10 @@ const { signAccess, signRefresh } = require("../lib/jwt");
 const sso = require("../lib/sso");
 
 const tenantOf = (req) => (req.user.role === "super_admin" && req.query.tenant_id ? String(req.query.tenant_id) : req.user.tenant_id);
+// Roles a tenant may assign via SSO — MUST exclude super_admin (reserved) so a self-serve owner
+// can't JIT-mint a platform admin. Mirrors ASSIGNABLE_ROLES in routes/users.js.
+const ASSIGNABLE_ROLES = new Set(["owner", "finance_manager", "accountant", "sales", "operations_manager", "viewer", "investor"]);
+const safeRole = (r) => (ASSIGNABLE_ROLES.has(r) ? r : "finance_manager");
 const callbackUri = (req) => `${req.protocol}://${req.get("host")}/api/sso/callback`;
 const frontend = () => (process.env.APP_BASE_URL || "").replace(/\/$/, "");
 const bounce = (res, req, hash) => res.redirect(`${frontend() || ""}${hash}`);
@@ -32,6 +36,14 @@ router.put("/config", authenticate, requireOwnerOrAdmin, async (req, res) => {
       .map((d) => String(d).toLowerCase().trim()).filter(Boolean);
     const bad = domains.find((d) => sso.isPublicDomain(d));
     if (bad) return res.status(400).json({ error: `Can't use a public email domain (${bad}) — SSO domains must be ones your organisation owns.` });
+    // Privilege-escalation guard: default_role must be an assignable role, never super_admin.
+    if (b.default_role && !ASSIGNABLE_ROLES.has(b.default_role)) return res.status(400).json({ error: `default_role must be one of: ${[...ASSIGNABLE_ROLES].join(", ")}.` });
+    // Cross-tenant domain uniqueness: a domain can be claimed by at most one enabled tenant, so an
+    // attacker tenant can't pre-empt a victim's identities. (DNS TXT ownership proof is a follow-up.)
+    if (domains.length) {
+      const { rows: clash } = await pool.query("SELECT tenant_id FROM sso_config WHERE enabled=true AND tenant_id<>$1 AND allowed_domains && $2::text[]", [tenantOf(req), domains]);
+      if (clash[0]) return res.status(409).json({ error: "One of these domains is already claimed by another workspace's SSO." });
+    }
     if (b.enabled && (!b.issuer || !b.client_id || (!b.client_secret && !(await sso.getConfig(tenantOf(req)))?.client_secret)))
       return res.status(400).json({ error: "issuer, client_id and client_secret are required to enable SSO." });
     // Keep the existing secret if the client didn't send a new one.
@@ -41,7 +53,7 @@ router.put("/config", authenticate, requireOwnerOrAdmin, async (req, res) => {
       `INSERT INTO sso_config(tenant_id, issuer, client_id, client_secret, allowed_domains, default_role, jit_provision, enabled, updated_at)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8, now())
        ON CONFLICT (tenant_id) DO UPDATE SET issuer=$2, client_id=$3, client_secret=$4, allowed_domains=$5, default_role=$6, jit_provision=$7, enabled=$8, updated_at=now()`,
-      [tenantOf(req), b.issuer || null, b.client_id || null, secretEnc, domains, b.default_role || "finance_manager", b.jit_provision !== false, !!b.enabled]);
+      [tenantOf(req), b.issuer || null, b.client_id || null, secretEnc, domains, safeRole(b.default_role || "finance_manager"), b.jit_provision !== false, !!b.enabled]);
     res.json({ ok: true });
   } catch (e) { console.error("[sso]", e.message); res.status(500).json({ error: "Internal error" }); }
 });
@@ -71,6 +83,9 @@ router.get("/callback", async (req, res) => {
     const info = await sso.fetchUserinfo(doc, tokens.access_token);
     const email = String(info.email || "").toLowerCase().trim();
     if (!email) return bounce(res, req, "/login?sso_error=no_email");
+    // Identity is keyed on the email claim, so require the IdP to assert it's verified — else an IdP
+    // that lets users self-set an unverified email could enable account takeover.
+    if (info.email_verified !== true && info.email_verified !== "true") return bounce(res, req, "/login?sso_error=email_unverified");
     const domain = email.split("@")[1];
     if (!(cfg.allowed_domains || []).includes(domain)) return bounce(res, req, "/login?sso_error=domain_not_allowed");
 
@@ -84,7 +99,7 @@ router.get("/callback", async (req, res) => {
       const unusable = await bcrypt.hash("sso:" + crypto.randomBytes(24).toString("hex"), 10); // password login impossible for SSO users
       const ins = await pool.query(
         "INSERT INTO users(email, password, role, tenant_id, first_login, full_name) VALUES($1,$2,$3,$4,false,$5) RETURNING *",
-        [email, unusable, cfg.default_role || "finance_manager", st.tenant, info.name || info.given_name || null]);
+        [email, unusable, safeRole(cfg.default_role), st.tenant, info.name || info.given_name || null]); // clamp: never provision super_admin via SSO
       user = ins.rows[0];
       await pool.query("INSERT INTO tenant_memberships(user_id, tenant_id, role, status) VALUES($1,$2,$3,'active') ON CONFLICT (user_id, tenant_id) DO NOTHING", [user.id, st.tenant, user.role]);
     }
