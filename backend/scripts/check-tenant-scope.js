@@ -99,6 +99,18 @@ function classify(sql, table, tenantTables, rlsTables, uniqueCols) {
   return "high";                                      // Razorpay shape
 }
 
+// classify a raw-pool.query INSERT. An INSERT into a tenant-scoped, non-RLS table that omits
+// the tenant_id COLUMN lets the row take the column default (often 'default') → it lands in
+// the wrong tenant. (RLS tables are safe: their WITH CHECK policy rejects a mismatched/absent
+// tenant at the DB.) A positional INSERT (no column list) can't be verified statically.
+function classifyInsert(sql, table, tenantTables, rlsTables) {
+  if (!tenantTables.has(table)) return "safe";
+  if (rlsTables.has(table)) return "safe";
+  const m = sql.match(/INSERT\s+INTO\s+\w+\s*\(([^)]*)\)/i); // column list before VALUES/SELECT
+  if (!m) return "review";                            // positional INSERT … VALUES(…)
+  return /\btenant_id\b/i.test(m[1]) ? "safe" : "high";
+}
+
 // Capture the FIRST argument to a call at openParen (index of "("), joining every string /
 // template-literal piece so concatenated SQL ("UPDATE …" + "WHERE tenant_id=…") is captured
 // whole. Stops at the top-level comma (end of arg 1) or the matching ")".
@@ -137,17 +149,25 @@ function scan(jsFiles, ctx) {
       from = idx + CALL.length;
       const sql = firstArgSql(txt, idx + CALL.length - 1);
       const w = sql.match(WRITE_RE);
-      if (!w) continue;
-      const table = (w[1] || w[2] || "").toLowerCase();
-      if (!ctx.tenantTables.has(table)) continue;
-      const verdict = classify(sql, table, ctx.tenantTables, ctx.rlsTables, ctx.uniqueCols);
+      const ins = w ? null : sql.match(/\bINSERT\s+INTO\s+(\w+)/i);
+      let table, op, verdict;
+      if (w) {
+        table = (w[1] || w[2] || "").toLowerCase();
+        if (!ctx.tenantTables.has(table)) continue;
+        verdict = classify(sql, table, ctx.tenantTables, ctx.rlsTables, ctx.uniqueCols);
+        op = /UPDATE/i.test(w[0]) ? "UPDATE" : "DELETE";
+      } else if (ins) {
+        table = ins[1].toLowerCase();
+        if (!ctx.tenantTables.has(table)) continue;
+        verdict = classifyInsert(sql, table, ctx.tenantTables, ctx.rlsTables);
+        op = "INSERT";
+      } else continue;
       if (verdict === "safe") continue;
       const lineNo = txt.slice(0, idx).split("\n").length;
       const around = lines.slice(Math.max(0, lineNo - 3), lineNo + 1).join("\n"); // @tenant-safe on/above the call
       if (/@tenant-safe\b/.test(around)) { suppressed++; continue; }
       findings.push({
-        file: path.relative(ROOT, file), line: lineNo, table,
-        op: /UPDATE/i.test(w[0]) ? "UPDATE" : "DELETE",
+        file: path.relative(ROOT, file), line: lineNo, table, op,
         severity: verdict, sql: sql.replace(/\s+/g, " ").trim().slice(0, 110),
       });
     }
@@ -173,6 +193,17 @@ function selfTest() {
   pass &= t("UPDATE invoices SET status=$1 WHERE id=$2", "invoices", "review");             // globally-unique PK
   pass &= t("UPDATE invoices SET x=$1", "invoices", "high");                                 // no WHERE at all
   pass &= t("UPDATE loans SET x=$1 WHERE y=$2", "loans", "safe");                            // FORCE-RLS table
+  // INSERT classifier: omitting tenant_id lands the row in the wrong tenant
+  const ti = (sql, table, want) => {
+    const got = classifyInsert(sql, table, tenantTables, rlsTables);
+    const ok = got === want;
+    console.log(`  ${ok ? "ok " : "FAIL"}  want=${want} got=${got}  ${sql}`);
+    return ok;
+  };
+  pass &= ti("INSERT INTO invoices(invoice_number, total_amount) VALUES($1,$2)", "invoices", "high");  // omits tenant_id
+  pass &= ti("INSERT INTO invoices(tenant_id, invoice_number) VALUES($1,$2)", "invoices", "safe");
+  pass &= ti("INSERT INTO invoices VALUES($1,$2,$3)", "invoices", "review");                            // positional
+  pass &= ti("INSERT INTO loans(x) VALUES($1)", "loans", "safe");                                       // FORCE-RLS
   // extractor must join concatenated string literals (the einvoice/ewaybill shape)
   const catSql = firstArgSql('pool.query("UPDATE invoices SET x=$2 " + "WHERE tenant_id=$1 AND id=$3", [a])', 10);
   const catOk = /tenant_id/.test(catSql);
@@ -196,7 +227,7 @@ const review = findings.filter((f) => f.severity === "review");
 console.log(`tenant tables: ${tenantTables.size} | RLS tables: ${rlsTables.size} | scanned: ${jsFiles.length} files | suppressed(@tenant-safe): ${suppressed}`);
 console.log(`findings: ${high.length} high, ${review.length} review\n`);
 const show = (f) => console.log(`  [${f.severity}] ${f.file}:${f.line}  ${f.op} ${f.table}\n      ${f.sql}`);
-if (high.length) { console.log("HIGH — no tenant_id and no globally-unique-column key (the cross-tenant bug shape):"); high.forEach(show); console.log(); }
+if (high.length) { console.log("HIGH — cross-tenant write risk (UPDATE/DELETE with no tenant_id & no unique key, or INSERT omitting tenant_id):"); high.forEach(show); console.log(); }
 if (review.length) {
   console.log(`REVIEW — keyed on a globally-unique column; safe only if a tenant check precedes it (${review.length})` + (process.argv.includes("--all") ? ":" : " — pass --all to list"));
   if (process.argv.includes("--all")) { review.forEach(show); console.log(); }
