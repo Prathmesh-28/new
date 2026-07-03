@@ -256,12 +256,145 @@ async function itrSummary(tenantId, fy, opts = {}) {
   };
 }
 
+// ── (4) Interest u/s 234A / 234B / 234C (precise) ─────────────────────────────
+// Replaces the rough frontend estimate. All three run at 1% per month; the period is
+// counted on a 30-day-month basis with any part of a month treated as a full month
+// (documented approximation — final figures confirmed at filing). Pure; no DB.
+//   234A - late filing: on (assessed tax − advance − TDS), from the return due date to
+//          the actual filing date.
+//   234B - default in advance tax: if advance paid < 90% of assessed tax, on the shortfall,
+//          from 1-Apr of the AY to the filing/assessment date.
+//   234C - deferment of instalments: per-instalment shortfall vs the cumulative target,
+//          with the 12%/36% June/Sep safe-harbour. 3 months each for Jun/Sep/Dec, 1 for Mar.
+const DAY_MS = 86400000;
+function taxMonths(fromISO, toISO) {
+  const d = Math.floor((new Date(toISO).getTime() - new Date(fromISO).getTime()) / DAY_MS);
+  return d <= 0 ? 0 : Math.ceil(d / 30); // month or part of a month (30-day basis)
+}
+const round100Down = (x) => Math.floor(Number(x) / 100) * 100; // interest base is rounded to ₹100
+
+function interest234({
+  ay, assessedTax, tds = 0, advanceTaxPaid = 0, paidCumulative,
+  returnDueDate, returnFiledOn, presumptive = false,
+} = {}) {
+  if (!ay) throw new PostError("BAD_INPUT", "ay required", 400);
+  const fyStartYear = Number(String(ay).slice(0, 4)) - 1;         // AY 2025-26 → FY 2024-25
+  const aprFirst = `${fyStartYear + 1}-04-01`;                    // 1-Apr of the AY
+  const dueDate = returnDueDate || `${fyStartYear + 1}-07-31`;    // default non-audit due date
+  const filedOn = returnFiledOn || new Date().toISOString().slice(0, 10);
+
+  const totalTax = Math.max(0, Number(assessedTax) || 0);
+  const netLiability = Math.max(0, totalTax - (Number(tds) || 0)); // "assessed tax" for 234B/234C
+  const advPaid = Number(advanceTaxPaid) || 0;
+
+  // 234B — advance tax < 90% of net liability.
+  let i234B = 0, b234B = 0, m234B = 0;
+  if (netLiability > 0 && advPaid < 0.9 * netLiability) {
+    b234B = round100Down(netLiability - advPaid);
+    m234B = taxMonths(aprFirst, filedOn);
+    i234B = Math.round(b234B * 0.01 * m234B);
+  }
+
+  // 234C — per-instalment deferment. Cumulative paid by each due date (defaults: only the
+  // Mar figure known = advPaid, earlier = 0 — the conservative case, clearly flagged).
+  const cum = paidCumulative || { jun: 0, sep: 0, dec: 0, mar: advPaid };
+  const schedule = presumptive
+    ? [{ key: "mar", target: 1.0, safe: 1.0, months: 1 }]
+    : [
+        { key: "jun", target: 0.15, safe: 0.12, months: 3 },
+        { key: "sep", target: 0.45, safe: 0.36, months: 3 },
+        { key: "dec", target: 0.75, safe: 0.75, months: 3 },
+        { key: "mar", target: 1.0, safe: 1.0, months: 1 },
+      ];
+  const c234C = [];
+  let i234C = 0;
+  for (const s of schedule) {
+    const paid = Number(cum[s.key]) || 0;
+    const safeAmt = netLiability * s.safe;
+    let interest = 0, shortfall = 0;
+    if (paid < safeAmt) { shortfall = round100Down(netLiability * s.target - paid); interest = Math.round(Math.max(0, shortfall) * 0.01 * s.months); }
+    i234C += interest;
+    c234C.push({ instalment: s.key, target_pct: Math.round(s.target * 100), paid, shortfall: Math.max(0, shortfall), months: s.months, interest });
+  }
+
+  // 234A — late filing.
+  let i234A = 0, m234A = 0, b234A = 0;
+  if (new Date(filedOn) > new Date(dueDate)) {
+    b234A = round100Down(Math.max(0, netLiability - advPaid));
+    m234A = taxMonths(dueDate, filedOn);
+    i234A = Math.round(b234A * 0.01 * m234A);
+  }
+
+  return {
+    assessmentYear: ay,
+    inputs: { assessedTax: totalTax, tds: Number(tds) || 0, advanceTaxPaid: advPaid, netLiability, returnDueDate: dueDate, returnFiledOn: filedOn, presumptive },
+    s234A: { base: b234A, months: m234A, interest: i234A },
+    s234B: { base: b234B, months: m234B, interest: i234B },
+    s234C: { instalments: c234C, interest: i234C },
+    totalInterest: i234A + i234B + i234C,
+    note: "1%/month, part of a month = full (30-day basis). 234C uses cumulative advance paid by each due date; supply paidCumulative {jun,sep,dec,mar} for accuracy. Confirm at filing.",
+  };
+}
+
+// ── (5) Form 3CD prep sheet (tax audit u/s 44AB) — ledger-derived ─────────────
+// Not a filed form: a prep sheet that fills the clauses derivable from the books so the
+// auditor starts from real numbers. Clause 40 ratios (turnover/GP/NP), clause 21(b)/40A(3)
+// cash payments over ₹10,000, and the 43B(h) MSME disallowance are computed here; the rest
+// are left as structured placeholders for the auditor.
+async function form3cd(tenantId, fy, opts = {}) {
+  if (!fy) throw new PostError("BAD_INPUT", "fy required", 400);
+  const pl = await reports.profitLoss(tenantId, fy);
+  const turnover = Number(pl.totalIncome) || 0;
+  const netProfit = Number(pl.netProfit) || 0;
+  const grossProfit = turnover - (Number(pl.totalExpense) || 0) + netProfit; // rough GP proxy; auditor refines
+
+  // Clause 21(b) / 40A(3): cash PAYMENT vouchers where a single payment credits the Cash
+  // ledger by more than ₹10,000 (₹35,000 for transporters). Ledger-derived flag list.
+  const { pool } = require("../../db");
+  const start = `${String(fy).slice(0, 4)}-04-01`, end = `${Number(String(fy).slice(0, 4)) + 1}-03-31`;
+  const { rows: cashPayments } = await pool.query(
+    `SELECT v.id, v.voucher_date, v.narration, SUM(e.credit) AS cash_out
+       FROM book_vouchers v
+       JOIN book_voucher_entries e ON e.voucher_id=v.id AND e.tenant_id=v.tenant_id
+       JOIN book_ledgers l ON l.id=e.ledger_id
+      WHERE v.tenant_id=$1 AND v.voucher_type='PAYMENT' AND v.is_cancelled=false
+        AND v.voucher_date BETWEEN $2 AND $3 AND l.is_bank=false AND LOWER(l.name) LIKE '%cash%'
+      GROUP BY v.id, v.voucher_date, v.narration
+      HAVING SUM(e.credit) > 10000
+      ORDER BY SUM(e.credit) DESC LIMIT 200`,
+    [tenantId, start, end]
+  ).catch(() => ({ rows: [] }));
+
+  let msme43b = null;
+  try { msme43b = await require("./msme").msme43b(tenantId, { asOf: end }); } catch { /* optional */ }
+
+  return {
+    financialYear: fy, assessmentYear: `${Number(String(fy).slice(0, 4)) + 1}-${String((Number(String(fy).slice(0, 4)) + 2) % 100).padStart(2, "0")}`,
+    clause_40_ratios: {
+      turnover, gross_profit: grossProfit, net_profit: netProfit,
+      gp_to_turnover_pct: turnover > 0 ? Math.round((grossProfit / turnover) * 10000) / 100 : 0,
+      np_to_turnover_pct: turnover > 0 ? Math.round((netProfit / turnover) * 10000) / 100 : 0,
+    },
+    clause_21b_40A3_cash_payments: {
+      count: cashPayments.length,
+      total: cashPayments.reduce((s, r) => s + Number(r.cash_out), 0),
+      items: cashPayments.map((r) => ({ date: r.voucher_date, narration: r.narration, amount: Number(r.cash_out) })),
+      note: "Single cash payments over ₹10,000 (₹35,000 for transporters) — potential 40A(3) disallowance; auditor to verify the exception cases.",
+    },
+    clause_22_msme_43bh: msme43b ? { disallowed: msme43b.totals.disallowed, interest: msme43b.totals.interest } : null,
+    placeholders: ["Clause 18 (depreciation)", "Clause 26 (43B statutory dues)", "Clause 31 (269SS/269T loans)", "Clause 34 (TDS/TCS compliance)"],
+    note: "Prep sheet only — clauses derivable from the ledger are filled; the auditor completes the rest and signs.",
+  };
+}
+
 // Re-export the rules-as-data primitives so an inspector route can read the dated
 // parameter tables (and the validation) the income-tax numbers are sourced from.
 module.exports = {
   advanceTaxSchedule,
   computeIncomeTax,
   itrSummary,
+  interest234,
+  form3cd,
   taxParams: taxrules.PARAMS,
   resolveParam: taxrules.resolveParam,
   validateParams: taxrules.validateParams,

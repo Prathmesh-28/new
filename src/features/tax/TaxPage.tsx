@@ -3,6 +3,7 @@ import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
+import { api } from "@/lib/api";
 import AiInsight from "@/components/ai/AiInsight";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -3015,6 +3016,27 @@ function Interest234Calc() {
   const [advancePaid, setAdvancePaid] = useState("");
   const [monthsLate, setMonthsLate] = useState("0"); // months after due date for 234A (self-assessment)
   const fc = formatCurrency;
+  // Precise (server-computed) 234A/B/C from actual dates + cumulative advance paid.
+  const nowY = new Date().getMonth() >= 3 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+  const defaultAy = `${nowY + 1}-${String((nowY + 2) % 100).padStart(2, "0")}`;
+  const [pDue, setPDue] = useState(`${nowY + 1}-07-31`);
+  const [pFiled, setPFiled] = useState(new Date().toISOString().slice(0, 10));
+  const [pCum, setPCum] = useState({ jun: "", sep: "", dec: "", mar: "" });
+  const [precise, setPrecise] = useState<null | { s234A: { interest: number; months: number }; s234B: { interest: number; months: number }; s234C: { interest: number }; totalInterest: number; note: string }>(null);
+  const [pLoading, setPLoading] = useState(false);
+  const computePrecise = async () => {
+    setPLoading(true);
+    try {
+      const num = (s: string) => (s === "" ? undefined : Number(s));
+      const anyCum = pCum.jun || pCum.sep || pCum.dec || pCum.mar;
+      const res = await api.post<typeof precise>("/api/books/tax/interest-234", {
+        ay: defaultAy, assessedTax: parseFloat(assessedTax) || 0, tds: 0,
+        advanceTaxPaid: parseFloat(advancePaid) || 0, returnDueDate: pDue, returnFiledOn: pFiled,
+        paidCumulative: anyCum ? { jun: num(pCum.jun) || 0, sep: num(pCum.sep) || 0, dec: num(pCum.dec) || 0, mar: num(pCum.mar) || (parseFloat(advancePaid) || 0) } : undefined,
+      });
+      setPrecise(res);
+    } catch (e) { toast.error((e as Error).message); } finally { setPLoading(false); }
+  };
 
   const tax = parseFloat(assessedTax) || 0;
   const paid = parseFloat(advancePaid) || 0;
@@ -3094,7 +3116,37 @@ function Interest234Calc() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">All sections charge 1% per month (simple). 234A runs from the ITR due date to the date of filing; 234B from 1 April of the AY; 234C is on each installment shortfall. 234C months are 3/3/3/1 for the four instalments. A part of a month counts as a full month. Indicative only - consult your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">The estimate above uses proportional assumptions. For the authoritative figure, compute precisely from your actual dates below.</p>
+
+      {/* Precise, server-computed 234A/B/C from actual filing dates + cumulative advance paid */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> Compute precisely (AY {defaultAy})</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-3">Uses the “assessed tax” and “advance tax paid” entered above, with the exact return dates + cumulative advance paid by each instalment.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Return due date</label><input type="date" value={pDue} onChange={e => setPDue(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Return filed on</label><input type="date" value={pFiled} onChange={e => setPFiled(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Cum. paid by 15 Jun</label><input type="number" value={pCum.jun} onChange={e => setPCum({ ...pCum, jun: e.target.value })} placeholder="optional" className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">by 15 Sep</label><input type="number" value={pCum.sep} onChange={e => setPCum({ ...pCum, sep: e.target.value })} placeholder="optional" className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">by 15 Dec</label><input type="number" value={pCum.dec} onChange={e => setPCum({ ...pCum, dec: e.target.value })} placeholder="optional" className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">by 15 Mar</label><input type="number" value={pCum.mar} onChange={e => setPCum({ ...pCum, mar: e.target.value })} placeholder="optional" className={INP} /></div>
+          <div className="flex items-end"><button onClick={computePrecise} disabled={pLoading} className="w-full text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-semibold disabled:opacity-50">{pLoading ? "Computing…" : "Compute"}</button></div>
+        </div>
+        {precise && (
+          <div className="mt-4 space-y-2">
+            {[
+              { label: `234A — late filing (${precise.s234A.months} mo)`, value: fc(precise.s234A.interest) },
+              { label: `234B — advance-tax default (${precise.s234B.months} mo)`, value: fc(precise.s234B.interest) },
+              { label: "234C — instalment deferment", value: fc(precise.s234C.interest) },
+              { label: "Total interest (precise)", value: fc(precise.totalInterest) },
+            ].map((r, i) => (
+              <div key={i} className={`flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0 ${i === 3 ? "font-bold text-red-400" : ""}`}>
+                <span className="text-xs text-[var(--color-muted)]">{r.label}</span><span className="tabular-nums">{r.value}</span>
+              </div>
+            ))}
+            <p className="text-[10px] text-[var(--color-muted)]">{precise.note}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

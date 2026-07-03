@@ -1029,4 +1029,8 @@ router.post("/cash-withdrawals", canPost, async (req, res) => { try { res.status
 router.get("/msme/43b", async (req, res) => { try { res.json(await msme.msme43b(tenantOf(req), { asOf: req.query.as_of, bankRate: req.query.bank_rate ? Number(req.query.bank_rate) : undefined })); } catch (e) { fail(res, e); } });
 router.get("/msme/form1", async (req, res) => { try { res.json(await msme.msmeForm1(tenantOf(req), { halfYear: req.query.half_year, bankRate: req.query.bank_rate ? Number(req.query.bank_rate) : undefined })); } catch (e) { fail(res, e); } });
 
+// ── Direct-tax depth: precise 234A/B/C interest + Form 3CD prep sheet ──
+router.post("/tax/interest-234", async (req, res) => { try { res.json(incometax.interest234(req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/tax/form-3cd", async (req, res) => { try { res.json(await incometax.form3cd(tenantOf(req), fyOf(req), {})); } catch (e) { fail(res, e); } });
+
 module.exports = router;
