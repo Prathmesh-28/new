@@ -317,6 +317,45 @@ async function recordRepayment(tenantId, loanId, { amount, method = "manual", re
   return { applied: amt, principal: payPrincipal, interest: payInterest, outstanding: newOutstanding, closed: closing, glPosted: !!voucherId };
 }
 
+// Financing position: what the tenant has raised against receivables + when each advance is
+// expected to clear (its backing invoice's due date). Real data; joins loans (RLS'd via q)
+// to their source invoices (invoices not RLS'd → explicit tenant filter). Powers the
+// "financing position" panel so the SMB can manage the book, not just take advances.
+async function financingPosition(tenantId) {
+  const { rows: loans } = await q(tenantId,
+    `SELECT id, kind, principal, apr, outstanding_principal, status, source_invoice_id,
+            disbursed_amount, due_date, created_at
+       FROM loans WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 200`, [tenantId]);
+  const invIds = [...new Set(loans.filter((l) => l.source_invoice_id).map((l) => l.source_invoice_id))];
+  const invMap = {};
+  if (invIds.length) {
+    const { rows: invs } = await pool.query(
+      "SELECT id, invoice_number, customer_name, total_amount, due_date, status FROM invoices WHERE tenant_id=$1 AND id = ANY($2)",
+      [tenantId, invIds]);
+    for (const iv of invs) invMap[iv.id] = iv;
+  }
+  const advances = loans.map((l) => {
+    const iv = l.source_invoice_id ? invMap[l.source_invoice_id] : null;
+    return {
+      loan_id: l.id, kind: l.kind, apr: n(l.apr), principal: n(l.principal),
+      net_disbursal: n(l.disbursed_amount), fee: r2(n(l.principal) - n(l.disbursed_amount)),
+      outstanding: n(l.outstanding_principal), status: l.status,
+      expected_recovery: (iv && iv.due_date) || l.due_date || null, // when cash is expected to clear
+      source_invoice: iv ? { invoice_number: iv.invoice_number, customer_name: iv.customer_name, total_amount: n(iv.total_amount), due_date: iv.due_date, status: iv.status } : null,
+    };
+  });
+  const active = advances.filter((a) => a.status === "active");
+  return {
+    summary: {
+      active_count: active.length,
+      total_outstanding: r2(active.reduce((s, a) => s + a.outstanding, 0)),
+      total_advanced: r2(active.reduce((s, a) => s + a.net_disbursal, 0)),
+      total_fees: r2(advances.reduce((s, a) => s + a.fee, 0)),
+    },
+    advances,
+  };
+}
+
 // Financeable invoices: issued-and-unpaid invoices (status 'sent') that don't already back
 // a live advance/offer, each with an indicative advance (advance_rate × face, capped at the
 // underwriting limit). Real data on the tenant's own AR — the frontend "advance this invoice"
@@ -415,7 +454,7 @@ async function postRepayment(tenantId, actorId, loan, principal, interest, repay
 module.exports = {
   LendError, eligibility,
   createOffer, createOffersBulk, listOffers, getOffer, acceptOffer, acceptOffersBulk, declineOffer,
-  getLoan, listLoans, recordRepayment, onInvoicePaid, financeableInvoices,
+  getLoan, listLoans, recordRepayment, onInvoicePaid, financeableInvoices, financingPosition,
   amortize, bullet, buildKFS, dpdBucket, // pure helpers exported for tests
   ledgerByName, firstBankLedger, ensureByNature, // GL helpers reused by servicing.js
 };

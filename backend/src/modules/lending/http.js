@@ -34,6 +34,10 @@ router.get("/eligibility", async (req, res) => {
 router.get("/financeable-invoices", async (req, res) => {
   try { res.json(await lending.financeableInvoices(tenantOf(req))); } catch (e) { fail(res, e); }
 });
+// What the tenant has raised against receivables + when each advance is expected to clear.
+router.get("/position", async (req, res) => {
+  try { res.json(await lending.financingPosition(tenantOf(req))); } catch (e) { fail(res, e); }
+});
 router.get("/offers", async (req, res) => {
   try { res.json(await lending.listOffers(tenantOf(req))); } catch (e) { fail(res, e); }
 });

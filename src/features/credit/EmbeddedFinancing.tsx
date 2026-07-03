@@ -15,6 +15,8 @@ interface Loan { id: string; kind: string; principal: number; outstanding_princi
 interface Servicing { active: number; byClass: { standard: number; overdue: number; npa: number }; overdueAmount: number; npaAmount: number; penalAccrued: number; outstanding: number }
 interface Mandate { id: string; loan_id: string; status: string; provider: string; provider_configured: boolean; collected: number; bounced: number }
 interface FinInvoice { id: string; invoice_number: string; customer_name: string; total_amount: number; due_date: string | null; indicative_advance: number }
+interface Advance { loan_id: string; status: string; outstanding: number; net_disbursal: number; fee: number; expected_recovery: string | null; source_invoice: { invoice_number: string; customer_name: string } | null }
+interface Position { summary: { active_count: number; total_outstanding: number; total_advanced: number; total_fees: number }; advances: Advance[] }
 
 // presetInvoiceId (from ?invoice_id= on /credit) preselects an invoice to advance — the
 // "turn THIS invoice into cash" entry point from the invoice/receivables lists.
@@ -24,6 +26,7 @@ export default function EmbeddedFinancing({ presetInvoiceId }: { presetInvoiceId
   const [loans, setLoans] = useState<Loan[]>([]);
   const [svc, setSvc] = useState<Servicing | null>(null);
   const [mandates, setMandates] = useState<Mandate[]>([]);
+  const [position, setPosition] = useState<Position | null>(null);
   const [settling, setSettling] = useState<string | null>(null);
   const [settleAmt, setSettleAmt] = useState("");
   const [loading, setLoading] = useState(true);
@@ -36,15 +39,16 @@ export default function EmbeddedFinancing({ presetInvoiceId }: { presetInvoiceId
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [e, o, l, s, mn, fi] = await Promise.all([
+      const [e, o, l, s, mn, fi, pos] = await Promise.all([
         api.get<Eligibility>("/api/lending/eligibility").catch(() => null),
         api.get<Offer[]>("/api/lending/offers").catch(() => []),
         api.get<Loan[]>("/api/lending/loans").catch(() => []),
         api.get<Servicing>("/api/lending/servicing").catch(() => null),
         api.get<Mandate[]>("/api/lending/mandates").catch(() => []),
         api.get<FinInvoice[]>("/api/lending/financeable-invoices").catch(() => []),
+        api.get<Position>("/api/lending/position").catch(() => null),
       ]);
-      setElig(e); setOffers(o || []); setLoans(l || []); setSvc(s); setMandates(mn || []); setFinanceable(fi || []);
+      setElig(e); setOffers(o || []); setLoans(l || []); setSvc(s); setMandates(mn || []); setFinanceable(fi || []); setPosition(pos);
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -231,10 +235,35 @@ export default function EmbeddedFinancing({ presetInvoiceId }: { presetInvoiceId
         </div>
       )}
 
+      {/* Financing position — what you've raised against receivables + when it clears */}
+      {position && position.summary.active_count > 0 && (
+        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          <p className="text-xs font-semibold mb-3 flex items-center gap-1.5"><Banknote size={13} className="text-[var(--color-primary)]" /> Your financing position</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <KfsCell label="Active advances" v={String(position.summary.active_count)} />
+            <KfsCell label="Outstanding" v={formatCurrency(position.summary.total_outstanding)} />
+            <KfsCell label="Cash advanced" v={formatCurrency(position.summary.total_advanced)} />
+            <KfsCell label="Total fees" v={formatCurrency(position.summary.total_fees)} />
+          </div>
+          {position.advances.some((a) => a.status === "active" && a.expected_recovery) && (
+            <div className="mt-3 space-y-1">
+              <p className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]">Expected recovery</p>
+              {position.advances.filter((a) => a.status === "active" && a.expected_recovery).sort((a, b) => String(a.expected_recovery).localeCompare(String(b.expected_recovery))).slice(0, 6).map((a) => (
+                <div key={a.loan_id} className="flex items-center justify-between text-[11px] text-[var(--color-muted)]">
+                  <span className="truncate">{a.source_invoice ? `${a.source_invoice.invoice_number} · ${a.source_invoice.customer_name}` : "Working capital"}</span>
+                  <span className="shrink-0">{formatCurrency(a.outstanding)} · by {a.expected_recovery}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Active loans */}
       <div className="space-y-2">
         <p className="text-[11px] uppercase tracking-wide text-[var(--color-muted)] flex items-center gap-1.5"><Banknote size={12} /> Loans</p>
         {loans.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No loans yet - accept an offer above.</p> : loans.map(l => {
+          const adv = (position?.advances || []).find((a) => a.loan_id === l.id);
           const cls = l.asset_class || "standard";
           const clsColor = cls === "npa" ? "bg-red-900/30 text-red-400" : "bg-amber-900/30 text-amber-400";
           return (
@@ -246,6 +275,9 @@ export default function EmbeddedFinancing({ presetInvoiceId }: { presetInvoiceId
                   {l.status === "active" && cls !== "standard" && <span className={`text-[10px] px-2 py-0.5 rounded-full ${clsColor}`}>{cls === "npa" ? "NPA" : "Overdue"}{l.dpd ? ` · ${l.dpd} DPD` : ""}</span>}
                 </p>
                 <p className="text-xs text-[var(--color-muted)]">Outstanding {formatCurrency(l.outstanding_principal)} · {l.status}{l.penal_accrued && l.penal_accrued > 0 ? ` · penal ${formatCurrency(l.penal_accrued)}` : ""}</p>
+                {l.status === "active" && adv?.source_invoice && (
+                  <p className="text-[11px] text-[var(--color-muted)] mt-0.5">↩ recovers from {adv.source_invoice.invoice_number}{adv.expected_recovery ? ` · expected by ${adv.expected_recovery}` : ""}</p>
+                )}
               </div>
               {l.status === "active" && (
                 <div className="flex items-center gap-2">
