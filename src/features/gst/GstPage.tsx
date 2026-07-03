@@ -30,7 +30,7 @@ export default function GstPage() {
   const tr = useT();
   const { store } = useApp();
   const firm = store.firm;
-  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp" | "tdsgst" | "einvoice" | "notice" | "gstr3b-prep" | "itc-recon" | "liability-forecast" | "place-supply" | "multi-gstin" | "rate-impact" | "blocked-credit" | "itc-reversal" | "vendor-score" | "drc03" | "gst-advances" | "zero-rated" | "health-score" | "interest-fee" | "threshold" | "gstr1-3b" | "rule180" | "einv30" | "inverted" | "cdn-register" | "cess" | "gstr9c" | "jobwork" | "isd" | "branch-transfer" | "pmt09" | "cross-charge" | "free-samples" | "pure-agent" | "audit-ready">("calculator");
+  const [tab, setTab]             = useState<"calculator" | "ledger" | "returns" | "calendar" | "verify" | "match" | "gstr1" | "eway" | "hsn" | "rcm" | "itc" | "gstr9" | "lut" | "refund" | "composition" | "qrmp" | "tdsgst" | "einvoice" | "notice" | "gstr3b-prep" | "itc-recon" | "liability-forecast" | "place-supply" | "multi-gstin" | "rate-impact" | "blocked-credit" | "itc-reversal" | "vendor-score" | "drc03" | "gst-advances" | "zero-rated" | "health-score" | "interest-fee" | "threshold" | "gstr1-3b" | "rule180" | "einv30" | "inverted" | "cdn-register" | "cess" | "gstr9c" | "jobwork" | "isd" | "branch-transfer" | "pmt09" | "cross-charge" | "free-samples" | "pure-agent" | "audit-ready" | "gst-depth">("calculator");
   const [gstin, setGstin]         = useState("");
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: string; gstin?: string; state?: string; stateCode?: string; pan?: string; source?: string; message?: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -251,7 +251,7 @@ export default function GstPage() {
       )}
 
       {/* Tabs */}
-      <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as typeof tab)} tabs={([["calculator", tr("gst.tab.calculator"), Calculator], ["ledger", tr("gst.tab.ledger"), BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `${tr("gst.tab.returns")} (${returns.length})`, FileText], ["match", tr("gst.tab.match"), GitCompare], ["calendar", tr("gst.tab.calendar"), Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2], ["notice", "Notice Reply", AlertTriangle], ["gstr3b-prep", "3B Auto-Prep", FileText], ["itc-recon", "2B vs Books", GitCompare], ["liability-forecast", "Liability Forecast", TrendingUp], ["place-supply", "Place of Supply", MapPin], ["multi-gstin", "Multi-GSTIN", Building2], ["rate-impact", "Rate-Change", Percent], ["blocked-credit", "Blocked Credit", Ban], ["itc-reversal", "ITC Reversal", Divide], ["vendor-score", "Vendor Score", Star], ["drc03", "DRC-03", Banknote], ["gst-advances", "GST on Advances", Wallet], ["zero-rated", "Export/SEZ Kit", Globe], ["health-score", "Health Score", Activity], ["interest-fee", "Interest & Late Fee", Timer], ["threshold", "Registration Advisor", Gauge], ["gstr1-3b", "GSTR-1 vs 3B", Scale], ["rule180", "180-Day Reversal", RotateCcw], ["einv30", "e-Invoice 30-Day", CalendarClock], ["inverted", "Inverted-Duty Refund", Coins], ["cdn-register", "Credit/Debit Notes", FileMinus], ["cess", "Cess Calculator", Flame], ["gstr9c", "GSTR-9C Recon", ClipboardCheck], ["jobwork", "Job-Work ITC-04", Hammer], ["isd", "ISD Distributor", Network], ["branch-transfer", "Branch Transfer", ArrowLeftRight], ["pmt09", "PMT-09 Transfer", Split], ["cross-charge", "Cross-Charge", Users], ["free-samples", "Free Samples/Gifts", Gift], ["pure-agent", "Pure Agent", UserCheck], ["audit-ready", "Audit-Readiness", ListChecks]] as const).map(([id, label, icon]) => ({ id, label, icon }))} />
+      <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as typeof tab)} tabs={([["calculator", tr("gst.tab.calculator"), Calculator], ["ledger", tr("gst.tab.ledger"), BookOpen], ["gstr1", "GSTR-1", Receipt], ["returns", `${tr("gst.tab.returns")} (${returns.length})`, FileText], ["match", tr("gst.tab.match"), GitCompare], ["calendar", tr("gst.tab.calendar"), Calendar], ["eway", "E-Way Bill", Truck], ["rcm", "RCM", AlertTriangle], ["hsn", "HSN Lookup", Search], ["verify", "Verify GSTIN", ShieldCheck], ["itc", "ITC Optimizer", CheckCircle2], ["gstr9", "GSTR-9", FileText], ["lut", "LUT Tracker", ShieldCheck], ["refund", "Refund Tracker", Download], ["composition", "Composition", ShieldCheck], ["qrmp", "QRMP", Calendar], ["tdsgst", "TDS/TCS-GST", FileText], ["einvoice", "e-Invoice", CheckCircle2], ["notice", "Notice Reply", AlertTriangle], ["gstr3b-prep", "3B Auto-Prep", FileText], ["itc-recon", "2B vs Books", GitCompare], ["liability-forecast", "Liability Forecast", TrendingUp], ["place-supply", "Place of Supply", MapPin], ["multi-gstin", "Multi-GSTIN", Building2], ["rate-impact", "Rate-Change", Percent], ["blocked-credit", "Blocked Credit", Ban], ["itc-reversal", "ITC Reversal", Divide], ["vendor-score", "Vendor Score", Star], ["drc03", "DRC-03", Banknote], ["gst-advances", "GST on Advances", Wallet], ["zero-rated", "Export/SEZ Kit", Globe], ["health-score", "Health Score", Activity], ["interest-fee", "Interest & Late Fee", Timer], ["threshold", "Registration Advisor", Gauge], ["gstr1-3b", "GSTR-1 vs 3B", Scale], ["rule180", "180-Day Reversal", RotateCcw], ["einv30", "e-Invoice 30-Day", CalendarClock], ["inverted", "Inverted-Duty Refund", Coins], ["cdn-register", "Credit/Debit Notes", FileMinus], ["cess", "Cess Calculator", Flame], ["gstr9c", "GSTR-9C Recon", ClipboardCheck], ["jobwork", "Job-Work ITC-04", Hammer], ["isd", "ISD Distributor", Network], ["branch-transfer", "Branch Transfer", ArrowLeftRight], ["pmt09", "PMT-09 Transfer", Split], ["cross-charge", "Cross-Charge", Users], ["free-samples", "Free Samples/Gifts", Gift], ["pure-agent", "Pure Agent", UserCheck], ["audit-ready", "Audit-Readiness", ListChecks], ["gst-depth", "GST Depth (server)", Gauge]] as const).map(([id, label, icon]) => ({ id, label, icon }))} />
 
       <AiInsight
         collapsed
@@ -1491,6 +1491,7 @@ export default function GstPage() {
       {tab === "free-samples"       && <FreeSamplesItcReversal />}
       {tab === "pure-agent"         && <PureAgentTagger />}
       {tab === "audit-ready"        && <AuditReadinessChecklist />}
+      {tab === "gst-depth"          && <GstDepthServer />}
     </div>
   );
 }
@@ -4480,6 +4481,59 @@ function ImsCockpit({ lines }: { lines: ReconResult[] }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── GST Depth (server-backed /api/books/gst): CMP-08, QRMP, Rule 86B, late-fee, B2C QR ──
+// Ledger-truth compute (over the real book_tax_entries engine), unlike the client-side calculator
+// tabs. Filing of these returns stays GSP-gated — this computes the figures + payable.
+function GstDepthServer() {
+  const nowY = new Date().getMonth() >= 3 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const [quarter, setQuarter] = useState("Q1");
+  const [period, setPeriod] = useState(thisMonth);
+  const [cmp, setCmp] = useState<any>(null);
+  const [qr, setQr] = useState<any>(null);
+  const [r86, setR86] = useState<any>(null);
+  const [late, setLate] = useState<any>(null);
+  const box = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4";
+  useEffect(() => {
+    api.get(`/api/books/gst/composition-cmp08?fy_start=${nowY}&quarter=${quarter}`).then(setCmp).catch(() => {});
+    api.get(`/api/books/gst/qrmp?fy_start=${nowY}&quarter=${quarter}`).then(setQr).catch(() => {});
+  }, [quarter, nowY]);
+  useEffect(() => {
+    api.get(`/api/books/gst/rule-86b?period=${period}`).then(setR86).catch(() => {});
+    api.get(`/api/books/gst/late-fee?period=${period}`).then(setLate).catch(() => {});
+  }, [period]);
+  const fc = (v: number) => "₹" + Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2 items-center">
+        <label className="text-xs text-[var(--color-muted)]">Quarter</label>
+        <select value={quarter} onChange={e => setQuarter(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm">{["Q1", "Q2", "Q3", "Q4"].map(q => <option key={q} value={q}>{q}</option>)}</select>
+        <label className="text-xs text-[var(--color-muted)] ml-3">Month</label>
+        <input type="month" value={period} onChange={e => setPeriod(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm" />
+      </div>
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className={box}>
+          <p className="text-sm font-semibold mb-2">Composition CMP-08 ({quarter})</p>
+          {cmp ? <div className="text-xs space-y-1 text-[var(--color-muted)]"><p>Outward turnover: <b className="text-[var(--color-text)]">{fc(cmp.outward_turnover)}</b></p><p>Tax payable @ {cmp.rate_pct}%: <b className="text-[var(--color-text)]">{fc(cmp.tax_payable)}</b></p><p className="text-[10px]">{cmp.note}</p></div> : <p className="text-xs text-[var(--color-muted)]">Loading…</p>}
+        </div>
+        <div className={box}>
+          <p className="text-sm font-semibold mb-2">QRMP ({quarter})</p>
+          {qr ? <div className="text-xs space-y-1 text-[var(--color-muted)]"><p>Quarter net liability: <b className="text-[var(--color-text)]">{fc(qr.quarter_net_liability)}</b></p><p>PMT-06 (35% fixed-sum): <b className="text-[var(--color-text)]">{qr.pmt06_35pct_challan != null ? fc(qr.pmt06_35pct_challan) : "— (Q1)"}</b></p><p className="text-[10px]">{qr.iff_note}</p></div> : <p className="text-xs text-[var(--color-muted)]">Loading…</p>}
+        </div>
+        <div className={box}>
+          <p className="text-sm font-semibold mb-2">Rule 86B ({period})</p>
+          {r86 ? <div className="text-xs space-y-1 text-[var(--color-muted)]"><p>Taxable turnover: <b className="text-[var(--color-text)]">{fc(r86.taxable_turnover)}</b> · {r86.rule_86b_applicable ? <span className="text-amber-400 font-semibold">86B applies</span> : <span className="text-emerald-400">not applicable</span>}</p>{r86.rule_86b_applicable && <p>Min cash payable (1% of output): <b className="text-[var(--color-text)]">{fc(r86.min_cash_payable)}</b></p>}<p className="text-[10px]">{r86.note}</p></div> : <p className="text-xs text-[var(--color-muted)]">Loading…</p>}
+        </div>
+        <div className={box}>
+          <p className="text-sm font-semibold mb-2">Late fee & interest ({period})</p>
+          {late ? <div className="text-xs space-y-1 text-[var(--color-muted)]"><p>Unpaid tax: <b className="text-[var(--color-text)]">{fc(late.unpaid_tax)}</b> · {late.days_late} day(s) late</p><p>Late fee: <b className="text-[var(--color-text)]">{fc(late.late_fee)}</b> · Interest: <b className="text-[var(--color-text)]">{fc(late.interest)}</b> · Total: <b className="text-red-400">{fc(late.total_payable)}</b></p><p className="text-[10px]">{late.note}</p></div> : <p className="text-xs text-[var(--color-muted)]">Loading…</p>}
+        </div>
+      </div>
+      <p className="text-[11px] text-[var(--color-muted)]">Also live from the ledger (real endpoints): GSTR-9/9C with CA reconciliation at <span className="font-mono">/api/books/gst/gstr9</span>. Filing of these returns is GSP-gated.</p>
     </div>
   );
 }

@@ -68,6 +68,7 @@ const roc = require("./roc");
 const stampreg = require("./stampregister");
 const insurance = require("./insurance");
 const taxdepth = require("./taxdepth");
+const gstadvanced = require("./gstadvanced");
 
 // GET /documents/:id/print is opened in a new browser tab (window.open) which can't
 // set an Authorization header - accept the short-lived access token as ?token= for
@@ -1047,6 +1048,13 @@ router.post("/tax/194q-206c", async (req, res) => { try { res.json(taxdepth.appl
 router.get("/tax/269st", async (req, res) => { try { res.json(await taxdepth.cash269ST(tenantOf(req), { fy: req.query.fy })); } catch (e) { fail(res, e); } });
 router.get("/tax/depreciation-recon", async (req, res) => { try { res.json(await taxdepth.depreciationRecon(tenantOf(req), { fy: req.query.fy, taxRatePct: req.query.rate ? Number(req.query.rate) : undefined })); } catch (e) { fail(res, e); } });
 router.get("/tax/itr-variance", async (req, res) => { try { res.json(await taxdepth.itrVariance(tenantOf(req), { fy: req.query.fy })); } catch (e) { fail(res, e); } });
+
+// ── GST advanced (buildable-now compute; filing stays GSP-gated) ──
+router.get("/gst/composition-cmp08", async (req, res) => { try { res.json(await gstadvanced.compositionCmp08(tenantOf(req), { fyStartYear: req.query.fy_start ? Number(req.query.fy_start) : undefined, quarter: req.query.quarter, ratePct: req.query.rate ? Number(req.query.rate) : undefined })); } catch (e) { fail(res, e); } });
+router.get("/gst/qrmp", async (req, res) => { try { res.json(await gstadvanced.qrmp(tenantOf(req), { fyStartYear: req.query.fy_start ? Number(req.query.fy_start) : undefined, quarter: req.query.quarter })); } catch (e) { fail(res, e); } });
+router.get("/gst/rule-86b", async (req, res) => { try { res.json(await gstadvanced.rule86B(tenantOf(req), { period: req.query.period })); } catch (e) { fail(res, e); } });
+router.get("/gst/late-fee", async (req, res) => { try { res.json(await gstadvanced.lateFeeInterest(tenantOf(req), { period: req.query.period, filedOn: req.query.filed_on, dueDate: req.query.due_date })); } catch (e) { fail(res, e); } });
+router.get("/gst/b2c-qr", async (req, res) => { try { res.json(await gstadvanced.b2cUpiQr(tenantOf(req), { amount: req.query.amount, invoiceNo: req.query.invoice_no })); } catch (e) { fail(res, e); } });
 
 // ── Company-law / ROC: statutory registers (members/directors/charges/rpt) + prep + Sec 188 ──
 router.get("/roc/registers/:kind", async (req, res) => { try { res.json(await roc.listRegister(tenantOf(req), req.params.kind)); } catch (e) { fail(res, e); } });
