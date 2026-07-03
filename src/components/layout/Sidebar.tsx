@@ -163,7 +163,7 @@ const NAV_CATALOG: NavGroup[] = [
     { to: "/insights",        label: "Reports & Analytics",icon: LineChart,       tab: "insights"     },
     { to: "/banking",         label: "Banking",            icon: Banknote,        tab: "banking"      },
     { to: "/payouts",         label: "Payouts",            icon: Coins,           tab: "payouts"      },
-    { to: "/fraud-sentinel",  label: "Fraud Sentinel",     icon: ShieldAlert,     tab: "fraud-sentinel" },
+    { to: "/fraud-sentinel",  label: "Books Integrity",    icon: ShieldAlert,     tab: "fraud-sentinel" },
     { to: "/documents",       label: "Documents",          icon: FolderOpen,      tab: "documents"    },
   ]},
   { label: "Run Operations", items: [
