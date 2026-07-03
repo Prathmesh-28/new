@@ -2,9 +2,10 @@
 // Exit / diligence readiness score (roadmap #199). Synthesises signals already in the platform
 // — books hygiene, statutory compliance, receivables quality, documentation — into a single
 // 0-100 lender/investor-facing readiness score with a per-dimension breakdown and an actionable
-// gap list ("what to fix to raise the score"). Pure aggregation over non-RLS tables (book_*,
-// invoices, gst_returns, tenant_profile); no external dependencies.
+// gap list ("what to fix to raise the score"). Pure aggregation over book_*, gst_returns,
+// tenant_profile (non-RLS) and invoices (FORCE-RLS, migration 0015 — read via q()); no deps.
 const { pool } = require("../db");
+const { q } = require("./tenantDb");
 
 const round = (x) => Math.round(x);
 const clamp = (x) => Math.max(0, Math.min(100, x));
@@ -23,6 +24,8 @@ function dimension(name, weight, checks) {
 }
 
 async function exitReadiness(tenantId, db = pool) {
+  // invoices is FORCE-RLS → those two scalars read through a tenant-GUC client, not `db`.
+  const RLS = { query: (sql, params) => q(tenantId, sql, params) };
   const [vTotal, vRecent, auditN, taxN, tdsN, gstN, invTotal, invOverdue, attachN, assetN, gstReg] = await Promise.all([
     scalar(db, "SELECT count(*) FROM book_vouchers WHERE tenant_id=$1 AND is_cancelled=false", [tenantId]),
     scalar(db, "SELECT count(*) FROM book_vouchers WHERE tenant_id=$1 AND is_cancelled=false AND voucher_date >= (CURRENT_DATE - 90)", [tenantId]),
@@ -30,8 +33,8 @@ async function exitReadiness(tenantId, db = pool) {
     scalar(db, "SELECT count(*) FROM book_tax_entries WHERE tenant_id=$1", [tenantId]),
     scalar(db, "SELECT count(*) FROM book_tax_entries WHERE tenant_id=$1 AND tax_kind='TDS'", [tenantId]),
     scalar(db, "SELECT count(*) FROM gst_returns WHERE tenant_id=$1", [tenantId]),
-    scalar(db, "SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE tenant_id=$1 AND status <> 'cancelled'", [tenantId]),
-    scalar(db, "SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE tenant_id=$1 AND status NOT IN ('paid','cancelled') AND due_date < CURRENT_DATE", [tenantId]),
+    scalar(RLS, "SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE tenant_id=$1 AND status <> 'cancelled'", [tenantId]),
+    scalar(RLS, "SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE tenant_id=$1 AND status NOT IN ('paid','cancelled') AND due_date < CURRENT_DATE", [tenantId]),
     scalar(db, "SELECT count(*) FROM book_attachments WHERE tenant_id=$1", [tenantId]),
     scalar(db, "SELECT count(*) FROM book_fixed_assets WHERE tenant_id=$1", [tenantId]),
     scalar(db, "SELECT count(*) FROM tenant_profile WHERE tenant_id=$1 AND COALESCE(gstin,'') <> ''", [tenantId]),

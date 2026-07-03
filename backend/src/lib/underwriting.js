@@ -42,7 +42,7 @@ async function score(tenantId, pool, enrichment) {
     pool.query("SELECT * FROM active_loans WHERE tenant_id=$1", [tenantId]).catch(() => ({ rows: [] })),
     pool.query("SELECT created_at FROM users WHERE tenant_id=$1 ORDER BY created_at LIMIT 1", [tenantId]),
     pool.query("SELECT period_year, period_month, status, filed_at, output_tax FROM gst_returns WHERE tenant_id=$1 ORDER BY period_year DESC, period_month DESC LIMIT 24", [tenantId]).catch(() => ({ rows: [] })),
-    pool.query("SELECT total_amount, status, due_date FROM invoices WHERE tenant_id=$1 AND status <> 'cancelled'", [tenantId]).catch(() => ({ rows: [] })),
+    q(tenantId, "SELECT total_amount, status, due_date FROM invoices WHERE tenant_id=$1 AND status <> 'cancelled'", [tenantId]).catch(() => ({ rows: [] })), // invoices is FORCE-RLS (0015) → q()
     q(tenantId, "SELECT outstanding_principal FROM loans WHERE tenant_id=$1 AND status='active'", [tenantId]).catch(() => ({ rows: [] })),
     q(tenantId, "SELECT COALESCE(SUM(s.total_due),0) AS due_next FROM loan_schedule s JOIN loans l ON l.id=s.loan_id WHERE l.tenant_id=$1 AND l.status='active' AND s.status <> 'paid' AND s.due_date < now() + interval '31 days'", [tenantId]).catch(() => ({ rows: [{ due_next: 0 }] })),
     q(tenantId, "SELECT COALESCE(MAX(now()::date - s.due_date),0) AS max_dpd FROM loan_schedule s JOIN loans l ON l.id=s.loan_id WHERE l.tenant_id=$1 AND l.status='active' AND s.status <> 'paid' AND s.due_date < now()::date", [tenantId]).catch(() => ({ rows: [{ max_dpd: 0 }] })),

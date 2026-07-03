@@ -310,7 +310,7 @@ async function runOverdueInvoiceEvents() {
   let fired = 0;
   for (const tenantId of tenants) {
     try {
-      const { rows } = await pool.query(
+      const { rows } = await require("../../lib/tenantDb").q(tenantId, // invoices FORCE-RLS (0015): per-tenant GUC read inside this per-tenant loop
         `SELECT *, (CURRENT_DATE - due_date::date) AS days_overdue FROM invoices
           WHERE tenant_id=$1 AND status NOT IN ('paid','cancelled') AND due_date < CURRENT_DATE
           ORDER BY due_date LIMIT 200`, [tenantId]);

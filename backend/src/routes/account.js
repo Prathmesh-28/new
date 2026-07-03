@@ -47,8 +47,10 @@ router.post("/consent", authenticate, validateBody({
 router.get("/export", authenticate, async (req, res) => {
   const t = req.user.tenant_id;
   const out = { exported_at: new Date().toISOString(), tenant_id: t };
+  // Route through q(t,...) so RLS'd tables (invoices — migration 0015) return the tenant's
+  // rows; harmless for the non-RLS tables (GUC set, no policy applies).
   const grab = async (label, sql, params) => {
-    try { out[label] = (await pool.query(sql, params)).rows; } catch { out[label] = []; }
+    try { out[label] = (await require("../lib/tenantDb").q(t, sql, params)).rows; } catch { out[label] = []; }
   };
   await grab("profile", "SELECT id, email, role, tenant_id, display_name, subscription_plan, created_at FROM users WHERE tenant_id=$1", [t]);
   await grab("app_data", "SELECT namespace, key, value, updated_at FROM kv_store WHERE tenant_id=$1", [t]);

@@ -68,7 +68,7 @@ const AGG_SQL = `
 
 // Ranked per-customer scores (worst payers first — the collections work-list).
 async function customerScores(tenantId, db = pool) {
-  const { rows } = await db.query(AGG_SQL, [tenantId]);
+  const { rows } = await require("./tenantDb").q(tenantId, AGG_SQL, [tenantId]); // invoices FORCE-RLS (0015) → q()
   const scored = rows.map(scoreRow)
     .sort((a, b) => (b.overdue_amount - a.overdue_amount) || (a.score - b.score));
   return scored;

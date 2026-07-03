@@ -94,9 +94,9 @@ async function createOffer(tenantId, userId, body = {}) {
     // When financing a SPECIFIC invoice the invoice is the source of truth — this closes
     // the self-liquidating loop (source_invoice_id set → onInvoicePaid recovers it). Verify
     // it's this tenant's, issued-and-unpaid, and derive the face value server-side (never
-    // trust a client-supplied amount). invoices is not RLS'd → explicit tenant_id filter.
+    // trust a client-supplied amount). invoices is FORCE-RLS (0015) → read via q(tenantId).
     if (sourceInvoiceId) {
-      const { rows: invRows } = await pool.query(
+      const { rows: invRows } = await q(tenantId,
         "SELECT id, total_amount, status, due_date FROM invoices WHERE id=$1 AND tenant_id=$2",
         [sourceInvoiceId, tenantId]
       );
@@ -329,7 +329,7 @@ async function financingPosition(tenantId) {
   const invIds = [...new Set(loans.filter((l) => l.source_invoice_id).map((l) => l.source_invoice_id))];
   const invMap = {};
   if (invIds.length) {
-    const { rows: invs } = await pool.query(
+    const { rows: invs } = await q(tenantId,
       "SELECT id, invoice_number, customer_name, total_amount, due_date, status FROM invoices WHERE tenant_id=$1 AND id = ANY($2)",
       [tenantId, invIds]);
     for (const iv of invs) invMap[iv.id] = iv;
@@ -359,9 +359,9 @@ async function financingPosition(tenantId) {
 // Financeable invoices: issued-and-unpaid invoices (status 'sent') that don't already back
 // a live advance/offer, each with an indicative advance (advance_rate × face, capped at the
 // underwriting limit). Real data on the tenant's own AR — the frontend "advance this invoice"
-// picker calls this. invoices is not RLS'd → explicit tenant filter; loans/offers are RLS'd.
+// picker calls this. invoices is FORCE-RLS (0015) → read via q(tenantId); loans/offers RLS'd too.
 async function financeableInvoices(tenantId, { advanceRate = 0.8 } = {}) {
-  const { rows } = await pool.query(
+  const { rows } = await q(tenantId,
     `SELECT id, invoice_number, customer_name, total_amount, due_date
        FROM invoices WHERE tenant_id=$1 AND status='sent'
        ORDER BY due_date NULLS LAST, created_at DESC LIMIT 100`, [tenantId]

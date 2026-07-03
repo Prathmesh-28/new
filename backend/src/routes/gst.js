@@ -100,7 +100,7 @@ router.post("/irn", authenticate, canWrite, async (req, res) => {
   const { invoice_id } = req.body;
   if (!invoice_id) return res.status(400).json({ error: "invoice_id required" });
   try {
-    const { rows: [inv] } = await pool.query("SELECT id FROM invoices WHERE id=$1 AND tenant_id=$2", [invoice_id, req.user.tenant_id]);
+    const { rows: [inv] } = await require("../lib/tenantDb").q(req.user.tenant_id, "SELECT id FROM invoices WHERE id=$1 AND tenant_id=$2", [invoice_id, req.user.tenant_id]); // invoices FORCE-RLS (0015)
     if (!inv) return res.status(404).json({ error: "Invoice not found" });
     // The SALES voucher the invoice→GL bridge posted for this invoice (if it was sent/paid).
     const { rows: [v] } = await pool.query(

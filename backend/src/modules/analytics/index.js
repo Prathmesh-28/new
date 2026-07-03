@@ -253,7 +253,7 @@ async function classifyReason(tenantId, daysIdle) {
        FROM analytics_events ae LEFT JOIN tenant_profile p ON p.tenant_id=ae.tenant_id
        WHERE ae.tenant_id=$1 AND ae.event <> 'winback_nudge'`, [tenantId]
     ).catch(() => ({ rows: [{}] })),
-    pool.query(
+    require("../../lib/tenantDb").q(tenantId, // invoices FORCE-RLS (0015); classifyReason runs per-tenant so the GUC is correct
       `SELECT count(*) FILTER (WHERE due_date < CURRENT_DATE AND status NOT IN ('paid','cancelled','draft')) AS overdue_count,
               COALESCE(SUM(total_amount) FILTER (WHERE due_date < CURRENT_DATE AND status NOT IN ('paid','cancelled','draft')),0) AS overdue_amount,
               count(*) FILTER (WHERE status NOT IN ('paid','cancelled','draft')) AS unpaid_count,

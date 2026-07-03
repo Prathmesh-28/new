@@ -11,7 +11,7 @@ const norm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
 
 async function entityGroups(tenantId, db = pool) {
   const [inv, led] = await Promise.all([
-    db.query("SELECT DISTINCT customer_name AS name, NULLIF(customer_gstin,'') AS gstin FROM invoices WHERE tenant_id=$1 AND customer_name IS NOT NULL", [tenantId]).catch(() => ({ rows: [] })),
+    require("./tenantDb").q(tenantId, "SELECT DISTINCT customer_name AS name, NULLIF(customer_gstin,'') AS gstin FROM invoices WHERE tenant_id=$1 AND customer_name IS NOT NULL", [tenantId]).catch(() => ({ rows: [] })), // invoices FORCE-RLS (0015)
     db.query("SELECT name, NULLIF(gstin,'') AS gstin, NULLIF(pan,'') AS pan FROM book_ledgers WHERE tenant_id=$1 AND is_party=true", [tenantId]).catch(() => ({ rows: [] })),
   ]);
   const parties = [];

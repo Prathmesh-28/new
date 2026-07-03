@@ -7,9 +7,9 @@
 //   • receivables   ← open invoices (invoices table) with due dates
 //   • obligations   ← upcoming loan installments (loan_schedule)   [payroll/GST next]
 //
-// RLS NOTE: `loans`/`loan_schedule` are FORCE-RLS (tenant GUC) — they MUST be read via
-// q(tenantId,...) or a plain pool.query returns 0 rows in prod. `invoices` and `book_*`
-// are NOT RLS'd, so they use pool.query scoped by tenant_id in the WHERE clause.
+// RLS NOTE: `loans`/`loan_schedule` AND `invoices` (migration 0015) are FORCE-RLS (tenant
+// GUC) — they MUST be read via q(tenantId,...) or a plain pool.query returns 0 rows in prod.
+// `book_*` are NOT RLS'd, so they use pool.query scoped by tenant_id in the WHERE clause.
 const { pool } = require("../db");
 const { q } = require("./tenantDb");
 const { trialBalance } = require("../modules/books/reports");
@@ -34,7 +34,7 @@ async function assembleForecastInputs(tenantId) {
   }
 
   // ── Receivables: open invoices (not draft/paid/cancelled/void) with due dates ──
-  const { rows: rec } = await pool.query(
+  const { rows: rec } = await q(tenantId, // invoices is FORCE-RLS (0015) → read via q()
     `SELECT id, invoice_number, customer_name, total_amount, due_date, status, created_at
        FROM invoices
       WHERE tenant_id = $1

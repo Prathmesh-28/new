@@ -2,6 +2,7 @@ const router    = require("express").Router();
 const PDFDoc    = require("pdfkit");
 const QRCode    = require("qrcode");
 const { pool }  = require("../db");
+const { q, withTenant } = require("../lib/tenantDb"); // invoices is FORCE-RLS (0015) — its access MUST set the tenant GUC
 const { authenticate } = require("../middleware/auth");
 const { sendMail } = require("../lib/email");
 const { sendWhatsApp } = require("../lib/whatsapp");
@@ -42,7 +43,7 @@ function computeAging(invoice) {
 
 // GET /api/invoices
 router.get("/", authenticate, async (req, res) => {
-  const { rows } = await pool.query(
+  const { rows } = await q(req.user.tenant_id,
     `SELECT i.*, json_agg(ii ORDER BY ii.id) AS items
      FROM invoices i
      LEFT JOIN invoice_items ii ON ii.invoice_id = i.id
@@ -59,12 +60,6 @@ router.post("/", authenticate, canWrite, async (req, res) => {
   const { customer_name, customer_gstin, customer_email, gst_rate = 18, due_date, items = [] } = req.body;
   if (!customer_name || !items.length) return res.status(400).json({ error: "customer_name and items required" });
 
-  const { rows: existing } = await pool.query(
-    "SELECT invoice_number FROM invoices WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 50",
-    [req.user.tenant_id]
-  );
-  const invoice_number = nextInvoiceNumber(existing.map(r => r.invoice_number));
-
   const subtotal   = items.reduce((s, i) => s + (parseFloat(i.quantity) * parseFloat(i.unit_price)), 0);
   const gstSum     = items.reduce((s, i) => {
     const lineAmt = parseFloat(i.quantity) * parseFloat(i.unit_price);
@@ -74,22 +69,31 @@ router.post("/", authenticate, canWrite, async (req, res) => {
   const gst_amount = parseFloat(gstSum.toFixed(2));
   const total      = parseFloat((subtotal + gst_amount).toFixed(2));
 
-  const { rows: [inv] } = await pool.query(
-    `INSERT INTO invoices(tenant_id, invoice_number, customer_name, customer_gstin, customer_email,
-       subtotal, gst_rate, gst_amount, total_amount, status, due_date)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'draft',$10)
-     RETURNING *`,
-    [req.user.tenant_id, invoice_number, customer_name, customer_gstin ?? null,
-     customer_email ?? null, subtotal, gst_rate, gst_amount, total, due_date ?? null]
-  );
-
-  for (const item of items) {
-    const amt = parseFloat(item.quantity) * parseFloat(item.unit_price);
-    await pool.query(
-      "INSERT INTO invoice_items(invoice_id, description, hsn_sac, quantity, unit_price, gst_rate, amount) VALUES($1,$2,$3,$4,$5,$6,$7)",
-      [inv.id, item.description, item.hsn_sac ?? null, item.quantity, item.unit_price, item.gst_rate ?? gst_rate, amt]
+  // One tenant-scoped transaction (RLS GUC set once): next-number read + invoice insert +
+  // line items — now atomic (a failed item insert no longer leaves a headerless invoice).
+  const inv = await withTenant(req.user.tenant_id, async (client) => {
+    const { rows: existing } = await client.query(
+      "SELECT invoice_number FROM invoices WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 50",
+      [req.user.tenant_id]
     );
-  }
+    const invoice_number = nextInvoiceNumber(existing.map(r => r.invoice_number));
+    const { rows: [row] } = await client.query(
+      `INSERT INTO invoices(tenant_id, invoice_number, customer_name, customer_gstin, customer_email,
+         subtotal, gst_rate, gst_amount, total_amount, status, due_date)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'draft',$10)
+       RETURNING *`,
+      [req.user.tenant_id, invoice_number, customer_name, customer_gstin ?? null,
+       customer_email ?? null, subtotal, gst_rate, gst_amount, total, due_date ?? null]
+    );
+    for (const item of items) {
+      const amt = parseFloat(item.quantity) * parseFloat(item.unit_price);
+      await client.query(
+        "INSERT INTO invoice_items(invoice_id, description, hsn_sac, quantity, unit_price, gst_rate, amount) VALUES($1,$2,$3,$4,$5,$6,$7)",
+        [row.id, item.description, item.hsn_sac ?? null, item.quantity, item.unit_price, item.gst_rate ?? gst_rate, amt]
+      );
+    }
+    return row;
+  });
 
   require("../modules/flows/runner").emitEvent(req.user.tenant_id, "invoice.created", { invoice: inv }).catch(() => {});
   require("../modules/analytics").track(req.user.tenant_id, req.user.id, { event: "invoice_created", props: { total } }).catch(() => {});
@@ -102,7 +106,7 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
   const valid = ["draft", "sent", "paid", "cancelled"];
   if (!valid.includes(status)) return res.status(400).json({ error: `status must be one of: ${valid.join(", ")}` });
 
-  const { rows: [inv] } = await pool.query(
+  const { rows: [inv] } = await q(req.user.tenant_id,
     "UPDATE invoices SET status=$1, paid_at=CASE WHEN $1='paid' THEN now() ELSE paid_at END WHERE id=$2 AND tenant_id=$3 RETURNING *",
     [status, req.params.id, req.user.tenant_id]
   );
@@ -126,18 +130,22 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
 // DELETE /api/invoices/:id - remove an invoice (and its line items), tenant-scoped.
 // The Receivables page calls this to sync a deletion to the ledger.
 router.delete("/:id", authenticate, canWrite, async (req, res) => {
-  const { rows: [inv] } = await pool.query(
-    "DELETE FROM invoices WHERE id=$1 AND tenant_id=$2 RETURNING id",
-    [req.params.id, req.user.tenant_id]
-  );
-  if (!inv) return res.status(404).json({ error: "Invoice not found" });
-  await pool.query("DELETE FROM invoice_items WHERE invoice_id=$1", [inv.id]).catch(() => {});
+  const deleted = await withTenant(req.user.tenant_id, async (client) => {
+    const { rows: [inv] } = await client.query(
+      "DELETE FROM invoices WHERE id=$1 AND tenant_id=$2 RETURNING id",
+      [req.params.id, req.user.tenant_id]
+    );
+    if (!inv) return false;
+    await client.query("DELETE FROM invoice_items WHERE invoice_id=$1", [inv.id]).catch(() => {});
+    return true;
+  });
+  if (!deleted) return res.status(404).json({ error: "Invoice not found" });
   res.status(204).end();
 });
 
 // GET /api/invoices/:id/pdf - generate PDF with PDFKit
 router.get("/:id/pdf", authenticate, async (req, res) => {
-  const { rows: [inv] } = await pool.query(
+  const { rows: [inv] } = await q(req.user.tenant_id,
     `SELECT i.*, json_agg(ii ORDER BY ii.id) AS items
      FROM invoices i LEFT JOIN invoice_items ii ON ii.invoice_id = i.id
      WHERE i.id=$1 AND i.tenant_id=$2 GROUP BY i.id`,
@@ -230,7 +238,7 @@ router.post("/:id/remind", authenticate, canWrite, async (req, res) => {
   try {
     // The invoice row already carries the customer's contact details - there is
     // no separate tenants table to join (the previous LEFT JOIN tenants crashed).
-    const { rows } = await pool.query(
+    const { rows } = await q(tenantId,
       `SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId]
     );
@@ -282,7 +290,7 @@ router.post("/:id/remind", authenticate, canWrite, async (req, res) => {
 
     // Move a still-draft invoice to "sent" once a reminder goes out.
     if (invoice.status === "draft") {
-      await pool.query(`UPDATE invoices SET status='sent' WHERE id=$1 AND tenant_id=$2`, [id, tenantId]);
+      await q(tenantId, `UPDATE invoices SET status='sent' WHERE id=$1 AND tenant_id=$2`, [id, tenantId]);
     }
 
     res.json({
@@ -316,7 +324,7 @@ router.get("/:id/reminders", authenticate, async (req, res) => {
 
 // POST /api/invoices/:id/send - email invoice
 router.post("/:id/send", authenticate, canWrite, async (req, res) => {
-  const { rows: [inv] } = await pool.query(
+  const { rows: [inv] } = await q(req.user.tenant_id,
     "SELECT * FROM invoices WHERE id=$1 AND tenant_id=$2",
     [req.params.id, req.user.tenant_id]
   );
@@ -330,14 +338,14 @@ router.post("/:id/send", authenticate, canWrite, async (req, res) => {
     html:    `<p>Dear ${inv.customer_name},</p><p>Please find your invoice <strong>${inv.invoice_number}</strong> for <strong>₹${parseFloat(inv.total_amount).toLocaleString("en-IN")}</strong>.</p><p>Due date: <strong>${inv.due_date || "On receipt"}</strong></p><p>Thank you for your business.</p>`,
   }).catch(() => {});
 
-  await pool.query("UPDATE invoices SET status='sent' WHERE id=$1 AND tenant_id=$2", [inv.id, req.user.tenant_id]);
+  await q(req.user.tenant_id, "UPDATE invoices SET status='sent' WHERE id=$1 AND tenant_id=$2", [inv.id, req.user.tenant_id]);
   require("../lib/invoiceGl").postInvoiceSale(req.user.tenant_id, { ...inv, status: "sent" }).catch(() => {}); // accrual: Dr Debtor / Cr Sales + Output GST on issue
   res.json({ ok: true });
 });
 
 // POST /api/invoices/:id/upi-link - generate UPI QR (Razorpay optional, fallback to static UPI)
 router.post("/:id/upi-link", authenticate, canWrite, async (req, res) => {
-  const { rows: [inv] } = await pool.query(
+  const { rows: [inv] } = await q(req.user.tenant_id,
     "SELECT i.*, kv.value AS kv FROM invoices i LEFT JOIN kv_store kv ON kv.tenant_id=i.tenant_id AND kv.namespace='app' AND kv.key='store' WHERE i.id=$1 AND i.tenant_id=$2",
     [req.params.id, req.user.tenant_id]
   );
@@ -355,7 +363,7 @@ router.post("/:id/upi-link", authenticate, canWrite, async (req, res) => {
     qrDataUrl = await QRCode.toDataURL(upiLink, { width: 200 });
   } catch { /* ok */ }
 
-  await pool.query("UPDATE invoices SET upi_link=$1 WHERE id=$2 AND tenant_id=$3", [upiLink, inv.id, req.user.tenant_id]);
+  await q(req.user.tenant_id, "UPDATE invoices SET upi_link=$1 WHERE id=$2 AND tenant_id=$3", [upiLink, inv.id, req.user.tenant_id]);
   res.json({ upi_link: upiLink, qr: qrDataUrl });
 });
 

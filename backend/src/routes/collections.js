@@ -1,6 +1,7 @@
 const router   = require("express").Router();
 const QRCode   = require("qrcode");
 const { pool } = require("../db");
+const { q } = require("../lib/tenantDb"); // invoices is FORCE-RLS (0015) — access sets the tenant GUC
 const { authenticate } = require("../middleware/auth");
 const crypto   = require("crypto");
 
@@ -21,7 +22,7 @@ router.post("/upi-link", authenticate, canWrite, async (req, res) => {
   const { invoice_id, amount } = req.body;
   if (!invoice_id) return res.status(400).json({ error: "invoice_id required" });
 
-  const { rows: [inv] } = await pool.query(
+  const { rows: [inv] } = await q(req.user.tenant_id,
     "SELECT i.*, kv.value AS kv FROM invoices i LEFT JOIN kv_store kv ON kv.tenant_id=i.tenant_id AND kv.namespace='app' AND kv.key='store' WHERE i.id=$1 AND i.tenant_id=$2",
     [invoice_id, req.user.tenant_id]
   );
@@ -76,7 +77,7 @@ router.post("/upi-link", authenticate, canWrite, async (req, res) => {
   }
   const qr = await QRCode.toDataURL(payUrl, { width: 200 }).catch(() => null);
 
-  await pool.query("UPDATE invoices SET upi_link=$1 WHERE id=$2 AND tenant_id=$3", [payUrl, inv.id, req.user.tenant_id]);
+  await q(req.user.tenant_id, "UPDATE invoices SET upi_link=$1 WHERE id=$2 AND tenant_id=$3", [payUrl, inv.id, req.user.tenant_id]);
   res.json({ url: payUrl, qr, provider: razorpay_url ? "razorpay" : "upi", demo: !razorpay_url });
 });
 
@@ -125,21 +126,21 @@ router.post("/", async (req, res) => {
       // for legacy links with no tenant, only proceed if exactly ONE invoice matches.
       let inv = null;
       if (noteTenant) {
-        const { rows } = await pool.query(
+        // The link carries its tenant → scope the lookup to it (sets the RLS GUC).
+        const { rows } = await q(noteTenant,
           "SELECT * FROM invoices WHERE invoice_number=$1 AND tenant_id=$2 AND status != 'paid' LIMIT 1",
           [invoiceNumber, noteTenant]
         );
         inv = rows[0] ?? null;
       } else {
-        const { rows } = await pool.query(
-          "SELECT * FROM invoices WHERE invoice_number=$1 AND status != 'paid'",
-          [invoiceNumber]
-        );
-        if (rows.length === 1) inv = rows[0];
-        else if (rows.length > 1) console.warn(`[razorpay] invoice_number ${invoiceNumber} is ambiguous across ${rows.length} tenants and the payment has no tenant note - skipping to avoid a cross-tenant write`);
+        // Legacy link with NO tenant note: under FORCE-RLS (0015) a cross-tenant lookup is
+        // impossible (no BYPASSRLS role) and invoice_number isn't globally unique, so we
+        // cannot safely resolve the invoice. Log + skip (never a cross-tenant write); modern
+        // links carry notes.tenant_id and reconcile via the branch above.
+        console.warn(`[razorpay] payment for ${invoiceNumber} has no tenant note - cannot reconcile under RLS; skipping (use a current-generation payment link).`);
       }
       if (inv) {
-        await pool.query(
+        await q(inv.tenant_id,
           "UPDATE invoices SET status='paid', paid_at=now() WHERE id=$1 AND tenant_id=$2",
           [inv.id, inv.tenant_id]
         );
@@ -164,7 +165,7 @@ router.post("/", async (req, res) => {
 // GET /api/collections/pending
 router.get("/pending", authenticate, async (req, res) => {
   const today = new Date().toISOString().split("T")[0];
-  const { rows } = await pool.query(
+  const { rows } = await q(req.user.tenant_id,
     `SELECT *, CURRENT_DATE - due_date::date AS days_overdue
      FROM invoices
      WHERE tenant_id=$1 AND status NOT IN ('paid','cancelled')
