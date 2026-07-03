@@ -71,9 +71,40 @@ async function listInvites(tenantId) {
   return rows;
 }
 
+// Post-transaction ratings (#167): a tenant rates a counterparty; ratingsSummary aggregates them.
+async function rateCounterparty(tenantId, actorId, { counterparty, gstin, category = "overall", rating, comment, txnRef } = {}) {
+  if (!counterparty) throw new CounterpartyError("BAD_INPUT", "counterparty required", 400);
+  const r = Math.round(Number(rating));
+  if (!(r >= 1 && r <= 5)) throw new CounterpartyError("BAD_INPUT", "rating must be 1-5", 400);
+  const { rows } = await q(tenantId,
+    `INSERT INTO counterparty_ratings(tenant_id, counterparty, gstin, category, rating, comment, txn_ref, created_by)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [tenantId, counterparty, gstin || null, category, r, comment || null, txnRef || null, actorId || null]);
+  return rows[0];
+}
+async function ratingsSummary(tenantId, { counterparty } = {}) {
+  const params = [tenantId]; let where = "tenant_id=$1";
+  if (counterparty) { params.push(counterparty); where += ` AND counterparty=$${params.length}`; }
+  const { rows } = await q(tenantId,
+    `SELECT counterparty, ROUND(AVG(rating)::numeric, 2) AS avg_rating, COUNT(*)::int AS n,
+            ROUND(AVG(rating) FILTER (WHERE category='payment')::numeric, 2) AS avg_payment,
+            ROUND(AVG(rating) FILTER (WHERE category='quality')::numeric, 2) AS avg_quality,
+            ROUND(AVG(rating) FILTER (WHERE category='delivery')::numeric, 2) AS avg_delivery,
+            MAX(created_at) AS last_rated
+       FROM counterparty_ratings WHERE ${where} GROUP BY counterparty ORDER BY AVG(rating) DESC`, params);
+  return rows.map((r) => ({ ...r, avg_rating: r.avg_rating == null ? null : Number(r.avg_rating) }));
+}
+async function listRatings(tenantId, { counterparty } = {}) {
+  const params = [tenantId]; let where = "tenant_id=$1";
+  if (counterparty) { params.push(counterparty); where += ` AND counterparty=$${params.length}`; }
+  const { rows } = await q(tenantId, `SELECT * FROM counterparty_ratings WHERE ${where} ORDER BY created_at DESC LIMIT 200`, params);
+  return rows;
+}
+
 module.exports = {
   CounterpartyError,
   dedupeGroups, customerScores, riskSummary,
   enrich, listEnrichments, providerStatus,
   inviteCounterparty, listInvites,
+  rateCounterparty, ratingsSummary, listRatings,
 };

@@ -37,4 +37,11 @@ router.post("/invite", canWrite, async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
+// Post-transaction ratings (#167).
+router.get("/ratings", async (req, res) => { try { res.json(await cp.listRatings(tenantOf(req), { counterparty: req.query.counterparty })); } catch (e) { fail(res, e); } });
+router.get("/ratings/summary", async (req, res) => { try { res.json(await cp.ratingsSummary(tenantOf(req), { counterparty: req.query.counterparty })); } catch (e) { fail(res, e); } });
+router.post("/rate", canWrite, async (req, res) => {
+  try { const b = req.body || {}; res.status(201).json(await cp.rateCounterparty(tenantOf(req), req.user.id, { counterparty: b.counterparty, gstin: b.gstin, category: b.category, rating: b.rating, comment: b.comment, txnRef: b.txn_ref })); } catch (e) { fail(res, e); }
+});
+
 module.exports = router;

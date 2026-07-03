@@ -10,6 +10,7 @@ const ENV = {
   mca:   { key: "MCA_API_KEY",   base: "MCA_API_BASE",   path: (id) => `/company/${encodeURIComponent(id)}` },
   gsp:   { key: "GSP_API_KEY",   base: "GSP_API_BASE",   path: (id) => `/gstin/${encodeURIComponent(id)}` },
   udyam: { key: "UDYAM_API_KEY", base: "UDYAM_API_BASE", path: (id) => `/udyam/${encodeURIComponent(id)}` },
+  ecourts: { key: "ECOURTS_API_KEY", base: "ECOURTS_API_BASE", path: (id) => `/search?query=${encodeURIComponent(id)}` }, // litigation screening (gated)
 };
 const VALID = Object.keys(ENV);
 

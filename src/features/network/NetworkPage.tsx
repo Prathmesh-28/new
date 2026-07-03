@@ -3139,15 +3139,24 @@ function NetworkIntelligence() {
   const [enrResult, setEnrResult] = useState<any>(null);
   const [inv, setInv] = useState({ name: "", email: "", phone: "", relation: "vendor" });
   const [invites, setInvites] = useState<any[]>([]);
+  const [ratings, setRatings] = useState<any[]>([]);
+  const [rateForm, setRateForm] = useState({ counterparty: "", category: "overall", rating: "5", comment: "" });
   const [err, setErr] = useState<string | null>(null);
 
   const loadInvites = () => api.get<any[]>("/api/counterparty/invites").then(setInvites).catch(() => {});
+  const loadRatings = () => api.get<any[]>("/api/counterparty/ratings/summary").then(setRatings).catch(() => {});
   useEffect(() => {
     Promise.all([
       api.get("/api/counterparty/dedupe-groups"), api.get("/api/counterparty/scores"), api.get<Record<string, { configured: boolean; problem: string | null }>>("/api/counterparty/providers"),
     ]).then(([g, s, p]) => { setGroups(g); setScores(s); setProviders(p); }).catch((e) => setErr((e as Error).message));
     loadInvites();
+    loadRatings();
   }, []);
+  const submitRating = async () => {
+    if (!rateForm.counterparty.trim()) return toast.error("Enter the counterparty");
+    try { await api.post("/api/counterparty/rate", { ...rateForm, rating: Number(rateForm.rating) }); toast.success("Rating recorded"); setRateForm({ counterparty: "", category: "overall", rating: "5", comment: "" }); loadRatings(); }
+    catch (e) { toast.error((e as Error).message); }
+  };
 
   const runEnrich = async () => {
     if (!enr.identifier.trim()) return toast.error("Enter a GSTIN / CIN / PAN");
@@ -3204,7 +3213,7 @@ function NetworkIntelligence() {
         {!isReadOnly && (
           <div className="flex flex-wrap gap-2 items-end">
             <select value={enr.kind} onChange={(e) => setEnr({ ...enr, kind: e.target.value })} className={INP + " w-auto"}>
-              <option value="gstn">GSTN filing status</option><option value="gsp">GSTIN validity (GSP)</option><option value="mca">MCA (CIN)</option><option value="udyam">Udyam (PAN)</option>
+              <option value="gstn">GSTN filing status</option><option value="gsp">GSTIN validity (GSP)</option><option value="mca">MCA (CIN)</option><option value="udyam">Udyam (PAN)</option><option value="ecourts">e-Courts litigation</option>
             </select>
             <input value={enr.identifier} onChange={(e) => setEnr({ ...enr, identifier: e.target.value.toUpperCase() })} placeholder="GSTIN / CIN / PAN" className={INP + " w-auto"} />
             <button onClick={runEnrich} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-semibold">Look up</button>
@@ -3238,6 +3247,32 @@ function NetworkIntelligence() {
                 <td data-label="Relation" className="py-1.5 capitalize">{x.relation}</td>
                 <td data-label="Sent on" className="py-1.5 text-[var(--color-muted)]">{(x.channels || []).join(", ") || "—"}</td>
                 <td data-label="Status" className="py-1.5 capitalize">{x.status}</td>
+              </tr>
+            ))}
+          </tbody></table>
+        )}
+      </div>
+
+      {/* Post-transaction ratings */}
+      <div className={`${CARD} p-4`}>
+        <p className="text-sm font-semibold mb-2 flex items-center gap-2"><Star size={14} className="text-[var(--color-primary)]" /> Counterparty ratings</p>
+        {!isReadOnly && (
+          <div className="flex flex-wrap gap-2 items-end mb-3">
+            <input value={rateForm.counterparty} onChange={(e) => setRateForm({ ...rateForm, counterparty: e.target.value })} placeholder="Counterparty" className={INP + " w-auto"} />
+            <select value={rateForm.category} onChange={(e) => setRateForm({ ...rateForm, category: e.target.value })} className={INP + " w-auto"}><option value="overall">Overall</option><option value="quality">Quality</option><option value="delivery">Delivery</option><option value="payment">Payment</option><option value="service">Service</option></select>
+            <select value={rateForm.rating} onChange={(e) => setRateForm({ ...rateForm, rating: e.target.value })} className={INP + " w-auto"}>{[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{"★".repeat(r)}</option>)}</select>
+            <input value={rateForm.comment} onChange={(e) => setRateForm({ ...rateForm, comment: e.target.value })} placeholder="Comment (optional)" className={INP + " w-auto"} />
+            <button onClick={submitRating} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-semibold">Rate</button>
+          </div>
+        )}
+        {ratings.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No ratings yet — rate a counterparty after a transaction.</p> : (
+          <table className="w-full text-sm rcard"><tbody>
+            {ratings.map((r, i) => (
+              <tr key={i} className="border-t border-[var(--color-border)]">
+                <td data-label="Counterparty" className="py-1.5">{r.counterparty}</td>
+                <td data-label="Avg" className="py-1.5 font-semibold text-amber-400">{r.avg_rating != null ? `${r.avg_rating.toFixed(1)}★` : "—"} <span className="text-[var(--color-muted)] font-normal">({r.n})</span></td>
+                <td data-label="Payment" className="py-1.5">{r.avg_payment != null ? `${Number(r.avg_payment).toFixed(1)}★` : "—"}</td>
+                <td data-label="Quality" className="py-1.5">{r.avg_quality != null ? `${Number(r.avg_quality).toFixed(1)}★` : "—"}</td>
               </tr>
             ))}
           </tbody></table>

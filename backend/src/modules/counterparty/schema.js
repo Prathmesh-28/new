@@ -10,7 +10,7 @@ const COUNTERPARTY_SCHEMA = `
 CREATE TABLE IF NOT EXISTS counterparty_enrichments (
   id           UUID PRIMARY KEY DEFAULT collab_uuidv7(),
   tenant_id    TEXT NOT NULL,
-  kind         TEXT NOT NULL CHECK (kind IN ('gstn','mca','gsp','udyam')),
+  kind         TEXT NOT NULL CHECK (kind IN ('gstn','mca','gsp','udyam','ecourts')),
   identifier   TEXT NOT NULL,                         -- GSTIN / CIN / PAN / Udyam no.
   status       TEXT NOT NULL DEFAULT 'gated' CHECK (status IN ('ok','gated','error')),
   data         JSONB NOT NULL DEFAULT '{}'::jsonb,    -- provider payload (empty when gated)
@@ -36,6 +36,22 @@ CREATE TABLE IF NOT EXISTS counterparty_invites (
   accepted_at  TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_counterparty_invites ON counterparty_invites(tenant_id, status, created_at DESC);
+
+-- Post-transaction ratings a tenant records about a counterparty (quality/delivery/payment).
+-- Feeds the counterparty's overall reliability picture; RLS'd (migration 0020).
+CREATE TABLE IF NOT EXISTS counterparty_ratings (
+  id             UUID PRIMARY KEY DEFAULT collab_uuidv7(),
+  tenant_id      TEXT NOT NULL,
+  counterparty   TEXT NOT NULL,                          -- name or GSTIN of the rated party
+  gstin          TEXT,
+  category       TEXT NOT NULL DEFAULT 'overall' CHECK (category IN ('overall','quality','delivery','payment','service')),
+  rating         INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  comment        TEXT,
+  txn_ref        TEXT,
+  created_by     UUID,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_counterparty_ratings ON counterparty_ratings(tenant_id, counterparty, created_at DESC);
 `;
 
 module.exports = { COUNTERPARTY_SCHEMA };
