@@ -39,5 +39,7 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
+      - name: Tenant-scope guard
+        run: npm run check:tenant-scope
       - name: Smoke tests
         run: npm test
