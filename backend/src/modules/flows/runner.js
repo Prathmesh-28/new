@@ -124,6 +124,17 @@ const NODES = {
     // compact, templatable shape for downstream branch/notify nodes
     return { score: r.score, grade: r.grade, decision: r.decision && r.decision.outcome, eligible_amount: r.approved_amount, recommended_product: r.recommended_product };
   },
+  async invoice_advance(cfg, ctx, env) {
+    // Indicative invoice-financing advance for the triggering invoice (the wedge, as a node):
+    // ~80% of face, capped at the tenant's underwriting limit. Reuses the lending eligibility.
+    const inv = (ctx && ctx.trigger && ctx.trigger.invoice) || {};
+    const face = Number(inv.total_amount || 0);
+    let advance = Math.round(0.8 * face * 100) / 100;
+    const elig = await require("../lending").eligibility(env.tenantId);
+    const cap = Number(elig.limit || 0);
+    if (cap > 0) advance = Math.min(advance, cap);
+    return { invoice_number: inv.invoice_number || null, face, advance, financeable: String(inv.status) === "sent" && advance > 0, grade: elig.grade, eligible_limit: cap };
+  },
   async notify(cfg, ctx, env) {
     await pool.query(
       "INSERT INTO alerts(tenant_id, rule_id, severity, title, message) VALUES($1,'flow',$2,$3,$4)",
@@ -139,6 +150,7 @@ const NODE_CATALOG = [
   { type: "llm", label: "Ask AI", desc: "Prompt your engine; use {{...}} for upstream data", fields: [{ key: "system", type: "text", label: "System (optional)" }, { key: "prompt", type: "textarea", label: "Prompt" }] },
   { type: "agent", label: "Run an agent", desc: "Run one of your Agent Studio agents", fields: [{ key: "agentId", type: "agentselect", label: "Agent" }, { key: "message", type: "textarea", label: "Message" }] },
   { type: "underwrite", label: "Underwrite (credit)", desc: "Run financing-readiness → {{nodes.id.grade / decision / eligible_amount}}", fields: [] },
+  { type: "invoice_advance", label: "Invoice advance offer", desc: "Indicative advance for the triggering invoice → {{nodes.id.advance / financeable}}", fields: [] },
   { type: "http", label: "HTTP request", desc: "Call an external API", fields: [{ key: "method", type: "select", label: "Method", options: ["GET", "POST", "PUT", "DELETE"] }, { key: "url", type: "text", label: "URL" }, { key: "headers", type: "json", label: "Headers" }, { key: "body", type: "textarea", label: "Body" }] },
   { type: "branch", label: "If / branch", desc: "Route by a condition (edges labelled true/false)", fields: [{ key: "left", type: "text", label: "Left ({{...}})" }, { key: "op", type: "select", label: "Operator", options: ["==", "!=", ">", "<", ">=", "<=", "contains", "truthy", "empty"] }, { key: "right", type: "text", label: "Right" }] },
   { type: "set", label: "Set values", desc: "Build a small object for later nodes", fields: [{ key: "values", type: "json", label: "Values" }] },
@@ -249,7 +261,8 @@ async function runDueScheduled(now = new Date()) {
 
 // Events the platform emits that flows can trigger on (shown in the builder).
 const EVENT_CATALOG = [
-  { event: "invoice.created", label: "Invoice created", desc: "A new invoice was created" },
+  { event: "invoice.created", label: "Invoice created", desc: "A new invoice was created (draft)" },
+  { event: "invoice.sent", label: "Invoice issued", desc: "An invoice was issued to the customer (unpaid → financeable)" },
   { event: "invoice.paid", label: "Invoice paid", desc: "An invoice was marked paid / payment received" },
   { event: "invoice.overdue", label: "Invoice overdue", desc: "An overdue unpaid invoice (daily check) — {{trigger.invoice.days_overdue}}, .customer_name, .total_amount" },
   { event: "transaction.created", label: "Transaction added", desc: "A transaction was recorded manually — {{trigger.transaction.amount}}, .category, .counterparty, .description" },

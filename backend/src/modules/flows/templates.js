@@ -46,6 +46,20 @@ const FLOW_TEMPLATES = [
     },
   },
   {
+    id: "invoice-financeable-alert",
+    name: "Issue invoice → offer an advance",
+    description: "The moment you issue an invoice, check if it can be advanced for cash and alert you with the amount. Turns receivables into working capital automatically (review the offer on the Credit page — no money moves without you).",
+    trigger: { type: "event", config: { event: "invoice.sent" } },
+    graph: {
+      nodes: [
+        { id: "adv", type: "invoice_advance", config: {} },
+        { id: "chk", type: "branch", config: { left: "{{nodes.adv.financeable}}", op: "truthy" } },
+        { id: "alert", type: "notify", config: { title: "Advance this invoice for cash", severity: "low", message: "Invoice {{trigger.invoice.invoice_number}} for {{trigger.invoice.customer_name}} (₹{{trigger.invoice.total_amount}}) is financeable - advance ~₹{{nodes.adv.advance}} now. Open Financing to review the offer." } },
+      ],
+      edges: [{ from: "adv", to: "chk" }, { from: "chk", to: "alert", branch: "true" }],
+    },
+  },
+  {
     id: "financing-ready",
     name: "Financing-ready watch",
     description: "Daily: run underwriting and alert you the moment the business is pre-qualified for credit.",

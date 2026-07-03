@@ -116,6 +116,9 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
     require("../modules/lending").onInvoicePaid(req.user.tenant_id, inv.id).catch(() => {});
   } else if (status === "sent") {
     require("../lib/invoiceGl").postInvoiceSale(req.user.tenant_id, inv).catch(() => {}); // accrual: recognise revenue + output GST on issue
+    // Issued & unpaid = the moment an invoice becomes financeable. Flows can trigger on this
+    // (e.g. the "issue invoice → offer an advance" automation).
+    require("../modules/flows/runner").emitEvent(req.user.tenant_id, "invoice.sent", { invoice: inv }).catch(() => {});
   }
   res.json(inv);
 });
