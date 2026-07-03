@@ -66,6 +66,7 @@ const bankcredit = require("./bankcredit");
 const msme = require("./msme");
 const roc = require("./roc");
 const stampreg = require("./stampregister");
+const insurance = require("./insurance");
 
 // GET /documents/:id/print is opened in a new browser tab (window.open) which can't
 // set an Authorization header - accept the short-lived access token as ?token= for
@@ -1057,5 +1058,16 @@ router.post("/stamp-register", canPost, async (req, res) => { try { res.status(2
 router.patch("/stamp-register/:id", canPost, async (req, res) => { try { res.json(await stampreg.updateStamp(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/stamp-register/:id/use", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await stampreg.useStamp(tenantOf(req), req.params.id, { documentRef: b.document_ref, usedOn: b.used_on })); } catch (e) { fail(res, e); } });
 router.delete("/stamp-register/:id", canPost, async (req, res) => { try { res.json(await stampreg.removeStamp(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+
+// ── Insurance: policy vault + sum-insured adequacy (vs live stock/assets) + claims tracker ──
+router.get("/insurance/policies", async (req, res) => { try { res.json(await insurance.listPolicies(tenantOf(req), { status: req.query.status })); } catch (e) { fail(res, e); } });
+router.post("/insurance/policies", canPost, async (req, res) => { try { res.status(201).json(await insurance.createPolicy(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.patch("/insurance/policies/:id", canPost, async (req, res) => { try { res.json(await insurance.updatePolicy(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.delete("/insurance/policies/:id", canPost, async (req, res) => { try { res.json(await insurance.removePolicy(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.get("/insurance/adequacy", async (req, res) => { try { res.json(await insurance.sumInsuredAdequacy(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.get("/insurance/expiring", async (req, res) => { try { res.json(await insurance.expiringPolicies(tenantOf(req), Number(req.query.within_days) || 45)); } catch (e) { fail(res, e); } });
+router.get("/insurance/claims", async (req, res) => { try { res.json(await insurance.listClaims(tenantOf(req), { status: req.query.status })); } catch (e) { fail(res, e); } });
+router.post("/insurance/claims", canPost, async (req, res) => { try { res.status(201).json(await insurance.createClaim(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.patch("/insurance/claims/:id", canPost, async (req, res) => { try { res.json(await insurance.updateClaim(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
 
 module.exports = router;

@@ -883,6 +883,45 @@ const BOOKS_SCHEMA = `
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_book_agreement_obligations ON book_agreement_obligations(tenant_id, status, due_date);
+
+  -- Insurance policy vault + claims. Adequacy (#152) is computed live against stock + fixed assets.
+  CREATE TABLE IF NOT EXISTS book_insurance_policies (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     TEXT NOT NULL,
+    insurer       TEXT,
+    policy_no     TEXT,
+    type          TEXT NOT NULL DEFAULT 'fire'
+                    CHECK (type IN ('fire','burglary','marine','stock','machinery','property','liability','group_health','gpa','keyman','wc','other')),
+    sum_insured   NUMERIC(15,2) NOT NULL DEFAULT 0,
+    premium       NUMERIC(15,2) NOT NULL DEFAULT 0,
+    start_date    DATE,
+    end_date      DATE,                                    -- renewal date
+    asset_covered TEXT,
+    beneficiary   TEXT,
+    scan_file_id  UUID,
+    status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','lapsed','renewed','cancelled')),
+    notes         TEXT,
+    created_by    UUID,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_insurance_policies ON book_insurance_policies(tenant_id, status, end_date);
+
+  CREATE TABLE IF NOT EXISTS book_insurance_claims (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    policy_id      UUID REFERENCES book_insurance_policies(id) ON DELETE SET NULL,
+    tenant_id      TEXT NOT NULL,
+    claim_no       TEXT,
+    incident_date  DATE,
+    filed_date     DATE,
+    claim_amount   NUMERIC(15,2) NOT NULL DEFAULT 0,
+    settled_amount NUMERIC(15,2) NOT NULL DEFAULT 0,
+    status         TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','filed','surveyor','approved','rejected','settled','closed')),
+    checklist      JSONB NOT NULL DEFAULT '[]'::jsonb,     -- filing checklist items {label, done}
+    notes          TEXT,
+    created_by     UUID,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_insurance_claims ON book_insurance_claims(tenant_id, status, created_at DESC);
 `;
 
 module.exports = { BOOKS_SCHEMA };

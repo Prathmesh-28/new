@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { api } from "@/lib/api";
 import { useT } from "@/i18n";
 import TabStrip from "@/components/TabStrip";
 import { useFeatureState } from "@/hooks/useFeatureState";
@@ -17,7 +18,7 @@ import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
 
 type Tab =
-  | "overview" | "register" | "gaps" | "suminsured" | "grouphealth"
+  | "overview" | "vault" | "register" | "gaps" | "suminsured" | "grouphealth"
   | "assetcover" | "tradecredit" | "claims" | "premvscover" | "keyman" | "riskscore"
   | "duecal" | "csrcompare" | "ncbtracker" | "deductibleopt" | "bicover"
   | "marinecover" | "piestimator" | "cyberscore" | "fleettracker" | "wcestimator"
@@ -47,6 +48,7 @@ export default function InsurancePage() {
         </div>
         <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
             ["overview", tr("ins.tab.overview"), ShieldCheck],
+            ["vault", "Policy Vault (live)", ShieldAlert],
             ["register", tr("ins.tab.register"), Wallet],
             ["gaps", tr("ins.tab.gaps"), FileWarning],
             ["suminsured", tr("ins.tab.suminsured"), Calculator],
@@ -89,6 +91,7 @@ export default function InsurancePage() {
       </div>
 
       {tab === "overview" && <Overview onPick={setTab} />}
+      {tab === "vault" && <PolicyVaultLive />}
       {tab === "register" && <PolicyRegister />}
       {tab === "gaps" && <CoverageGapAnalyzer />}
       {tab === "suminsured" && <SumInsuredCalculator />}
@@ -3564,6 +3567,81 @@ function LiabilityLimitAdequacy() {
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Rule-of-thumb sizing only - real liability limits depend on contracts (landlords/clients often mandate a minimum), industry hazard and legal-cost exposure. Liability claims include defence costs; confirm whether those erode your limit. Bind through an IRDAI-licensed insurer/broker.</p>
+    </div>
+  );
+}
+
+// ── Policy Vault (live, server-backed /api/books/insurance) ──────────────────────
+// Persisted policy vault + claims + the headline: sum-insured adequacy computed against LIVE
+// ledger values (stock closing value + fixed-asset net book value). Under-insurance flags the
+// average-clause shortfall in rupees. Unlike the KV calculator tabs, this reconciles to the books.
+interface VaultPolicy { id: string; insurer: string; policy_no: string; type: string; sum_insured: number; premium: number; end_date: string | null; status: string; state: string; days_to_renewal: number | null }
+interface Adequacy { live: { stock_value: number; fixed_assets_value: number }; under_insured_count: number; policies: Array<{ id: string; insurer: string; type: string; sum_insured: number; coverable_value?: number; basis?: string; adequacy_pct: number | null; under_insured?: boolean; shortfall?: number; average_clause_note?: string | null; note?: string }> }
+function PolicyVaultLive() {
+  const [policies, setPolicies] = useState<VaultPolicy[] | null>(null);
+  const [adq, setAdq] = useState<Adequacy | null>(null);
+  const [f, setF] = useState({ insurer: "", policy_no: "", type: "fire", sum_insured: "", premium: "", end_date: "", asset_covered: "" });
+  const load = () => {
+    api.get<VaultPolicy[]>("/api/books/insurance/policies").then(setPolicies).catch(e => toast.error((e as Error).message));
+    api.get<Adequacy>("/api/books/insurance/adequacy").then(setAdq).catch(() => {});
+  };
+  useEffect(() => { load(); }, []);
+  const add = async () => {
+    if (!(Number(f.sum_insured) > 0)) return toast.error("Enter the sum insured");
+    try { await api.post("/api/books/insurance/policies", { ...f, sum_insured: Number(f.sum_insured), premium: Number(f.premium) || 0 }); toast.success("Policy added"); setF({ insurer: "", policy_no: "", type: "fire", sum_insured: "", premium: "", end_date: "", asset_covered: "" }); load(); }
+    catch (e) { toast.error((e as Error).message); }
+  };
+  const del = async (id: string) => { try { await api.delete(`/api/books/insurance/policies/${id}`); load(); } catch (e) { toast.error((e as Error).message); } };
+  const fc = formatCurrency;
+  return (
+    <div className="space-y-4">
+      {adq && (
+        <div className={`${CARD} p-4`}>
+          <p className="text-sm font-semibold mb-2">Sum-insured adequacy vs live values</p>
+          <p className="text-xs text-[var(--color-muted)] mb-2">Live stock: <b className="text-[var(--color-text)]">{fc(adq.live.stock_value)}</b> · Fixed assets (NBV): <b className="text-[var(--color-text)]">{fc(adq.live.fixed_assets_value)}</b> · <span className={adq.under_insured_count ? "text-red-400 font-semibold" : "text-emerald-400"}>{adq.under_insured_count} under-insured</span></p>
+          {adq.policies.filter(p => p.adequacy_pct != null).length > 0 && (
+            <table className="w-full text-sm rcard"><tbody>
+              {adq.policies.filter(p => p.adequacy_pct != null).map(p => (
+                <tr key={p.id} className="border-t border-[var(--color-border)]">
+                  <td data-label="Policy" className="py-1.5 capitalize">{p.type} · {p.insurer || "—"}</td>
+                  <td data-label="Sum insured" className="py-1.5">{fc(p.sum_insured)}</td>
+                  <td data-label="Coverable" className="py-1.5">{fc(p.coverable_value || 0)} <span className="text-[10px] text-[var(--color-muted)]">({p.basis})</span></td>
+                  <td data-label="Adequacy" className={`py-1.5 font-medium ${p.under_insured ? "text-red-400" : "text-emerald-400"}`}>{p.adequacy_pct}%{p.under_insured && ` · short ${fc(p.shortfall || 0)}`}</td>
+                </tr>
+              ))}
+            </tbody></table>
+          )}
+        </div>
+      )}
+      <div className={`${CARD} p-4 flex flex-wrap gap-2 items-end`}>
+        <input className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm" placeholder="Insurer" value={f.insurer} onChange={e => setF({ ...f, insurer: e.target.value })} />
+        <input className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm" placeholder="Policy no" value={f.policy_no} onChange={e => setF({ ...f, policy_no: e.target.value })} />
+        <select className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm" value={f.type} onChange={e => setF({ ...f, type: e.target.value })}>
+          {["fire", "burglary", "marine", "stock", "machinery", "property", "liability", "group_health", "gpa", "keyman", "wc", "other"].map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <input className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm" type="number" placeholder="Sum insured ₹" value={f.sum_insured} onChange={e => setF({ ...f, sum_insured: e.target.value })} />
+        <input className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm" type="number" placeholder="Premium ₹" value={f.premium} onChange={e => setF({ ...f, premium: e.target.value })} />
+        <input className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm" type="date" title="Renewal" value={f.end_date} onChange={e => setF({ ...f, end_date: e.target.value })} />
+        <button onClick={add} className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold"><Plus size={13} /> Add policy</button>
+      </div>
+      {!policies ? <p className="text-xs text-[var(--color-muted)]">Loading…</p> : policies.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No policies in the vault yet.</p>
+      ) : (
+        <div className={`${CARD} p-4`}>
+          <table className="w-full text-sm rcard"><tbody>
+            {policies.map(p => (
+              <tr key={p.id} className="border-t border-[var(--color-border)]">
+                <td data-label="Policy" className="py-1.5 capitalize">{p.type} · {p.insurer || "—"} {p.policy_no && <span className="text-[var(--color-muted)]">#{p.policy_no}</span>}</td>
+                <td data-label="Sum insured" className="py-1.5">{fc(p.sum_insured)}</td>
+                <td data-label="Premium" className="py-1.5">{fc(p.premium)}</td>
+                <td data-label="Renewal" className="py-1.5">{p.end_date || "—"}{p.days_to_renewal != null && p.state === "expiring" && <span className="text-amber-400 text-[11px] ml-1">({p.days_to_renewal}d)</span>}{p.state === "lapsed" && <span className="text-red-400 text-[11px] ml-1">lapsed</span>}</td>
+                <td className="py-1.5"><button onClick={() => del(p.id)} className="text-red-400 text-[11px]">Remove</button></td>
+              </tr>
+            ))}
+          </tbody></table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Adequacy compares each fire/burglary/marine policy to live stock value and each machinery/property policy to fixed-asset net book value — under-insurance triggers the average clause on a claim.</p>
     </div>
   );
 }
