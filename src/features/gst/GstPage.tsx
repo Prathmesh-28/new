@@ -4497,6 +4497,12 @@ function GstDepthServer() {
   const [qr, setQr] = useState<any>(null);
   const [r86, setR86] = useState<any>(null);
   const [late, setLate] = useState<any>(null);
+  const [commonItc, setCommonItc] = useState("");
+  const [hoCost, setHoCost] = useState("");
+  const [isd, setIsd] = useState<any>(null);
+  const [cc, setCc] = useState<any>(null);
+  const runIsd = () => api.get(`/api/books/gst/isd?period=${period}&common_itc=${Number(commonItc) || 0}`).then(setIsd).catch(() => {});
+  const runCc = () => api.get(`/api/books/gst/cross-charge?period=${period}&ho_cost=${Number(hoCost) || 0}`).then(setCc).catch(() => {});
   const box = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4";
   useEffect(() => {
     api.get(`/api/books/gst/composition-cmp08?fy_start=${nowY}&quarter=${quarter}`).then(setCmp).catch(() => {});
@@ -4531,6 +4537,27 @@ function GstDepthServer() {
         <div className={box}>
           <p className="text-sm font-semibold mb-2">Late fee & interest ({period})</p>
           {late ? <div className="text-xs space-y-1 text-[var(--color-muted)]"><p>Unpaid tax: <b className="text-[var(--color-text)]">{fc(late.unpaid_tax)}</b> · {late.days_late} day(s) late</p><p>Late fee: <b className="text-[var(--color-text)]">{fc(late.late_fee)}</b> · Interest: <b className="text-[var(--color-text)]">{fc(late.interest)}</b> · Total: <b className="text-red-400">{fc(late.total_payable)}</b></p><p className="text-[10px]">{late.note}</p></div> : <p className="text-xs text-[var(--color-muted)]">Loading…</p>}
+        </div>
+      </div>
+      {/* ISD (#52) + cross-charge (#53) — allocate across branches by turnover */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className={box}>
+          <p className="text-sm font-semibold mb-2">ISD credit distribution</p>
+          <div className="flex gap-2 items-end mb-2">
+            <input type="number" value={commonItc} onChange={e => setCommonItc(e.target.value)} placeholder="Common ITC pool ₹" className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm w-40" />
+            <button onClick={runIsd} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold">Distribute</button>
+          </div>
+          {isd && (isd.allocation.length === 0 ? <p className="text-[11px] text-[var(--color-muted)]">{isd.note}</p> :
+            <table className="w-full text-xs rcard"><tbody>{isd.allocation.map((a: any, i: number) => <tr key={i} className="border-t border-[var(--color-border)]"><td data-label="Branch" className="py-1">{a.branch}</td><td data-label="Share" className="py-1">{a.share_pct}%</td><td data-label="ITC" className="py-1">{fc(a.itc_allocated)}</td></tr>)}</tbody></table>)}
+        </div>
+        <div className={box}>
+          <p className="text-sm font-semibold mb-2">Cross-charge (Schedule I)</p>
+          <div className="flex gap-2 items-end mb-2">
+            <input type="number" value={hoCost} onChange={e => setHoCost(e.target.value)} placeholder="HO common cost ₹" className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm w-40" />
+            <button onClick={runCc} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold">Allocate</button>
+          </div>
+          {cc && (cc.allocation.length === 0 ? <p className="text-[11px] text-[var(--color-muted)]">{cc.note}</p> :
+            <table className="w-full text-xs rcard"><tbody>{cc.allocation.map((a: any, i: number) => <tr key={i} className="border-t border-[var(--color-border)]"><td data-label="Branch" className="py-1">{a.branch}</td><td data-label="Cost" className="py-1">{fc(a.allocated_cost)}</td><td data-label="IGST" className="py-1">{fc(a.igst)}</td></tr>)}</tbody></table>)}
         </div>
       </div>
       <p className="text-[11px] text-[var(--color-muted)]">Also live from the ledger (real endpoints): GSTR-9/9C with CA reconciliation at <span className="font-mono">/api/books/gst/gstr9</span>. Filing of these returns is GSP-gated.</p>

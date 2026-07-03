@@ -1055,6 +1055,8 @@ router.get("/gst/qrmp", async (req, res) => { try { res.json(await gstadvanced.q
 router.get("/gst/rule-86b", async (req, res) => { try { res.json(await gstadvanced.rule86B(tenantOf(req), { period: req.query.period })); } catch (e) { fail(res, e); } });
 router.get("/gst/late-fee", async (req, res) => { try { res.json(await gstadvanced.lateFeeInterest(tenantOf(req), { period: req.query.period, filedOn: req.query.filed_on, dueDate: req.query.due_date })); } catch (e) { fail(res, e); } });
 router.get("/gst/b2c-qr", async (req, res) => { try { res.json(await gstadvanced.b2cUpiQr(tenantOf(req), { amount: req.query.amount, invoiceNo: req.query.invoice_no })); } catch (e) { fail(res, e); } });
+router.get("/gst/isd", async (req, res) => { try { res.json(await gstadvanced.isdDistribution(tenantOf(req), { period: req.query.period, commonItc: req.query.common_itc ? Number(req.query.common_itc) : 0 })); } catch (e) { fail(res, e); } });
+router.get("/gst/cross-charge", async (req, res) => { try { res.json(await gstadvanced.crossCharge(tenantOf(req), { period: req.query.period, hoCost: req.query.ho_cost ? Number(req.query.ho_cost) : 0, igstRate: req.query.igst_rate ? Number(req.query.igst_rate) : undefined })); } catch (e) { fail(res, e); } });
 
 // ── Company-law / ROC: statutory registers (members/directors/charges/rpt) + prep + Sec 188 ──
 router.get("/roc/registers/:kind", async (req, res) => { try { res.json(await roc.listRegister(tenantOf(req), req.params.kind)); } catch (e) { fail(res, e); } });

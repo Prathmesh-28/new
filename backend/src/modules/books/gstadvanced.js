@@ -109,4 +109,47 @@ async function b2cUpiQr(tenantId, { amount, invoiceNo } = {}) {
   return { configured: true, payload: `upi://pay?pa=${encodeURIComponent(vpa)}&pn=${pn}${am}&cu=INR${tn}`, vpa, note: "Render this string as a QR on the B2C invoice. Mandatory for registered persons with aggregate turnover > ₹500cr." };
 }
 
-module.exports = { compositionCmp08, qrmp, rule86B, lateFeeInterest, b2cUpiQr };
+// Per-branch outward turnover in a month (drives ISD + cross-charge allocation ratios).
+function monthBounds(period) {
+  const [y, m] = String(period).split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { from: `${period}-01`, to: `${period}-${String(last).padStart(2, "0")}` };
+}
+async function branchTurnover(tenantId, period) {
+  const { from, to } = monthBounds(period || new Date().toISOString().slice(0, 7));
+  const { rows } = await pool.query(
+    `SELECT b.id, b.name, b.gstin, COALESCE(SUM(te.taxable_value),0) AS turnover
+       FROM book_branches b
+       LEFT JOIN book_vouchers v ON v.branch_id=b.id AND v.tenant_id=b.tenant_id AND v.is_cancelled=false AND v.voucher_date BETWEEN $2 AND $3
+       LEFT JOIN book_tax_entries te ON te.voucher_id=v.id AND te.is_input=false
+      WHERE b.tenant_id=$1 AND b.is_active=true
+      GROUP BY b.id, b.name, b.gstin ORDER BY turnover DESC`, [tenantId, from, to]);
+  return rows.map((r) => ({ id: r.id, name: r.name, gstin: r.gstin, turnover: n(r.turnover) }));
+}
+
+// #52 — ISD: distribute a common ITC pool across branch GSTINs by turnover ratio (GSTR-6 basis).
+async function isdDistribution(tenantId, { period, commonItc = 0 } = {}) {
+  const branches = await branchTurnover(tenantId, period);
+  const total = branches.reduce((s, b) => s + b.turnover, 0);
+  const pool_ = n(commonItc);
+  const allocation = branches.map((b) => {
+    const pct = total > 0 ? r2((b.turnover / total) * 100) : 0;
+    return { branch: b.name, gstin: b.gstin, turnover: b.turnover, share_pct: pct, itc_allocated: total > 0 ? r2(pool_ * b.turnover / total) : 0 };
+  });
+  return { period: period || new Date().toISOString().slice(0, 7), common_itc: r2(pool_), total_turnover: r2(total), allocation, note: total > 0 ? "ISD credit distributed pro-rata to each branch's turnover (GSTR-6 basis). Filing is GSP-gated." : "No branch turnover in this period — add branches / tag vouchers to a branch." };
+}
+
+// #53 — Cross-charge: allocate a head-office common cost across branches by turnover, each leg an
+// inter-branch supply (Schedule I) attracting IGST (default 18%).
+async function crossCharge(tenantId, { period, hoCost = 0, igstRate = 18 } = {}) {
+  const branches = await branchTurnover(tenantId, period);
+  const total = branches.reduce((s, b) => s + b.turnover, 0);
+  const cost = n(hoCost);
+  const allocation = branches.map((b) => {
+    const alloc = total > 0 ? r2(cost * b.turnover / total) : 0;
+    return { branch: b.name, gstin: b.gstin, turnover: b.turnover, allocated_cost: alloc, igst: r2(alloc * n(igstRate) / 100) };
+  });
+  return { period: period || new Date().toISOString().slice(0, 7), ho_cost: r2(cost), igst_rate_pct: n(igstRate), total_turnover: r2(total), allocation, note: "HO common cost cross-charged to branches pro-rata (Schedule I inter-branch supply); each leg attracts IGST. Post as inter-branch invoices." };
+}
+
+module.exports = { compositionCmp08, qrmp, rule86B, lateFeeInterest, b2cUpiQr, isdDistribution, crossCharge };
