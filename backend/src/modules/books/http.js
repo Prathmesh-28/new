@@ -1080,6 +1080,8 @@ router.post("/roc/board-minutes", canPost, async (req, res) => { try { res.json(
 router.get("/fraud-scan", async (req, res) => { try { res.json(await fraudsentinel.scan(tenantOf(req))); } catch (e) { fail(res, e); } });
 // Books Health Score — composite bookkeeping-quality score.
 router.get("/health-score", async (req, res) => { try { res.json(await require("./health").booksHealth(tenantOf(req))); } catch (e) { fail(res, e); } });
+// Business Wrapped — ledger-computed year in review.
+router.get("/wrapped", async (req, res) => { try { res.json(await require("./wrapped").businessWrapped(tenantOf(req), { fy: req.query.fy })); } catch (e) { fail(res, e); } });
 
 // ── Stamp / franking / notary / e-stamp register (in-house; scans link to the files vault) ──
 router.get("/stamp-register", async (req, res) => { try { res.json(await stampreg.listStamps(tenantOf(req), { status: req.query.status })); } catch (e) { fail(res, e); } });
