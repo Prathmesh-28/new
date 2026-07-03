@@ -264,6 +264,7 @@ const EVENT_CATALOG = [
   { event: "invoice.created", label: "Invoice created", desc: "A new invoice was created (draft)" },
   { event: "invoice.sent", label: "Invoice issued", desc: "An invoice was issued to the customer (unpaid → financeable)" },
   { event: "invoice.paid", label: "Invoice paid", desc: "An invoice was marked paid / payment received" },
+  { event: "advance.recovered", label: "Advance auto-recovered", desc: "An invoice-financing advance self-liquidated when its invoice was paid ({{trigger.advance.recovered}}, .invoice_id)" },
   { event: "invoice.overdue", label: "Invoice overdue", desc: "An overdue unpaid invoice (daily check) — {{trigger.invoice.days_overdue}}, .customer_name, .total_amount" },
   { event: "transaction.created", label: "Transaction added", desc: "A transaction was recorded manually — {{trigger.transaction.amount}}, .category, .counterparty, .description" },
   { event: "cash.daily", label: "Daily cash pulse", desc: "Each morning with cash, runway & receivables ({{trigger.snapshot.runwayDays}}, .cash.total, …)" },

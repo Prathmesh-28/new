@@ -60,6 +60,16 @@ const FLOW_TEMPLATES = [
     },
   },
   {
+    id: "advance-recovered-alert",
+    name: "Advance recovered → alert",
+    description: "When an invoice-financing advance self-liquidates (its invoice got paid), raise an alert so you have closure on the financing.",
+    trigger: { type: "event", config: { event: "advance.recovered" } },
+    graph: {
+      nodes: [{ id: "alert", type: "notify", config: { title: "Advance auto-recovered", severity: "low", message: "An invoice advance of ₹{{trigger.advance.recovered}} was cleared automatically - your customer paid the backing invoice. Nothing to do." } }],
+      edges: [],
+    },
+  },
+  {
     id: "financing-ready",
     name: "Financing-ready watch",
     description: "Daily: run underwriting and alert you the moment the business is pre-qualified for credit.",

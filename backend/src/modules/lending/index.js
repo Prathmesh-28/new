@@ -400,6 +400,14 @@ async function onInvoicePaid(tenantId, invoiceId) {
   const { rows: prev } = await q(tenantId,"SELECT COALESCE(SUM(interest_component),0) AS i, COALESCE(SUM(principal_component),0) AS p FROM loan_repayments WHERE loan_id=$1", [loan.id]);
   const due = r2(n(loan.outstanding_principal) + Math.max(0, n(sch[0].i) - n(prev[0].i)));
   const res = await recordRepayment(tenantId, loan.id, { amount: due, method: "auto_invoice", ref: `inv_recover_${invoiceId}` });
+  // Closure signal: when the advance fully self-liquidates, emit an event so Flows can notify
+  // the owner ("your advance cleared"). Lazy require avoids a flows↔lending import cycle;
+  // fire-and-forget; the emit's own in-flow guard prevents recursion.
+  if (res && res.closed) {
+    require("../flows/runner").emitEvent(tenantId, "advance.recovered", {
+      advance: { loan_id: loan.id, invoice_id: invoiceId, recovered: r2(n(res.applied) || due), kind: loan.kind },
+    }).catch(() => {});
+  }
   return { matched: true, loanId: loan.id, ...res };
 }
 
