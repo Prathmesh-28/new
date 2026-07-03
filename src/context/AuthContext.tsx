@@ -41,6 +41,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading]     = useState(true);
   const [serverReady, setReady]   = useState(false);
 
+  // Set the current user and, if the server has a saved UI-language preference, tell the
+  // i18n provider to adopt it (#169). A window event keeps AuthProvider and I18nProvider
+  // decoupled. Null locale = user never chose one → leave the device (localStorage) default.
+  const applyUser = useCallback((u: AuthUser | null) => {
+    setUser(u);
+    if (u?.locale) {
+      try { window.dispatchEvent(new CustomEvent("hr:setlocale", { detail: u.locale })); } catch { /* ignore */ }
+    }
+  }, []);
+
   /* Warm the server the moment AuthProvider mounts */
   useEffect(() => {
     let cancelled = false;
@@ -83,16 +93,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let token = await secureGet("hr_access");
       if (token) {
         const u = await fetchMe(token);
-        if (u) { setUser(u); setLoading(false); return; }
+        if (u) { applyUser(u); setLoading(false); return; }
       }
       token = await tryRefresh();
       if (token) {
         const u = await fetchMe(token);
-        if (u) { setUser(u); }
+        if (u) { applyUser(u); }
       }
       setLoading(false);
     })();
-  }, [fetchMe, tryRefresh]);
+  }, [fetchMe, tryRefresh, applyUser]);
 
   const login = useCallback(async (email: string, password: string, turnstileToken?: string, mfaCode?: string): Promise<AuthUser> => {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -116,9 +126,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await secureSet("hr_access", access);
     await secureSet("hr_refresh", refresh);
     setReady(true);
-    setUser(u);
+    applyUser(u);
     return u as AuthUser;
-  }, []);
+  }, [applyUser]);
 
   // Re-fetch the current user (e.g. after a plan upgrade) so entitlements update
   // in-session without a full page reload.
@@ -127,8 +137,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!token) return;
     let u = await fetchMe(token);
     if (!u) { token = await tryRefresh(); if (token) u = await fetchMe(token); }
-    if (u) setUser(u);
-  }, [fetchMe, tryRefresh]);
+    if (u) applyUser(u);
+  }, [fetchMe, tryRefresh, applyUser]);
 
   const logout = useCallback(async () => {
     const rt = await secureGet("hr_refresh");

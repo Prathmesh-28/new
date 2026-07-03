@@ -5,6 +5,8 @@
 // localStorage. Adding a language = drop a locale file, register a loader, add to LOCALES.
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import en from "./locales/en";
+import { secureGet } from "@/lib/secureStorage";
+import { API_BASE } from "@/lib/apiBase";
 
 export const LOCALES: { code: string; label: string; native: string }[] = [
   { code: "en", label: "English", native: "English" },
@@ -69,9 +71,37 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { try { document.documentElement.lang = locale; } catch { /* ignore */ } }, [locale]);
 
+  // Adopt a locale the server reports for the logged-in user. Once authenticated the
+  // server profile is the source of truth (so the language follows the user across
+  // devices); localStorage still gives instant, no-flash startup. AuthContext dispatches
+  // this event after hydrating/logging in a user — a window event keeps the two providers
+  // decoupled (neither imports the other). We update localStorage + state but skip the
+  // server round-trip (the value already came from the server).
+  useEffect(() => {
+    const onServerLocale = (e: Event) => {
+      const code = (e as CustomEvent).detail;
+      if (typeof code === "string" && LOCALES.some((l) => l.code === code)) {
+        try { localStorage.setItem(STORAGE_KEY, code); } catch { /* ignore */ }
+        setLocaleState(code);
+      }
+    };
+    window.addEventListener("hr:setlocale", onServerLocale as EventListener);
+    return () => window.removeEventListener("hr:setlocale", onServerLocale as EventListener);
+  }, []);
+
   const setLocale = useCallback((code: string) => {
     try { localStorage.setItem(STORAGE_KEY, code); } catch { /* ignore */ }
     setLocaleState(code);
+    // Best-effort server sync so the choice follows the user across devices/logins (#169).
+    // No-ops when signed out (no token); failures are non-fatal (localStorage still holds it).
+    secureGet("hr_access").then((tok) => {
+      if (!tok) return;
+      fetch(`${API_BASE}/auth/locale`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
+        body: JSON.stringify({ locale: code }),
+      }).catch(() => { /* offline / transient — localStorage is the fallback */ });
+    }).catch(() => { /* ignore */ });
   }, []);
 
   // active locale → English base → the key itself (a missing key surfaces English, never "[key]")

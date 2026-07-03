@@ -131,7 +131,7 @@ router.post("/login", validateBody({
   res.json({
     access:  signAccess(payload),
     refresh: signRefresh(payload),
-    user:    { id: user.id, email: user.email, role: user.role, tenant_id: user.tenant_id, first_login: firstLogin, plan: user.subscription_plan || "free" },
+    user:    { id: user.id, email: user.email, role: user.role, tenant_id: user.tenant_id, first_login: firstLogin, plan: user.subscription_plan || "free", locale: user.locale || null },
   });
  } catch (e) {
   // Login had NO error handling: any unexpected error (env/schema/DB) previously became an
@@ -249,10 +249,11 @@ router.get("/me", authenticate, async (req, res) => {
       id: req.user.id, email: req.user.email, role: req.user.role,
       tenant_id: req.user.tenant_id, first_login: req.user.first_login,
       display_name: req.user.display_name, plan: req.user.subscription_plan || "free",
+      locale: req.user.locale || null,
     });
   }
   const { rows } = await pool.query(
-    "SELECT id, email, role, tenant_id, first_login, display_name, subscription_plan AS plan FROM users WHERE id=$1",
+    "SELECT id, email, role, tenant_id, first_login, display_name, subscription_plan AS plan, locale FROM users WHERE id=$1",
     [req.user.id]
   );
   if (!rows[0]) return res.status(404).json({ error: "User not found" });
@@ -295,6 +296,17 @@ router.put("/profile", authenticate, async (req, res) => {
     [display_name.trim().slice(0, 64), req.user.id]
   );
   res.json({ ok: true });
+});
+
+// PUT /auth/locale - persist the user's UI language (#169 i18n) so it follows them
+// across devices/logins. The frontend still writes localStorage for instant, no-flash
+// startup; this makes the server the source of truth for a logged-in user.
+const SUPPORTED_LOCALES = ["en", "hi", "mr", "bn", "ta", "te", "gu", "kn", "ml", "pa"];
+router.put("/locale", authenticate, validateBody({
+  locale: { type: "string", required: true, enum: SUPPORTED_LOCALES },
+}), async (req, res) => {
+  await pool.query("UPDATE users SET locale=$1 WHERE id=$2", [req.body.locale, req.user.id]);
+  res.json({ ok: true, locale: req.body.locale });
 });
 
 // POST /auth/change-password - requires current password

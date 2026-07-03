@@ -554,6 +554,10 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count    INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS status         TEXT NOT NULL DEFAULT 'active';  -- active | suspended
 
+    -- ── UI locale preference (#169 i18n) — server-side so the chosen language follows
+    --    the user across devices/logins instead of living only in per-device localStorage.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS locale         TEXT;  -- en | hi | mr | bn | ta | te | gu | kn | ml | pa (null = follow device default)
+
     -- ── Company / tenant profile (identity beyond the email-derived tenant id) ─
     CREATE TABLE IF NOT EXISTS tenant_profile (
       tenant_id     TEXT PRIMARY KEY,

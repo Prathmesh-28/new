@@ -17,6 +17,7 @@ export interface AuthUser {
   first_login: boolean;
   display_name?: string;
   plan?: PlanTier;
+  locale?: string | null;
 }
 
 // ── Subscription plans / entitlements ──────────────────────────────────────────
