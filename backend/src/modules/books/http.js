@@ -973,6 +973,13 @@ router.get("/advances", async (req, res) => { try { res.json(await ops.listAdvan
 router.post("/expenses/parse", canPost, async (req, res) => { try { res.json(await require("./voiceExpense").parseExpenseText(tenantOf(req), (req.body || {}).text)); } catch (e) { fail(res, e); } });
 // Agreement obligation extraction → lock-ins/renewals/escalations/notice/payments (rule + LLM).
 router.post("/agreements/extract", canPost, async (req, res) => { try { res.json(await require("./agreements").extractObligations(tenantOf(req), (req.body || {}).text)); } catch (e) { fail(res, e); } });
+// Agreement repository: persist + extract, list, obligations calendar, obligation status.
+router.get("/agreements", async (req, res) => { try { res.json(await require("./agreements").listAgreements(tenantOf(req), { status: req.query.status })); } catch (e) { fail(res, e); } });
+router.get("/agreements/obligations/calendar", async (req, res) => { try { res.json(await require("./agreements").obligationsCalendar(tenantOf(req), { withinDays: req.query.within_days ? Number(req.query.within_days) : undefined })); } catch (e) { fail(res, e); } });
+router.get("/agreements/:id", async (req, res) => { try { res.json(await require("./agreements").getAgreement(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/agreements", canPost, async (req, res) => { try { res.status(201).json(await require("./agreements").saveAgreement(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.delete("/agreements/:id", canPost, async (req, res) => { try { res.json(await require("./agreements").removeAgreement(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
+router.patch("/agreements/obligations/:oid", canPost, async (req, res) => { try { res.json(await require("./agreements").setObligationStatus(tenantOf(req), req.params.oid, (req.body || {}).status)); } catch (e) { fail(res, e); } });
 // Statutory compliance register (real table; queryable/reportable). Filings, meetings, registers.
 const compliance = require("./compliance");
 router.get("/compliance-items", async (req, res) => { try { res.json(await compliance.listComplianceItems(tenantOf(req), { status: req.query.status, kind: req.query.kind })); } catch (e) { fail(res, e); } });

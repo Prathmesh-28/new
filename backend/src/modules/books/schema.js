@@ -848,6 +848,41 @@ const BOOKS_SCHEMA = `
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_book_stamp_register ON book_stamp_register(tenant_id, status, valid_till);
+
+  -- Agreement repository (persists what agreements.js extracts) + an obligations calendar.
+  CREATE TABLE IF NOT EXISTS book_agreements (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     TEXT NOT NULL,
+    title         TEXT NOT NULL,
+    counterparty  TEXT,
+    kind          TEXT,                                    -- lease | vendor | employment | nda | loan | service | ...
+    start_date    DATE,
+    end_date      DATE,
+    renewal_date  DATE,
+    auto_renew    BOOLEAN NOT NULL DEFAULT false,
+    notice_days   INT NOT NULL DEFAULT 0,                  -- notice period before renewal/expiry
+    value_amount  NUMERIC(15,2),
+    body_text     TEXT,                                    -- pasted agreement text (source for extraction)
+    scan_file_id  UUID,                                    -- link to the files vault
+    status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','expired','renewed','terminated')),
+    created_by    UUID,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_agreements ON book_agreements(tenant_id, status, renewal_date);
+
+  CREATE TABLE IF NOT EXISTS book_agreement_obligations (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agreement_id  UUID NOT NULL REFERENCES book_agreements(id) ON DELETE CASCADE,
+    tenant_id     TEXT NOT NULL,
+    type          TEXT NOT NULL DEFAULT 'other',           -- lock_in | renewal | escalation | notice | payment | penalty | termination | other
+    description   TEXT,
+    due_date      DATE,
+    amount        NUMERIC(15,2),
+    term          TEXT,
+    status        TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','done','waived')),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_agreement_obligations ON book_agreement_obligations(tenant_id, status, due_date);
 `;
 
 module.exports = { BOOKS_SCHEMA };

@@ -6,6 +6,7 @@ import { format, differenceInCalendarDays } from "date-fns";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import { API_BASE } from "@/lib/apiBase";
+import { api } from "@/lib/api";
 import { useT } from "@/i18n";
 
 type DocCategory = "gst" | "banking" | "legal" | "tax" | "payroll" | "other";
@@ -233,7 +234,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
   );
 }
 
-type DocTab = "vault" | "ocr" | "esign" | "expiry" | "stmt-parser" | "audit-trail" | "checklist" | "templates" | "share" | "kyc" | "contract-dates" | "filing" | "approval" | "gstin-check" | "doc-requests" | "naming" | "compliance-cal" | "bundles" | "storage" | "access-matrix" | "watermark" | "statutory-pack" | "version-log" | "signatory-register" | "redaction-log" | "retention-policy" | "obligation-tracker";
+type DocTab = "vault" | "ocr" | "esign" | "expiry" | "stmt-parser" | "audit-trail" | "checklist" | "templates" | "share" | "kyc" | "contract-dates" | "filing" | "approval" | "gstin-check" | "doc-requests" | "naming" | "compliance-cal" | "bundles" | "storage" | "access-matrix" | "watermark" | "statutory-pack" | "version-log" | "signatory-register" | "redaction-log" | "retention-policy" | "obligation-tracker" | "agreements";
 
 export default function DocumentsPage() {
   const tr = useT();
@@ -336,7 +337,7 @@ export default function DocumentsPage() {
 
       {/* Section selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-        {([["vault", tr("docs.tab.vault"), FolderOpen], ["ocr", tr("docs.tab.ocr"), ScanLine], ["esign", tr("docs.tab.esign"), PenTool], ["expiry", tr("docs.tab.expiry"), CalendarClock], ["stmt-parser", tr("docs.tab.stmtParser"), FileSpreadsheet], ["audit-trail", tr("docs.tab.auditTrail"), History], ["checklist", tr("docs.tab.checklist"), ListChecks], ["templates", tr("docs.tab.templates"), Files], ["share", "Share-Link Tracker", Link2], ["kyc", "KYC Collector", UserCheck], ["contract-dates", "Contract Key-Dates", CalendarRange], ["filing", "Bill Filing Tracker", Archive], ["approval", "Approval Flow", ClipboardCheck], ["gstin-check", "GSTIN Validator", BadgeCheck], ["doc-requests", "Document Requests", Inbox], ["naming", "Naming Helper", Wand2], ["compliance-cal", "Compliance Calendar", CalendarDays], ["bundles", "Document Bundles", Layers], ["storage", "Storage Summary", HardDrive], ["access-matrix", "Access Matrix", KeyRound], ["watermark", "Watermark Note", Stamp], ["statutory-pack", "Statutory Pack", PackageCheck], ["version-log", "Version Log", GitBranch], ["signatory-register", "Signatory Register", Signature], ["redaction-log", "Redaction Checklist", EyeOff], ["retention-policy", "Retention Policy", CalendarX], ["obligation-tracker", "Obligation Tracker", ListTodo]] as const).map(([id, label, Icon]) => (
+        {([["vault", tr("docs.tab.vault"), FolderOpen], ["ocr", tr("docs.tab.ocr"), ScanLine], ["esign", tr("docs.tab.esign"), PenTool], ["expiry", tr("docs.tab.expiry"), CalendarClock], ["stmt-parser", tr("docs.tab.stmtParser"), FileSpreadsheet], ["audit-trail", tr("docs.tab.auditTrail"), History], ["checklist", tr("docs.tab.checklist"), ListChecks], ["templates", tr("docs.tab.templates"), Files], ["share", "Share-Link Tracker", Link2], ["kyc", "KYC Collector", UserCheck], ["contract-dates", "Contract Key-Dates", CalendarRange], ["filing", "Bill Filing Tracker", Archive], ["approval", "Approval Flow", ClipboardCheck], ["gstin-check", "GSTIN Validator", BadgeCheck], ["doc-requests", "Document Requests", Inbox], ["naming", "Naming Helper", Wand2], ["compliance-cal", "Compliance Calendar", CalendarDays], ["bundles", "Document Bundles", Layers], ["storage", "Storage Summary", HardDrive], ["access-matrix", "Access Matrix", KeyRound], ["watermark", "Watermark Note", Stamp], ["statutory-pack", "Statutory Pack", PackageCheck], ["version-log", "Version Log", GitBranch], ["signatory-register", "Signatory Register", Signature], ["redaction-log", "Redaction Checklist", EyeOff], ["retention-policy", "Retention Policy", CalendarX], ["obligation-tracker", "Obligation Tracker", ListTodo], ["agreements", "Agreement Repository", Signature]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setDocTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${docTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -370,6 +371,7 @@ export default function DocumentsPage() {
       {docTab === "redaction-log"      && <RedactionChecklist />}
       {docTab === "retention-policy"   && <RetentionPolicy />}
       {docTab === "obligation-tracker" && <ObligationTracker />}
+      {docTab === "agreements" && <AgreementRepository />}
 
       {docTab === "vault" && <>
 
@@ -3059,6 +3061,102 @@ function ObligationTracker() {
         </>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">Obligations are entered manually - read the contract carefully to capture every deliverable, reporting duty and penalty trigger. This list reminds you; it does not amend the contract.</p>
+    </div>
+  );
+}
+
+// ── Agreement Repository (server-backed, /api/books/agreements) ──────────────────
+// Persists agreements + their obligations, runs the extraction engine on pasted text, and
+// synthesises the notice-deadline (renewal/expiry minus notice period) + renewal date so the
+// obligations calendar has a real backbone. Unlike the KV Obligation Tracker, this is queryable.
+interface AgrObligation { id: string; type: string; description: string; due_date: string | null; amount: number | null; term: string | null; status: string; title?: string; counterparty?: string; days_to_due?: number; state?: string }
+interface Agreement { id: string; title: string; counterparty: string; kind: string; renewal_date: string | null; end_date: string | null; notice_days: number; auto_renew: boolean; status: string; value_amount: number | null; obligations?: AgrObligation[] }
+function AgreementRepository() {
+  const [list, setList] = useState<Agreement[] | null>(null);
+  const [calendar, setCalendar] = useState<AgrObligation[]>([]);
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ title: "", counterparty: "", kind: "vendor", start_date: "", end_date: "", renewal_date: "", auto_renew: false, notice_days: "", value_amount: "", body_text: "" });
+  const [saving, setSaving] = useState(false);
+  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
+  const load = () => {
+    api.get<Agreement[]>("/api/books/agreements").then(setList).catch(e => toast.error((e as Error).message));
+    api.get<AgrObligation[]>("/api/books/agreements/obligations/calendar").then(setCalendar).catch(() => {});
+  };
+  useEffect(() => { load(); }, []);
+  const save = async () => {
+    if (!f.title.trim()) return toast.error("Title required");
+    setSaving(true);
+    try {
+      await api.post("/api/books/agreements", { ...f, notice_days: Number(f.notice_days) || 0, value_amount: f.value_amount ? Number(f.value_amount) : undefined });
+      toast.success("Agreement saved — obligations extracted");
+      setF({ title: "", counterparty: "", kind: "vendor", start_date: "", end_date: "", renewal_date: "", auto_renew: false, notice_days: "", value_amount: "", body_text: "" });
+      setOpen(false); load();
+    } catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
+  };
+  const setStatus = async (oid: string, status: string) => { try { await api.patch(`/api/books/agreements/obligations/${oid}`, { status }); load(); } catch (e) { toast.error((e as Error).message); } };
+  const del = async (id: string) => { try { await api.delete(`/api/books/agreements/${id}`); load(); } catch (e) { toast.error((e as Error).message); } };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-[var(--color-muted)]">Persisted agreements + an obligations calendar (notice deadlines, renewals, escalations). Paste the text to auto-extract clauses.</p>
+        <button onClick={() => setOpen(!open)} className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold"><Plus size={13} /> New agreement</button>
+      </div>
+
+      {open && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+          <div className="grid md:grid-cols-2 gap-3">
+            <input className={inp} placeholder="Title *" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} />
+            <input className={inp} placeholder="Counterparty" value={f.counterparty} onChange={e => setF({ ...f, counterparty: e.target.value })} />
+            <select className={inp} value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })}>
+              {["vendor", "lease", "employment", "nda", "loan", "service", "other"].map(k => <option key={k} value={k}>{k}</option>)}
+            </select>
+            <input className={inp} type="number" placeholder="Value ₹ (optional)" value={f.value_amount} onChange={e => setF({ ...f, value_amount: e.target.value })} />
+            <label className="text-xs text-[var(--color-muted)] flex flex-col gap-1">Start<input className={inp} type="date" value={f.start_date} onChange={e => setF({ ...f, start_date: e.target.value })} /></label>
+            <label className="text-xs text-[var(--color-muted)] flex flex-col gap-1">Renewal / end<input className={inp} type="date" value={f.renewal_date} onChange={e => setF({ ...f, renewal_date: e.target.value })} /></label>
+            <input className={inp} type="number" placeholder="Notice period (days)" value={f.notice_days} onChange={e => setF({ ...f, notice_days: e.target.value })} />
+            <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={f.auto_renew} onChange={e => setF({ ...f, auto_renew: e.target.checked })} /> Auto-renews</label>
+          </div>
+          <textarea className={inp} rows={4} placeholder="Paste the agreement text to auto-extract lock-ins, renewals, escalations, notice periods, penalties…" value={f.body_text} onChange={e => setF({ ...f, body_text: e.target.value })} />
+          <button onClick={save} disabled={saving} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold disabled:opacity-50">{saving ? "Saving…" : "Save & extract obligations"}</button>
+        </div>
+      )}
+
+      {/* Obligations calendar */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <p className="text-sm font-semibold mb-2">Obligations calendar</p>
+        {calendar.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No dated obligations yet — save an agreement with a renewal date, notice period, or contract text.</p> : (
+          <table className="w-full text-sm rcard"><tbody>
+            {calendar.map(o => (
+              <tr key={o.id} className="border-t border-[var(--color-border)]">
+                <td data-label="Due" className={`py-1.5 ${o.state === "overdue" ? "text-red-400" : o.state === "due_soon" ? "text-amber-400" : ""}`}>{o.due_date}{o.days_to_due != null && ` (${o.days_to_due}d)`}</td>
+                <td data-label="Type" className="py-1.5 capitalize">{o.type.replace("_", " ")}</td>
+                <td data-label="Agreement" className="py-1.5">{o.title} {o.counterparty && <span className="text-[var(--color-muted)]">({o.counterparty})</span>}</td>
+                <td data-label="What" className="py-1.5 text-xs text-[var(--color-muted)]">{o.description}</td>
+                <td className="py-1.5"><button onClick={() => setStatus(o.id, "done")} className="text-[11px] text-emerald-400 border border-emerald-800/40 px-2 py-0.5 rounded">Done</button></td>
+              </tr>
+            ))}
+          </tbody></table>
+        )}
+      </div>
+
+      {/* Agreements list */}
+      {!list ? <p className="text-xs text-[var(--color-muted)]">Loading…</p> : list.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <p className="text-sm font-semibold mb-2">Agreements ({list.length})</p>
+          <table className="w-full text-sm rcard"><tbody>
+            {list.map(a => (
+              <tr key={a.id} className="border-t border-[var(--color-border)]">
+                <td data-label="Agreement" className="py-1.5">{a.title} <span className="text-[var(--color-muted)]">{a.kind}</span></td>
+                <td data-label="Counterparty" className="py-1.5">{a.counterparty || "—"}</td>
+                <td data-label="Renewal" className="py-1.5">{a.renewal_date || a.end_date || "—"}{a.auto_renew && <span className="text-[10px] text-amber-400 ml-1">auto</span>}</td>
+                <td data-label="Value" className="py-1.5">{a.value_amount != null ? formatCurrency(a.value_amount) : "—"}</td>
+                <td className="py-1.5"><button onClick={() => del(a.id)} className="text-red-400"><Trash2 size={13} /></button></td>
+              </tr>
+            ))}
+          </tbody></table>
+        </div>
+      )}
     </div>
   );
 }
