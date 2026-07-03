@@ -823,6 +823,31 @@ const BOOKS_SCHEMA = `
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_book_rpt_register ON book_rpt_register(tenant_id, fy);
+
+  -- Stamp-duty / franking / notary / e-stamp register (in-house tracker; scans link to the files
+  -- vault). Live DigiLocker/SHCIL procurement is credential-gated elsewhere; this logs instruments
+  -- bought anywhere and tracks their value, usage and validity.
+  CREATE TABLE IF NOT EXISTS book_stamp_register (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     TEXT NOT NULL,
+    instrument    TEXT NOT NULL DEFAULT 'stamp_paper' CHECK (instrument IN ('stamp_paper','franking','notary','e_stamp')),
+    purpose       TEXT,                                    -- agreement / affidavit / lease / bond / ...
+    counterparty  TEXT,
+    stamp_value   NUMERIC(15,2) NOT NULL DEFAULT 0,        -- face value of the instrument
+    duty_amount   NUMERIC(15,2) NOT NULL DEFAULT 0,        -- stamp duty / franking / notary fee paid
+    serial_no     TEXT,                                    -- stamp paper / certificate / franking serial
+    vendor        TEXT,                                    -- treasury / bank / notary / SHCIL ACC
+    purchased_on  DATE,
+    used_on       DATE,
+    valid_till    DATE,
+    status        TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available','used','expired','cancelled')),
+    document_ref  TEXT,                                    -- what it was used for
+    scan_file_id  UUID,                                    -- link to the files vault (uploaded scan)
+    notes         TEXT,
+    created_by    UUID,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_stamp_register ON book_stamp_register(tenant_id, status, valid_till);
 `;
 
 module.exports = { BOOKS_SCHEMA };

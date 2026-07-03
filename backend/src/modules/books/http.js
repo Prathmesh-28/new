@@ -65,6 +65,7 @@ const cc = require("./costcentres");
 const bankcredit = require("./bankcredit");
 const msme = require("./msme");
 const roc = require("./roc");
+const stampreg = require("./stampregister");
 
 // GET /documents/:id/print is opened in a new browser tab (window.open) which can't
 // set an Authorization header - accept the short-lived access token as ?token= for
@@ -1041,5 +1042,13 @@ router.patch("/roc/registers/:kind/:id", canPost, async (req, res) => { try { re
 router.delete("/roc/registers/:kind/:id", canPost, async (req, res) => { try { res.json(await roc.removeRegisterRow(tenantOf(req), req.user.id, req.params.kind, req.params.id)); } catch (e) { fail(res, e); } });
 router.get("/roc/prep", async (req, res) => { try { res.json(await roc.rocPrep(tenantOf(req), fyOf(req), { agmDate: req.query.agm_date, entityType: req.query.entity_type })); } catch (e) { fail(res, e); } });
 router.get("/roc/section-188", async (req, res) => { try { res.json(await roc.section188(tenantOf(req), req.query.fy)); } catch (e) { fail(res, e); } });
+
+// ── Stamp / franking / notary / e-stamp register (in-house; scans link to the files vault) ──
+router.get("/stamp-register", async (req, res) => { try { res.json(await stampreg.listStamps(tenantOf(req), { status: req.query.status })); } catch (e) { fail(res, e); } });
+router.get("/stamp-register/summary", async (req, res) => { try { res.json(await stampreg.summary(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/stamp-register", canPost, async (req, res) => { try { res.status(201).json(await stampreg.createStamp(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.patch("/stamp-register/:id", canPost, async (req, res) => { try { res.json(await stampreg.updateStamp(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.post("/stamp-register/:id/use", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await stampreg.useStamp(tenantOf(req), req.params.id, { documentRef: b.document_ref, usedOn: b.used_on })); } catch (e) { fail(res, e); } });
+router.delete("/stamp-register/:id", canPost, async (req, res) => { try { res.json(await stampreg.removeStamp(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 
 module.exports = router;

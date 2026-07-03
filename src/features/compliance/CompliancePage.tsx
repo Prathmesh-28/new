@@ -24,7 +24,7 @@ type ComplianceTab =
   | "ptax-tracker" | "ip-renewal" | "iec-compliance" | "pollution-consent"
   | "fire-noc" | "csr-spend" | "rpt-register" | "dir-disqual" | "event-roc"
   | "annual-cal" | "msme-form1" | "sbo-register" | "secretarial-std" | "gst-turnover-recon"
-  | "roc-filing";
+  | "roc-filing" | "stamp-notary";
 
 interface ComplianceEvent {
   date: Date;
@@ -172,6 +172,7 @@ export default function CompliancePage() {
           ["secretarial-std", "Secretarial Standards", ClipboardCheck],
           ["gst-turnover-recon", "GST vs Books Recon", Scale],
           ["roc-filing", "ROC Filing (server)", FileStack],
+          ["stamp-notary", "Stamp / Notary Register", ScrollText],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -181,6 +182,7 @@ export default function CompliancePage() {
       </div>
 
       {tab === "roc-filing" && <RocFilingServer />}
+      {tab === "stamp-notary" && <StampNotaryRegister />}
       {tab === "roc-prep" && <RocAutoPrep />}
       {tab === "kyc-dpt3" && <KycDpt3Tracker />}
       {tab === "board-agm" && <BoardAgmManager />}
@@ -2523,6 +2525,82 @@ function RocFilingServer() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Stamp / franking / notary / e-stamp register (server-backed, /api/books/stamp-register) ──
+// Tracks the stamp-duty instruments an SMB buys (agreements, affidavits, leases): face value,
+// duty paid, validity, usage. Live DigiLocker/SHCIL procurement is credential-gated elsewhere;
+// this logs manually-captured instruments today.
+interface StampRow { id: string; instrument: string; purpose: string; counterparty: string; stamp_value: number; duty_amount: number; serial_no: string; vendor: string; valid_till: string; status: string; state: string; days_to_expiry: number | null; document_ref: string }
+function StampNotaryRegister() {
+  const { isReadOnly } = useApp();
+  const [rows, setRows] = useState<StampRow[] | null>(null);
+  const [sum, setSum] = useState<{ available_value: number; duty_spent_total: number; expiring_soon: number; expired: number } | null>(null);
+  const [f, setF] = useState({ instrument: "stamp_paper", purpose: "", counterparty: "", stamp_value: "", duty_amount: "", serial_no: "", vendor: "", purchased_on: new Date().toISOString().slice(0, 10), valid_till: "" });
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]";
+  const load = () => { api.get<StampRow[]>("/api/books/stamp-register").then(setRows).catch(e => toast.error((e as Error).message)); api.get<typeof sum>("/api/books/stamp-register/summary").then(setSum).catch(() => {}); };
+  useEffect(() => { load(); }, []);
+  const add = async () => {
+    if (!(Number(f.stamp_value) > 0 || Number(f.duty_amount) > 0)) return toast.error("Enter a stamp value or duty amount");
+    try { await api.post("/api/books/stamp-register", { ...f, stamp_value: Number(f.stamp_value) || 0, duty_amount: Number(f.duty_amount) || 0 }); toast.success("Instrument recorded"); setF({ ...f, purpose: "", counterparty: "", stamp_value: "", duty_amount: "", serial_no: "" }); load(); }
+    catch (e) { toast.error((e as Error).message); }
+  };
+  const markUsed = async (id: string) => {
+    const document_ref = window.prompt("Used for (document reference):") ?? "";
+    try { await api.post(`/api/books/stamp-register/${id}/use`, { document_ref: document_ref || undefined }); toast.success("Marked used"); load(); } catch (e) { toast.error((e as Error).message); }
+  };
+  const del = async (id: string) => { try { await api.delete(`/api/books/stamp-register/${id}`); load(); } catch (e) { toast.error((e as Error).message); } };
+  const fc = formatCurrency;
+  return (
+    <div className="space-y-4">
+      {sum && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[["On hand (value)", fc(sum.available_value)], ["Duty spent", fc(sum.duty_spent_total)], ["Expiring ≤30d", String(sum.expiring_soon)], ["Expired", String(sum.expired)]].map(([l, v], i) => (
+            <div key={i} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3"><p className="text-[10px] text-[var(--color-muted)] uppercase">{l}</p><p className="text-lg font-bold text-[var(--color-text)] mt-1">{v}</p></div>
+          ))}
+        </div>
+      )}
+      {!isReadOnly && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap gap-2 items-end">
+          <select className={inp} value={f.instrument} onChange={e => setF({ ...f, instrument: e.target.value })}>
+            <option value="stamp_paper">Stamp paper</option><option value="franking">Franking</option><option value="notary">Notary</option><option value="e_stamp">e-Stamp</option>
+          </select>
+          <input className={inp} placeholder="Purpose (lease…)" value={f.purpose} onChange={e => setF({ ...f, purpose: e.target.value })} />
+          <input className={inp} placeholder="Counterparty" value={f.counterparty} onChange={e => setF({ ...f, counterparty: e.target.value })} />
+          <input className={inp} type="number" placeholder="Face value ₹" value={f.stamp_value} onChange={e => setF({ ...f, stamp_value: e.target.value })} />
+          <input className={inp} type="number" placeholder="Duty/fee ₹" value={f.duty_amount} onChange={e => setF({ ...f, duty_amount: e.target.value })} />
+          <input className={inp} placeholder="Serial / cert no" value={f.serial_no} onChange={e => setF({ ...f, serial_no: e.target.value })} />
+          <input className={inp} type="date" title="Valid till" value={f.valid_till} onChange={e => setF({ ...f, valid_till: e.target.value })} />
+          <button onClick={add} className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold"><Plus size={13} /> Record</button>
+        </div>
+      )}
+      {!rows ? <p className="text-xs text-[var(--color-muted)] px-1">Loading…</p> : rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No stamp/notary instruments recorded yet.</p>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <table className="w-full text-sm rcard"><tbody>
+            {rows.map(r => (
+              <tr key={r.id} className="border-t border-[var(--color-border)]">
+                <td data-label="Instrument" className="py-1.5 capitalize">{r.instrument.replace("_", " ")}{r.serial_no ? ` · ${r.serial_no}` : ""}</td>
+                <td data-label="Purpose" className="py-1.5">{r.purpose || "—"} {r.counterparty && <span className="text-[var(--color-muted)]">({r.counterparty})</span>}</td>
+                <td data-label="Value" className="py-1.5">{fc(r.stamp_value)}{r.duty_amount ? ` · duty ${fc(r.duty_amount)}` : ""}</td>
+                <td data-label="Status" className={`py-1.5 capitalize ${r.state === "expired" ? "text-red-400" : r.state === "expiring" ? "text-amber-400" : r.status === "used" ? "text-[var(--color-muted)]" : "text-emerald-400"}`}>
+                  {r.state}{r.days_to_expiry != null && r.state === "expiring" ? ` (${r.days_to_expiry}d)` : ""}
+                </td>
+                {!isReadOnly && (
+                  <td data-label="" className="py-1.5">
+                    {r.status === "available" && <button onClick={() => markUsed(r.id)} className="text-[11px] text-sky-400 border border-sky-800/40 px-2 py-1 rounded-md mr-1">Mark used</button>}
+                    <button onClick={() => del(r.id)} className="text-red-400"><X size={13} /></button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody></table>
+        </div>
+      )}
+      <p className="text-[11px] text-[var(--color-muted)]">Records instruments bought anywhere. Live DigiLocker fetch &amp; SHCIL e-stamp procurement are credential-gated integrations (not enabled here) — this register works today with manual capture.</p>
     </div>
   );
 }
