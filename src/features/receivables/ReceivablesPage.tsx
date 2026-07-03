@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
@@ -124,11 +125,12 @@ function chaseMessage(inv: Invoice, daysOverdue: number): string {
   return `Hi, invoice ${inv.invoiceNumber ?? inv.id} for ${amt} was due on ${format(parseISO(inv.dueDate), "d MMM yyyy")} and is now ${daysOverdue} day${daysOverdue !== 1 ? "s" : ""} overdue. Please arrange payment at the earliest or contact us to discuss.`;
 }
 
-function KanbanPipeline({ withDays, isReadOnly, onMarkPaid, onChase }: {
+function KanbanPipeline({ withDays, isReadOnly, onMarkPaid, onChase, onFinance }: {
   withDays: (Invoice & { bucket: string; daysOverdue: number })[];
   isReadOnly: boolean;
   onMarkPaid: (id: string) => void;
   onChase: (inv: typeof withDays[0]) => void;
+  onFinance: (inv: typeof withDays[0]) => void;
 }) {
   const cols = [
     { key: "current", label: "Current",     color: "border-green-700/40",  headerColor: "text-green-400",  dot: "bg-green-500" },
@@ -166,6 +168,12 @@ function KanbanPipeline({ withDays, isReadOnly, onMarkPaid, onChase }: {
                         className="flex-1 flex items-center justify-center gap-1 py-1 text-[10px] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-blue-400 hover:border-blue-700/40 rounded-md transition-colors">
                         <Send size={9} /> Chase
                       </button>
+                      {inv.source === "backend" && (
+                        <button onClick={() => onFinance(inv)} title="Advance this invoice (get cash now)"
+                          className="flex-1 flex items-center justify-center gap-1 py-1 text-[10px] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 rounded-md transition-colors">
+                          <Banknote size={9} /> Finance
+                        </button>
+                      )}
                       <button onClick={() => onMarkPaid(inv.id)} title="Mark paid"
                         className="flex-1 flex items-center justify-center gap-1 py-1 text-[10px] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-green-400 hover:border-green-700/40 rounded-md transition-colors">
                         <CheckCircle2 size={9} /> Paid
@@ -191,6 +199,9 @@ type ReceivablesTab = "overview" | "risk-score" | "factoring" | "cash-app" | "co
 
 export default function ReceivablesPage() {
   const tr = useT();
+  const navigate = useNavigate();
+  // "Turn this invoice into cash" → the live financing tab with the invoice preselected.
+  const financeInvoice = (inv: Invoice) => navigate(`/credit?invoice_id=${inv.id}`);
   const { store, addInvoice, updateInvoice, deleteInvoice, isReadOnly } = useApp();
   const { invoices } = store;
   const [showAdd, setShowAdd] = useState(false);
@@ -377,6 +388,7 @@ export default function ReceivablesPage() {
           isReadOnly={isReadOnly}
           onMarkPaid={id => { const inv = invoices.find(i => i.id === id); if (inv) handleMarkPaid(inv); }}
           onChase={inv => { const msg = chaseMessage(inv, inv.daysOverdue); window.open(`mailto:?subject=${encodeURIComponent(`Payment reminder: ${formatCurrency(inv.amount)}`)}&body=${encodeURIComponent(msg)}`, "_blank"); }}
+          onFinance={financeInvoice}
         />
       )}
 
@@ -411,6 +423,12 @@ export default function ReceivablesPage() {
                       className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-blue-400 hover:bg-blue-950/20 transition-colors">
                       <Send size={13} />
                     </button>
+                    {inv.source === "backend" && (
+                      <button onClick={() => financeInvoice(inv)} title="Advance this invoice (get cash now)"
+                        className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-colors">
+                        <Banknote size={13} />
+                      </button>
+                    )}
                     <button onClick={() => handleMarkPaid(inv)} title="Mark as paid"
                       className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-green-400 hover:bg-green-950/20 transition-colors">
                       <CheckCircle2 size={13} />

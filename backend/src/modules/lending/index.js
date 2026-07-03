@@ -85,17 +85,46 @@ async function createOffer(tenantId, userId, body = {}) {
   let principal, apr, processingFee, tenureMonths = null, tenureDays = null, sched, sourceInvoiceId = null;
 
   if (kind === "invoice_finance") {
-    const invoiceAmount = n(body.invoice_amount);
-    if (!(invoiceAmount > 0)) throw new LendError("BAD_INPUT", "invoice_amount required for invoice financing", 400);
+    let invoiceAmount = n(body.invoice_amount);
     const advanceRate = body.advance_rate != null ? Math.min(Math.max(n(body.advance_rate), 0), 0.9) : 0.8;
     apr = n(body.apr) || 24;
     tenureDays = Math.round(n(body.tenure_days) || 60);
+    sourceInvoiceId = body.invoice_id || null;
+
+    // When financing a SPECIFIC invoice the invoice is the source of truth — this closes
+    // the self-liquidating loop (source_invoice_id set → onInvoicePaid recovers it). Verify
+    // it's this tenant's, issued-and-unpaid, and derive the face value server-side (never
+    // trust a client-supplied amount). invoices is not RLS'd → explicit tenant_id filter.
+    if (sourceInvoiceId) {
+      const { rows: invRows } = await pool.query(
+        "SELECT id, total_amount, status, due_date FROM invoices WHERE id=$1 AND tenant_id=$2",
+        [sourceInvoiceId, tenantId]
+      );
+      const inv = invRows[0];
+      if (!inv) throw new LendError("NOT_FOUND", "Invoice not found", 404);
+      if (inv.status !== "sent") throw new LendError("BAD_STATE", `Only an issued, unpaid invoice can be financed (this one is ${inv.status})`, 409);
+      invoiceAmount = n(inv.total_amount);
+      // One live advance per invoice — refuse a second offer/loan against the same invoice.
+      const { rows: dup } = await q(tenantId,
+        `SELECT 1 FROM loans WHERE tenant_id=$1 AND source_invoice_id=$2 AND status='active'
+         UNION ALL
+         SELECT 1 FROM loan_offers WHERE tenant_id=$1 AND source_invoice_id=$2 AND status='offered' LIMIT 1`,
+        [tenantId, sourceInvoiceId]
+      );
+      if (dup[0]) throw new LendError("DUPLICATE", "This invoice already has a live advance or a pending offer", 409);
+      // Default the tenor to days-until-due so repayment lands when the invoice is expected paid.
+      if (body.tenure_days == null && inv.due_date) {
+        const days = Math.ceil((new Date(inv.due_date).getTime() - Date.now()) / 86400000);
+        if (days > 0) tenureDays = days;
+      }
+    }
+    if (!(invoiceAmount > 0)) throw new LendError("BAD_INPUT", "invoice_amount required for invoice financing", 400);
+
     principal = r2(advanceRate * invoiceAmount);
     // never advance beyond the tenant's underwriting limit
     const elig = await eligibility(tenantId);
     if (elig.limit > 0) principal = Math.min(principal, elig.limit);
     processingFee = r2(n(body.processing_fee) || principal * 0.01);
-    sourceInvoiceId = body.invoice_id || null;
     sched = bullet(principal, apr, tenureDays, today);
   } else {
     principal = n(body.principal);
@@ -111,11 +140,19 @@ async function createOffer(tenantId, userId, body = {}) {
   }
 
   const kfs = buildKFS({ kind, principal, processingFee, apr, sched });
-  const { rows } = await q(tenantId,
-    `INSERT INTO loan_offers(tenant_id,kind,principal,processing_fee,apr,tenure_months,tenure_days,source_invoice_id,kfs,created_by,expires_at)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now() + interval '14 days') RETURNING *`,
-    [tenantId, kind, principal, processingFee, apr, tenureMonths, tenureDays, sourceInvoiceId, JSON.stringify(kfs), userId || null]
-  );
+  let rows;
+  try {
+    ({ rows } = await q(tenantId,
+      `INSERT INTO loan_offers(tenant_id,kind,principal,processing_fee,apr,tenure_months,tenure_days,source_invoice_id,kfs,created_by,expires_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now() + interval '14 days') RETURNING *`,
+      [tenantId, kind, principal, processingFee, apr, tenureMonths, tenureDays, sourceInvoiceId, JSON.stringify(kfs), userId || null]
+    ));
+  } catch (e) {
+    // uq_loan_offers_open_invoice: a concurrent request already opened an offer for this
+    // invoice — enforce one-live-advance-per-invoice even under a TOCTOU race.
+    if (e.code === "23505") throw new LendError("DUPLICATE", "This invoice already has a pending offer or live advance", 409);
+    throw e;
+  }
   return { ...rows[0], principal: n(rows[0].principal), processing_fee: n(rows[0].processing_fee), apr: n(rows[0].apr), schedule_preview: sched.rows };
 }
 
@@ -144,11 +181,19 @@ async function acceptOffer(tenantId, offerId, actorId) {
   const dueDate = sched.rows[sched.rows.length - 1].due_date;
   const net = r2(n(offer.principal) - n(offer.processing_fee));
 
-  const { rows: lr } = await q(tenantId,
-    `INSERT INTO loans(tenant_id,offer_id,kind,principal,apr,outstanding_principal,status,source_invoice_id,disbursed_amount,disbursed_at,due_date)
-     VALUES($1,$2,$3,$4,$5,$4,'active',$6,$7, now(), $8) RETURNING *`,
-    [tenantId, offer.id, offer.kind, n(offer.principal), n(offer.apr), offer.source_invoice_id, net, dueDate]
-  );
+  let lr;
+  try {
+    ({ rows: lr } = await q(tenantId,
+      `INSERT INTO loans(tenant_id,offer_id,kind,principal,apr,outstanding_principal,status,source_invoice_id,disbursed_amount,disbursed_at,due_date)
+       VALUES($1,$2,$3,$4,$5,$4,'active',$6,$7, now(), $8) RETURNING *`,
+      [tenantId, offer.id, offer.kind, n(offer.principal), n(offer.apr), offer.source_invoice_id, net, dueDate]
+    ));
+  } catch (e) {
+    // uq_loans_active_invoice: this invoice already backs an active advance. Prevents a
+    // double disbursal when two offers on one invoice are accepted concurrently.
+    if (e.code === "23505") throw new LendError("DUPLICATE", "This invoice already has an active advance", 409);
+    throw e;
+  }
   const loan = lr[0];
   for (const s of sched.rows) {
     await q(tenantId,
@@ -240,8 +285,41 @@ async function recordRepayment(tenantId, loanId, { amount, method = "manual", re
   return { applied: amt, principal: payPrincipal, interest: payInterest, outstanding: newOutstanding, closed: closing, glPosted: !!voucherId };
 }
 
-// Invoice-financing wedge: when the source invoice is paid, auto-recover the loan.
-async function onInvoicePaid(tenantId, invoiceId, { ref } = {}) {
+// Financeable invoices: issued-and-unpaid invoices (status 'sent') that don't already back
+// a live advance/offer, each with an indicative advance (advance_rate × face, capped at the
+// underwriting limit). Real data on the tenant's own AR — the frontend "advance this invoice"
+// picker calls this. invoices is not RLS'd → explicit tenant filter; loans/offers are RLS'd.
+async function financeableInvoices(tenantId, { advanceRate = 0.8 } = {}) {
+  const { rows } = await pool.query(
+    `SELECT id, invoice_number, customer_name, total_amount, due_date
+       FROM invoices WHERE tenant_id=$1 AND status='sent'
+       ORDER BY due_date NULLS LAST, created_at DESC LIMIT 100`, [tenantId]
+  );
+  if (!rows.length) return [];
+  const { rows: taken } = await q(tenantId,
+    `SELECT source_invoice_id AS id FROM loans WHERE tenant_id=$1 AND source_invoice_id IS NOT NULL AND status='active'
+     UNION
+     SELECT source_invoice_id AS id FROM loan_offers WHERE tenant_id=$1 AND source_invoice_id IS NOT NULL AND status='offered'`,
+    [tenantId]
+  );
+  const takenSet = new Set(taken.map((t) => t.id));
+  const cap = n((await eligibility(tenantId)).limit);
+  return rows
+    .filter((r) => !takenSet.has(r.id))
+    .map((r) => {
+      const face = n(r.total_amount);
+      let advance = r2(advanceRate * face);
+      if (cap > 0) advance = Math.min(advance, cap);
+      return { id: r.id, invoice_number: r.invoice_number, customer_name: r.customer_name, total_amount: face, due_date: r.due_date, indicative_advance: r2(advance) };
+    });
+}
+
+// Invoice-financing wedge: when the source invoice is paid, auto-recover the loan. Called
+// from BOTH the Razorpay webhook and the manual mark-paid path. The recovery repayment uses
+// a STABLE per-invoice ref so recordRepayment's unique-ref (uq_loan_repayments_ref) dedup
+// collapses any double-fire — same path retried, webhook + manual, or a concurrent race —
+// to a single repayment. (Caller-supplied ref is intentionally ignored for this reason.)
+async function onInvoicePaid(tenantId, invoiceId) {
   const { rows } = await q(tenantId,
     "SELECT * FROM loans WHERE tenant_id=$1 AND source_invoice_id=$2 AND status='active' LIMIT 1", [tenantId, invoiceId]
   );
@@ -250,7 +328,7 @@ async function onInvoicePaid(tenantId, invoiceId, { ref } = {}) {
   const { rows: sch } = await q(tenantId,"SELECT COALESCE(SUM(interest_due),0) AS i FROM loan_schedule WHERE loan_id=$1", [loan.id]);
   const { rows: prev } = await q(tenantId,"SELECT COALESCE(SUM(interest_component),0) AS i, COALESCE(SUM(principal_component),0) AS p FROM loan_repayments WHERE loan_id=$1", [loan.id]);
   const due = r2(n(loan.outstanding_principal) + Math.max(0, n(sch[0].i) - n(prev[0].i)));
-  const res = await recordRepayment(tenantId, loan.id, { amount: due, method: "auto_invoice", ref: ref || `inv_${invoiceId}` });
+  const res = await recordRepayment(tenantId, loan.id, { amount: due, method: "auto_invoice", ref: `inv_recover_${invoiceId}` });
   return { matched: true, loanId: loan.id, ...res };
 }
 
@@ -305,7 +383,7 @@ async function postRepayment(tenantId, actorId, loan, principal, interest, repay
 module.exports = {
   LendError, eligibility,
   createOffer, listOffers, getOffer, acceptOffer, declineOffer,
-  getLoan, listLoans, recordRepayment, onInvoicePaid,
+  getLoan, listLoans, recordRepayment, onInvoicePaid, financeableInvoices,
   amortize, bullet, buildKFS, dpdBucket, // pure helpers exported for tests
   ledgerByName, firstBankLedger, ensureByNature, // GL helpers reused by servicing.js
 };

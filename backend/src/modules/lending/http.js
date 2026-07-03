@@ -29,6 +29,11 @@ router.get("/eligibility", async (req, res) => {
 });
 
 // ── Offers (LOS) ─────────────────────────────────────────────────────────────
+// Issued, unpaid invoices the tenant can turn into cash, each with an indicative advance.
+// Powers the "advance this invoice" picker; real AR data, no gated rail touched.
+router.get("/financeable-invoices", async (req, res) => {
+  try { res.json(await lending.financeableInvoices(tenantOf(req))); } catch (e) { fail(res, e); }
+});
 router.get("/offers", async (req, res) => {
   try { res.json(await lending.listOffers(tenantOf(req))); } catch (e) { fail(res, e); }
 });

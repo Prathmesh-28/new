@@ -110,6 +110,10 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
   if (status === "paid") {
     require("../modules/flows/runner").emitEvent(req.user.tenant_id, "invoice.paid", { invoice: inv }).catch(() => {});
     require("../lib/invoiceGl").postInvoiceReceipt(req.user.tenant_id, inv).catch(() => {}); // Dr Undeposited Funds / Cr Debtor (books the sale first if needed)
+    // Invoice-financing wedge (self-liquidating): if this invoice backs an active advance,
+    // auto-recover the loan. The Razorpay webhook does the same; onInvoicePaid uses a stable
+    // per-invoice recovery ref so a manual + webhook (or concurrent) double-fire dedups to one.
+    require("../modules/lending").onInvoicePaid(req.user.tenant_id, inv.id).catch(() => {});
   } else if (status === "sent") {
     require("../lib/invoiceGl").postInvoiceSale(req.user.tenant_id, inv).catch(() => {}); // accrual: recognise revenue + output GST on issue
   }

@@ -24,6 +24,11 @@ CREATE TABLE IF NOT EXISTS loan_offers (
   expires_at        TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_loan_offers_tenant ON loan_offers(tenant_id, created_at DESC);
+-- One live advance per invoice (enforce, not just check-then-insert): at most one OPEN offer
+-- per source invoice. Partial + IS NOT NULL, so pre-wedge rows (source_invoice_id NULL) and
+-- non-invoice products are unaffected. The read-guard in createOffer is the friendly path;
+-- this index closes the concurrent double-submit / webhook+manual TOCTOU race.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_loan_offers_open_invoice ON loan_offers(tenant_id, source_invoice_id) WHERE status='offered' AND source_invoice_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS loans (
   id                   UUID PRIMARY KEY DEFAULT collab_uuidv7(),
@@ -52,6 +57,11 @@ CREATE TABLE IF NOT EXISTS loans (
 );
 CREATE INDEX IF NOT EXISTS idx_loans_tenant ON loans(tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_loans_invoice ON loans(tenant_id, source_invoice_id) WHERE source_invoice_id IS NOT NULL;
+-- The money-safety guard: at most one ACTIVE loan per invoice, so two accepted offers on the
+-- same invoice cannot both disburse (onInvoicePaid recovers by source_invoice_id and would
+-- otherwise leave the second advance outstanding). Partial + IS NOT NULL → pre-wedge/non-invoice
+-- loans (source_invoice_id NULL) are unaffected. acceptOffer catches the 23505 as a friendly error.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_loans_active_invoice ON loans(tenant_id, source_invoice_id) WHERE status='active' AND source_invoice_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS loan_schedule (
   id             UUID PRIMARY KEY DEFAULT collab_uuidv7(),

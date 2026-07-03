@@ -1,4 +1,5 @@
 import { useState, useMemo, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useT } from "@/i18n";
 import FinancingReadiness from "@/features/credit/FinancingReadiness";
@@ -50,7 +51,12 @@ export default function CreditPage() {
   const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
   const showCta  = runway > 0 && runway < 45;
 
-  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd" | "wcscore" | "captable" | "valuation" | "aapull" | "matcher" | "comscore" | "discount" | "docpack" | "foir" | "emicalc" | "flatred" | "dscr" | "drawing" | "gstelig" | "lap" | "prepay" | "odterm" | "scoreplan" | "offercmp" | "invadv" | "nbfcbank" | "scheme" | "livewc">("overview");
+  // Deep-link: /credit?invoice_id=… lands on the live financing tab with that invoice
+  // preselected ("turn this invoice into cash" from the invoice/receivables lists).
+  const [searchParams] = useSearchParams();
+  const presetInvoiceId = searchParams.get("invoice_id") || undefined;
+
+  const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd" | "wcscore" | "captable" | "valuation" | "aapull" | "matcher" | "comscore" | "discount" | "docpack" | "foir" | "emicalc" | "flatred" | "dscr" | "drawing" | "gstelig" | "lap" | "prepay" | "odterm" | "scoreplan" | "offercmp" | "invadv" | "nbfcbank" | "scheme" | "livewc">(presetInvoiceId ? "livewc" : "overview");
   const [amount,       setAmount]       = useState("");
   const [term,         setTerm]         = useState("24");
   const [purpose,      setPurpose]      = useState("");
@@ -224,7 +230,7 @@ export default function CreditPage() {
       </div>
 
       {/* ── GET FINANCING (wired to /api/lending) ── */}
-      {tab === "livewc" && <EmbeddedFinancing />}
+      {tab === "livewc" && <EmbeddedFinancing presetInvoiceId={presetInvoiceId} />}
 
       {/* ── OVERVIEW ── */}
       {tab === "overview" && (

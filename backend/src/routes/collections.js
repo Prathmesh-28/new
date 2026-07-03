@@ -149,7 +149,8 @@ router.post("/", async (req, res) => {
         // the 200 that stops Razorpay retrying.
         require("../lib/invoiceGl").postInvoiceReceipt(inv.tenant_id, inv, { amount: payment.amount / 100, ref: `rzp_${payment.id}`, idempotencyKey: `recv:inv:${inv.id}` }).catch(() => {}); // per-invoice key (same as the manual path) → no double receipt in either order
         // Invoice-financing wedge: if this invoice backs an active advance, auto-recover it (self-liquidating).
-        require("../modules/lending").onInvoicePaid(inv.tenant_id, inv.id, { ref: `inv_${payment.id}` }).catch(() => {});
+        // Stable per-invoice recovery ref lives in onInvoicePaid → dedups vs the manual mark-paid path.
+        require("../modules/lending").onInvoicePaid(inv.tenant_id, inv.id).catch(() => {});
         // Create revenue transaction in KV store is done client-side via polling
         // Could also push via Server-Sent Events or WebSocket in production
         console.log(`[razorpay] Invoice ${invoiceNumber} (tenant ${inv.tenant_id}) marked paid - ₹${payment.amount / 100}`);
