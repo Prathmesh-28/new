@@ -237,6 +237,18 @@ async function acceptOffer(tenantId, offerId, actorId) {
   await q(tenantId,"UPDATE loan_offers SET status='accepted' WHERE id=$1", [offer.id]);
   const voucherId = await postDisbursal(tenantId, actorId, loan, net);
   if (voucherId) await q(tenantId,"UPDATE loans SET disbursal_voucher_id=$2 WHERE id=$1", [loan.id, voucherId]);
+  // Track the actual lender→SMB transfer on the shared payouts rail (money-rail is gated: with
+  // no RazorpayX/Setu creds it stays 'pending' in manual mode — never faked). Best-effort: a
+  // rail hiccup must not fail the accept. GL for a disbursal stays with lending (payouts skips
+  // kind='disbursal'). Lazy require avoids a lending↔payouts load-time cycle.
+  try {
+    const payouts = require("../payouts/index");
+    const po = await payouts.requestPayout(tenantId, {
+      kind: "disbursal", amount: net, purpose: `Advance disbursal (loan ${loan.id})`,
+      refType: "loan", refId: loan.id, idempotencyKey: `disburse:${loan.id}`, actorId,
+    });
+    if (po && po.id) await q(tenantId, "UPDATE loans SET disbursal_payout_id=$2 WHERE id=$1", [loan.id, po.id]);
+  } catch (e) { console.warn("[lending] disbursal payout skipped:", e.message); }
   return getLoan(tenantId, loan.id);
 }
 

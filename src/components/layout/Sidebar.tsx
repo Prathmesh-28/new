@@ -162,6 +162,7 @@ const NAV_CATALOG: NavGroup[] = [
     { to: "/compliance",      label: "Compliance",         icon: CalendarCheck,   tab: "compliance"   },
     { to: "/insights",        label: "Reports & Analytics",icon: LineChart,       tab: "insights"     },
     { to: "/banking",         label: "Banking",            icon: Banknote,        tab: "banking"      },
+    { to: "/payouts",         label: "Payouts",            icon: Coins,           tab: "payouts"      },
     { to: "/documents",       label: "Documents",          icon: FolderOpen,      tab: "documents"    },
   ]},
   { label: "Run Operations", items: [

@@ -1,6 +1,7 @@
 const router   = require("express").Router();
 const { pool } = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
+const payouts  = require("../modules/payouts/index");
 
 // GET /api/bnpl/facility
 router.get("/facility", authenticate, async (req, res) => {
@@ -55,11 +56,21 @@ router.post("/drawdown", authenticate, requireOwnerOrAdmin, async (req, res) => 
     [amount, fac.id]
   );
 
-  // Production: call Setu Payout API
-  // POST https://uat.setu.co/api/v2/payouts/link
-  // Headers: x-setu-client-id, x-setu-client-secret
+  // Pay the supplier via the shared payouts rail. Idempotent on the drawdown id (a retry
+  // won't double-pay). Gated: with no Setu/RazorpayX creds the payout stays 'pending' in manual
+  // mode (operator confirms the transfer) — we never fabricate a settlement. On settlement the
+  // rail posts the GL (Dr Sundry Creditors / Cr Borrowings). Best-effort: a rail error leaves the
+  // drawdown recorded with the payout un-sent, surfaced honestly in the response.
+  let payout = null;
+  try {
+    payout = await payouts.requestPayout(req.user.tenant_id, {
+      kind: "bnpl", amount: parseFloat(amount), beneficiary: { name: supplier_name },
+      purpose: `BNPL supplier payout (${supplier_name})`, refType: "bnpl_drawdown", refId: dd.id,
+      idempotencyKey: `bnpl:${dd.id}`, actorId: req.user.id,
+    });
+  } catch (e) { console.error("[bnpl] payout error:", e.message); }
 
-  res.status(201).json({ ...dd, demo: !process.env.SETU_CLIENT_ID });
+  res.status(201).json({ ...dd, payout: payout && { id: payout.id, status: payout.status, provider: payout.provider, provider_configured: payout.provider_configured } });
 });
 
 // GET /api/bnpl/drawdowns

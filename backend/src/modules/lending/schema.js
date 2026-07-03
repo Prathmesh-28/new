@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS loans (
   disbursed_at         TIMESTAMPTZ,
   due_date             DATE,
   disbursal_voucher_id UUID,
+  disbursal_payout_id  UUID,                                   -- shared payouts-rail transfer (migration 0017)
   -- Servicing lifecycle (migration 0011): DPD cache, asset classification, penal accrual.
   dpd                   INT           NOT NULL DEFAULT 0,
   asset_class           TEXT          NOT NULL DEFAULT 'standard',  -- standard | overdue | npa

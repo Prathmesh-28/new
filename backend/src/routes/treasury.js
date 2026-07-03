@@ -1,6 +1,7 @@
 const router = require("express").Router();
 const { pool } = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
+const payouts = require("../modules/payouts/index");
 
 // super_admin may target any tenant via ?tenant_id; everyone else is scoped to their own.
 const tenantOf = (req) =>
@@ -113,9 +114,31 @@ router.get("/analysis", authenticate, requireOwnerOrAdmin, async (req, res) => {
   }
 });
 
-// POST /sweep-enable - Enable auto-sweep (stub)
+// POST /sweep-enable - Enable auto-sweep (enrollment)
 router.post("/sweep-enable", authenticate, requireOwnerOrAdmin, async (req, res) => {
   res.json({ success: true, message: "Auto-sweep enrollment queued. Our team will contact you to complete setup." });
+});
+
+// POST /sweep - Move idle cash into a destination (FD / liquid fund) via the shared payouts rail.
+// Gated: with no rail configured the sweep stays 'pending' in manual mode (operator confirms the
+// transfer to the bank/AMC) — never faked. On settlement the rail posts the GL (Dr Investments /
+// Cr Bank). destination_label names the holding; kind labels the instrument.
+router.post("/sweep", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const tenantId = tenantOf(req);
+    const { amount, destination_label, kind, idempotency_key } = req.body || {};
+    const amt = Number(amount);
+    if (!(amt > 0)) return res.status(400).json({ error: "a positive amount is required" });
+    const payout = await payouts.requestPayout(tenantId, {
+      kind: "treasury", amount: amt, purpose: destination_label ? String(destination_label) : (kind ? String(kind) : "Investments"),
+      refType: "treasury_sweep", refId: null, idempotencyKey: idempotency_key || null, actorId: req.user.id,
+      beneficiary: { name: destination_label ? String(destination_label) : "Treasury" },
+    });
+    res.status(201).json({ payout: { id: payout.id, status: payout.status, provider: payout.provider, provider_configured: payout.provider_configured } });
+  } catch (err) {
+    console.error("[treasury] sweep:", err.message);
+    res.status(err.http || 500).json({ error: err.message || "Failed to initiate sweep" });
+  }
 });
 
 module.exports = router;
