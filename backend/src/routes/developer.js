@@ -27,6 +27,19 @@ router.delete("/keys/:id", requireOwnerOrAdmin, async (req, res) => {
 // ── Outbound webhooks ──
 const crypto = require("crypto");
 const { pool } = require("../db");
+// SSRF guard: reject webhook URLs that target private/loopback/link-local/metadata hosts, so a
+// tenant can't point the dispatcher at internal services. (Blocks the obvious cases; DNS-rebinding
+// would need per-delivery IP pinning — a noted follow-up.)
+function isPrivateHost(u) {
+  try {
+    const h = new URL(u).hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    if (h === "localhost" || h.endsWith(".internal") || h.endsWith(".local")) return true;
+    if (/^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(h)) return true;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
+    if (h === "::1" || h.startsWith("fc") || h.startsWith("fd")) return true;
+    return false;
+  } catch { return true; }
+}
 router.get("/webhooks", async (req, res) => {
   try { const { rows } = await pool.query("SELECT id, url, events, active, created_at FROM api_webhooks WHERE tenant_id=$1 ORDER BY created_at DESC", [tenantOf(req)]); res.json(rows); }
   catch (e) { console.error("[developer]", e.message); res.status(500).json({ error: "Internal error" }); }
@@ -35,6 +48,7 @@ router.post("/webhooks", requireOwnerOrAdmin, async (req, res) => {
   try {
     const b = req.body || {};
     if (!b.url || !/^https?:\/\//.test(b.url)) return res.status(400).json({ error: "A valid https URL is required" });
+    if (isPrivateHost(b.url)) return res.status(400).json({ error: "Webhook URL must be a public host (private/loopback/metadata addresses are blocked)." });
     const events = Array.isArray(b.events) && b.events.length ? b.events : ["*"];
     const secret = "whsec_" + crypto.randomBytes(18).toString("base64url");
     const { rows } = await pool.query(
