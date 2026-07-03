@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { useNavigate } from "react-router-dom";
@@ -78,7 +78,7 @@ export default function TaxPage() {
     | "itr-prefill" | "form15ca" | "sec80" | "eq-levy" | "advtax-calendar" | "tax-notice"
     | "hra" | "house-prop" | "44ae" | "gratuity" | "relief-89" | "donation-80g" | "cg-exempt" | "interest-234"
     | "115ba" | "partner-remun" | "80jjaa" | "esop-tax" | "buyback"
-    | "194n" | "43bh" | "presumptive-cmp" | "surcharge">("overview");
+    | "194n" | "43bh" | "presumptive-cmp" | "surcharge" | "tax-depth">("overview");
   const [aaScheme,   setAaScheme]   = useState<"44ad" | "44ada">("44ad");
   const [aaTurnover, setAaTurnover] = useState("");
   const [aaDigital,  setAaDigital]  = useState(false);
@@ -157,7 +157,7 @@ export default function TaxPage() {
             ["tds-return", "TDS Return (24Q/26Q)", Receipt], ["form26as", "26AS / AIS Recon", FileSearch], ["tds-finder", "TDS Section Finder", Search], ["ldc-197", "Lower-Deduction (197)", FileCheck], ["depreciation", "Depreciation Schedule", Layers], ["loss-setoff", "Loss Set-off & C/F", Repeat], ["itr-prefill", "ITR Pre-Fill Pack", FilePlus2], ["form15ca", "Form 15CA/CB", Globe], ["sec80", "Sec 80 Maximiser", PiggyBank], ["eq-levy", "Equalisation Levy / 194O", ShoppingCart], ["advtax-calendar", "Adv. Tax Calendar", CalendarClock], ["tax-notice", "Notice / Demand 143(1)", Gavel],
             ["hra", "HRA Exemption 10(13A)", Home], ["house-prop", "House Property 24(b)", Building2], ["44ae", "Presumptive 44AE (Transport)", Truck], ["gratuity", "Gratuity / Leave Encash", Umbrella], ["relief-89", "Arrears Relief 89(1)", Banknote], ["donation-80g", "Donations 80G", Heart], ["cg-exempt", "CG Exemption 54/54EC/54F", Coins], ["interest-234", "Interest 234A/B/C", Percent],
             ["115ba", "Corporate Rate 115BAA/BAB", Landmark], ["partner-remun", "Partner Remuneration 40(b)", Users], ["80jjaa", "New-Employee 80JJAA", UserPlus], ["esop-tax", "ESOP Tax", Gift], ["buyback", "Share Buyback 115QA", Wallet],
-            ["194n", "Cash Withdrawal 194N", HandCoins], ["43bh", "MSME 43B(h) Disallowance", BadgePercent], ["presumptive-cmp", "Presumptive vs Books", GitCompare], ["surcharge", "Surcharge & Marginal Relief", Sigma]] as const).map(([id, label, Icon]) => (
+            ["194n", "Cash Withdrawal 194N", HandCoins], ["43bh", "MSME 43B(h) Disallowance", BadgePercent], ["presumptive-cmp", "Presumptive vs Books", GitCompare], ["surcharge", "Surcharge & Marginal Relief", Sigma], ["tax-depth", "Tax Depth (server)", Percent]] as const).map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTaxTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${taxTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
               <Icon size={11} />{label}
@@ -844,6 +844,7 @@ export default function TaxPage() {
       {taxTab === "43bh"            && <Msme43BhChecker />}
       {taxTab === "presumptive-cmp" && <PresumptiveVsBooks />}
       {taxTab === "surcharge"       && <SurchargeMarginalRelief />}
+      {taxTab === "tax-depth"       && <TaxDepthServer />}
     </div>
   );
 }
@@ -3937,6 +3938,86 @@ function SurchargeMarginalRelief() {
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
         <AlertTriangle size={12} className="shrink-0 mt-px" />
         Surcharge: 10% &gt;₹50L, 15% &gt;₹1cr, 25% &gt;₹2cr, 37% &gt;₹5cr (old regime only; new regime caps at 25%). Surcharge on capital gains/dividends is capped at 15%. Indicative individual rates - confirm with your CA.
+      </div>
+    </div>
+  );
+}
+
+// ── Tax Depth (server-backed /api/books/tax): 194Q/206C, 269ST, depreciation recon, ITR variance ──
+function TaxDepthServer() {
+  const fc = formatCurrency;
+  const [q, setQ] = useState({ myTurnoverPrevFy: "", counterpartyTurnoverPrevFy: "", aggregateValueFy: "", iAmBuyer: true });
+  const [qRes, setQRes] = useState<any>(null);
+  const [st, setSt] = useState<any>(null);
+  const [dep, setDep] = useState<any>(null);
+  const [variance, setVariance] = useState<any>(null);
+  useEffect(() => {
+    api.get("/api/books/tax/269st").then(setSt).catch(() => {});
+    api.get("/api/books/tax/depreciation-recon").then(setDep).catch(() => {});
+    api.get("/api/books/tax/itr-variance").then(setVariance).catch(() => {});
+  }, []);
+  const runQ = async () => {
+    try { setQRes(await api.post("/api/books/tax/194q-206c", { myTurnoverPrevFy: Number(q.myTurnoverPrevFy) || 0, counterpartyTurnoverPrevFy: Number(q.counterpartyTurnoverPrevFy) || 0, aggregateValueFy: Number(q.aggregateValueFy) || 0, iAmBuyer: q.iAmBuyer })); }
+    catch (e) { toast.error((e as Error).message); }
+  };
+  const card = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5";
+  const row = "flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-2 last:border-0";
+  return (
+    <div className="space-y-4 max-w-3xl">
+      {/* 194Q vs 206C(1H) */}
+      <div className={card}>
+        <h3 className="text-sm font-semibold mb-1">194Q (buyer TDS) vs 206C(1H) (seller TCS) — applicability</h3>
+        <p className="text-xs text-[var(--color-muted)] mb-3">0.1% on value over ₹50L when the liable party's prior-FY turnover &gt; ₹10cr. 194Q takes precedence over 206C(1H).</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">My turnover (prev FY) ₹</label><input type="number" className={INP} value={q.myTurnoverPrevFy} onChange={e => setQ({ ...q, myTurnoverPrevFy: e.target.value })} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Counterparty turnover ₹</label><input type="number" className={INP} value={q.counterpartyTurnoverPrevFy} onChange={e => setQ({ ...q, counterpartyTurnoverPrevFy: e.target.value })} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Transaction value (FY) ₹</label><input type="number" className={INP} value={q.aggregateValueFy} onChange={e => setQ({ ...q, aggregateValueFy: e.target.value })} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">My role</label><select className={INP} value={q.iAmBuyer ? "buyer" : "seller"} onChange={e => setQ({ ...q, iAmBuyer: e.target.value === "buyer" })}><option value="buyer">Buyer</option><option value="seller">Seller</option></select></div>
+        </div>
+        <button onClick={runQ} className="mt-3 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-4 py-2 rounded-lg font-semibold">Check applicability</button>
+        {qRes && (
+          <div className="mt-3 text-sm">
+            <p className="font-semibold">{qRes.section === "none" ? "Neither applies" : `${qRes.section} — ${qRes.who}`}{qRes.section !== "none" && ` @ ${qRes.rate_pct}% = ${fc(qRes.amount)}`}</p>
+            <p className="text-xs text-[var(--color-muted)] mt-1">{qRes.precedence_note} {qRes.liable_on_me ? "This obligation is on YOU." : ""}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Depreciation recon + deferred tax */}
+      <div className={card}>
+        <h3 className="text-sm font-semibold mb-2">Book vs IT depreciation → deferred tax</h3>
+        {dep ? (
+          <div className="space-y-2">
+            <div className={row}><span className="text-xs text-[var(--color-muted)]">Book depreciation (Companies Act)</span><span className="tabular-nums">{fc(dep.book_depreciation)}</span></div>
+            <div className={row}><span className="text-xs text-[var(--color-muted)]">IT-Act block depreciation</span><span className="tabular-nums">{fc(dep.it_depreciation)}</span></div>
+            <div className={row}><span className="text-xs text-[var(--color-muted)]">Timing difference</span><span className="tabular-nums">{fc(dep.timing_difference)}</span></div>
+            <div className={row}><span className="text-xs font-semibold">{dep.deferred_tax_liability ? "Deferred Tax Liability" : "Deferred Tax Asset"} @ {dep.tax_rate_pct}%</span><span className="tabular-nums font-bold text-orange-400">{fc(dep.deferred_tax_liability || dep.deferred_tax_asset)}</span></div>
+            <p className="text-[10px] text-[var(--color-muted)]">{dep.note}</p>
+          </div>
+        ) : <p className="text-xs text-[var(--color-muted)]">Loading…</p>}
+      </div>
+
+      {/* 269ST + ITR variance */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className={card}>
+          <h3 className="text-sm font-semibold mb-2">269ST cash-receipt alerts</h3>
+          {st ? (st.breaches.length === 0 ? <p className="text-xs text-emerald-400">No cash receipts ≥ ₹2L flagged.</p> : (
+            <div className="space-y-1">
+              {st.breaches.slice(0, 6).map((b: any, i: number) => <p key={i} className="text-xs text-red-400">⚠ {b.date} · {b.party}: {fc(b.cash_received)}</p>)}
+              <p className="text-[10px] text-[var(--color-muted)]">{st.note}</p>
+            </div>
+          )) : <p className="text-xs text-[var(--color-muted)]">Loading…</p>}
+        </div>
+        <div className={card}>
+          <h3 className="text-sm font-semibold mb-2">ITR-to-books variance</h3>
+          {variance ? (
+            <div className="space-y-1 text-xs">
+              <p>Books net profit: <b className="text-[var(--color-text)]">{fc(variance.books_net_profit)}</b></p>
+              {variance.adjustments.map((a: any, i: number) => <p key={i} className="text-[var(--color-muted)]">{a.effect === "add to income" ? "+" : "−"} {a.item}: {fc(Math.abs(a.amount))}</p>)}
+              <p className="font-semibold pt-1">Est. business income: {fc(variance.estimated_business_income)}</p>
+            </div>
+          ) : <p className="text-xs text-[var(--color-muted)]">Loading…</p>}
+        </div>
       </div>
     </div>
   );

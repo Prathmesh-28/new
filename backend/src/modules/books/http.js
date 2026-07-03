@@ -67,6 +67,7 @@ const msme = require("./msme");
 const roc = require("./roc");
 const stampreg = require("./stampregister");
 const insurance = require("./insurance");
+const taxdepth = require("./taxdepth");
 
 // GET /documents/:id/print is opened in a new browser tab (window.open) which can't
 // set an Authorization header - accept the short-lived access token as ?token= for
@@ -1042,6 +1043,10 @@ router.get("/msme/form1", async (req, res) => { try { res.json(await msme.msmeFo
 // ── Direct-tax depth: precise 234A/B/C interest + Form 3CD prep sheet ──
 router.post("/tax/interest-234", async (req, res) => { try { res.json(incometax.interest234(req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/tax/form-3cd", async (req, res) => { try { res.json(await incometax.form3cd(tenantOf(req), fyOf(req), {})); } catch (e) { fail(res, e); } });
+router.post("/tax/194q-206c", async (req, res) => { try { res.json(taxdepth.applicability194Q206C(req.body || {})); } catch (e) { fail(res, e); } });
+router.get("/tax/269st", async (req, res) => { try { res.json(await taxdepth.cash269ST(tenantOf(req), { fy: req.query.fy })); } catch (e) { fail(res, e); } });
+router.get("/tax/depreciation-recon", async (req, res) => { try { res.json(await taxdepth.depreciationRecon(tenantOf(req), { fy: req.query.fy, taxRatePct: req.query.rate ? Number(req.query.rate) : undefined })); } catch (e) { fail(res, e); } });
+router.get("/tax/itr-variance", async (req, res) => { try { res.json(await taxdepth.itrVariance(tenantOf(req), { fy: req.query.fy })); } catch (e) { fail(res, e); } });
 
 // ── Company-law / ROC: statutory registers (members/directors/charges/rpt) + prep + Sec 188 ──
 router.get("/roc/registers/:kind", async (req, res) => { try { res.json(await roc.listRegister(tenantOf(req), req.params.kind)); } catch (e) { fail(res, e); } });
