@@ -63,6 +63,7 @@ const ocr = require("./ocr");
 const portal = require("./portal");
 const cc = require("./costcentres");
 const bankcredit = require("./bankcredit");
+const msme = require("./msme");
 
 // GET /documents/:id/print is opened in a new browser tab (window.open) which can't
 // set an Authorization header - accept the short-lived access token as ?token= for
@@ -1023,5 +1024,9 @@ router.post("/remittances/:id/file", canPost, async (req, res) => { try { res.js
 
 router.get("/cash-withdrawals/194n", async (req, res) => { try { res.json(await bankcredit.monitor194N(tenantOf(req), { fy: req.query.fy })); } catch (e) { fail(res, e); } });
 router.post("/cash-withdrawals", canPost, async (req, res) => { try { res.status(201).json(await bankcredit.recordCashWithdrawal(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
+
+// ── MSME 43B(h) & Form MSME-1 (ledger truth: PURCHASE vouchers to Micro/Small vendors) ──
+router.get("/msme/43b", async (req, res) => { try { res.json(await msme.msme43b(tenantOf(req), { asOf: req.query.as_of, bankRate: req.query.bank_rate ? Number(req.query.bank_rate) : undefined })); } catch (e) { fail(res, e); } });
+router.get("/msme/form1", async (req, res) => { try { res.json(await msme.msmeForm1(tenantOf(req), { halfYear: req.query.half_year, bankRate: req.query.bank_rate ? Number(req.query.bank_rate) : undefined })); } catch (e) { fail(res, e); } });
 
 module.exports = router;

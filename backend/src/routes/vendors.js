@@ -17,7 +17,7 @@ const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next(
 router.use(authenticate);
 const tenantOf = (req) => (req.user.role === "super_admin" && req.query.tenant_id ? String(req.query.tenant_id) : req.user.tenant_id);
 
-const FIELDS = ["name", "gstin", "pan", "contact_name", "phone", "email", "upi", "bank_account", "bank_ifsc", "payment_terms_days", "is_msme", "udyam", "category", "notes"];
+const FIELDS = ["name", "gstin", "pan", "contact_name", "phone", "email", "upi", "bank_account", "bank_ifsc", "payment_terms_days", "is_msme", "msme_category", "udyam", "udyam_registered_on", "udyam_doc_url", "category", "notes"];
 const pick = (body) => {
   const out = {};
   for (const f of FIELDS) if (body[f] !== undefined) out[f] = body[f];

@@ -1247,7 +1247,10 @@ async function initDb() {
       bank_ifsc       TEXT,
       payment_terms_days INT DEFAULT 30,
       is_msme         BOOLEAN DEFAULT false,
+      msme_category   TEXT,              -- micro | small | medium (43B(h) fires only for micro/small; migration 0018)
       udyam           TEXT,
+      udyam_registered_on DATE,
+      udyam_doc_url   TEXT,
       category        TEXT,
       notes           TEXT,
       created_at      TIMESTAMPTZ DEFAULT now(),

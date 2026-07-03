@@ -30,6 +30,7 @@ export interface VendorMaster {
   bank_ifsc: string | null;
   payment_terms_days: number | null;
   is_msme: boolean | null;
+  msme_category: string | null;   // micro | small | medium — 43B(h) applies to micro/small only
   udyam: string | null;
   category: string | null;
   notes: string | null;
@@ -117,6 +118,7 @@ function VendorProfileModal({
     bank_ifsc: initial?.bank_ifsc ?? "",
     payment_terms_days: initial?.payment_terms_days ?? null,
     is_msme: initial?.is_msme ?? false,
+    msme_category: initial?.msme_category ?? "",
     udyam: initial?.udyam ?? "",
     category: initial?.category ?? "expense",
     notes: initial?.notes ?? "",
@@ -154,6 +156,7 @@ function VendorProfileModal({
       bank_ifsc: ifsc || null,
       payment_terms_days: terms === null || terms === undefined || Number.isNaN(terms) ? null : Number(terms),
       is_msme: !!form.is_msme,
+      msme_category: form.is_msme ? ((form.msme_category as string) || "small") : null,
       udyam: (form.udyam ?? "").toUpperCase().trim() || null,
       category: form.category || "expense",
       notes: (form.notes ?? "").trim() || null,
@@ -249,6 +252,17 @@ function VendorProfileModal({
             <input type="checkbox" checked={!!form.is_msme} onChange={e => set("is_msme", e.target.checked)} className="accent-[var(--color-primary)]" />
             Registered MSME vendor (subject to 45-day payment rule / 43B(h))
           </label>
+          {form.is_msme && (
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">MSME classification</label>
+              <select value={(form.msme_category as string) ?? ""} onChange={e => set("msme_category", e.target.value)} className={inp}>
+                <option value="micro">Micro</option>
+                <option value="small">Small</option>
+                <option value="medium">Medium (43B(h) does NOT apply)</option>
+              </select>
+              <p className="text-[10px] text-[var(--color-muted)] mt-1">The 45-day rule &amp; interest disallowance apply only to Micro &amp; Small suppliers.</p>
+            </div>
+          )}
 
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Notes</label>
@@ -3233,7 +3247,9 @@ function MsmeInterestLiability() {
       .filter(b => b.status === "unpaid")
       .map(b => {
         const vm = idx[(b.vendorName || "").toLowerCase()];
-        if (!vm?.is_msme) return null;
+        // 43B(h) fires only for Micro & Small — Medium is out of scope. Legacy MSME rows with no
+        // category recorded stay in scope (treated as small until the owner classifies them).
+        if (!vm?.is_msme || vm.msme_category === "medium") return null;
         const terms = vm.payment_terms_days;
         const limit = terms && terms > 0 ? Math.min(terms, 45) : 15;
         const deadline = new Date(new Date(b.billDate).getTime() + limit * day);
