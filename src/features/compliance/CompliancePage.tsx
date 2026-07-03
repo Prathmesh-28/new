@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { useApp } from "@/context/AppContext";
+import { api } from "@/lib/api";
 import AiInsight from "@/components/ai/AiInsight";
 import { computeFinancialSnapshot, gstLatePenalty } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
@@ -22,7 +23,8 @@ type ComplianceTab =
   | "posh-policy" | "penalty-multi" | "health-score"
   | "ptax-tracker" | "ip-renewal" | "iec-compliance" | "pollution-consent"
   | "fire-noc" | "csr-spend" | "rpt-register" | "dir-disqual" | "event-roc"
-  | "annual-cal" | "msme-form1" | "sbo-register" | "secretarial-std" | "gst-turnover-recon";
+  | "annual-cal" | "msme-form1" | "sbo-register" | "secretarial-std" | "gst-turnover-recon"
+  | "roc-filing";
 
 interface ComplianceEvent {
   date: Date;
@@ -169,6 +171,7 @@ export default function CompliancePage() {
           ["sbo-register", "Beneficial Owner (SBO)", UserCog],
           ["secretarial-std", "Secretarial Standards", ClipboardCheck],
           ["gst-turnover-recon", "GST vs Books Recon", Scale],
+          ["roc-filing", "ROC Filing (server)", FileStack],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
@@ -177,6 +180,7 @@ export default function CompliancePage() {
         ))}
       </div>
 
+      {tab === "roc-filing" && <RocFilingServer />}
       {tab === "roc-prep" && <RocAutoPrep />}
       {tab === "kyc-dpt3" && <KycDpt3Tracker />}
       {tab === "board-agm" && <BoardAgmManager />}
@@ -2423,6 +2427,102 @@ function GstTurnoverRecon() {
         </div>
       </div>
       <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />A clean reconciliation needs every difference explained (timing, schemes, credit notes, cross-charges). GSTR-9C requires the auditor to certify these adjustments - this is a prep aid, not the certified statement.</p>
+    </div>
+  );
+}
+
+// ── ROC Filing (server-backed): statutory registers persisted in the ledger DB + AOC-4/MGT-7
+// prep + Section 188 RPT threshold test. Unlike the KV-backed register tabs, this is queryable,
+// auditable and reconciles to the books. Talks to /api/books/roc/*.
+type RegField = { key: string; label: string; type?: "number" | "date" | "checkbox" | "text" };
+const ROC_REGISTERS: Record<string, { label: string; fields: RegField[]; show: string[] }> = {
+  members:   { label: "Members", fields: [{ key: "name", label: "Name" }, { key: "shares_held", label: "Shares", type: "number" }, { key: "holding_pct", label: "Holding %", type: "number" }, { key: "is_sbo", label: "SBO (>25%)", type: "checkbox" }], show: ["name", "shares_held", "holding_pct", "is_sbo"] },
+  directors: { label: "Directors / KMP", fields: [{ key: "name", label: "Name" }, { key: "din", label: "DIN" }, { key: "designation", label: "Designation" }, { key: "is_kmp", label: "KMP", type: "checkbox" }], show: ["name", "din", "designation", "is_kmp"] },
+  charges:   { label: "Charges", fields: [{ key: "charge_holder", label: "Charge holder" }, { key: "amount", label: "Amount", type: "number" }, { key: "charge_type", label: "Type" }, { key: "created_on", label: "Created on", type: "date" }], show: ["charge_holder", "amount", "charge_type", "status"] },
+  rpt:       { label: "Related-Party (188)", fields: [{ key: "party_name", label: "Party" }, { key: "relation", label: "Relation" }, { key: "nature", label: "Nature" }, { key: "amount", label: "Amount", type: "number" }, { key: "arms_length", label: "Arm's length", type: "checkbox" }, { key: "fy", label: "FY (e.g. 2024-25)" }], show: ["party_name", "relation", "nature", "amount", "arms_length"] },
+};
+
+function RocFilingServer() {
+  const { isReadOnly } = useApp();
+  const [kind, setKind] = useState<keyof typeof ROC_REGISTERS>("members");
+  const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
+  const [form, setForm] = useState<Record<string, unknown>>({});
+  const [prep, setPrep] = useState<any>(null);
+  const [s188, setS188] = useState<any>(null);
+  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]";
+  const cfg = ROC_REGISTERS[kind];
+
+  const load = (k: keyof typeof ROC_REGISTERS = kind) => { api.get<Array<Record<string, unknown>>>(`/api/books/roc/registers/${k}`).then(setRows).catch(e => toast.error((e as Error).message)); };
+  useEffect(() => { load(kind); setForm({}); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [kind]);
+
+  const add = async () => {
+    if (!Object.keys(form).length) return toast.error("Enter at least one field");
+    try { await api.post(`/api/books/roc/registers/${kind}`, form); toast.success("Added to register"); setForm({}); load(); }
+    catch (e) { toast.error((e as Error).message); }
+  };
+  const del = async (id: string) => { try { await api.delete(`/api/books/roc/registers/${kind}/${id}`); load(); } catch (e) { toast.error((e as Error).message); } };
+  const runPrep = () => api.get("/api/books/roc/prep").then(setPrep).catch(e => toast.error((e as Error).message));
+  const runS188 = () => api.get("/api/books/roc/section-188").then(setS188).catch(e => toast.error((e as Error).message));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1.5 flex-wrap">
+        {Object.entries(ROC_REGISTERS).map(([k, v]) => (
+          <button key={k} onClick={() => setKind(k as keyof typeof ROC_REGISTERS)}
+            className={`text-xs px-3 py-1.5 rounded-lg border ${kind === k ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent font-semibold" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{v.label}</button>
+        ))}
+      </div>
+
+      {!isReadOnly && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex flex-wrap gap-2 items-end">
+          {cfg.fields.map(f => (
+            <div key={f.key}>
+              <label className="text-[10px] text-[var(--color-muted)] block mb-1">{f.label}</label>
+              {f.type === "checkbox"
+                ? <input type="checkbox" checked={!!form[f.key]} onChange={e => setForm({ ...form, [f.key]: e.target.checked })} className="accent-[var(--color-primary)] h-8" />
+                : <input type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"} value={(form[f.key] as string) ?? ""} onChange={e => setForm({ ...form, [f.key]: f.type === "number" ? Number(e.target.value) : e.target.value })} className={inp} />}
+            </div>
+          ))}
+          <button onClick={add} className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold"><Plus size={13} /> Add</button>
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] px-1">No entries in the {cfg.label} register yet.</p>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <table className="w-full text-sm rcard"><tbody>
+            {rows.map(r => (
+              <tr key={String(r.id)} className="border-t border-[var(--color-border)]">
+                {cfg.show.map(c => <td key={c} data-label={c} className="py-1.5">{typeof r[c] === "boolean" ? (r[c] ? "Yes" : "No") : String(r[c] ?? "—")}</td>)}
+                {!isReadOnly && <td className="py-1.5"><button onClick={() => del(String(r.id))} className="text-red-400"><X size={13} /></button></td>}
+              </tr>
+            ))}
+          </tbody></table>
+        </div>
+      )}
+
+      <div className="grid md:grid-cols-2 gap-3">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2"><p className="text-sm font-semibold">AOC-4 / MGT-7 prep</p><button onClick={runPrep} className="text-xs border border-[var(--color-border)] px-2.5 py-1 rounded-lg">Compute</button></div>
+          {prep && (
+            <div className="text-xs space-y-1 text-[var(--color-muted)]">
+              <p>Turnover: <b className="text-[var(--color-text)]">{formatCurrency(prep.aoc4.turnover)}</b> · Net profit: <b className="text-[var(--color-text)]">{formatCurrency(prep.aoc4.net_profit)}</b></p>
+              <p>Net worth: <b className="text-[var(--color-text)]">{formatCurrency(prep.aoc4.net_worth)}</b> · {prep.aoc4.form} / {prep.mgt7.form}</p>
+              <p>Members: <b className="text-[var(--color-text)]">{prep.mgt7.members}</b> · Directors: <b className="text-[var(--color-text)]">{prep.mgt7.directors}</b> · Open charges: <b className="text-[var(--color-text)]">{prep.mgt7.open_charges}</b></p>
+            </div>
+          )}
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2"><p className="text-sm font-semibold">Section 188 threshold</p><button onClick={runS188} className="text-xs border border-[var(--color-border)] px-2.5 py-1 rounded-lg">Check</button></div>
+          {s188 && (
+            <div className="text-xs space-y-1 text-[var(--color-muted)]">
+              <p>{s188.transactions.length} RPT(s) · <span className={s188.breaches.length ? "text-red-400 font-semibold" : "text-emerald-400"}>{s188.breaches.length} needing action</span></p>
+              {s188.breaches.slice(0, 5).map((b: any) => <p key={b.id} className="text-red-400">⚠ {b.party_name}: {formatCurrency(b.amount)} {b.needs_shareholder_approval && !b.shareholder_approved ? "→ needs shareholder resolution" : "→ needs board approval / AOC-2"}</p>)}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

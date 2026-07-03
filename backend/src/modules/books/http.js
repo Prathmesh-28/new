@@ -64,6 +64,7 @@ const portal = require("./portal");
 const cc = require("./costcentres");
 const bankcredit = require("./bankcredit");
 const msme = require("./msme");
+const roc = require("./roc");
 
 // GET /documents/:id/print is opened in a new browser tab (window.open) which can't
 // set an Authorization header - accept the short-lived access token as ?token= for
@@ -1032,5 +1033,13 @@ router.get("/msme/form1", async (req, res) => { try { res.json(await msme.msmeFo
 // ── Direct-tax depth: precise 234A/B/C interest + Form 3CD prep sheet ──
 router.post("/tax/interest-234", async (req, res) => { try { res.json(incometax.interest234(req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/tax/form-3cd", async (req, res) => { try { res.json(await incometax.form3cd(tenantOf(req), fyOf(req), {})); } catch (e) { fail(res, e); } });
+
+// ── Company-law / ROC: statutory registers (members/directors/charges/rpt) + prep + Sec 188 ──
+router.get("/roc/registers/:kind", async (req, res) => { try { res.json(await roc.listRegister(tenantOf(req), req.params.kind)); } catch (e) { fail(res, e); } });
+router.post("/roc/registers/:kind", canPost, async (req, res) => { try { res.status(201).json(await roc.addRegisterRow(tenantOf(req), req.user.id, req.params.kind, req.body || {})); } catch (e) { fail(res, e); } });
+router.patch("/roc/registers/:kind/:id", canPost, async (req, res) => { try { res.json(await roc.updateRegisterRow(tenantOf(req), req.user.id, req.params.kind, req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
+router.delete("/roc/registers/:kind/:id", canPost, async (req, res) => { try { res.json(await roc.removeRegisterRow(tenantOf(req), req.user.id, req.params.kind, req.params.id)); } catch (e) { fail(res, e); } });
+router.get("/roc/prep", async (req, res) => { try { res.json(await roc.rocPrep(tenantOf(req), fyOf(req), { agmDate: req.query.agm_date, entityType: req.query.entity_type })); } catch (e) { fail(res, e); } });
+router.get("/roc/section-188", async (req, res) => { try { res.json(await roc.section188(tenantOf(req), req.query.fy)); } catch (e) { fail(res, e); } });
 
 module.exports = router;

@@ -757,6 +757,72 @@ const BOOKS_SCHEMA = `
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_book_cash_withdrawals ON book_cash_withdrawals(tenant_id, withdrawn_on);
+
+  -- ── Company-law statutory registers (persisted, was frontend KV) + RPT (Sec 188) ──
+  CREATE TABLE IF NOT EXISTS book_members_register (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     TEXT NOT NULL,
+    name          TEXT NOT NULL,
+    pan           TEXT,
+    folio         TEXT,
+    share_class   TEXT DEFAULT 'equity',
+    shares_held   NUMERIC(18,0) NOT NULL DEFAULT 0,
+    holding_pct   NUMERIC(6,3),
+    is_sbo        BOOLEAN NOT NULL DEFAULT false,   -- significant beneficial owner (>25%) → BEN-2
+    joined_on     DATE,
+    ceased_on     DATE,
+    notes         TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_members_register ON book_members_register(tenant_id);
+
+  CREATE TABLE IF NOT EXISTS book_directors_register (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     TEXT NOT NULL,
+    name          TEXT NOT NULL,
+    din           TEXT,
+    designation   TEXT,                              -- director | managing_director | cfo | cs | ...
+    pan           TEXT,
+    is_kmp        BOOLEAN NOT NULL DEFAULT false,
+    appointed_on  DATE,
+    resigned_on   DATE,
+    dsc_expires_on DATE,                             -- DSC validity (for MCA filing readiness)
+    notes         TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_directors_register ON book_directors_register(tenant_id);
+
+  CREATE TABLE IF NOT EXISTS book_charges_register (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     TEXT NOT NULL,
+    charge_holder TEXT NOT NULL,                     -- lender / secured creditor
+    charge_id     TEXT,                              -- CHG-1 charge id
+    charge_type   TEXT DEFAULT 'fixed',              -- fixed | floating
+    amount        NUMERIC(15,2) NOT NULL DEFAULT 0,
+    asset_desc    TEXT,
+    created_on    DATE,                              -- date of creation of charge
+    satisfied_on  DATE,
+    status        TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','satisfied')),
+    notes         TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_charges_register ON book_charges_register(tenant_id, status);
+
+  CREATE TABLE IF NOT EXISTS book_rpt_register (
+    id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id             TEXT NOT NULL,
+    fy                    TEXT,
+    party_name            TEXT NOT NULL,
+    relation              TEXT,                       -- director | kmp | relative | group_company | ...
+    nature                TEXT,                       -- goods | services | property_sale | property_lease | loan | ...
+    amount                NUMERIC(15,2) NOT NULL DEFAULT 0,
+    arms_length           BOOLEAN NOT NULL DEFAULT true,
+    board_approved_on     DATE,
+    shareholder_approved_on DATE,
+    notes                 TEXT,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_rpt_register ON book_rpt_register(tenant_id, fy);
 `;
 
 module.exports = { BOOKS_SCHEMA };
