@@ -1069,6 +1069,11 @@ router.patch("/roc/registers/:kind/:id", canPost, async (req, res) => { try { re
 router.delete("/roc/registers/:kind/:id", canPost, async (req, res) => { try { res.json(await roc.removeRegisterRow(tenantOf(req), req.user.id, req.params.kind, req.params.id)); } catch (e) { fail(res, e); } });
 router.get("/roc/prep", async (req, res) => { try { res.json(await roc.rocPrep(tenantOf(req), fyOf(req), { agmDate: req.query.agm_date, entityType: req.query.entity_type })); } catch (e) { fail(res, e); } });
 router.get("/roc/section-188", async (req, res) => { try { res.json(await roc.section188(tenantOf(req), req.query.fy)); } catch (e) { fail(res, e); } });
+router.get("/roc/auditor-rotation", async (req, res) => { try { res.json(await roc.auditorRotation(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.get("/roc/strike-off-risk", async (req, res) => { try { res.json(await roc.strikeOffRisk(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.get("/roc/dpt3", async (req, res) => { try { res.json(await roc.dpt3Prep(tenantOf(req), req.query.fy)); } catch (e) { fail(res, e); } });
+router.post("/roc/dividend-tds", async (req, res) => { try { const b = req.body || {}; res.json(roc.dividendTds({ totalDividend: b.total_dividend, perShareholderAvg: b.per_shareholder_avg, panAvailable: b.pan_available !== false })); } catch (e) { fail(res, e); } });
+router.post("/roc/board-minutes", canPost, async (req, res) => { try { res.json(roc.boardMinutes(req.body || {})); } catch (e) { fail(res, e); } });
 
 // ── Stamp / franking / notary / e-stamp register (in-house; scans link to the files vault) ──
 router.get("/stamp-register", async (req, res) => { try { res.json(await stampreg.listStamps(tenantOf(req), { status: req.query.status })); } catch (e) { fail(res, e); } });

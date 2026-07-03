@@ -922,6 +922,24 @@ const BOOKS_SCHEMA = `
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_book_insurance_claims ON book_insurance_claims(tenant_id, status, created_at DESC);
+
+  -- Statutory auditor register (Sec 139) + rotation tracking (ADT-1).
+  CREATE TABLE IF NOT EXISTS book_auditors (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     TEXT NOT NULL,
+    name          TEXT NOT NULL,
+    firm          TEXT,
+    frn           TEXT,                                    -- ICAI firm registration no.
+    is_firm       BOOLEAN NOT NULL DEFAULT true,           -- firm (10y cap) vs individual (5y cap)
+    appointed_on  DATE,
+    term_years    INT NOT NULL DEFAULT 5,                  -- one term = 5 years (Sec 139)
+    terms_served  INT NOT NULL DEFAULT 1,
+    adt1_filed_on DATE,
+    status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','resigned','rotated')),
+    notes         TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_auditors ON book_auditors(tenant_id, status);
 `;
 
 module.exports = { BOOKS_SCHEMA };

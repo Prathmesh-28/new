@@ -2442,6 +2442,7 @@ const ROC_REGISTERS: Record<string, { label: string; fields: RegField[]; show: s
   directors: { label: "Directors / KMP", fields: [{ key: "name", label: "Name" }, { key: "din", label: "DIN" }, { key: "designation", label: "Designation" }, { key: "is_kmp", label: "KMP", type: "checkbox" }], show: ["name", "din", "designation", "is_kmp"] },
   charges:   { label: "Charges", fields: [{ key: "charge_holder", label: "Charge holder" }, { key: "amount", label: "Amount", type: "number" }, { key: "charge_type", label: "Type" }, { key: "created_on", label: "Created on", type: "date" }], show: ["charge_holder", "amount", "charge_type", "status"] },
   rpt:       { label: "Related-Party (188)", fields: [{ key: "party_name", label: "Party" }, { key: "relation", label: "Relation" }, { key: "nature", label: "Nature" }, { key: "amount", label: "Amount", type: "number" }, { key: "arms_length", label: "Arm's length", type: "checkbox" }, { key: "fy", label: "FY (e.g. 2024-25)" }], show: ["party_name", "relation", "nature", "amount", "arms_length"] },
+  auditors:  { label: "Auditors", fields: [{ key: "name", label: "Auditor / firm" }, { key: "frn", label: "FRN" }, { key: "is_firm", label: "Is a firm", type: "checkbox" }, { key: "appointed_on", label: "Appointed on", type: "date" }, { key: "adt1_filed_on", label: "ADT-1 filed on", type: "date" }], show: ["name", "frn", "appointed_on", "status"] },
 };
 
 function RocFilingServer() {
@@ -2524,6 +2525,48 @@ function RocFilingServer() {
             </div>
           )}
         </div>
+      </div>
+      <SecretarialChecks />
+    </div>
+  );
+}
+
+// Secretarial checks: strike-off risk (#36), auditor rotation (#33), DPT-3 (#30), dividend 194 TDS (#35).
+function SecretarialChecks() {
+  const [risk, setRisk] = useState<any>(null);
+  const [rot, setRot] = useState<any[]>([]);
+  const [dpt3, setDpt3] = useState<any>(null);
+  const [div, setDiv] = useState<any>(null);
+  const [divAmt, setDivAmt] = useState("");
+  useEffect(() => {
+    api.get("/api/books/roc/strike-off-risk").then(setRisk).catch(() => {});
+    api.get<any[]>("/api/books/roc/auditor-rotation").then(setRot).catch(() => {});
+    api.get("/api/books/roc/dpt3").then(setDpt3).catch(() => {});
+  }, []);
+  const calcDiv = () => api.post("/api/books/roc/dividend-tds", { total_dividend: Number(divAmt) || 0 }).then(setDiv).catch(e => toast.error((e as Error).message));
+  const box = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4";
+  const riskColor: Record<string, string> = { high: "text-red-400", elevated: "text-red-400", watch: "text-amber-400", clear: "text-emerald-400" };
+  return (
+    <div className="grid md:grid-cols-2 gap-3">
+      <div className={box}>
+        <p className="text-sm font-semibold mb-1">Strike-off risk</p>
+        {risk ? <div className="text-xs text-[var(--color-muted)] space-y-1"><p>Risk: <b className={riskColor[risk.risk_level] || ""}>{risk.risk_level}</b> · {risk.overdue_filings.length} overdue ROC filing(s){risk.worst_days_overdue ? ` · worst ${risk.worst_days_overdue}d` : ""}</p>{risk.overdue_filings.slice(0, 3).map((o: any, i: number) => <p key={i} className="text-red-400">⚠ {o.title} ({o.days_overdue}d)</p>)}</div> : <p className="text-xs text-[var(--color-muted)]">Loading…</p>}
+      </div>
+      <div className={box}>
+        <p className="text-sm font-semibold mb-1">Auditor rotation (Sec 139)</p>
+        {rot.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No auditor recorded (add under the Auditors register).</p> : rot.map((a, i) => <p key={i} className={`text-xs ${a.must_rotate ? "text-red-400" : a.rotation_due_soon ? "text-amber-400" : "text-[var(--color-muted)]"}`}>{a.name}: {a.years_served}/{a.cap_years}y {a.must_rotate ? "· MUST ROTATE" : a.rotation_due_soon ? "· rotation due soon" : ""}{!a.adt1_filed ? " · ADT-1 pending" : ""}</p>)}
+      </div>
+      <div className={box}>
+        <p className="text-sm font-semibold mb-1">DPT-3 (deposits return)</p>
+        {dpt3 ? <div className="text-xs text-[var(--color-muted)] space-y-1"><p>Outstanding loans/deposits: <b className="text-[var(--color-text)]">{formatCurrency(dpt3.total_outstanding)}</b> · due {dpt3.due_date}</p>{dpt3.items.slice(0, 4).map((it: any, i: number) => <p key={i}>· {it.head}: {formatCurrency(it.amount)}</p>)}</div> : <p className="text-xs text-[var(--color-muted)]">Loading…</p>}
+      </div>
+      <div className={box}>
+        <p className="text-sm font-semibold mb-1">Dividend TDS (Sec 194)</p>
+        <div className="flex gap-2 items-end mb-2">
+          <input type="number" value={divAmt} onChange={e => setDivAmt(e.target.value)} placeholder="Total dividend ₹" className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm w-40" />
+          <button onClick={calcDiv} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold">Compute</button>
+        </div>
+        {div && <p className="text-xs text-[var(--color-muted)]">TDS @ {div.tds_rate_pct}%: <b className="text-[var(--color-text)]">{formatCurrency(div.tds)}</b> · net payout {formatCurrency(div.net_payout)}</p>}
       </div>
     </div>
   );

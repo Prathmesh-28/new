@@ -9,6 +9,7 @@ const { writeAudit } = require("../../lib/audit");
 
 class RocError extends Error { constructor(code, message, http = 400) { super(message); this.code = code; this.http = http; } }
 const n = (v) => (v == null ? 0 : Number(v));
+const r2 = (v) => Math.round(Number(v) * 100) / 100;
 
 // Generic register helpers keyed to the four tables + their writable columns.
 const REGISTERS = {
@@ -16,6 +17,7 @@ const REGISTERS = {
   directors: { table: "book_directors_register", cols: ["name", "din", "designation", "pan", "is_kmp", "appointed_on", "resigned_on", "dsc_expires_on", "notes"], order: "name" },
   charges:   { table: "book_charges_register",   cols: ["charge_holder", "charge_id", "charge_type", "amount", "asset_desc", "created_on", "satisfied_on", "status", "notes"], order: "created_on DESC NULLS LAST" },
   rpt:       { table: "book_rpt_register",        cols: ["fy", "party_name", "relation", "nature", "amount", "arms_length", "board_approved_on", "shareholder_approved_on", "notes"], order: "created_at DESC" },
+  auditors:  { table: "book_auditors",            cols: ["name", "firm", "frn", "is_firm", "appointed_on", "term_years", "terms_served", "adt1_filed_on", "status", "notes"], order: "created_at DESC" },
 };
 function reg(kind) { const r = REGISTERS[kind]; if (!r) throw new RocError("BAD_INPUT", `Unknown register '${kind}'`, 400); return r; }
 
@@ -138,6 +140,69 @@ async function section188(tenantId, fy) {
   };
 }
 
+// #33 — Auditor rotation (Sec 139): individual auditor max 1 term (5y); firm max 2 terms (10y).
+async function auditorRotation(tenantId) {
+  const { rows } = await pool.query("SELECT * FROM book_auditors WHERE tenant_id=$1 AND status='active' ORDER BY appointed_on", [tenantId]);
+  const today = new Date();
+  return rows.map((a) => {
+    const cap = a.is_firm ? 10 : 5;
+    const yearsServed = a.appointed_on ? r2((today - new Date(a.appointed_on)) / (365.25 * 86400000)) : 0;
+    const remaining = r2(cap - yearsServed);
+    return { name: a.name, firm: a.firm, is_firm: a.is_firm, appointed_on: a.appointed_on, adt1_filed: !!a.adt1_filed_on, years_served: yearsServed, cap_years: cap, years_to_rotation: remaining, must_rotate: remaining <= 0, rotation_due_soon: remaining > 0 && remaining <= 1 };
+  });
+}
+
+// #36 — Strike-off risk: overdue statutory ROC filings raise strike-off exposure (Sec 248).
+async function strikeOffRisk(tenantId) {
+  const { rows } = await pool.query(
+    `SELECT title, authority, due_date, (CURRENT_DATE - due_date) AS days_overdue
+       FROM book_compliance_items
+      WHERE tenant_id=$1 AND status='pending' AND kind='filing' AND due_date < CURRENT_DATE
+        AND (authority ILIKE '%roc%' OR authority ILIKE '%mca%' OR title ILIKE ANY(ARRAY['%AOC-4%','%MGT-7%','%ADT-1%','%DIR-3%','%DPT-3%']))
+      ORDER BY due_date`, [tenantId]).catch(() => ({ rows: [] }));
+  const overdue = rows.map((r) => ({ title: r.title, authority: r.authority, due_date: r.due_date, days_overdue: Number(r.days_overdue) }));
+  const worst = overdue.reduce((m, o) => Math.max(m, o.days_overdue), 0);
+  // Two consecutive years of non-filing → strike-off notice risk (Sec 248).
+  const level = worst > 730 ? "high" : worst > 365 ? "elevated" : overdue.length ? "watch" : "clear";
+  return { risk_level: level, overdue_filings: overdue, worst_days_overdue: worst, note: "Two consecutive FYs of non-filing of annual returns/financials exposes a company to strike-off (Sec 248). File the overdue forms (with additional fees) to clear the risk." };
+}
+
+// #30 — DPT-3: outstanding loans/deposits (return of deposits) from balance-sheet liabilities.
+async function dpt3Prep(tenantId, fy) {
+  const useFy = fy || (() => { const d = new Date(); const y = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1; return `${y}-${String((y + 1) % 100).padStart(2, "0")}`; })();
+  const bs = await reports.balanceSheet(tenantId, useFy);
+  const DEP_RE = /deposit|unsecured loan|loan from|borrow|debenture|director.*loan|inter.?corporate/i;
+  const rows = (bs.liabilities || []).filter((l) => DEP_RE.test(l.name)).map((l) => ({ head: l.name, amount: n(l.amount) }));
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  return { fy: useFy, items: rows, total_outstanding: r2(total), due_date: `${useFy.split("-")[0] + 1}-06-30`, note: "DPT-3: annual return of deposits & exempt receipts (loans from directors/related parties, ICDs, etc.) outstanding as at 31 Mar. Classify each head as deposit vs exempted before filing (due 30 Jun)." };
+}
+
+// #35 — Dividend + Sec 194 TDS: 10% on resident dividend above ₹5,000/shareholder (20% without PAN).
+function dividendTds({ totalDividend = 0, perShareholderAvg = 0, panAvailable = true } = {}) {
+  const gross = n(totalDividend);
+  const rate = panAvailable ? 10 : 20;
+  // Threshold relief applies per shareholder; if the average payout ≤ ₹5,000 no TDS is generally due.
+  const belowThreshold = n(perShareholderAvg) > 0 && n(perShareholderAvg) <= 5000 && panAvailable;
+  const tds = belowThreshold ? 0 : r2(gross * rate / 100);
+  return { total_dividend: r2(gross), tds_rate_pct: rate, tds: tds, net_payout: r2(gross - tds), below_threshold: belowThreshold, note: "Sec 194: TDS 10% on resident dividends exceeding ₹5,000 per shareholder in the FY (20% if PAN not furnished). Also file the board/AGM resolution and pay within 30 days." };
+}
+
+// #26 — Board/AGM minutes generator from agenda + resolutions (templated text).
+function boardMinutes({ companyName = "the Company", meetingType = "Board", date, place = "Registered Office", attendees = [], agenda = [], resolutions = [] } = {}) {
+  const d = date || new Date().toISOString().slice(0, 10);
+  const lines = [];
+  lines.push(`MINUTES OF THE ${String(meetingType).toUpperCase()} MEETING OF ${companyName.toUpperCase()}`);
+  lines.push(`held on ${d} at ${place}.`, "");
+  if (attendees.length) lines.push("PRESENT:", ...attendees.map((a, i) => `  ${i + 1}. ${a}`), "");
+  lines.push("The Chairman confirmed the requisite quorum was present and called the meeting to order.", "");
+  (agenda.length ? agenda : ["To take note of the business placed before the meeting."]).forEach((a, i) => lines.push(`${i + 1}. ${a}`));
+  lines.push("");
+  if (resolutions.length) { lines.push("RESOLUTIONS PASSED:", ""); resolutions.forEach((r, i) => lines.push(`Resolution ${i + 1}: "RESOLVED THAT ${r}"`, "")); }
+  lines.push("There being no other business, the meeting concluded with a vote of thanks to the Chair.", "", "____________________", "Chairman");
+  return { minutes: lines.join("\n"), meeting_type: meetingType, date: d, note: "Draft minutes — finalise within 30 days (Secretarial Standard SS-1/SS-2), enter in the Minutes Book, and file MGT-14 for any special resolutions." };
+}
+
 module.exports = {
   RocError, listRegister, addRegisterRow, updateRegisterRow, removeRegisterRow, rocPrep, section188,
+  auditorRotation, strikeOffRisk, dpt3Prep, dividendTds, boardMinutes,
 };
