@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { api } from "@/lib/api";
 import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount } from "@/lib/utils";
@@ -26,10 +27,11 @@ type TabId =
   | "price-list" | "sla" | "group-buy" | "intro" | "watchlist" | "meeting-log"
   | "netting" | "tiers" | "terms-bench" | "co-market" | "intros-ledger"
   | "forecast-share" | "partner-nps"
-  | "spend-share-trend" | "jv-split" | "pay-reliability";
+  | "spend-share-trend" | "jv-split" | "pay-reliability" | "intel";
 
 const TABS = [
   ["overview", "Overview", Network],
+  ["intel", "Counterparty Intelligence", ShieldCheck],
   ["directory", "Buyer-Supplier Directory", BookUser],
   ["confirm", "Invoice Confirmation", FileCheck2],
   ["recon", "Counterparty Reconciliation", GitCompareArrows],
@@ -131,6 +133,7 @@ export default function NetworkPage() {
       </div>
 
       {tab === "overview" && <Overview counterparties={liveCounterparties} />}
+      {tab === "intel" && <NetworkIntelligence />}
       {tab === "directory" && <Directory live={liveCounterparties} />}
       {tab === "confirm" && <InvoiceConfirmation />}
       {tab === "recon" && <CounterpartyReconciliation live={liveCounterparties} />}
@@ -3118,6 +3121,137 @@ function PaymentReliability() {
         </div>
       )}
       <p className="text-[10px] text-[var(--color-muted)]">On-time % counts cleared (paid) invoices against all settled ones (paid + overdue). Reliable = 80%+ on time and 7 days or less average lateness.</p>
+    </div>
+  );
+}
+
+// ── Counterparty Intelligence (server-backed) ────────────────────────────────
+// Surfaces the REAL local signals — PAN-dedup entity groups + payment-behaviour customer scores,
+// both computed from the tenant's own ledger — plus GATED external enrichment (GSTN/MCA/GSP/Udyam:
+// honestly reported as off until credentials are configured — never faked) and anchor-led invites.
+// Talks to /api/counterparty/*.
+function NetworkIntelligence() {
+  const { isReadOnly } = useApp();
+  const [groups, setGroups] = useState<any>(null);
+  const [scores, setScores] = useState<any>(null);
+  const [providers, setProviders] = useState<Record<string, { configured: boolean; problem: string | null }> | null>(null);
+  const [enr, setEnr] = useState({ kind: "gstn", identifier: "" });
+  const [enrResult, setEnrResult] = useState<any>(null);
+  const [inv, setInv] = useState({ name: "", email: "", phone: "", relation: "vendor" });
+  const [invites, setInvites] = useState<any[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+
+  const loadInvites = () => api.get<any[]>("/api/counterparty/invites").then(setInvites).catch(() => {});
+  useEffect(() => {
+    Promise.all([
+      api.get("/api/counterparty/dedupe-groups"), api.get("/api/counterparty/scores"), api.get<Record<string, { configured: boolean; problem: string | null }>>("/api/counterparty/providers"),
+    ]).then(([g, s, p]) => { setGroups(g); setScores(s); setProviders(p); }).catch((e) => setErr((e as Error).message));
+    loadInvites();
+  }, []);
+
+  const runEnrich = async () => {
+    if (!enr.identifier.trim()) return toast.error("Enter a GSTIN / CIN / PAN");
+    try { setEnrResult(await api.post("/api/counterparty/enrich", { kind: enr.kind, identifier: enr.identifier })); }
+    catch (e) { toast.error((e as Error).message); }
+  };
+  const sendInvite = async () => {
+    if (!inv.email && !inv.phone) return toast.error("Enter an email or phone");
+    try { const r = await api.post<{ sent_on: string[]; note?: string }>("/api/counterparty/invite", inv); toast.success(r.sent_on.length ? `Invited via ${r.sent_on.join(", ")}` : (r.note || "Invite recorded")); setInv({ name: "", email: "", phone: "", relation: "vendor" }); loadInvites(); }
+    catch (e) { toast.error((e as Error).message); }
+  };
+
+  if (err) return <div className={`${CARD} p-4 text-sm text-red-400`}>Couldn't load intelligence: {err}</div>;
+  const gSummary = groups?.summary || groups || {};
+  const pf = scores?.portfolio || {};
+
+  return (
+    <div className="space-y-4">
+      {/* Portfolio + dedup KPIs (real, from the ledger) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Kpi label="Counterparties" value={String(gSummary.counterparties ?? "—")} />
+        <Kpi label="Multi-GSTIN entities" value={String(gSummary.multi_gstin_entities ?? "—")} />
+        <Kpi label="Receivables at risk" value={pf.total_overdue != null ? formatCurrency(pf.total_overdue) : "—"} danger={Number(pf.total_overdue) > 0} />
+        <Kpi label="At-risk customers" value={String(pf.at_risk_customers ?? "—")} />
+      </div>
+
+      {/* Worst payers (real customer scores) */}
+      <div className={`${CARD} p-4`}>
+        <p className="text-sm font-semibold mb-2 flex items-center gap-2"><Gauge size={14} className="text-[var(--color-primary)]" /> Payment-behaviour scores</p>
+        {!scores ? <p className="text-xs text-[var(--color-muted)]">Loading…</p> : (scores.customers || []).length === 0 ? <p className="text-xs text-[var(--color-muted)]">No customer history yet.</p> : (
+          <table className="w-full text-sm rcard"><tbody>
+            {(scores.customers || []).slice(0, 8).map((c: any, i: number) => (
+              <tr key={i} className="border-t border-[var(--color-border)]">
+                <td data-label="Customer" className="py-1.5">{c.name}</td>
+                <td data-label="Grade" className="py-1.5 font-semibold">{c.grade}</td>
+                <td data-label="On-time" className="py-1.5">{c.on_time_rate != null ? `${Math.round(c.on_time_rate)}%` : "—"}</td>
+                <td data-label="Outstanding" className="py-1.5">{formatCurrency(c.outstanding || 0)}</td>
+              </tr>
+            ))}
+          </tbody></table>
+        )}
+      </div>
+
+      {/* Gated external enrichment */}
+      <div className={`${CARD} p-4`}>
+        <p className="text-sm font-semibold mb-1 flex items-center gap-2"><ShieldCheck size={14} className="text-[var(--color-primary)]" /> Registry enrichment</p>
+        {providers && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {Object.entries(providers).map(([k, v]) => (
+              <span key={k} className="text-[11px] px-2 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]">{k.toUpperCase()}: <b className={v.configured ? "text-emerald-400" : "text-[var(--color-muted)]"}>{v.configured ? "live" : "off"}</b></span>
+            ))}
+          </div>
+        )}
+        {!isReadOnly && (
+          <div className="flex flex-wrap gap-2 items-end">
+            <select value={enr.kind} onChange={(e) => setEnr({ ...enr, kind: e.target.value })} className={INP + " w-auto"}>
+              <option value="gstn">GSTN filing status</option><option value="gsp">GSTIN validity (GSP)</option><option value="mca">MCA (CIN)</option><option value="udyam">Udyam (PAN)</option>
+            </select>
+            <input value={enr.identifier} onChange={(e) => setEnr({ ...enr, identifier: e.target.value.toUpperCase() })} placeholder="GSTIN / CIN / PAN" className={INP + " w-auto"} />
+            <button onClick={runEnrich} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-semibold">Look up</button>
+          </div>
+        )}
+        {enrResult && (
+          <div className={`mt-3 text-xs rounded-lg p-3 ${enrResult.status === "ok" ? "bg-emerald-950/20 text-emerald-300" : enrResult.status === "gated" ? "bg-amber-950/20 text-amber-300" : "bg-red-950/20 text-red-300"}`}>
+            <b className="uppercase">{enrResult.status}</b> — {enrResult.message || (enrResult.status === "ok" ? "Fetched." : "")}
+            {enrResult.status === "ok" && <pre className="mt-1 overflow-x-auto text-[10px] text-[var(--color-muted)]">{JSON.stringify(enrResult.data, null, 1).slice(0, 800)}</pre>}
+          </div>
+        )}
+      </div>
+
+      {/* Anchor-led invites */}
+      <div className={`${CARD} p-4`}>
+        <p className="text-sm font-semibold mb-2 flex items-center gap-2"><UserPlus size={14} className="text-[var(--color-primary)]" /> Invite a dealer / supplier</p>
+        {!isReadOnly && (
+          <div className="flex flex-wrap gap-2 items-end mb-3">
+            <input value={inv.name} onChange={(e) => setInv({ ...inv, name: e.target.value })} placeholder="Name" className={INP + " w-auto"} />
+            <input value={inv.email} onChange={(e) => setInv({ ...inv, email: e.target.value })} placeholder="Email" className={INP + " w-auto"} />
+            <input value={inv.phone} onChange={(e) => setInv({ ...inv, phone: e.target.value })} placeholder="Phone" className={INP + " w-auto"} />
+            <select value={inv.relation} onChange={(e) => setInv({ ...inv, relation: e.target.value })} className={INP + " w-auto"}><option value="vendor">Vendor</option><option value="customer">Customer</option><option value="dealer">Dealer</option><option value="distributor">Distributor</option></select>
+            <button onClick={sendInvite} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-semibold">Invite</button>
+          </div>
+        )}
+        {invites.length === 0 ? <p className="text-xs text-[var(--color-muted)]">No invites yet.</p> : (
+          <table className="w-full text-sm rcard"><tbody>
+            {invites.map((x) => (
+              <tr key={x.id} className="border-t border-[var(--color-border)]">
+                <td data-label="Name" className="py-1.5">{x.name || x.email || x.phone}</td>
+                <td data-label="Relation" className="py-1.5 capitalize">{x.relation}</td>
+                <td data-label="Sent on" className="py-1.5 text-[var(--color-muted)]">{(x.channels || []).join(", ") || "—"}</td>
+                <td data-label="Status" className="py-1.5 capitalize">{x.status}</td>
+              </tr>
+            ))}
+          </tbody></table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Kpi({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
+  return (
+    <div className={`${CARD} p-4`}>
+      <p className="text-[11px] text-[var(--color-muted)] uppercase tracking-wide">{label}</p>
+      <p className={`text-lg font-bold mt-1 ${danger ? "text-red-400" : "text-[var(--color-text)]"}`}>{value}</p>
     </div>
   );
 }
