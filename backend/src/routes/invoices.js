@@ -8,8 +8,12 @@ const { sendMail } = require("../lib/email");
 const { sendWhatsApp } = require("../lib/whatsapp");
 const platformConfig = require("../lib/platformConfig");
 
+const { round2, applyReceipt, remainingToSettle } = require("../lib/invoicePaymentMath");
+
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant","sales"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
+// Payment modes accepted on a receipt. Kept small + closed so the mode column stays reportable.
+const PAY_MODES = new Set(["cash", "upi", "bank", "neft", "cheque", "card", "other"]);
 
 // The SMB's own firm name - so a reminder a CUSTOMER receives is signed by the
 // business, not the logged-in user's display name or a generic "your supplier".
@@ -105,20 +109,54 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
   const { status } = req.body;
   const valid = ["draft", "sent", "paid", "cancelled"];
   if (!valid.includes(status)) return res.status(400).json({ error: `status must be one of: ${valid.join(", ")}` });
+  const tenantId = req.user.tenant_id;
 
-  const { rows: [inv] } = await q(req.user.tenant_id,
-    "UPDATE invoices SET status=$1, paid_at=CASE WHEN $1='paid' THEN now() ELSE paid_at END WHERE id=$2 AND tenant_id=$3 RETURNING *",
-    [status, req.params.id, req.user.tenant_id]
+  // Marking paid must settle only the OUTSTANDING balance (partial receipts may already be
+  // booked) and must be a no-op on an already-paid invoice — otherwise the settling receipt
+  // double-posts against those partials or against a historical full receipt.
+  if (status === "paid") {
+    let outcome;
+    try {
+      outcome = await withTenant(tenantId, async (client) => {
+      const { rows: [cur] } = await client.query("SELECT * FROM invoices WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [req.params.id, tenantId]);
+      if (!cur) return { notFound: true };
+      if (cur.status === "paid") return { inv: cur, already: true }; // idempotent: nothing left to post
+      const remaining = remainingToSettle({ total: cur.total_amount, paidAmount: cur.paid_amount || 0 });
+      // Record the settling remainder as a receipt so sum(invoice_payments)==paid_amount holds.
+      // Strict > 0: amounts are paise-quantized, so even a 1-paise residual gets a settling
+      // receipt — otherwise the GL debtor keeps an uncleared residual on a "paid" invoice.
+      let settle = null;
+      if (remaining > 0) {
+        const { rows: [p] } = await client.query(
+          "INSERT INTO invoice_payments(tenant_id, invoice_id, amount, mode, reference, created_by) VALUES($1,$2,$3,'other','Marked paid',$4) RETURNING *",
+          [tenantId, cur.id, remaining, req.user.id || null]);
+        settle = p;
+      }
+      const { rows: [upd] } = await client.query(
+        "UPDATE invoices SET status='paid', paid_at=now(), paid_amount=total_amount WHERE id=$1 AND tenant_id=$2 RETURNING *",
+        [cur.id, tenantId]);
+      return { inv: upd, settle, remaining };
+      });
+    } catch (e) { console.error("[invoices] mark paid failed:", e.message); return res.status(500).json({ error: "Internal error" }); }
+    if (outcome.notFound) return res.status(404).json({ error: "Invoice not found" });
+    if (!outcome.already) {
+      require("../modules/flows/runner").emitEvent(tenantId, "invoice.paid", { invoice: outcome.inv }).catch(() => {});
+      if (outcome.settle) // book only the remainder; shared :settle key so a concurrent manual-mark + Razorpay webhook dedup to one, while partial :p: keys never collide
+        require("../lib/invoiceGl").postInvoiceReceipt(tenantId, outcome.inv, { amount: outcome.settle.amount, ref: outcome.inv.invoice_number, idempotencyKey: `recv:inv:${outcome.inv.id}:settle` }).catch(() => {});
+      // Invoice-financing wedge (self-liquidating): if this invoice backs an active advance,
+      // auto-recover the loan. The Razorpay webhook does the same; onInvoicePaid uses a stable
+      // per-invoice recovery ref so a manual + webhook (or concurrent) double-fire dedups to one.
+      require("../modules/lending").onInvoicePaid(tenantId, outcome.inv.id).catch(() => {});
+    }
+    return res.json(outcome.inv);
+  }
+
+  const { rows: [inv] } = await q(tenantId,
+    "UPDATE invoices SET status=$1 WHERE id=$2 AND tenant_id=$3 RETURNING *",
+    [status, req.params.id, tenantId]
   );
   if (!inv) return res.status(404).json({ error: "Invoice not found" });
-  if (status === "paid") {
-    require("../modules/flows/runner").emitEvent(req.user.tenant_id, "invoice.paid", { invoice: inv }).catch(() => {});
-    require("../lib/invoiceGl").postInvoiceReceipt(req.user.tenant_id, inv).catch(() => {}); // Dr Undeposited Funds / Cr Debtor (books the sale first if needed)
-    // Invoice-financing wedge (self-liquidating): if this invoice backs an active advance,
-    // auto-recover the loan. The Razorpay webhook does the same; onInvoicePaid uses a stable
-    // per-invoice recovery ref so a manual + webhook (or concurrent) double-fire dedups to one.
-    require("../modules/lending").onInvoicePaid(req.user.tenant_id, inv.id).catch(() => {});
-  } else if (status === "sent") {
+  if (status === "sent") {
     require("../lib/invoiceGl").postInvoiceSale(req.user.tenant_id, inv).catch(() => {}); // accrual: recognise revenue + output GST on issue
     // Issued & unpaid = the moment an invoice becomes financeable. Flows can trigger on this
     // (e.g. the "issue invoice → offer an advance" automation).
@@ -365,6 +403,68 @@ router.post("/:id/upi-link", authenticate, canWrite, async (req, res) => {
 
   await q(req.user.tenant_id, "UPDATE invoices SET upi_link=$1 WHERE id=$2 AND tenant_id=$3", [upiLink, inv.id, req.user.tenant_id]);
   res.json({ upi_link: upiLink, qr: qrDataUrl });
+});
+
+// ── Payments / receipts (partial & advance both supported) ──
+// GET /:id/payments — the receipt ledger for an invoice + its running balance.
+router.get("/:id/payments", authenticate, async (req, res) => {
+  try {
+  const t = req.user.tenant_id;
+  const rows = await withTenant(t, async (client) => {
+    const { rows: [inv] } = await client.query("SELECT total_amount, paid_amount FROM invoices WHERE id=$1 AND tenant_id=$2", [req.params.id, t]);
+    if (!inv) return null;
+    const { rows: pays } = await client.query(
+      "SELECT id, amount, mode, reference, received_at, created_at FROM invoice_payments WHERE tenant_id=$1 AND invoice_id=$2 ORDER BY received_at, created_at",
+      [t, req.params.id]);
+    return { total_amount: Number(inv.total_amount), paid_amount: Number(inv.paid_amount || 0), balance_due: round2(Number(inv.total_amount) - Number(inv.paid_amount || 0)), payments: pays };
+  });
+  if (!rows) return res.status(404).json({ error: "Invoice not found" });
+  res.json(rows);
+  } catch (e) { console.error("[invoices] payments list failed:", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
+// POST /:id/payments — record a receipt (partial or full). Updates paid_amount, flips status to
+// 'paid' only when fully settled, and posts a GL RECEIPT for THIS amount (idempotent per payment
+// id) so the books track partial collection. Overpayment is refused so AR is never driven negative.
+router.post("/:id/payments", authenticate, canWrite, async (req, res) => {
+  try {
+  const t = req.user.tenant_id;
+  const amount = round2(req.body?.amount);
+  const mode = String(req.body?.mode || "other").toLowerCase();
+  const reference = req.body?.reference ? String(req.body.reference).slice(0, 120) : null;
+  const receivedAt = req.body?.received_at ? String(req.body.received_at).slice(0, 10) : null;
+  if (!(amount > 0)) return res.status(400).json({ error: "amount must be greater than 0" });
+  if (!PAY_MODES.has(mode)) return res.status(400).json({ error: `mode must be one of: ${[...PAY_MODES].join(", ")}` });
+  if (receivedAt && !/^\d{4}-\d{2}-\d{2}$/.test(receivedAt)) return res.status(400).json({ error: "received_at must be YYYY-MM-DD" });
+
+  const outcome = await withTenant(t, async (client) => {
+    const { rows: [inv] } = await client.query("SELECT * FROM invoices WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [req.params.id, t]);
+    if (!inv) return { notFound: true };
+    if (inv.status === "cancelled") return { cancelled: true };
+    const eff = applyReceipt({ total: inv.total_amount, paidAmount: inv.paid_amount || 0 }, amount);
+    if (!eff.ok) return { over: true, balance: eff.balanceBefore };
+    const { rows: [pay] } = await client.query(
+      "INSERT INTO invoice_payments(tenant_id, invoice_id, amount, mode, reference, received_at, created_by) VALUES($1,$2,$3,$4,$5,COALESCE($6::date, CURRENT_DATE),$7) RETURNING *",
+      [t, inv.id, amount, mode, reference, receivedAt, req.user.id || null]);
+    const { rows: [upd] } = await client.query(
+      `UPDATE invoices SET paid_amount=$1,
+         status=CASE WHEN $2 THEN 'paid' WHEN status='draft' THEN 'sent' ELSE status END,
+         paid_at=CASE WHEN $2 THEN now() ELSE paid_at END
+       WHERE id=$3 AND tenant_id=$4 RETURNING *`,
+      [eff.newPaid, eff.fullyPaid, inv.id, t]);
+    return { inv: upd, pay, fullyPaid: eff.fullyPaid };
+  });
+  if (outcome.notFound) return res.status(404).json({ error: "Invoice not found" });
+  if (outcome.cancelled) return res.status(400).json({ error: "Can't record a payment against a cancelled invoice." });
+  if (outcome.over) return res.status(400).json({ error: `That's more than the ₹${outcome.balance.toLocaleString("en-IN")} still outstanding — record the balance or less.` });
+
+  // GL receipt for THIS payment only, keyed per payment id → no double-post vs the settling receipt.
+  require("../lib/invoiceGl").postInvoiceReceipt(t, outcome.inv, { amount: outcome.pay.amount, ref: reference || outcome.inv.invoice_number, idempotencyKey: `recv:inv:${outcome.inv.id}:p:${outcome.pay.id}` }).catch(() => {});
+  require("../modules/flows/runner").emitEvent(t, outcome.fullyPaid ? "invoice.paid" : "invoice.payment", { invoice: outcome.inv, payment: outcome.pay }).catch(() => {});
+  if (outcome.fullyPaid) require("../modules/lending").onInvoicePaid(t, outcome.inv.id).catch(() => {});
+  require("../modules/analytics").track(t, req.user.id, { event: "invoice_payment", props: { amount: outcome.pay.amount, fully_paid: outcome.fullyPaid } }).catch(() => {});
+  res.status(201).json({ payment: outcome.pay, invoice: { ...outcome.inv, aging: computeAging(outcome.inv) }, balance_due: round2(Number(outcome.inv.total_amount) - Number(outcome.inv.paid_amount)) });
+  } catch (e) { console.error("[invoices] record payment failed:", e.message); res.status(500).json({ error: "Internal error" }); }
 });
 
 module.exports = router;

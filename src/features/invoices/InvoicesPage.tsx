@@ -23,8 +23,10 @@ interface Invoice {
   id: string; invoice_number: string; customer_name: string; customer_gstin?: string;
   customer_email?: string; subtotal: number; gst_rate: number; gst_amount: number;
   total_amount: number; status: string; due_date?: string; paid_at?: string;
+  paid_amount?: number;
   irn?: string; upi_link?: string; aging?: string; items?: InvoiceItem[]; created_at: string;
 }
+interface InvoicePayment { id: string; amount: number; mode: string; reference?: string; received_at: string; created_at: string; }
 
 const STATUS_COLOR: Record<string, string> = {
   draft:     "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
@@ -364,6 +366,7 @@ export default function InvoicesPage() {
   const [composeInitial, setComposeInitial] = useState<{ customer?: string; amount?: string; desc?: string } | undefined>();
   const [searchParams, setSearchParams] = useSearchParams();
   const [qrInvoice, setQrInvoice] = useState<Invoice | null>(null);
+  const [payInvoice, setPayInvoice] = useState<Invoice | null>(null);
 
   // Open a pre-filled new-invoice form when the assistant deep-links here
   // (/invoices?compose=1&customer=&amount=&desc=), then strip the params.
@@ -416,7 +419,12 @@ export default function InvoicesPage() {
       .map(d => ({
         id: d.id,
         customer: d.customer_name,
-        amount: Number(d.total_amount) || 0,
+        // Open invoices mirror the OUTSTANDING balance (partial receipts already netted) —
+        // Collections/dunning/Working Capital read this as "what the customer still owes".
+        // Paid invoices keep the full total (read as realised revenue, not a balance).
+        amount: d.status === "paid"
+          ? (Number(d.total_amount) || 0)
+          : Math.max(0, (Number(d.total_amount) || 0) - (Number(d.paid_amount) || 0)),
         invoiceNumber: d.invoice_number,
         invoiceDate: (d.created_at || "").split("T")[0],
         dueDate: (d.due_date || d.created_at || "").split("T")[0],
@@ -480,8 +488,11 @@ export default function InvoicesPage() {
     true
   );
 
-  const totalPending = invoices.filter(i => i.status !== "paid" && i.status !== "cancelled").reduce((s, i) => s + parseFloat(String(i.total_amount)), 0);
-  const totalOverdue = invoices.filter(i => i.aging && i.aging !== "current" && i.aging !== "paid").reduce((s, i) => s + parseFloat(String(i.total_amount)), 0);
+  // Open buckets sum the OUTSTANDING balance (partial receipts netted), so the header
+  // KPIs agree with the per-row "due" figures. Paid sums the full realised totals.
+  const outstanding = (i: Invoice) => Math.max(0, (parseFloat(String(i.total_amount)) || 0) - (Number(i.paid_amount) || 0));
+  const totalPending = invoices.filter(i => i.status !== "paid" && i.status !== "cancelled").reduce((s, i) => s + outstanding(i), 0);
+  const totalOverdue = invoices.filter(i => i.status !== "paid" && i.status !== "cancelled" && i.aging && i.aging !== "current" && i.aging !== "paid").reduce((s, i) => s + outstanding(i), 0);
   const totalPaid    = invoices.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(String(i.total_amount)), 0);
 
   return (
@@ -615,7 +626,13 @@ export default function InvoicesPage() {
                   </td>
                   <td data-label="Amount" className="px-4 py-3 text-right tabular-nums">
                     <p className="font-semibold">{formatCurrency(parseFloat(String(inv.total_amount)))}</p>
-                    <p className="text-[10px] text-[var(--color-muted)]">+GST {inv.gst_rate}%</p>
+                    {Number(inv.paid_amount) > 0 && inv.status !== "paid" ? (
+                      <p className="text-[10px] text-amber-400" title={`${formatCurrency(Number(inv.paid_amount))} received`}>
+                        {formatCurrency(parseFloat(String(inv.total_amount)) - Number(inv.paid_amount))} due
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-[var(--color-muted)]">+GST {inv.gst_rate}%</p>
+                    )}
                   </td>
                   <td data-label="Due" className="px-4 py-3 hidden md:table-cell">
                     {inv.due_date ? (
@@ -625,10 +642,16 @@ export default function InvoicesPage() {
                     ) : <span className="text-xs text-[var(--color-muted)]">-</span>}
                   </td>
                   <td data-label="Status" className="px-4 py-3">
-                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLOR[inv.status] ?? ""}`}>
-                      {inv.status === "paid" ? <Check size={9} /> : inv.status === "sent" ? <Send size={9} /> : inv.status === "draft" ? <Clock size={9} /> : <AlertCircle size={9} />}
-                      {inv.status}
-                    </span>
+                    {Number(inv.paid_amount) > 0 && inv.status !== "paid" && inv.status !== "cancelled" ? (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium bg-amber-900/25 text-amber-400 border-amber-800/40" title="Partially paid">
+                        <Wallet size={9} /> partial
+                      </span>
+                    ) : (
+                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLOR[inv.status] ?? ""}`}>
+                        {inv.status === "paid" ? <Check size={9} /> : inv.status === "sent" ? <Send size={9} /> : inv.status === "draft" ? <Clock size={9} /> : <AlertCircle size={9} />}
+                        {inv.status}
+                      </span>
+                    )}
                   </td>
                   <td data-label="" className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
@@ -657,7 +680,11 @@ export default function InvoicesPage() {
                               <MessageCircle size={13} />
                             </button>
                           )}
-                          <button onClick={() => markStatus(inv.id, "paid")} title="Mark paid"
+                          <button onClick={() => setPayInvoice(inv)} title="Record a payment (partial or full)"
+                            className="p-1.5 text-[var(--color-muted)] hover:text-amber-400 hover:bg-amber-900/10 rounded">
+                            <Wallet size={13} />
+                          </button>
+                          <button onClick={() => markStatus(inv.id, "paid")} title="Mark fully paid"
                             className="p-1.5 text-[var(--color-muted)] hover:text-green-400 hover:bg-green-900/10 rounded">
                             <Check size={13} />
                           </button>
@@ -674,6 +701,107 @@ export default function InvoicesPage() {
 
       {showNew   && <NewInvoiceModal initial={composeInitial} onClose={() => { setShowNew(false); setComposeInitial(undefined); }} onCreated={load} />}
       {qrInvoice && <UpiQrModal invoice={qrInvoice} onClose={() => setQrInvoice(null)} />}
+      {payInvoice && <RecordPaymentModal invoice={payInvoice} onClose={() => setPayInvoice(null)} onDone={load} />}
+    </div>
+  );
+}
+
+// Record a receipt against an invoice — partial or full. Posts to /payments, which updates the
+// balance, flips to "paid" only when fully settled, and books the GL receipt for this amount.
+function RecordPaymentModal({ invoice, onClose, onDone }: { invoice: Invoice; onClose: () => void; onDone: () => void }) {
+  const total = parseFloat(String(invoice.total_amount)) || 0;
+  const alreadyPaid = Number(invoice.paid_amount) || 0;
+  const balance = Math.round((total - alreadyPaid) * 100) / 100;
+  const [amount, setAmount] = useState<string>(balance > 0 ? String(balance) : "");
+  const [mode, setMode] = useState("upi");
+  const [reference, setReference] = useState("");
+  const [receivedAt, setReceivedAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [history, setHistory] = useState<InvoicePayment[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.get<{ payments: InvoicePayment[] }>(`/api/invoices/${invoice.id}/payments`)
+      .then(d => setHistory(d.payments ?? [])).catch(() => {});
+  }, [invoice.id]);
+
+  const amt = parseFloat(amount) || 0;
+  const invalid = !(amt > 0) || amt > balance + 0.001;
+
+  const submit = async () => {
+    if (invalid) return;
+    setSaving(true);
+    try {
+      const res = await api.post<{ balance_due: number }>(`/api/invoices/${invoice.id}/payments`, { amount: amt, mode, reference: reference || undefined, received_at: receivedAt });
+      toast.success(res.balance_due > 0 ? `Payment recorded · ${formatCurrency(res.balance_due)} still due` : "Payment recorded · invoice fully paid");
+      onDone(); onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to record payment");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
+          <h3 className="font-semibold flex items-center gap-2"><Wallet size={16} className="text-amber-400" /> Record payment</h3>
+          <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="flex justify-between text-sm">
+            <span className="text-[var(--color-muted)]">{invoice.invoice_number} · {invoice.customer_name}</span>
+            <span className="tabular-nums font-medium">{formatCurrency(total)}</span>
+          </div>
+          <div className="flex justify-between text-xs bg-[var(--color-accent)] rounded-lg px-3 py-2">
+            <span className="text-[var(--color-muted)]">Already received</span><span className="tabular-nums">{formatCurrency(alreadyPaid)}</span>
+          </div>
+          <div className="flex justify-between text-xs px-3">
+            <span className="text-[var(--color-muted)]">Balance due</span><span className="tabular-nums font-semibold text-amber-400">{formatCurrency(balance)}</span>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount received (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} max={balance} min={0} step="0.01"
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm tabular-nums" />
+            {amt > balance + 0.001 && <p className="text-[10px] text-red-400 mt-1">Can't exceed the {formatCurrency(balance)} balance.</p>}
+            {balance > 0 && amt > 0 && amt < balance && <p className="text-[10px] text-[var(--color-muted)] mt-1">Partial — {formatCurrency(balance - amt)} will remain due.</p>}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Mode</label>
+              <select value={mode} onChange={e => setMode(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm">
+                {["upi", "cash", "bank", "neft", "cheque", "card", "other"].map(m => <option key={m} value={m}>{m.toUpperCase()}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
+              <input type="date" value={receivedAt} onChange={e => setReceivedAt(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] block mb-1">Reference (UTR / cheque no.) <span className="opacity-60">optional</span></label>
+            <input value={reference} onChange={e => setReference(e.target.value)} placeholder="e.g. UTR 123456789" className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm" />
+          </div>
+          {history.length > 0 && (
+            <div className="border-t border-[var(--color-border)] pt-3">
+              <p className="text-[10px] uppercase tracking-wider text-[var(--color-muted)] mb-1.5">Receipts</p>
+              <div className="space-y-1 max-h-28 overflow-y-auto">
+                {history.map(p => (
+                  <div key={p.id} className="flex justify-between text-xs">
+                    <span className="text-[var(--color-muted)]">{new Date(p.received_at).toLocaleDateString("en-IN")} · {p.mode.toUpperCase()}{p.reference ? ` · ${p.reference}` : ""}</span>
+                    <span className="tabular-nums">{formatCurrency(Number(p.amount))}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-[var(--color-border)]">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)]">Cancel</button>
+          <button onClick={submit} disabled={invalid || saving}
+            className="px-4 py-2 text-sm rounded-lg bg-[var(--color-primary)] text-white font-medium disabled:opacity-50">
+            {saving ? "Recording…" : "Record payment"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

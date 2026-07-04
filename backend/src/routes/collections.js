@@ -1,7 +1,8 @@
 const router   = require("express").Router();
 const QRCode   = require("qrcode");
 const { pool } = require("../db");
-const { q } = require("../lib/tenantDb"); // invoices is FORCE-RLS (0015) — access sets the tenant GUC
+const { q, withTenant } = require("../lib/tenantDb"); // invoices is FORCE-RLS (0015) — access sets the tenant GUC
+const { round2, remainingToSettle } = require("../lib/invoicePaymentMath");
 const { authenticate } = require("../middleware/auth");
 const crypto   = require("crypto");
 
@@ -123,38 +124,63 @@ router.post("/", async (req, res) => {
     if (invoiceNumber) {
       // invoice_number is NOT globally unique, so matching it alone could mark a
       // DIFFERENT tenant's invoice paid. Prefer the tenant from the link's notes;
-      // for legacy links with no tenant, only proceed if exactly ONE invoice matches.
-      let inv = null;
-      if (noteTenant) {
-        // The link carries its tenant → scope the lookup to it (sets the RLS GUC).
-        const { rows } = await q(noteTenant,
-          "SELECT * FROM invoices WHERE invoice_number=$1 AND tenant_id=$2 AND status != 'paid' LIMIT 1",
-          [invoiceNumber, noteTenant]
-        );
-        inv = rows[0] ?? null;
-      } else {
-        // Legacy link with NO tenant note: under FORCE-RLS (0015) a cross-tenant lookup is
-        // impossible (no BYPASSRLS role) and invoice_number isn't globally unique, so we
-        // cannot safely resolve the invoice. Log + skip (never a cross-tenant write); modern
-        // links carry notes.tenant_id and reconcile via the branch above.
+      // legacy links with no tenant note cannot be resolved safely under FORCE-RLS.
+      if (!noteTenant) {
         console.warn(`[razorpay] payment for ${invoiceNumber} has no tenant note - cannot reconcile under RLS; skipping (use a current-generation payment link).`);
-      }
-      if (inv) {
-        await q(inv.tenant_id,
-          "UPDATE invoices SET status='paid', paid_at=now() WHERE id=$1 AND tenant_id=$2",
-          [inv.id, inv.tenant_id]
-        );
-        require("../modules/flows/runner").emitEvent(inv.tenant_id, "invoice.paid", { invoice: { ...inv, status: "paid" } }).catch(() => {});
-        // Post the receipt to the GL server-side (books the SALES voucher first if needed, so
-        // the debtor nets to zero). Best-effort + idempotent on the payment id; never blocks
-        // the 200 that stops Razorpay retrying.
-        require("../lib/invoiceGl").postInvoiceReceipt(inv.tenant_id, inv, { amount: payment.amount / 100, ref: `rzp_${payment.id}`, idempotencyKey: `recv:inv:${inv.id}` }).catch(() => {}); // per-invoice key (same as the manual path) → no double receipt in either order
-        // Invoice-financing wedge: if this invoice backs an active advance, auto-recover it (self-liquidating).
-        // Stable per-invoice recovery ref lives in onInvoicePaid → dedups vs the manual mark-paid path.
-        require("../modules/lending").onInvoicePaid(inv.tenant_id, inv.id).catch(() => {});
-        // Create revenue transaction in KV store is done client-side via polling
-        // Could also push via Server-Sent Events or WebSocket in production
-        console.log(`[razorpay] Invoice ${invoiceNumber} (tenant ${inv.tenant_id}) marked paid - ₹${payment.amount / 100}`);
+      } else {
+        // Apply the capture as a RECEIPT under a row lock, exactly like the manual partial
+        // path, so a concurrent partial/mark-paid can never double-book (the lock serializes
+        // them; each books only what is outstanding at ITS turn). Records what the customer
+        // ACTUALLY paid (payment.amount, capped at the balance), inserts the invoice_payments
+        // row so sum(receipts)==paid_amount stays true, and flips to 'paid' only when settled.
+        const ref = `rzp_${payment.id}`;
+        const outcome = await withTenant(noteTenant, async (client) => {
+          const { rows: [cur] } = await client.query(
+            "SELECT * FROM invoices WHERE invoice_number=$1 AND tenant_id=$2 LIMIT 1 FOR UPDATE",
+            [invoiceNumber, noteTenant]);
+          if (!cur) return null;
+          // A cancelled invoice must NOT be resurrected by a late capture on an old link.
+          if (cur.status === "paid" || cur.status === "cancelled") return { skip: cur.status };
+          // Webhook retry dedup: this Razorpay payment id is already recorded on this invoice.
+          const { rows: dup } = await client.query(
+            "SELECT 1 FROM invoice_payments WHERE tenant_id=$1 AND invoice_id=$2 AND reference=$3 LIMIT 1",
+            [noteTenant, cur.id, ref]);
+          if (dup[0]) return { skip: "duplicate" };
+          const remaining = remainingToSettle({ total: cur.total_amount, paidAmount: cur.paid_amount || 0 });
+          // Cap at the outstanding balance so AR is never driven negative even if partial
+          // receipts landed after the link was minted for the full amount.
+          const received = round2((Number(payment.amount) || 0) / 100);
+          const applied = Math.min(received, remaining);
+          if (!(applied > 0)) return { skip: "nothing_outstanding" };
+          const { rows: [pay] } = await client.query(
+            "INSERT INTO invoice_payments(tenant_id, invoice_id, amount, mode, reference) VALUES($1,$2,$3,'upi',$4) RETURNING *",
+            [noteTenant, cur.id, applied, ref]);
+          const newPaid = round2(round2(cur.paid_amount || 0) + applied);
+          const fullyPaid = newPaid >= round2(cur.total_amount);
+          const { rows: [upd] } = await client.query(
+            `UPDATE invoices SET paid_amount=$1,
+               status=CASE WHEN $2 THEN 'paid' WHEN status='draft' THEN 'sent' ELSE status END,
+               paid_at=CASE WHEN $2 THEN now() ELSE paid_at END
+             WHERE id=$3 AND tenant_id=$4 RETURNING *`,
+            [newPaid, fullyPaid, cur.id, noteTenant]);
+          return { inv: upd, pay, fullyPaid, overCapture: round2(received - applied) };
+        }).catch((e) => { console.error("[razorpay] settle failed:", e.message); return null; });
+
+        if (outcome?.inv) {
+          const { inv, pay, fullyPaid, overCapture } = outcome;
+          if (overCapture > 0) console.warn(`[razorpay] ${invoiceNumber}: captured ₹${overCapture} more than the outstanding balance — recorded only the balance; reconcile the excess manually.`);
+          require("../modules/flows/runner").emitEvent(inv.tenant_id, fullyPaid ? "invoice.paid" : "invoice.payment", { invoice: inv, payment: pay }).catch(() => {});
+          // GL receipt for THIS capture only (books the SALES voucher first if needed). Keyed per
+          // invoice_payments row — unique like the manual partial path; retries were already
+          // deduped by the reference check above. Best-effort: never blocks the 200 to Razorpay.
+          require("../lib/invoiceGl").postInvoiceReceipt(inv.tenant_id, inv, { amount: pay.amount, ref, idempotencyKey: `recv:inv:${inv.id}:p:${pay.id}` }).catch(() => {});
+          // Invoice-financing wedge: if this invoice backs an active advance, auto-recover it
+          // (self-liquidating). onInvoicePaid self-dedups vs the manual mark-paid path.
+          if (fullyPaid) require("../modules/lending").onInvoicePaid(inv.tenant_id, inv.id).catch(() => {});
+          console.log(`[razorpay] Invoice ${invoiceNumber} (tenant ${inv.tenant_id}) received ₹${pay.amount}${fullyPaid ? " - fully paid" : ` - ₹${round2(Number(inv.total_amount) - Number(inv.paid_amount))} still due`}`);
+        } else if (outcome?.skip) {
+          console.log(`[razorpay] Invoice ${invoiceNumber}: capture skipped (${outcome.skip}).`);
+        }
       }
     }
   }
