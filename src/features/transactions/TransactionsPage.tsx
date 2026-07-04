@@ -3468,7 +3468,7 @@ function StatementImportTool({ bankAccounts, onImported }: { bankAccounts: { id:
     setImporting(true);
     try {
       // Chunked so a 2,000-row statement doesn't ride one giant request.
-      let inserted = 0, skipped = 0;
+      let inserted = 0, skipped = 0, errored = 0;
       for (let i = 0; i < included.length; i += 500) {
         const chunk = included.slice(i, i + 500).map(r => ({
           bank_account_id: accountId || undefined,
@@ -3478,11 +3478,15 @@ function StatementImportTool({ bankAccounts, onImported }: { bankAccounts: { id:
           transaction_date: r.date,
           source: "import",
         }));
-        const res = await api.post<{ inserted: unknown[]; skipped_duplicates: number }>("/api/transactions", chunk);
+        const res = await api.post<{ inserted: unknown[]; skipped_duplicates: number; skipped_errors: number }>("/api/transactions", chunk);
         inserted += res.inserted?.length ?? 0;
         skipped += res.skipped_duplicates ?? 0;
+        errored += res.skipped_errors ?? 0;
       }
-      toast.success(`Imported ${inserted} transaction${inserted === 1 ? "" : "s"}${skipped ? ` · ${skipped} duplicate${skipped === 1 ? "" : "s"} skipped` : ""}`);
+      const parts = [`Imported ${inserted} transaction${inserted === 1 ? "" : "s"}`];
+      if (skipped) parts.push(`${skipped} duplicate${skipped === 1 ? "" : "s"} skipped`);
+      if (errored) parts.push(`${errored} row${errored === 1 ? "" : "s"} failed`);
+      if (errored) toast.warning(parts.join(" · ")); else toast.success(parts.join(" · "));
       setRows([]); setFileName("");
       onImported();
     } catch (e) {

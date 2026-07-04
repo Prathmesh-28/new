@@ -44,6 +44,18 @@ const CESS = {
 // Keyed (via `from`) to the AY: ayToDate('2024-25')='2023-04-01', '2025-26'='2024-04-01'.
 const IT_SLABS_NEW = [
   {
+    from: "2025-04-01", // AY 2026-27 (FY 2025-26) - Budget 2025 / Finance Act 2025 revision
+    brackets: [
+      { upTo: 400000, rate: 0 },
+      { upTo: 800000, rate: 5 },
+      { upTo: 1200000, rate: 10 },
+      { upTo: 1600000, rate: 15 },
+      { upTo: 2000000, rate: 20 },
+      { upTo: 2400000, rate: 25 },
+      { upTo: null, rate: 30 },
+    ],
+  },
+  {
     from: "2024-04-01", // AY 2025-26 (FY 2024-25)
     brackets: [
       { upTo: 300000, rate: 0 },
@@ -79,8 +91,16 @@ const IT_SLABS_OLD = [
   },
 ];
 
-// 87A rebate: { incomeLimit, maxRebate }. New-regime ≤7L; old-regime ≤5L.
-const REBATE_87A_NEW = [{ from: "2023-04-01", incomeLimit: 700000, maxRebate: 25000 }];
+// 87A rebate: { incomeLimit, maxRebate }. New-regime ≤7L (≤12L from FY2025-26 per
+// Budget 2025 - the widely-reported "no tax up to ₹12L" change); old-regime ≤5L
+// (unchanged since 2018 - Budget 2025 did not touch the old regime).
+// Modelled as a cliff rebate (matches the pre-existing ≤7L/₹25,000 entry's shape) —
+// the Act's marginal-relief-above-the-limit provision is not implemented here or
+// for the prior threshold, so this is a deliberate scope match, not a new gap.
+const REBATE_87A_NEW = [
+  { from: "2025-04-01", incomeLimit: 1200000, maxRebate: 60000 },
+  { from: "2023-04-01", incomeLimit: 700000, maxRebate: 25000 },
+];
 const REBATE_87A_OLD = [{ from: "2018-04-01", incomeLimit: 500000, maxRebate: 12500 }];
 
 // Surcharge bands [{ over, rate }] - highest crossed band applies. Under the new

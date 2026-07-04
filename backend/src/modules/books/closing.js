@@ -66,6 +66,13 @@ async function _reservesLedgerId(tenantId) {
 
 // Per-P&L-ledger net movement for the FY (debit-positive signed balance). P&L
 // ledgers reset every FY so we use this-FY movement only - no carry-forward.
+//
+// The FY/is_cancelled filter MUST sit in the WHERE clause (not just the ON clause of the
+// LEFT JOIN to book_vouchers), or it only nulls out v.* for a non-matching entry without
+// excluding that entry's debit/credit from the SUM — silently aggregating EVERY financial
+// year's activity ever posted to the ledger. "e.id IS NULL" keeps a P&L ledger with zero
+// activity this FY in the result set (LEFT JOIN preserved, dr/cr fall back to 0 via COALESCE)
+// without readmitting other-FY/cancelled entries.
 async function _plLedgerBalances(tenantId, fy) {
   const { rows } = await pool.query(
     `SELECT l.id, l.name, g.nature,
@@ -75,8 +82,8 @@ async function _plLedgerBalances(tenantId, fy) {
        JOIN book_account_groups g ON g.id = l.group_id AND g.affects_pl = true
        LEFT JOIN book_voucher_entries e ON e.ledger_id = l.id AND e.tenant_id = l.tenant_id
        LEFT JOIN book_vouchers v ON v.id = e.voucher_id
-                 AND v.financial_year = $2 AND v.is_cancelled = false
       WHERE l.tenant_id = $1
+        AND (e.id IS NULL OR (v.financial_year = $2 AND v.is_cancelled = false))
       GROUP BY l.id, l.name, g.nature
       ORDER BY g.nature, l.name`,
     [tenantId, fy]

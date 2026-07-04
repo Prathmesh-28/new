@@ -65,14 +65,18 @@ async function autoMatch(tenantId, toleranceDays = 3) {
   const { rows: lines } = await pool.query("SELECT * FROM book_bank_lines WHERE tenant_id=$1 AND status='UNMATCHED'", [tenantId]);
   let matched = 0;
   for (const line of lines) {
+    // The amount comparison happens below in JS (lineMatches) - it was never referenced in
+    // this SQL text despite being bound as $4, and Postgres rejects a bound-but-unreferenced
+    // parameter ("could not determine data type of parameter $4") the moment a HIGHER-numbered
+    // placeholder ($5) is used - autoMatch 500'd on every single call since it was written.
     const { rows: cand } = await pool.query(
       `SELECT v.id, v.voucher_date, e.debit, e.credit
          FROM book_voucher_entries e
          JOIN book_vouchers v ON v.id=e.voucher_id AND v.is_cancelled=false
         WHERE e.tenant_id=$1 AND e.ledger_id=$2
           AND v.id NOT IN (SELECT voucher_id FROM book_bank_lines WHERE voucher_id IS NOT NULL)
-          AND v.voucher_date BETWEEN ($3::date - $5::int) AND ($3::date + $5::int)`,
-      [tenantId, line.bank_ledger_id, line.txn_date, line.amount, toleranceDays]
+          AND v.voucher_date BETWEEN ($3::date - $4::int) AND ($3::date + $4::int)`,
+      [tenantId, line.bank_ledger_id, line.txn_date, toleranceDays]
     );
     const hit = cand.find((c) => lineMatches(line, c, c.voucher_date, toleranceDays));
     if (hit) { await pool.query("UPDATE book_bank_lines SET status='MATCHED', voucher_id=$2 WHERE id=$1 AND tenant_id=$3", [line.id, hit.id, tenantId]); matched += 1; }

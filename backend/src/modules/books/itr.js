@@ -44,7 +44,7 @@ const incometax = require("./incometax");
 // out of this SMB scope.) AYs mirror incometax's SUPPORTED_AYS so we never emit a
 // form for an AY whose slabs the engine refuses to compute.
 const SUPPORTED_FORMS = ["ITR-3", "ITR-4"];
-const SUPPORTED_AYS = ["2024-25", "2025-26"];
+const SUPPORTED_AYS = ["2024-25", "2025-26", "2026-27"];
 
 // ── (B) FORM_SPEC - declarative field map (ustaxes pattern) ──────────────────
 // For each form: the human label, the income schedules it carries, and the

@@ -5,7 +5,7 @@
 // edit can't silently change a tax computation. Run: node --test src/modules/books/taxengines.test.js
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { interest234 } = require("./incometax");
+const { interest234, computeIncomeTax } = require("./incometax");
 const { applicability194Q206C } = require("./taxdepth");
 const { msmeInterest } = require("./msme");
 const { dividendTds, boardMinutes } = require("./roc");
@@ -63,6 +63,32 @@ test("dividend Sec-194 TDS: 10% resident, 20% no-PAN, threshold relief", () => {
   assert.equal(dividendTds({ totalDividend: 100000, panAvailable: true }).tds, 10000);
   assert.equal(dividendTds({ totalDividend: 100000, panAvailable: false }).tds, 20000);
   assert.equal(dividendTds({ totalDividend: 100000, perShareholderAvg: 4000, panAvailable: true }).tds, 0, "≤ ₹5k/shareholder → no TDS");
+});
+
+test("AY 2026-27 (FY2025-26): Budget 2025 new-regime ₹12L nil-tax point, cliff above it, old regime + prior AY unaffected", () => {
+  // Landmark Budget 2025 change: total income ≤ ₹12,00,000 under the new regime → NIL tax
+  // (rebate u/s 87A raised to ₹60,000). Was UNSUPPORTED_AY before this fix.
+  const atLimit = computeIncomeTax({ taxableIncome: 1200000, regime: "new", entityType: "individual", ay: "2026-27" });
+  assert.equal(atLimit.total, "0.00");
+  assert.equal(atLimit.rebate, "60000.00");
+
+  // Just above the limit: this codebase models 87A as a cliff (no marginal relief) for
+  // EVERY threshold it has ever encoded, not just this one — so normal slab tax applies.
+  const justAbove = computeIncomeTax({ taxableIncome: 1200001, regime: "new", entityType: "individual", ay: "2026-27" });
+  assert.equal(justAbove.rebate, "0.00");
+  assert.ok(Number(justAbove.total) > 0, "no rebate above the limit -> tax is due");
+
+  // Old regime was NOT revised by Budget 2025 - AY2026-27 must match AY2025-26 exactly.
+  const old2026 = computeIncomeTax({ taxableIncome: 600000, regime: "old", entityType: "individual", ay: "2026-27" });
+  const old2025 = computeIncomeTax({ taxableIncome: 600000, regime: "old", entityType: "individual", ay: "2025-26" });
+  assert.deepEqual(old2026, old2025);
+
+  // Regression: AY2025-26 new-regime keeps its OWN ₹7L rebate ceiling, unaffected by the
+  // new AY2026-27 entry being prepended to the dated table. Rebate = min(tax, ceiling); at
+  // exactly ₹7L the slab tax (₹20,000) is below the ₹25,000 ceiling, so THAT'S the rebate.
+  const priorAy = computeIncomeTax({ taxableIncome: 700000, regime: "new", entityType: "individual", ay: "2025-26" });
+  assert.equal(priorAy.total, "0.00");
+  assert.equal(priorAy.rebate, "20000.00");
 });
 
 test("board minutes generator produces a usable minute", () => {

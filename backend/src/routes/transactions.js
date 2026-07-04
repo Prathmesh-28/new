@@ -58,11 +58,20 @@ router.get("/summary", authenticate, async (req, res) => {
   res.json(rows);
 });
 
+// The client-side bank-account picker can carry an account created purely in the local KV
+// store (DashboardPage's "Add Account" modal uses generateId() - a Math.random() base36
+// string, never a real backend bank_accounts row). Sending that as bank_account_id crashes
+// the INSERT (invalid UUID for the FK column) and, with no per-row isolation, aborted the
+// WHOLE batch on one bad row. Never trust a client-supplied FK to be well-formed.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const asBankAccountId = (v) => (v && UUID_RE.test(v) ? v : null);
+
 // POST /api/transactions - manual entry or bulk import
 router.post("/", authenticate, canWrite, async (req, res) => {
-  const items = Array.isArray(req.body) ? req.body : [req.body];
+  const isBulk = Array.isArray(req.body); // bulk import must isolate a bad row; single add should surface its own error honestly
+  const items = isBulk ? req.body : [req.body];
   const inserted = [];
-  let skippedDuplicates = 0;
+  let skippedDuplicates = 0, skippedErrors = 0;
 
   // Statement-import dedupe: re-importing an overlapping statement must never double-count.
   // For source:"import" rows, load the ledger's (date|amount|description) signatures over the
@@ -87,12 +96,20 @@ router.post("/", authenticate, canWrite, async (req, res) => {
       existingSigs.add(sig);
     }
 
-    const { rows } = await pool.query(
+    const insertOne = () => pool.query(
       `INSERT INTO transactions(tenant_id, bank_account_id, amount, description_raw, merchant_name, category, is_recurring, recurrence_cadence, transaction_date, source)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [req.user.tenant_id, bank_account_id || null, amount, description_raw || null, merchant_name || null, category, is_recurring, recurrence_cadence || null, transaction_date, source]
+      [req.user.tenant_id, asBankAccountId(bank_account_id), amount, description_raw || null, merchant_name || null, category, is_recurring, recurrence_cadence || null, transaction_date, source]
     );
-    inserted.push(rows[0]);
+    if (isBulk) {
+      // A per-row failure (unexpected constraint, etc.) must never abort the rest of the
+      // batch - that would silently drop every transaction after it with no way to tell
+      // which succeeded. Isolate each insert; keep going.
+      try { inserted.push((await insertOne()).rows[0]); }
+      catch (e) { console.error("[transactions] row insert failed, skipping:", e.message); skippedErrors++; }
+    } else {
+      inserted.push((await insertOne()).rows[0]); // single add: let a genuine failure surface as a real error
+    }
   }
 
   // Fire a transaction.created event ONLY for a single manual add (never on bulk import, to
@@ -104,7 +121,7 @@ router.post("/", authenticate, canWrite, async (req, res) => {
     }).catch(() => {});
   }
 
-  if (Array.isArray(req.body)) return res.status(201).json({ inserted, skipped_duplicates: skippedDuplicates });
+  if (isBulk) return res.status(201).json({ inserted, skipped_duplicates: skippedDuplicates, skipped_errors: skippedErrors });
   res.status(201).json(inserted.length === 1 ? inserted[0] : inserted);
 });
 

@@ -34,7 +34,7 @@ const { ayToDate, resolveParam, slabTax, applyRebate87A, surcharge: surchargeOf,
 // NOTE: only the individual path was AY-gated historically; company/firm used static
 // FLAT_RATES regardless of AY (see flatRulesFor), so that path is intentionally NOT
 // gated here.
-const SUPPORTED_AYS = new Set(["2024-25", "2025-26"]);
+const SUPPORTED_AYS = new Set(["2024-25", "2025-26", "2026-27"]);
 
 // Resolve the INDIVIDUAL slab/rebate/surcharge rule set for an AY from the dated
 // parameter store. Mirrors the old IT_RULES[ay] shape. Throws UNSUPPORTED_AY for an
