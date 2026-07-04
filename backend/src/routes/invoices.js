@@ -9,6 +9,7 @@ const { sendWhatsApp } = require("../lib/whatsapp");
 const platformConfig = require("../lib/platformConfig");
 
 const { round2, applyReceipt, remainingToSettle } = require("../lib/invoicePaymentMath");
+const { taxSplit } = require("../lib/gstInvoice");
 
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant","sales"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
@@ -61,7 +62,7 @@ router.get("/", authenticate, async (req, res) => {
 
 // POST /api/invoices
 router.post("/", authenticate, canWrite, async (req, res) => {
-  const { customer_name, customer_gstin, customer_email, gst_rate = 18, due_date, items = [] } = req.body;
+  const { customer_name, customer_gstin, customer_email, customer_phone, gst_rate = 18, due_date, items = [] } = req.body;
   if (!customer_name || !items.length) return res.status(400).json({ error: "customer_name and items required" });
 
   const subtotal   = items.reduce((s, i) => s + (parseFloat(i.quantity) * parseFloat(i.unit_price)), 0);
@@ -83,11 +84,11 @@ router.post("/", authenticate, canWrite, async (req, res) => {
     const invoice_number = nextInvoiceNumber(existing.map(r => r.invoice_number));
     const { rows: [row] } = await client.query(
       `INSERT INTO invoices(tenant_id, invoice_number, customer_name, customer_gstin, customer_email,
-         subtotal, gst_rate, gst_amount, total_amount, status, due_date)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'draft',$10)
+         customer_phone, subtotal, gst_rate, gst_amount, total_amount, status, due_date)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'draft',$11)
        RETURNING *`,
       [req.user.tenant_id, invoice_number, customer_name, customer_gstin ?? null,
-       customer_email ?? null, subtotal, gst_rate, gst_amount, total, due_date ?? null]
+       customer_email ?? null, customer_phone ?? null, subtotal, gst_rate, gst_amount, total, due_date ?? null]
     );
     for (const item of items) {
       const amt = parseFloat(item.quantity) * parseFloat(item.unit_price);
@@ -198,6 +199,15 @@ router.get("/:id/pdf", authenticate, async (req, res) => {
   const firm = kvRows[0]?.value?.value?.firm ?? {};
   const items = (inv.items ?? []).filter(Boolean);
 
+  // Tax split for the document — same seller-GSTIN source as the GL bridge (tenant_profile,
+  // falling back to the firm KV) and the same derivation (lib/gstInvoice), so the printed
+  // CGST/SGST-vs-IGST can never disagree with what was posted to the books.
+  const { rows: profRows } = await pool.query("SELECT gstin FROM tenant_profile WHERE tenant_id=$1 LIMIT 1", [req.user.tenant_id]).catch(() => ({ rows: [] }));
+  const split = taxSplit({
+    gstAmount: inv.gst_amount, gstRate: inv.gst_rate,
+    buyerGstin: inv.customer_gstin, sellerGstin: profRows[0]?.gstin || firm.gstNumber || null,
+  });
+
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="${inv.invoice_number}.pdf"`);
 
@@ -218,10 +228,15 @@ router.get("/:id/pdf", authenticate, async (req, res) => {
     .text(firm.address || "", right, 66, { align: "right", width: 150 })
     .text(firm.gstNumber ? `GSTIN: ${firm.gstNumber}` : "", right, 80, { align: "right", width: 150 });
 
-  // Bill To
+  // Bill To (+ place of supply — Rule 46 wants it on the face of the tax invoice)
   doc.fillColor("#000").font("Helvetica-Bold").text("Bill To:", 50, 140);
   doc.font("Helvetica").text(inv.customer_name, 50, 156);
   if (inv.customer_gstin) doc.text(`GSTIN: ${inv.customer_gstin}`, 50, 170);
+  if (split.placeOfSupply) {
+    doc.fillColor("#666").fontSize(9)
+      .text(`Place of Supply: ${split.placeOfSupply.name ? `${split.placeOfSupply.name} (${split.placeOfSupply.code})` : split.placeOfSupply.code} · ${split.interState ? "Inter-state (IGST)" : "Intra-state (CGST+SGST)"}`, 50, inv.customer_gstin ? 184 : 170)
+      .fillColor("#000").fontSize(10);
+  }
 
   // Table header
   const tableTop = 210;
@@ -250,15 +265,20 @@ router.get("/:id/pdf", authenticate, async (req, res) => {
   doc.moveTo(50, y).lineTo(550, y).stroke("#ddd");
   y += 12;
   const totals = [
-    ["Subtotal",   parseFloat(inv.subtotal)],
-    [`GST (${inv.gst_rate}%)`, parseFloat(inv.gst_amount)],
-    ["Total",      parseFloat(inv.total_amount)],
+    ["Subtotal", parseFloat(inv.subtotal)],
+    // CGST+SGST for intra-state, IGST for inter-state — matches the GL posting exactly.
+    ...split.lines.map((l) => [l.label, l.amount]),
+    ["Total", parseFloat(inv.total_amount)],
   ];
+  const paidSoFar = round2(inv.paid_amount);
+  if (paidSoFar > 0 && paidSoFar < round2(inv.total_amount)) {
+    totals.push(["Received", paidSoFar], ["Balance Due", round2(Number(inv.total_amount) - paidSoFar)]);
+  }
   for (const [label, val] of totals) {
-    const bold = label === "Total";
+    const bold = label === "Total" || label === "Balance Due";
     doc.font(bold ? "Helvetica-Bold" : "Helvetica").fillColor(bold ? "#1A6B55" : "#000")
        .text(label, 380, y, { width: 120, align: "right" })
-       .text(`₹${val.toLocaleString("en-IN")}`, 450, y, { width: 95, align: "right" });
+       .text(`₹${Number(val).toLocaleString("en-IN")}`, 450, y, { width: 95, align: "right" });
     y += 18;
   }
 

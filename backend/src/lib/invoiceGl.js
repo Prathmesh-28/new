@@ -15,7 +15,10 @@ const { toDb } = require("../modules/books/money");
 
 const num = (v) => (v == null ? 0 : Number(v) || 0);
 const round2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
-const stateOf = (gstin) => (typeof gstin === "string" && gstin.trim().length >= 2 ? gstin.trim().slice(0, 2) : null);
+// Shared with the document layer (lib/gstInvoice.js) so the customer-facing tax split can never
+// disagree with what the GL posts. Requires 2 leading DIGITS (a real GSTIN state code) —
+// a malformed GSTIN now falls back to intra-state, same as no GSTIN at all.
+const { stateOf } = require("./gstInvoice");
 const isoDate = (d) => { try { return new Date(d).toISOString().slice(0, 10); } catch { return new Date().toISOString().slice(0, 10); } };
 
 async function sellerGstin(tenantId) {
