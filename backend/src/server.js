@@ -501,6 +501,11 @@ initDb()
     // Books: generate due recurring invoices/bills/journals daily at 07:30 IST.
     cron.schedule("0 2 * * *", () => {
       require("./modules/books/documents").runAllRecurring().catch(err => console.error("[books-recurring]", err.message));
+      // Customer-facing recurring invoices (invoice_recurring → real numbered invoices,
+      // optional auto-send). Skips missed periods; never back-bills a catch-up batch.
+      require("./lib/recurringInvoices").runDueRecurringInvoices()
+        .then(n => { if (n) console.log(`[recurring-invoices] generated ${n} invoice(s)`); })
+        .catch(err => console.error("[recurring-invoices]", err.message));
     }, { timezone: "UTC" });
     // Lending: daily loan servicing at 08:00 IST (02:30 UTC), after recurring docs post.
     // First schedule any due e-NACH mandate presentations, then run servicing (DPD refresh,

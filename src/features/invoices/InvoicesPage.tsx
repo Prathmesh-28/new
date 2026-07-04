@@ -564,7 +564,7 @@ export default function InvoicesPage() {
 
       {tab === "quote"         ? <QuotationBuilder /> :
        tab === "proforma"      ? <ProformaGenerator /> :
-       tab === "recurring"     ? <RecurringBilling /> :
+       tab === "recurring"     ? <RecurringBilling onChanged={load} /> :
        tab === "paylink"       ? <PaymentLinkBuilder invoices={invoices} /> :
        tab === "creditnote"    ? <CreditDebitNoteManager invoices={invoices} onChanged={load} /> :
        tab === "creditlimit"   ? <CreditLimitManager invoices={invoices} /> :
@@ -1007,78 +1007,120 @@ function ProformaGenerator() {
   );
 }
 
-// #41 ── Recurring / Subscription Billing ─────────────────────────────────────
-interface Recurring { id: string; customer: string; amount: string; gst: string; freq: "monthly" | "quarterly" | "yearly"; nextRun: string; active: boolean; generated: number; }
-function RecurringBilling() {
-  const [subs, setSubs] = useFeatureState<Recurring[]>("invoice-recurring", []);
+// #41 ── Recurring / Subscription Billing — REAL now: schedules live server-side
+// (invoice_recurring) and the daily books cron generates actual numbered invoices on the
+// next-run date (skipping missed periods, never back-billing). Auto-send emails + accrues
+// to the GL on issue, exactly like a hand-sent invoice.
+interface RecurringSchedule {
+  id: string; customer_name: string; customer_gstin?: string; customer_email?: string;
+  customer_phone?: string; gst_rate: number; items: InvoiceItem[]; cadence: "weekly" | "monthly" | "quarterly";
+  day_of_month?: number; next_run: string; due_in_days: number; auto_send: boolean;
+  active: boolean; last_run?: string; last_invoice_id?: string; created_at: string;
+}
+function RecurringBilling({ onChanged }: { onChanged: () => void }) {
+  const [subs, setSubs] = useState<RecurringSchedule[]>([]);
   const [customer, setCustomer] = useState("");
+  const [email, setEmail] = useState("");
+  const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState("");
   const [gst, setGst] = useState("18");
-  const [freq, setFreq] = useState<Recurring["freq"]>("monthly");
+  const [freq, setFreq] = useState<RecurringSchedule["cadence"]>("monthly");
   const [nextRun, setNextRun] = useState(() => new Date().toISOString().split("T")[0]);
+  const [autoSend, setAutoSend] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
 
-  const advance = (date: string, f: Recurring["freq"]) => {
-    const d = new Date(date);
-    if (f === "monthly") d.setMonth(d.getMonth() + 1);
-    else if (f === "quarterly") d.setMonth(d.getMonth() + 3);
-    else d.setFullYear(d.getFullYear() + 1);
-    return d.toISOString().split("T")[0];
+  const loadSubs = useCallback(() => {
+    api.get<RecurringSchedule[]>("/api/invoices/recurring").then(setSubs).catch(() => {});
+  }, []);
+  useEffect(() => { loadSubs(); }, [loadSubs]);
+
+  const add = async () => {
+    if (!customer || !desc || !(parseFloat(amount) > 0)) { toast.error("Add customer, description and amount"); return; }
+    if (autoSend && !email) { toast.error("Auto-send needs a customer email"); return; }
+    try {
+      await api.post("/api/invoices/recurring", {
+        customer_name: customer, customer_email: email || undefined,
+        gst_rate: parseFloat(gst) || 18, cadence: freq, next_run: nextRun, auto_send: autoSend,
+        items: [{ description: desc, quantity: 1, unit_price: parseFloat(amount), gst_rate: parseFloat(gst) || 18 }],
+      });
+      toast.success("Schedule created - the cron generates the invoice on the run date");
+      setCustomer(""); setEmail(""); setDesc(""); setAmount(""); setAutoSend(false);
+      loadSubs();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to create schedule"); }
   };
 
-  const add = () => {
-    if (!customer || !amount) { toast.error("Add customer and amount"); return; }
-    setSubs(p => [...p, { id: uid(), customer, amount, gst, freq, nextRun, active: true, generated: 0 }]);
-    setCustomer(""); setAmount("");
-    toast.success("Subscription scheduled");
+  const runNow = async (id: string) => {
+    setBusy(id);
+    try {
+      const inv = await api.post<Invoice>(`/api/invoices/recurring/${id}/run-now`, {});
+      toast.success(`${inv.invoice_number} generated`);
+      loadSubs(); onChanged();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to generate"); }
+    finally { setBusy(null); }
   };
-  const runNow = (id: string) => {
-    setSubs(p => p.map(s => s.id === id ? { ...s, nextRun: advance(s.nextRun, s.freq), generated: s.generated + 1 } : s));
-    toast.success("Invoice generated - next cycle scheduled");
+  const toggle = async (s: RecurringSchedule) => {
+    try { await api.patch(`/api/invoices/recurring/${s.id}`, { active: !s.active }); loadSubs(); }
+    catch { toast.error("Failed to update"); }
+  };
+  const remove = async (id: string) => {
+    try { await api.delete(`/api/invoices/recurring/${id}`); loadSubs(); toast.success("Schedule deleted"); }
+    catch { toast.error("Failed to delete"); }
   };
 
   const today = new Date().toISOString().split("T")[0];
-  const dueNow = subs.filter(s => s.active && s.nextRun <= today);
+  const scheduleTotal = (s: RecurringSchedule) => (s.items || []).reduce((sum, i) => {
+    const line = (Number(i.quantity) || 0) * (Number(i.unit_price) || 0);
+    return sum + line * (1 + (Number(i.gst_rate ?? s.gst_rate) || 0) / 100);
+  }, 0);
+  const dueNow = subs.filter(s => s.active && s.next_run?.slice(0, 10) <= today);
   const mrr = subs.filter(s => s.active).reduce((sum, s) => {
-    const t = (parseFloat(s.amount) || 0) * (1 + (parseFloat(s.gst) || 0) / 100);
-    return sum + (s.freq === "monthly" ? t : s.freq === "quarterly" ? t / 3 : t / 12);
+    const t = scheduleTotal(s);
+    return sum + (s.cadence === "monthly" ? t : s.cadence === "quarterly" ? t / 3 : t * 4.33);
   }, 0);
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Active subscriptions", value: String(subs.filter(s => s.active).length), color: "text-blue-400" },
+          { label: "Active schedules", value: String(subs.filter(s => s.active).length), color: "text-blue-400" },
           { label: "Est. MRR (incl GST)", value: formatCurrency(Math.round(mrr)), color: "text-green-400" },
           { label: "Due to generate", value: String(dueNow.length), color: dueNow.length ? "text-orange-400" : "text-[var(--color-muted)]" },
         ].map(c => <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p><p className={`text-xl font-bold tabular-nums ${c.color}`}>{c.value}</p></div>)}
       </div>
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
         <h2 className="text-sm font-semibold flex items-center gap-2"><Repeat size={14} className="text-[var(--color-primary)]" /> Recurring / Subscription Billing</h2>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <input value={customer} onChange={e => setCustomer(e.target.value)} className={INP} placeholder="Customer *" />
-          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className={INP} placeholder="Amount ₹ *" />
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={INP} placeholder="Customer email (for auto-send)" />
+          <input value={desc} onChange={e => setDesc(e.target.value)} className={INP} placeholder="Line description * (e.g. Retainer - July)" />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className={INP} placeholder="Amount ₹ (pre-GST) *" />
           <select value={gst} onChange={e => setGst(e.target.value)} className={INP}>{GST_RATES.map(r => <option key={r} value={r}>GST {r}%</option>)}</select>
-          <select value={freq} onChange={e => setFreq(e.target.value as Recurring["freq"])} className={INP}>{(["monthly", "quarterly", "yearly"] as const).map(f => <option key={f} value={f}>{f}</option>)}</select>
+          <select value={freq} onChange={e => setFreq(e.target.value as RecurringSchedule["cadence"])} className={INP}>{(["weekly", "monthly", "quarterly"] as const).map(f => <option key={f} value={f}>{f}</option>)}</select>
           <input type="date" value={nextRun} onChange={e => setNextRun(e.target.value)} className={INP} />
+          <label className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
+            <input type="checkbox" checked={autoSend} onChange={e => setAutoSend(e.target.checked)} />
+            Auto-send by email on generation (also accrues to the books)
+          </label>
         </div>
         <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90">+ Schedule</button>
       </div>
       {subs.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
           <table className="w-full text-sm min-w-[640px]">
-            <thead><tr className="border-b border-[var(--color-border)]">{["Customer", "Amount+GST", "Freq", "Next run", "Generated", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+            <thead><tr className="border-b border-[var(--color-border)]">{["Customer", "Amount+GST", "Cadence", "Next run", "Last run", "Auto-send", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
-              {subs.map(s => { const tot = (parseFloat(s.amount) || 0) * (1 + (parseFloat(s.gst) || 0) / 100); const due = s.active && s.nextRun <= today; return (
-                <tr key={s.id} className={`hover:bg-white/2 ${due ? "bg-orange-950/10" : ""}`}>
-                  <td className="px-4 py-2.5 font-medium">{s.customer}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(tot))}</td>
-                  <td className="px-4 py-2.5 text-xs capitalize">{s.freq}</td>
-                  <td className={`px-4 py-2.5 text-xs ${due ? "text-orange-400 font-semibold" : "text-[var(--color-muted)]"}`}>{s.nextRun}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-xs">{s.generated}</td>
+              {subs.map(s => { const due = s.active && s.next_run?.slice(0, 10) <= today; return (
+                <tr key={s.id} className={`hover:bg-white/2 ${due ? "bg-orange-950/10" : ""} ${!s.active ? "opacity-50" : ""}`}>
+                  <td className="px-4 py-2.5 font-medium">{s.customer_name}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(scheduleTotal(s)))}</td>
+                  <td className="px-4 py-2.5 text-xs capitalize">{s.cadence}</td>
+                  <td className={`px-4 py-2.5 text-xs ${due ? "text-orange-400 font-semibold" : "text-[var(--color-muted)]"}`}>{s.next_run?.slice(0, 10)}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{s.last_run?.slice(0, 10) || "-"}</td>
+                  <td className="px-4 py-2.5 text-xs">{s.auto_send ? "Yes" : "Draft only"}</td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    <button onClick={() => runNow(s.id)} className="text-xs text-[var(--color-primary)] hover:underline">Generate now</button>
-                    <button onClick={() => setSubs(p => p.map(x => x.id === s.id ? { ...x, active: !x.active } : x))} className="ml-3 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">{s.active ? "Pause" : "Resume"}</button>
-                    <button onClick={() => setSubs(p => p.filter(x => x.id !== s.id))} className="ml-3 text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                    <button onClick={() => runNow(s.id)} disabled={busy === s.id || !s.active} className="text-xs text-[var(--color-primary)] hover:underline disabled:opacity-50">{busy === s.id ? "Generating…" : "Generate now"}</button>
+                    <button onClick={() => toggle(s)} className="ml-3 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">{s.active ? "Pause" : "Resume"}</button>
+                    <button onClick={() => remove(s.id)} className="ml-3 text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
                   </td>
                 </tr>
               ); })}
@@ -1086,10 +1128,11 @@ function RecurringBilling() {
           </table>
         </div>
       )}
-      {NOTE("Cycles advance on 'Generate now'. Connect to a scheduler/cron to auto-generate the invoice on the next-run date.")}
+      {NOTE("Invoices generate automatically at 07:30 IST on the run date - as drafts, or sent + accrued to the books when auto-send is on. Missed periods are skipped, never back-billed.")}
     </div>
   );
 }
+
 
 // #42 ── Payment Links (UPI/card) on Invoice ─────────────────────────────────
 function PaymentLinkBuilder({ invoices }: { invoices: Invoice[] }) {

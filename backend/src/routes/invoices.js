@@ -26,14 +26,7 @@ async function firmNameOf(tenantId) {
   return null;
 }
 
-function nextInvoiceNumber(existing) {
-  const year = new Date().getFullYear();
-  const nums = existing
-    .map(n => { const m = n.match(/INV-\d{4}-(\d+)$/); return m ? parseInt(m[1]) : 0; })
-    .filter(Boolean);
-  const next = nums.length ? Math.max(...nums) + 1 : 1;
-  return `INV-${year}-${String(next).padStart(3, "0")}`;
-}
+const { createInvoiceTx } = require("../lib/invoiceCreate"); // shared with the recurring-invoice cron
 
 function computeAging(invoice) {
   if (invoice.status === "paid") return "paid";
@@ -65,43 +58,14 @@ router.post("/", authenticate, canWrite, async (req, res) => {
   const { customer_name, customer_gstin, customer_email, customer_phone, gst_rate = 18, due_date, items = [] } = req.body;
   if (!customer_name || !items.length) return res.status(400).json({ error: "customer_name and items required" });
 
-  const subtotal   = items.reduce((s, i) => s + (parseFloat(i.quantity) * parseFloat(i.unit_price)), 0);
-  const gstSum     = items.reduce((s, i) => {
-    const lineAmt = parseFloat(i.quantity) * parseFloat(i.unit_price);
-    const lineRate = (i.gst_rate ?? gst_rate);
-    return s + (lineAmt * lineRate / 100);
-  }, 0);
-  const gst_amount = parseFloat(gstSum.toFixed(2));
-  const total      = parseFloat((subtotal + gst_amount).toFixed(2));
-
   // One tenant-scoped transaction (RLS GUC set once): next-number read + invoice insert +
-  // line items — now atomic (a failed item insert no longer leaves a headerless invoice).
-  const inv = await withTenant(req.user.tenant_id, async (client) => {
-    const { rows: existing } = await client.query(
-      "SELECT invoice_number FROM invoices WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 50",
-      [req.user.tenant_id]
-    );
-    const invoice_number = nextInvoiceNumber(existing.map(r => r.invoice_number));
-    const { rows: [row] } = await client.query(
-      `INSERT INTO invoices(tenant_id, invoice_number, customer_name, customer_gstin, customer_email,
-         customer_phone, subtotal, gst_rate, gst_amount, total_amount, status, due_date)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'draft',$11)
-       RETURNING *`,
-      [req.user.tenant_id, invoice_number, customer_name, customer_gstin ?? null,
-       customer_email ?? null, customer_phone ?? null, subtotal, gst_rate, gst_amount, total, due_date ?? null]
-    );
-    for (const item of items) {
-      const amt = parseFloat(item.quantity) * parseFloat(item.unit_price);
-      await client.query(
-        "INSERT INTO invoice_items(invoice_id, description, hsn_sac, quantity, unit_price, gst_rate, amount) VALUES($1,$2,$3,$4,$5,$6,$7)",
-        [row.id, item.description, item.hsn_sac ?? null, item.quantity, item.unit_price, item.gst_rate ?? gst_rate, amt]
-      );
-    }
-    return row;
-  });
+  // line items — atomic, via the factory shared with the recurring-invoice cron.
+  const inv = await withTenant(req.user.tenant_id, (client) =>
+    createInvoiceTx(client, req.user.tenant_id, { customer_name, customer_gstin, customer_email, customer_phone, gst_rate, due_date, items })
+  );
 
   require("../modules/flows/runner").emitEvent(req.user.tenant_id, "invoice.created", { invoice: inv }).catch(() => {});
-  require("../modules/analytics").track(req.user.tenant_id, req.user.id, { event: "invoice_created", props: { total } }).catch(() => {});
+  require("../modules/analytics").track(req.user.tenant_id, req.user.id, { event: "invoice_created", props: { total: Number(inv.total_amount) } }).catch(() => {});
   res.status(201).json(inv);
 });
 
@@ -589,6 +553,83 @@ router.post("/:id/credit-notes", authenticate, canWrite, async (req, res) => {
     require("../modules/analytics").track(t, req.user.id, { event: "credit_note_issued", props: { amount: Number(outcome.note.total_amount) } }).catch(() => {});
     res.status(201).json({ note: outcome.note, invoice: { ...outcome.inv, aging: computeAging(outcome.inv) }, balance_due: outcome.balanceAfter });
   } catch (e) { console.error("[invoices] credit note failed:", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
+// ── Recurring invoice schedules (real generation via the daily books cron) ──
+const CADENCES = new Set(["weekly", "monthly", "quarterly"]);
+
+router.get("/recurring", authenticate, async (req, res) => {
+  try {
+    const { rows } = await q(req.user.tenant_id,
+      "SELECT * FROM invoice_recurring WHERE tenant_id=$1 ORDER BY created_at DESC", [req.user.tenant_id]);
+    res.json(rows);
+  } catch (e) { console.error("[invoices] recurring list failed:", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
+router.post("/recurring", authenticate, canWrite, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const items = Array.isArray(b.items) ? b.items.filter((i) => i && i.description && parseFloat(i.quantity) > 0 && parseFloat(i.unit_price) >= 0) : [];
+    if (!b.customer_name || !items.length) return res.status(400).json({ error: "customer_name and at least one item are required" });
+    if (!CADENCES.has(b.cadence)) return res.status(400).json({ error: `cadence must be one of: ${[...CADENCES].join(", ")}` });
+    const nextRun = String(b.next_run || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(nextRun)) return res.status(400).json({ error: "next_run must be YYYY-MM-DD" });
+    const dom = b.day_of_month != null ? Number(b.day_of_month) : Number(nextRun.slice(8, 10));
+    if (!(dom >= 1 && dom <= 31)) return res.status(400).json({ error: "day_of_month must be 1-31" });
+    if (b.auto_send && !b.customer_email) return res.status(400).json({ error: "auto_send needs a customer email to send to." });
+    const { rows: [row] } = await q(req.user.tenant_id,
+      `INSERT INTO invoice_recurring(tenant_id, customer_name, customer_gstin, customer_email, customer_phone,
+         gst_rate, items, cadence, day_of_month, next_run, due_in_days, auto_send, created_by)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [req.user.tenant_id, String(b.customer_name).trim(), b.customer_gstin || null, b.customer_email || null,
+       b.customer_phone || null, Number(b.gst_rate) || 18, JSON.stringify(items), b.cadence, dom, nextRun,
+       Math.min(Math.max(Number(b.due_in_days) || 15, 0), 180), !!b.auto_send, req.user.id || null]);
+    res.status(201).json(row);
+  } catch (e) { console.error("[invoices] recurring create failed:", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
+router.patch("/recurring/:rid", authenticate, canWrite, async (req, res) => {
+  try {
+    const b = req.body || {};
+    // Only the safe, individually-validated fields are patchable.
+    const sets = [], vals = [];
+    const put = (col, val) => { vals.push(val); sets.push(`${col}=$${vals.length}`); };
+    if (b.active != null) put("active", !!b.active);
+    if (b.auto_send != null) put("auto_send", !!b.auto_send);
+    if (b.next_run != null) {
+      const d = String(b.next_run).slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return res.status(400).json({ error: "next_run must be YYYY-MM-DD" });
+      put("next_run", d);
+    }
+    if (b.cadence != null) {
+      if (!CADENCES.has(b.cadence)) return res.status(400).json({ error: `cadence must be one of: ${[...CADENCES].join(", ")}` });
+      put("cadence", b.cadence);
+    }
+    if (!sets.length) return res.status(400).json({ error: "Nothing to update" });
+    vals.push(req.params.rid, req.user.tenant_id);
+    const { rows: [row] } = await q(req.user.tenant_id,
+      `UPDATE invoice_recurring SET ${sets.join(", ")} WHERE id=$${vals.length - 1} AND tenant_id=$${vals.length} RETURNING *`, vals);
+    if (!row) return res.status(404).json({ error: "Schedule not found" });
+    res.json(row);
+  } catch (e) { console.error("[invoices] recurring patch failed:", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
+router.delete("/recurring/:rid", authenticate, canWrite, async (req, res) => {
+  try {
+    const { rowCount } = await q(req.user.tenant_id,
+      "DELETE FROM invoice_recurring WHERE id=$1 AND tenant_id=$2", [req.params.rid, req.user.tenant_id]);
+    if (!rowCount) return res.status(404).json({ error: "Schedule not found" });
+    res.status(204).end();
+  } catch (e) { console.error("[invoices] recurring delete failed:", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
+// Generate this schedule's invoice NOW (doesn't wait for the cron); advances next_run.
+router.post("/recurring/:rid/run-now", authenticate, canWrite, async (req, res) => {
+  try {
+    const inv = await require("../lib/recurringInvoices").generateForSchedule(req.user.tenant_id, req.params.rid, { force: true });
+    if (!inv) return res.status(400).json({ error: "Schedule not found, inactive, or has no items." });
+    res.status(201).json(inv);
+  } catch (e) { console.error("[invoices] recurring run-now failed:", e.message); res.status(500).json({ error: "Internal error" }); }
 });
 
 module.exports = router;
