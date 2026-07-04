@@ -2215,98 +2215,227 @@ function CashAccrualToggle() {
 // ── #193 MANUAL JOURNAL-ENTRY COMPOSER ──────────────────────────────────────
 // Compose a balanced double-entry voucher (debits = credits) before posting.
 // Stored as durable JV records; does not touch the cash ledger.
+// ── MANUAL JOURNAL VOUCHER — REAL (audit fix) ────────────────────────────────
+// Was: legs typed into a client KV blob ("txn-manual-journals") with a fake
+// "JV-0001 posted" toast — nothing ever reached the ledger. Now: posts a real
+// JOURNAL voucher via POST /api/books/vouchers (the posting engine: balanced to
+// the paise, gap-free numbering, period locks, audit trail), lists the real
+// JOURNAL vouchers back from the books, reverses via the real mirror-voucher
+// endpoint, and adds the ledger-statement drill-down (GET /ledgers/:id/statement)
+// that previously had no caller anywhere in the app.
+interface BookLedgerOpt { id: string; name: string; is_active: boolean; }
+interface BookJv { id: string; voucher_number: number; voucher_date: string; narration: string | null; reference: string | null; is_cancelled: boolean; source: string; }
+interface GlStatement {
+  ledger: string; financialYear: string; openingBalance: string; closingBalance: string;
+  entries: { date: string; type: string; number: number; narration: string | null; debit: string; credit: string; balance: string }[];
+}
+const currentIndianFy = () => { const d = new Date(); const y = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1; return `${y}-${String((y + 1) % 100).padStart(2, "0")}`; };
+
 function JournalEntryComposer() {
-  type Leg = { id: string; account: string; debit: string; credit: string };
-  type JV = { id: string; voucherNo: string; date: string; narration: string; legs: { account: string; debit: number; credit: number }[]; total: number };
-  const [journals, setJournals] = useFeatureState<JV[]>("txn-manual-journals", []);
+  type Leg = { id: string; ledgerId: string; debit: string; credit: string };
+  type LegacyJV = { id: string; voucherNo: string; date: string; narration: string; legs: { account: string; debit: number; credit: number }[]; total: number };
+  const [legacy] = useFeatureState<LegacyJV[]>("txn-manual-journals", []);
+  const [ledgers, setLedgers] = useState<BookLedgerOpt[]>([]);
+  const [recent, setRecent] = useState<BookJv[]>([]);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [narration, setNarration] = useState("");
   const [legs, setLegs] = useState<Leg[]>([
-    { id: generateId(), account: "", debit: "", credit: "" },
-    { id: generateId(), account: "", debit: "", credit: "" },
+    { id: generateId(), ledgerId: "", debit: "", credit: "" },
+    { id: generateId(), ledgerId: "", debit: "", credit: "" },
   ]);
+  const [posting, setPosting] = useState(false);
+  const [reversing, setReversing] = useState<string | null>(null);
+  // Ledger drill-down
+  const [stmtLedgerId, setStmtLedgerId] = useState("");
+  const [stmtFy, setStmtFy] = useState(currentIndianFy());
+  const [stmt, setStmt] = useState<GlStatement | null>(null);
+  const [stmtBusy, setStmtBusy] = useState(false);
+
   const fc = formatCurrency;
   const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
+  const loadRecent = useCallback(() => {
+    api.get<BookJv[]>("/api/books/vouchers?type=JOURNAL").then(rows => setRecent(Array.isArray(rows) ? rows.slice(0, 25) : [])).catch(() => {});
+  }, []);
+  useEffect(() => {
+    api.get<BookLedgerOpt[]>("/api/books/ledgers")
+      .then(rows => setLedgers((Array.isArray(rows) ? rows : []).filter(l => l.is_active).sort((a, b) => a.name.localeCompare(b.name))))
+      .catch(() => {});
+    loadRecent();
+  }, [loadRecent]);
+
   const totalDr = legs.reduce((s, l) => s + (parseFloat(l.debit) || 0), 0);
   const totalCr = legs.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
-  const balanced = Math.abs(totalDr - totalCr) < 0.5 && totalDr > 0;
+  // The posting engine checks EXACT decimal equality — mirror that to the paise here,
+  // instead of the old ±0.5 tolerance that the server would then reject.
+  const balanced = Math.round(totalDr * 100) === Math.round(totalCr * 100) && totalDr > 0;
 
   const updateLeg = (id: string, patch: Partial<Leg>) => setLegs(prev => prev.map(l => l.id === id ? { ...l, ...patch } : l));
-  const addLeg = () => setLegs(prev => [...prev, { id: generateId(), account: "", debit: "", credit: "" }]);
+  const addLeg = () => setLegs(prev => [...prev, { id: generateId(), ledgerId: "", debit: "", credit: "" }]);
   const removeLeg = (id: string) => setLegs(prev => prev.length > 2 ? prev.filter(l => l.id !== id) : prev);
 
-  const post = () => {
-    if (!balanced) { toast.error("Debits must equal credits and be non-zero"); return; }
-    if (legs.some(l => !l.account.trim())) { toast.error("Every leg needs an account name"); return; }
-    const voucherNo = `JV-${String(journals.length + 1).padStart(4, "0")}`;
-    setJournals(prev => [{
-      id: generateId(), voucherNo, date, narration,
-      legs: legs.map(l => ({ account: l.account.trim(), debit: parseFloat(l.debit) || 0, credit: parseFloat(l.credit) || 0 })),
-      total: totalDr,
-    }, ...prev]);
-    setLegs([{ id: generateId(), account: "", debit: "", credit: "" }, { id: generateId(), account: "", debit: "", credit: "" }]);
-    setNarration("");
-    toast.success(`${voucherNo} posted · ${fc(totalDr)}`);
+  const post = async () => {
+    if (!balanced) { toast.error("Debits must equal credits exactly (to the paise) and be non-zero"); return; }
+    // A fully-blank extra line is just dropped; a line with an amount but no ledger
+    // (or a ledger but no amount) is a real user error the engine would reject cryptically.
+    const active = legs.filter(l => l.ledgerId || parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0);
+    if (active.some(l => !l.ledgerId)) { toast.error("Every line with an amount needs a ledger"); return; }
+    if (active.some(l => !(parseFloat(l.debit) > 0) && !(parseFloat(l.credit) > 0))) { toast.error("Every line needs a debit or a credit amount"); return; }
+    if (active.length < 2) { toast.error("A journal needs at least two lines"); return; }
+    setPosting(true);
+    try {
+      const r = await api.post<{ voucherNumber: number }>("/api/books/vouchers", {
+        voucher: { voucherType: "JOURNAL", voucherDate: date, narration: narration || "Manual journal voucher", source: "manual" },
+        entries: active.map(l => ({ ledgerId: l.ledgerId, debit: (parseFloat(l.debit) || 0).toFixed(2), credit: (parseFloat(l.credit) || 0).toFixed(2) })),
+      });
+      toast.success(`JOURNAL #${r.voucherNumber} posted to the books · ${fc(totalDr)}`);
+      setLegs([{ id: generateId(), ledgerId: "", debit: "", credit: "" }, { id: generateId(), ledgerId: "", debit: "", credit: "" }]);
+      setNarration("");
+      loadRecent();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Posting failed");
+    } finally { setPosting(false); }
+  };
+
+  const reverse = async (v: BookJv) => {
+    setReversing(v.id);
+    try {
+      await api.post(`/api/books/vouchers/${v.id}/reverse`, {});
+      toast.success(`JOURNAL #${v.voucher_number} reversed (mirror voucher posted)`);
+      loadRecent();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Reverse failed"); }
+    finally { setReversing(null); }
+  };
+
+  const loadStatement = async (ledgerId: string, fy: string) => {
+    if (!ledgerId) { setStmt(null); return; }
+    setStmtBusy(true);
+    try { setStmt(await api.get<GlStatement>(`/api/books/ledgers/${ledgerId}/statement?fy=${encodeURIComponent(fy)}`)); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Failed to load the ledger statement"); setStmt(null); }
+    finally { setStmtBusy(false); }
   };
 
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-        <div className="flex items-center gap-2 mb-3"><NotebookPen size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Manual Journal Voucher</h3></div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} /></div>
-          <input value={narration} onChange={e => setNarration(e.target.value)} placeholder="Narration / being…" className={`${inp} md:col-span-2 self-end`} />
-        </div>
-        <div className="space-y-2">
-          {legs.map(l => (
-            <div key={l.id} className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center">
-              <input value={l.account} onChange={e => updateLeg(l.id, { account: e.target.value })} placeholder="Account / ledger" className={`${inp} md:col-span-6`} />
-              <input type="number" value={l.debit} onChange={e => updateLeg(l.id, { debit: e.target.value, credit: "" })} placeholder="Debit ₹" className={`${inp} md:col-span-2`} />
-              <input type="number" value={l.credit} onChange={e => updateLeg(l.id, { credit: e.target.value, debit: "" })} placeholder="Credit ₹" className={`${inp} md:col-span-3`} />
-              <button onClick={() => removeLeg(l.id)} className="text-[var(--color-muted)] hover:text-red-400 md:col-span-1 justify-self-end"><X size={14} /></button>
+        <div className="flex items-center gap-2 mb-3"><NotebookPen size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Manual Journal Voucher (posts to the books)</h3></div>
+        {ledgers.length === 0 ? (
+          <p className="text-xs text-[var(--color-muted)]">No ledgers found — set up your chart of accounts on the Books page first (Books → seed the default chart), then post journals here.</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+              <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} /></div>
+              <input value={narration} onChange={e => setNarration(e.target.value)} placeholder="Narration / being…" className={`${inp} md:col-span-2 self-end`} />
             </div>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-3 mt-3">
-          <button onClick={addLeg} className="text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)]">+ Add line</button>
-          <span className="text-xs tabular-nums text-[var(--color-muted)]">Dr {fc(totalDr)} · Cr {fc(totalCr)}</span>
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${balanced ? "bg-green-950/30 text-green-400" : "bg-orange-950/30 text-orange-400"}`}>{balanced ? "✓ Balanced" : `Out by ${fc(Math.abs(totalDr - totalCr))}`}</span>
-          <button onClick={post} disabled={!balanced} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40 ml-auto">Post voucher</button>
-        </div>
+            <div className="space-y-2">
+              {legs.map(l => (
+                <div key={l.id} className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center">
+                  <select value={l.ledgerId} onChange={e => updateLeg(l.id, { ledgerId: e.target.value })} className={`${inp} md:col-span-6`}>
+                    <option value="">- ledger -</option>
+                    {ledgers.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  </select>
+                  <input type="number" value={l.debit} onChange={e => updateLeg(l.id, { debit: e.target.value, credit: "" })} placeholder="Debit ₹" className={`${inp} md:col-span-2`} />
+                  <input type="number" value={l.credit} onChange={e => updateLeg(l.id, { credit: e.target.value, debit: "" })} placeholder="Credit ₹" className={`${inp} md:col-span-3`} />
+                  <button onClick={() => removeLeg(l.id)} className="text-[var(--color-muted)] hover:text-red-400 md:col-span-1 justify-self-end"><X size={14} /></button>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 mt-3">
+              <button onClick={addLeg} className="text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)]">+ Add line</button>
+              <span className="text-xs tabular-nums text-[var(--color-muted)]">Dr {fc(totalDr)} · Cr {fc(totalCr)}</span>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${balanced ? "bg-green-950/30 text-green-400" : "bg-orange-950/30 text-orange-400"}`}>{balanced ? "✓ Balanced" : `Out by ${fc(Math.abs(totalDr - totalCr))}`}</span>
+              <button onClick={post} disabled={!balanced || posting} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40 ml-auto">{posting ? "Posting…" : "Post to books"}</button>
+            </div>
+          </>
+        )}
       </div>
 
-      {journals.length > 0 && (
+      {recent.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
-          <div className="px-5 py-3 border-b border-[var(--color-border)] text-sm font-semibold">Posted Journals ({journals.length})</div>
+          <div className="px-5 py-3 border-b border-[var(--color-border)] text-sm font-semibold">Journal vouchers in the books ({recent.length})</div>
           <div className="divide-y divide-[var(--color-border)]">
-            {journals.map(j => (
-              <div key={j.id} className="px-5 py-3">
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="font-mono font-semibold text-[var(--color-primary)]">{j.voucherNo}</span>
-                    <span className="text-[var(--color-muted)]">{j.date}</span>
-                    {j.narration && <span className="text-[var(--color-muted)] italic truncate max-w-xs">- {j.narration}</span>}
-                  </div>
-                  <button onClick={() => setJournals(prev => prev.filter(x => x.id !== j.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+            {recent.map(v => (
+              <div key={v.id} className={`px-5 py-2.5 flex items-center justify-between gap-3 ${v.is_cancelled ? "opacity-50" : ""}`}>
+                <div className="flex items-center gap-2 text-xs min-w-0">
+                  <span className="font-mono font-semibold text-[var(--color-primary)] shrink-0">JV #{v.voucher_number}</span>
+                  <span className="text-[var(--color-muted)] shrink-0">{String(v.voucher_date).slice(0, 10)}</span>
+                  {v.narration && <span className="text-[var(--color-muted)] italic truncate">- {v.narration}</span>}
+                  {v.is_cancelled && <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-red-800/40 text-red-400 shrink-0">reversed</span>}
                 </div>
-                <table className="w-full text-xs">
-                  <tbody>
-                    {j.legs.map((leg, i) => (
-                      <tr key={i}>
-                        <td className={`py-0.5 ${leg.credit > 0 ? "pl-8 text-[var(--color-muted)]" : "font-medium"}`}>{leg.account}</td>
-                        <td className="py-0.5 text-right tabular-nums w-28">{leg.debit > 0 ? fc(leg.debit) : ""}</td>
-                        <td className="py-0.5 text-right tabular-nums w-28">{leg.credit > 0 ? fc(leg.credit) : ""}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {!v.is_cancelled && (
+                  <button onClick={() => reverse(v)} disabled={reversing === v.id}
+                    className="text-[10px] font-semibold px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-red-400 hover:border-red-800/40 shrink-0 disabled:opacity-50">
+                    {reversing === v.id ? "Reversing…" : "Reverse"}
+                  </button>
+                )}
               </div>
             ))}
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Manual vouchers for adjustments, depreciation, provisions, and corrections. Each must balance (debits = credits). These are kept as JV records and don't move your cash/bank ledger.</p>
+
+      {/* GL ledger drill-down — the accountant workflow that had no UI: any ledger's full
+          statement with a running balance for a financial year. */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+        <div className="flex items-center gap-2"><BookOpen size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Ledger statement (drill-down)</h3></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <select value={stmtLedgerId} onChange={e => { setStmtLedgerId(e.target.value); void loadStatement(e.target.value, stmtFy); }} className={`${inp} md:col-span-2`}>
+            <option value="">- pick a ledger to open its statement -</option>
+            {ledgers.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+          <input value={stmtFy} onChange={e => setStmtFy(e.target.value)} onBlur={() => stmtLedgerId && void loadStatement(stmtLedgerId, stmtFy)} placeholder="2025-26" className={inp} />
+        </div>
+        {stmtBusy ? (
+          <p className="text-xs text-[var(--color-muted)]">Loading statement…</p>
+        ) : stmt ? (
+          <>
+            <div className="flex flex-wrap gap-4 text-xs">
+              <span className="text-[var(--color-muted)]">Opening: <b className="text-[var(--color-text)] tabular-nums">{fc(Number(stmt.openingBalance))}</b></span>
+              <span className="text-[var(--color-muted)]">Closing: <b className="text-[var(--color-text)] tabular-nums">{fc(Number(stmt.closingBalance))}</b></span>
+              <span className="text-[var(--color-muted)]">{stmt.entries.length} entr{stmt.entries.length === 1 ? "y" : "ies"} · FY {stmt.financialYear}</span>
+            </div>
+            {stmt.entries.length === 0 ? (
+              <p className="text-xs text-[var(--color-muted)]">No postings on this ledger in FY {stmt.financialYear}.</p>
+            ) : (
+              <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto max-h-96 overflow-y-auto">
+                <table className="w-full text-xs min-w-[560px]">
+                  <thead className="sticky top-0 bg-[var(--color-surface)]"><tr className="border-b border-[var(--color-border)]">{["Date", "Voucher", "Narration", "Debit", "Credit", "Balance"].map((h, i) => <th key={h} className={`px-3 py-2 font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i <= 2 ? "text-left" : "text-right"}`}>{h}</th>)}</tr></thead>
+                  <tbody className="divide-y divide-[var(--color-border)]">
+                    {stmt.entries.map((e, i) => (
+                      <tr key={i} className="hover:bg-white/2">
+                        <td className="px-3 py-2 tabular-nums whitespace-nowrap">{String(e.date).slice(0, 10)}</td>
+                        <td className="px-3 py-2 font-mono whitespace-nowrap">{e.type} #{e.number}</td>
+                        <td className="px-3 py-2 text-[var(--color-muted)] max-w-[220px] truncate" title={e.narration ?? ""}>{e.narration ?? "-"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-red-400">{Number(e.debit) > 0 ? fc(Number(e.debit)) : "-"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-green-400">{Number(e.credit) > 0 ? fc(Number(e.credit)) : "-"}</td>
+                        <td className={`px-3 py-2 text-right tabular-nums font-semibold ${Number(e.balance) < 0 ? "text-red-400" : ""}`}>{fc(Number(e.balance))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-[var(--color-muted)]">Pick any ledger to see every voucher that hit it, with a running balance — the core accountant drill-down.</p>
+        )}
+      </div>
+
+      {legacy.length > 0 && (
+        <details className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg">
+          <summary className="px-5 py-3 text-xs text-[var(--color-muted)] cursor-pointer">Legacy entries from the old tool ({legacy.length}) — these were saved locally only and were NEVER posted to the books; re-enter any that matter above.</summary>
+          <div className="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)]">
+            {legacy.map(j => (
+              <div key={j.id} className="px-5 py-2 text-xs text-[var(--color-muted)]">
+                <span className="font-mono">{j.voucherNo}</span> · {j.date} · {fc(j.total)}{j.narration ? ` · ${j.narration}` : ""}
+                <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded-full border border-orange-800/40 text-orange-400">not in books</span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      <p className="text-[10px] text-[var(--color-muted)]">Manual vouchers for adjustments, depreciation, provisions, and corrections. Posted through the real books engine: exact balance to the paise, gap-free numbering, period locks and the audit trail all apply. Posted vouchers can't be edited — reverse and re-post instead.</p>
     </div>
   );
 }
