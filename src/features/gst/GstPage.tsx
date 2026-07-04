@@ -3664,6 +3664,26 @@ function Gstr9cReconciliation() {
   const [gstr9Itc, setGstr9Itc]           = useState("");
   const [bookTax, setBookTax]             = useState("");
   const [gstr9Tax, setGstr9Tax]           = useState("");
+  const [fy, setFy]                       = useState(currentFyStr());
+  const [filling, setFilling]             = useState(false);
+
+  // The "as per books" side of all three heads is derivable from the SAME real gstr9
+  // engine the GSTR-9 tab uses — only the "as per filed return" side is genuinely
+  // external (what was actually submitted on the portal) and stays manual.
+  const autoFillFromBooks = async () => {
+    setFilling(true);
+    try {
+      const d = await api.get<Gstr9Response>(`/api/books/gst/gstr9?fy=${encodeURIComponent(fy)}`);
+      const t4 = d.partII_outward.table4_taxable, t5 = d.partII_outward.table5_nonTaxable;
+      const turnover = (Number(t4["4N_total"]?.taxable) || 0) + (Number(t5["5N_total"]?.taxable) || 0);
+      const itc = gstr9HeadTotal(d.partIII_itc.table6_availed["6O_total"]);
+      const t9 = d.partIV_taxPaid.table9;
+      const taxPaid = gstr9HeadTotal(t9["9_paid_cash"]) + gstr9HeadTotal(t9["9_paid_itc"]);
+      setBookTurnover(turnover.toFixed(2)); setBookItc(itc.toFixed(2)); setBookTax(taxPaid.toFixed(2));
+      toast.success(`Books side filled from the ledger for FY ${fy} — enter the filed-return side to reconcile`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Could not load the books-side figures"); }
+    finally { setFilling(false); }
+  };
 
   const r = useMemo(() => {
     const n = (v: string) => parseFloat(v) || 0;
@@ -3686,7 +3706,16 @@ function Gstr9cReconciliation() {
       </div>
 
       <div className={GST_CARD}>
-        <div className="flex items-center gap-2 mb-4"><ClipboardCheck size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Reconciliation worksheet</h2></div>
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <ClipboardCheck size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">Reconciliation worksheet</h2>
+          <div className="ml-auto flex items-center gap-2">
+            <input value={fy} onChange={e => setFy(e.target.value)} placeholder="2025-26" className="w-24 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-xs outline-none" />
+            <button onClick={autoFillFromBooks} disabled={filling}
+              className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-50">
+              <RefreshCw size={11} className={filling ? "animate-spin" : ""} /> {filling ? "Loading…" : "Auto-fill books side"}
+            </button>
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Turnover as per books (₹)</label><input type="number" value={bookTurnover} onChange={e => setBookTurnover(e.target.value)} placeholder="audited P&L" className={GST_INPUT} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Turnover as per GSTR-9 (₹)</label><input type="number" value={gstr9Turnover} onChange={e => setGstr9Turnover(e.target.value)} placeholder="annual return" className={GST_INPUT} /></div>
