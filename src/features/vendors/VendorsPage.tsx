@@ -6,7 +6,7 @@ import { formatCurrency, formatAmount, generateId } from "@/lib/utils";
 import { api } from "@/lib/api";
 import EmptyState from "@/components/EmptyState";
 import AiInsight from "@/components/ai/AiInsight";
-import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2, LineChart, Layers, Network, FileCheck2, Gavel, PiggyBank, FileBadge, BadgePercent, Ban, CreditCard, Repeat, Truck, CopyCheck, Hourglass, Scale, Pencil, Building2, BadgeCheck, Loader2 } from "lucide-react";
+import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2, LineChart, Layers, Network, FileCheck2, Gavel, PiggyBank, FileBadge, BadgePercent, Ban, CreditCard, Repeat, Truck, CopyCheck, Hourglass, Scale, Pencil, Building2, BadgeCheck, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 
@@ -48,7 +48,7 @@ function useVendorMaster() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await api.get<VendorMaster[]>("/vendors");
+      const rows = await api.get<VendorMaster[]>("/api/vendors");
       setVendors(Array.isArray(rows) ? rows : []);
     } catch (e) {
       // Offline / not-yet-seeded: keep whatever we had, surface once.
@@ -63,8 +63,8 @@ function useVendorMaster() {
   const upsert = useCallback(async (draft: VendorDraft, id?: string): Promise<VendorMaster | null> => {
     try {
       const saved = id
-        ? await api.patch<VendorMaster>(`/vendors/${id}`, draft)
-        : await api.post<VendorMaster>("/vendors", draft);
+        ? await api.patch<VendorMaster>(`/api/vendors/${id}`, draft)
+        : await api.post<VendorMaster>("/api/vendors", draft);
       setVendors(prev => {
         const without = prev.filter(v => v.id !== saved.id && v.name !== saved.name);
         return [...without, saved].sort((a, b) => a.name.localeCompare(b.name));
@@ -78,7 +78,7 @@ function useVendorMaster() {
 
   const remove = useCallback(async (id: string): Promise<boolean> => {
     try {
-      await api.delete(`/vendors/${id}`);
+      await api.delete(`/api/vendors/${id}`);
       setVendors(prev => prev.filter(v => v.id !== id));
       return true;
     } catch (e) {
@@ -89,6 +89,65 @@ function useVendorMaster() {
 
   return { vendors, loading, refresh, upsert, remove };
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Real Accounts Payable (#6 audit fix): bills are REAL PURCHASE vouchers posted
+   to the books (backend/src/modules/vendorBills.js) - GL, GST input, optional
+   TDS withholding, and bill-wise settlement all real. AP aging below is derived
+   from actual open bills (GET /api/vendor-bills/aging), not the old obligations
+   guess. Every consumer calls this hook independently (same pattern as
+   useVendorMaster above) rather than threading props through every tab.
+   ───────────────────────────────────────────────────────────────────────── */
+// Matches billwise.openBills()'s actual shape exactly (backend/src/modules/books/billwise.js) —
+// note the field is "number" (the ledger's own auto-incrementing voucher number), NOT the
+// vendor's own bill/invoice reference text (that's book_vouchers.reference, not returned here).
+export interface ApAgingBill {
+  voucherId: string; voucherType: "SALES" | "PURCHASE"; number: number; date: string; dueDate: string;
+  gross: number; allocated: number; outstanding: number; daysOverdue: number;
+}
+export interface ApAgingVendorRow {
+  vendorId: string; vendorLedgerId: string; vendorName: string;
+  isMsme: boolean; msmeCategory: string | null; paymentTermsDays: number | null; total: number;
+  buckets: { current: number; d30: number; d60: number; d60plus: number };
+  bills: ApAgingBill[];
+}
+export interface ApAgingResponse {
+  vendors: ApAgingVendorRow[];
+  totals: { current: number; d30: number; d60: number; d60plus: number };
+  grandTotal: number;
+}
+const EMPTY_AGING: ApAgingResponse = { vendors: [], totals: { current: 0, d30: 0, d60: 0, d60plus: 0 }, grandTotal: 0 };
+
+function useApAging() {
+  const [aging, setAging] = useState<ApAgingResponse>(EMPTY_AGING);
+  const [loading, setLoading] = useState(true);
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try { setAging(await api.get<ApAgingResponse>("/api/vendor-bills/aging")); }
+    catch (e) { console.warn("[vendor-bills] aging load failed", e); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void refresh(); }, [refresh]);
+  return { aging, loading, refresh };
+}
+
+// Bank ledgers, for the "pay from" selector on a bill settlement.
+function useBankLedgers() {
+  const [ledgers, setLedgers] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    api.get<{ id: string; name: string; is_bank: boolean; is_active: boolean }[]>("/api/books/ledgers")
+      .then(rows => setLedgers((Array.isArray(rows) ? rows : []).filter(r => r.is_bank && r.is_active).map(r => ({ id: r.id, name: r.name }))))
+      .catch(() => {});
+  }, []);
+  return ledgers;
+}
+
+const AP_BUCKET_META: Record<keyof ApAgingResponse["totals"], { label: string; color: string; chipCls: string }> = {
+  current:  { label: "Current (not yet due)", color: "text-green-400",  chipCls: "bg-green-950/30 text-green-400 border-green-800/30" },
+  d30:      { label: "1-30 days overdue",     color: "text-yellow-400", chipCls: "bg-yellow-950/30 text-yellow-400 border-yellow-800/30" },
+  d60:      { label: "31-60 days overdue",    color: "text-orange-400", chipCls: "bg-orange-950/30 text-orange-400 border-orange-800/30" },
+  d60plus:  { label: "60+ days overdue",      color: "text-red-400",    chipCls: "bg-red-950/30 text-red-400 border-red-800/30" },
+};
 
 // Lightweight format checks for the profile form (mirrors the KYC vault validators).
 const VM_PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
@@ -378,22 +437,6 @@ function ScheduleModal({ vendor, onClose }: { vendor: Vendor; onClose: () => voi
   );
 }
 
-type AgingBucket = "current" | "1_30" | "31_60" | "61_plus";
-
-const AGING_META: Record<AgingBucket, { label: string; color: string; chipCls: string }> = {
-  current:  { label: "Current (not yet due)",    color: "text-green-400",  chipCls: "bg-green-950/30 text-green-400 border-green-800/30" },
-  "1_30":   { label: "1-30 days overdue",        color: "text-yellow-400", chipCls: "bg-yellow-950/30 text-yellow-400 border-yellow-800/30" },
-  "31_60":  { label: "31-60 days overdue",       color: "text-orange-400", chipCls: "bg-orange-950/30 text-orange-400 border-orange-800/30" },
-  "61_plus":{ label: "60+ days overdue",         color: "text-red-400",    chipCls: "bg-red-950/30 text-red-400 border-red-800/30" },
-};
-
-function apAgingBucket(daysOverdue: number): AgingBucket {
-  if (daysOverdue <= 0) return "current";
-  if (daysOverdue <= 30) return "1_30";
-  if (daysOverdue <= 60) return "31_60";
-  return "61_plus";
-}
-
 export default function VendorsPage() {
   const tr = useT();
   const { store } = useApp();
@@ -404,9 +447,17 @@ export default function VendorsPage() {
   const [sortKey,  setSortKey]  = useState<SortKey>("totalSpend");
   const [sortAsc,  setSortAsc]  = useState(false);
   const [schedVendor, setSchedVendor] = useState<Vendor | null>(null);
+  // AP Aging → "View bills" jumps here with the vendor preselected. A fresh object each click
+  // (not just the vendor id) so clicking the SAME vendor twice in a row still re-triggers the
+  // jump even if the Bills tab's own dropdown was changed in between (React bails out on an
+  // unchanged primitive dependency, but never on a new object reference).
+  const [billsFocus, setBillsFocus] = useState<{ vendorId: string; n: number } | undefined>(undefined);
 
   // Real persisted vendor master (GSTIN/PAN/bank/terms/MSME) backing the directory.
   const { vendors: master, loading: masterLoading, upsert, remove, refresh } = useVendorMaster();
+  // Real AP aging (from actual posted bills) - feeds the Aging tab, the AI context below, and
+  // is refreshed whenever the Bills tab records or pays a bill.
+  const { aging } = useApAging();
   // Profile editor: null = closed; { name, record } = open (record null for create).
   const [profileEdit, setProfileEdit] = useState<{ record: VendorMaster | null; presetName?: string } | null>(null);
 
@@ -529,7 +580,7 @@ export default function VendorsPage() {
     if (Object.keys(patch).length === 0) { toast.error("Choose at least one field to update"); return; }
 
     setBulkApplying(true);
-    const results = await Promise.allSettled(ids.map(id => api.patch<VendorMaster>(`/vendors/${id}`, patch)));
+    const results = await Promise.allSettled(ids.map(id => api.patch<VendorMaster>(`/api/vendors/${id}`, patch)));
     setBulkApplying(false);
 
     const ok = results.filter(r => r.status === "fulfilled").length;
@@ -541,27 +592,6 @@ export default function VendorsPage() {
     await refresh();
     clearBulk();
   };
-
-  // AP Aging: obligations that represent vendor payables (type="other")
-  const apAging = useMemo(() => {
-    const today = new Date();
-    return store.obligations
-      .filter(o => o.type === "other" || o.type === "payroll" || o.type === "tax")
-      .map(o => {
-        const due = new Date(o.dueDate);
-        const daysOverdue = Math.floor((today.getTime() - due.getTime()) / 86400000);
-        return { ...o, due, daysOverdue, bucket: apAgingBucket(daysOverdue) };
-      })
-      .sort((a, b) => b.daysOverdue - a.daysOverdue);
-  }, [store.obligations]);
-
-  const agingBucketTotals = useMemo(() =>
-    (["current", "1_30", "31_60", "61_plus"] as AgingBucket[]).map(b => ({
-      bucket: b,
-      amount: apAging.filter(o => o.bucket === b).reduce((s, o) => s + o.amount, 0),
-      count: apAging.filter(o => o.bucket === b).length,
-    })),
-  [apAging]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(a => !a);
@@ -646,11 +676,11 @@ export default function VendorsPage() {
               trend: v.trend,
               lastPayment: v.lastPayment,
             })),
-          apAgingBuckets: agingBucketTotals.map(b => ({
-            bucket: b.bucket,
-            amount: Math.round(b.amount),
-            count: b.count,
+          apAgingBuckets: (Object.keys(aging.totals) as (keyof typeof aging.totals)[]).map(bucket => ({
+            bucket,
+            amount: Math.round(aging.totals[bucket]),
           })),
+          apAgingVendorsWithDues: aging.vendors.length,
         }}
       />
 
@@ -850,80 +880,7 @@ export default function VendorsPage() {
       )}
 
       {view === "aging" && (
-        <div className="space-y-5">
-          <div>
-            <p className="text-sm text-[var(--color-muted)]">Outstanding payables from your scheduled obligations, bucketed by age. Schedule payments in the Directory tab to populate this view.</p>
-          </div>
-
-          {/* Bucket summary */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {agingBucketTotals.map(b => {
-              const meta = AGING_META[b.bucket];
-              const Icon = b.bucket === "current" ? CheckCircle2 : b.bucket === "61_plus" ? AlertTriangle : Clock;
-              return (
-                <div key={b.bucket} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Icon size={12} className={meta.color} />
-                    <p className="text-[10px] text-[var(--color-muted)]">{meta.label}</p>
-                  </div>
-                  <p className={`text-lg font-bold tabular-nums ${meta.color}`}>{formatAmount(b.amount)}</p>
-                  <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{b.count} obligation{b.count !== 1 ? "s" : ""}</p>
-                </div>
-              );
-            })}
-          </div>
-
-          {apAging.length === 0 ? (
-            <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
-              <Clock size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-              <p className="text-sm text-[var(--color-muted)]">No payables scheduled yet. Use the Directory tab to schedule vendor payments.</p>
-            </div>
-          ) : (
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
-                  <tr>
-                    {["Payable", "Type", "Due Date", "Age", "Amount", "Status"].map((h, i) => (
-                      <th key={h} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : i <= 2 ? "text-left" : "text-right"}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--color-border)]">
-                  {apAging.map(o => {
-                    const meta = AGING_META[o.bucket];
-                    return (
-                      <tr key={o.id} className="hover:bg-white/2">
-                        <td className="px-4 py-3 font-medium max-w-[180px] truncate">{o.name}</td>
-                        <td className="px-4 py-3">
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${CATEGORY_COLOR[o.type] ?? "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
-                            {CATEGORY_LABEL[o.type] ?? o.type}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-[var(--color-muted)]">
-                          {o.due.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {o.daysOverdue <= 0
-                            ? <span className="text-green-400">Due in {Math.abs(o.daysOverdue)}d</span>
-                            : <span className={meta.color}>{o.daysOverdue}d overdue</span>}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(o.amount)}</td>
-                        <td className="px-4 py-3 text-right">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${meta.chipCls}`}>
-                            {o.bucket === "current" ? "Current" : o.bucket === "1_30" ? "1-30d" : o.bucket === "31_60" ? "31-60d" : "60d+"}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <div className="px-4 py-2.5 bg-[var(--color-bg)] border-t border-[var(--color-border)]">
-                <p className="text-xs text-[var(--color-muted)]">Total outstanding: <span className="font-semibold text-[var(--color-text)]">{formatCurrency(apAging.reduce((s,o) => s + o.amount, 0))}</span></p>
-              </div>
-            </div>
-          )}
-        </div>
+        <ApAgingBoard onSelectVendor={(id) => { setBillsFocus({ vendorId: id, n: Date.now() }); setView("bills"); }} />
       )}
 
       {/* ── MSME 45-DAY RULE ── */}
@@ -1027,7 +984,7 @@ export default function VendorsPage() {
         );
       })()}
 
-      {view === "bills"         && <BillsPayables />}
+      {view === "bills"         && <BillsPayables focus={billsFocus} />}
       {view === "po"            && <PurchaseOrderManager />}
       {view === "three-way"     && <ThreeWayMatch />}
       {view === "vendor-tds"    && <VendorTdsLedger />}
@@ -3206,9 +3163,8 @@ interface MsmeDue { id: string; vendor: string; amount: string; acceptedOn: stri
 function MsmeInterestLiability() {
   const [dues, setDues] = useFeatureState<MsmeDue[]>("ven-msme-dues", []);
   const [bankRate, setBankRate] = useFeatureState<number>("ven-msme-bank-rate", 6.5);
-  // Live 43B(h) radar: real unpaid Bills (Bills tab) to MSME-tagged vendors.
-  const [autoBills] = useFeatureState<Bill[]>("payables-bills", []);
-  const { vendors: vmaster } = useVendorMaster();
+  // Live 43B(h) radar: real open bills (Bills tab, posted to the books) to MSME-tagged vendors.
+  const { aging } = useApAging();
 
   const add = () => setDues(prev => [{ id: crypto.randomUUID(), vendor: "", amount: "", acceptedOn: new Date().toISOString().split("T")[0] }, ...prev]);
   const update = (id: string, patch: Partial<MsmeDue>) => setDues(prev => prev.map(d => d.id === id ? { ...d, ...patch } : d));
@@ -3240,28 +3196,25 @@ function MsmeInterestLiability() {
   // income, ~25% tax) AND attracts the 3× penal interest above - both real cash.
   const TAX_RATE = 0.25;
   const auto = useMemo(() => {
-    const idx: Record<string, VendorMaster> = {};
-    for (const v of vmaster) idx[v.name.toLowerCase()] = v;
     const day = 86400000;
-    return (autoBills || [])
-      .filter(b => b.status === "unpaid")
-      .map(b => {
-        const vm = idx[(b.vendorName || "").toLowerCase()];
-        // 43B(h) fires only for Micro & Small — Medium is out of scope. Legacy MSME rows with no
-        // category recorded stay in scope (treated as small until the owner classifies them).
-        if (!vm?.is_msme || vm.msme_category === "medium") return null;
-        const terms = vm.payment_terms_days;
-        const limit = terms && terms > 0 ? Math.min(terms, 45) : 15;
-        const deadline = new Date(new Date(b.billDate).getTime() + limit * day);
+    const rows: { id: string; vendor: string; amount: number; limit: number; deadline: Date; daysToDeadline: number; overdueDays: number; interest: number }[] = [];
+    for (const v of aging.vendors) {
+      // 43B(h) fires only for Micro & Small — Medium is out of scope. Legacy MSME rows with no
+      // category recorded stay in scope (treated as small until the owner classifies them).
+      if (!v.isMsme || v.msmeCategory === "medium") continue;
+      const limit = v.paymentTermsDays && v.paymentTermsDays > 0 ? Math.min(v.paymentTermsDays, 45) : 15;
+      for (const b of v.bills) {
+        if (!(b.outstanding > 0)) continue; // fully settled - no forward exposure
+        const deadline = new Date(new Date(b.date).getTime() + limit * day);
         const daysToDeadline = Math.floor((deadline.getTime() - today.getTime()) / day);
         const overdueDays = daysToDeadline < 0 ? -daysToDeadline : 0;
         const months = overdueDays / 30;
-        const interest = overdueDays > 0 ? b.amount * (Math.pow(1 + annualRate / 100 / 12, months) - 1) : 0;
-        return { id: b.id, vendor: b.vendorName, amount: b.amount, limit, deadline, daysToDeadline, overdueDays, interest };
-      })
-      .filter((r): r is NonNullable<typeof r> => r !== null)
-      .sort((a, b) => a.daysToDeadline - b.daysToDeadline);
-  }, [autoBills, vmaster, today, annualRate]);
+        const interest = overdueDays > 0 ? b.outstanding * (Math.pow(1 + annualRate / 100 / 12, months) - 1) : 0;
+        rows.push({ id: b.voucherId, vendor: v.vendorName, amount: b.outstanding, limit, deadline, daysToDeadline, overdueDays, interest });
+      }
+    }
+    return rows.sort((a, b) => a.daysToDeadline - b.daysToDeadline);
+  }, [aging, today, annualRate]);
 
   const autoBreached = auto.filter(r => r.daysToDeadline < 0);
   const autoDisallow = autoBreached.reduce((s, r) => s + r.amount, 0); // expense added back to income
@@ -4476,268 +4429,319 @@ function WorkingCapitalSimulator() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Bills / Payables - the missing core Accounts Payable register. Record vendor
-   bills (against a saved vendor master profile or a free-typed name), track the
-   open balance by aging bucket, and mark them paid. Frontend-only durable
-   records via useFeatureState ("payables-bills"); due date defaults from the
-   chosen vendor's saved payment_terms_days. Complements AP Aging (derived from
-   transactions) with explicit, user-entered open bills.
+   Real Accounts Payable UI (#6 audit fix): ApAgingBoard reads actual open
+   bills (useApAging); BillsPayables records/pays REAL bills against
+   /api/vendor-bills, which posts a genuine PURCHASE voucher (GST input,
+   optional TDS, bill-wise settlement) - not a local tracker.
    ───────────────────────────────────────────────────────────────────────── */
-interface Bill {
-  id: string;
-  vendorId?: string;
-  vendorName: string;
-  billNumber?: string;
-  billDate: string;
-  dueDate: string;
-  amount: number;
-  status: "unpaid" | "paid";
-  notes?: string;
+const AP_BUCKET_KEYS: (keyof ApAgingResponse["totals"])[] = ["current", "d30", "d60", "d60plus"];
+
+function ApAgingBoard({ onSelectVendor }: { onSelectVendor: (vendorId: string) => void }) {
+  const { aging, loading, refresh } = useApAging();
+
+  if (loading && aging.vendors.length === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <Loader2 size={24} className="mx-auto mb-3 animate-spin text-[var(--color-muted)]" />
+        <p className="text-sm text-[var(--color-muted)]">Loading real payables from the books…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-sm text-[var(--color-muted)] max-w-2xl">
+          Every open bill posted through the Bills tab, aged from its actual due date - not a manual guess.
+          {aging.vendors.length > 0 && <> Outstanding across {aging.vendors.length} vendor{aging.vendors.length !== 1 ? "s" : ""}: <span className="font-semibold text-[var(--color-text)]">{formatCurrency(aging.grandTotal)}</span>.</>}
+        </p>
+        <button onClick={() => refresh()} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-primary)] flex items-center gap-1 shrink-0"><RefreshCw size={12} /> Refresh</button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {AP_BUCKET_KEYS.map(b => {
+          const meta = AP_BUCKET_META[b];
+          const Icon = b === "current" ? CheckCircle2 : b === "d60plus" ? AlertTriangle : Clock;
+          const count = aging.vendors.reduce((s, v) => s + v.bills.filter(bill =>
+            b === "current" ? bill.daysOverdue <= 0 :
+            b === "d30" ? bill.daysOverdue > 0 && bill.daysOverdue <= 30 :
+            b === "d60" ? bill.daysOverdue > 30 && bill.daysOverdue <= 60 :
+            bill.daysOverdue > 60
+          ).length, 0);
+          return (
+            <div key={b} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+              <div className="flex items-center gap-1.5 mb-1"><Icon size={12} className={meta.color} /><p className="text-[10px] text-[var(--color-muted)]">{meta.label}</p></div>
+              <p className={`text-lg font-bold tabular-nums ${meta.color}`}>{formatCurrency(aging.totals[b])}</p>
+              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{count} bill{count !== 1 ? "s" : ""}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {aging.vendors.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <Clock size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+          <p className="text-sm text-[var(--color-muted)]">No open bills yet. Record a vendor bill in the Bills tab to start tracking real payables.</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Vendor", "Current", "1-30d", "31-60d", "60d+", "Total", ""].map((h, i) => (
+                  <th key={h} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {aging.vendors.map(v => (
+                <tr key={v.vendorId} className="hover:bg-white/2">
+                  <td className="px-4 py-3 font-medium max-w-[200px] truncate">
+                    {v.vendorName}
+                    {v.isMsme && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full border border-purple-800/40 text-purple-400 bg-purple-950/20">MSME</span>}
+                  </td>
+                  {AP_BUCKET_KEYS.map(b => (
+                    <td key={b} className={`px-4 py-3 text-right tabular-nums ${v.buckets[b] > 0 ? AP_BUCKET_META[b].color : "text-[var(--color-muted)]"}`}>{v.buckets[b] > 0 ? formatCurrency(v.buckets[b]) : "-"}</td>
+                  ))}
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(v.total)}</td>
+                  <td className="px-4 py-3 text-right"><button onClick={() => onSelectVendor(v.vendorId)} className="text-[10px] font-semibold text-[var(--color-primary)] hover:underline">View bills</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
-type BillBucket = "not-due" | "0-30" | "31-60" | "61-90" | "90+";
-const BILL_BUCKET_LABEL: Record<BillBucket, string> = {
-  "not-due": "Not due",
-  "0-30": "0-30 days",
-  "31-60": "31-60 days",
-  "61-90": "61-90 days",
-  "90+": "90+ days",
-};
-const BILL_BUCKET_COLOR: Record<BillBucket, string> = {
-  "not-due": "text-[var(--color-muted)]",
-  "0-30": "text-yellow-400",
-  "31-60": "text-orange-400",
-  "61-90": "text-red-400",
-  "90+": "text-red-500",
-};
+const TDS_SECTIONS_UI = [
+  { code: "194C", label: "194C - Contractor payments (1%)" },
+  { code: "194J", label: "194J - Professional / technical fees (10%)" },
+  { code: "194H", label: "194H - Commission / brokerage (5%)" },
+  { code: "194I", label: "194I - Rent (10%)" },
+  { code: "194Q", label: "194Q - Purchase of goods above ₹50L (0.1%)" },
+];
+const AP_GST_RATES = [0, 5, 12, 18, 28];
 
-// Whole-day difference (today - dueDate); negative ⇒ not yet due, positive ⇒ overdue.
-function billDaysOverdue(dueDate: string): number {
-  const due = new Date(dueDate + "T00:00:00");
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Math.round((today.getTime() - due.getTime()) / 86_400_000);
-}
-function billBucket(dueDate: string): BillBucket {
-  const d = billDaysOverdue(dueDate);
-  if (d <= 0) return "not-due";
-  if (d <= 30) return "0-30";
-  if (d <= 60) return "31-60";
-  if (d <= 90) return "61-90";
-  return "90+";
+interface VendorBillRow {
+  voucherId: string; billNumber: string | null; voucherNumber: number; date: string; narration: string | null;
+  cancelled: boolean; gross: number; allocated: number; outstanding: number;
+  status: "open" | "partial" | "settled" | "cancelled"; vendorId: string; vendorName: string;
 }
 
-function BillsPayables() {
+function BillsPayables({ focus }: { focus?: { vendorId: string; n: number } }) {
   const { vendors: master } = useVendorMaster();
-  const [bills, setBills] = useFeatureState<Bill[]>("payables-bills", []);
+  const bankLedgers = useBankLedgers();
+  const [vendorId, setVendorId] = useState<string>("");
+  const [bills, setBills] = useState<VendorBillRow[]>([]);
+  const [billsLoading, setBillsLoading] = useState(false);
 
-  const [vendorName, setVendorName] = useState("");
-  const [vendorId, setVendorId] = useState<string | undefined>(undefined);
   const [billNumber, setBillNumber] = useState("");
   const [billDate, setBillDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [dueDate, setDueDate] = useState("");
-  const [dueTouched, setDueTouched] = useState(false);
+  const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
-  const [notes, setNotes] = useState("");
+  const [gstRate, setGstRate] = useState("18");
+  const [interState, setInterState] = useState(false);
+  const [rcm, setRcm] = useState(false);
+  const [tdsSection, setTdsSection] = useState("");
+  const [panAvailable, setPanAvailable] = useState(true);
+  const [lowerRate, setLowerRate] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  // Resolve a typed/picked name back to a saved master profile (case-insensitive).
-  const matchedMaster = useMemo(
-    () => master.find(v => v.name.toLowerCase() === vendorName.trim().toLowerCase()) ?? null,
-    [master, vendorName],
-  );
+  const [payTarget, setPayTarget] = useState<VendorBillRow | "fifo" | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payBank, setPayBank] = useState("");
+  const [payDate, setPayDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [payRef, setPayRef] = useState("");
+  const [paying, setPaying] = useState(false);
 
-  // Default the due date from the matched vendor's payment terms (bill date + terms),
-  // unless the user has manually edited the due date.
-  useEffect(() => {
-    if (dueTouched) return;
-    const terms = matchedMaster?.payment_terms_days;
-    if (terms != null && billDate) {
-      const d = new Date(billDate + "T00:00:00");
-      d.setDate(d.getDate() + terms);
-      setDueDate(d.toISOString().split("T")[0]);
-    }
-  }, [matchedMaster, billDate, dueTouched]);
+  useEffect(() => { if (focus) setVendorId(focus.vendorId); }, [focus]);
+  useEffect(() => { if (bankLedgers.length && !payBank) setPayBank(bankLedgers[0].id); }, [bankLedgers, payBank]);
 
-  const add = () => {
-    const name = vendorName.trim();
-    const amt = parseFloat(amount) || 0;
-    if (!name) { toast.error("Pick or type a vendor"); return; }
-    if (amt <= 0) { toast.error("Enter a bill amount"); return; }
-    if (!billDate || !dueDate) { toast.error("Bill date and due date are required"); return; }
-    const bill: Bill = {
-      id: generateId(),
-      vendorId: matchedMaster?.id ?? vendorId,
-      vendorName: name,
-      billNumber: billNumber.trim() || undefined,
-      billDate,
-      dueDate,
-      amount: amt,
-      status: "unpaid",
-      notes: notes.trim() || undefined,
-    };
-    setBills(prev => [bill, ...prev]);
-    setVendorName(""); setVendorId(undefined); setBillNumber("");
-    setAmount(""); setNotes(""); setDueDate(""); setDueTouched(false);
-    toast.success(`Bill of ${formatCurrency(amt)} for ${name} recorded`);
+  const selectedVendor = master.find(v => v.id === vendorId) ?? null;
+
+  const loadBills = useCallback(async (vid: string) => {
+    if (!vid) { setBills([]); return; }
+    setBillsLoading(true);
+    try { setBills(await api.get<VendorBillRow[]>(`/api/vendor-bills?vendor_id=${vid}`)); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Failed to load bills"); setBills([]); }
+    finally { setBillsLoading(false); }
+  }, []);
+  useEffect(() => { void loadBills(vendorId); }, [vendorId, loadBills]);
+
+  const resetForm = () => {
+    setBillNumber(""); setDescription(""); setAmount(""); setInterState(false); setRcm(false);
+    setTdsSection(""); setPanAvailable(true); setLowerRate("");
   };
 
-  const markPaid = (id: string) => {
-    setBills(prev => prev.map(b => b.id === id ? { ...b, status: "paid" } : b));
-    toast.success("Bill marked paid");
+  const submitBill = async () => {
+    if (!vendorId) { toast.error("Pick a vendor"); return; }
+    if (!billNumber.trim()) { toast.error("Enter the bill/invoice number"); return; }
+    const amt = parseFloat(amount);
+    if (!(amt > 0)) { toast.error("Enter a bill amount"); return; }
+    setSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        vendorId, billNumber: billNumber.trim(), billDate, narration: description.trim() || undefined,
+        lineTotal: amt, gstRate: Number(gstRate), interState, rcm,
+        items: rcm ? undefined : [{ description: description.trim() || billNumber.trim(), quantity: 1, unit_price: amt, gst_rate: Number(gstRate) }],
+      };
+      if (tdsSection) body.tds = { section: tdsSection, panAvailable, lowerRate: lowerRate ? Number(lowerRate) : undefined };
+      const res = await api.post<{ voucherNumber: number; tds?: { tdsAmount: string; vendorNet: string; section: string } }>("/api/vendor-bills", body);
+      toast.success(res.tds
+        ? `Bill recorded (PUR-${res.voucherNumber}) · TDS ${res.tds.section} ₹${Number(res.tds.tdsAmount).toLocaleString("en-IN")} withheld · net payable ₹${Number(res.tds.vendorNet).toLocaleString("en-IN")}`
+        : `Bill recorded (PUR-${res.voucherNumber})`);
+      resetForm();
+      await loadBills(vendorId);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to record bill"); }
+    finally { setSaving(false); }
   };
-  const markUnpaid = (id: string) => {
-    setBills(prev => prev.map(b => b.id === id ? { ...b, status: "unpaid" } : b));
+
+  const openPay = (target: VendorBillRow | "fifo") => {
+    setPayTarget(target);
+    setPayAmount(target === "fifo"
+      ? String(bills.filter(b => b.status !== "settled" && b.status !== "cancelled").reduce((s, b) => s + b.outstanding, 0))
+      : String(target.outstanding));
+    setPayRef("");
   };
-  const remove = (id: string) => {
-    setBills(prev => prev.filter(b => b.id !== id));
-    toast.success("Bill deleted");
+  const submitPay = async () => {
+    if (!vendorId || !payTarget) return;
+    const amt = parseFloat(payAmount);
+    if (!(amt > 0)) { toast.error("Enter an amount"); return; }
+    if (!payBank) { toast.error("Pick a bank account to pay from"); return; }
+    setPaying(true);
+    try {
+      await api.post("/api/vendor-bills/pay", {
+        vendorId, bankLedgerId: payBank, amount: amt, date: payDate, reference: payRef.trim() || undefined,
+        billVoucherId: payTarget === "fifo" ? undefined : payTarget.voucherId,
+      });
+      toast.success(`₹${amt.toLocaleString("en-IN")} paid`);
+      setPayTarget(null);
+      await loadBills(vendorId);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Payment failed"); }
+    finally { setPaying(false); }
   };
 
-  const open = bills.filter(b => b.status === "unpaid");
-
-  // KPI strip + aging buckets, computed over OPEN bills only.
-  const totalOutstanding = open.reduce((s, b) => s + b.amount, 0);
-  const overdueAmount = open.reduce((s, b) => s + (billDaysOverdue(b.dueDate) > 0 ? b.amount : 0), 0);
-  const dueSoonCount = open.filter(b => {
-    const d = billDaysOverdue(b.dueDate);
-    return d <= 0 && d > -8; // due within the next 7 days (and not yet overdue)
-  }).length;
-
-  const bucketTotals = useMemo(() => {
-    const init: Record<BillBucket, { amount: number; count: number }> = {
-      "not-due": { amount: 0, count: 0 },
-      "0-30": { amount: 0, count: 0 },
-      "31-60": { amount: 0, count: 0 },
-      "61-90": { amount: 0, count: 0 },
-      "90+": { amount: 0, count: 0 },
-    };
-    for (const b of open) {
-      const k = billBucket(b.dueDate);
-      init[k].amount += b.amount;
-      init[k].count += 1;
-    }
-    return init;
-  }, [open]);
-
-  // Open bills first (most overdue at the top), then paid ones.
-  const sorted = useMemo(
-    () => [...bills].sort((a, b) => {
-      if (a.status !== b.status) return a.status === "unpaid" ? -1 : 1;
-      return billDaysOverdue(b.dueDate) - billDaysOverdue(a.dueDate);
-    }),
-    [bills],
-  );
+  const open = bills.filter(b => b.status !== "settled" && b.status !== "cancelled");
+  const totalOutstanding = open.reduce((s, b) => s + b.outstanding, 0);
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Record what you owe each vendor and track it to its due date. The AP Aging tab is derived from your bank transactions; this is your explicit bill register - every open payable, bucketed by how overdue it is, so nothing slips past its due date.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Record what a vendor actually billed you - it posts a real purchase entry to the books (with GST input credit and optional TDS withholding), and pay it off against the real ledger. This is your Accounts Payable system of record, not a side tracker.</p>
 
-      {/* KPI strip */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: "Total Outstanding", value: formatCurrency(totalOutstanding), color: totalOutstanding > 0 ? "text-[var(--color-primary)]" : "text-green-400" },
-          { label: "Overdue", value: formatCurrency(overdueAmount), color: overdueAmount > 0 ? "text-red-400" : "text-green-400" },
-          { label: "Due in next 7 days", value: dueSoonCount.toString(), color: dueSoonCount > 0 ? "text-orange-400" : "text-[var(--color-muted)]" },
-        ].map(s => (
-          <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-            <p className="text-xs text-[var(--color-muted)] mb-1">{s.label}</p>
-            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
-          </div>
-        ))}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+        <label className="text-[10px] text-[var(--color-muted)] block mb-1">Vendor</label>
+        <select value={vendorId} onChange={e => setVendorId(e.target.value)} className={inpCls}>
+          <option value="">- select a vendor -</option>
+          {master.map(v => <option key={v.id} value={v.id}>{v.name}{v.is_msme ? " (MSME)" : ""}</option>)}
+        </select>
+        {master.length === 0 && <p className="text-[10px] text-[var(--color-muted)] mt-1.5">No vendors saved yet - add one in the Directory tab first.</p>}
+        {selectedVendor?.payment_terms_days != null && <p className="text-[10px] text-[var(--color-muted)] mt-1.5">Payment terms: {selectedVendor.payment_terms_days} days{selectedVendor.gstin ? ` · GSTIN ${selectedVendor.gstin}` : ""}</p>}
       </div>
 
-      {/* Add bill form */}
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2"><Banknote size={15} className="text-[var(--color-primary)]" /> Record Bill</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-          <div>
-            <input
-              list="bill-vendors"
-              value={vendorName}
-              onChange={e => {
-                const v = e.target.value;
-                setVendorName(v);
-                const m = master.find(x => x.name.toLowerCase() === v.trim().toLowerCase());
-                setVendorId(m?.id);
-              }}
-              placeholder="Vendor * (pick or type)"
-              className={inpCls}
-            />
-            <datalist id="bill-vendors">{master.map(v => <option key={v.id} value={v.name} />)}</datalist>
-            {matchedMaster?.payment_terms_days != null && (
-              <p className="text-[10px] text-[var(--color-muted)] mt-1">Terms: {matchedMaster.payment_terms_days} days{matchedMaster.is_msme ? " · MSME" : ""}</p>
-            )}
+      {vendorId && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Outstanding to this vendor</p><p className={`text-xl font-bold tabular-nums ${totalOutstanding > 0 ? "text-[var(--color-primary)]" : "text-green-400"}`}>{formatCurrency(totalOutstanding)}</p></div>
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Open bills</p><p className="text-xl font-bold tabular-nums">{open.length}</p></div>
           </div>
-          <input value={billNumber} onChange={e => setBillNumber(e.target.value)} placeholder="Bill / invoice no." className={inpCls} />
-          <input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount ₹ *" className={inpCls} />
-          <div>
-            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Bill date</label>
-            <input type="date" value={billDate} onChange={e => setBillDate(e.target.value)} className={inpCls} />
-          </div>
-          <div>
-            <label className="text-[10px] text-[var(--color-muted)] block mb-1">Due date{matchedMaster?.payment_terms_days != null && !dueTouched ? " (from terms)" : ""}</label>
-            <input type="date" value={dueDate} onChange={e => { setDueDate(e.target.value); setDueTouched(true); }} className={inpCls} />
-          </div>
-          <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes" className={inpCls} />
-        </div>
-        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Plus size={13} /> Record Bill</button>
-      </div>
 
-      {/* Aging buckets */}
-      {open.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {(Object.keys(BILL_BUCKET_LABEL) as BillBucket[]).map(k => (
-            <div key={k} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3">
-              <p className="text-[11px] text-[var(--color-muted)] mb-1">{BILL_BUCKET_LABEL[k]}</p>
-              <p className={`text-base font-bold tabular-nums ${BILL_BUCKET_COLOR[k]}`}>{formatCurrency(bucketTotals[k].amount)}</p>
-              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{bucketTotals[k].count} bill{bucketTotals[k].count !== 1 ? "s" : ""}</p>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2"><Banknote size={15} className="text-[var(--color-primary)]" /> Record Bill</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <input value={billNumber} onChange={e => setBillNumber(e.target.value)} placeholder="Bill / invoice no. *" className={inpCls} />
+              <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Bill date</label><input type="date" value={billDate} onChange={e => setBillDate(e.target.value)} className={inpCls} /></div>
+              <input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder={rcm ? "Taxable value ₹ *" : "Amount ₹ (pre-GST) *"} className={inpCls} />
+              <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Description" className={inpCls} />
+              <select value={gstRate} onChange={e => setGstRate(e.target.value)} className={inpCls}>{AP_GST_RATES.map(r => <option key={r} value={r}>GST {r}%</option>)}</select>
+              <label className="flex items-center gap-2 text-xs text-[var(--color-muted)]"><input type="checkbox" checked={interState} onChange={e => setInterState(e.target.checked)} /> Inter-state (IGST)</label>
             </div>
-          ))}
-        </div>
-      )}
+            <label className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
+              <input type="checkbox" checked={rcm} onChange={e => setRcm(e.target.checked)} />
+              Reverse charge (RCM) - vendor charges no GST; we self-assess and claim the matching ITC
+            </label>
 
-      {/* Bill list */}
-      {bills.length === 0 ? (
-        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
-          <Banknote size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-          <p className="text-sm text-[var(--color-muted)]">No bills recorded yet. Add a vendor bill above to start tracking what you owe and when it's due.</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {sorted.map(b => {
-            const d = billDaysOverdue(b.dueDate);
-            const bucket = billBucket(b.dueDate);
-            const paid = b.status === "paid";
-            return (
-              <div key={b.id} className={`bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 ${paid ? "opacity-60" : ""}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate">
-                      {b.vendorName}
-                      {b.billNumber ? <span className="text-[var(--color-muted)] font-normal text-xs"> · {b.billNumber}</span> : null}
-                      {paid
-                        ? <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold text-green-400"><CheckCircle2 size={11} /> Paid</span>
-                        : d > 0
-                          ? <span className={`ml-2 inline-flex items-center gap-1 text-[10px] font-semibold ${BILL_BUCKET_COLOR[bucket]}`}><AlertTriangle size={11} /> {d}d overdue</span>
-                          : <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--color-muted)]"><CalendarClock size={11} /> due in {Math.abs(d)}d</span>}
-                    </p>
-                    <p className="text-[11px] text-[var(--color-muted)] mt-1">
-                      {formatCurrency(b.amount)} · billed {format(new Date(b.billDate + "T00:00:00"), "dd MMM yyyy")} · due {format(new Date(b.dueDate + "T00:00:00"), "dd MMM yyyy")}
-                      {b.notes ? ` · ${b.notes}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {paid ? (
-                      <button onClick={() => markUnpaid(b.id)} className="text-[10px] font-semibold px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-primary)]">Reopen</button>
-                    ) : (
-                      <button onClick={() => markPaid(b.id)} className="text-[10px] font-semibold px-2.5 py-1 rounded border border-green-800/40 text-green-400 hover:bg-green-950/30">Mark paid</button>
+            <div className="border-t border-[var(--color-border)] pt-3 space-y-2">
+              <label className="text-[10px] text-[var(--color-muted)] block">TDS withholding (optional)</label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <select value={tdsSection} onChange={e => setTdsSection(e.target.value)} className={inpCls}>
+                  <option value="">No TDS</option>
+                  {TDS_SECTIONS_UI.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+                </select>
+                {tdsSection && (
+                  <>
+                    <label className="flex items-center gap-2 text-xs text-[var(--color-muted)]"><input type="checkbox" checked={panAvailable} onChange={e => setPanAvailable(e.target.checked)} /> Vendor has PAN</label>
+                    <input type="number" min="0" value={lowerRate} onChange={e => setLowerRate(e.target.value)} placeholder="Lower-rate % (§197 certificate, optional)" className={inpCls} />
+                  </>
+                )}
+              </div>
+              {tdsSection && !panAvailable && <p className="text-[10px] text-orange-400">No PAN → §206AA penal rate (20%) applies instead of the section rate.</p>}
+            </div>
+
+            <button onClick={submitBill} disabled={saving} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5 disabled:opacity-50"><Plus size={13} /> {saving ? "Recording…" : "Record Bill"}</button>
+          </div>
+
+          {open.length > 0 && (
+            <button onClick={() => openPay("fifo")} className="text-xs font-semibold px-4 py-2 rounded-lg border border-green-800/40 text-green-400 hover:bg-green-950/20 flex items-center gap-1.5"><Wallet size={13} /> Pay this vendor (settles oldest bills first)</button>
+          )}
+
+          {billsLoading ? (
+            <p className="text-xs text-[var(--color-muted)]">Loading bills…</p>
+          ) : bills.length === 0 ? (
+            <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+              <Banknote size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+              <p className="text-sm text-[var(--color-muted)]">No bills recorded for this vendor yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {bills.map(b => (
+                <div key={b.voucherId} className={`bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 ${b.status === "settled" || b.status === "cancelled" ? "opacity-60" : ""}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">
+                        {b.billNumber || `PUR-${b.voucherNumber}`}
+                        <span className={`ml-2 inline-flex items-center gap-1 text-[10px] font-semibold ${b.status === "settled" ? "text-green-400" : b.status === "cancelled" ? "text-[var(--color-muted)]" : b.status === "partial" ? "text-yellow-400" : "text-orange-400"}`}>
+                          {b.status === "settled" ? <CheckCircle2 size={11} /> : b.status === "cancelled" ? <X size={11} /> : <Clock size={11} />} {b.status}
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-[var(--color-muted)] mt-1">{formatCurrency(b.gross)} billed · {formatCurrency(b.outstanding)} outstanding · {format(new Date(b.date + "T00:00:00"), "dd MMM yyyy")}{b.narration ? ` · ${b.narration}` : ""}</p>
+                    </div>
+                    {b.status !== "settled" && b.status !== "cancelled" && (
+                      <button onClick={() => openPay(b)} className="text-[10px] font-semibold px-2.5 py-1 rounded border border-green-800/40 text-green-400 hover:bg-green-950/30 shrink-0">Pay this bill</button>
                     )}
-                    <button onClick={() => remove(b.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
                   </div>
                 </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {payTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setPayTarget(null)}>
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
+              <h3 className="font-semibold flex items-center gap-2"><Wallet size={16} className="text-green-400" /> {payTarget === "fifo" ? "Pay vendor (oldest bills first)" : `Pay ${payTarget.billNumber || `PUR-${payTarget.voucherNumber}`}`}</h3>
+              <button onClick={() => setPayTarget(null)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Amount (₹)</label><input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} className={inpCls} /></div>
+              <div>
+                <label className="text-[10px] text-[var(--color-muted)] block mb-1">Pay from</label>
+                <select value={payBank} onChange={e => setPayBank(e.target.value)} className={inpCls}>
+                  {bankLedgers.length === 0 && <option value="">No bank ledgers found</option>}
+                  {bankLedgers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
               </div>
-            );
-          })}
+              <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Date</label><input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className={inpCls} /></div>
+              <input value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="Reference (UTR / cheque no.)" className={inpCls} />
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-[var(--color-border)]">
+              <button onClick={() => setPayTarget(null)} className="px-4 py-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)]">Cancel</button>
+              <button onClick={submitPay} disabled={paying} className="px-4 py-2 text-sm rounded-lg bg-[var(--color-primary)] text-white font-medium disabled:opacity-50">{paying ? "Paying…" : "Confirm payment"}</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
