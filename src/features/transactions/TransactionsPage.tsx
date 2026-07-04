@@ -2,7 +2,8 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, generateId } from "@/lib/utils";
-import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText, Repeat, Wand2, GitCompareArrows, Split, Layers, ArrowLeftRight, FolderTree, Scale, NotebookPen, Calculator, BookOpen, BookText, Wallet, Eraser, Lock, ListTree, Percent, Receipt, Banknote, Target, Users, Trash2, RefreshCw, CloudOff, Link2 } from "lucide-react";
+import { Search, Filter, ChevronLeft, ChevronRight, Download, Tag, X, ScanLine, CheckCheck, FileText, Repeat, Wand2, GitCompareArrows, Split, Layers, ArrowLeftRight, FolderTree, Scale, NotebookPen, Calculator, BookOpen, BookText, Wallet, Eraser, Lock, ListTree, Percent, Receipt, Banknote, Target, Users, Trash2, RefreshCw, CloudOff, Link2, UploadCloud } from "lucide-react";
+import { parseStatementCsv, guessCategory, type ParsedLine } from "@/lib/statementParse";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import type { Transaction, Invoice } from "@/data/types";
@@ -49,8 +50,12 @@ function catFromApi(c: string | null | undefined): Transaction["category"] {
     default:               return "expense"; // rent/software/inventory/utilities/marketing/uncategorized
   }
 }
-// UI bucket → backend category (used on create/update)
-function catToApi(c: Transaction["category"]): string {
+// UI bucket → backend category (used on create/update). When the row already carries a full
+// backend category whose bucket MATCHES what's being written, preserve it — before this, any
+// edit (merchant fix, bulk action, rule) silently corrupted rent/software/inventory/… back to
+// "uncategorized". Only a deliberate bucket CHANGE re-maps.
+function catToApi(c: Transaction["category"], apiCategory?: string): string {
+  if (apiCategory && catFromApi(apiCategory) === c) return apiCategory;
   switch (c) {
     case "revenue":  return "revenue";
     case "payroll":  return "payroll";
@@ -69,6 +74,7 @@ function txnFromApi(r: any): Transaction {
     amount:        Number(r.amount) || 0,
     description:   r.description_raw ?? r.account_name ?? "Transaction",
     category:      catFromApi(r.category),
+    apiCategory:   r.category ?? undefined, // full backend category, preserved for round-trips
     counterparty:  r.merchant_name ?? "",
     isRecurring:   !!r.is_recurring,
     bankAccountId: r.bank_account_id ? String(r.bank_account_id) : "",
@@ -82,7 +88,7 @@ function txnToApiBody(t: Transaction) {
     amount:           t.amount,
     description_raw:  t.description,
     merchant_name:    t.counterparty || undefined,
-    category:         catToApi(t.category),
+    category:         catToApi(t.category, t.apiCategory),
     is_recurring:     t.isRecurring,
     transaction_date: t.date,
     source:           "manual",
@@ -173,7 +179,7 @@ export default function TransactionsPage() {
 
   useEffect(() => { void loadFromServer(); }, [loadFromServer]);
 
-  const [view, setView] = useState<"transactions" | "pdc" | "bounce" | "upi" | "recon" | "recurring" | "cat-rules" | "recon-workbench" | "split-txn" | "bulk-tag" | "transfer-detect" | "cost-center" | "cash-accrual" | "journal-entry" | "trial-balance" | "day-book" | "ledger-account" | "opening-balance" | "write-off" | "period-lock" | "chart-of-accounts" | "gst-ledger" | "tds-ledger" | "cash-bank-split" | "counterparty-360" | "budget-actual" | "cash-application">("transactions");
+  const [view, setView] = useState<"transactions" | "import" | "pdc" | "bounce" | "upi" | "recon" | "recurring" | "cat-rules" | "recon-workbench" | "split-txn" | "bulk-tag" | "transfer-detect" | "cost-center" | "cash-accrual" | "journal-entry" | "trial-balance" | "day-book" | "ledger-account" | "opening-balance" | "write-off" | "period-lock" | "chart-of-accounts" | "gst-ledger" | "tds-ledger" | "cash-bank-split" | "counterparty-360" | "budget-actual" | "cash-application">("transactions");
   const [scanning, setScanning] = useState(false);
   const [showReconcile, setShowReconcile] = useState(false);
   // Snap a receipt/bill → Claude vision extracts vendor/amount/date/category →
@@ -286,7 +292,7 @@ export default function TransactionsPage() {
     updateTransaction({ ...t, category });
     if (apiState === "offline") return;
     try {
-      await api.patch(`/api/transactions/${t.id}`, { category: catToApi(category) });
+      await api.patch(`/api/transactions/${t.id}`, { category: catToApi(category, t.apiCategory) });
     } catch {
       toast.error("Saved locally - couldn't sync category to the server.");
     }
@@ -304,7 +310,7 @@ export default function TransactionsPage() {
     const undo = () => {
       prior.forEach(p => updateTransaction({ ...p.txn, category: p.category }));
       if (apiState !== "offline") {
-        Promise.allSettled(prior.map(p => api.patch(`/api/transactions/${p.txn.id}`, { category: catToApi(p.category) })))
+        Promise.allSettled(prior.map(p => api.patch(`/api/transactions/${p.txn.id}`, { category: catToApi(p.category, p.txn.apiCategory) })))
           .then(rs => { const f = rs.filter(r => r.status === "rejected").length; if (f) toast.error(`${f} categor${f !== 1 ? "ies" : "y"} couldn't sync to the server`); });
       }
       toast.success(`Reverted ${prior.length} categor${prior.length !== 1 ? "ies" : "y"}`);
@@ -312,7 +318,7 @@ export default function TransactionsPage() {
 
     if (apiState !== "offline") {
       const results = await Promise.allSettled(
-        targets.map(t => api.patch(`/api/transactions/${t.id}`, { category: catToApi(bulkCat) })),
+        targets.map(t => api.patch(`/api/transactions/${t.id}`, { category: catToApi(bulkCat, t.apiCategory) })),
       );
       const failed = results.filter(r => r.status === "rejected").length;
       if (failed) toast.error(`${failed} of ${targets.length} categor${failed !== 1 ? "ies" : "y"} saved locally but not synced to the server.`);
@@ -396,7 +402,7 @@ export default function TransactionsPage() {
     matching.forEach(t => updateTransaction({ ...t, category: bulkCat }));
     setSelected(new Set());
     if (apiState !== "offline") {
-      Promise.allSettled(matching.map(t => api.patch(`/api/transactions/${t.id}`, { category: catToApi(bulkCat) })))
+      Promise.allSettled(matching.map(t => api.patch(`/api/transactions/${t.id}`, { category: catToApi(bulkCat, t.apiCategory) })))
         .then(rs => { const f = rs.filter(r => r.status === "rejected").length; if (f) toast.error(`${f} of ${matching.length} couldn't sync to the server`); });
     }
     toast.success(`Rule saved: all "${counterparty}" → ${bulkCat} (${matching.length} updated)`);
@@ -497,6 +503,10 @@ export default function TransactionsPage() {
               <Download size={12} /> {tr("txn.exportCsv")}
             </button>
           )}
+          <button onClick={() => setView(v => v === "import" ? "transactions" : "import")}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === "import" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
+            <UploadCloud size={12} /> Import Statement
+          </button>
           <button onClick={() => setView(v => v === "pdc" ? "transactions" : "pdc")}
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${view === "pdc" ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]"}`}>
             <FileText size={12} /> PDC Register
@@ -554,6 +564,7 @@ export default function TransactionsPage() {
 
       {showReconcile && <ReconcileModal onClose={() => setShowReconcile(false)} />}
 
+      {view === "import"          && <StatementImportTool bankAccounts={bankAccounts} onImported={() => { setView("transactions"); loadFromServer(); }} />}
       {view === "cat-rules"       && <CategorisationRulesEngine />}
       {view === "recon-workbench" && <ReconciliationWorkbench />}
       {view === "split-txn"       && <SplitTransactionTool />}
@@ -3417,6 +3428,130 @@ function CashApplication() {
 
       <p className="text-[10px] text-[var(--color-muted)]">
         Candidates only include payments dated on or after the invoice. Exact amounts (within ₹1) are high-confidence; amounts within ±5% or ±₹500 are flagged as approximate so you can confirm before applying. Matching is reversible from the toast.
+      </p>
+    </div>
+  );
+}
+
+// ── Import Statement (CSV) ────────────────────────────────────────────────────
+// Real file-based bank-statement import: parse (Indian date/amount formats, HDFC/ICICI/SBI
+// style Debit-Credit or single-Amount layouts) → preview with per-row category + include
+// toggles → bulk POST with source:"import". The SERVER dedupes on (date|amount|description),
+// so re-importing an overlapping statement never double-counts.
+interface ImportRow extends ParsedLine {
+  include: boolean;
+  category: Transaction["category"];
+}
+function StatementImportTool({ bankAccounts, onImported }: { bankAccounts: { id: string; name: string }[]; onImported: () => void }) {
+  const [rows, setRows] = useState<ImportRow[]>([]);
+  const [fileName, setFileName] = useState("");
+  const [parseSkipped, setParseSkipped] = useState(0);
+  const [accountId, setAccountId] = useState(bankAccounts[0]?.id ?? "");
+  const [importing, setImporting] = useState(false);
+
+  const onFile = async (f: File | undefined) => {
+    if (!f) return;
+    const text = await f.text();
+    const parsed = parseStatementCsv(text);
+    if (!parsed.lines.length) { toast.error("Couldn't read any transactions from that file — expected a CSV with date, description and amount (or debit/credit) columns."); return; }
+    setFileName(f.name);
+    setParseSkipped(parsed.skipped);
+    setRows(parsed.lines.map(l => ({ ...l, include: true, category: guessCategory(l.description, l.amount) })));
+  };
+
+  const included = rows.filter(r => r.include);
+  const inflow  = included.filter(r => r.amount > 0).reduce((s, r) => s + r.amount, 0);
+  const outflow = included.filter(r => r.amount < 0).reduce((s, r) => s - r.amount, 0);
+
+  const doImport = async () => {
+    if (!included.length) { toast.error("Nothing selected to import"); return; }
+    setImporting(true);
+    try {
+      // Chunked so a 2,000-row statement doesn't ride one giant request.
+      let inserted = 0, skipped = 0;
+      for (let i = 0; i < included.length; i += 500) {
+        const chunk = included.slice(i, i + 500).map(r => ({
+          bank_account_id: accountId || undefined,
+          amount: r.amount,
+          description_raw: r.description,
+          category: catToApi(r.category),
+          transaction_date: r.date,
+          source: "import",
+        }));
+        const res = await api.post<{ inserted: unknown[]; skipped_duplicates: number }>("/api/transactions", chunk);
+        inserted += res.inserted?.length ?? 0;
+        skipped += res.skipped_duplicates ?? 0;
+      }
+      toast.success(`Imported ${inserted} transaction${inserted === 1 ? "" : "s"}${skipped ? ` · ${skipped} duplicate${skipped === 1 ? "" : "s"} skipped` : ""}`);
+      setRows([]); setFileName("");
+      onImported();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally { setImporting(false); }
+  };
+
+  const CATS: Transaction["category"][] = ["revenue", "expense", "payroll", "loan", "tax", "transfer"];
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-4">
+      <h2 className="text-sm font-semibold flex items-center gap-2"><UploadCloud size={14} className="text-[var(--color-primary)]" /> Import Bank Statement (CSV)</h2>
+      <div className="flex items-center gap-3 flex-wrap">
+        <label className="flex items-center gap-2 text-xs bg-[var(--color-bg)] border border-dashed border-[var(--color-border)] rounded-lg px-4 py-3 cursor-pointer hover:border-[var(--color-primary)]">
+          <UploadCloud size={14} className="text-[var(--color-muted)]" />
+          {fileName || "Choose your bank's CSV export (HDFC / ICICI / SBI / any date-description-amount file)"}
+          <input type="file" accept=".csv,.txt" className="hidden" onChange={e => onFile(e.target.files?.[0])} />
+        </label>
+        {bankAccounts.length > 0 && (
+          <select value={accountId} onChange={e => setAccountId(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-xs">
+            {bankAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        )}
+      </div>
+      {rows.length > 0 && (
+        <>
+          <div className="flex items-center gap-4 text-xs flex-wrap">
+            <span className="text-[var(--color-muted)]">{included.length} of {rows.length} rows selected</span>
+            <span className="text-green-400 tabular-nums">+{formatCurrency(inflow)} in</span>
+            <span className="text-red-400 tabular-nums">−{formatCurrency(outflow)} out</span>
+            {parseSkipped > 0 && <span className="text-[var(--color-muted)]">({parseSkipped} unreadable row{parseSkipped === 1 ? "" : "s"} skipped at parse)</span>}
+          </div>
+          <div className="max-h-80 overflow-y-auto border border-[var(--color-border)] rounded-lg">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-[var(--color-surface)]">
+                <tr className="border-b border-[var(--color-border)]">
+                  <th className="px-3 py-2 text-left w-8"><input type="checkbox" checked={included.length === rows.length} onChange={e => setRows(p => p.map(r => ({ ...r, include: e.target.checked })))} /></th>
+                  <th className="px-3 py-2 text-left font-semibold text-[var(--color-muted)] uppercase tracking-wider">Date</th>
+                  <th className="px-3 py-2 text-left font-semibold text-[var(--color-muted)] uppercase tracking-wider">Description</th>
+                  <th className="px-3 py-2 text-right font-semibold text-[var(--color-muted)] uppercase tracking-wider">Amount</th>
+                  <th className="px-3 py-2 text-left font-semibold text-[var(--color-muted)] uppercase tracking-wider">Category</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {rows.map((r, i) => (
+                  <tr key={i} className={r.include ? "" : "opacity-40"}>
+                    <td className="px-3 py-1.5"><input type="checkbox" checked={r.include} onChange={e => setRows(p => p.map((x, j) => j === i ? { ...x, include: e.target.checked } : x))} /></td>
+                    <td className="px-3 py-1.5 tabular-nums whitespace-nowrap">{r.date}</td>
+                    <td className="px-3 py-1.5 max-w-[280px] truncate" title={r.description}>{r.description}</td>
+                    <td className={`px-3 py-1.5 text-right tabular-nums ${r.amount > 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(r.amount)}</td>
+                    <td className="px-3 py-1.5">
+                      <select value={r.category} onChange={e => setRows(p => p.map((x, j) => j === i ? { ...x, category: e.target.value as Transaction["category"] } : x))}
+                        className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs">
+                        {CATS.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button onClick={doImport} disabled={importing || included.length === 0}
+            className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">
+            {importing ? "Importing…" : `Import ${included.length} transaction${included.length === 1 ? "" : "s"}`}
+          </button>
+        </>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">
+        Reads your bank's CSV export directly - Indian date formats, lakh commas and Debit/Credit or single-Amount layouts. The server skips rows that already exist (same date + amount + description), so re-importing an overlapping period is safe.
       </p>
     </div>
   );

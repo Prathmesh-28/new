@@ -166,6 +166,10 @@ export interface Transaction {
   // Cash application: links a received/paid transaction to the invoice/bill it
   // settles, so AR/AP reconcile against the ledger instead of living in silos.
   invoiceId?: string;
+  // The backend's FULL category (rent/software/inventory/utilities/marketing/…), preserved
+  // through the UI's six display buckets so an edit can round-trip without destroying the
+  // server's sub-category (it used to write every expense back as "uncategorized").
+  apiCategory?: string;
 }
 
 export interface Alert {

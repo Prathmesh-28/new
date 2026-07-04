@@ -62,10 +62,30 @@ router.get("/summary", authenticate, async (req, res) => {
 router.post("/", authenticate, canWrite, async (req, res) => {
   const items = Array.isArray(req.body) ? req.body : [req.body];
   const inserted = [];
+  let skippedDuplicates = 0;
+
+  // Statement-import dedupe: re-importing an overlapping statement must never double-count.
+  // For source:"import" rows, load the ledger's (date|amount|description) signatures over the
+  // incoming date range once, and skip exact matches (and repeats within the same upload).
+  const importRows = items.filter((t) => t && t.source === "import" && t.amount && t.transaction_date);
+  const existingSigs = new Set();
+  if (importRows.length) {
+    const dates = importRows.map((t) => String(t.transaction_date).slice(0, 10)).sort();
+    const { rows: existing } = await pool.query(
+      "SELECT transaction_date::date AS d, amount, COALESCE(description_raw,'') AS descr FROM transactions WHERE tenant_id=$1 AND transaction_date BETWEEN $2 AND $3",
+      [req.user.tenant_id, dates[0], dates[dates.length - 1]]
+    );
+    for (const r of existing) existingSigs.add(`${String(r.d).slice(0, 10)}|${Number(r.amount)}|${r.descr}`);
+  }
 
   for (const t of items) {
     const { bank_account_id, amount, description_raw, merchant_name, category = "uncategorized", transaction_date, source = "manual", is_recurring = false, recurrence_cadence } = t;
     if (!amount || !transaction_date) continue;
+    if (source === "import") {
+      const sig = `${String(transaction_date).slice(0, 10)}|${Number(amount)}|${description_raw || ""}`;
+      if (existingSigs.has(sig)) { skippedDuplicates++; continue; }
+      existingSigs.add(sig);
+    }
 
     const { rows } = await pool.query(
       `INSERT INTO transactions(tenant_id, bank_account_id, amount, description_raw, merchant_name, category, is_recurring, recurrence_cadence, transaction_date, source)
@@ -84,6 +104,7 @@ router.post("/", authenticate, canWrite, async (req, res) => {
     }).catch(() => {});
   }
 
+  if (Array.isArray(req.body)) return res.status(201).json({ inserted, skipped_duplicates: skippedDuplicates });
   res.status(201).json(inserted.length === 1 ? inserted[0] : inserted);
 });
 
