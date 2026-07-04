@@ -923,6 +923,32 @@ const BOOKS_SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_book_insurance_claims ON book_insurance_claims(tenant_id, status, created_at DESC);
 
+  -- §GSTR-2B WORKBENCH - persisted match results + IMS accept/reject decisions.
+  -- One row per LINE of a 2B match run for a period (all four buckets), so a match
+  -- run's output stops evaporating on reload and the IMS deemed-acceptance worklist
+  -- survives devices and is auditable (who decided, when). Re-running a period
+  -- replaces the lines but CARRIES FORWARD the decision for any line that reappears.
+  CREATE TABLE IF NOT EXISTS book_gstr2b_lines (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id        TEXT NOT NULL,
+    period           TEXT NOT NULL,                        -- 'YYYY-MM'
+    bucket           TEXT NOT NULL CHECK (bucket IN ('MATCHED','PROBABLE','MISSING_IN_BOOKS','MISSING_IN_PORTAL')),
+    match_status     TEXT,                                 -- EXACT | SUGGESTED | PROBABLE (matched buckets only)
+    gstin            TEXT,
+    invoice_no       TEXT,
+    invoice_date     DATE,
+    taxable          NUMERIC(19,4) NOT NULL DEFAULT 0,
+    tax              NUMERIC(19,4) NOT NULL DEFAULT 0,
+    voucher_id       UUID,                                 -- the books-side voucher, when one matched
+    books_invoice_no TEXT,
+    tax_diff         NUMERIC(19,4),
+    decision         TEXT NOT NULL DEFAULT 'PENDING' CHECK (decision IN ('PENDING','ACCEPT','REJECT')),
+    decided_by       TEXT,
+    decided_at       TIMESTAMPTZ,
+    run_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_book_gstr2b_lines ON book_gstr2b_lines(tenant_id, period);
+
   -- Statutory auditor register (Sec 139) + rotation tracking (ADT-1).
   CREATE TABLE IF NOT EXISTS book_auditors (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

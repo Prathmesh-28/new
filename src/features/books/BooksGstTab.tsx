@@ -132,13 +132,20 @@ interface Gstr2bMatchRow {
   diff?: string | number | null;
   reason?: string | null;
 }
-interface Gstr2bMatchResult {
-  period?: string;
-  matched?: Gstr2bMatchRow[];
-  probable?: Gstr2bMatchRow[];
-  missingInBooks?: Gstr2bMatchRow[];
-  missingInPortal?: Gstr2bMatchRow[];
-  summary?: { itcAtRisk?: string | number };
+// Persisted 2B workbench (backend/src/modules/books/gst.js gstr2bWorkbench) — a match
+// run's saved lines + the IMS accept/reject decision each carries.
+type WbBucket = "MATCHED" | "PROBABLE" | "MISSING_IN_BOOKS" | "MISSING_IN_PORTAL";
+type WbDecision = "PENDING" | "ACCEPT" | "REJECT";
+interface WorkbenchLine {
+  id: string; bucket: WbBucket; matchStatus: string | null; gstin: string | null;
+  invoiceNo: string | null; invoiceDate: string | null; taxable: string; tax: string;
+  voucherId: string | null; booksInvoiceNo: string | null; taxDiff: string | null;
+  decision: WbDecision; decidedBy: string | null; decidedAt: string | null;
+}
+interface Workbench {
+  period: string;
+  lines: WorkbenchLine[];
+  summary: { byBucket: Record<WbBucket, number>; byDecision: Record<WbDecision, number>; pendingDeemed: number; itcAtRisk: string; lastRunAt: string | null };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1140,34 +1147,46 @@ function parseGstr2bCsv(text: string): Gstr2bMatchRow[] {
   return rows;
 }
 
-function Gstr2bBucketTable({ title, rows, tint }: { title: string; rows: Gstr2bMatchRow[]; tint?: "green" | "red" | "amber" }) {
-  const dot =
-    tint === "green" ? "bg-green-400" : tint === "red" ? "bg-red-400" : tint === "amber" ? "bg-amber-400" : "bg-[var(--color-primary)]";
+const WB_BUCKET_META: Record<WbBucket, { title: string; dot: string; note: string }> = {
+  MATCHED: { title: "Matched", dot: "bg-green-400", note: "Books and 2B agree - safe to accept." },
+  PROBABLE: { title: "Probable (same supplier + amount, invoice-no differs)", dot: "bg-amber-400", note: "Verify the invoice number, then accept or reject." },
+  MISSING_IN_BOOKS: { title: "In 2B, not booked", dot: "bg-red-400", note: "Supplier filed it but it isn't in your books - book the bill or reject it on the portal." },
+  MISSING_IN_PORTAL: { title: "Booked, not in 2B (ITC at risk)", dot: "bg-red-400", note: "You claimed ITC the supplier hasn't filed - chase the supplier; IMS decisions don't apply to your own books-side entries." },
+};
+
+function WbDecisionChip({ d }: { d: WbDecision }) {
+  const cls = d === "ACCEPT" ? "border-green-800/40 bg-green-950/30 text-green-400"
+    : d === "REJECT" ? "border-red-800/40 bg-red-950/30 text-red-400"
+    : "border-orange-800/40 bg-orange-950/30 text-orange-400";
+  return <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${cls}`}>{d === "PENDING" ? "pending" : d.toLowerCase()}</span>;
+}
+
+function WorkbenchBucket({ bucket, lines, onDecide, deciding }: {
+  bucket: WbBucket; lines: WorkbenchLine[];
+  onDecide: (ids: string[], d: WbDecision) => void; deciding: boolean;
+}) {
+  const meta = WB_BUCKET_META[bucket];
+  const imsApplies = bucket !== "MISSING_IN_PORTAL"; // books-side lines aren't portal invoices
   return (
     <div>
-      <div className="flex items-center gap-2 mb-2">
-        <span className={`w-2 h-2 rounded-full ${dot}`} />
-        <h4 className="text-sm font-semibold">{title}</h4>
-        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)] tabular-nums">
-          {rows.length}
-        </span>
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
+        <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
+        <h4 className="text-sm font-semibold">{meta.title}</h4>
+        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)] tabular-nums">{lines.length}</span>
         <div className="ml-auto">
           <ExportMenu
             size="sm"
-            filename={`gstr2b-${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`}
-            title={`GSTR-2B · ${title}`}
+            filename={`gstr2b-${bucket.toLowerCase()}`}
+            title={`GSTR-2B · ${meta.title}`}
             columns={[
-              { key: "gstin", label: "GSTIN" },
-              { key: "invoiceNo", label: "Invoice" },
-              { key: "invoiceDate", label: "Date" },
-              { key: "taxable", label: "Taxable" },
-              { key: "tax", label: "Tax" },
-              { key: "reason", label: "Reason" },
+              { key: "gstin", label: "GSTIN" }, { key: "invoiceNo", label: "Invoice" }, { key: "invoiceDate", label: "Date" },
+              { key: "taxable", label: "Taxable" }, { key: "tax", label: "Tax" }, { key: "decision", label: "Decision" },
             ]}
-            rows={rows as unknown as Record<string, unknown>[]}
+            rows={lines as unknown as Record<string, unknown>[]}
           />
         </div>
       </div>
+      <p className="text-[11px] text-[var(--color-muted)] mb-2">{meta.note}</p>
       <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-surface)]">
         <table className="w-full text-sm border-collapse">
           <thead>
@@ -1177,22 +1196,43 @@ function Gstr2bBucketTable({ title, rows, tint }: { title: string; rows: Gstr2bM
               <th className={thCls}>Date</th>
               <th className={thR}>Taxable</th>
               <th className={thR}>Tax</th>
+              <th className={thCls}>Decision</th>
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
-              <tr><td colSpan={5} className="px-3 py-5 text-center text-[var(--color-muted)]">None.</td></tr>
+            {lines.length === 0 ? (
+              <tr><td colSpan={6} className="px-3 py-5 text-center text-[var(--color-muted)]">None.</td></tr>
             ) : (
-              rows.map((r, i) => (
-                <tr key={i} className="border-b border-[var(--color-border)] last:border-b-0">
-                  <td className="px-3 py-2.5 font-mono text-xs">{r.gstin || "-"}</td>
+              lines.map((l) => (
+                <tr key={l.id} className="border-b border-[var(--color-border)] last:border-b-0">
+                  <td className="px-3 py-2.5 font-mono text-xs">{l.gstin || "-"}</td>
                   <td className="px-3 py-2.5">
-                    <span className="font-mono text-xs">{r.invoiceNo || "-"}</span>
-                    {r.reason && <span className="ml-2 text-[10px] text-[var(--color-muted)]">{r.reason}</span>}
+                    <span className="font-mono text-xs">{l.invoiceNo || "-"}</span>
+                    {l.matchStatus && l.matchStatus !== "EXACT" && <span className="ml-2 text-[10px] text-[var(--color-muted)]">{l.matchStatus.toLowerCase()}{l.booksInvoiceNo && l.booksInvoiceNo !== l.invoiceNo ? ` · books: ${l.booksInvoiceNo}` : ""}</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{r.invoiceDate || "-"}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{rupee(r.taxable as string)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{rupee(r.tax as string)}</td>
+                  <td className="px-3 py-2.5 text-[var(--color-muted)] whitespace-nowrap">{l.invoiceDate ? String(l.invoiceDate).slice(0, 10) : "-"}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{rupee(l.taxable)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{rupee(l.tax)}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {imsApplies ? (
+                      l.decision === "PENDING" ? (
+                        <span className="inline-flex gap-1">
+                          <button type="button" disabled={deciding} onClick={() => onDecide([l.id], "ACCEPT")}
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded border border-green-800/40 text-green-400 hover:bg-green-950/30 disabled:opacity-50">Accept</button>
+                          <button type="button" disabled={deciding} onClick={() => onDecide([l.id], "REJECT")}
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded border border-red-800/40 text-red-400 hover:bg-red-950/30 disabled:opacity-50">Reject</button>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5">
+                          <WbDecisionChip d={l.decision} />
+                          <button type="button" disabled={deciding} onClick={() => onDecide([l.id], "PENDING")}
+                            className="text-[10px] text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-50">undo</button>
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-[10px] text-[var(--color-muted)]">n/a (books-side)</span>
+                    )}
+                  </td>
                 </tr>
               ))
             )}
@@ -1205,69 +1245,122 @@ function Gstr2bBucketTable({ title, rows, tint }: { title: string; rows: Gstr2bM
 
 function Gstr2bMatchCard({ period }: { period: string }) {
   const [csv, setCsv] = useState("");
-  const [result, setResult] = useState<Gstr2bMatchResult | null>(null);
+  const [wb, setWb] = useState<Workbench | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deciding, setDeciding] = useState(false);
 
   const parsed = useMemo(() => parseGstr2bCsv(csv), [csv]);
 
+  // Load the SAVED workbench for the period on mount / period change - a prior run
+  // no longer evaporates on reload.
+  const loadWb = useCallback(async (p: string) => {
+    try {
+      const w = await api.get<Workbench>(`/api/books/gst/gstr2b/workbench?period=${encodeURIComponent(p)}`);
+      setWb(w.lines.length ? w : null);
+    } catch { setWb(null); }
+  }, []);
+  useEffect(() => { void loadWb(period); }, [period, loadWb]);
+
   const run = async () => {
-    if (parsed.length === 0) {
-      toast.error("Paste at least one 2B invoice row");
-      return;
-    }
+    if (parsed.length === 0) { toast.error("Paste at least one 2B invoice row"); return; }
     setBusy(true);
     try {
-      const res = await api.post<Gstr2bMatchResult>("/api/books/gst/gstr2b/match", {
-        period,
-        portalInvoices: parsed,
-      });
-      setResult(res);
-      toast.success(`Matched ${res?.matched?.length ?? 0} · ${parsed.length} portal invoices`);
-    } catch (e) {
-      toast.error(errMsg(e));
-    } finally {
-      setBusy(false);
-    }
+      const w = await api.post<Workbench>("/api/books/gst/gstr2b/run", { period, portalInvoices: parsed });
+      setWb(w);
+      setCsv("");
+      toast.success(`Run saved · ${w.summary.byBucket.MATCHED} matched of ${parsed.length} portal invoices — decisions carry forward on re-runs`);
+    } catch (e) { toast.error(errMsg(e)); }
+    finally { setBusy(false); }
   };
 
+  const decide = async (ids: string[], d: WbDecision) => {
+    if (!ids.length) return;
+    setDeciding(true);
+    try {
+      await api.post("/api/books/gst/gstr2b/decide", { ids, decision: d });
+      await loadWb(period);
+    } catch (e) { toast.error(errMsg(e)); }
+    finally { setDeciding(false); }
+  };
+
+  const acceptAllMatched = () => {
+    if (!wb) return;
+    const ids = wb.lines.filter((l) => l.bucket === "MATCHED" && l.decision === "PENDING").map((l) => l.id);
+    if (!ids.length) { toast.success("No pending matched lines left"); return; }
+    void decide(ids, "ACCEPT");
+  };
+
+  // IMS deadline: GSTR-3B for the period is due the 20th of the FOLLOWING month; any
+  // portal invoice still pending then is deemed accepted.
+  const [py, pm] = period.split("-").map(Number);
+  const imsDue = new Date(py, pm, 20); // month is 1-based in `period` → this lands on the 20th of the next month
+  const daysToDue = Math.ceil((imsDue.getTime() - Date.now()) / 86400000);
+
+  const bucketLines = (b: WbBucket) => (wb?.lines ?? []).filter((l) => l.bucket === b);
+
   return (
-    <Card title="GSTR-2B ITC match (invoice-level)" icon={<GitCompareArrows size={15} />}>
+    <Card title="GSTR-2B ITC match + IMS worklist (persisted)" icon={<GitCompareArrows size={15} />}>
       <div className="space-y-3">
         <div>
           <label className={labelCls}>Paste portal 2B invoices (CSV: gstin, invoiceNo, invoiceDate, taxable, tax)</label>
           <textarea
             value={csv}
             onChange={(e) => setCsv(e.target.value)}
-            rows={6}
+            rows={5}
             placeholder={GSTR2B_PLACEHOLDER}
             className={`${inputCls} font-mono text-xs resize-y`}
           />
           <p className="text-[11px] text-[var(--color-muted)] mt-1">
-            {parsed.length} invoice{parsed.length === 1 ? "" : "s"} parsed · a header row is auto-detected and skipped.
+            {parsed.length} invoice{parsed.length === 1 ? "" : "s"} parsed · a header row is auto-detected and skipped. Re-running the same period keeps your accept/reject decisions.
           </p>
         </div>
         <button type="button" onClick={run} disabled={busy} className={btnPrimary}>
-          {busy ? <RefreshCw size={14} className="animate-spin" /> : <GitCompareArrows size={14} />} Match against books
+          {busy ? <RefreshCw size={14} className="animate-spin" /> : <GitCompareArrows size={14} />} Match &amp; save run
         </button>
 
-        {result && (
+        {wb && (
           <div className="space-y-4 pt-1">
             <div className="flex flex-wrap gap-3">
-              <StatCard label="Matched" value={String(result.matched?.length ?? 0)} tint="green" />
-              <StatCard label="Probable" value={String(result.probable?.length ?? 0)} />
-              <StatCard label="Missing in books" value={String(result.missingInBooks?.length ?? 0)} tint="red" />
-              <StatCard label="Missing in portal" value={String(result.missingInPortal?.length ?? 0)} tint="red" />
+              <StatCard label="Matched" value={String(wb.summary.byBucket.MATCHED ?? 0)} tint="green" />
+              <StatCard label="Probable" value={String(wb.summary.byBucket.PROBABLE ?? 0)} />
+              <StatCard label="In 2B, not booked" value={String(wb.summary.byBucket.MISSING_IN_BOOKS ?? 0)} tint="red" />
+              <StatCard label="Booked, not in 2B" value={String(wb.summary.byBucket.MISSING_IN_PORTAL ?? 0)} tint="red" />
             </div>
+
+            {/* IMS deemed-acceptance exposure */}
+            <div className={`rounded-lg border p-4 space-y-2 ${wb.summary.pendingDeemed > 0 ? "bg-orange-950/20 border-orange-800/40" : "bg-green-950/20 border-green-800/40"}`}>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <p className="text-sm font-semibold">{wb.summary.pendingDeemed > 0 ? `${wb.summary.pendingDeemed} portal invoice${wb.summary.pendingDeemed === 1 ? "" : "s"} still pending → deemed accepted on filing` : "Every portal invoice has a decision"}</p>
+                  <p className="text-xs text-[var(--color-muted)] mt-0.5">
+                    IMS decisions are due with GSTR-3B ({imsDue.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}{daysToDue >= 0 ? ` · ${daysToDue}d left` : " · past due"}). Decide here, then mirror on the portal — unactioned = accepted by default.
+                  </p>
+                </div>
+                <button type="button" onClick={acceptAllMatched} disabled={deciding}
+                  className="text-[11px] font-semibold border border-[var(--color-border)] hover:border-[var(--color-primary)] px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+                  Accept all clean matches
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="px-2 py-0.5 rounded-full border border-green-800/40 bg-green-950/30 text-green-400">{wb.summary.byDecision.ACCEPT ?? 0} accepted</span>
+                <span className="px-2 py-0.5 rounded-full border border-red-800/40 bg-red-950/30 text-red-400">{wb.summary.byDecision.REJECT ?? 0} rejected</span>
+                <span className="px-2 py-0.5 rounded-full border border-orange-800/40 bg-orange-950/30 text-orange-400">{wb.summary.byDecision.PENDING ?? 0} pending</span>
+                {wb.summary.lastRunAt && <span className="px-2 py-0.5 text-[var(--color-muted)]">last run {new Date(wb.summary.lastRunAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>}
+              </div>
+            </div>
+
             <div className="bg-[var(--color-bg)] border border-red-700/40 rounded-lg p-4 flex items-center justify-between">
-              <span className="text-sm font-semibold text-red-300">ITC at risk</span>
-              <span className="text-xl font-bold tabular-nums text-red-400">{rupee(result.summary?.itcAtRisk)}</span>
+              <span className="text-sm font-semibold text-red-300">ITC at risk (booked, not in 2B)</span>
+              <span className="text-xl font-bold tabular-nums text-red-400">{rupee(wb.summary.itcAtRisk)}</span>
             </div>
-            <Gstr2bBucketTable title="Matched" rows={result.matched ?? []} tint="green" />
-            <Gstr2bBucketTable title="Probable (fuzzy / amount mismatch)" rows={result.probable ?? []} tint="amber" />
-            <Gstr2bBucketTable title="Missing in books (in 2B, not booked)" rows={result.missingInBooks ?? []} tint="red" />
-            <Gstr2bBucketTable title="Missing in portal (booked, not in 2B)" rows={result.missingInPortal ?? []} tint="red" />
+
+            <WorkbenchBucket bucket="MATCHED" lines={bucketLines("MATCHED")} onDecide={decide} deciding={deciding} />
+            <WorkbenchBucket bucket="PROBABLE" lines={bucketLines("PROBABLE")} onDecide={decide} deciding={deciding} />
+            <WorkbenchBucket bucket="MISSING_IN_BOOKS" lines={bucketLines("MISSING_IN_BOOKS")} onDecide={decide} deciding={deciding} />
+            <WorkbenchBucket bucket="MISSING_IN_PORTAL" lines={bucketLines("MISSING_IN_PORTAL")} onDecide={decide} deciding={deciding} />
           </div>
         )}
+        {!wb && <p className="text-[11px] text-[var(--color-muted)]">No saved run for {period} yet — paste this period's 2B above and run the match. Results and your accept/reject decisions persist across reloads and devices.</p>}
       </div>
     </Card>
   );

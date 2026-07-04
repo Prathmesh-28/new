@@ -1016,4 +1016,93 @@ async function blockedItcSummary(tenantId, period, voucherIds = null) {
   };
 }
 
-module.exports = { monthRange, fyRange, gstr1, gstr3b, gstr2bReconcile, gstr2bMatch, gstr9, gstr9c, deductionReport, derivePlaceOfSupply, gstr1Sections, hsnSummary, hsnSummaryRange, gstr1Advances, gstr1DocIssue, gstr1Ecommerce, gstr1Amendments, gstr1Json, setGstRate, getGstRate, listGstRates, recordChallan, listChallans, gstLiabilityVsPaid, blockedItcSummary };
+// ── GSTR-2B WORKBENCH (persisted) ─────────────────────────────────────────────
+// The invoice-level matcher above is correct but its output previously evaporated on
+// reload, and IMS accept/reject decisions lived in a client-side blob. These three
+// functions make the workbench durable: run-and-save (decisions carried forward across
+// re-runs), read back, and record decisions with actor + timestamp.
+
+const _2B_SIDE = (bucket) => (bucket === "MISSING_IN_PORTAL" ? "BOOKS" : "PORTAL");
+const _2B_KEY = (gstin, invoiceNo, side) => `${String(gstin || "").toUpperCase()}|${String(invoiceNo || "").toUpperCase()}|${side}`;
+const _2B_DATE = (d) => { const t = Date.parse(d); return Number.isNaN(t) ? null : new Date(t).toISOString().slice(0, 10); };
+
+// Run the matcher and PERSIST the result for the period, replacing any prior run but
+// carrying each line's ACCEPT/REJECT decision forward when the same (gstin, invoice-no,
+// side) reappears — so refreshing an updated 2B never wipes the owner's worklist.
+async function gstr2bRunAndSave(tenantId, actorId, period, portalInvoices = []) {
+  const res = await gstr2bMatch(tenantId, period, portalInvoices);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows: old } = await client.query(
+      "SELECT gstin, invoice_no, bucket, decision, decided_by, decided_at FROM book_gstr2b_lines WHERE tenant_id=$1 AND period=$2 AND decision<>'PENDING'",
+      [tenantId, period]);
+    const prior = new Map(old.map((r) => [_2B_KEY(r.gstin, r.invoice_no, _2B_SIDE(r.bucket)), r]));
+    await client.query("DELETE FROM book_gstr2b_lines WHERE tenant_id=$1 AND period=$2", [tenantId, period]);
+    const ins = (bucket, matchStatus, gstin, invoiceNo, invoiceDate, taxable, tax, voucherId, booksInvoiceNo, taxDiff) => {
+      const p = prior.get(_2B_KEY(gstin, invoiceNo, _2B_SIDE(bucket)));
+      return client.query(
+        `INSERT INTO book_gstr2b_lines(tenant_id, period, bucket, match_status, gstin, invoice_no, invoice_date, taxable, tax, voucher_id, books_invoice_no, tax_diff, decision, decided_by, decided_at)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+        [tenantId, period, bucket, matchStatus, gstin || null, invoiceNo || null, _2B_DATE(invoiceDate),
+         toDb(taxable || 0), toDb(tax || 0), voucherId || null, booksInvoiceNo || null, taxDiff == null ? null : toDb(taxDiff),
+         p ? p.decision : "PENDING", p ? p.decided_by : null, p ? p.decided_at : null]);
+    };
+    for (const m of res.matched) await ins("MATCHED", m.status, m.gstin, m.portal.invoiceNo, m.portal.invoiceDate, m.portal.taxable, m.portal.tax, m.books.voucherId, m.books.invoiceNo, m.taxDiff);
+    for (const m of res.probable) await ins("PROBABLE", m.status, m.gstin, m.portal.invoiceNo, m.portal.invoiceDate, m.portal.taxable, m.portal.tax, m.books.voucherId, m.books.invoiceNo, m.taxDiff);
+    for (const m of res.missingInBooks) await ins("MISSING_IN_BOOKS", null, m.gstin, m.invoiceNo, m.invoiceDate, m.taxable, m.tax, null, null, null);
+    for (const m of res.missingInPortal) await ins("MISSING_IN_PORTAL", null, m.gstin, m.invoiceNo, m.invoiceDate, m.taxable, m.tax, m.voucherId, m.invoiceNo, null);
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+  return gstr2bWorkbench(tenantId, period);
+}
+
+// Read the saved workbench for a period: every line + a summary (bucket/decision counts,
+// the IMS deemed-acceptance exposure = PENDING portal-side lines, ITC at risk).
+async function gstr2bWorkbench(tenantId, period) {
+  const { rows } = await pool.query(
+    "SELECT * FROM book_gstr2b_lines WHERE tenant_id=$1 AND period=$2 ORDER BY bucket, gstin, invoice_no",
+    [tenantId, period]);
+  const byBucket = { MATCHED: 0, PROBABLE: 0, MISSING_IN_BOOKS: 0, MISSING_IN_PORTAL: 0 };
+  const byDecision = { PENDING: 0, ACCEPT: 0, REJECT: 0 };
+  let itcAtRisk = money(0), pendingDeemed = 0, lastRunAt = null;
+  const lines = rows.map((r) => {
+    byBucket[r.bucket] = (byBucket[r.bucket] || 0) + 1;
+    byDecision[r.decision] = (byDecision[r.decision] || 0) + 1;
+    if (r.bucket === "MISSING_IN_PORTAL") itcAtRisk = itcAtRisk.plus(money(r.tax));
+    // IMS deemed-acceptance applies to PORTAL-side inward invoices left unactioned.
+    if (r.decision === "PENDING" && _2B_SIDE(r.bucket) === "PORTAL") pendingDeemed++;
+    if (!lastRunAt || r.run_at > lastRunAt) lastRunAt = r.run_at;
+    return {
+      id: r.id, bucket: r.bucket, matchStatus: r.match_status, gstin: r.gstin,
+      invoiceNo: r.invoice_no, invoiceDate: r.invoice_date, taxable: toRupees(r.taxable), tax: toRupees(r.tax),
+      voucherId: r.voucher_id, booksInvoiceNo: r.books_invoice_no,
+      taxDiff: r.tax_diff == null ? null : toRupees(r.tax_diff),
+      decision: r.decision, decidedBy: r.decided_by, decidedAt: r.decided_at,
+    };
+  });
+  return { period, lines, summary: { byBucket, byDecision, pendingDeemed, itcAtRisk: toRupees(itcAtRisk), lastRunAt } };
+}
+
+// Record ACCEPT / REJECT / PENDING for one or many lines, with actor + timestamp.
+async function gstr2bDecide(tenantId, actorId, { ids, decision } = {}) {
+  const d = String(decision || "").toUpperCase();
+  if (!["ACCEPT", "REJECT", "PENDING"].includes(d)) throw new PostError("BAD_DECISION", "decision must be ACCEPT, REJECT or PENDING", 422);
+  const list = Array.isArray(ids) ? ids.filter(Boolean) : [];
+  if (!list.length) throw new PostError("BAD_INPUT", "ids[] required", 400);
+  const { rowCount } = await pool.query(
+    `UPDATE book_gstr2b_lines
+        SET decision=$3,
+            decided_by=CASE WHEN $3='PENDING' THEN NULL ELSE $4 END,
+            decided_at=CASE WHEN $3='PENDING' THEN NULL ELSE now() END
+      WHERE tenant_id=$1 AND id = ANY($2::uuid[])`,
+    [tenantId, list, d, actorId || null]);
+  return { updated: rowCount, decision: d };
+}
+
+module.exports = { monthRange, fyRange, gstr1, gstr3b, gstr2bReconcile, gstr2bMatch, gstr2bRunAndSave, gstr2bWorkbench, gstr2bDecide, gstr9, gstr9c, deductionReport, derivePlaceOfSupply, gstr1Sections, hsnSummary, hsnSummaryRange, gstr1Advances, gstr1DocIssue, gstr1Ecommerce, gstr1Amendments, gstr1Json, setGstRate, getGstRate, listGstRates, recordChallan, listChallans, gstLiabilityVsPaid, blockedItcSummary };

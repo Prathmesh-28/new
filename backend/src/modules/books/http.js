@@ -709,6 +709,10 @@ router.get("/gst/gstr1", async (req, res) => { try { const p = reqPeriod(req, re
 router.get("/gst/gstr3b", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.gstr3b(tenantOf(req), p)); } catch (e) { fail(res, e); } });
 router.post("/gst/gstr2b/reconcile", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.period) return res.status(400).json({ error: "period required" }); res.json(await gst.gstr2bReconcile(tenantOf(req), b.period, b.rows || [])); } catch (e) { fail(res, e); } });
 router.post("/gst/gstr2b/match", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.period) return res.status(400).json({ error: "period required" }); res.json(await gst.gstr2bMatch(tenantOf(req), b.period, b.portalInvoices || b.rows || [])); } catch (e) { fail(res, e); } });
+// GSTR-2B workbench (persisted): run-and-save, read back, record IMS accept/reject decisions.
+router.post("/gst/gstr2b/run", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.period) return res.status(400).json({ error: "period required" }); res.json(await gst.gstr2bRunAndSave(tenantOf(req), req.user.id, b.period, b.portalInvoices || b.rows || [])); } catch (e) { fail(res, e); } });
+router.get("/gst/gstr2b/workbench", async (req, res) => { try { const p = reqPeriod(req, res); if (p) res.json(await gst.gstr2bWorkbench(tenantOf(req), p)); } catch (e) { fail(res, e); } });
+router.post("/gst/gstr2b/decide", canPost, async (req, res) => { try { res.json(await gst.gstr2bDecide(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 // Identifier validation (GSTIN/PAN/Aadhaar/IFSC/… checksums).
 router.get("/validate", async (req, res) => { try { res.json(validators.validate(req.query.kind, req.query.value)); } catch (e) { fail(res, e); } });
 router.get("/validate/gstin", async (req, res) => { try { res.json(validators.gstinInfo(String(req.query.value || ""))); } catch (e) { fail(res, e); } });
