@@ -864,21 +864,36 @@ function CashApplication() {
 
   const apply = async (m: CashMatch) => {
     if (!m.invoiceId) return;
-    setApplied(prev => ({ ...prev, [m.invoiceId!]: m.txnId }));
-    // Recording the match should also settle the invoice. Mark it paid in the
-    // KV store, and for backend-origin invoices sync the status to the ledger.
     const inv = invoices.find(i => i.id === m.invoiceId);
-    if (inv && inv.status !== "paid") {
-      updateInvoice({ ...inv, status: "paid" });
-      if (inv.source === "backend") {
-        try {
-          await api.patch(`/api/invoices/${inv.id}`, { status: "paid" });
-        } catch {
-          toast.error("Receipt applied, but failed to sync paid status to the ledger");
-          return;
-        }
+    if (!inv) return;
+    // Backend-origin invoices get a REAL receipt for the ACTUAL amount received (capped at
+    // the outstanding balance) via POST /:id/payments — the server flips to paid only when
+    // fully settled. Before this, a "likely" match (±2% or even a name hit alone) force-
+    // marked the WHOLE invoice paid: a ₹5,000 receipt with a matching customer name could
+    // settle a ₹50,000 invoice and stop all dunning on the unpaid ₹45,000.
+    if (inv.source === "backend") {
+      try {
+        // For open backend mirrors, store `amount` IS the outstanding balance.
+        const amt = Math.round(Math.min(m.amount, inv.amount) * 100) / 100;
+        const res = await api.post<{ balance_due: number }>(`/api/invoices/${inv.id}/payments`, {
+          amount: amt, mode: "bank",
+          reference: (m.description || "").slice(0, 120) || undefined,
+          received_at: m.date,
+        });
+        setApplied(prev => ({ ...prev, [m.invoiceId!]: m.txnId }));
+        if (res.balance_due <= 0) updateInvoice({ ...inv, status: "paid" });
+        else updateInvoice({ ...inv, amount: res.balance_due });
+        toast.success(res.balance_due > 0
+          ? `${formatCurrency(amt)} applied to ${m.invoiceLabel} · ${formatCurrency(res.balance_due)} still due`
+          : `${formatCurrency(amt)} applied — ${m.invoiceLabel} fully paid`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not record the receipt");
       }
+      return;
     }
+    // KV-only invoice (manual/CSV — no backend row exists): local settle, as before.
+    setApplied(prev => ({ ...prev, [m.invoiceId!]: m.txnId }));
+    if (inv.status !== "paid") updateInvoice({ ...inv, status: "paid" });
     toast.success(`Applied ${formatCurrency(m.amount)} to ${m.invoiceLabel}`);
   };
 
@@ -892,7 +907,14 @@ function CashApplication() {
 
   const unapply = (invId: string) => {
     setApplied(prev => { const n = { ...prev }; delete n[invId]; return n; });
-    toast.success("Receipt un-applied");
+    const inv = invoices.find(i => i.id === invId);
+    if (inv?.source === "backend") {
+      // The local link is cleared, but the receipt itself is a real record in the books —
+      // don't pretend otherwise.
+      toast.warning("Link removed here — the recorded payment stays on the invoice (adjust it from the Invoices page if it was wrong)");
+    } else {
+      toast.success("Receipt un-applied");
+    }
   };
 
   return (

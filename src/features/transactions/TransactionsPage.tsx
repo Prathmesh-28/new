@@ -3393,14 +3393,42 @@ function CashApplication() {
   const paidInvoices       = invoices.filter(i => i.status === "paid").length;
   const pctReconciled      = totalInvoices > 0 ? Math.round((paidInvoices / totalInvoices) * 100) : 0;
 
-  // Apply one match: stamp the receipt with the invoice id and mark the invoice
-  // paid. Toast offers Undo (revert both writes) within the standard window.
-  const applyMatch = useCallback((m: CashMatch, silent = false) => {
+  // Apply one match. Backend-origin invoices (source:"backend" — mirrored from the real
+  // /api/invoices table) get a REAL receipt via POST /:id/payments: the server records the
+  // payment, caps it at the outstanding balance, flips to paid only when fully settled, and
+  // books the GL receipt — so server-side dunning stops chasing a customer who has paid.
+  // (Before this, "marks paid" was KV-only: the invoices table never updated and the
+  // overdue-reminder cron kept nudging paid customers.) A near-match (±5%) now records the
+  // ACTUAL receipt amount instead of force-marking the whole invoice paid. No Undo for these
+  // — a recorded receipt is a real financial record; adjust via the Invoices page if wrong.
+  // KV-only invoices (manual/CSV, no backend row) keep the local flip with Undo.
+  const applyMatch = useCallback(async (m: CashMatch, silent = false): Promise<boolean> => {
     const priorTxn = m.txn;
     const priorInv = m.invoice;
+    if (priorInv.source === "backend") {
+      try {
+        // For open backend mirrors, store `amount` IS the outstanding balance.
+        const amt = Math.round(Math.min(priorTxn.amount, priorInv.amount) * 100) / 100;
+        const res = await api.post<{ balance_due: number }>(`/api/invoices/${priorInv.id}/payments`, {
+          amount: amt, mode: "bank",
+          reference: (priorTxn.description || "").slice(0, 120) || undefined,
+          received_at: priorTxn.date,
+        });
+        updateTransaction({ ...priorTxn, invoiceId: priorInv.id });
+        if (res.balance_due <= 0) updateInvoice({ ...priorInv, status: "paid" });
+        else updateInvoice({ ...priorInv, amount: res.balance_due });
+        if (!silent) toast.success(res.balance_due > 0
+          ? `${fc(amt)} recorded against ${priorInv.customer}'s invoice · ${fc(res.balance_due)} still due`
+          : `${fc(amt)} recorded — ${priorInv.customer}'s invoice fully paid`);
+        return true;
+      } catch (e) {
+        if (!silent) toast.error(e instanceof Error ? e.message : "Could not record the receipt");
+        return false;
+      }
+    }
     updateTransaction({ ...priorTxn, invoiceId: priorInv.id });
     updateInvoice({ ...priorInv, status: "paid" });
-    if (silent) return;
+    if (silent) return true;
     toast.success(`Matched ${fc(priorTxn.amount)} → ${priorInv.customer}'s invoice - marked paid`, {
       action: {
         label: "Undo",
@@ -3412,26 +3440,33 @@ function CashApplication() {
       },
       duration: 10000,
     });
+    return true;
   }, [updateTransaction, updateInvoice, fc]);
 
-  // Apply every high-confidence (exact) match in one go, with a batched Undo.
-  const autoMatchAll = useCallback(() => {
+  // Apply every high-confidence (exact) match in one go. Backend receipts are real records,
+  // so the batched Undo is only offered when EVERY match was a local (KV-only) invoice.
+  const autoMatchAll = useCallback(async () => {
     if (highMatches.length === 0) return;
     const batch = highMatches;
-    batch.forEach(m => applyMatch(m, true));
-    toast.success(`Auto-matched ${batch.length} exact payment${batch.length !== 1 ? "s" : ""} to invoices`, {
-      action: {
-        label: "Undo all",
-        onClick: () => {
-          batch.forEach(m => {
-            updateTransaction({ ...m.txn, invoiceId: undefined });
-            updateInvoice({ ...m.invoice });
-          });
-          toast.success(`Reverted ${batch.length} match${batch.length !== 1 ? "es" : ""}`);
+    let ok = 0, failed = 0;
+    for (const m of batch) { (await applyMatch(m, true)) ? ok++ : failed++; }
+    const allLocal = batch.every(m => m.invoice.source !== "backend");
+    const msg = `Auto-matched ${ok} exact payment${ok !== 1 ? "s" : ""}${failed ? ` · ${failed} failed` : ""}`;
+    if (allLocal && failed === 0) {
+      toast.success(msg, {
+        action: {
+          label: "Undo all",
+          onClick: () => {
+            batch.forEach(m => {
+              updateTransaction({ ...m.txn, invoiceId: undefined });
+              updateInvoice({ ...m.invoice });
+            });
+            toast.success(`Reverted ${batch.length} match${batch.length !== 1 ? "es" : ""}`);
+          },
         },
-      },
-      duration: 10000,
-    });
+        duration: 10000,
+      });
+    } else if (failed) { toast.warning(msg); } else { toast.success(msg); }
   }, [highMatches, applyMatch, updateTransaction, updateInvoice]);
 
   const suggForInvoice = useCallback((invId: string) => suggestions.find(m => m.invoice.id === invId) ?? null, [suggestions]);
