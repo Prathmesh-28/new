@@ -2,7 +2,7 @@ const router   = require("express").Router();
 const QRCode   = require("qrcode");
 const { pool } = require("../db");
 const { q, withTenant } = require("../lib/tenantDb"); // invoices is FORCE-RLS (0015) — access sets the tenant GUC
-const { round2, remainingToSettle } = require("../lib/invoicePaymentMath");
+const { round2, remainingToSettle, effectiveTotal } = require("../lib/invoicePaymentMath");
 const { authenticate } = require("../middleware/auth");
 const crypto   = require("crypto");
 
@@ -146,7 +146,7 @@ router.post("/", async (req, res) => {
             "SELECT 1 FROM invoice_payments WHERE tenant_id=$1 AND invoice_id=$2 AND reference=$3 LIMIT 1",
             [noteTenant, cur.id, ref]);
           if (dup[0]) return { skip: "duplicate" };
-          const remaining = remainingToSettle({ total: cur.total_amount, paidAmount: cur.paid_amount || 0 });
+          const remaining = remainingToSettle({ total: cur.total_amount, paidAmount: cur.paid_amount || 0, creditedAmount: cur.credited_amount || 0 });
           // Cap at the outstanding balance so AR is never driven negative even if partial
           // receipts landed after the link was minted for the full amount.
           const received = round2((Number(payment.amount) || 0) / 100);
@@ -156,7 +156,7 @@ router.post("/", async (req, res) => {
             "INSERT INTO invoice_payments(tenant_id, invoice_id, amount, mode, reference) VALUES($1,$2,$3,'upi',$4) RETURNING *",
             [noteTenant, cur.id, applied, ref]);
           const newPaid = round2(round2(cur.paid_amount || 0) + applied);
-          const fullyPaid = newPaid >= round2(cur.total_amount);
+          const fullyPaid = newPaid >= effectiveTotal({ total: cur.total_amount, creditedAmount: cur.credited_amount || 0 });
           const { rows: [upd] } = await client.query(
             `UPDATE invoices SET paid_amount=$1,
                status=CASE WHEN $2 THEN 'paid' WHEN status='draft' THEN 'sent' ELSE status END,

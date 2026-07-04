@@ -3,7 +3,7 @@
 // A regression here mis-states collection or drives AR negative. Run: node --test src/lib/invoicePaymentMath.test.js
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { applyReceipt, remainingToSettle, round2 } = require("./invoicePaymentMath");
+const { applyReceipt, remainingToSettle, round2, effectiveTotal, creditableBalance } = require("./invoicePaymentMath");
 
 test("full payment from zero settles the invoice", () => {
   const r = applyReceipt({ total: 1000, paidAmount: 0 }, 1000);
@@ -66,4 +66,36 @@ test("remainingToSettle returns the unpaid balance, 0 when already covered", () 
 
 test("round2 tames binary-float drift", () => {
   assert.equal(round2(0.1 + 0.2), 0.3);
+});
+
+// ── Credit-note dimension: receipts settle the EFFECTIVE total (net of credits) ──
+
+test("credit note shrinks what a receipt may collect", () => {
+  // ₹1000 invoice, ₹300 credited → only ₹700 collectible.
+  assert.equal(effectiveTotal({ total: 1000, creditedAmount: 300 }), 700);
+  const over = applyReceipt({ total: 1000, paidAmount: 0, creditedAmount: 300 }, 800);
+  assert.equal(over.ok, false, "collecting into the credited portion must be refused");
+  assert.equal(over.balanceBefore, 700);
+  const exact = applyReceipt({ total: 1000, paidAmount: 0, creditedAmount: 300 }, 700);
+  assert.equal(exact.ok, true);
+  assert.equal(exact.fullyPaid, true, "settling the net balance IS fully paid");
+});
+
+test("partials + credit compose: balance = total − paid − credited", () => {
+  const r = applyReceipt({ total: 1000, paidAmount: 400, creditedAmount: 250 }, 100);
+  assert.equal(r.ok, true);
+  assert.equal(r.balanceAfter, 250);
+  assert.equal(r.fullyPaid, false);
+  assert.equal(remainingToSettle({ total: 1000, paidAmount: 500, creditedAmount: 250 }), 250);
+});
+
+test("creditableBalance caps at the uncollected remainder, floors at 0", () => {
+  assert.equal(creditableBalance({ total: 1000, paidAmount: 400, creditedAmount: 0 }), 600);
+  assert.equal(creditableBalance({ total: 1000, paidAmount: 400, creditedAmount: 600 }), 0);
+  assert.equal(creditableBalance({ total: 1000, paidAmount: 1000, creditedAmount: 0 }), 0, "fully-paid invoice: nothing creditable (refunds are a different flow)");
+});
+
+test("fully credited, nothing collected → zero balance and zero collectible", () => {
+  assert.equal(effectiveTotal({ total: 500, creditedAmount: 500 }), 0);
+  assert.equal(applyReceipt({ total: 500, paidAmount: 0, creditedAmount: 500 }, 1).ok, false);
 });

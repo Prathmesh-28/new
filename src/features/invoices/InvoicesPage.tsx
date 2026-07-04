@@ -23,7 +23,7 @@ interface Invoice {
   id: string; invoice_number: string; customer_name: string; customer_gstin?: string;
   customer_email?: string; subtotal: number; gst_rate: number; gst_amount: number;
   total_amount: number; status: string; due_date?: string; paid_at?: string;
-  paid_amount?: number;
+  paid_amount?: number; credited_amount?: number;
   irn?: string; upi_link?: string; aging?: string; items?: InvoiceItem[]; created_at: string;
 }
 interface InvoicePayment { id: string; amount: number; mode: string; reference?: string; received_at: string; created_at: string; }
@@ -419,12 +419,13 @@ export default function InvoicesPage() {
       .map(d => ({
         id: d.id,
         customer: d.customer_name,
-        // Open invoices mirror the OUTSTANDING balance (partial receipts already netted) —
-        // Collections/dunning/Working Capital read this as "what the customer still owes".
-        // Paid invoices keep the full total (read as realised revenue, not a balance).
+        // Open invoices mirror the OUTSTANDING balance (partial receipts + credit notes
+        // netted) — Collections/dunning/Working Capital read this as "what the customer
+        // still owes". Paid invoices mirror what was actually collected (paid_amount), so a
+        // credit-adjusted invoice never inflates realised revenue.
         amount: d.status === "paid"
-          ? (Number(d.total_amount) || 0)
-          : Math.max(0, (Number(d.total_amount) || 0) - (Number(d.paid_amount) || 0)),
+          ? (Number(d.paid_amount) || Number(d.total_amount) || 0)
+          : Math.max(0, (Number(d.total_amount) || 0) - (Number(d.paid_amount) || 0) - (Number(d.credited_amount) || 0)),
         invoiceNumber: d.invoice_number,
         invoiceDate: (d.created_at || "").split("T")[0],
         dueDate: (d.due_date || d.created_at || "").split("T")[0],
@@ -488,12 +489,13 @@ export default function InvoicesPage() {
     true
   );
 
-  // Open buckets sum the OUTSTANDING balance (partial receipts netted), so the header
-  // KPIs agree with the per-row "due" figures. Paid sums the full realised totals.
-  const outstanding = (i: Invoice) => Math.max(0, (parseFloat(String(i.total_amount)) || 0) - (Number(i.paid_amount) || 0));
+  // Open buckets sum the OUTSTANDING balance (partial receipts + credit notes netted), so
+  // the header KPIs agree with the per-row "due" figures. Paid sums what was actually
+  // collected (paid_amount), so credit-adjusted invoices don't inflate it.
+  const outstanding = (i: Invoice) => Math.max(0, (parseFloat(String(i.total_amount)) || 0) - (Number(i.paid_amount) || 0) - (Number(i.credited_amount) || 0));
   const totalPending = invoices.filter(i => i.status !== "paid" && i.status !== "cancelled").reduce((s, i) => s + outstanding(i), 0);
   const totalOverdue = invoices.filter(i => i.status !== "paid" && i.status !== "cancelled" && i.aging && i.aging !== "current" && i.aging !== "paid").reduce((s, i) => s + outstanding(i), 0);
-  const totalPaid    = invoices.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(String(i.total_amount)), 0);
+  const totalPaid    = invoices.filter(i => i.status === "paid").reduce((s, i) => s + (Number(i.paid_amount) || parseFloat(String(i.total_amount)) || 0), 0);
 
   return (
     <div className="space-y-4">
@@ -564,7 +566,7 @@ export default function InvoicesPage() {
        tab === "proforma"      ? <ProformaGenerator /> :
        tab === "recurring"     ? <RecurringBilling /> :
        tab === "paylink"       ? <PaymentLinkBuilder invoices={invoices} /> :
-       tab === "creditnote"    ? <CreditDebitNoteManager invoices={invoices} /> :
+       tab === "creditnote"    ? <CreditDebitNoteManager invoices={invoices} onChanged={load} /> :
        tab === "creditlimit"   ? <CreditLimitManager invoices={invoices} /> :
        tab === "multicurrency" ? <MultiCurrencyInvoicing /> :
        tab === "approval"      ? <ApprovalWorkflow invoices={invoices} /> :
@@ -626,9 +628,9 @@ export default function InvoicesPage() {
                   </td>
                   <td data-label="Amount" className="px-4 py-3 text-right tabular-nums">
                     <p className="font-semibold">{formatCurrency(parseFloat(String(inv.total_amount)))}</p>
-                    {Number(inv.paid_amount) > 0 && inv.status !== "paid" ? (
-                      <p className="text-[10px] text-amber-400" title={`${formatCurrency(Number(inv.paid_amount))} received`}>
-                        {formatCurrency(parseFloat(String(inv.total_amount)) - Number(inv.paid_amount))} due
+                    {(Number(inv.paid_amount) > 0 || Number(inv.credited_amount) > 0) && inv.status !== "paid" && inv.status !== "cancelled" ? (
+                      <p className="text-[10px] text-amber-400" title={`${formatCurrency(Number(inv.paid_amount) || 0)} received${Number(inv.credited_amount) > 0 ? ` · ${formatCurrency(Number(inv.credited_amount))} credited` : ""}`}>
+                        {formatCurrency(Math.max(0, parseFloat(String(inv.total_amount)) - (Number(inv.paid_amount) || 0) - (Number(inv.credited_amount) || 0)))} due
                       </p>
                     ) : (
                       <p className="text-[10px] text-[var(--color-muted)]">+GST {inv.gst_rate}%</p>
@@ -711,7 +713,8 @@ export default function InvoicesPage() {
 function RecordPaymentModal({ invoice, onClose, onDone }: { invoice: Invoice; onClose: () => void; onDone: () => void }) {
   const total = parseFloat(String(invoice.total_amount)) || 0;
   const alreadyPaid = Number(invoice.paid_amount) || 0;
-  const balance = Math.round((total - alreadyPaid) * 100) / 100;
+  const credited = Number(invoice.credited_amount) || 0;
+  const balance = Math.round((total - alreadyPaid - credited) * 100) / 100;
   const [amount, setAmount] = useState<string>(balance > 0 ? String(balance) : "");
   const [mode, setMode] = useState("upi");
   const [reference, setReference] = useState("");
@@ -754,6 +757,11 @@ function RecordPaymentModal({ invoice, onClose, onDone }: { invoice: Invoice; on
           <div className="flex justify-between text-xs bg-[var(--color-accent)] rounded-lg px-3 py-2">
             <span className="text-[var(--color-muted)]">Already received</span><span className="tabular-nums">{formatCurrency(alreadyPaid)}</span>
           </div>
+          {credited > 0 && (
+            <div className="flex justify-between text-xs bg-[var(--color-accent)] rounded-lg px-3 py-2">
+              <span className="text-[var(--color-muted)]">Credit notes issued</span><span className="tabular-nums">−{formatCurrency(credited)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-xs px-3">
             <span className="text-[var(--color-muted)]">Balance due</span><span className="tabular-nums font-semibold text-amber-400">{formatCurrency(balance)}</span>
           </div>
@@ -1143,87 +1151,108 @@ function PaymentLinkBuilder({ invoices }: { invoices: Invoice[] }) {
 }
 
 // #43 ── Credit Note & Debit Note Manager ────────────────────────────────────
-interface CDNote { id: string; type: "credit" | "debit"; number: string; againstInvoice: string; customer: string; reason: string; taxable: string; gst: string; createdAt: string; }
-function CreditDebitNoteManager({ invoices }: { invoices: Invoice[] }) {
-  const [notes, setNotes] = useFeatureState<CDNote[]>("invoice-cdnotes", []);
-  const [type, setType] = useState<CDNote["type"]>("credit");
-  const [against, setAgainst] = useState("");
-  const [customer, setCustomer] = useState("");
+// Credit notes — REAL documents now: numbered server-side (CN-YYYY-NNN), capped at the
+// uncollected balance, posted to the GL as a CREDIT_NOTE voucher and reported in GSTR-1
+// CDNR / GSTR-3B 4I automatically. (Debit notes ride on supplementary invoices — issue a
+// new invoice for upward revisions; we don't fake a register for them here.)
+interface ServerCreditNote {
+  id: string; note_number: string; reason: string; subtotal: number; gst_amount: number;
+  total_amount: number; created_at: string; invoice_number?: string; customer_name?: string;
+}
+function CreditDebitNoteManager({ invoices, onChanged }: { invoices: Invoice[]; onChanged: () => void }) {
+  const [notes, setNotes] = useState<ServerCreditNote[]>([]);
+  const [invoiceId, setInvoiceId] = useState("");
+  const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
-  const [taxable, setTaxable] = useState("");
-  const [gst, setGst] = useState("18");
+  const [creditable, setCreditable] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const onPickInv = (num: string) => {
-    setAgainst(num);
-    const inv = invoices.find(i => i.invoice_number === num);
-    if (inv) { setCustomer(inv.customer_name); setGst(String(inv.gst_rate ?? 18)); }
+  const loadNotes = useCallback(() => {
+    api.get<ServerCreditNote[]>("/api/invoices/credit-notes/all").then(setNotes).catch(() => {});
+  }, []);
+  useEffect(() => { loadNotes(); }, [loadNotes]);
+
+  // A credit note adjusts an ISSUED, not-yet-settled document.
+  const eligible = invoices.filter(i => i.status !== "draft" && i.status !== "cancelled" && i.status !== "paid");
+
+  useEffect(() => {
+    if (!invoiceId) { setCreditable(null); return; }
+    api.get<{ creditable: number }>(`/api/invoices/${invoiceId}/credit-notes`)
+      .then(d => setCreditable(d.creditable)).catch(() => setCreditable(null));
+  }, [invoiceId]);
+
+  const amt = parseFloat(amount) || 0;
+  const invalid = !invoiceId || !(amt > 0) || !reason.trim() || (creditable != null && amt > creditable + 0.001);
+
+  const submit = async () => {
+    if (invalid) return;
+    setSaving(true);
+    try {
+      const res = await api.post<{ note: ServerCreditNote; balance_due: number }>(`/api/invoices/${invoiceId}/credit-notes`, { amount: amt, reason: reason.trim() });
+      toast.success(`${res.note.note_number} issued · ${formatCurrency(res.balance_due)} now due`);
+      setAmount(""); setReason(""); setInvoiceId(""); setCreditable(null);
+      loadNotes(); onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to issue credit note");
+    } finally { setSaving(false); }
   };
-  const tx = parseFloat(taxable) || 0;
-  const gstAmt = Math.round(tx * (parseFloat(gst) || 0) / 100);
-  const total = tx + gstAmt;
 
-  const save = () => {
-    if (!customer || !taxable) { toast.error("Add customer and taxable value"); return; }
-    const prefix = type === "credit" ? "CN" : "DN";
-    const number = `${prefix}-${new Date().getFullYear()}-${String(notes.filter(n => n.type === type).length + 1).padStart(3, "0")}`;
-    setNotes(p => [{ id: uid(), type, number, againstInvoice: against, customer, reason, taxable, gst, createdAt: new Date().toISOString() }, ...p]);
-    setTaxable(""); setReason("");
-    toast.success(`${type === "credit" ? "Credit" : "Debit"} note ${number} issued`);
-  };
-
-  const netCredit = notes.filter(n => n.type === "credit").reduce((s, n) => s + (parseFloat(n.taxable) || 0) * (1 + (parseFloat(n.gst) || 0) / 100), 0);
-  const netDebit = notes.filter(n => n.type === "debit").reduce((s, n) => s + (parseFloat(n.taxable) || 0) * (1 + (parseFloat(n.gst) || 0) / 100), 0);
+  const totalCredited = notes.reduce((s, n) => s + (Number(n.total_amount) || 0), 0);
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 max-w-md">
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Credit notes (GST reduces output tax)</p><p className="text-lg font-bold tabular-nums text-green-400">{formatCurrency(Math.round(netCredit))}</p></div>
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Debit notes (GST increases output tax)</p><p className="text-lg font-bold tabular-nums text-orange-400">{formatCurrency(Math.round(netDebit))}</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Credit notes issued</p><p className="text-lg font-bold tabular-nums text-green-400">{notes.length}</p></div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Output tax reversed (incl. GST)</p><p className="text-lg font-bold tabular-nums text-green-400">{formatCurrency(totalCredited)}</p></div>
       </div>
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
-        <h2 className="text-sm font-semibold flex items-center gap-2"><FileMinus2 size={14} className="text-[var(--color-primary)]" /> Credit / Debit Note Manager</h2>
-        <div className="flex gap-2">
-          {(["credit", "debit"] as const).map(t => <button key={t} onClick={() => setType(t)} className={`flex-1 py-2 text-xs font-semibold rounded-lg border capitalize ${type === t ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-transparent" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{t} note</button>)}
-        </div>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><FileMinus2 size={14} className="text-[var(--color-primary)]" /> Issue Credit Note</h2>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={LBL}>Against invoice</label>
-            <select value={against} onChange={e => onPickInv(e.target.value)} className={INP}>
-              <option value="">- select / manual -</option>
-              {invoices.map(i => <option key={i.id} value={i.invoice_number}>{i.invoice_number}</option>)}
+            <label className={LBL}>Against invoice *</label>
+            <select value={invoiceId} onChange={e => setInvoiceId(e.target.value)} className={INP}>
+              <option value="">- select -</option>
+              {eligible.map(i => <option key={i.id} value={i.id}>{i.invoice_number} · {i.customer_name}</option>)}
             </select>
           </div>
-          <div><label className={LBL}>Customer *</label><input value={customer} onChange={e => setCustomer(e.target.value)} className={INP} /></div>
-          <div><label className={LBL}>Taxable value (₹) *</label><input type="number" value={taxable} onChange={e => setTaxable(e.target.value)} className={INP} /></div>
-          <div><label className={LBL}>GST rate</label><select value={gst} onChange={e => setGst(e.target.value)} className={INP}>{GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}</select></div>
+          <div>
+            <label className={LBL}>Amount incl. GST (₹) *</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className={INP} min={0} step="0.01" />
+            {creditable != null && <p className="text-[10px] text-[var(--color-muted)] mt-1">Creditable: {formatCurrency(creditable)} (uncollected balance)</p>}
+            {creditable != null && amt > creditable + 0.001 && <p className="text-[10px] text-red-400 mt-1">Exceeds the uncollected balance — refunds of received money are a separate flow.</p>}
+          </div>
         </div>
-        <div><label className={LBL}>Reason</label><input value={reason} onChange={e => setReason(e.target.value)} className={INP} placeholder="Goods returned / price revision / deficiency" /></div>
-        <div className="flex justify-between text-sm border-t border-[var(--color-border)] pt-2"><span className="text-[var(--color-muted)]">GST {gst}% + total</span><span className="font-bold tabular-nums">{formatCurrency(gstAmt)} · {formatCurrency(total)}</span></div>
-        <button onClick={save} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90">Issue {type} note</button>
+        <div><label className={LBL}>Reason *</label><input value={reason} onChange={e => setReason(e.target.value)} className={INP} placeholder="Goods returned / price revision / deficiency in service" /></div>
+        <button onClick={submit} disabled={invalid || saving} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">
+          {saving ? "Issuing…" : "Issue credit note"}
+        </button>
+        <p className="text-[10px] text-[var(--color-muted)]">GST is carved out in the invoice's own proportion; the note posts a CREDIT_NOTE voucher to the books and lands in GSTR-1 (CDNR) and GSTR-3B 4I. Needing an upward revision? Issue a supplementary invoice instead of a debit note.</p>
       </div>
       {notes.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
           <table className="w-full text-sm min-w-[640px]">
-            <thead><tr className="border-b border-[var(--color-border)]">{["Note", "Type", "Against", "Customer", "Total", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+            <thead><tr className="border-b border-[var(--color-border)]">{["Note", "Against", "Customer", "Reason", "GST", "Total", "Date"].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
-              {notes.map(n => { const t = (parseFloat(n.taxable) || 0) * (1 + (parseFloat(n.gst) || 0) / 100); return (
+              {notes.map(n => (
                 <tr key={n.id} className="hover:bg-white/2">
-                  <td className="px-4 py-2.5 font-mono text-xs">{n.number}</td>
-                  <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${n.type === "credit" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-orange-900/30 text-orange-400 border-orange-800/40"}`}>{n.type}</span></td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{n.againstInvoice || "-"}</td>
-                  <td className="px-4 py-2.5">{n.customer}</td>
-                  <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(Math.round(t))}</td>
-                  <td className="px-4 py-2.5 text-right"><button onClick={() => setNotes(p => p.filter(x => x.id !== n.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  <td className="px-4 py-2.5 font-mono text-xs">{n.note_number}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{n.invoice_number || "-"}</td>
+                  <td className="px-4 py-2.5">{n.customer_name || "-"}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[180px] truncate" title={n.reason}>{n.reason}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-xs">{formatCurrency(Number(n.gst_amount))}</td>
+                  <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(Number(n.total_amount))}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{new Date(n.created_at).toLocaleDateString("en-IN")}</td>
                 </tr>
-              ); })}
+              ))}
             </tbody>
           </table>
         </div>
       )}
-      {NOTE("Credit notes must be reported in GSTR-1 by 30 Nov following the FY-end to reverse output tax. Debit notes increase tax liability in the issue month.")}
+      {NOTE("Credit notes must be reported in GSTR-1 by 30 Nov following the FY-end to reverse output tax. Issued notes are immutable here — they're numbered GL documents; adjust with a further note if needed.")}
     </div>
   );
 }
+
 
 // #44 ── Customer Credit Limit & Hold ────────────────────────────────────────
 interface CreditCfg { id: string; customer: string; limit: string; overdueDaysHold: string; }

@@ -8,7 +8,7 @@ const { sendMail } = require("../lib/email");
 const { sendWhatsApp } = require("../lib/whatsapp");
 const platformConfig = require("../lib/platformConfig");
 
-const { round2, applyReceipt, remainingToSettle } = require("../lib/invoicePaymentMath");
+const { round2, applyReceipt, remainingToSettle, effectiveTotal, creditableBalance } = require("../lib/invoicePaymentMath");
 const { taxSplit } = require("../lib/gstInvoice");
 
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant","sales"];
@@ -122,7 +122,7 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
       const { rows: [cur] } = await client.query("SELECT * FROM invoices WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [req.params.id, tenantId]);
       if (!cur) return { notFound: true };
       if (cur.status === "paid") return { inv: cur, already: true }; // idempotent: nothing left to post
-      const remaining = remainingToSettle({ total: cur.total_amount, paidAmount: cur.paid_amount || 0 });
+      const remaining = remainingToSettle({ total: cur.total_amount, paidAmount: cur.paid_amount || 0, creditedAmount: cur.credited_amount || 0 });
       // Record the settling remainder as a receipt so sum(invoice_payments)==paid_amount holds.
       // Strict > 0: amounts are paise-quantized, so even a 1-paise residual gets a settling
       // receipt — otherwise the GL debtor keeps an uncleared residual on a "paid" invoice.
@@ -134,7 +134,9 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
         settle = p;
       }
       const { rows: [upd] } = await client.query(
-        "UPDATE invoices SET status='paid', paid_at=now(), paid_amount=total_amount WHERE id=$1 AND tenant_id=$2 RETURNING *",
+        // Paid means the customer settled the EFFECTIVE total (net of credit notes) — never
+        // claim more cash was received than was actually collectible.
+        "UPDATE invoices SET status='paid', paid_at=now(), paid_amount=total_amount-credited_amount WHERE id=$1 AND tenant_id=$2 RETURNING *",
         [cur.id, tenantId]);
       return { inv: upd, settle, remaining };
       });
@@ -271,8 +273,12 @@ router.get("/:id/pdf", authenticate, async (req, res) => {
     ["Total", parseFloat(inv.total_amount)],
   ];
   const paidSoFar = round2(inv.paid_amount);
-  if (paidSoFar > 0 && paidSoFar < round2(inv.total_amount)) {
-    totals.push(["Received", paidSoFar], ["Balance Due", round2(Number(inv.total_amount) - paidSoFar)]);
+  const credited = round2(inv.credited_amount);
+  const netBalance = remainingToSettle({ total: inv.total_amount, paidAmount: paidSoFar, creditedAmount: credited });
+  if (credited > 0) totals.push(["Less: Credit Notes", credited]);
+  if ((paidSoFar > 0 || credited > 0) && netBalance > 0) {
+    if (paidSoFar > 0) totals.push(["Received", paidSoFar]);
+    totals.push(["Balance Due", netBalance]);
   }
   for (const [label, val] of totals) {
     const bold = label === "Total" || label === "Balance Due";
@@ -431,12 +437,17 @@ router.get("/:id/payments", authenticate, async (req, res) => {
   try {
   const t = req.user.tenant_id;
   const rows = await withTenant(t, async (client) => {
-    const { rows: [inv] } = await client.query("SELECT total_amount, paid_amount FROM invoices WHERE id=$1 AND tenant_id=$2", [req.params.id, t]);
+    const { rows: [inv] } = await client.query("SELECT total_amount, paid_amount, credited_amount FROM invoices WHERE id=$1 AND tenant_id=$2", [req.params.id, t]);
     if (!inv) return null;
     const { rows: pays } = await client.query(
       "SELECT id, amount, mode, reference, received_at, created_at FROM invoice_payments WHERE tenant_id=$1 AND invoice_id=$2 ORDER BY received_at, created_at",
       [t, req.params.id]);
-    return { total_amount: Number(inv.total_amount), paid_amount: Number(inv.paid_amount || 0), balance_due: round2(Number(inv.total_amount) - Number(inv.paid_amount || 0)), payments: pays };
+    return {
+      total_amount: Number(inv.total_amount), paid_amount: Number(inv.paid_amount || 0),
+      credited_amount: Number(inv.credited_amount || 0),
+      balance_due: remainingToSettle({ total: inv.total_amount, paidAmount: inv.paid_amount || 0, creditedAmount: inv.credited_amount || 0 }),
+      payments: pays,
+    };
   });
   if (!rows) return res.status(404).json({ error: "Invoice not found" });
   res.json(rows);
@@ -461,7 +472,7 @@ router.post("/:id/payments", authenticate, canWrite, async (req, res) => {
     const { rows: [inv] } = await client.query("SELECT * FROM invoices WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [req.params.id, t]);
     if (!inv) return { notFound: true };
     if (inv.status === "cancelled") return { cancelled: true };
-    const eff = applyReceipt({ total: inv.total_amount, paidAmount: inv.paid_amount || 0 }, amount);
+    const eff = applyReceipt({ total: inv.total_amount, paidAmount: inv.paid_amount || 0, creditedAmount: inv.credited_amount || 0 }, amount);
     if (!eff.ok) return { over: true, balance: eff.balanceBefore };
     const { rows: [pay] } = await client.query(
       "INSERT INTO invoice_payments(tenant_id, invoice_id, amount, mode, reference, received_at, created_by) VALUES($1,$2,$3,$4,$5,COALESCE($6::date, CURRENT_DATE),$7) RETURNING *",
@@ -483,8 +494,101 @@ router.post("/:id/payments", authenticate, canWrite, async (req, res) => {
   require("../modules/flows/runner").emitEvent(t, outcome.fullyPaid ? "invoice.paid" : "invoice.payment", { invoice: outcome.inv, payment: outcome.pay }).catch(() => {});
   if (outcome.fullyPaid) require("../modules/lending").onInvoicePaid(t, outcome.inv.id).catch(() => {});
   require("../modules/analytics").track(t, req.user.id, { event: "invoice_payment", props: { amount: outcome.pay.amount, fully_paid: outcome.fullyPaid } }).catch(() => {});
-  res.status(201).json({ payment: outcome.pay, invoice: { ...outcome.inv, aging: computeAging(outcome.inv) }, balance_due: round2(Number(outcome.inv.total_amount) - Number(outcome.inv.paid_amount)) });
+  res.status(201).json({ payment: outcome.pay, invoice: { ...outcome.inv, aging: computeAging(outcome.inv) }, balance_due: remainingToSettle({ total: outcome.inv.total_amount, paidAmount: outcome.inv.paid_amount, creditedAmount: outcome.inv.credited_amount || 0 }) });
   } catch (e) { console.error("[invoices] record payment failed:", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
+// ── Credit notes (real documents: numbered, GL-posted, GSTR-visible) ──
+// GET /credit-notes/all — every note for the tenant (newest first), for the tool tab.
+router.get("/credit-notes/all", authenticate, async (req, res) => {
+  try {
+    const { rows } = await q(req.user.tenant_id,
+      `SELECT cn.*, i.invoice_number, i.customer_name FROM invoice_credit_notes cn
+       JOIN invoices i ON i.id = cn.invoice_id
+       WHERE cn.tenant_id=$1 ORDER BY cn.created_at DESC LIMIT 200`,
+      [req.user.tenant_id]);
+    res.json(rows);
+  } catch (e) { console.error("[invoices] credit notes list failed:", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
+// GET /:id/credit-notes — notes against one invoice + how much more is creditable.
+router.get("/:id/credit-notes", authenticate, async (req, res) => {
+  try {
+    const t = req.user.tenant_id;
+    const out = await withTenant(t, async (client) => {
+      const { rows: [inv] } = await client.query("SELECT total_amount, paid_amount, credited_amount FROM invoices WHERE id=$1 AND tenant_id=$2", [req.params.id, t]);
+      if (!inv) return null;
+      const { rows: notes } = await client.query(
+        "SELECT id, note_number, reason, subtotal, gst_amount, total_amount, created_at FROM invoice_credit_notes WHERE tenant_id=$1 AND invoice_id=$2 ORDER BY created_at",
+        [t, req.params.id]);
+      return { credited_amount: Number(inv.credited_amount || 0), creditable: creditableBalance({ total: inv.total_amount, paidAmount: inv.paid_amount || 0, creditedAmount: inv.credited_amount || 0 }), notes };
+    });
+    if (!out) return res.status(404).json({ error: "Invoice not found" });
+    res.json(out);
+  } catch (e) { console.error("[invoices] credit notes failed:", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
+// POST /:id/credit-notes — issue a credit note for `amount` (GST-inclusive) with a reason.
+// GST is carved out in the invoice's own proportion, the note gets a CN-YYYY-NNN number, the
+// invoice's credited_amount rises (balance = total − paid − credited everywhere), and the GL
+// books a CREDIT_NOTE voucher that flows into GSTR-1 CDNR / GSTR-3B 4I via the existing engine.
+// Capped at the UNCOLLECTED balance: crediting money already received is a refund — a different,
+// payout-gated flow we refuse to fake.
+router.post("/:id/credit-notes", authenticate, canWrite, async (req, res) => {
+  try {
+    const t = req.user.tenant_id;
+    const amount = round2(req.body?.amount);
+    const reason = String(req.body?.reason || "").trim().slice(0, 300);
+    if (!(amount > 0)) return res.status(400).json({ error: "amount must be greater than 0" });
+    if (!reason) return res.status(400).json({ error: "A reason is required on a credit note (it appears on the GST document)." });
+
+    const outcome = await withTenant(t, async (client) => {
+      const { rows: [inv] } = await client.query("SELECT * FROM invoices WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [req.params.id, t]);
+      if (!inv) return { notFound: true };
+      if (inv.status === "draft") return { err: "Send the invoice first — a credit note adjusts an ISSUED document." };
+      if (inv.status === "cancelled") return { err: "Can't credit a cancelled invoice." };
+      const creditable = creditableBalance({ total: inv.total_amount, paidAmount: inv.paid_amount || 0, creditedAmount: inv.credited_amount || 0 });
+      if (amount > creditable) return { err: `Only ₹${creditable.toLocaleString("en-IN")} is still uncollected on this invoice — a credit note can't exceed that (refunding received money is a separate flow).` };
+
+      // Carve GST out of the credited amount in the invoice's own proportion, so the note's
+      // tax exactly reverses its share of the original output GST.
+      const gstShare = Number(inv.total_amount) > 0 ? Number(inv.gst_amount) / Number(inv.total_amount) : 0;
+      const noteGst = round2(amount * gstShare);
+      const noteSubtotal = round2(amount - noteGst);
+
+      // CN-YYYY-NNN per tenant, same style as invoice numbering.
+      const { rows: existing } = await client.query(
+        "SELECT note_number FROM invoice_credit_notes WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 50", [t]);
+      const year = new Date().getFullYear();
+      const nums = existing.map((r) => { const m = r.note_number.match(/CN-\d{4}-(\d+)$/); return m ? parseInt(m[1]) : 0; }).filter(Boolean);
+      const note_number = `CN-${year}-${String(nums.length ? Math.max(...nums) + 1 : 1).padStart(3, "0")}`;
+
+      const { rows: [note] } = await client.query(
+        "INSERT INTO invoice_credit_notes(tenant_id, invoice_id, note_number, reason, subtotal, gst_amount, total_amount, created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
+        [t, inv.id, note_number, reason, noteSubtotal, noteGst, amount, req.user.id || null]);
+
+      const newCredited = round2(round2(inv.credited_amount || 0) + amount);
+      const paid = round2(inv.paid_amount || 0);
+      const balanceAfter = round2(round2(inv.total_amount) - newCredited - paid);
+      // Fully credited with nothing collected → the invoice is voided by the note.
+      // Balance zeroed with money collected → settled (cash + adjustment).
+      const newStatus = balanceAfter <= 0 ? (paid > 0 ? "paid" : "cancelled") : inv.status;
+      const { rows: [upd] } = await client.query(
+        `UPDATE invoices SET credited_amount=$1, status=$2,
+           paid_at=CASE WHEN $2='paid' AND paid_at IS NULL THEN now() ELSE paid_at END
+         WHERE id=$3 AND tenant_id=$4 RETURNING *`,
+        [newCredited, newStatus, inv.id, t]);
+      return { inv: upd, note, balanceAfter };
+    });
+    if (outcome.notFound) return res.status(404).json({ error: "Invoice not found" });
+    if (outcome.err) return res.status(400).json({ error: outcome.err });
+
+    // GL CREDIT_NOTE voucher (Dr Sales + Output GST / Cr Debtor), idempotent per note id.
+    require("../lib/invoiceGl").postInvoiceCreditNote(t, outcome.inv, outcome.note).catch(() => {});
+    require("../modules/flows/runner").emitEvent(t, "invoice.credit_note", { invoice: outcome.inv, note: outcome.note }).catch(() => {});
+    require("../modules/analytics").track(t, req.user.id, { event: "credit_note_issued", props: { amount: Number(outcome.note.total_amount) } }).catch(() => {});
+    res.status(201).json({ note: outcome.note, invoice: { ...outcome.inv, aging: computeAging(outcome.inv) }, balance_due: outcome.balanceAfter });
+  } catch (e) { console.error("[invoices] credit note failed:", e.message); res.status(500).json({ error: "Internal error" }); }
 });
 
 module.exports = router;

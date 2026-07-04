@@ -28,6 +28,44 @@ async function sellerGstin(tenantId) {
   } catch { return null; }
 }
 
+// The revenue + output-GST legs for a given (subtotal, gst) slice of an invoice, with the
+// intra/inter-state derivation. Shared by the SALES voucher and the CREDIT_NOTE voucher so a
+// note can never split its tax differently from the sale it adjusts.
+// → { party, legs: [{ledgerId, amt}], taxes } or null when the chart isn't seeded.
+async function salesLegs(tenantId, inv, { subtotal, gst }) {
+  const party = await resolvePartyLedgerByName(tenantId, inv.customer_name || "Customer", "SALES");
+  const salesL = await ledgerIdByName(tenantId, "Sales");
+  if (!party || !salesL) return null; // chart not seeded → leave AR in the invoices table only
+
+  const legs = []; // { ledgerId, amt }
+  const taxes = [];
+  if (subtotal > 0) legs.push({ ledgerId: salesL, amt: subtotal });
+
+  if (gst > 0) {
+    const rate = num(inv.gst_rate);
+    const buyer = stateOf(inv.customer_gstin);
+    const seller = stateOf(await sellerGstin(tenantId));
+    const interState = !!(buyer && seller && buyer !== seller);
+    const pos = buyer || seller || null;
+    if (interState) {
+      const igstL = await ledgerIdByName(tenantId, "IGST Output");
+      if (!igstL) return null;
+      legs.push({ ledgerId: igstL, amt: gst });
+      taxes.push({ taxKind: "IGST", rate, taxableValue: subtotal, taxAmount: gst, isInput: false, placeOfSupply: pos, supplyType: "REGULAR", counterpartyGstin: inv.customer_gstin || null });
+    } else {
+      const cgstL = await ledgerIdByName(tenantId, "CGST Output");
+      const sgstL = await ledgerIdByName(tenantId, "SGST Output");
+      if (!cgstL || !sgstL) return null;
+      const cgst = round2(gst / 2);
+      const sgst = round2(gst - cgst); // exact remainder so the two halves sum to gst
+      legs.push({ ledgerId: cgstL, amt: cgst }, { ledgerId: sgstL, amt: sgst });
+      taxes.push({ taxKind: "CGST", rate: round2(rate / 2), taxableValue: subtotal, taxAmount: cgst, isInput: false, placeOfSupply: pos, supplyType: "REGULAR", counterpartyGstin: inv.customer_gstin || null });
+      taxes.push({ taxKind: "SGST", rate: round2(rate / 2), taxableValue: subtotal, taxAmount: sgst, isInput: false, placeOfSupply: pos, supplyType: "REGULAR", counterpartyGstin: inv.customer_gstin || null });
+    }
+  }
+  return { party, legs, taxes };
+}
+
 // Post the SALES voucher for an invoice (idempotent on sale:inv:<id>). Returns the
 // postVoucher result, or null if the books aren't seeded / nothing to post.
 async function postInvoiceSale(tenantId, inv) {
@@ -36,41 +74,14 @@ async function postInvoiceSale(tenantId, inv) {
     const gst = round2(num(inv.gst_amount));
     if (subtotal + gst <= 0) return null;
 
-    const party = await resolvePartyLedgerByName(tenantId, inv.customer_name || "Customer", "SALES");
-    const salesL = await ledgerIdByName(tenantId, "Sales");
-    if (!party || !salesL) return null; // chart not seeded → leave AR in the invoices table only
-
-    const credits = []; // { ledgerId, amt }
-    const taxes = [];
-    if (subtotal > 0) credits.push({ ledgerId: salesL, amt: subtotal });
-
-    if (gst > 0) {
-      const rate = num(inv.gst_rate);
-      const buyer = stateOf(inv.customer_gstin);
-      const seller = stateOf(await sellerGstin(tenantId));
-      const interState = !!(buyer && seller && buyer !== seller);
-      const pos = buyer || seller || null;
-      if (interState) {
-        const igstL = await ledgerIdByName(tenantId, "IGST Output");
-        if (!igstL) return null;
-        credits.push({ ledgerId: igstL, amt: gst });
-        taxes.push({ taxKind: "IGST", rate, taxableValue: subtotal, taxAmount: gst, isInput: false, placeOfSupply: pos, supplyType: "REGULAR", counterpartyGstin: inv.customer_gstin || null });
-      } else {
-        const cgstL = await ledgerIdByName(tenantId, "CGST Output");
-        const sgstL = await ledgerIdByName(tenantId, "SGST Output");
-        if (!cgstL || !sgstL) return null;
-        const cgst = round2(gst / 2);
-        const sgst = round2(gst - cgst); // exact remainder so the two halves sum to gst
-        credits.push({ ledgerId: cgstL, amt: cgst }, { ledgerId: sgstL, amt: sgst });
-        taxes.push({ taxKind: "CGST", rate: round2(rate / 2), taxableValue: subtotal, taxAmount: cgst, isInput: false, placeOfSupply: pos, supplyType: "REGULAR", counterpartyGstin: inv.customer_gstin || null });
-        taxes.push({ taxKind: "SGST", rate: round2(rate / 2), taxableValue: subtotal, taxAmount: sgst, isInput: false, placeOfSupply: pos, supplyType: "REGULAR", counterpartyGstin: inv.customer_gstin || null });
-      }
-    }
+    const derived = await salesLegs(tenantId, inv, { subtotal, gst });
+    if (!derived) return null;
+    const { party, legs, taxes } = derived;
 
     // Balanced by construction: party debit == sum of credits (subtotal + gst booked).
-    const partyDebit = round2(credits.reduce((s, c) => s + c.amt, 0));
+    const partyDebit = round2(legs.reduce((s, c) => s + c.amt, 0));
     const entries = [{ ledgerId: party, debit: toDb(partyDebit), credit: "0" }];
-    for (const c of credits) entries.push({ ledgerId: c.ledgerId, debit: "0", credit: toDb(c.amt) });
+    for (const c of legs) entries.push({ ledgerId: c.ledgerId, debit: "0", credit: toDb(c.amt) });
 
     return await postVoucher(
       tenantId, null,
@@ -80,6 +91,38 @@ async function postInvoiceSale(tenantId, inv) {
     );
   } catch (e) {
     console.warn("[invoiceGl] sale voucher skipped:", e && e.message);
+    return null;
+  }
+}
+
+// Post the CREDIT_NOTE voucher for a credit note against an invoice (idempotent per note).
+// Mirror of the sale: Dr Sales + Dr Output GST / Cr Sundry Debtor. The tax rows ride on a
+// CREDIT_NOTE voucher, which the GST engine already reports in GSTR-1 CDNR and GSTR-3B 4I.
+// Books the SALES voucher first (idempotent) so the debtor can absorb the credit.
+async function postInvoiceCreditNote(tenantId, inv, note) {
+  try {
+    const subtotal = round2(num(note.subtotal));
+    const gst = round2(num(note.gst_amount));
+    if (subtotal + gst <= 0) return null;
+    const sale = await postInvoiceSale(tenantId, inv);
+    if (!sale) { console.warn("[invoiceGl] credit note skipped: sale voucher not established"); return null; }
+
+    const derived = await salesLegs(tenantId, inv, { subtotal, gst });
+    if (!derived) return null;
+    const { party, legs, taxes } = derived;
+
+    const partyCredit = round2(legs.reduce((s, c) => s + c.amt, 0));
+    const entries = legs.map((c) => ({ ledgerId: c.ledgerId, debit: toDb(c.amt), credit: "0" }));
+    entries.push({ ledgerId: party, debit: "0", credit: toDb(partyCredit) });
+
+    return await postVoucher(
+      tenantId, null,
+      { voucherType: "CREDIT_NOTE", voucherDate: isoDate(note.created_at || Date.now()), narration: `Credit note ${note.note_number || ""} against ${inv.invoice_number || "invoice"}: ${note.reason || ""}`.trim(), reference: note.note_number || null, partyLedgerId: party, source: "invoice" },
+      entries,
+      { idempotencyKey: `cn:inv:${inv.id}:${note.id}`, taxes }
+    );
+  } catch (e) {
+    console.warn("[invoiceGl] credit note voucher skipped:", e && e.message);
     return null;
   }
 }
@@ -114,4 +157,4 @@ async function postInvoiceReceipt(tenantId, inv, { amount, ref, idempotencyKey }
   }
 }
 
-module.exports = { postInvoiceSale, postInvoiceReceipt };
+module.exports = { postInvoiceSale, postInvoiceReceipt, postInvoiceCreditNote };
