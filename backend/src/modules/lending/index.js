@@ -80,12 +80,17 @@ const LADDER_CLEAN_DPD = 15; // a loan closed without ever crossing 15 DPD count
 async function conductLadder(tenantId) {
   const { rows } = await q(tenantId,
     `SELECT l.id, l.status, l.dpd,
-            COALESCE((SELECT MAX(e.dpd) FROM loan_servicing_events e WHERE e.loan_id=l.id AND e.tenant_id=l.tenant_id), l.dpd) AS max_dpd
+            COALESCE((SELECT MAX(e.dpd) FROM loan_servicing_events e WHERE e.loan_id=l.id AND e.tenant_id=l.tenant_id), l.dpd) AS max_dpd,
+            COALESCE((SELECT SUM(s.waiver_amount) FROM loan_settlements s WHERE s.loan_id=l.id AND s.tenant_id=l.tenant_id),0) AS waived
        FROM loans l WHERE l.tenant_id=$1`, [tenantId]).catch(() => ({ rows: [] }));
-  const cleanLoans = rows.filter((l) => l.status === "closed" && Number(l.max_dpd) < LADDER_CLEAN_DPD).length;
-  // Freeze (drop to the entry step): anything currently past due, or a write-off ever.
+  // Clean = closed without ever crossing the DPD line AND without a waiver — a settlement
+  // where the lender forgave principal is a realized credit loss, not clean conduct.
+  const cleanLoans = rows.filter((l) => l.status === "closed" && Number(l.max_dpd) < LADDER_CLEAN_DPD && Number(l.waived) <= 0).length;
+  // Freeze (drop to the entry step): anything currently past due, a write-off ever, or a
+  // waiver settlement ever.
   const frozen = rows.some((l) => l.status === "active" && Number(l.dpd) > 0)
-    || rows.some((l) => l.status === "written_off");
+    || rows.some((l) => l.status === "written_off")
+    || rows.some((l) => Number(l.waived) > 0);
   const step = frozen ? 0 : Math.min(cleanLoans, LADDER_STEPS.length - 1);
   return { clean_loans: cleanLoans, step, pct: LADDER_STEPS[step], frozen };
 }

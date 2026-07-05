@@ -138,7 +138,11 @@ async function settleLoan(tenantId, loanId, { settlementAmount, note, actorId } 
      VALUES($1,$2,$3,$4,$5,$6,$7)`,
     [loanId, tenantId, paid, waiver, voucherId, note || null, actorId || null]);
   await q(tenantId, "UPDATE loans SET outstanding_principal=0, status='closed', settled_at=now() WHERE tenant_id=$1 AND id=$2", [tenantId, loanId]);
-  await q(tenantId, "UPDATE loan_schedule SET status='paid', paid_at=COALESCE(paid_at, now()) WHERE loan_id=$1", [loanId]);
+  // #7 repay→relearn: unpaid/overdue schedule rows are DELINQUENCY EVIDENCE and are left
+  // exactly as they stand — the old code stamped every row 'paid', so a waiver settlement
+  // (an actual credit loss) became indistinguishable from a clean payer in every future
+  // read of this borrower's history. The loan_settlements row (waiver_amount) is the
+  // authoritative record; the conduct ladder and the outcome labeler both read it.
   return { settled: true, loanId, settlementAmount: paid, waiverAmount: waiver, glPosted: !!voucherId };
 }
 

@@ -47,7 +47,8 @@ async function labelOutcomes() {
     try {
       const { rows: loans } = await q(tenantId,
         `SELECT l.id, l.kind, l.status, l.dpd, l.disbursed_at, l.created_at,
-                COALESCE((SELECT MAX(e.dpd) FROM loan_servicing_events e WHERE e.loan_id=l.id AND e.tenant_id=l.tenant_id), l.dpd) AS max_dpd
+                COALESCE((SELECT MAX(e.dpd) FROM loan_servicing_events e WHERE e.loan_id=l.id AND e.tenant_id=l.tenant_id), l.dpd) AS max_dpd,
+                COALESCE((SELECT SUM(s.waiver_amount) FROM loan_settlements s WHERE s.loan_id=l.id AND s.tenant_id=l.tenant_id),0) AS waived
            FROM loans l WHERE l.tenant_id=$1`, [tenantId]);
       if (!loans.length) continue;
       const { rows: runs } = await pool.query(
@@ -66,7 +67,9 @@ async function labelOutcomes() {
         const threshold = badThresholdFor(loan.kind);
         const maxDpd = Number(loan.max_dpd) || 0;
         let label = null;
-        if (loan.status === "written_off" || maxDpd >= threshold) label = "bad";
+        // A waiver settlement is a realized CREDIT LOSS — it must label bad even though the
+        // loan reads "closed" (the old settlement flow made it look like a clean payer).
+        if (loan.status === "written_off" || maxDpd >= threshold || Number(loan.waived) > 0) label = "bad";
         else if (loan.status === "closed") label = "good";
         if (!label) continue; // still maturing
         await pool.query(
