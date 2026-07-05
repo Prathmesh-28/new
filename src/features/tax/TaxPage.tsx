@@ -18,6 +18,19 @@ import {
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, startOfYear } from "date-fns";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import { useUrlTab } from "@/hooks/useUrlTab";
+import TabStrip from "@/components/TabStrip";
+
+// C1/C2/C14 (2026-07 gap audit): TaxPage rendered all 39 tabs as flat wrapping pills with
+// no overflow/search at all — worse than GST/Payroll, which at least folded into
+// TabStrip's dropdown already.
+const TAX_TAB_IDS = ["overview", "44ad", "cg", "audit", "tcs", "mat", "angel", "regime", "advtax",
+  "tds-return", "form26as", "tds-finder", "ldc-197", "depreciation", "loss-setoff",
+  "itr-prefill", "form15ca", "sec80", "eq-levy", "advtax-calendar", "tax-notice",
+  "hra", "house-prop", "44ae", "gratuity", "relief-89", "donation-80g", "cg-exempt", "interest-234",
+  "115ba", "partner-remun", "80jjaa", "esop-tax", "buyback",
+  "194n", "43bh", "presumptive-cmp", "surcharge", "tax-depth"] as const;
+type TaxTab = (typeof TAX_TAB_IDS)[number];
 
 interface TaxDeadline {
   label: string;
@@ -74,12 +87,7 @@ export default function TaxPage() {
   const navigate = useNavigate();
   const today = new Date();
   const [pushed, setPushed] = useState<Set<string>>(new Set());
-  const [taxTab, setTaxTab] = useState<"overview" | "44ad" | "cg" | "audit" | "tcs" | "mat" | "angel" | "regime" | "advtax"
-    | "tds-return" | "form26as" | "tds-finder" | "ldc-197" | "depreciation" | "loss-setoff"
-    | "itr-prefill" | "form15ca" | "sec80" | "eq-levy" | "advtax-calendar" | "tax-notice"
-    | "hra" | "house-prop" | "44ae" | "gratuity" | "relief-89" | "donation-80g" | "cg-exempt" | "interest-234"
-    | "115ba" | "partner-remun" | "80jjaa" | "esop-tax" | "buyback"
-    | "194n" | "43bh" | "presumptive-cmp" | "surcharge" | "tax-depth">("overview");
+  const [taxTab, setTaxTab] = useUrlTab<TaxTab>("overview", { validValues: TAX_TAB_IDS });
   const [aaScheme,   setAaScheme]   = useState<"44ad" | "44ada">("44ad");
   const [aaTurnover, setAaTurnover] = useState("");
   const [aaDigital,  setAaDigital]  = useState(false);
@@ -153,18 +161,11 @@ export default function TaxPage() {
           </h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("tax.subtitle")}</p>
         </div>
-        <div className="flex gap-1 flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-          {([["overview", tr("tax.tab.overview"), ShieldCheck], ["regime", tr("tax.tab.regime"), Scale], ["advtax", tr("tax.tab.advtax"), Clock], ["44ad", tr("tax.tab.presumptive44ad"), Calculator], ["cg", tr("tax.tab.capitalGains"), TrendingUp], ["audit", tr("tax.tab.audit44ab"), AlertTriangle], ["tcs", tr("tax.tab.tcsTracker"), FileText], ["mat", tr("tax.tab.matCheck"), AlertTriangle], ["angel", "Angel Tax", AlertTriangle],
+        <TabStrip primaryCount={6} storageKey="tax-tabs" active={taxTab} onChange={(id) => setTaxTab(id as typeof taxTab)} tabs={([["overview", tr("tax.tab.overview"), ShieldCheck], ["regime", tr("tax.tab.regime"), Scale], ["advtax", tr("tax.tab.advtax"), Clock], ["44ad", tr("tax.tab.presumptive44ad"), Calculator], ["cg", tr("tax.tab.capitalGains"), TrendingUp], ["audit", tr("tax.tab.audit44ab"), AlertTriangle], ["tcs", tr("tax.tab.tcsTracker"), FileText], ["mat", tr("tax.tab.matCheck"), AlertTriangle], ["angel", "Angel Tax", AlertTriangle],
             ["tds-return", "TDS Return (24Q/26Q)", Receipt], ["form26as", "26AS / AIS Recon", FileSearch], ["tds-finder", "TDS Section Finder", Search], ["ldc-197", "Lower-Deduction (197)", FileCheck], ["depreciation", "Depreciation Schedule", Layers], ["loss-setoff", "Loss Set-off & C/F", Repeat], ["itr-prefill", "ITR Pre-Fill Pack", FilePlus2], ["form15ca", "Form 15CA/CB", Globe], ["sec80", "Sec 80 Maximiser", PiggyBank], ["eq-levy", "Equalisation Levy / 194O", ShoppingCart], ["advtax-calendar", "Adv. Tax Calendar", CalendarClock], ["tax-notice", "Notice / Demand 143(1)", Gavel],
             ["hra", "HRA Exemption 10(13A)", Home], ["house-prop", "House Property 24(b)", Building2], ["44ae", "Presumptive 44AE (Transport)", Truck], ["gratuity", "Gratuity / Leave Encash", Umbrella], ["relief-89", "Arrears Relief 89(1)", Banknote], ["donation-80g", "Donations 80G", Heart], ["cg-exempt", "CG Exemption 54/54EC/54F", Coins], ["interest-234", "Interest 234A/B/C", Percent],
             ["115ba", "Corporate Rate 115BAA/BAB", Landmark], ["partner-remun", "Partner Remuneration 40(b)", Users], ["80jjaa", "New-Employee 80JJAA", UserPlus], ["esop-tax", "ESOP Tax", Gift], ["buyback", "Share Buyback 115QA", Wallet],
-            ["194n", "Cash Withdrawal 194N", HandCoins], ["43bh", "MSME 43B(h) Disallowance", BadgePercent], ["presumptive-cmp", "Presumptive vs Books", GitCompare], ["surcharge", "Surcharge & Marginal Relief", Sigma], ["tax-depth", "Tax Depth (server)", Percent]] as const).map(([id, label, Icon]) => (
-            <button key={id} onClick={() => setTaxTab(id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${taxTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
-              <Icon size={11} />{label}
-            </button>
-          ))}
-        </div>
+            ["194n", "Cash Withdrawal 194N", HandCoins], ["43bh", "MSME 43B(h) Disallowance", BadgePercent], ["presumptive-cmp", "Presumptive vs Books", GitCompare], ["surcharge", "Surcharge & Marginal Relief", Sigma], ["tax-depth", "Tax Depth (server)", Percent]] as const).map(([id, label, icon]) => ({ id, label, icon }))} />
       </div>
 
       {taxTab === "44ad" && (() => {
