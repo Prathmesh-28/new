@@ -127,10 +127,7 @@ router.get("/org/export", async (req, res) => {
 router.delete("/org", async (req, res) => {
   const tid = scopeTenant(req);
   if (tid === req.user.tenant_id) return res.status(400).json({ error: "You can't delete your own admin workspace" });
-  await pool.query("DELETE FROM users WHERE tenant_id=$1", [tid]);
-  await pool.query("DELETE FROM kv_store WHERE tenant_id=$1", [tid]);
-  await pool.query("DELETE FROM tenant_profile WHERE tenant_id=$1", [tid]);
-  await pool.query("DELETE FROM tenant_billing WHERE tenant_id=$1", [tid]);
+  await require("../lib/retention").wipeTenant(tid);
   writeAudit(req.user.id, "org.delete", "tenant", tid, {});
   res.json({ ok: true });
 });

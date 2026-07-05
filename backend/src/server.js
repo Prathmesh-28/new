@@ -606,6 +606,27 @@ initDb()
         .then(r => { if (r && (r.created || r.expired)) console.log(`[lending-preapproval] ${r.created} offer(s) refreshed, ${r.expired} expired`); })
         .catch(err => console.error("[lending-preapproval]", err.message));
     }, { timezone: "UTC" });
+    // Data retention (D5, 2026-07 gap audit): process self-requested erasures past their
+    // grace window, age out audit_log past its retention window, and scan (dry-run unless
+    // RETENTION_PURGE_ENFORCE=true) statutory records past the GST/IT-Act window. Nightly
+    // at 04:00 UTC, clear of the other jobs above.
+    cron.schedule("0 4 * * *", async () => {
+      const retention = require("./lib/retention");
+      try {
+        const n = await retention.processDeletionRequests();
+        if (n) console.log(`[retention] completed ${n} self-requested erasure(s)`);
+      } catch (err) { console.error("[retention-deletion-requests]", err.message); }
+      try {
+        const n = await retention.purgeAuditLog();
+        if (n) console.log(`[retention] aged out ${n} audit_log row(s)`);
+      } catch (err) { console.error("[retention-audit-log]", err.message); }
+      try {
+        const r = await retention.purgeStatutoryRecords();
+        if (r.invoices || r.transactions || r.loans) {
+          console.log(`[retention] statutory ${r.enforced ? "purged" : "dry-run"}:`, r);
+        }
+      } catch (err) { console.error("[retention-statutory]", err.message); }
+    }, { timezone: "UTC" });
     // Books: durable e-invoice worker (registers QUEUED vouchers with the GSP).
     require("./modules/books/einvoice").startWorker();
     // SMB agents: run scheduled (daily/weekly) agents each hour - read-only autonomous runs.
