@@ -49,6 +49,11 @@ async function initDb() {
       meta       JSONB,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    -- The audit trail must outlive its actor: a plain REFERENCES (NO ACTION) blocked
+    -- deleting ANY user who had ever performed an audited action (2026-07 gap audit,
+    -- found while verifying A4/A8) — SET NULL keeps the historical row, drops the link.
+    ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS audit_log_user_id_fkey;
+    ALTER TABLE audit_log ADD CONSTRAINT audit_log_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
 
     CREATE TABLE IF NOT EXISTS files (
       id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -551,6 +556,9 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS invites_tenant  ON team_invites(tenant_id, status);
     -- invite (owner → person) vs request (person → company "let me join")
     ALTER TABLE team_invites ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'invite';
+    -- Resend/nudge a pending invite (B7 gap audit 2026-07): re-notify in-platform without
+    -- cancel+recreate. reminded_at drives a cooldown; last_reminded_at is shown to the owner.
+    ALTER TABLE team_invites ADD COLUMN IF NOT EXISTS reminded_at TIMESTAMPTZ;
 
     -- ── Activity / lifecycle signals on users (last login, status) ────────────
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at  TIMESTAMPTZ;

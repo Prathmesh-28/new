@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
-import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users, Eye, SlidersHorizontal, RotateCcw, ChevronDown, ChevronRight, Grid3x3, GitBranch, Plus, CalendarClock, History, ShieldQuestion, LogIn, FileText, Globe, Image, BellRing, Hash, Palette, Receipt, Landmark, Send, Archive, LayoutDashboard, Percent, MapPin, Tags, ClipboardList } from "lucide-react";
+import { UserPlus, Trash2, Copy, CheckCircle2, Save, MessageCircle, Unlink, Lock, Users, Eye, SlidersHorizontal, RotateCcw, ChevronDown, ChevronRight, Grid3x3, GitBranch, Plus, CalendarClock, History, ShieldQuestion, LogIn, FileText, Globe, Image, BellRing, Hash, Palette, Receipt, Landmark, Send, Archive, LayoutDashboard, Percent, MapPin, Tags, ClipboardList, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useFeatureState } from "@/hooks/useFeatureState";
@@ -1490,7 +1490,7 @@ function StatementTemplateCard() {
 }
 
 // ── Team invites (owner-facing): invite teammates in-platform, see pending/sent ──
-type OutInvite = { id: string; invitee_email: string; role: string; status: string; inviter_email: string | null; created_at: string; tenant_id?: string };
+type OutInvite = { id: string; invitee_email: string; role: string; status: string; inviter_email: string | null; created_at: string; tenant_id?: string; reminded_at?: string | null };
 type Seats = { plan: string; used: number; limit: number; full: boolean; remaining: number; nextPlan: string | null };
 
 export function TeamInvitesCard() {
@@ -1589,21 +1589,75 @@ export function TeamInvitesCard() {
         </div>
       )}
 
-      {list.length > 0 && (
+      {list.filter(i => i.status !== "pending").length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold mb-1 text-[var(--color-muted)]">Sent invites</p>
-          {list.map(inv => (
+          <p className="text-xs font-semibold mb-1 text-[var(--color-muted)]">Past invites</p>
+          {list.filter(i => i.status !== "pending").map(inv => (
             <div key={inv.id} className="flex items-center justify-between gap-3 text-sm border-t border-[var(--color-border)] pt-2 first:border-0 first:pt-0">
               <span className="truncate"><span className="font-medium">{inv.invitee_email}</span> <span className="text-[var(--color-muted)]">· {roleLabel(inv.role)}</span></span>
-              <div className="flex items-center gap-3 shrink-0">
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badge(inv.status)}`}>{inv.status}</span>
-                {inv.status === "pending" && <button onClick={() => cancel(inv.id)} title="Cancel invite" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>}
-              </div>
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badge(inv.status)}`}>{inv.status}</span>
             </div>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+// Pending outgoing invites, rendered as rows inside the SAME table as active members
+// (B7: unify what used to be two disconnected cards) — same avatar/status/action layout,
+// with a Remind (in-platform re-notify, 24h cooldown) + Cancel action per row.
+export function PendingInviteRows() {
+  const [list, setList] = useState<OutInvite[]>([]);
+  const headers = useCallback(() => ({ Authorization: `Bearer ${localStorage.getItem("hr_access") ?? ""}` }), []);
+  const load = useCallback(() => {
+    fetch(`${BASE}/api/invites`, { headers: headers() }).then(r => r.ok ? r.json() : { outgoing: [] }).then(d => setList((d.outgoing ?? []).filter((i: OutInvite) => i.status === "pending"))).catch(() => {});
+  }, [headers]);
+  useEffect(() => { load(); const t = setInterval(load, 20000); return () => clearInterval(t); }, [load]);
+
+  const remind = async (id: string) => {
+    const res = await fetch(`${BASE}/api/invites/${id}/resend`, { method: "POST", headers: headers() });
+    if (res.ok) { toast.success("Reminded — they'll see it next time they're in-app"); load(); }
+    else toast.error((await res.json().catch(() => ({}))).error ?? "Failed to remind");
+  };
+  const cancel = async (id: string) => {
+    const res = await fetch(`${BASE}/api/invites/${id}/cancel`, { method: "POST", headers: headers() });
+    if (res.ok) { toast.success("Invite cancelled"); load(); } else toast.error("Failed to cancel");
+  };
+
+  if (!list.length) return null;
+  return (
+    <>
+      {list.map(inv => {
+        const canRemind = !inv.reminded_at || (Date.now() - new Date(inv.reminded_at).getTime() >= 24 * 60 * 60 * 1000);
+        return (
+          <div key={inv.id} className="flex items-center justify-between py-3.5 gap-3 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-full bg-[var(--color-bg)] border border-dashed border-[var(--color-border)] flex items-center justify-center shrink-0">
+                <Mail size={14} className="text-[var(--color-muted)]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{inv.invitee_email}</p>
+                <p className="text-xs text-[var(--color-muted)] mt-0.5 truncate">
+                  <span className="text-yellow-500">Pending invite</span>
+                  <span> · invited {relTime(inv.created_at)}</span>
+                  {inv.reminded_at && <span> · reminded {relTime(inv.reminded_at)}</span>}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${roleBadge(inv.role as UserRole)}`}>{roleLabel(inv.role)}</span>
+              <button onClick={() => remind(inv.id)} disabled={!canRemind} title={canRemind ? "Remind (in-app)" : "Already reminded in the last 24h"} className="text-[var(--color-muted)] hover:text-[var(--color-primary)] disabled:opacity-30 disabled:hover:text-[var(--color-muted)] transition-colors p-1">
+                <BellRing size={14} />
+              </button>
+              <button onClick={() => cancel(inv.id)} title="Cancel invite" className="text-[var(--color-muted)] hover:text-red-400 transition-colors p-1">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </>
   );
 }
 

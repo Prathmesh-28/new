@@ -4,7 +4,7 @@ const crypto  = require("crypto");
 const { pool } = require("../db");
 const { signAccess, signRefresh, verifyRefresh } = require("../lib/jwt");
 const { authenticate } = require("../middleware/auth");
-const { sendOtp, sendWelcome } = require("../lib/email");
+const { sendOtp, sendWelcome, sendPasswordResetSuccess } = require("../lib/email");
 const { validateBody } = require("../lib/validate");
 const { requireHuman } = require("../lib/turnstile");
 
@@ -283,7 +283,11 @@ router.post("/set-password", authenticate, async (req, res) => {
   const { password } = req.body;
   if (!password || password.length < 8) return res.status(400).json({ error: "Password too short" });
   const hash = await bcrypt.hash(password, 10);
-  await pool.query("UPDATE users SET password=$1, first_login=false WHERE id=$2", [hash, req.user.id]);
+  const { rows } = await pool.query(
+    "UPDATE users SET password=$1, first_login=false WHERE id=$2 RETURNING email, display_name",
+    [hash, req.user.id]
+  );
+  if (rows[0]) sendPasswordResetSuccess({ to: rows[0].email, name: rows[0].display_name }).catch(() => {});
   res.json({ ok: true });
 });
 
@@ -323,6 +327,7 @@ router.post("/change-password", authenticate, async (req, res) => {
 
   const hash = await bcrypt.hash(new_password, 10);
   await pool.query("UPDATE users SET password=$1 WHERE id=$2", [hash, req.user.id]);
+  sendPasswordResetSuccess({ to: req.user.email, name: req.user.display_name }).catch(() => {});
   res.json({ ok: true });
 });
 

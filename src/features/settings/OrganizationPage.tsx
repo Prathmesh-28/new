@@ -14,7 +14,7 @@ import BillingCard from "./BillingCard";
 import {
   relTime, OwnerOnboardingCard, CompanyProfileCard, JoinCompanyCard, TeamInvitesCard,
   PermissionMatrixCard, ApprovalPolicyCard, BooksLockCard, AuditLogCard,
-  DataRetentionCard, LocationsCard, OrgActivityCard, type TeamUser,
+  DataRetentionCard, LocationsCard, OrgActivityCard, PendingInviteRows, type TeamUser,
 } from "./SettingsPage";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -272,6 +272,7 @@ export default function OrganizationPage() {
                         </div>
                       );
                     })}
+                    <PendingInviteRows />
                     {users.length === 0 && (
                       <p className="py-8 text-center text-sm text-[var(--color-muted)]">No team members yet - invite your finance person, accountant or sales staff above.</p>
                     )}

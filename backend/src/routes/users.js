@@ -218,6 +218,7 @@ router.patch("/:id/profile", authenticate, async (req, res) => {
     vals
   );
   if (!rows.length) return res.status(404).json({ error: "Not found" });
+  writeAudit(req.user.id, "user.edit_profile", "user", req.params.id, { email: typeof email === "string" ? email.trim().toLowerCase() : undefined, display_name });
   res.json(rows[0]);
 });
 
@@ -234,6 +235,16 @@ router.delete("/:id", authenticate, async (req, res) => {
   if (actor.role === "owner") {
     if (target.tenant_id !== actor.tenant_id) return res.status(403).json({ error: "Forbidden" });
     if (target.role === "super_admin")        return res.status(403).json({ error: "Forbidden" });
+  }
+
+  // Deleting a tenant's sole owner would orphan the company (mirrors the self-service
+  // leave guard above) — block it for both an owner removing a co-owner and a
+  // super_admin acting cross-tenant from the admin console.
+  if (target.role === "owner") {
+    const { rows: co } = await pool.query(
+      "SELECT COUNT(*)::int AS n FROM users WHERE tenant_id=$1 AND role='owner' AND id<>$2", [target.tenant_id, target.id]
+    );
+    if (co[0].n === 0) return res.status(409).json({ error: "This is the only owner of that company — promote another member to owner first, or the org will be orphaned." });
   }
 
   // Deleting a super_admin must not drop the count to zero - do it atomically.

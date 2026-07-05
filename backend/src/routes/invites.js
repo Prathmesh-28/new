@@ -208,6 +208,39 @@ router.post("/:id/decline", authenticate, requireOwnerOrAdmin, async (req, res) 
   res.json({ ok: true });
 });
 
+// ── POST /api/invites/:id/resend - nudge a pending invite without cancel+recreate (B7) ─
+// In-platform only (matches the invite flow itself, which is deliberately email-free): bumps
+// reminded_at (owner sees "reminded Xm ago", 1/day cooldown to avoid spam) and — when the
+// invitee is an existing user — raises an in-app alert so it surfaces on their next visit.
+router.post("/:id/resend", authenticate, requireOwnerOrAdmin, async (req, res) => {
+  const { rows } = await pool.query("SELECT * FROM team_invites WHERE id=$1", [req.params.id]);
+  const inv = rows[0];
+  if (!inv) return res.status(404).json({ error: "Not found" });
+  if (req.user.role !== "super_admin" && inv.tenant_id !== req.user.tenant_id) return res.status(403).json({ error: "Forbidden" });
+  if (inv.kind !== "invite" || inv.status !== "pending") return res.status(409).json({ error: "Only a pending invite can be reminded" });
+  if (inv.reminded_at && Date.now() - new Date(inv.reminded_at).getTime() < 24 * 60 * 60 * 1000) {
+    return res.status(429).json({ error: "Already reminded in the last 24 hours" });
+  }
+  await pool.query("UPDATE team_invites SET reminded_at=now() WHERE id=$1", [inv.id]);
+  if (inv.invitee_user_id) {
+    // Alerts are read scoped to the reader's OWN tenant_id (routes/alerts.js) — the
+    // invitee hasn't joined inv.tenant_id yet, so the notification must land in their
+    // current workspace, not the one they're being invited into.
+    const { rows: invitee } = await pool.query("SELECT tenant_id FROM users WHERE id=$1", [inv.invitee_user_id]);
+    if (invitee[0]) {
+      await pool.query(
+        `INSERT INTO alerts(tenant_id, rule_id, severity, title, message, meta)
+         VALUES($1,'team.invite_reminder','low',$2,$3,$4)`,
+        [invitee[0].tenant_id, "You have a pending team invite",
+         `${req.user.display_name || req.user.email} invited you to join as ${inv.role.replace(/_/g, " ")} — accept or decline from Settings.`,
+         JSON.stringify({ invite_id: inv.id })]
+      ).catch(() => {});
+    }
+  }
+  writeAudit(req.user.id, "invite.resend", "tenant", inv.tenant_id, { invitee: inv.invitee_email });
+  res.json({ ok: true, reminded_at: new Date().toISOString() });
+});
+
 // ── POST /api/invites/:id/cancel - inviter/owner/super withdraws a pending one ─
 router.post("/:id/cancel", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { rows } = await pool.query("SELECT * FROM team_invites WHERE id=$1", [req.params.id]);

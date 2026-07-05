@@ -7,6 +7,19 @@
 const { pool } = require("../db");
 const { q } = require("./tenantDb");
 
+// High-severity alerts also email the tenant's owner(s) — sendAlertEmail existed but was
+// never called from anywhere (2026-07 gap audit, B11). Best-effort: a mail failure must
+// never break alert creation; gated only by the SMTP_* env already used for OTP/welcome mail.
+async function notifyOwnersByEmail(tenantId, { title, message, severity }) {
+  if (severity !== "high" && severity !== "critical") return;
+  try {
+    const { rows: owners } = await pool.query(
+      "SELECT email, display_name FROM users WHERE tenant_id=$1 AND role='owner'", [tenantId]);
+    const { sendAlertEmail } = require("./email");
+    for (const o of owners) await sendAlertEmail({ to: o.email, title, message, severity }).catch(() => {});
+  } catch (e) { console.error("[reminders] owner alert email failed for", tenantId, e.message); }
+}
+
 async function runOverdueReminders() {
   // invoices is FORCE-RLS (0015): a single cross-tenant scan returns 0 rows under RLS. So
   // enumerate tenants from a non-RLS source (users — every tenant has ≥1) and scan + alert
@@ -51,6 +64,9 @@ async function runOverdueReminders() {
         );
         created++;
         require("../modules/flows/runner").emitEvent(tenantId, "invoice.overdue", { invoice: inv, days_overdue: days }).catch(() => {});
+        const title = `Invoice ${inv.invoice_number} is overdue`;
+        const message = `${inv.customer_name} - ₹${amount} is ${days} day${days === 1 ? "" : "s"} overdue. Send a reminder or chase the payment.`;
+        notifyOwnersByEmail(tenantId, { title, message, severity }).catch(() => {});
       } catch (e) {
         console.error("[reminders] insert failed for", inv.id, e.message);
       }
@@ -96,6 +112,9 @@ async function runExpiryReminders() {
             JSON.stringify({ expiry_id: it.id, kind: it.kind, days_to_expiry: days })]);
         created++;
         require("../modules/flows/runner").emitEvent(tenantId, isDsc ? "dsc.expiring" : "expiry.due", { item: it, days_to_expiry: days }).catch(() => {});
+        const title = `${isDsc ? "DSC" : (it.kind || "Item")} ${it.name} ${days < 0 ? "expired" : "expiring"}`;
+        const message = `${it.name}${it.identifier ? ` (${it.identifier})` : ""} ${when}. Renew it to stay compliant.`;
+        notifyOwnersByEmail(tenantId, { title, message, severity }).catch(() => {});
       } catch (e) { console.error("[reminders] expiry alert insert failed for", it.id, e.message); }
     }
   }
