@@ -120,7 +120,7 @@ const NODES = {
     return { sent: !!process.env.SMTP_USER, to }; // sent only if SMTP is configured
   },
   async underwrite(cfg, ctx, env) {
-    const r = await require("../../lib/underwriting").score(env.tenantId, pool);
+    const r = await require("../../lib/underwriting").score(env.tenantId, pool, undefined, { trigger: "flows" });
     // compact, templatable shape for downstream branch/notify nodes
     return { score: r.score, grade: r.grade, decision: r.decision && r.decision.outcome, eligible_amount: r.approved_amount, recommended_product: r.recommended_product };
   },

@@ -11,6 +11,21 @@ const INDUSTRY_RISK = {
   default: 1.0,
 };
 
+// Scorecard version stamp — persisted with every run so future weight changes can be
+// backtested against outcomes recorded under the version that produced them.
+const SCORECARD_VERSION = "v2-2026-07";
+
+// pg returns DATE columns as JS Date objects; a naive toString() yields "Mon Jun 15 2026…",
+// so slicing it produced WEEKDAY+MONTH buckets ("Mon Jun") instead of calendar months —
+// the #2-weighted consistency signal was computed over garbage for every tenant.
+// These handle Date | ISO string | anything Date.parse can read, in UTC.
+function isoDate(d) {
+  if (d instanceof Date) return d.toISOString().slice(0, 10);
+  const t = Date.parse(d);
+  return Number.isNaN(t) ? String(d).slice(0, 10) : new Date(t).toISOString().slice(0, 10);
+}
+const isoMonth = (d) => isoDate(d).slice(0, 7);
+
 // Map free-text firm.industry/sector → an INDUSTRY_RISK band (policy heuristic, NOT a live
 // default-rate feed). Unknown → default (1.0).
 function normalizeIndustry(s) {
@@ -24,7 +39,7 @@ function normalizeIndustry(s) {
   return "default";
 }
 
-async function score(tenantId, pool, enrichment) {
+async function score(tenantId, pool, enrichment, opts = {}) {
   const cutoff90  = daysAgo(90);
   const cutoff180 = daysAgo(180);
   const c90 = new Date(cutoff90); // Date form for in-JS filters — a Date compared to a string is ALWAYS false (latent bug: the 90-day window was silently empty)
@@ -39,10 +54,13 @@ async function score(tenantId, pool, enrichment) {
       [tenantId, cutoff180]
     ),
     pool.query("SELECT * FROM bank_accounts WHERE tenant_id=$1 AND is_active=true", [tenantId]),
-    pool.query("SELECT * FROM active_loans WHERE tenant_id=$1", [tenantId]).catch(() => ({ rows: [] })),
+    // Legacy fallback EXCLUDES fake-rail loans: every "loan" created by accepting one of
+    // the old illustrative lender offers carries offer_id — a demo toy must never lower a
+    // real credit limit. Genuinely-legacy manual records (offer_id NULL) still count.
+    pool.query("SELECT * FROM active_loans WHERE tenant_id=$1 AND offer_id IS NULL", [tenantId]).catch(() => ({ rows: [] })),
     pool.query("SELECT created_at FROM users WHERE tenant_id=$1 ORDER BY created_at LIMIT 1", [tenantId]),
-    pool.query("SELECT period_year, period_month, status, filed_at, output_tax FROM gst_returns WHERE tenant_id=$1 ORDER BY period_year DESC, period_month DESC LIMIT 24", [tenantId]).catch(() => ({ rows: [] })),
-    q(tenantId, "SELECT total_amount, status, due_date FROM invoices WHERE tenant_id=$1 AND status <> 'cancelled'", [tenantId]).catch(() => ({ rows: [] })), // invoices is FORCE-RLS (0015) → q()
+    pool.query("SELECT period_year, period_month, status, filed_at, output_tax, computed_data FROM gst_returns WHERE tenant_id=$1 ORDER BY period_year DESC, period_month DESC LIMIT 24", [tenantId]).catch(() => ({ rows: [] })),
+    q(tenantId, "SELECT total_amount, status, due_date, customer_gstin, customer_name, created_at FROM invoices WHERE tenant_id=$1 AND status <> 'cancelled'", [tenantId]).catch(() => ({ rows: [] })), // invoices is FORCE-RLS (0015) → q()
     q(tenantId, "SELECT outstanding_principal FROM loans WHERE tenant_id=$1 AND status='active'", [tenantId]).catch(() => ({ rows: [] })),
     q(tenantId, "SELECT COALESCE(SUM(s.total_due),0) AS due_next FROM loan_schedule s JOIN loans l ON l.id=s.loan_id WHERE l.tenant_id=$1 AND l.status='active' AND s.status <> 'paid' AND s.due_date < now() + interval '31 days'", [tenantId]).catch(() => ({ rows: [{ due_next: 0 }] })),
     q(tenantId, "SELECT COALESCE(MAX(now()::date - s.due_date),0) AS max_dpd FROM loan_schedule s JOIN loans l ON l.id=s.loan_id WHERE l.tenant_id=$1 AND l.status='active' AND s.status <> 'paid' AND s.due_date < now()::date", [tenantId]).catch(() => ({ rows: [{ max_dpd: 0 }] })),
@@ -74,21 +92,51 @@ async function score(tenantId, pool, enrichment) {
   const inflows180 = txns.filter(t => Number(t.amount) > 0);
   const outflows180 = txns.filter(t => Number(t.amount) < 0);
 
-  const monthlyRevenue90  = sum(inflows90)  / 3;
-  const monthlyRevenue180 = sum(inflows180) / 6;
+  const monthlyRevenueBooks90 = sum(inflows90)  / 3;
+  const monthlyRevenue180     = sum(inflows180) / 6;
 
-  // S1 - Average monthly revenue (last 3 months)
+  // GST-declared turnover (lender-verifiable) — the returns we compute store the period's
+  // taxable turnover in computed_data. It was fetched here and then DISCARDED; now, when a
+  // business's books lag (common: sales invoiced but bank inflows recorded elsewhere), the
+  // GST-declared monthly turnover FLOORS the revenue signal — declared-to-government beats
+  // absent bookkeeping. Books remain the source when they're the larger.
+  const gstTurnovers = gstRows
+    .filter((r) => r.filed_at || ["filed", "accepted"].includes(r.status))
+    .map((r) => Number(r.computed_data?.taxable_turnover))
+    .filter((v) => Number.isFinite(v) && v > 0);
+  const gstMonthlyTurnover = gstTurnovers.length ? gstTurnovers.reduce((a, b) => a + b, 0) / gstTurnovers.length : 0;
+  const monthlyRevenue90 = Math.max(monthlyRevenueBooks90, gstMonthlyTurnover);
+  const revenueSource = monthlyRevenue90 === monthlyRevenueBooks90 ? "books" : "gst_returns";
+
+  // S1 - Average monthly revenue (last 3 months, GST-floored)
   const s1 = scoreRevenue(monthlyRevenue90);
 
   // S2 - Revenue consistency (CoV of monthly inflows)
   const s2 = scoreConsistency(inflows180);
 
-  // S3 - Business age in months
-  const ageMonths = (Date.now() - new Date(joinDate)) / (1000 * 60 * 60 * 24 * 30);
+  // S3 - Business vintage: EARLIEST EVIDENCE of the business existing — the first user's
+  // join date, the earliest invoice, or the earliest FILED GST period — whichever is
+  // oldest. (Join date alone punished long-running firms that adopted Headroom recently.)
+  const earliestInvoice = invRows.reduce((min, i) => {
+    const t = i.created_at ? new Date(i.created_at).getTime() : Infinity;
+    return t < min ? t : min;
+  }, Infinity);
+  const earliestGst = gstRows
+    .filter((r) => r.filed_at || ["filed", "accepted"].includes(r.status))
+    .reduce((min, r) => {
+      const t = new Date(r.period_year, (r.period_month || 1) - 1, 1).getTime();
+      return t < min ? t : min;
+    }, Infinity);
+  const earliestEvidence = Math.min(new Date(joinDate).getTime(), earliestInvoice, earliestGst);
+  const ageMonths = (Date.now() - earliestEvidence) / (1000 * 60 * 60 * 24 * 30);
   const s3 = scoreAge(ageMonths);
 
-  // S4 - Revenue concentration (top customer %)
-  const s4 = scoreConcentration(inflows90);
+  // S4 - Revenue concentration. Prefer INVOICES keyed by customer GSTIN (falling back to
+  // the normalized name) — the audit-grade source. Fall back to bank inflows only when
+  // there are too few invoices, and there EXCLUDE unnamed receipts: previously every
+  // no-counterparty inflow lumped into one "unknown" merchant, so a tenant that didn't
+  // fill counterparty names looked 100%-concentrated and ate the full penalty.
+  const s4 = scoreConcentrationFromInvoices(invRows, inflows90);
 
   // S5 - Overdraft frequency (transactions that cause balance to go <0)
   const s5 = scoreOverdraft(txns);
@@ -96,20 +144,32 @@ async function score(tenantId, pool, enrichment) {
   // S6 - Debt service ratio. Real near-term scheduled repayment from the lending module
   // (SUM of total_due in the next 31 days); falls back to a 5%-of-outstanding proxy for
   // out-of-window bullet loans, and to legacy active_loans when no lending loan exists.
+  // ZERO revenue with a real repayment obligation is the WORST debt-service position,
+  // not a perfect one (the old ternary scored it 100).
   const monthlyLoanRepayment = useLending
     ? (dueNext > 0 ? dueNext : realOutstanding * 0.05)
     : legacyOutstanding * 0.05;
-  const dsr = monthlyRevenue90 > 0 ? monthlyLoanRepayment / monthlyRevenue90 : 0;
-  const s6 = dsr < 0.15 ? 100 : dsr < 0.30 ? 80 : dsr < 0.45 ? 60 : dsr < 0.60 ? 40 : 20;
+  let s6;
+  if (monthlyLoanRepayment <= 0) s6 = 100;                    // no debt burden at all
+  else if (monthlyRevenue90 <= 0) s6 = 20;                    // debt with no revenue to service it
+  else {
+    const dsr = monthlyLoanRepayment / monthlyRevenue90;
+    s6 = dsr < 0.15 ? 100 : dsr < 0.30 ? 80 : dsr < 0.45 ? 60 : dsr < 0.60 ? 40 : 20;
+  }
+  const dsr = monthlyRevenue90 > 0 ? monthlyLoanRepayment / monthlyRevenue90 : (monthlyLoanRepayment > 0 ? Infinity : 0);
 
   // S12 - Loan repayment conduct (worst current DPD across the real schedule). Neutral (100)
   // when there are no loans or nothing is overdue.
   const s12 = maxDpd <= 0 ? 100 : maxDpd <= 30 ? 60 : maxDpd <= 60 ? 35 : 15;
 
-  // S7 - Current balance vs monthly burn
+  // S7 - Current balance vs monthly burn. When the tenant has NO bank accounts on record,
+  // the runway is UNKNOWN, not zero — the old code scored active businesses 10/100 on a
+  // 10%-weight factor purely for not having connected a bank (an ~9-point penalty for
+  // keeping books). Unknown → neutral 60, surfaced as runway_months: null.
   const monthlyBurn = Math.abs(sum(outflows90)) / 3;
-  const runwayMonths = monthlyBurn > 0 ? currentBalance / monthlyBurn : 6;
-  const s7 = runwayMonths >= 3 ? 100 : runwayMonths >= 1.5 ? 70 : runwayMonths >= 0.5 ? 40 : 10;
+  const runwayKnown = accounts.length > 0;
+  const runwayMonths = !runwayKnown ? null : (monthlyBurn > 0 ? currentBalance / monthlyBurn : 6);
+  const s7 = !runwayKnown ? 60 : runwayMonths >= 3 ? 100 : runwayMonths >= 1.5 ? 70 : runwayMonths >= 0.5 ? 40 : 10;
 
   // S8 - Payment behaviour (outflows vs expected recurring)
   const s8 = scorePaymentBehavior(txns);
@@ -173,10 +233,15 @@ async function score(tenantId, pool, enrichment) {
     factors,
     breakdown: {
       monthly_revenue: Math.round(monthlyRevenue90),
+      monthly_revenue_books: Math.round(monthlyRevenueBooks90),
+      monthly_revenue_gst: Math.round(gstMonthlyTurnover),
+      revenue_source: revenueSource,
       monthly_revenue_180: Math.round(monthlyRevenue180),
       age_months: Math.round(ageMonths),
-      debt_service_ratio: Math.round(dsr * 100) / 100,
-      runway_months: Math.round(runwayMonths * 10) / 10,
+      debt_service_ratio: Number.isFinite(dsr) ? Math.round(dsr * 100) / 100 : null,
+      runway_months: runwayMonths == null ? null : Math.round(runwayMonths * 10) / 10,
+      runway_source: runwayKnown ? "bank_accounts" : "none",
+      scorecard_version: SCORECARD_VERSION,
       current_balance: currentBalance,
       gst_periods_filed: recv ? s10 : 0,           // NOTE: this is the 0-100 GST SCORE
       gst_filings_count: gstFiledCount(gstRows),   // the real COUNT of periods filed
@@ -194,6 +259,10 @@ async function score(tenantId, pool, enrichment) {
     },
   };
   result.decision = decide(result);
+  // Persist EVERY compute (including declines) — the label loop that makes the scorecard
+  // backtestable lives on these rows. Best-effort inside the lib so no caller path is
+  // ever missed and no scoring read can fail because the analytics insert did.
+  require("./underwritingRuns").recordRun(tenantId, result, { trigger: opts.trigger, actorId: opts.actorId }).catch(() => {});
   return result;
 }
 
@@ -277,7 +346,7 @@ function scoreConsistency(inflows) {
   if (!inflows.length) return 0;
   const byMonth = {};
   for (const t of inflows) {
-    const m = t.transaction_date.toString().slice(0, 7);
+    const m = isoMonth(t.transaction_date); // real YYYY-MM calendar months (see isoDate note)
     byMonth[m] = (byMonth[m] || 0) + Number(t.amount);
   }
   const vals = Object.values(byMonth);
@@ -297,17 +366,47 @@ function scoreAge(months) {
   return 10;
 }
 
+// Shared top-share → score bands.
+function concentrationBands(topPct) {
+  return topPct < 0.2 ? 100 : topPct < 0.35 ? 80 : topPct < 0.5 ? 60 : topPct < 0.7 ? 40 : 20;
+}
+
+// Concentration from INVOICES, keyed by customer GSTIN (else normalized name) — the same
+// identity key customerScore.js uses, so the debtor a lender sees here matches the debtor
+// graded there. Requires ≥3 invoices to be meaningful; otherwise falls back to bank
+// inflows with NAMED counterparties only (unnamed receipts excluded — see S4 note), and
+// when less than half the inflow volume is attributable, the signal is honestly neutral.
+function scoreConcentrationFromInvoices(invRows, inflows) {
+  const invoiced = (invRows || []).filter((i) => Number(i.total_amount) > 0);
+  if (invoiced.length >= 3) {
+    const byCustomer = {};
+    for (const i of invoiced) {
+      const key = (i.customer_gstin && String(i.customer_gstin).trim().toUpperCase())
+        || String(i.customer_name || "").trim().toLowerCase() || "unknown";
+      byCustomer[key] = (byCustomer[key] || 0) + Number(i.total_amount);
+    }
+    const vals = Object.values(byCustomer).sort((a, b) => b - a);
+    const total = vals.reduce((a, b) => a + b, 0);
+    return concentrationBands(total > 0 ? vals[0] / total : 0);
+  }
+  return scoreConcentration(inflows);
+}
+
 function scoreConcentration(inflows) {
   if (!inflows.length) return 50;
+  const named = inflows.filter((t) => t.merchant_name && String(t.merchant_name).trim());
+  const namedVolume = named.reduce((s, t) => s + Number(t.amount), 0);
+  const totalVolume = inflows.reduce((s, t) => s + Number(t.amount), 0);
+  // Less than half the volume attributable to a named counterparty → concentration is
+  // unknowable from this data; neutral, never penal.
+  if (totalVolume <= 0 || namedVolume / totalVolume < 0.5) return 50;
   const byMerchant = {};
-  for (const t of inflows) {
-    const m = t.merchant_name || "unknown";
+  for (const t of named) {
+    const m = String(t.merchant_name).trim().toLowerCase();
     byMerchant[m] = (byMerchant[m] || 0) + Number(t.amount);
   }
   const vals = Object.values(byMerchant).sort((a, b) => b - a);
-  const total = vals.reduce((a, b) => a + b, 0);
-  const topPct = total > 0 ? vals[0] / total : 0;
-  return topPct < 0.2 ? 100 : topPct < 0.35 ? 80 : topPct < 0.5 ? 60 : topPct < 0.7 ? 40 : 20;
+  return concentrationBands(vals[0] / namedVolume);
 }
 
 function scoreOverdraft(txns) {
@@ -318,10 +417,8 @@ function scoreOverdraft(txns) {
   const sorted = [...txns].sort((a, b) => new Date(a.transaction_date) - new Date(b.transaction_date));
   let lastDate = null;
   for (const t of sorted) {
-    if (lastDate !== t.transaction_date.toString().slice(0, 10)) {
-      totalDays++;
-      lastDate = t.transaction_date.toString().slice(0, 10);
-    }
+    const day = isoDate(t.transaction_date);
+    if (lastDate !== day) { totalDays++; lastDate = day; }
     balance += Number(t.amount);
     if (balance < 0) overdraftDays++;
   }
@@ -362,4 +459,8 @@ function daysAgo(n) {
   return d.toISOString().slice(0, 10);
 }
 
-module.exports = { score, scoreGst, receivablesHealth, gradeOf, decide };
+module.exports = {
+  score, scoreGst, receivablesHealth, gradeOf, decide, SCORECARD_VERSION,
+  // pure signal fns exported for the DB-free unit suite
+  isoDate, isoMonth, scoreConsistency, scoreConcentration, scoreConcentrationFromInvoices, scoreOverdraft,
+};

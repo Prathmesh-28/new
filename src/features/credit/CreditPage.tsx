@@ -1,5 +1,5 @@
 import { useState, useMemo, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useT } from "@/i18n";
 import FinancingReadiness from "@/features/credit/FinancingReadiness";
@@ -54,6 +54,7 @@ export default function CreditPage() {
   // Deep-link: /credit?invoice_id=… lands on the live financing tab with that invoice
   // preselected ("turn this invoice into cash" from the invoice/receivables lists).
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const presetInvoiceId = searchParams.get("invoice_id") || undefined;
 
   const [tab,          setTab]          = useState<"overview" | "apply" | "loans" | "notyet" | "wc" | "equip" | "cc" | "fd" | "wcscore" | "captable" | "valuation" | "aapull" | "matcher" | "comscore" | "discount" | "docpack" | "foir" | "emicalc" | "flatred" | "dscr" | "drawing" | "gstelig" | "lap" | "prepay" | "odterm" | "scoreplan" | "offercmp" | "invadv" | "nbfcbank" | "scheme" | "livewc">(presetInvoiceId ? "livewc" : "overview");
@@ -137,30 +138,16 @@ export default function CreditPage() {
     }
   };
 
+  // These comparison offers are ILLUSTRATIVE (no lender integration behind them) — the
+  // backend retired the accept path because "accepting" one created a fictional loan
+  // that both misled the owner AND contaminated the real credit score as genuine debt.
+  // Real financing (KFS + actual disbursal via the payouts rail) lives on /capital.
   const handleAccept = async (offer: NonNullable<typeof realOffers>[number]) => {
     if (!bestApp) return;
     setShowKfs(null);
-    try {
-      const { loan } = await api.post<{ loan: { id: string; disbursed_amount: number | string; outstanding_balance: number | string; next_payment_at: string } }>(
-        `/api/credit/accept/${offer.id}`, {}
-      );
-      const principal = Number(loan.disbursed_amount);
-      const monthlyEmi = emi(principal, offer.rate, offer.termMonths);
-      const newLoan: ActiveLoan = {
-        id: loan.id, lender: offer.lender, principal, outstanding: Number(loan.outstanding_balance ?? principal),
-        rate: offer.rate, termMonths: offer.termMonths, monthlyEmi,
-        startDate: new Date().toISOString().split("T")[0],
-        nextPaymentDate: (loan.next_payment_at || new Date(Date.now() + 30 * 86400000).toISOString()).split("T")[0],
-        nextPaymentAmount: monthlyEmi, applicationId: bestApp.id,
-      };
-      addActiveLoan(newLoan);
-      updateCreditApplication({ ...bestApp, status: "funded", updatedAt: new Date().toISOString() });
-      toast.success(`${offer.lender} - ₹${(principal / 100000).toFixed(1)}L disbursed`);
-      setTab("loans");
-    } catch (err) {
-      const status = Number(String((err as Error)?.message || "").match(/^(\d{3})/)?.[1] || 0);
-      toast.error(status === 409 ? "This offer is no longer active." : "Couldn't accept the offer. Please try again.");
-    }
+    void offer;
+    toast.info("These are illustrative comparison terms — no lender is wired behind them. For real financing against your score, use the Capital page.", { duration: 8000 });
+    navigate("/capital");
   };
 
   return (

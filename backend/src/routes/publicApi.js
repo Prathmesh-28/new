@@ -54,7 +54,7 @@ router.get("/vendors", requireScope("read"), async (req, res) => {
 
 router.get("/credit-score", requireScope("read"), async (req, res) => {
   try {
-    const uw = await underwrite(req.apiTenant, pool);
+    const uw = await underwrite(req.apiTenant, pool, undefined, { trigger: "public_api" });
     if (!uw) return res.status(404).json({ error: "Insufficient data to score." });
     res.json({ score: uw.score, grade: uw.grade, approved_amount: uw.approved_amount, decision: uw.decision?.outcome || uw.decision || null, factors: (uw.factors || []).map((f) => ({ label: f.label, score: f.score })) });
   } catch (e) { fail(res, e); }

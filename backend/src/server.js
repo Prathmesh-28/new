@@ -514,9 +514,15 @@ initDb()
     cron.schedule("30 2 * * *", async () => {
       try { const m = await require("./modules/lending/mandates").presentDueAll(); if (m && m.scheduled) console.log(`[lending-mandates] scheduled ${m.scheduled} presentation(s)`); }
       catch (err) { console.error("[lending-mandates]", err.message); }
-      require("./modules/lending/servicing").runServicingDue()
-        .then(r => { if (r && r.serviced) console.log(`[lending-servicing] serviced ${r.serviced} loan(s), ${r.penalPosted} penal accrual(s)`); })
-        .catch(err => console.error("[lending-servicing]", err.message));
+      try {
+        const r = await require("./modules/lending/servicing").runServicingDue();
+        if (r && r.serviced) console.log(`[lending-servicing] serviced ${r.serviced} loan(s), ${r.penalPosted} penal accrual(s)`);
+      } catch (err) { console.error("[lending-servicing]", err.message); }
+      // AFTER servicing refreshed DPD: label underwriting runs from observed loan conduct —
+      // the repay→relearn loop that makes the scorecard backtestable.
+      require("./lib/underwritingRuns").labelOutcomes()
+        .then(n => { if (n) console.log(`[underwriting-runs] labelled ${n} run outcome(s)`); })
+        .catch(err => console.error("[underwriting-runs]", err.message));
     }, { timezone: "UTC" });
     // Books: durable e-invoice worker (registers QUEUED vouchers with the GSP).
     require("./modules/books/einvoice").startWorker();

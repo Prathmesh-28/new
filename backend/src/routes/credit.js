@@ -58,7 +58,7 @@ router.post("/apply", authenticate, canWrite, async (req, res) => {
   if (recent[0]) return res.status(429).json({ error: "You may submit only one application per 90 days.", code: "velocity_limit" });
 
   // Run underwriting
-  const result = await underwrite(req.user.tenant_id, pool);
+  const result = await underwrite(req.user.tenant_id, pool, undefined, { trigger: "apply", actorId: req.user.id });
 
   // Minimum pre-qualification score is a super-admin-tunable platform setting (default 35).
   const minScore = await platformConfig.num("limits", "creditMinScore", 35);
@@ -99,34 +99,29 @@ router.post("/apply", authenticate, canWrite, async (req, res) => {
     [app.id]
   );
 
-  res.status(201).json({ application: app, offers, underwriting: result });
+  // These offers are ILLUSTRATIVE market comparisons (no lender integration behind them);
+  // flag them so no client can present them as acceptable loans. Real, acceptable
+  // financing lives in the lending module.
+  res.status(201).json({
+    application: app,
+    offers: offers.map((o) => ({ ...o, illustrative: true })),
+    offers_note: "Illustrative comparison terms only — real financing (KFS + disbursal) runs via the Capital page.",
+    underwriting: result,
+  });
 });
 
-// POST /api/credit/accept/:offerId
+// POST /api/credit/accept/:offerId — RETIRED. The offers on this page come from an
+// ILLUSTRATIVE partner list (no lender integration exists behind them); accepting one
+// used to insert an active_loans row that (a) the real scorecard then read as genuine
+// debt — a demo toy lowering actual credit limits — and (b) told the user they had
+// taken a loan when no money existed or moved: exactly the pattern RBI's Digital
+// Lending Directions prohibit. Real financing flows through the lending module
+// (offers with a Key Fact Statement, disbursal via the payouts rail).
 router.post("/accept/:offerId", authenticate, canWrite, async (req, res) => {
-  const { rows: offerRows } = await pool.query(
-    "SELECT co.*, ca.tenant_id AS app_tenant FROM credit_offers co JOIN credit_applications ca ON ca.id=co.application_id WHERE co.id=$1",
-    [req.params.offerId]
-  );
-  if (!offerRows[0]) return res.status(404).json({ error: "Offer not found" });
-  if (offerRows[0].app_tenant !== req.user.tenant_id) return res.status(403).json({ error: "Forbidden" });
-  if (offerRows[0].status !== "active") return res.status(409).json({ error: "Offer no longer active" });
-
-  // Accept offer. The tenant is already verified above (app_tenant check); the tenant_id
-  // filters here are defense-in-depth so each write is self-safe (see check-tenant-scope).
-  const t = req.user.tenant_id;
-  await pool.query("UPDATE credit_offers SET status='accepted' WHERE id=$1 AND tenant_id=$2", [req.params.offerId, t]);
-  await pool.query("UPDATE credit_offers SET status='expired' WHERE application_id=$1 AND id!=$2 AND tenant_id=$3", [offerRows[0].application_id, req.params.offerId, t]);
-  await pool.query("UPDATE credit_applications SET status='accepted' WHERE id=$1 AND tenant_id=$2", [offerRows[0].application_id, t]);
-
-  // Create active loan
-  const { rows: loanRows } = await pool.query(
-    `INSERT INTO active_loans(tenant_id, offer_id, disbursed_amount, outstanding_balance, next_payment_at)
-     VALUES($1,$2,$3,$3,$4) RETURNING *`,
-    [req.user.tenant_id, req.params.offerId, offerRows[0].offer_amount, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()]
-  );
-
-  res.json({ ok: true, loan: loanRows[0] });
+  res.status(410).json({
+    error: "These are illustrative comparison offers — no lender is wired behind them, so they can't be accepted. Real financing (with a Key Fact Statement and actual disbursal) runs through the Capital page.",
+    code: "illustrative_offer",
+  });
 });
 
 // GET /api/credit/loans
@@ -170,7 +165,7 @@ router.post("/loans/:id/payment", authenticate, canWrite, async (req, res) => {
 
 // GET /api/credit/score - current underwriting score (no application created)
 router.get("/score", authenticate, requireOwnerOrAdmin, async (req, res) => {
-  const result = await underwrite(req.user.tenant_id, pool);
+  const result = await underwrite(req.user.tenant_id, pool, undefined, { trigger: "score", actorId: req.user.id });
   res.json(result);
 });
 
@@ -185,14 +180,14 @@ router.post("/enrich", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const firm = kvRows[0]?.value?.value?.firm ?? {};
   const enrichment = await finbox.enrich({ pan: firm.pan, gstin: firm.gstNumber, mobile: firm.phone, name: firm.name });
   const usable = enrichment.configured && !enrichment.error ? enrichment : undefined;
-  const result = await underwrite(req.user.tenant_id, pool, usable);
+  const result = await underwrite(req.user.tenant_id, pool, usable, { trigger: "enrich", actorId: req.user.id });
   res.json({ enrichment, result, enriched: !!usable });
 });
 
 // GET /api/credit/report - formal JSON creditworthiness report (Headroom's own "output
 // layer", the artifact that flows into a lender/LOS). Read-only; no application created.
 router.get("/report", authenticate, requireOwnerOrAdmin, async (req, res) => {
-  const result = await underwrite(req.user.tenant_id, pool);
+  const result = await underwrite(req.user.tenant_id, pool, undefined, { trigger: "report", actorId: req.user.id });
   res.json({
     report_id: "rpt_" + require("crypto").randomBytes(6).toString("hex"),
     schema_version: "1.0",
@@ -264,7 +259,7 @@ router.post("/underwrite-agentic", authenticate, requireOwnerOrAdmin, async (req
 // POST /api/credit/finbox - submit lead to Finbox Credit API (NBFC routing)
 router.post("/finbox", authenticate, requireOwnerOrAdmin, async (req, res) => {
   const { requested_amount, purpose } = req.body;
-  const result = await underwrite(req.user.tenant_id, pool);
+  const result = await underwrite(req.user.tenant_id, pool, undefined, { trigger: "route_lenders", actorId: req.user.id });
 
   // Production: POST https://api.finbox.in/v2/credit/lead
   // Headers: x-api-key: FINBOX_API_KEY
@@ -310,22 +305,66 @@ router.post("/finbox", authenticate, requireOwnerOrAdmin, async (req, res) => {
   });
 });
 
-// GET /api/credit/lender-api/:tenantId - B2B lender API (API key protected)
+// GET /api/credit/lender-api/:tenantId - B2B lender API. Hardened (plan #3):
+//  • per-lender named keys (LENDER_API_KEYS="lenderA:key1,lenderB:key2"; legacy single
+//    LENDER_API_KEY still works, named "default"), compared in CONSTANT TIME
+//  • tenant CONSENT required: the business must have created a Credit Passport with
+//    score sharing on — their explicit, revocable opt-in artifact — before any external
+//    party can pull their score
+//  • every access (served or refused) is logged to lender_api_access
+//  • CURATED response (score/grade/decision/factor labels), never the raw breakdown of
+//    internal financial metrics the old response leaked
+function lenderKeyName(presented) {
+  if (!presented) return null;
+  const pairs = [];
+  for (const kv of String(process.env.LENDER_API_KEYS || "").split(",")) {
+    const i = kv.indexOf(":");
+    if (i > 0) pairs.push([kv.slice(0, i).trim(), kv.slice(i + 1).trim()]);
+  }
+  if (process.env.LENDER_API_KEY) pairs.push(["default", process.env.LENDER_API_KEY]);
+  const p = Buffer.from(String(presented));
+  for (const [name, key] of pairs) {
+    const k = Buffer.from(key);
+    if (p.length === k.length && crypto.timingSafeEqual(p, k)) return name;
+  }
+  return null;
+}
+const logLenderAccess = (lender, tenantId, outcome, req) =>
+  pool.query("INSERT INTO lender_api_access(lender_name, tenant_id, outcome, ip) VALUES($1,$2,$3,$4)",
+    [lender, tenantId, outcome, req.ip || null]).catch(() => {});
+
 router.get("/lender-api/:tenantId", async (req, res) => {
-  const apiKey = req.headers["x-api-key"];
-  if (!apiKey || apiKey !== process.env.LENDER_API_KEY) {
+  const tenantId = String(req.params.tenantId);
+  const lender = lenderKeyName(req.headers["x-api-key"]);
+  if (!lender) {
+    await logLenderAccess(null, tenantId, "bad_key", req);
     return res.status(401).json({ error: "Invalid API key" });
   }
-  const result = await underwrite(req.params.tenantId, pool).catch(() => null);
-  if (!result) return res.status(404).json({ error: "Tenant not found or insufficient data" });
+  // Consent gate: the tenant's own shareable Credit Passport (with score sharing on) is
+  // the opt-in. No passport → the lender is told consent is missing, not given data.
+  const { rows: consent } = await pool.query(
+    "SELECT include_score FROM credit_passports WHERE tenant_id=$1", [tenantId]).catch(() => ({ rows: [] }));
+  if (!consent[0] || consent[0].include_score === false) {
+    await logLenderAccess(lender, tenantId, "no_consent", req);
+    return res.status(403).json({ error: "The business has not enabled credit-profile sharing.", code: "consent_required" });
+  }
+  const result = await underwrite(tenantId, pool, undefined, { trigger: "lender_api" }).catch(() => null);
+  if (!result) {
+    await logLenderAccess(lender, tenantId, "not_found", req);
+    return res.status(404).json({ error: "Tenant not found or insufficient data" });
+  }
+  await logLenderAccess(lender, tenantId, "served", req);
   res.json({
-    tenant_id:          req.params.tenantId,
-    score:              result.score,
-    approved_amount:    result.approved_amount,
-    recommendation:     result.recommended_product,
-    breakdown:          result.breakdown,
-    queried_at:         new Date().toISOString(),
-    powered_by:         "Headroom Underwriting Engine v2",
+    tenant_id:       tenantId,
+    score:           result.score,
+    grade:           result.grade,
+    decision:        result.decision?.outcome || null,
+    approved_amount: result.approved_amount,
+    recommendation:  result.recommended_product,
+    factors:         (result.factors || []).map((f) => ({ label: f.label, score: f.score, status: f.status })),
+    scorecard_version: result.breakdown?.scorecard_version || null,
+    queried_at:      new Date().toISOString(),
+    powered_by:      "Headroom Underwriting Engine v2",
   });
 });
 

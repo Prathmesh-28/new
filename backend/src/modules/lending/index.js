@@ -71,7 +71,7 @@ function buildKFS({ kind, principal, processingFee, apr, sched }) {
 async function eligibility(tenantId) {
   try {
     const { score: underwrite } = require("../../lib/underwriting");
-    const r = await underwrite(tenantId, pool);
+    const r = await underwrite(tenantId, pool, undefined, { trigger: "lending_offer" });
     return { limit: n(r.approved_amount), grade: r.grade, score: r.score, decision: r.decision?.outcome || r.decision, recommended_product: r.recommended_product };
   } catch {
     return { limit: 0, grade: "E", score: 0, decision: "refer", recommended_product: null };
