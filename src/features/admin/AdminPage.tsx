@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useMemo, Fragment, type ReactNode } from "react";
 import { useT } from "@/i18n";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { useApp } from "@/context/AppContext";
@@ -12,7 +12,7 @@ import {
 import {
   ShieldCheck, Building2, Users as UsersIcon, CreditCard, ScrollText, Server,
   Search, Copy, X, Pencil, KeyRound, Crown, Trash2, LogIn, Zap, Power, UserPlus,
-  Download, RefreshCw, Ghost, Wallet, TrendingUp, Receipt, Activity, Check, Upload, Eye, Mail,
+  Download, RefreshCw, Ghost, Wallet, TrendingUp, Receipt, Activity, Check, Upload, Eye, Mail, ChevronDown,
 } from "lucide-react";
 
 // BASE is imported per the spec; referenced here so the import is never dropped.
@@ -770,6 +770,7 @@ export default function AdminPage() {
         {section === "companies" && (
           <CompaniesSection
             companies={companies}
+            users={users}
             loading={loadingCompanies}
             planPreset={companyPlanPreset}
             setPlanPreset={setCompanyPlanPreset}
@@ -777,6 +778,7 @@ export default function AdminPage() {
             onEnter={enterTenant}
             onSetPlan={setTenantPlan}
             onSetStatus={setTenantStatus}
+            reload={() => { fetchCompanies(); fetchUsers(); }}
           />
         )}
         {section === "users" && (
@@ -935,10 +937,13 @@ function PlanPicker({ current, onPick, onClose }: { current: PlanTier; onPick: (
   );
 }
 
+interface CompanyInvite { id: string; invitee_email: string; role: string; status: string; tenant_id?: string }
+
 function CompaniesSection({
-  companies, loading, planPreset, setPlanPreset, searchPreset, onEnter, onSetPlan, onSetStatus,
+  companies, users, loading, planPreset, setPlanPreset, searchPreset, onEnter, onSetPlan, onSetStatus, reload,
 }: {
   companies: Company[];
+  users: AdminUser[];
   loading: boolean;
   planPreset: PlanTier | "all";
   setPlanPreset: (p: PlanTier | "all") => void;
@@ -946,12 +951,60 @@ function CompaniesSection({
   onEnter: (c: Company) => void;
   onSetPlan: (tenantId: string, plan: PlanTier) => void;
   onSetStatus: (tenantId: string, suspend: boolean) => void;
+  reload: () => void;
 }) {
   const [q, setQ] = useState(searchPreset);
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "suspended">("all");
   const [sort, setSort] = useState<CompanySort>("newest");
   const [openPlan, setOpenPlan] = useState<string | null>(null);
   const [confirmSuspend, setConfirmSuspend] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkPlanOpen, setBulkPlanOpen] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [invites, setInvites] = useState<CompanyInvite[]>([]);
+
+  // A7: pending invites, fetched once (super_admin sees every tenant's) and filtered
+  // per-company when a row expands. Members reuse the `users` list already loaded.
+  useEffect(() => {
+    api.get<{ outgoing?: CompanyInvite[] }>("/api/invites").then((d) => setInvites(d.outgoing ?? [])).catch(() => {});
+  }, []);
+
+  const toggleSelect = (tid: string) => setSelected((s) => { const n = new Set(s); n.has(tid) ? n.delete(tid) : n.add(tid); return n; });
+
+  // A5: bulk plan / suspend / export across selected companies.
+  const bulkSetPlan = (plan: PlanTier) => {
+    const targets = [...selected];
+    setBulkPlanOpen(false);
+    setSelected(new Set());
+    targets.forEach((tid) => onSetPlan(tid, plan));
+  };
+  const bulkSuspend = () => {
+    const targets = [...selected];
+    setSelected(new Set());
+    targets.forEach((tid) => onSetStatus(tid, true));
+  };
+  const bulkExport = () => {
+    const rows = companies.filter((c) => selected.has(c.tenant_id));
+    downloadJSON("headroom-companies-export.json", rows);
+    toast.success(`Exported ${rows.length} compan${rows.length === 1 ? "y" : "ies"}`);
+  };
+
+  // A8: the DELETE /api/admin/org endpoint already existed but was never exposed in the
+  // console — this is the most destructive action here, so it gets the undo window too.
+  const deleteCompany = (c: Company) => {
+    const label = c.company_name || c.owner_email || c.tenant_id;
+    setConfirmDelete(null);
+    undoableAction(`${label} and all its data will be permanently deleted`, async () => {
+      try {
+        await api.delete(`/api/admin/org?tenant_id=${encodeURIComponent(c.tenant_id)}`);
+        toast.success(`${label} deleted`);
+        reload();
+      } catch (err) {
+        toast.error(errMsg(err));
+      }
+    }, () => {});
+  };
 
   const planCounts = useMemo(() => {
     const c: Record<string, number> = { all: companies.length, free: 0, starter: 0, growth: 0, pro: 0 };
@@ -1007,6 +1060,19 @@ function CompaniesSection({
             { id: "pro", label: `Pro (${planCounts.pro})` },
           ]}
         />
+        {/* A5: bulk actions across selected companies */}
+        {selected.size > 0 && (
+          <div className="flex items-center gap-2.5 bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 rounded-lg px-3 py-2">
+            <span className="text-xs font-semibold">{selected.size} selected</span>
+            <div className="relative">
+              <button onClick={() => setBulkPlanOpen((v) => !v)} className="text-xs font-semibold px-2.5 py-1 rounded border border-[var(--color-border)] hover:border-[var(--color-primary)]">Change plan</button>
+              {bulkPlanOpen && <PlanPicker current="free" onPick={bulkSetPlan} onClose={() => setBulkPlanOpen(false)} />}
+            </div>
+            <button onClick={bulkSuspend} className="text-xs font-semibold px-2.5 py-1 rounded border border-[var(--color-border)] hover:border-red-400 hover:text-red-400">Suspend</button>
+            <button onClick={bulkExport} className="text-xs font-semibold px-2.5 py-1 rounded border border-[var(--color-border)] hover:border-[var(--color-primary)]">Export</button>
+            <button onClick={() => setSelected(new Set())} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] ml-auto">Clear</button>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -1017,9 +1083,14 @@ function CompaniesSection({
         <EmptyState icon={<Building2 size={28} />} message="No companies match." />
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[940px]">
+          <table className="w-full text-sm min-w-[980px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
+                <th className={`${thCls} text-left w-8`}>
+                  <input type="checkbox" checked={filtered.length > 0 && filtered.every((c) => selected.has(c.tenant_id))}
+                    onChange={(e) => setSelected(e.target.checked ? new Set(filtered.map((c) => c.tenant_id)) : new Set())}
+                    className="accent-[var(--color-primary)]" aria-label="Select all" />
+                </th>
                 <th className={`${thCls} text-left`}>Company</th>
                 <th className={`${thCls} text-left`}>Owner</th>
                 <th className={`${thCls} text-right`}>Users</th>
@@ -1034,10 +1105,20 @@ function CompaniesSection({
             <tbody className="divide-y divide-[var(--color-border)]">
               {filtered.map((c) => {
                 const label = c.company_name || c.owner_email || c.tenant_id;
+                const isOpen = expanded === c.tenant_id;
+                const members = users.filter((u) => u.tenant_id === c.tenant_id);
+                const pending = invites.filter((i) => i.tenant_id === c.tenant_id && i.status === "pending");
                 return (
-                  <tr key={c.tenant_id} className="group hover:bg-white/5">
+                  <Fragment key={c.tenant_id}>
+                  <tr className="group hover:bg-white/5">
                     <td className="px-4 py-2.5">
-                      <p className="font-semibold">{c.company_name || c.owner_email || "-"}</p>
+                      <input type="checkbox" checked={selected.has(c.tenant_id)} onChange={() => toggleSelect(c.tenant_id)} className="accent-[var(--color-primary)]" aria-label={`Select ${label}`} />
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <button onClick={() => setExpanded(isOpen ? null : c.tenant_id)} className="font-semibold hover:text-[var(--color-primary)] flex items-center gap-1">
+                        {c.company_name || c.owner_email || "-"}
+                        <ChevronDown size={12} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                      </button>
                       <CopyId id={c.tenant_id} chars={10} />
                     </td>
                     <td className="px-4 py-2.5 text-[var(--color-muted)] truncate max-w-[170px]">{c.owner_email || "-"}</td>
@@ -1072,9 +1153,57 @@ function CompaniesSection({
                             />
                           )}
                         </div>
+                        <div className="relative">
+                          <button onClick={() => setConfirmDelete(confirmDelete === c.tenant_id ? null : c.tenant_id)} title="Delete company" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+                          {confirmDelete === c.tenant_id && (
+                            <ConfirmPopover
+                              danger
+                              confirmLabel="Delete permanently"
+                              message={`Permanently delete "${label}" — all ${c.user_count} user(s), invoices, transactions and books? This cannot be undone after a few seconds.`}
+                              onConfirm={() => deleteCompany(c)}
+                              onCancel={() => setConfirmDelete(null)}
+                            />
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
+                  {isOpen && (
+                    <tr key={`${c.tenant_id}-detail`}>
+                      <td colSpan={10} className="bg-[var(--color-bg)] px-6 py-4">
+                        {/* A7: members + pending invites for this company in one place */}
+                        <div className="grid md:grid-cols-2 gap-6 text-xs">
+                          <div>
+                            <p className="font-semibold uppercase tracking-wider text-[var(--color-muted)] mb-2">Members ({members.length})</p>
+                            {members.length === 0 ? <p className="text-[var(--color-muted)]">No members loaded.</p> : (
+                              <div className="space-y-1.5">
+                                {members.map((m) => (
+                                  <div key={m.id} className="flex items-center justify-between gap-2">
+                                    <span className="truncate">{m.display_name || m.email}</span>
+                                    <RolePill role={m.role} />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-semibold uppercase tracking-wider text-[var(--color-muted)] mb-2">Pending invites ({pending.length})</p>
+                            {pending.length === 0 ? <p className="text-[var(--color-muted)]">None pending.</p> : (
+                              <div className="space-y-1.5">
+                                {pending.map((i) => (
+                                  <div key={i.id} className="flex items-center justify-between gap-2">
+                                    <span className="truncate">{i.invitee_email}</span>
+                                    <span className="text-[var(--color-muted)]">{roleLabel(i.role)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
