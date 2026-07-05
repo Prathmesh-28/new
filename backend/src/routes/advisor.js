@@ -139,7 +139,150 @@ router.get("/gst-status", authenticate, requireAdvisor, async (req, res) => {
   }
 });
 
-// GET /marketplace - Businesses looking for CA (no advisor linked)
+// ── GST FILING BOARD - the CA's multi-client cockpit for a period ─────────────
+// One call answers, for EVERY linked client at once: did this month have GST activity
+// in the books, what's the live 3B liability, has the 3B been computed/filed (ARN),
+// how many portal invoices are still un-actioned in IMS (deemed accepted on filing),
+// and how much booked ITC the supplier hasn't filed (at risk). Batched: 4 queries
+// total regardless of client count. Access = the advisor's own linked clients only.
+router.get("/gst-board", authenticate, requireAdvisor, async (req, res) => {
+  try {
+    const period = /^\d{4}-\d{2}$/.test(String(req.query.period || "")) ? String(req.query.period) : new Date().toISOString().slice(0, 7);
+    const [py, pm] = period.split("-").map(Number);
+    const from = `${period}-01`;
+    const to = `${period}-${String(new Date(Date.UTC(py, pm, 0)).getUTCDate()).padStart(2, "0")}`;
+
+    const { rows: links } = await pool.query(
+      "SELECT client_tenant_id, client_label FROM advisor_client_links WHERE advisor_id=$1 ORDER BY client_label NULLS LAST",
+      [req.user.id]);
+    if (!links.length) {
+      return res.json({ period, due_gstr1: null, due_gstr3b: null, overdue_3b: false, clients: [], totals: { clients: 0, filed: 0, computed: 0, not_computed: 0, turnover: 0, net_liability_books: 0, ims_pending: 0, itc_at_risk: 0 } });
+    }
+    const ids = links.map((l) => l.client_tenant_id);
+
+    const [{ rows: liab }, { rows: rets }, { rows: wb }] = await Promise.all([
+      // Books-live GST for the period per client (from posted book_tax_entries).
+      pool.query(
+        `SELECT te.tenant_id,
+                COALESCE(SUM(te.taxable_value) FILTER (WHERE te.is_input=false AND te.tax_kind IN ('CGST','IGST')),0) AS turnover,
+                COALESCE(SUM(te.tax_amount) FILTER (WHERE te.is_input=false),0) AS output_tax,
+                COALESCE(SUM(te.tax_amount) FILTER (WHERE te.is_input=true),0)  AS itc
+           FROM book_tax_entries te
+           JOIN book_vouchers v ON v.id=te.voucher_id AND v.is_cancelled=false
+          WHERE te.tenant_id = ANY($1) AND v.voucher_date BETWEEN $2 AND $3
+          GROUP BY te.tenant_id`, [ids, from, to]),
+      // The 3B return record (computed/filed tracker) for the period.
+      pool.query(
+        `SELECT tenant_id, status, filed_at, net_liability, gstn_arn FROM gst_returns
+          WHERE tenant_id = ANY($1) AND period_month=$2 AND period_year=$3 AND return_type='GSTR-3B'`,
+        [ids, pm, py]),
+      // 2B/IMS workbench summary (persisted match runs + decisions).
+      pool.query(
+        `SELECT tenant_id,
+                COUNT(*) FILTER (WHERE decision='PENDING' AND bucket <> 'MISSING_IN_PORTAL')::int AS ims_pending,
+                COALESCE(SUM(tax) FILTER (WHERE bucket='MISSING_IN_PORTAL'),0) AS itc_at_risk,
+                MAX(run_at) AS last_2b_run
+           FROM book_gstr2b_lines WHERE tenant_id = ANY($1) AND period=$2 GROUP BY tenant_id`, [ids, period]),
+    ]);
+    const liabBy = new Map(liab.map((r) => [r.tenant_id, r]));
+    const retBy = new Map(rets.map((r) => [r.tenant_id, r]));
+    const wbBy = new Map(wb.map((r) => [r.tenant_id, r]));
+
+    // Statutory due dates for the period: GSTR-1 the 11th, GSTR-3B the 20th of the next month.
+    const due_gstr1 = new Date(Date.UTC(py, pm, 11)).toISOString().slice(0, 10);
+    const due_gstr3b = new Date(Date.UTC(py, pm, 20)).toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+
+    const clients = links.map((l) => {
+      const L = liabBy.get(l.client_tenant_id), R = retBy.get(l.client_tenant_id), W = wbBy.get(l.client_tenant_id);
+      const output_tax = Number(L?.output_tax || 0), itc = Number(L?.itc || 0);
+      return {
+        tenant_id: l.client_tenant_id,
+        label: l.client_label || l.client_tenant_id,
+        has_activity: !!L,
+        turnover: Number(L?.turnover || 0),
+        output_tax, itc,
+        net_liability_books: Math.max(0, Number((output_tax - itc).toFixed(2))),
+        r3b_status: R ? (R.filed_at ? "filed" : R.status || "computed") : "not_computed",
+        r3b_filed_at: R?.filed_at ?? null,
+        r3b_arn: R?.gstn_arn ?? null,
+        r3b_net_liability: R?.net_liability != null ? Number(R.net_liability) : null,
+        ims_pending: Number(W?.ims_pending || 0),
+        itc_at_risk: Number(W?.itc_at_risk || 0),
+        last_2b_run: W?.last_2b_run ?? null,
+      };
+    }).sort((a, b) => {
+      // Unfiled-with-activity first (the CA's actual worklist), biggest liability first.
+      const rank = (c) => (c.r3b_status === "filed" ? 2 : c.has_activity ? 0 : 1);
+      return rank(a) - rank(b) || b.net_liability_books - a.net_liability_books;
+    });
+
+    const totals = {
+      clients: clients.length,
+      filed: clients.filter((c) => c.r3b_status === "filed").length,
+      computed: clients.filter((c) => c.r3b_status !== "filed" && c.r3b_status !== "not_computed").length,
+      not_computed: clients.filter((c) => c.r3b_status === "not_computed").length,
+      turnover: clients.reduce((s, c) => s + c.turnover, 0),
+      net_liability_books: clients.reduce((s, c) => s + c.net_liability_books, 0),
+      ims_pending: clients.reduce((s, c) => s + c.ims_pending, 0),
+      itc_at_risk: clients.reduce((s, c) => s + c.itc_at_risk, 0),
+    };
+    res.json({ period, due_gstr1, due_gstr3b, overdue_3b: today > due_gstr3b, clients, totals });
+  } catch (err) {
+    console.error("[advisor] gst-board failed:", err.message);
+    res.status(500).json({ error: "Failed to build the GST board" });
+  }
+});
+
+// POST /gst-board/prepare - REAL bulk GSTR-3B compute for every linked client with books
+// activity in the period. Upserts a 'draft' gst_returns record per client from the actual
+// ledger — the same computation each client's own POST /api/gst/returns runs. This replaces
+// the old UI's fake "Prepare All" (a setTimeout + success toast that computed nothing).
+router.post("/gst-board/prepare", authenticate, requireAdvisor, async (req, res) => {
+  try {
+    const period = /^\d{4}-\d{2}$/.test(String((req.body || {}).period || "")) ? String(req.body.period) : new Date().toISOString().slice(0, 7);
+    const [py, pm] = period.split("-").map(Number);
+    const gst = require("../modules/books/gst");
+    const round2 = (x) => parseFloat((Number(x) || 0).toFixed(2));
+    const sumHeads = (o) => round2((Number(o.CGST) || 0) + (Number(o.SGST) || 0) + (Number(o.IGST) || 0) + (Number(o.CESS) || 0));
+
+    const { rows: links } = await pool.query(
+      "SELECT client_tenant_id, client_label FROM advisor_client_links WHERE advisor_id=$1", [req.user.id]);
+    let prepared = 0, skipped = 0, failed = 0;
+    for (const l of links) {
+      try {
+        // Never clobber an already-FILED return.
+        const { rows: existing } = await pool.query(
+          "SELECT filed_at FROM gst_returns WHERE tenant_id=$1 AND return_type='GSTR-3B' AND period_month=$2 AND period_year=$3",
+          [l.client_tenant_id, pm, py]);
+        if (existing[0]?.filed_at) { skipped++; continue; }
+
+        const b3 = await gst.gstr3b(l.client_tenant_id, period);
+        const output_tax = sumHeads(b3.outputTax);
+        const input_tax_credit = sumHeads(b3.inputTaxCredit);
+        if (output_tax === 0 && input_tax_credit === 0) { skipped++; continue; } // no GST activity → nothing to prepare
+        const net_liability = round2(Math.max(0, output_tax - input_tax_credit));
+        await pool.query(
+          `INSERT INTO gst_returns(tenant_id, return_type, period_month, period_year, output_tax, input_tax_credit, net_liability, computed_data)
+           VALUES($1,'GSTR-3B',$2,$3,$4,$5,$6,$7)
+           ON CONFLICT(tenant_id, return_type, period_month, period_year)
+           DO UPDATE SET output_tax=$4, input_tax_credit=$5, net_liability=$6, computed_data=$7, status='draft'`,
+          [l.client_tenant_id, pm, py, output_tax, input_tax_credit, net_liability,
+           JSON.stringify({ outputTax: b3.outputTax, inputTaxCredit: b3.inputTaxCredit, source: "books", prepared_by_advisor: req.user.id })]);
+        prepared++;
+      } catch (e) { console.error("[advisor] prepare failed for", l.client_tenant_id, e.message); failed++; }
+    }
+    res.json({ period, prepared, skipped, failed });
+  } catch (err) {
+    console.error("[advisor] gst-board prepare failed:", err.message);
+    res.status(500).json({ error: "Bulk prepare failed" });
+  }
+});
+
+// GET /marketplace - businesses looking for a CA (opted in, not yet linked). HONEST:
+// an empty result returns an empty list. (This used to fabricate hardcoded business
+// names — "Raj Traders", "Krishna Exports" — whenever the real query found nothing,
+// presenting fake prospects as real leads. Never again.)
 router.get("/marketplace", authenticate, requireAdvisor, async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -151,21 +294,10 @@ router.get("/marketplace", authenticate, requireAdvisor, async (req, res) => {
        AND t.seek_advisor = true
        ORDER BY t.created_at DESC
        LIMIT 20`
-    ).catch(() => ({ rows: [] }));
-    // Return mock data if table/column doesn't exist
-    if (!rows.length) {
-      return res.json([
-        { id: "mock-1", name: "Raj Traders Pvt Ltd", city: "Mumbai", industry: "Retail", created_at: new Date(Date.now() - 86400000*3).toISOString() },
-        { id: "mock-2", name: "Krishna Exports", city: "Surat", industry: "Textile", created_at: new Date(Date.now() - 86400000*7).toISOString() },
-        { id: "mock-3", name: "Meera Pharma Dist.", city: "Hyderabad", industry: "Pharma", created_at: new Date(Date.now() - 86400000*12).toISOString() },
-      ]);
-    }
+    ).catch(() => ({ rows: [] })); // tenants.seek_advisor may not exist on older DBs → honest empty
     res.json(rows);
   } catch {
-    res.json([
-      { id: "mock-1", name: "Raj Traders Pvt Ltd", city: "Mumbai", industry: "Retail", created_at: new Date(Date.now() - 86400000*3).toISOString() },
-      { id: "mock-2", name: "Krishna Exports", city: "Surat", industry: "Textile", created_at: new Date(Date.now() - 86400000*7).toISOString() },
-    ]);
+    res.json([]);
   }
 });
 

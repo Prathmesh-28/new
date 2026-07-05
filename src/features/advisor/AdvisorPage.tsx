@@ -38,13 +38,18 @@ type AdvisorAlert = {
   created_at: string;
 };
 
-type GstClientStatus = {
-  tenant_id: string;
-  label: string;
-  gst_status: string;
-  net_liability: number | null;
-  filed_at: string | null;
-  gstn_arn: string | null;
+// GST Filing Board — response of GET /api/advisor/gst-board (one row per linked client:
+// books-live liability, 3B computed/filed state, IMS deemed-acceptance exposure, ITC at risk).
+type BoardClient = {
+  tenant_id: string; label: string; has_activity: boolean;
+  turnover: number; output_tax: number; itc: number; net_liability_books: number;
+  r3b_status: string; r3b_filed_at: string | null; r3b_arn: string | null; r3b_net_liability: number | null;
+  ims_pending: number; itc_at_risk: number; last_2b_run: string | null;
+};
+type GstBoard = {
+  period: string; due_gstr1: string | null; due_gstr3b: string | null; overdue_3b: boolean;
+  clients: BoardClient[];
+  totals: { clients: number; filed: number; computed: number; not_computed: number; turnover: number; net_liability_books: number; ims_pending: number; itc_at_risk: number };
 };
 
 type MarketplaceLead = {
@@ -356,121 +361,136 @@ function FirmProfileModal({ profile, onSave, onClose }: { profile: CaFirmProfile
 // ── Bulk GST Tab ──────────────────────────────────────────────────────────────
 
 function BulkGstTab() {
-  const [data, setData]       = useState<{ month: number; year: number; clients: GstClientStatus[] } | null>(null);
+  const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
+  const [board, setBoard] = useState<GstBoard | null>(null);
   const [loading, setLoading] = useState(true);
   const [preparing, setPreparing] = useState(false);
-  const [expanded, setExpanded]   = useState<string | null>(null);
 
-  useEffect(() => {
-    api.get<{ month: number; year: number; clients: GstClientStatus[] }>("/api/advisor/gst-status")
-      .then(setData).catch(() => {}).finally(() => setLoading(false));
+  const load = useCallback(async (p: string) => {
+    setLoading(true);
+    try { setBoard(await api.get<GstBoard>(`/api/advisor/gst-board?period=${encodeURIComponent(p)}`)); }
+    catch { toast.error("Couldn't load the GST board"); }
+    finally { setLoading(false); }
   }, []);
+  useEffect(() => { void load(period); }, [period, load]);
 
+  // REAL bulk prepare: computes each client's GSTR-3B from their actual posted ledger and
+  // persists a draft return record. (The old button here faked it — a 1.5s timer + success
+  // toast that computed nothing.)
   const prepareAll = async () => {
     setPreparing(true);
-    await new Promise(r => setTimeout(r, 1500));
-    setPreparing(false);
-    toast.success("GSTR-3B prepared for all clients. Review and file in each client's GST tab.");
+    try {
+      const r = await api.post<{ prepared: number; skipped: number; failed: number }>("/api/advisor/gst-board/prepare", { period });
+      toast.success(`3B computed from the books for ${r.prepared} client${r.prepared === 1 ? "" : "s"}${r.skipped ? ` · ${r.skipped} skipped (already filed / no activity)` : ""}${r.failed ? ` · ${r.failed} failed` : ""}`);
+      await load(period);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Bulk prepare failed"); }
+    finally { setPreparing(false); }
   };
 
-  if (loading) return <div className="py-8 flex justify-center"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>;
+  if (loading && !board) return <div className="py-8 flex justify-center"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>;
 
-  const clients = data?.clients ?? [];
-  const pending = clients.filter(c => c.gst_status !== "filed");
-  const filed   = clients.filter(c => c.gst_status === "filed");
-  const totalLiability = clients.reduce((s, c) => s + (c.net_liability ?? 0), 0);
-  const today = new Date();
-  const dueDate = new Date(today.getFullYear(), today.getMonth(), 20);
-  const daysLeft = differenceInCalendarDays(dueDate, today);
+  const clients = board?.clients ?? [];
+  const t = board?.totals;
+  const daysLeft3b = board?.due_gstr3b ? Math.ceil((new Date(board.due_gstr3b + "T00:00:00").getTime() - Date.now()) / 86400000) : null;
+  const unfiled = (t?.clients ?? 0) - (t?.filed ?? 0);
+
+  const statusChip = (c: BoardClient) => {
+    if (c.r3b_status === "filed") return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-green-900/30 text-green-400 border-green-800/40 inline-flex items-center gap-1"><CheckCircle2 size={8} /> filed</span>;
+    if (c.r3b_status === "not_computed") return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-900/20 text-red-400 border-red-800/30 inline-flex items-center gap-1"><AlertTriangle size={8} /> not computed</span>;
+    return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-yellow-900/20 text-yellow-400 border-yellow-800/30 inline-flex items-center gap-1"><Calculator size={8} /> {c.r3b_status}</span>;
+  };
 
   return (
     <div className="space-y-4">
-      {/* Header banner */}
-      <div className={`border rounded-lg px-4 py-3 flex items-center justify-between gap-4 ${daysLeft <= 5 ? "bg-red-900/20 border-red-700/50" : "bg-blue-900/20 border-blue-700/40"}`}>
+      {/* Period + due banner */}
+      <div className={`border rounded-lg px-4 py-3 flex items-center justify-between gap-4 flex-wrap ${board?.overdue_3b && unfiled > 0 ? "bg-red-900/20 border-red-700/50" : (daysLeft3b !== null && daysLeft3b <= 5 && unfiled > 0) ? "bg-orange-900/20 border-orange-700/40" : "bg-blue-900/20 border-blue-700/40"}`}>
         <div>
-          <p className={`text-sm font-semibold ${daysLeft <= 5 ? "text-red-300" : "text-blue-300"}`}>
-            GSTR-3B · {data ? `${MONTH_NAMES[data.month - 1]} ${data.year}` : "Current month"}
-            {daysLeft >= 0 && <span className="ml-2 text-xs font-normal opacity-80">· {daysLeft === 0 ? "Due TODAY" : `${daysLeft}d left`}</span>}
+          <p className="text-sm font-semibold">
+            GST Filing Board · {period}
+            {board?.due_gstr3b && (
+              <span className="ml-2 text-xs font-normal opacity-80">
+                3B due {board.due_gstr3b}{daysLeft3b !== null && (daysLeft3b < 0 ? ` · ${-daysLeft3b}d OVERDUE` : daysLeft3b === 0 ? " · due TODAY" : ` · ${daysLeft3b}d left`)} · GSTR-1 due {board.due_gstr1}
+              </span>
+            )}
           </p>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            {pending.length} pending · {filed.length} filed · Total liability: {formatCurrency(totalLiability)}
+            {t?.filed ?? 0} filed · {t?.computed ?? 0} computed · {t?.not_computed ?? 0} not computed · books liability {formatCurrency(t?.net_liability_books ?? 0)}
+            {(t?.ims_pending ?? 0) > 0 && <span className="text-orange-400"> · {t?.ims_pending} IMS pending → deemed accepted</span>}
+            {(t?.itc_at_risk ?? 0) > 0 && <span className="text-red-400"> · ITC at risk {formatCurrency(t?.itc_at_risk ?? 0)}</span>}
           </p>
         </div>
-        {pending.length > 0 && (
-          <button onClick={prepareAll} disabled={preparing}
+        <div className="flex items-center gap-2">
+          <input type="month" value={period} onChange={e => setPeriod(e.target.value || new Date().toISOString().slice(0, 7))}
+            className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-xs outline-none" />
+          <button onClick={prepareAll} disabled={preparing || clients.length === 0}
             className="flex items-center gap-1.5 text-xs bg-blue-600 text-white font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-50 whitespace-nowrap">
-            <Zap size={11} /> {preparing ? "Preparing…" : `Prepare All (${pending.length})`}
+            <Zap size={11} /> {preparing ? "Computing from books…" : "Compute 3B for all (from books)"}
           </button>
-        )}
+        </div>
       </div>
 
       {clients.length === 0 ? (
         <div className="text-center py-10 text-sm text-[var(--color-muted)]">No clients linked yet. Add clients from the Clients tab.</div>
       ) : (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
-          <div className="divide-y divide-[var(--color-border)]">
-            {clients.map(c => {
-              const isExpanded = expanded === c.tenant_id;
-              const isPending  = c.gst_status !== "filed";
-              // Compute estimated breakdown
-              const cgst = c.net_liability ? Math.round(c.net_liability * 0.5) : null;
-              const sgst = cgst;
-              return (
-                <div key={c.tenant_id}>
-                  <div
-                    className="flex items-center gap-4 px-4 py-3 hover:bg-white/2 cursor-pointer"
-                    onClick={() => setExpanded(isExpanded ? null : c.tenant_id)}
-                  >
-                    <div className="flex-1 min-w-0">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[820px]">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+              <tr>
+                {["Client", "Turnover (books)", "3B liability (books)", "3B status", "IMS pending", "ITC at risk"].map((h, i) => (
+                  <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i === 0 || i === 3 ? "text-left" : "text-right"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)]">
+              {clients.map(c => {
+                const delta = c.r3b_net_liability != null ? Math.round((c.net_liability_books - c.r3b_net_liability) * 100) / 100 : null;
+                return (
+                  <tr key={c.tenant_id} className={`hover:bg-white/2 ${!c.has_activity && c.r3b_status === "not_computed" ? "opacity-60" : ""}`}>
+                    <td className="px-4 py-3">
                       <p className="text-sm font-medium">{c.label}</p>
-                      {c.gstn_arn && <p className="text-[10px] font-mono text-[var(--color-muted)]">ARN: {c.gstn_arn}</p>}
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${c.gst_status === "filed" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/20 text-yellow-400 border-yellow-800/30"}`}>
-                      {c.gst_status === "filed" ? <CheckCircle2 size={8} /> : <Calculator size={8} />}
-                      {c.gst_status}
-                    </span>
-                    <div className="text-right min-w-[80px]">
-                      <p className={`text-sm font-bold tabular-nums ${isPending ? "text-orange-400" : "text-[var(--color-muted)]"}`}>
-                        {c.net_liability !== null ? formatCurrency(c.net_liability) : "-"}
-                      </p>
-                    </div>
-                    {isExpanded ? <ChevronUp size={12} className="text-[var(--color-muted)] shrink-0" /> : <ChevronDown size={12} className="text-[var(--color-muted)] shrink-0" />}
-                  </div>
-                  {isExpanded && c.net_liability !== null && (
-                    <div className="px-4 pb-3 bg-[var(--color-bg)] border-t border-[var(--color-border)]">
-                      <div className="grid grid-cols-3 gap-3 mt-3 mb-3">
-                        {[
-                          { label: "CGST", value: cgst },
-                          { label: "SGST", value: sgst },
-                          { label: "IGST", value: 0 },
-                        ].map(({ label, value }) => (
-                          <div key={label} className="text-center bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-2">
-                            <p className="text-[10px] text-[var(--color-muted)]">{label}</p>
-                            <p className="text-sm font-bold tabular-nums">{formatCurrency(value ?? 0)}</p>
-                          </div>
-                        ))}
-                      </div>
-                      {isPending && (
-                        <button onClick={() => toast.success(`${c.label} GSTR-3B prepared. Open their GST tab to review and file.`)}
-                          className="w-full text-xs bg-blue-600/80 text-white font-semibold py-2 rounded-lg hover:opacity-90">
-                          Prepare {c.label}'s GSTR-3B →
-                        </button>
+                      {c.r3b_arn && <p className="text-[10px] font-mono text-[var(--color-muted)]">ARN: {c.r3b_arn}</p>}
+                      {!c.has_activity && <p className="text-[10px] text-[var(--color-muted)]">no GST activity this period</p>}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)]">{c.has_activity ? formatCurrency(c.turnover) : "-"}</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold">
+                      {c.has_activity ? formatCurrency(c.net_liability_books) : "-"}
+                      {delta !== null && Math.abs(delta) > 1 && (
+                        <p className="text-[10px] text-orange-400 font-normal" title="Books have moved since the 3B record was computed — re-compute before filing">Δ {formatCurrency(Math.abs(delta))} vs computed</p>
                       )}
-                      {c.filed_at && (
-                        <p className="text-[10px] text-green-400 mt-2 text-center">Filed {new Date(c.filed_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div className="px-4 py-2.5 bg-[var(--color-bg)] border-t border-[var(--color-border)] flex items-center justify-between">
-            <p className="text-xs text-[var(--color-muted)]">{clients.length} clients · {filed.length} filed</p>
-            <p className="text-xs font-semibold text-orange-400">Total pending: {formatCurrency(pending.reduce((s, c) => s + (c.net_liability ?? 0), 0))}</p>
-          </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {statusChip(c)}
+                      {c.r3b_filed_at && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{new Date(c.r3b_filed_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</p>}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {c.ims_pending > 0
+                        ? <span className="text-orange-400 font-semibold">{c.ims_pending}</span>
+                        : c.last_2b_run ? <span className="text-green-400">0</span> : <span className="text-[var(--color-muted)]" title="No 2B match run saved for this period">no 2B run</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {c.itc_at_risk > 0 ? <span className="text-red-400 font-semibold">{formatCurrency(c.itc_at_risk)}</span> : <span className="text-[var(--color-muted)]">-</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-[var(--color-border)] bg-[var(--color-bg)]">
+                <td className="px-4 py-2.5 text-xs font-semibold">TOTAL · {t?.clients} clients</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-xs font-semibold">{formatCurrency(t?.turnover ?? 0)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-xs font-semibold">{formatCurrency(t?.net_liability_books ?? 0)}</td>
+                <td className="px-4 py-2.5" />
+                <td className="px-4 py-2.5 text-right tabular-nums text-xs font-semibold">{t?.ims_pending ?? 0}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-xs font-semibold">{formatCurrency(t?.itc_at_risk ?? 0)}</td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
       )}
+
+      <p className="text-[10px] text-[var(--color-muted)]">
+        Liability and turnover come live from each client's posted books; "computed" means a draft 3B record exists (created here or in the client's GST page); actual portal filing is GSP-gated and never faked. IMS-pending counts portal 2B invoices with no accept/reject decision — they are DEEMED ACCEPTED when the 3B is filed.
+      </p>
     </div>
   );
 }
@@ -691,16 +711,6 @@ function PracticeTab({ clients }: { clients: ClientSummary[] }) {
 
 // ── Marketplace Tab ───────────────────────────────────────────────────────────
 
-const LEAD_REASONS = [
-  "No CA on record - first GST registration needed",
-  "Missed TDS deposit for 2 consecutive months",
-  "Revenue crossed ₹40L - approaching GST threshold",
-  "Looking for audit-ready financials for investor due diligence",
-  "Wants monthly MIS reports + CFO-lite advisory",
-  "Needs tax planning before FY close",
-];
-const REVENUE_TIERS = ["₹5L-20L / yr", "₹20L-1Cr / yr", "₹1Cr-5Cr / yr", "₹5Cr+ / yr"];
-
 function MarketplaceTab() {
   const [leads, setLeads]    = useState<MarketplaceLead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -708,28 +718,28 @@ function MarketplaceTab() {
   const [declined, setDeclined] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    // HONEST feed: only the real fields the backend returns. (This used to layer fabricated
+    // "match scores", rotating fake urgency reasons, invented revenue tiers and fee estimates
+    // onto each lead — numbers with no basis, presented as lead intelligence.)
     api.get<MarketplaceLead[]>("/api/advisor/marketplace")
-      .then(raw => {
-        const enriched = raw.map((l, i) => ({
-          ...l,
-          reason: LEAD_REASONS[i % LEAD_REASONS.length],
-          revenue_tier: REVENUE_TIERS[i % REVENUE_TIERS.length],
-          match_score: 70 + (i * 7) % 30,
-          est_annual_fee: (i % 3 === 0 ? 60000 : i % 3 === 1 ? 120000 : 240000),
-        }));
-        setLeads(enriched);
-      })
+      .then(raw => setLeads(Array.isArray(raw) ? raw : []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  const acceptLead = (lead: MarketplaceLead) => {
-    setAccepted(s => new Set([...s, lead.id]));
-    toast.success(`Lead accepted! ${lead.name} will be notified. Potential fee: ${formatCurrency(lead.est_annual_fee ?? 0)}/yr`);
+  // Accepting a lead does something REAL now: it links the business as a client via the
+  // same endpoint the Clients tab uses (it appears in your client list and the GST board).
+  const acceptLead = async (lead: MarketplaceLead) => {
+    try {
+      await api.post("/api/advisor/clients", { client_tenant_id: lead.id, client_label: lead.name });
+      setAccepted(s => new Set([...s, lead.id]));
+      toast.success(`${lead.name} linked as a client — they now appear in your Clients tab and GST board`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not link the client");
+    }
   };
   const declineLead = (id: string) => {
     setDeclined(s => new Set([...s, id]));
-    toast.success("Lead passed - we'll show you better matches next time.");
   };
 
   if (loading) return <div className="py-8 flex justify-center"><div className="w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" /></div>;
