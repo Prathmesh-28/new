@@ -520,9 +520,15 @@ initDb()
       } catch (err) { console.error("[lending-servicing]", err.message); }
       // AFTER servicing refreshed DPD: label underwriting runs from observed loan conduct —
       // the repay→relearn loop that makes the scorecard backtestable.
-      require("./lib/underwritingRuns").labelOutcomes()
-        .then(n => { if (n) console.log(`[underwriting-runs] labelled ${n} run outcome(s)`); })
-        .catch(err => console.error("[underwriting-runs]", err.message));
+      try {
+        const n2 = await require("./lib/underwritingRuns").labelOutcomes();
+        if (n2) console.log(`[underwriting-runs] labelled ${n2} run outcome(s)`);
+      } catch (err) { console.error("[underwriting-runs]", err.message); }
+      // THEN refresh continuous pre-approval: expire stale offers, keep a fresh standing
+      // working-capital offer (ladder-limited, 14d expiry) per pre-qualified tenant.
+      require("./modules/lending").refreshStandingOffers()
+        .then(r => { if (r && (r.created || r.expired)) console.log(`[lending-preapproval] ${r.created} offer(s) refreshed, ${r.expired} expired`); })
+        .catch(err => console.error("[lending-preapproval]", err.message));
     }, { timezone: "UTC" });
     // Books: durable e-invoice worker (registers QUEUED vouchers with the GSP).
     require("./modules/books/einvoice").startWorker();

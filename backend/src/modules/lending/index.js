@@ -68,13 +68,42 @@ function buildKFS({ kind, principal, processingFee, apr, sched }) {
 }
 
 // ── Eligibility (reuses the deterministic scorecard) ───────────────────────────
+// ── #5 Progressive limit ladder ────────────────────────────────────────────────
+// KreditBee's signature control, and at low loan volume the correct science: default
+// probability can't be known yet, so EXPOSURE is controlled instead. The scorecard
+// amount is a CEILING; the offerable limit starts at 35% of it and steps up only on
+// proven conduct (cleanly closed loans), freezing on live distress. RBI note: increases
+// only ever materialize through borrower-INITIATED offer creation + acceptance (all our
+// offers are), never silently.
+const LADDER_STEPS = [0.35, 0.6, 0.8, 1.0];
+const LADDER_CLEAN_DPD = 15; // a loan closed without ever crossing 15 DPD counts as clean
+async function conductLadder(tenantId) {
+  const { rows } = await q(tenantId,
+    `SELECT l.id, l.status, l.dpd,
+            COALESCE((SELECT MAX(e.dpd) FROM loan_servicing_events e WHERE e.loan_id=l.id AND e.tenant_id=l.tenant_id), l.dpd) AS max_dpd
+       FROM loans l WHERE l.tenant_id=$1`, [tenantId]).catch(() => ({ rows: [] }));
+  const cleanLoans = rows.filter((l) => l.status === "closed" && Number(l.max_dpd) < LADDER_CLEAN_DPD).length;
+  // Freeze (drop to the entry step): anything currently past due, or a write-off ever.
+  const frozen = rows.some((l) => l.status === "active" && Number(l.dpd) > 0)
+    || rows.some((l) => l.status === "written_off");
+  const step = frozen ? 0 : Math.min(cleanLoans, LADDER_STEPS.length - 1);
+  return { clean_loans: cleanLoans, step, pct: LADDER_STEPS[step], frozen };
+}
+
 async function eligibility(tenantId) {
   try {
     const { score: underwrite } = require("../../lib/underwriting");
     const r = await underwrite(tenantId, pool, undefined, { trigger: "lending_offer" });
-    return { limit: n(r.approved_amount), grade: r.grade, score: r.score, decision: r.decision?.outcome || r.decision, recommended_product: r.recommended_product };
+    const ceiling = n(r.approved_amount);
+    const ladder = await conductLadder(tenantId);
+    const limit = r2(ceiling * ladder.pct);
+    return {
+      limit, ceiling, ladder,
+      grade: r.grade, score: r.score,
+      decision: r.decision?.outcome || r.decision, recommended_product: r.recommended_product,
+    };
   } catch {
-    return { limit: 0, grade: "E", score: 0, decision: "refer", recommended_product: null };
+    return { limit: 0, ceiling: 0, ladder: null, grade: "E", score: 0, decision: "refer", recommended_product: null };
   }
 }
 
@@ -84,12 +113,15 @@ async function createOffer(tenantId, userId, body = {}) {
   const today = new Date().toISOString().slice(0, 10);
   let principal, apr, processingFee, tenureMonths = null, tenureDays = null, sched, sourceInvoiceId = null;
 
+  let pricing = null; // #4/#8: the recorded pricing rationale (debtor grade → terms), stored on the KFS
+
   if (kind === "invoice_finance") {
     let invoiceAmount = n(body.invoice_amount);
-    const advanceRate = body.advance_rate != null ? Math.min(Math.max(n(body.advance_rate), 0), 0.9) : 0.8;
-    apr = n(body.apr) || 24;
+    apr = n(body.apr) || 0; // 0 = not specified → grade-based default below
+    let advanceRate = body.advance_rate != null ? Math.min(Math.max(n(body.advance_rate), 0), 0.9) : null;
     tenureDays = Math.round(n(body.tenure_days) || 60);
     sourceInvoiceId = body.invoice_id || null;
+    let debtor = null, debtorKey = null;
 
     // When financing a SPECIFIC invoice the invoice is the source of truth — this closes
     // the self-liquidating loop (source_invoice_id set → onInvoicePaid recovers it). Verify
@@ -97,7 +129,7 @@ async function createOffer(tenantId, userId, body = {}) {
     // trust a client-supplied amount). invoices is FORCE-RLS (0015) → read via q(tenantId).
     if (sourceInvoiceId) {
       const { rows: invRows } = await q(tenantId,
-        "SELECT id, total_amount, status, due_date FROM invoices WHERE id=$1 AND tenant_id=$2",
+        "SELECT id, total_amount, status, due_date, customer_gstin, customer_name FROM invoices WHERE id=$1 AND tenant_id=$2",
         [sourceInvoiceId, tenantId]
       );
       const inv = invRows[0];
@@ -117,13 +149,69 @@ async function createOffer(tenantId, userId, body = {}) {
         const days = Math.ceil((new Date(inv.due_date).getTime() - Date.now()) / 86400000);
         if (days > 0) tenureDays = days;
       }
+
+      // ── #4 DEBTOR-GRADE PRICING ── invoice finance is priced on WHO OWES the invoice.
+      // The per-debtor payment-behaviour score (GSTIN-keyed, from the tenant's own paid
+      // history) sets the default advance rate + APR; explicit body values still override.
+      debtorKey = (inv.customer_gstin && String(inv.customer_gstin).trim()) || String(inv.customer_name || "").trim();
+      try {
+        const scores = await require("../../lib/customerScore").customerScores(tenantId);
+        debtor = scores.find((s) =>
+          (inv.customer_gstin && s.gstin && s.gstin.trim().toUpperCase() === inv.customer_gstin.trim().toUpperCase())
+          || (!inv.customer_gstin && s.customer === inv.customer_name)) || null;
+      } catch { /* pricing falls back to conservative defaults */ }
+      const grade = debtor?.grade || null;
+      const ADVANCE_BY_GRADE = { A: 0.9, B: 0.85, C: 0.8, D: 0.7, E: 0.65 };
+      const APR_BY_GRADE = { A: 18, B: 20, C: 24, D: 28, E: 32 };
+      if (advanceRate == null) advanceRate = grade ? ADVANCE_BY_GRADE[grade] : 0.75; // unknown debtor → conservative
+      if (!apr) apr = grade ? APR_BY_GRADE[grade] : 24;
+
+      // Dilution reserve: the tenant's own credit-note ratio (trailing 180d) — invoices
+      // that get partially credited later dilute the collateral, so the advance rate is
+      // haircut by the observed ratio (capped at 15 points).
+      try {
+        const { rows: dil } = await q(tenantId,
+          `SELECT COALESCE((SELECT SUM(cn.total_amount) FROM invoice_credit_notes cn WHERE cn.tenant_id=$1 AND cn.created_at > now() - interval '180 days'),0) AS credited,
+                  COALESCE((SELECT SUM(i.total_amount) FROM invoices i WHERE i.tenant_id=$1 AND i.status <> 'cancelled' AND i.created_at > now() - interval '180 days'),0) AS billed`,
+          [tenantId]);
+        const billed = n(dil[0]?.billed), credited = n(dil[0]?.credited);
+        const dilution = billed > 0 ? Math.min(credited / billed, 0.15) : 0;
+        if (dilution > 0 && body.advance_rate == null) advanceRate = Math.max(0.5, r2(advanceRate - dilution));
+        pricing = {
+          debtor: debtor ? { key: debtorKey, grade: debtor.grade, score: debtor.score, on_time_rate: debtor.on_time_rate } : { key: debtorKey || null, grade: null, note: "no payment history — conservative defaults" },
+          advance_rate: advanceRate, apr, dilution_reserve: r2(dilution),
+          basis: "Per-debtor payment-behaviour grade (tenant's own invoice history) sets advance rate + APR; dilution reserve from 180d credit-note ratio.",
+        };
+      } catch { /* dilution optional */ }
     }
+    if (advanceRate == null) advanceRate = 0.8; // no specific invoice → legacy default
+    if (!apr) apr = 24;
     if (!(invoiceAmount > 0)) throw new LendError("BAD_INPUT", "invoice_amount required for invoice financing", 400);
 
     principal = r2(advanceRate * invoiceAmount);
-    // never advance beyond the tenant's underwriting limit
+    // never advance beyond the tenant's (ladder-controlled) underwriting limit
     const elig = await eligibility(tenantId);
     if (elig.limit > 0) principal = Math.min(principal, elig.limit);
+
+    // ── #4 per-debtor concentration cap: the same anchor buyer must not back more than
+    // 40% of the tenant's scorecard ceiling across live advances. Clamp, or refuse when
+    // the debtor's book is already full.
+    if (sourceInvoiceId && debtorKey && elig.ceiling > 0) {
+      const { rows: expRows } = await q(tenantId,
+        `SELECT COALESCE(SUM(l.outstanding_principal),0) AS exposure
+           FROM loans l JOIN invoices i ON i.id::text = l.source_invoice_id AND i.tenant_id = l.tenant_id
+          WHERE l.tenant_id=$1 AND l.status='active'
+            AND COALESCE(NULLIF(i.customer_gstin,''), i.customer_name) = $2`,
+        [tenantId, debtorKey]).catch(() => ({ rows: [{ exposure: 0 }] }));
+      const exposure = n(expRows[0]?.exposure);
+      const cap = r2(elig.ceiling * 0.4);
+      if (exposure >= cap) throw new LendError("DEBTOR_CONCENTRATION", `This customer already backs ₹${Math.round(exposure).toLocaleString("en-IN")} of live advances — the per-debtor cap (40% of your limit ceiling) is full. Finance a different customer's invoice or repay first.`, 409);
+      if (exposure + principal > cap) {
+        principal = r2(cap - exposure);
+        if (pricing) pricing.concentration_clamped_to = principal;
+      }
+    }
+
     processingFee = r2(n(body.processing_fee) || principal * 0.01);
     sched = bullet(principal, apr, tenureDays, today);
   } else {
@@ -140,6 +228,7 @@ async function createOffer(tenantId, userId, body = {}) {
   }
 
   const kfs = buildKFS({ kind, principal, processingFee, apr, sched });
+  if (pricing) kfs.pricing = pricing; // #8 partial: the recorded rationale behind these terms
   let rows;
   try {
     ({ rows } = await q(tenantId,
@@ -206,6 +295,12 @@ async function declineOffer(tenantId, id) {
 async function acceptOffer(tenantId, offerId, actorId) {
   const offer = await getOffer(tenantId, offerId);
   if (offer.status !== "offered") throw new LendError("BAD_STATE", `Offer is ${offer.status}`, 409);
+  // #6 fix: expires_at was written on every offer and then never checked — a stale offer
+  // priced off last quarter's score could be accepted forever. Expire it loudly instead.
+  if (offer.expires_at && new Date(offer.expires_at).getTime() < Date.now()) {
+    await q(tenantId, "UPDATE loan_offers SET status='expired' WHERE tenant_id=$1 AND id=$2 AND status='offered'", [tenantId, offerId]).catch(() => {});
+    throw new LendError("EXPIRED", "This offer has expired — request a fresh one (terms re-price on your current score).", 409);
+  }
   const today = new Date().toISOString().slice(0, 10);
   const sched = offer.kind === "invoice_finance"
     ? bullet(n(offer.principal), n(offer.apr), offer.tenure_days, today)
@@ -471,8 +566,40 @@ async function postRepayment(tenantId, actorId, loan, principal, interest, repay
   } catch (e) { console.warn("[lending] repayment GL skipped:", e.message); return null; }
 }
 
+// ── #6 Continuous pre-approval ─────────────────────────────────────────────────
+// KreditBee's "10-minute decision" is really pre-computation: nightly, every tenant is
+// scored and a STANDING working-capital offer (7-day expiry, ladder-limited, with KFS)
+// is kept fresh in loan_offers — so the Capital page always shows a live, acceptable
+// number instead of computing one on click. Also expires stale offers per tenant
+// (loan_offers is RLS'd → per-tenant q()). Borrower-initiated acceptance unchanged.
+async function refreshStandingOffers() {
+  const { rows: tenants } = await pool.query("SELECT DISTINCT tenant_id FROM users WHERE tenant_id IS NOT NULL");
+  let created = 0, expired = 0, skipped = 0;
+  for (const { tenant_id: tenantId } of tenants) {
+    try {
+      // Sweep this tenant's stale offers first.
+      const { rowCount } = await q(tenantId,
+        "UPDATE loan_offers SET status='expired' WHERE tenant_id=$1 AND status='offered' AND expires_at IS NOT NULL AND expires_at < now()", [tenantId]);
+      expired += rowCount || 0;
+      // A live standing (non-invoice) offer already? Nothing to do.
+      const { rows: open } = await q(tenantId,
+        "SELECT 1 FROM loan_offers WHERE tenant_id=$1 AND status='offered' AND source_invoice_id IS NULL LIMIT 1", [tenantId]);
+      if (open[0]) { skipped++; continue; }
+      // Conservative: no standing offer while any non-invoice loan is live.
+      const { rows: liveLoan } = await q(tenantId,
+        "SELECT 1 FROM loans WHERE tenant_id=$1 AND status='active' AND source_invoice_id IS NULL LIMIT 1", [tenantId]);
+      if (liveLoan[0]) { skipped++; continue; }
+      const elig = await eligibility(tenantId);
+      if (!(elig.limit > 0) || elig.decision !== "pre_qualified") { skipped++; continue; }
+      await createOffer(tenantId, null, { kind: "working_capital", principal: elig.limit });
+      created++;
+    } catch (e) { console.warn("[lending] standing-offer refresh failed for", tenantId, e.message); }
+  }
+  return { created, expired, skipped };
+}
+
 module.exports = {
-  LendError, eligibility,
+  LendError, eligibility, conductLadder, refreshStandingOffers,
   createOffer, createOffersBulk, listOffers, getOffer, acceptOffer, acceptOffersBulk, declineOffer,
   getLoan, listLoans, recordRepayment, onInvoicePaid, financeableInvoices, financingPosition,
   amortize, bullet, buildKFS, dpdBucket, // pure helpers exported for tests
