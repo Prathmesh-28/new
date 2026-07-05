@@ -17,6 +17,7 @@ import AppLockCard from "./AppLockCard";
 import SecurityCard from "./SecurityCard";
 import NotificationsCard from "./NotificationsCard";
 import PrivacyCard from "./PrivacyCard";
+import DatePicker from "@/components/DatePicker";
 
 export type TeamUser = {
   id: string;
@@ -255,9 +256,7 @@ export function BooksLockCard() {
           <p className="text-[10px] text-[var(--color-muted)] mt-1">India's standard FY runs April-March.</p>
         </div>
         <div>
-          <label className="text-xs text-[var(--color-muted)] block mb-1">Lock books up to &amp; including</label>
-          <input type="date" value={lockInput} onChange={e => setLockInput(e.target.value)}
-            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <DatePicker label="Lock books up to & including" value={lockInput} onChange={setLockInput} id="books-lock-date" />
         </div>
       </div>
 

@@ -8,6 +8,8 @@ import type { Invoice as StoreInvoice } from "@/data/types";
 import { formatCurrency } from "@/lib/utils";
 import DiscussButton from "@/features/collab/DiscussButton";
 import { LoadingState, ErrorState } from "@/components/EmptyState";
+import DatePicker from "@/components/DatePicker";
+import CurrencyInput from "@/components/CurrencyInput";
 import {
   Plus, FileText, Send, Download, QrCode, X, Check, Clock, AlertCircle, MessageCircle, Bell, Zap,
   FileSignature, FilePlus2, Repeat, Link2, FileMinus2, ShieldAlert, Globe, GitPullRequestArrow,
@@ -122,8 +124,7 @@ function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void;
               </select>
             </div>
             <div>
-              <label className={lbl}>Due date</label>
-              <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inp} />
+              <DatePicker label="Due date" value={dueDate} onChange={setDueDate} id="new-invoice-due-date" />
             </div>
           </div>
 
@@ -780,8 +781,7 @@ function RecordPaymentModal({ invoice, onClose, onDone }: { invoice: Invoice; on
               </select>
             </div>
             <div>
-              <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-              <input type="date" value={receivedAt} onChange={e => setReceivedAt(e.target.value)} className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm" />
+              <DatePicker label="Date" value={receivedAt} onChange={setReceivedAt} id="cash-received-date" />
             </div>
           </div>
           <div>
@@ -916,7 +916,7 @@ function QuotationBuilder() {
         <h2 className="text-sm font-semibold flex items-center gap-2"><FileSignature size={14} className="text-[var(--color-primary)]" /> Quotation / Estimate Builder</h2>
         <div className="grid grid-cols-2 gap-3">
           <div><label className={LBL}>Customer *</label><input value={customer} onChange={e => setCustomer(e.target.value)} className={INP} placeholder="Acme Pvt Ltd" /></div>
-          <div><label className={LBL}>Valid until</label><input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} className={INP} /></div>
+          <div><DatePicker label="Valid until" value={validUntil} onChange={setValidUntil} id="quote-valid-until" /></div>
         </div>
         <LineItemsEditor items={items} setItems={setItems} />
         <DocTotals subtotal={calc.subtotal} gst={calc.gst} total={calc.total} />
@@ -1093,10 +1093,10 @@ function RecurringBilling({ onChanged }: { onChanged: () => void }) {
           <input value={customer} onChange={e => setCustomer(e.target.value)} className={INP} placeholder="Customer *" />
           <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={INP} placeholder="Customer email (for auto-send)" />
           <input value={desc} onChange={e => setDesc(e.target.value)} className={INP} placeholder="Line description * (e.g. Retainer - July)" />
-          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className={INP} placeholder="Amount ₹ (pre-GST) *" />
+          <CurrencyInput value={amount ? parseFloat(amount) || null : null} onChange={(v) => setAmount(v != null ? String(v) : "")} placeholder="Amount (pre-GST) *" min={0} id="recurring-amount" />
           <select value={gst} onChange={e => setGst(e.target.value)} className={INP}>{GST_RATES.map(r => <option key={r} value={r}>GST {r}%</option>)}</select>
           <select value={freq} onChange={e => setFreq(e.target.value as RecurringSchedule["cadence"])} className={INP}>{(["weekly", "monthly", "quarterly"] as const).map(f => <option key={f} value={f}>{f}</option>)}</select>
-          <input type="date" value={nextRun} onChange={e => setNextRun(e.target.value)} className={INP} />
+          <DatePicker value={nextRun} onChange={setNextRun} id="recurring-next-run" />
           <label className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
             <input type="checkbox" checked={autoSend} onChange={e => setAutoSend(e.target.checked)} />
             Auto-send by email on generation (also accrues to the books)
