@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import type { ActiveLoan } from "@/data/types";
 import PreviewBadge from "@/components/PreviewBadge";
 import AiInsight from "@/components/ai/AiInsight";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 function emi(principal: number, annualRate: number, months: number): number {
   const r = annualRate / 100 / 12;
@@ -844,7 +845,7 @@ function WCSizingTab() {
             </div>
             <div className="text-right">
               <p className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(mpbfCalc)}</p>
-              <p className="text-[10px] text-[var(--color-muted)]">indicative limit</p>
+              <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />indicative limit</p>
             </div>
           </div>
         </div>
@@ -1864,14 +1865,14 @@ function ValuationTab() {
           <h3 className="text-sm font-semibold mb-1">Blended Valuation</h3>
           <p className="text-xs text-[var(--color-muted)] mb-4">Equal-weight average of the methods with a value ({methodEvs.length} of 3).</p>
           <div className="flex items-center justify-between bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 rounded-lg px-4 py-3">
-            <span className="text-xs text-[var(--color-muted)]">Indicative Enterprise Value</span>
+            <span className="text-xs text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative Enterprise Value</span>
             <span className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{blendedEv > 0 ? formatCurrency(blendedEv) : "-"}</span>
           </div>
         </div>
       </div>
 
       <p className="text-[10px] text-[var(--color-muted)]">
-        Valuation is indicative only. Indian SMEs typically trade at 0.5-3x revenue or 4-8x EBITDA depending on sector and growth. DCF: terminal value = FCFₙ × (1 + terminal growth) ÷ (WACC − terminal growth), discounted to PV; EV = Σ discounted FCF + discounted terminal value. DCF is highly sensitive to WACC and terminal-growth assumptions - WACC must exceed terminal growth.
+        <DataFreshnessBadge kind="indicative" className="mr-1.5" />Valuation is indicative only. Indian SMEs typically trade at 0.5-3x revenue or 4-8x EBITDA depending on sector and growth. DCF: terminal value = FCFₙ × (1 + terminal growth) ÷ (WACC − terminal growth), discounted to PV; EV = Σ discounted FCF + discounted terminal value. DCF is highly sensitive to WACC and terminal-growth assumptions - WACC must exceed terminal growth.
       </p>
     </div>
   );
@@ -1974,7 +1975,7 @@ function AaUnderwritingPull() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Landmark size={14} className="text-[var(--color-primary)]" /> AA-Data Underwriting Pull</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Models the credit profile a lender derives from your Account Aggregator bank-statement feed. Inflow and balance are pre-filled from your live data - adjust the bank-behaviour signals to see how the underwriting score and indicative limit move.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Models the credit profile a lender derives from your Account Aggregator bank-statement feed. Inflow and balance are pre-filled from your live data - adjust the bank-behaviour signals to see how the underwriting score and indicative limit move.</p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -2047,7 +2048,7 @@ function AaUnderwritingPull() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Estimator only - no live Account Aggregator fetch is made. Real underwriting pulls 6-12 months of statements via the AA (Sahamati/RBI) framework with your explicit consent. Indicative limit uses a 50% FOIR cap on surplus inflow, capitalised at ~16% p.a. over 36 months, then risk-adjusted by score band.
+        <DataFreshnessBadge kind="indicative" className="mr-1.5" />Estimator only - no live Account Aggregator fetch is made. Real underwriting pulls 6-12 months of statements via the AA (Sahamati/RBI) framework with your explicit consent. Indicative limit uses a 50% FOIR cap on surplus inflow, capitalised at ~16% p.a. over 36 months, then risk-adjusted by score band.
       </div>
     </div>
   );
@@ -2097,7 +2098,7 @@ function LoanEligibilityMatcher() {
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Target size={14} className="text-[var(--color-primary)]" /> Business Loan Eligibility Matcher</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Match your profile to common Indian SME lending products and see approval odds + indicative ticket size for each.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Match your profile to common Indian SME lending products and see approval odds + indicative ticket size for each.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Annual turnover (₹)</label>
@@ -2145,7 +2146,7 @@ function LoanEligibilityMatcher() {
                 ))}
               </div>
               <div className="flex items-center justify-between text-xs border-t border-[var(--color-border)] pt-2">
-                <span className="text-[var(--color-muted)]">Indicative ticket (25% of turnover, capped)</span>
+                <span className="text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative ticket (25% of turnover, capped)</span>
                 <span className="font-bold tabular-nums text-[var(--color-primary)]">{p.eligible ? formatCurrency(p.offer) : "-"}</span>
               </div>
             </div>
@@ -2154,7 +2155,7 @@ function LoanEligibilityMatcher() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Match % and tickets are indicative - final eligibility depends on each lender's policy, bureau report and document verification. CGTMSE coverage and rates vary by scheme; verify current terms with the lender.
+        <DataFreshnessBadge kind="indicative" className="mr-1.5" />Match % and tickets are indicative - final eligibility depends on each lender's policy, bureau report and document verification. CGTMSE coverage and rates vary by scheme; verify current terms with the lender.
       </div>
     </div>
   );
@@ -2406,7 +2407,7 @@ function InvoiceDiscountingConnector() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Indicative only - actual bids on TReDS (RXIL/M1xchange/Invoicemart) are set by financiers and depend on buyer credit rating. Advance % and rate vary; bill discounting is typically with-recourse unless factored. Discount charge = face × rate × tenure/365.
+        <DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative only - actual bids on TReDS (RXIL/M1xchange/Invoicemart) are set by financiers and depend on buyer credit rating. Advance % and rate vary; bill discounting is typically with-recourse unless factored. Discount charge = face × rate × tenure/365.
       </div>
     </div>
   );
@@ -2509,7 +2510,7 @@ function LoanDocumentPack() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Checklist is indicative of common Indian SME lending requirements. Individual lenders may ask for additional documents (CA-certified turnover, board resolution, projected DSCR working). Keep statements in PDF as downloaded from net-banking for faster verification.
+        <DataFreshnessBadge kind="indicative" className="mr-1.5" />Checklist is indicative of common Indian SME lending requirements. Individual lenders may ask for additional documents (CA-certified turnover, board resolution, projected DSCR working). Keep statements in PDF as downloaded from net-banking for faster verification.
       </div>
     </div>
   );
@@ -2638,7 +2639,7 @@ function FoirCalculator() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        FOIR = (existing EMIs + fixed obligations + proposed EMI) ÷ net income. Banks typically cap FOIR at 40-55% depending on income level (higher income allows higher ratios). Max loan reverses the EMI formula at the proposed rate and tenure. Indicative - lenders also apply DSCR and bureau checks.
+        <DataFreshnessBadge kind="indicative" className="mr-1.5" />FOIR = (existing EMIs + fixed obligations + proposed EMI) ÷ net income. Banks typically cap FOIR at 40-55% depending on income level (higher income allows higher ratios). Max loan reverses the EMI formula at the proposed rate and tenure. Indicative - lenders also apply DSCR and bureau checks.
       </div>
     </div>
   );
@@ -3301,7 +3302,7 @@ function LapLtvTab() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Indicative LTV bands: residential ~65-75%, commercial ~55-65%, industrial ~50%. Lenders value the property conservatively (often below market) and net off any existing charge. LAP tenures run up to 15 years - longer tenure lowers EMI but raises total interest.
+        <DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative LTV bands: residential ~65-75%, commercial ~55-65%, industrial ~50%. Lenders value the property conservatively (often below market) and net off any existing charge. LAP tenures run up to 15 years - longer tenure lowers EMI but raises total interest.
       </div>
     </div>
   );
@@ -3672,7 +3673,7 @@ function ScoreImprovementPlanner() {
         </div>
       </div>
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Point values are indicative weightings from the underwriting model. Completing committed actions and re-applying after 30+ days lets the engine re-score with the improved data.
+        <DataFreshnessBadge kind="indicative" className="mr-1.5" />Point values are indicative weightings from the underwriting model. Completing committed actions and re-applying after 30+ days lets the engine re-score with the improved data.
       </div>
     </div>
   );
@@ -4080,7 +4081,7 @@ function SchemeFinder() {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        Scheme limits and rules are indicative as of the latest public guidelines and vary by lender and applicant category. Confirm current terms with the lending bank or on the official scheme portal before applying.
+        <DataFreshnessBadge kind="indicative" className="mr-1.5" />Scheme limits and rules are indicative as of the latest public guidelines and vary by lender and applicant category. Confirm current terms with the lending bank or on the official scheme portal before applying.
       </div>
     </div>
   );

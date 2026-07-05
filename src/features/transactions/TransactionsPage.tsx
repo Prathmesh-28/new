@@ -11,6 +11,7 @@ import { capturePhoto } from "@/lib/nativeFeatures";
 import { api } from "@/lib/api";
 import { useT } from "@/i18n";
 import ReconcileModal from "./ReconcileModal";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 const CATEGORIES = ["revenue", "expense", "payroll", "loan", "tax", "transfer"] as const;
 const PAGE_SIZE  = 50;
@@ -2207,7 +2208,7 @@ function CashAccrualToggle() {
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Window: last {months} months. Cash basis counts money actually received/paid; accrual adds revenue you've invoiced but not yet collected. Expense-side accrual (open bills) is not modelled here. Indicative - confirm your method with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Window: last {months} months. Cash basis counts money actually received/paid; accrual adds revenue you've invoiced but not yet collected. Expense-side accrual (open bills) is not modelled here. Indicative - confirm your method with your CA.</p>
     </div>
   );
 }
@@ -3029,7 +3030,7 @@ function GstLedger() {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">An indicative GSTR-3B-style summary. It back-computes the tax embedded in revenue and expense lines at a single slab assuming amounts are tax-inclusive - real returns need line-level rates, ineligible-ITC exclusions and RCM. Use as a directional estimate and confirm with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />An indicative GSTR-3B-style summary. It back-computes the tax embedded in revenue and expense lines at a single slab assuming amounts are tax-inclusive - real returns need line-level rates, ineligible-ITC exclusions and RCM. Use as a directional estimate and confirm with your CA.</p>
     </div>
   );
 }
@@ -3111,7 +3112,7 @@ function TdsLedger() {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">An indicative TDS estimate on expense and payroll payments per counterparty, applied above a section threshold. Actual TDS depends on PAN/payee status, aggregate-during-year limits and exact section applicability - treat this as a working estimate and confirm with your CA before depositing.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />An indicative TDS estimate on expense and payroll payments per counterparty, applied above a section threshold. Actual TDS depends on PAN/payee status, aggregate-during-year limits and exact section applicability - treat this as a working estimate and confirm with your CA before depositing.</p>
     </div>
   );
 }

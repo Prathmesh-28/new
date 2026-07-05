@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { differenceInCalendarDays, format } from "date-fns";
 import { useT } from "@/i18n";
 import type { CapitalRaise } from "@/data/types";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1349,7 +1350,7 @@ function ExitWaterfall() {
       </button>
 
       <p className="text-[10px] text-[var(--color-muted)]">
-        Simplified model: non-participating preferred, single liquidation preference per class, no participation cap or accrued dividends. For indicative planning only - confirm with your cap-table/legal advisor.
+        <DataFreshnessBadge kind="indicative" className="mr-1.5" />Simplified model: non-participating preferred, single liquidation preference per class, no participation cap or accrued dividends. For indicative planning only - confirm with your cap-table/legal advisor.
       </p>
     </div>
   );

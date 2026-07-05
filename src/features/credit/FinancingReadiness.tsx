@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
 import { Gauge, TrendingUp, ArrowRight, Loader2, Sparkles, ShieldCheck } from "lucide-react";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 /**
  * Financing readiness - the embedded-working-capital wedge. Runs the same live
@@ -106,7 +107,7 @@ export default function FinancingReadiness({ onApply }: { onApply?: () => void }
           </div>
         </div>
         <div className="flex-1 min-w-[180px]">
-          <p className="text-[11px] text-[var(--color-muted)]">Indicative eligibility</p>
+          <p className="text-[11px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative eligibility</p>
           <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(data.approved_amount || 0))}</p>
           {data.recommended_product && <p className="text-[11px] text-[var(--color-muted)] mt-0.5 capitalize">Best fit: {String(data.recommended_product).replace(/_/g, " ")}</p>}
         </div>
@@ -162,7 +163,7 @@ export default function FinancingReadiness({ onApply }: { onApply?: () => void }
           </ul>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)] mt-3">Computed live from your cash flows, GST filings and receivables on the same engine lenders underwrite on - no document uploads. Indicative only; final terms depend on the lender.</p>
+      <p className="text-[10px] text-[var(--color-muted)] mt-3"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Computed live from your cash flows, GST filings and receivables on the same engine lenders underwrite on - no document uploads. Indicative only; final terms depend on the lender.</p>
     </div>
   );
 }

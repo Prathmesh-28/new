@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 type Tab =
   | "overview" | "vault" | "register" | "gaps" | "suminsured" | "grouphealth"
@@ -566,7 +567,7 @@ function GroupHealthEstimator() {
       <div className={`${CARD} p-5`}>
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><HeartPulse size={14} className="text-[var(--color-primary)]" /> Group-Health Premium Estimator</h3>
         <p className="text-xs text-[var(--color-muted)] mb-4">
-          Indicative annual mediclaim premium by age band. Group cover is available for teams as small as two.
+          <DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative annual mediclaim premium by age band. Group cover is available for teams as small as two.
         </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           {(Object.keys(AGE_FACTOR) as AgeBand[]).map(band => (
@@ -614,7 +615,7 @@ function GroupHealthEstimator() {
           <p className="text-sm mt-3">Roughly <strong className="text-[var(--color-primary)]">{formatCurrency(Math.round(result.perHead))}</strong> per life per year, all-in.</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative model only - actual group-mediclaim pricing depends on claims experience, room-rent caps, co-pay, network and insurer. GST on health insurance premium is 18%. Bind through an IRDAI-licensed insurer/broker.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative model only - actual group-mediclaim pricing depends on claims experience, room-rent caps, co-pay, network and insurer. GST on health insurance premium is 18%. Bind through an IRDAI-licensed insurer/broker.</p>
     </div>
   );
 }
@@ -792,7 +793,7 @@ function TradeCreditEstimator() {
           )}
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Trade-credit pricing depends on your buyer ledger quality, sector and historic bad-debt rate; insurers set per-buyer credit limits after assessing each debtor. Figures here are indicative - get a formal quote from an IRDAI-licensed credit insurer.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Trade-credit pricing depends on your buyer ledger quality, sector and historic bad-debt rate; insurers set per-buyer credit limits after assessing each debtor. Figures here are indicative - get a formal quote from an IRDAI-licensed credit insurer.</p>
     </div>
   );
 }
@@ -1623,7 +1624,7 @@ function BusinessInterruptionEstimator() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Pick an indemnity period long enough to fully rebuild and regain market share - 12 months is a common minimum; manufacturers often need 18-24. "Increased cost of working" pays for temporary premises/overtime to keep trading. Indicative only; rates are insurer-set.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Pick an indemnity period long enough to fully rebuild and regain market share - 12 months is a common minimum; manufacturers often need 18-24. "Increased cost of working" pays for temporary premises/overtime to keep trading. Indicative only; rates are insurer-set.</p>
     </div>
   );
 }
@@ -1708,7 +1709,7 @@ function MarineTransitCalculator() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">An Institute Cargo Clause "A" cover is all-risk; "C" is named-perils only and cheaper. For exports, sum insured is conventionally CIF + 10% to cover incidental costs and lost margin. Rates depend on commodity, route and packing. Indicative only.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />An Institute Cargo Clause "A" cover is all-risk; "C" is named-perils only and cheaper. For exports, sum insured is conventionally CIF + 10% to cover incidental costs and lost margin. Rates depend on commodity, route and packing. Indicative only.</p>
     </div>
   );
 }
@@ -1844,7 +1845,7 @@ function CyberInsuranceScorer() {
           <div className="h-full rounded-full transition-all" style={{ width: `${score}%`, background: band.bar }} />
         </div>
         {score > 0 && (
-          <p className="text-sm mt-4">Indicative cover to consider: <strong className="text-[var(--color-primary)]">{formatCurrency(suggestedLimit)}</strong> first-party + liability limit.</p>
+          <p className="text-sm mt-4"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative cover to consider: <strong className="text-[var(--color-primary)]">{formatCurrency(suggestedLimit)}</strong> first-party + liability limit.</p>
         )}
       </div>
       <p className="text-[10px] text-[var(--color-muted)]">A heuristic prioritisation tool, not an underwriting decision. Under the DPDP Act, the Data Protection Board can levy penalties up to ₹250 crore for serious breaches - cyber cover typically funds breach response, forensics, notification and legal costs. Calibrate the limit with a broker.</p>
@@ -2293,7 +2294,7 @@ function TopUpOptimizer() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative only - real top-up pricing depends on insurer, waiting periods, room-rent limits and pre-existing conditions. A regular top-up resets its deductible per claim; a super-top-up applies it once for the policy year, so a person with several smaller bills is usually better off with super-top-up. GST on health premium is 18%.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative only - real top-up pricing depends on insurer, waiting periods, room-rent limits and pre-existing conditions. A regular top-up resets its deductible per claim; a super-top-up applies it once for the policy year, so a person with several smaller bills is usually better off with super-top-up. GST on health premium is 18%.</p>
     </div>
   );
 }
@@ -2809,7 +2810,7 @@ function SurrenderValueEstimator() {
       {planType === "endowment" && !result.locked && (
         <p className="text-xs text-[var(--color-muted)] px-1">Guaranteed Surrender Value factor applied: <strong className="text-[var(--color-text)]">{result.factorPct}%</strong> of eligible premiums. Special (insurer-declared) surrender value may be higher - ask for a surrender quote before deciding.</p>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Rough estimate only. Endowment surrender uses indicative IRDAI GSV factors (rising with elapsed term, first year's premium excluded, nil before two years). ULIPs carry a 5-year lock-in and discontinuance charges. Always get the exact surrender/paid-up figures from your insurer before acting.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Rough estimate only. Endowment surrender uses indicative IRDAI GSV factors (rising with elapsed term, first year's premium excluded, nil before two years). ULIPs carry a 5-year lock-in and discontinuance charges. Always get the exact surrender/paid-up figures from your insurer before acting.</p>
     </div>
   );
 }
@@ -2894,7 +2895,7 @@ function GroupVsIndividual() {
           )}
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative comparison. Group rates depend on group size, age mix, claims experience and chosen benefits; individual retail premiums vary by underwriting. Group cover ends when employment ends and may lack portability - many teams pair a small individual base with group cover. GST on health premium is 18%.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative comparison. Group rates depend on group size, age mix, claims experience and chosen benefits; individual retail premiums vary by underwriting. Group cover ends when employment ends and may lack portability - many teams pair a small individual base with group cover. GST on health premium is 18%.</p>
     </div>
   );
 }
@@ -3395,7 +3396,7 @@ function BusinessPackageRecommender() {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative sector templates only - your actual needs depend on premises, staff, exposure and contracts. Many insurers offer a single "business package / shopkeeper" policy bundling several of these sections at a discount. Bind through an IRDAI-licensed insurer/broker.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative sector templates only - your actual needs depend on premises, staff, exposure and contracts. Many insurers offer a single "business package / shopkeeper" policy bundling several of these sections at a discount. Bind through an IRDAI-licensed insurer/broker.</p>
     </div>
   );
 }

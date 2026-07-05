@@ -17,6 +17,7 @@ import { format, addDays, addMonths, differenceInCalendarDays } from "date-fns";
 import AiInsight from "@/components/ai/AiInsight";
 import TabStrip from "@/components/TabStrip";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 // shared styles (reused from TaxPage/DebtPage input convention)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -683,7 +684,7 @@ function SurplusAllocator({ totalBalance }: { totalBalance: number }) {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Illustrative allocations, not investment advice. Yields are indicative and not guaranteed - hybrid/equity values fluctuate and can fall. Match instrument to when you'll actually need the cash.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Illustrative allocations, not investment advice. Yields are indicative and not guaranteed - hybrid/equity values fluctuate and can fall. Match instrument to when you'll actually need the cash.</p>
     </div>
   );
 }
@@ -3091,7 +3092,7 @@ function LiquidityTierAllocator({ totalBalance }: { totalBalance: number }) {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Tier yields are indicative and not guaranteed. Size Tier 1 to cover committed payables and payroll before stretching for yield in higher tiers. Allocation aid, not advice.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Tier yields are indicative and not guaranteed. Size Tier 1 to cover committed payables and payroll before stretching for yield in higher tiers. Allocation aid, not advice.</p>
     </div>
   );
 }
@@ -3148,7 +3149,7 @@ function YieldLiquidityTradeoff() {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Liquidity scores are illustrative (100 = same-day access). Yields are indicative and not guaranteed. The score is a blended ranking aid - match the actual instrument to a real cash-need date.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Liquidity scores are illustrative (100 = same-day access). Yields are indicative and not guaranteed. The score is a blended ranking aid - match the actual instrument to a real cash-need date.</p>
     </div>
   );
 }

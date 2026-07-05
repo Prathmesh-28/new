@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import { useApp } from "@/context/AppContext";
 import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
@@ -1018,7 +1019,7 @@ function CarbonOffsetEstimator() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative only - voluntary carbon market prices vary widely by vintage, project and registry. Verify credit serial numbers to avoid double-counting. Offsetting is no substitute for cutting emissions at source.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative only - voluntary carbon market prices vary widely by vintage, project and registry. Verify credit serial numbers to avoid double-counting. Offsetting is no substitute for cutting emissions at source.</p>
     </div>
   );
 }
@@ -1532,7 +1533,7 @@ function RenewableSwitchRoi() {
           )}
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative; excludes O&amp;M, degradation, financing and net-metering credits. Generation usable only up to your own consumption unless you have net-metering / open access.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative; excludes O&amp;M, degradation, financing and net-metering credits. Generation usable only up to your own consumption unless you have net-metering / open access.</p>
     </div>
   );
 }
@@ -1994,7 +1995,7 @@ function GreenLoanEligibility() {
           <p className={`text-[10px] mt-0.5 ${band.color}`}>{band.label}</p>
         </div>
         <div className={`${CARD} p-4`}>
-          <p className="text-xs text-[var(--color-muted)] mb-1">Indicative rate step-down</p>
+          <p className="text-xs text-[var(--color-muted)] mb-1"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative rate step-down</p>
           <p className="text-2xl font-bold tabular-nums text-[var(--color-primary)]">{band.rate}</p>
           <p className="text-[10px] text-[var(--color-muted)] mt-0.5">vs standard term loan</p>
         </div>
@@ -2010,7 +2011,7 @@ function GreenLoanEligibility() {
           <p className="text-xs text-[var(--color-text)] mt-1">{band.note}</p>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative screening only - actual eligibility, rates and step-downs are set by the lender. Use this to prioritise which ESG gaps to close before applying.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative screening only - actual eligibility, rates and step-downs are set by the lender. Use this to prioritise which ESG gaps to close before applying.</p>
     </div>
   );
 }
@@ -2491,7 +2492,7 @@ function CsrImpactTracker() {
       <div className={`${CARD} p-4 space-y-3`}>
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h3 className="text-sm font-semibold flex items-center gap-2"><HeartHandshake size={14} className="text-[var(--color-primary)]" /> Community / CSR Impact Tracker</h3>
-          {csrGuide > 0 && <span className="text-[10px] text-[var(--color-muted)]">2% of profit (indicative CSR): {formatCurrency(Math.round(csrGuide))}</span>}
+          {csrGuide > 0 && <span className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />2% of profit (indicative CSR): {formatCurrency(Math.round(csrGuide))}</span>}
         </div>
         <p className="text-xs text-[var(--color-muted)]">Log community and CSR projects with spend and reach - the 'S' that BRSR Principle 8 and investors ask for. (Companies Act Sec 135 mandates 2% CSR above ₹5cr profit / ₹500cr turnover thresholds.)</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
@@ -2560,7 +2561,7 @@ function CsrImpactTracker() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">The 2% figure is indicative - statutory CSR under Sec 135 only applies above net-worth/turnover/profit thresholds. Confirm applicability with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />The 2% figure is indicative - statutory CSR under Sec 135 only applies above net-worth/turnover/profit thresholds. Confirm applicability with your CA.</p>
     </div>
   );
 }
@@ -2858,7 +2859,7 @@ function GreenCertificationChecklist() {
           })}
         </div>
       ))}
-      <p className="text-[10px] text-[var(--color-muted)]">An indicative shortlist of common India-relevant certifications. Scope, cost and applicability vary - confirm requirements with the issuing body or your auditor before applying.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />An indicative shortlist of common India-relevant certifications. Scope, cost and applicability vary - confirm requirements with the issuing body or your auditor before applying.</p>
     </div>
   );
 }

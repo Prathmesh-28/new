@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, startOfYear } from "date-fns";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 interface TaxDeadline {
   label: string;
@@ -1310,10 +1311,10 @@ function AdvanceTaxEstimator() {
 
       {below90 && applicable && (
         <div className="rounded-lg p-4 border border-orange-800/40 bg-orange-950/20">
-          <p className="text-sm font-bold text-orange-400">⚠ Less than 90% paid - Sec 234B interest of ~{fc(interest234B)} applies (1%/month on shortfall from 1 April, indicative).</p>
+          <p className="text-sm font-bold text-orange-400"><DataFreshnessBadge kind="indicative" className="mr-1.5" />⚠ Less than 90% paid - Sec 234B interest of ~{fc(interest234B)} applies (1%/month on shortfall from 1 April, indicative).</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Sec 234C: 1% per month on installment shortfall (×3 months for Jun/Sep/Dec, ×1 for Mar). Sec 234B: 1% per month if &lt; 90% paid by year-end. Presumptive 44AD/44ADA taxpayers may pay 100% by 15 Mar. Indicative - consult a CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Sec 234C: 1% per month on installment shortfall (×3 months for Jun/Sep/Dec, ×1 for Mar). Sec 234B: 1% per month if &lt; 90% paid by year-end. Presumptive 44AD/44ADA taxpayers may pay 100% by 15 Mar. Indicative - consult a CA.</p>
     </div>
   );
 }
@@ -1974,7 +1975,7 @@ function ItrPrefillPack() {
           </div>
         </div>
       ))}
-      <p className="text-[10px] text-[var(--color-muted)]">Pre-fill is indicative - book-to-tax adjustments (disallowances u/s 40/43B, depreciation per IT Act, MAT) must be applied before filing. Reconcile with 26AS/AIS and the Balance Sheet module. Your CA finalises the return.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Pre-fill is indicative - book-to-tax adjustments (disallowances u/s 40/43B, depreciation per IT Act, MAT) must be applied before filing. Reconcile with 26AS/AIS and the Balance Sheet module. Your CA finalises the return.</p>
     </div>
   );
 }
@@ -2814,7 +2815,7 @@ function Relief89Calc() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative computation using current (new-regime) slabs for both years; the actual Form 10E uses each year's own slabs. Form 10E must be filed on the e-filing portal before submitting the ITR, else relief is disallowed. Consult your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative computation using current (new-regime) slabs for both years; the actual Form 10E uses each year's own slabs. Form 10E must be filed on the e-filing portal before submitting the ITR, else relief is disallowed. Consult your CA.</p>
     </div>
   );
 }
@@ -3006,7 +3007,7 @@ function CapitalGainExemptionPlanner() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Sec 54/54F exemption (for residential house) is itself capped at ₹10 crore of investment from FY 2023-24. 54EC bonds: ₹50L max, 5-year lock-in. Unutilised gains must be parked in a Capital Gains Account Scheme before the ITR due date. Tax saved shown at the 12.5% LTCG rate (indicative). Consult your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Sec 54/54F exemption (for residential house) is itself capped at ₹10 crore of investment from FY 2023-24. 54EC bonds: ₹50L max, 5-year lock-in. Unutilised gains must be parked in a Capital Gains Account Scheme before the ITR due date. Tax saved shown at the 12.5% LTCG rate (indicative). Consult your CA.</p>
     </div>
   );
 }
@@ -3236,7 +3237,7 @@ function CorporateRate115BA() {
           )}
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Once exercised, the 115BAA/115BAB option is irrevocable for all future years. Surcharge is a flat 10% (no slabs) under both. MAT (115JB) does not apply to companies that opt in. Indicative - confirm eligibility with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Once exercised, the 115BAA/115BAB option is irrevocable for all future years. Surcharge is a flat 10% (no slabs) under both. MAT (115JB) does not apply to companies that opt in. Indicative - confirm eligibility with your CA.</p>
     </div>
   );
 }
@@ -3300,7 +3301,7 @@ function PartnerRemuneration40b() {
           </p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Applies only to working partners with remuneration authorised by the partnership deed. Interest to partners is separately capped at 12% p.a. Remuneration is taxable as business income in the partner's hands under Sec 28(v). Indicative - verify with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Applies only to working partners with remuneration authorised by the partnership deed. Interest to partners is separately capped at 12% p.a. Remuneration is taxable as business income in the partner's hands under Sec 28(v). Indicative - verify with your CA.</p>
     </div>
   );
 }
@@ -3370,7 +3371,7 @@ function NewEmployee80JJAA() {
           <p className="text-sm font-bold text-red-400">⚠ Not eligible this year - emoluments must be ≤ ₹25,000/month and the employee must work ≥ 240 days (≥ 150 for apparel/footwear/leather). Payments must be via non-cash mode.</p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Requires Form 10DA from a CA. Employees who join after PF-registration and remain ≥ 240 days count as "additional". Casual employees and those whose full PF is paid by government are excluded. Indicative - confirm with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Requires Form 10DA from a CA. Employees who join after PF-registration and remain ≥ 240 days count as "additional". Casual employees and those whose full PF is paid by government are excluded. Indicative - confirm with your CA.</p>
     </div>
   );
 }
@@ -3473,7 +3474,7 @@ function EsopTaxPlanner() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Eligible-startup (Sec 80-IAC / DPIIT) employees may defer the perquisite TDS up to the earliest of 5 years, sale, or leaving. FMV of unlisted shares needs a merchant-banker valuation. Listed LTCG enjoys the ₹1.25L exemption shared across all equity. Indicative - confirm with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Eligible-startup (Sec 80-IAC / DPIIT) employees may defer the perquisite TDS up to the earliest of 5 years, sale, or leaving. FMV of unlisted shares needs a merchant-banker valuation. Listed LTCG enjoys the ₹1.25L exemption shared across all equity. Indicative - confirm with your CA.</p>
     </div>
   );
 }
@@ -3560,7 +3561,7 @@ function BuybackTax115QA() {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">New regime: the company has no 115QA tax but must withhold TDS u/s 194 (10% for residents) on the consideration; the cost of acquisition is treated as a capital loss the shareholder can carry forward 8 years. Indicative - confirm with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />New regime: the company has no 115QA tax but must withhold TDS u/s 194 (10% for residents) on the consideration; the cost of acquisition is treated as a capital loss the shareholder can carry forward 8 years. Indicative - confirm with your CA.</p>
     </div>
   );
 }

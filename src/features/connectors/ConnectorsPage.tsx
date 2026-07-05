@@ -7,6 +7,7 @@ import { CheckCircle2, Clock, AlertCircle, PlugZap, RefreshCw, Trash2, X, Bankno
 import { toast } from "sonner";
 import type { BankConnector, ConnectorProvider } from "@/data/types";
 import PreviewBadge from "@/components/PreviewBadge";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import { useT } from "@/i18n";
 
 const PROVIDERS: {
@@ -942,10 +943,14 @@ function ConnectorHealthMonitor() {
   );
 }
 
+// C6 (2026-07 gap audit): every connector on this page is a client-side simulation (no
+// real OAuth/API call) — DemoNote already said so in a full sentence at every call site;
+// it now leads with the shared glanceable badge too, so "is this real?" reads at a glance
+// before the detail sentence, without touching the ~15 individual call sites below.
 const DemoNote = ({ children }: { children: ReactNode }) => (
   <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-3 py-2 text-[11px] text-[var(--color-muted)] flex items-start gap-2">
     <AlertCircle size={12} className="shrink-0 mt-px" />
-    {children}
+    <span><DataFreshnessBadge kind="simulated" className="mr-1.5" />{children}</span>
   </div>
 );
 

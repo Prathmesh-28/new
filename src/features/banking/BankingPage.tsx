@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
 import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 // ── shared styles (mirrors TaxPage/DebtPage input + card classes) ────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -844,7 +845,7 @@ function PaymentRailChooser() {
           </table>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Limits and charges are indicative per RBI norms; your bank may cap UPI/IMPS lower or waive NEFT/RTGS online fees. RTGS is for ₹2 lakh and above. Confirm your bank&apos;s schedule.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Limits and charges are indicative per RBI norms; your bank may cap UPI/IMPS lower or waive NEFT/RTGS online fees. RTGS is for ₹2 lakh and above. Confirm your bank&apos;s schedule.</p>
     </div>
   );
 }
@@ -1939,7 +1940,7 @@ function SavingsInterestEstimator() {
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold flex items-center gap-2"><PiggyBank size={14} className="text-[var(--color-primary)]" /> Interest-on-Savings Estimator</h3>
-        <p className="text-xs text-[var(--color-muted)]">Savings-account interest is calculated daily on the closing balance and credited quarterly. Estimate what a parked balance earns, the effective annual yield, and the indicative TDS once interest crosses ₹40,000 in a year.</p>
+        <p className="text-xs text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Savings-account interest is calculated daily on the closing balance and credited quarterly. Estimate what a parked balance earns, the effective annual yield, and the indicative TDS once interest crosses ₹40,000 in a year.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Average balance held (₹)</label>
@@ -1973,7 +1974,7 @@ function SavingsInterestEstimator() {
       <Callout tone="ok" icon={Coins}>
         A savings account at {r}% barely beats inflation. For idle business cash, an overnight/liquid fund or an auto-sweep FD usually yields more - compare in the Sweep Planner.
       </Callout>
-      <p className="text-[10px] text-[var(--color-muted)]">Estimate only, assuming a steady average balance and quarterly compounding. TDS shown is indicative (10% u/s 194A above the ₹40,000 threshold; banks deduct on actual interest credited). Confirm with your bank and CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Estimate only, assuming a steady average balance and quarterly compounding. TDS shown is indicative (10% u/s 194A above the ₹40,000 threshold; banks deduct on actual interest credited). Confirm with your bank and CA.</p>
     </div>
   );
 }

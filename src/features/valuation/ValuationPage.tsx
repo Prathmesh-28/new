@@ -10,6 +10,7 @@ import { Gem, Rocket, ArrowRight, Users, Building2, Sprout, SlidersHorizontal, F
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 const INDUSTRY_MULTIPLES: Record<string, number> = {
   "SaaS / Fintech": 8, "SaaS": 8, "Fintech": 6, "E-commerce": 2.5, "Manufacturing": 1.5,
@@ -780,7 +781,7 @@ function Esop409aFmv({ enterpriseValue }: { enterpriseValue: number }) {
       )}
 
       <div className="bg-[var(--color-accent)]/40 border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-        A US 409A valuation must be done by an independent appraiser; this is an indicative strike-price guide. Set option exercise price at or above FMV to avoid deemed-perquisite / tax issues.
+        <DataFreshnessBadge kind="indicative" className="mr-1.5" />A US 409A valuation must be done by an independent appraiser; this is an indicative strike-price guide. Set option exercise price at or above FMV to avoid deemed-perquisite / tax issues.
       </div>
     </div>
   );
@@ -1458,7 +1459,7 @@ function RuleOf40({ annualRevenue, growthPct, monthlyNet, monthlyRevenue }: { an
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Below 40, investors expect you to trade growth for efficiency (or vice-versa). The implied multiple is an indicative guide, not a quote.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Below 40, investors expect you to trade growth for efficiency (or vice-versa). The implied multiple is an indicative guide, not a quote.</p>
     </div>
   );
 }
@@ -1629,7 +1630,7 @@ function SecondarySaleTax({ equityValue }: { equityValue: number }) {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative only. Unlisted-share LTCG (held &gt; 24 months) is taxed at 12.5% plus cess/surcharge post Jul-2024; short-term gains are taxed at slab rate (assumed 30% here). Confirm with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative only. Unlisted-share LTCG (held &gt; 24 months) is taxed at 12.5% plus cess/surcharge post Jul-2024; short-term gains are taxed at slab rate (assumed 30% here). Confirm with your CA.</p>
     </div>
   );
 }

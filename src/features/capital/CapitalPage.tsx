@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import AiInsight from "@/components/ai/AiInsight";
 import CampaignsTab from "@/features/capital/CampaignsTab";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 // ── Backend-shaped types (rows from /api/capital/raises) ──────────────────────
 // Defined locally to avoid touching the shared data/types.ts. The Raises tab now
@@ -551,7 +552,7 @@ function SafeNoteModeller() {
           </p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Simplified pre-money method: ignores the new-money and option-pool shuffle and any MFN/pro-rata terms. SAFEs do not accrue interest; notes do. Use for indicative dilution only.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Simplified pre-money method: ignores the new-money and option-pool shuffle and any MFN/pro-rata terms. SAFEs do not accrue interest; notes do. Use for indicative dilution only.</p>
     </section>
   );
 }
@@ -638,7 +639,7 @@ function GrantSubsidyFinder() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative eligibility only - final approval depends on scheme guidelines, district notifications &amp; documentation. State subsidies vary by state policy. Verify on the relevant portal before applying.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative eligibility only - final approval depends on scheme guidelines, district notifications &amp; documentation. State subsidies vary by state policy. Verify on the relevant portal before applying.</p>
     </section>
   );
 }

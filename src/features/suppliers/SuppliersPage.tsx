@@ -8,6 +8,7 @@ import PreviewBadge from "@/components/PreviewBadge";
 import EmptyState from "@/components/EmptyState";
 import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
@@ -2872,7 +2873,7 @@ function TdsOnBillsCalculator() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative rates for resident vendors - deduct on the ex-GST value. 194Q applies only above the ₹50L per-vendor annual threshold (and not where the seller charges 206C(1H) TCS). No PAN triggers a flat 20% under Sec 206AA. Confirm current rates and your 194C single-bill vs ₹1L annual limits with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative rates for resident vendors - deduct on the ex-GST value. 194Q applies only above the ₹50L per-vendor annual threshold (and not where the seller charges 206C(1H) TCS). No PAN triggers a flat 20% under Sec 206AA. Confirm current rates and your 194C single-bill vs ₹1L annual limits with your CA.</p>
     </div>
   );
 }

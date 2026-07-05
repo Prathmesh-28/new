@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 // ── shared styles (reuse TaxPage input class) ────────────────────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -777,7 +778,7 @@ function CreditSignalScorecard({ live }: { live: Live[] }) {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">This is an internal indicative signal, not a credit bureau score. Lenders apply their own underwriting. Improve it by diversifying buyers, collecting confirmed trade references, and invoicing on time.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />This is an internal indicative signal, not a credit bureau score. Lenders apply their own underwriting. Improve it by diversifying buyers, collecting confirmed trade references, and invoicing on time.</p>
     </div>
   );
 }

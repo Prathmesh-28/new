@@ -10,6 +10,7 @@ import { runForecast } from "@/lib/forecastEngine";
 import EmptyState from "@/components/EmptyState";
 import { useT } from "@/i18n";
 import type { Scenario } from "@/data/types";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 const HORIZON = 180; // 6-month planning window, driven by the real Monte-Carlo engine
 
@@ -1059,7 +1060,7 @@ function CostCutSimulator() {
           </p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative percentages - replace with your real line items for an exact plan. High-pain cuts (payroll, rent) carry morale and continuity costs not shown here.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative percentages - replace with your real line items for an exact plan. High-pain cuts (payroll, rent) carry morale and continuity costs not shown here.</p>
     </div>
   );
 }

@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import AiDraft from "@/components/ai/AiDraft";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 type Aging = "current" | "1-30" | "31-60" | "61-90" | "90+";
 
@@ -3172,7 +3173,7 @@ function PaymentBehavior() {
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">For unpaid invoices, days late is measured from due date to today. For paid invoices we use the available dates as a proxy (the store does not record an explicit payment date), so treat paid-late figures as indicative.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />For unpaid invoices, days late is measured from due date to today. For paid invoices we use the available dates as a proxy (the store does not record an explicit payment date), so treat paid-late figures as indicative.</p>
     </div>
   );
 }

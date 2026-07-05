@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths, differenceInCalendarDays } from "date-fns";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 // shared styles (reused from TaxPage/DebtPage convention)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -843,7 +844,7 @@ function MdrCalculator() {
           )}
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Rates are indicative market figures, not your contracted MDR. RBI prohibits surcharging on debit cards; convenience fees on credit are allowed only where disclosed. Confirm exact slabs with your acquirer.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Rates are indicative market figures, not your contracted MDR. RBI prohibits surcharging on debit cards; convenience fees on credit are allowed only where disclosed. Confirm exact slabs with your acquirer.</p>
     </div>
   );
 }
@@ -2231,7 +2232,7 @@ function SettlementForecaster() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Cycles are indicative - most gateways settle UPI/net-banking at T+1 and cards at T+2, excluding bank holidays. Same-day/instant settlement is usually available for a transparent extra fee. Confirm your exact cycle with your acquirer.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Cycles are indicative - most gateways settle UPI/net-banking at T+1 and cards at T+2, excluding bank holidays. Same-day/instant settlement is usually available for a transparent extra fee. Confirm your exact cycle with your acquirer.</p>
     </div>
   );
 }

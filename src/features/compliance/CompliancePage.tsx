@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { format, addMonths, setDate, isBefore, differenceInDays } from "date-fns";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 type ComplianceTab =
   | "overview" | "roc-prep" | "kyc-dpt3" | "board-agm" | "registers"
@@ -1400,7 +1401,7 @@ function MultiActPenaltyEstimator() {
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4"><p className="text-xs text-[var(--color-muted)] mb-1">Delay</p><p className="text-lg font-bold tabular-nums">{d} days</p></div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 col-span-2 md:col-span-1"><p className="text-xs text-[var(--color-muted)] mb-1">Months (part)</p><p className="text-lg font-bold tabular-nums">{months}</p></div>
       </div>
-      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />{basis}. Indicative only - actual penalties depend on facts and officer discretion.</p>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><DataFreshnessBadge kind="indicative" className="mr-1.5" /><AlertTriangle size={12} className="mt-0.5 shrink-0" />{basis}. Indicative only - actual penalties depend on facts and officer discretion.</p>
     </div>
   );
 }
@@ -1957,7 +1958,7 @@ function DirectorDisqualChecker() {
           </div>
         );
       })}
-      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />Acting as a director while disqualified is an offence (fine + imprisonment). This is an indicative self-check - confirm DIN status on the MCA portal.</p>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><DataFreshnessBadge kind="indicative" className="mr-1.5" /><AlertTriangle size={12} className="mt-0.5 shrink-0" />Acting as a director while disqualified is an offence (fine + imprisonment). This is an indicative self-check - confirm DIN status on the MCA portal.</p>
     </div>
   );
 }
@@ -2024,7 +2025,7 @@ function EventBasedRocTracker() {
           </div>
         )}
       </div>
-      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" />Late event-based filings attract ₹100/day MCA additional fee with no cap; charge forms (CHG-1) filed beyond 30 days need a separate condonation route. Windows are indicative - confirm the exact rule per form.</p>
+      <p className="text-[11px] text-[var(--color-muted)] flex items-start gap-1.5"><DataFreshnessBadge kind="indicative" className="mr-1.5" /><AlertTriangle size={12} className="mt-0.5 shrink-0" />Late event-based filings attract ₹100/day MCA additional fee with no cap; charge forms (CHG-1) filed beyond 30 days need a separate condonation route. Windows are indicative - confirm the exact rule per form.</p>
     </div>
   );
 }

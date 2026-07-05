@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 const BUCKET_COLORS = ["#22c55e", "#eab308", "#f97316", "#ef4444", "#b91c1c"];
 
@@ -2417,7 +2418,7 @@ function WcLoanSizer({ snap }: { snap: FinancialSnapshot }) {
               : `Tight: your monthly net (${formatCurrency(snap.monthlyNet)}) covers the EMI only ${coverage.toFixed(1)}×. Lengthen tenor, fund a smaller slice, or fix the cycle first.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">EMI uses the standard reducing-balance formula P·r·(1+r)ⁿ / ((1+r)ⁿ−1) at a monthly rate. Affordability flagged green when monthly net ≥ 1.25× EMI. Indicative only - lender sanction depends on drawing power, security and credit history.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />EMI uses the standard reducing-balance formula P·r·(1+r)ⁿ / ((1+r)ⁿ−1) at a monthly rate. Affordability flagged green when monthly net ≥ 1.25× EMI. Indicative only - lender sanction depends on drawing power, security and credit history.</p>
     </div>
   );
 }
@@ -2795,7 +2796,7 @@ function BillDiscountMargin({ snap }: { snap: FinancialSnapshot }) {
               : `Pricey: ${effAnnualPct.toFixed(1)}% annualised is steep - compare against your OD line before discounting. The held-back margin (${formatCurrency(bill - advance)}) releases when the buyer pays.`}
         </p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Advance = bill × (1 − margin). Discount charge = advance × rate × tenor/365. Effective annual cost = total cost ÷ advance × 365/tenor. The margin is held back and released on buyer payment. Indicative - actual terms vary by bank, buyer rating and whether the bill is LC-backed (lower rate) or clean.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Advance = bill × (1 − margin). Discount charge = advance × rate × tenor/365. Effective annual cost = total cost ÷ advance × 365/tenor. The margin is held back and released on buyer payment. Indicative - actual terms vary by bank, buyer rating and whether the bill is LC-backed (lower rate) or clean.</p>
     </div>
   );
 }

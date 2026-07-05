@@ -15,6 +15,7 @@ import { format, startOfMonth, subMonths, isWithinInterval, differenceInCalendar
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1288,7 +1289,7 @@ function SavingsOpportunityFinder() {
       <div className="flex items-center gap-2 mb-3">
         <Lightbulb size={13} className="text-yellow-400" />
         <h2 className="text-sm font-semibold">Savings-Opportunity Finder</h2>
-        <span className="ml-auto text-xs text-[var(--color-muted)]">estimated, indicative</span>
+        <span className="ml-auto text-xs text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />estimated, indicative</span>
       </div>
 
       {opps.length === 0 ? (

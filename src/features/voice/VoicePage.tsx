@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 // ── shared styles (reused from TaxPage/DebtPage convention) ──────────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -1033,7 +1034,7 @@ function SpokenInvoiceCreator() {
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><FileText size={14} className="text-[var(--color-primary)]" /> {tr("voi.invoiceHeading")}</h2>
         <p className="text-xs text-[var(--color-muted)]">
-          Say <em className="text-[var(--color-text)]">&ldquo;invoice Sharma 5000 for consulting&rdquo;</em> and we draft the invoice header, amount, and an indicative 18% GST line.
+          <DataFreshnessBadge kind="indicative" className="mr-1.5" />Say <em className="text-[var(--color-text)]">&ldquo;invoice Sharma 5000 for consulting&rdquo;</em> and we draft the invoice header, amount, and an indicative 18% GST line.
         </p>
         {!SPEECH_IN && <FallbackNote>{tr("voi.invoiceFallback")}</FallbackNote>}
         <div className="flex gap-2">
@@ -1060,7 +1061,7 @@ function SpokenInvoiceCreator() {
               </div>
               <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between"><span className="text-[var(--color-muted)]">{tr("voi.taxableValue")}</span><span className="tabular-nums">{formatCurrency(draft.amount)}</span></div>
-                <div className="flex justify-between"><span className="text-[var(--color-muted)]">{tr("voi.gstIndicative")}</span><span className="tabular-nums">{formatCurrency(gst)}</span></div>
+                <div className="flex justify-between"><span className="text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />{tr("voi.gstIndicative")}</span><span className="tabular-nums">{formatCurrency(gst)}</span></div>
                 <div className="flex justify-between font-bold border-t border-[var(--color-border)] pt-1.5 mt-1.5"><span>{tr("voi.total")}</span><span className="tabular-nums text-[var(--color-primary)]">{formatCurrency(draft.amount + gst)}</span></div>
               </div>
               <p className="text-[11px] text-[var(--color-muted)] mt-3">Preview only. Rate, HSN, and place-of-supply are placeholders - finalise and issue from <strong className="text-[var(--color-text)]">Invoices</strong>.</p>

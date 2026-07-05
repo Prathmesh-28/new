@@ -14,6 +14,7 @@ import ExportMenu from "@/components/ExportMenu";
 import SharedEmptyState from "@/components/EmptyState";
 import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 // Roles allowed to write payroll/HRMS data - mirrors the backend hrms WRITE_ROLES gate.
 const PAYROLL_WRITE_ROLES = new Set(["super_admin", "owner", "finance_manager"]);
@@ -4210,7 +4211,7 @@ function MinWageCheckTab({ employees }: { employees: EmpLite[] }) {
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative rates - minimum wages are revised twice yearly (basic + VDA) and vary by scheduled employment. Verify the latest gazette notification for {state.replace(/([a-z])([A-Z])/g, "$1 $2")} before relying on these figures.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative rates - minimum wages are revised twice yearly (basic + VDA) and vary by scheduled employment. Verify the latest gazette notification for {state.replace(/([a-z])([A-Z])/g, "$1 $2")} before relying on these figures.</p>
     </div>
   );
 }
@@ -4737,7 +4738,7 @@ function GroupInsuranceTab({ employees }: { employees: EmpLite[] }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
         <h3 className="text-sm font-semibold flex items-center gap-2"><Umbrella size={14} /> Group Insurance - GMC · GTL · GPA</h3>
-        <p className="text-xs text-[var(--color-muted)]">Size group health (GMC), term life (GTL) and personal-accident (GPA) cover for the team and estimate the annual premium. Optionally deduct a share of the GMC premium from payroll. Rates are indicative SMB group rates - your insurer's quote will vary.</p>
+        <p className="text-xs text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Size group health (GMC), term life (GTL) and personal-accident (GPA) cover for the team and estimate the annual premium. Optionally deduct a share of the GMC premium from payroll. Rates are indicative SMB group rates - your insurer's quote will vary.</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
             <label className={lbl}>GMC sum insured / life (₹)</label>
@@ -4787,7 +4788,7 @@ function GroupInsuranceTab({ employees }: { employees: EmpLite[] }) {
           </tfoot>
         </table>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative estimate for {headcount} active lives. Actual premium depends on age mix, claim history, family-floater size and waiting-period waivers. Employer-paid group health premium is a deductible business expense; the employee share deducted via payroll is post-tax.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative estimate for {headcount} active lives. Actual premium depends on age mix, claim history, family-floater size and waiting-period waivers. Employer-paid group health premium is a deductible business expense; the employee share deducted via payroll is post-tax.</p>
     </div>
   );
 }
@@ -4885,7 +4886,7 @@ function PfEsiChallanTab({ employees }: { employees: EmpLite[] }) {
           <p className="text-[10px] text-[var(--color-muted)] pt-1">PF wages base {fc(pfWages)}. Employees above ₹21,000 are out of ESI; those above the ceiling at the start of a contribution period stay covered until it ends.</p>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative totals - generate the actual ECR on the EPFO portal and the ESI return on the ESIC portal, then pay the system-generated challan. Late deposit attracts interest u/s 7Q and damages u/s 14B (PF) and 12% interest (ESI).</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative totals - generate the actual ECR on the EPFO portal and the ESI return on the ESIC portal, then pay the system-generated challan. Late deposit attracts interest u/s 7Q and damages u/s 14B (PF) and 12% interest (ESI).</p>
     </div>
   );
 }

@@ -19,6 +19,7 @@ import { addMonths, format, parseISO } from "date-fns";
 import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 type ActiveLoanLike = { id: string; lender: string; outstanding: number; rate: number; monthlyEmi: number };
 
@@ -1815,7 +1816,7 @@ function InterestSubsidyEstimator({ loans }: { loans: ActiveLoanLike[] }) {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative only. Actual subvention rates, caps and eligibility (Udyam registration, manufacturing/service category, scheme validity) vary and change with notifications. Confirm with your lender / the scheme portal before relying on these figures.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative only. Actual subvention rates, caps and eligibility (Udyam registration, manufacturing/service category, scheme validity) vary and change with notifications. Confirm with your lender / the scheme portal before relying on these figures.</p>
     </div>
   );
 }

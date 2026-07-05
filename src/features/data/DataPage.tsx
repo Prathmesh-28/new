@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import TransactionImportModal from "@/components/TransactionImportModal";
 import MigrationWizard from "@/components/MigrationWizard";
 import type { Transaction } from "@/data/types";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 function downloadCsv(name: string, content: string) {
   const blob = new Blob([content], { type: "text/csv" });
@@ -707,7 +708,7 @@ function MultiEntityConsolidation() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative consolidation (AS-21 style). Intra-group turnover nets off revenue &amp; cost equally (PBT-neutral, by design); only unrealised profit on intra-group stock reduces Group PBT. Intra-group balances are not auto-detected. Verify with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative consolidation (AS-21 style). Intra-group turnover nets off revenue &amp; cost equally (PBT-neutral, by design); only unrealised profit on intra-group stock reduces Group PBT. Intra-group balances are not auto-detected. Verify with your CA.</p>
     </div>
   );
 }
@@ -1219,7 +1220,7 @@ function FilingTemplates() {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Templates are indicative formats - confirm exact column requirements with the GST portal or your accounting software before filing.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Templates are indicative formats - confirm exact column requirements with the GST portal or your accounting software before filing.</p>
     </div>
   );
 }

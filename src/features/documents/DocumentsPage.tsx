@@ -8,6 +8,7 @@ import { formatCurrency } from "@/lib/utils";
 import { API_BASE } from "@/lib/apiBase";
 import { api } from "@/lib/api";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 type DocCategory = "gst" | "banking" | "legal" | "tax" | "payroll" | "other";
 type DocStatus = "valid" | "expiring" | "expired" | "uploaded";
@@ -1260,7 +1261,7 @@ function DocumentChecklist() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Indicative lists for common cases - lenders, GST officers and tendering authorities may ask for additional documents. Confirm the exact requirements before final submission.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative lists for common cases - lenders, GST officers and tendering authorities may ask for additional documents. Confirm the exact requirements before final submission.</p>
     </div>
   );
 }

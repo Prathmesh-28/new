@@ -15,6 +15,7 @@ import { format, subMonths, startOfMonth, endOfMonth, parseISO, getDay, subYears
 import { SegmentedToggle, SeriesLegend, useSeriesToggle } from "@/components/charts/ChartKit";
 import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 const CATEGORY_COLORS: Record<string, string> = {
   expense:  "#ef4444",
@@ -1512,7 +1513,7 @@ function BalanceSheetTab() {
       </div>
 
       <p className="text-[10px] text-[var(--color-muted)]">
-        Indicative balance sheet for management use. Fixed assets are net of Straight-Line / WDV depreciation per Schedule II of the Companies Act 2013; retained earnings is shown as the balancing figure. The statutory presentation format is prescribed by Schedule III of the Companies Act 2013 and should be prepared by your CA.
+        <DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative balance sheet for management use. Fixed assets are net of Straight-Line / WDV depreciation per Schedule II of the Companies Act 2013; retained earnings is shown as the balancing figure. The statutory presentation format is prescribed by Schedule III of the Companies Act 2013 and should be prepared by your CA.
       </p>
     </div>
   );
@@ -1670,7 +1671,7 @@ function RatiosTab() {
       </div>
 
       <p className="text-[10px] text-[var(--color-muted)]">
-        Benchmarks are indicative Indian SME averages and vary materially by sector, age and capital structure - treat them as a starting point, not a verdict. Lower is better for Debt-to-Equity. Revenue and net profit are annualised from the trailing 12 months of tagged transactions.
+        <DataFreshnessBadge kind="indicative" className="mr-1.5" />Benchmarks are indicative Indian SME averages and vary materially by sector, age and capital structure - treat them as a starting point, not a verdict. Lower is better for Debt-to-Equity. Revenue and net profit are annualised from the trailing 12 months of tagged transactions.
       </p>
     </div>
   );
@@ -1955,7 +1956,7 @@ function CommissionTab() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Tiered mode applies each tier's rate only to the sales within that band (marginal, like income-tax slabs). Commission to non-employee agents may attract TDS u/s 194H (5%) and GST (18%). Indicative only.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Tiered mode applies each tier's rate only to the sales within that band (marginal, like income-tax slabs). Commission to non-employee agents may attract TDS u/s 194H (5%) and GST (18%). Indicative only.</p>
     </div>
   );
 }
@@ -2213,7 +2214,7 @@ function CustomerCohortsTab() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">LTV and retention are computed from observed transaction recency/frequency; with no contract data, "churned" means no revenue in 90+ days. Indicative.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />LTV and retention are computed from observed transaction recency/frequency; with no contract data, "churned" means no revenue in 90+ days. Indicative.</p>
     </div>
   );
 }
@@ -2391,7 +2392,7 @@ function UnitEconomicsTab() {
           })}
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">CAC uses an assumed S&M share of total expense; LTV uses average revenue per account × assumed lifetime × gross margin. Tune the assumptions above for your model. Indicative.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />CAC uses an assumed S&M share of total expense; LTV uses average revenue per account × assumed lifetime × gross margin. Tune the assumptions above for your model. Indicative.</p>
     </div>
   );
 }
@@ -2749,7 +2750,7 @@ function MarginBridgeTab() {
           })}
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Price flows straight to profit; volume scales contribution at current margin; cost change hits COGS. Base COGS is an assumption - adjust above. Indicative model.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Price flows straight to profit; volume scales contribution at current margin; cost change hits COGS. Base COGS is an assumption - adjust above. Indicative model.</p>
     </div>
   );
 }
@@ -2944,7 +2945,7 @@ function MarginTrendsTab() {
           <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]"><div className="w-4 h-0.5" style={{ background: "var(--color-primary)" }} /> Net margin</div>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Gross margin uses an assumed direct-cost (COGS) share; net margin is revenue minus all recorded expenses. A widening gross-net gap signals rising overheads. Indicative.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Gross margin uses an assumed direct-cost (COGS) share; net margin is revenue minus all recorded expenses. A widening gross-net gap signals rising overheads. Indicative.</p>
     </div>
   );
 }
@@ -3188,7 +3189,7 @@ function BreakEvenTab() {
         </ResponsiveContainer>
         <p className="text-[10px] text-[var(--color-muted)] mt-2">Green months clear break-even; red months fall short. The dashed line is the monthly break-even revenue at current cost structure.</p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Break-even = fixed cost ÷ contribution-margin ratio. Payroll is treated as fixed; the remaining opex is split fixed/variable by your assumption above. Figures are monthly averages over the trailing 6 months. Indicative.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Break-even = fixed cost ÷ contribution-margin ratio. Payroll is treated as fixed; the remaining opex is split fixed/variable by your assumption above. Figures are monthly averages over the trailing 6 months. Indicative.</p>
     </div>
   );
 }
@@ -3259,7 +3260,7 @@ function WorkingCapitalTab() {
           <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]"><div className="w-4 h-0.5" style={{ background: "var(--color-primary)" }} /> Cash conversion cycle</div>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A shorter cash conversion cycle frees up working capital. DSO from open invoices vs revenue run-rate; DPO proxied from purchase run-rate; DIO is your assumption. A negative CCC means suppliers fund your sales cycle. Indicative.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />A shorter cash conversion cycle frees up working capital. DSO from open invoices vs revenue run-rate; DPO proxied from purchase run-rate; DIO is your assumption. A negative CCC means suppliers fund your sales cycle. Indicative.</p>
     </div>
   );
 }
@@ -3407,7 +3408,7 @@ function RefundImpactTab() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Detects negative revenue entries and outflows whose text mentions refund, return, credit note, discount, rebate or similar. A leakage rate above ~5% of gross revenue usually warrants a pricing or returns-policy review. Indicative.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Detects negative revenue entries and outflows whose text mentions refund, return, credit note, discount, rebate or similar. A leakage rate above ~5% of gross revenue usually warrants a pricing or returns-policy review. Indicative.</p>
     </div>
   );
 }
@@ -3477,7 +3478,7 @@ function PerEmployeeTab() {
           </p>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Per-employee metrics annualise the trailing 12 months and divide by your entered headcount. The benchmark is a reference figure you set, not live peer data. Useful for tracking productivity as you hire. Indicative.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Per-employee metrics annualise the trailing 12 months and divide by your entered headcount. The benchmark is a reference figure you set, not live peer data. Useful for tracking productivity as you hire. Indicative.</p>
     </div>
   );
 }
@@ -3573,7 +3574,7 @@ function YoYGrowthTab() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">YoY isolates true growth from seasonal swings by comparing like months. Months with no prior-year data show "-". Computed live from revenue transactions. Indicative.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />YoY isolates true growth from seasonal swings by comparing like months. Months with no prior-year data show "-". Computed live from revenue transactions. Indicative.</p>
     </div>
   );
 }
@@ -3661,7 +3662,7 @@ function NewVsRepeatTab() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A healthy SMB usually earns the majority of revenue from repeat customers. A heavy "new" tilt means growth depends on constant acquisition. Indicative.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />A healthy SMB usually earns the majority of revenue from repeat customers. A heavy "new" tilt means growth depends on constant acquisition. Indicative.</p>
     </div>
   );
 }
@@ -3741,7 +3742,7 @@ function WeekdayPatternTab() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Patterns reflect the booking date of bank/UPI transactions, which may lag the actual sale for credit terms. Indicative.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Patterns reflect the booking date of bank/UPI transactions, which may lag the actual sale for credit terms. Indicative.</p>
     </div>
   );
 }
@@ -3810,7 +3811,7 @@ function AovTrendTab() {
         </ResponsiveContainer>
         <p className="text-[10px] text-[var(--color-muted)] mt-2">Bars show transaction count (right axis); line shows AOV (left axis). A rising line on flat bars means each sale is getting larger.</p>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Each inbound revenue transaction is treated as one "order". Where one invoice is paid in multiple instalments this slightly understates AOV. Indicative.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Each inbound revenue transaction is treated as one "order". Where one invoice is paid in multiple instalments this slightly understates AOV. Indicative.</p>
     </div>
   );
 }
@@ -3905,7 +3906,7 @@ function ChannelSplitTab() {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Based on captured orders, not bank transactions, so totals may differ from booked revenue. Useful for deciding where to invest sales effort. Indicative.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Based on captured orders, not bank transactions, so totals may differ from booked revenue. Useful for deciding where to invest sales effort. Indicative.</p>
     </div>
   );
 }

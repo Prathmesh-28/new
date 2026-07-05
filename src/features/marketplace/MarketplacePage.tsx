@@ -15,6 +15,7 @@ import {
   Upload, Database, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 // Reused TaxPage input class string.
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -1582,7 +1583,7 @@ function FbaFeeEstimator() {
     <div className="space-y-4 max-w-2xl">
       <div className={`${CARD} p-5 space-y-3`}>
         <h2 className="text-sm font-semibold flex items-center gap-2"><Warehouse size={14} className="text-[var(--color-primary)]" /> FBA / Warehouse Fee Estimator</h2>
-        <p className="text-xs text-[var(--color-muted)]">Estimate per-unit fulfilment cost: weight-handling (billed on the higher of actual vs volumetric weight), pick-and-pack, and monthly storage by volume. Rates are indicative - match to your latest rate card.</p>
+        <p className="text-xs text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Estimate per-unit fulfilment cost: weight-handling (billed on the higher of actual vs volumetric weight), pick-and-pack, and monthly storage by volume. Rates are indicative - match to your latest rate card.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {([
             ["Actual weight (kg)", weight, setWeight, "0.5"],

@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { format, differenceInCalendarDays } from "date-fns";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 // shared styles - reused TaxPage/DebtPage input class string
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -1538,7 +1539,7 @@ function DtaaWithholdingLookup() {
               </>
             )}
           </div>
-          <p className="text-[11px] text-[var(--color-muted)] mt-3">Indicative treaty rates only - actual articles, surcharge/cess, MFN clauses and s.206AA (PAN absence → 20%) can change this. File Form 15CA/15CB before remitting.</p>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative treaty rates only - actual articles, surcharge/cess, MFN clauses and s.206AA (PAN absence → 20%) can change this. File Form 15CA/15CB before remitting.</p>
         </div>
       )}
     </div>
@@ -2198,7 +2199,7 @@ function OdiFdiTracker() {
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">FDI share allotment is reported on Form FC-GPR within 30 days; ODI is reported via Form ODI at remittance, with an annual APR thereafter. Timelines are indicative - confirm with your AD bank / CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />FDI share allotment is reported on Form FC-GPR within 30 days; ODI is reported via Form ODI at remittance, with an annual APR thereafter. Timelines are indicative - confirm with your AD bank / CA.</p>
     </div>
   );
 }
@@ -2323,7 +2324,7 @@ function GiftCityEstimator() {
               <span className="font-bold tabular-nums text-[var(--color-primary)]">{formatCurrency(Math.round(totalSaved))}</span>
             </div>
           </div>
-          <p className="text-[11px] text-[var(--color-muted)] mt-3">Indicative only. IFSC units also enjoy GST and stamp-duty concessions, but MAT/AMT, surcharge, cess and conditions apply. GIFT City suits IT/ITeS, fund management, fintech and aircraft/ship leasing. Confirm eligibility with your CA.</p>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative only. IFSC units also enjoy GST and stamp-duty concessions, but MAT/AMT, surcharge, cess and conditions apply. GIFT City suits IT/ITeS, fund management, fintech and aircraft/ship leasing. Confirm eligibility with your CA.</p>
         </div>
       )}
     </div>

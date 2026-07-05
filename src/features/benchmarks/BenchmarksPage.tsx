@@ -8,6 +8,7 @@ import { BarChart3, TrendingUp, TrendingDown, Minus, Award, AlertTriangle, Chevr
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from "recharts";
 import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 const SECTORS = [
   "Manufacturing (SMB)",
@@ -999,7 +1000,7 @@ function ProfitabilityPercentile({ sector }: { sector: string }) {
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Direct costs exclude payroll (counted separately). Upside multiplies the margin gap by your TTM revenue. Sector distributions are indicative reference curves for typical Indian SMBs, not live peer data.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Direct costs exclude payroll (counted separately). Upside multiplies the margin gap by your TTM revenue. Sector distributions are indicative reference curves for typical Indian SMBs, not live peer data.</p>
     </div>
   );
 }
@@ -1079,7 +1080,7 @@ function ExpenseRatioBenchmark({ sector }: { sector: string }) {
           <BandRow key={String(r.key)} label={r.label} desc={r.desc} yours={r.yours} unit="%" low={r.low} mid={r.mid} high={r.high} higherIsBetter={false} />
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Interest is the annual run-rate (outstanding × rate). Tax reflects cash actually paid in the window. Reference bands are indicative guides for typical Indian SMBs, not live peer data. Series length: {series.filter(m => m.revenue > 0).length} months.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Interest is the annual run-rate (outstanding × rate). Tax reflects cash actually paid in the window. Reference bands are indicative guides for typical Indian SMBs, not live peer data. Series length: {series.filter(m => m.revenue > 0).length} months.</p>
     </div>
   );
 }
@@ -1155,7 +1156,7 @@ function ProductivityBenchmark({ sector }: { sector: string }) {
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Profit per head = (TTM revenue − direct costs − payroll) ÷ headcount. Sector bands are indicative annual revenue-per-employee ranges for typical Indian SMBs, not live peer data.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Profit per head = (TTM revenue − direct costs − payroll) ÷ headcount. Sector bands are indicative annual revenue-per-employee ranges for typical Indian SMBs, not live peer data.</p>
     </div>
   );
 }
@@ -1230,7 +1231,7 @@ function DigitalMaturityScorecard({ sector }: { sector: string }) {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Scored entirely from your own usage signals - no peer data involved. Weights are indicative of how much each capability typically improves analytics quality and lender confidence.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Scored entirely from your own usage signals - no peer data involved. Weights are indicative of how much each capability typically improves analytics quality and lender confidence.</p>
     </div>
   );
 }
@@ -1268,7 +1269,7 @@ function ValuationMultipleBenchmark({ sector }: { sector: string }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Building2 size={14} className="text-[var(--color-primary)]" /> Valuation-Multiple Benchmark</h2>
-        <p className="text-xs text-[var(--color-muted)]">Indicative enterprise value from typical <span className="text-[var(--color-text)]">{sector}</span> EV/Revenue multiples applied to your live TTM revenue. Your EBITDA margin nudges where in the band you land.</p>
+        <p className="text-xs text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative enterprise value from typical <span className="text-[var(--color-text)]">{sector}</span> EV/Revenue multiples applied to your live TTM revenue. Your EBITDA margin nudges where in the band you land.</p>
         {!hasRev && <p className="text-xs text-yellow-400 mt-2">Add 12 months of revenue to estimate a valuation range.</p>}
       </div>
 
@@ -1287,7 +1288,7 @@ function ValuationMultipleBenchmark({ sector }: { sector: string }) {
           <p className="text-[10px] text-[var(--color-muted)]">range {mult.low}x-{mult.high}x</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-          <p className="text-xs text-[var(--color-muted)] mb-1">Indicative EV</p>
+          <p className="text-xs text-[var(--color-muted)] mb-1"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Indicative EV</p>
           <p className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{hasRev ? formatCurrency(valApplied) : "-"}</p>
         </div>
       </div>
@@ -1306,7 +1307,7 @@ function ValuationMultipleBenchmark({ sector }: { sector: string }) {
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A rough revenue-multiple estimate only - real valuations weigh growth, margins, customer concentration, defensibility and diligence. Multiple bands are indicative for typical Indian SMBs, not live transaction comps. Confirm with an advisor.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />A rough revenue-multiple estimate only - real valuations weigh growth, margins, customer concentration, defensibility and diligence. Multiple bands are indicative for typical Indian SMBs, not live transaction comps. Confirm with an advisor.</p>
     </div>
   );
 }
@@ -1378,7 +1379,7 @@ function StockTurnBenchmark({ sector }: { sector: string }) {
           </p>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Turns use a 90-day annualised COGS proxy from received purchase orders. Slow/dead stock flags items at or below their reorder level. Sector turn norms are indicative guides for typical Indian SMBs, not live peer data.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Turns use a 90-day annualised COGS proxy from received purchase orders. Slow/dead stock flags items at or below their reorder level. Sector turn norms are indicative guides for typical Indian SMBs, not live peer data.</p>
     </div>
   );
 }
@@ -1453,7 +1454,7 @@ function TaxBurdenBenchmark({ sector }: { sector: string }) {
           <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Your burden is above the typical range - check input-tax-credit capture and vendor GST uploads for leakage.</p>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Net GST uses your output rate after input credit on expense transactions; it is an estimate, not a filed return. Direct tax reflects cash tagged to the tax category. Sector bands are indicative guides for typical Indian SMBs, not live peer data. Confirm with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Net GST uses your output rate after input credit on expense transactions; it is an estimate, not a filed return. Direct tax reflects cash tagged to the tax category. Sector bands are indicative guides for typical Indian SMBs, not live peer data. Confirm with your CA.</p>
     </div>
   );
 }
@@ -1513,7 +1514,7 @@ function EbitdaMarginBenchmark({ sector }: { sector: string }) {
           <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Operating margin is below the typical range - review pricing, direct-cost leakage and payroll efficiency.</p>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">A pre-interest, pre-tax, pre-depreciation operating-margin proxy: depreciation and one-offs aren't separated out. Upside multiplies the margin gap by TTM revenue. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />A pre-interest, pre-tax, pre-depreciation operating-margin proxy: depreciation and one-offs aren't separated out. Upside multiplies the margin gap by TTM revenue. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
     </div>
   );
 }
@@ -1586,7 +1587,7 @@ function RevenueVolatilityBenchmark({ sector }: { sector: string }) {
         </ResponsiveContainer>
         <BandRow label="Coefficient of variation" desc="Std deviation ÷ average revenue. Lower is steadier." yours={cv} unit="%" low={band.low} mid={band.mid} high={band.high} higherIsBetter={false} />
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Coefficient of variation = std deviation ÷ mean of monthly revenue. Genuine seasonality can read as high volatility; pair this with the seasonality view before acting. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Coefficient of variation = std deviation ÷ mean of monthly revenue. Genuine seasonality can read as high volatility; pair this with the seasonality view before acting. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
     </div>
   );
 }
@@ -1649,7 +1650,7 @@ function LiquidityBufferBenchmark({ sector }: { sector: string }) {
           <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Buffer is below the typical floor - consider a working-capital line, faster collections or trimming non-essential spend.</p>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Buffer = total linked cash ÷ average monthly burn (net cash outflow). It ignores undrawn credit lines and committed receivables. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Buffer = total linked cash ÷ average monthly burn (net cash outflow). It ignores undrawn credit lines and committed receivables. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
     </div>
   );
 }
@@ -1715,7 +1716,7 @@ function DebtLeverageBenchmark({ sector }: { sector: string }) {
           <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Leverage is above the typical range - prioritise deleveraging or refinancing before taking on new debt.</p>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Uses outstanding principal across active loans ÷ TTM revenue; it excludes trade payables and undrawn limits. Debt service is the annual EMI run-rate. Reference bands are indicative for typical Indian SMBs, not live peer data. Confirm with your lender or CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Uses outstanding principal across active loans ÷ TTM revenue; it excludes trade payables and undrawn limits. Debt service is the annual EMI run-rate. Reference bands are indicative for typical Indian SMBs, not live peer data. Confirm with your lender or CA.</p>
     </div>
   );
 }
@@ -1775,7 +1776,7 @@ function OpexEfficiencyBenchmark({ sector }: { sector: string }) {
           <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Opex is above the typical range - review vendor spend, subscriptions and discretionary costs for savings.</p>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Operating spend excludes payroll (benchmarked separately) and is taken net of nothing - it includes all non-payroll cash outflows tagged as costs. Saving multiplies the ratio gap by TTM revenue. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Operating spend excludes payroll (benchmarked separately) and is taken net of nothing - it includes all non-payroll cash outflows tagged as costs. Saving multiplies the ratio gap by TTM revenue. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
     </div>
   );
 }
@@ -1806,7 +1807,7 @@ function NetMarginBandBenchmark({ sector }: { sector: string }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Banknote size={14} className="text-[var(--color-primary)]" /> Net-Margin Band</h2>
-        <p className="text-xs text-[var(--color-muted)]">Your trailing-12-month net margin - revenue less direct costs, payroll and estimated loan interest - placed against indicative <span className="text-[var(--color-text)]">{sector}</span> bands.</p>
+        <p className="text-xs text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Your trailing-12-month net margin - revenue less direct costs, payroll and estimated loan interest - placed against indicative <span className="text-[var(--color-text)]">{sector}</span> bands.</p>
         {!hasRev && <p className="text-xs text-yellow-400 mt-2">Add 12 months of revenue and expense transactions to compute your net margin.</p>}
       </div>
 
@@ -1837,7 +1838,7 @@ function NetMarginBandBenchmark({ sector }: { sector: string }) {
           <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Net margin is below the typical range - review pricing, direct costs and overhead to widen the gap.</p>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Interest is estimated at ~40% of total EMI; tax is not deducted, so this is a pre-tax operating net margin. Upside multiplies the margin gap by TTM revenue. Reference bands are indicative for typical Indian SMBs, not live peer data. Confirm with your CA before acting.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Interest is estimated at ~40% of total EMI; tax is not deducted, so this is a pre-tax operating net margin. Upside multiplies the margin gap by TTM revenue. Reference bands are indicative for typical Indian SMBs, not live peer data. Confirm with your CA before acting.</p>
     </div>
   );
 }
@@ -1866,7 +1867,7 @@ function CashRunwayBandBenchmark({ sector }: { sector: string }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Timer size={14} className="text-[var(--color-primary)]" /> Cash-Runway Band</h2>
-        <p className="text-xs text-[var(--color-muted)]">How many months of net burn your current cash balance covers, against indicative <span className="text-[var(--color-text)]">{sector}</span> runway bands. A longer runway is a stronger safety buffer.</p>
+        <p className="text-xs text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />How many months of net burn your current cash balance covers, against indicative <span className="text-[var(--color-text)]">{sector}</span> runway bands. A longer runway is a stronger safety buffer.</p>
         {months === null && <p className="text-xs text-yellow-400 mt-2">No net monthly burn detected - add expense transactions to compute your runway.</p>}
       </div>
 
@@ -1897,7 +1898,7 @@ function CashRunwayBandBenchmark({ sector }: { sector: string }) {
           <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Runway is below the typical range - accelerate collections, trim burn or secure a credit line before cash tightens.</p>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Burn is net monthly outflow from recent transactions; a single lumpy month can distort it. Cash-to-median multiplies the runway gap by monthly burn. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Burn is net monthly outflow from recent transactions; a single lumpy month can distort it. Cash-to-median multiplies the runway gap by monthly burn. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
     </div>
   );
 }
@@ -1943,7 +1944,7 @@ function CustomerRetentionBandBenchmark({ sector }: { sector: string }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><HeartHandshake size={14} className="text-[var(--color-primary)]" /> Customer-Retention Band</h2>
-        <p className="text-xs text-[var(--color-muted)]">The share of customers invoiced before the last 6 months who were invoiced again in the last 6 months, against indicative <span className="text-[var(--color-text)]">{sector}</span> retention bands.</p>
+        <p className="text-xs text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />The share of customers invoiced before the last 6 months who were invoiced again in the last 6 months, against indicative <span className="text-[var(--color-text)]">{sector}</span> retention bands.</p>
         {retention === null && (
           <EmptyStateInline description="Add invoices spanning more than 6 months so prior customers can be matched against recent ones." />
         )}
@@ -1978,7 +1979,7 @@ function CustomerRetentionBandBenchmark({ sector }: { sector: string }) {
           <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> Retention is below the typical range - {lapsed} prior customer(s) haven't reordered; a win-back outreach could recover revenue.</p>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Customers are matched by name (case-insensitive); naming inconsistencies can understate retention. Windows are split at 6 months before today. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
+      <p className="text-[10px] text-[var(--color-muted)]"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Customers are matched by name (case-insensitive); naming inconsistencies can understate retention. Windows are split at 6 months before today. Reference bands are indicative for typical Indian SMBs, not live peer data.</p>
     </div>
   );
 }

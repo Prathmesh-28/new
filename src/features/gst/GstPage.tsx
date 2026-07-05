@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { parse2BJson, parseRegisterRows, reconcile, type ReconResult, type ReconSummary } from "@/lib/gstReconcile";
 import { addDays, format } from "date-fns";
+import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 
 // GST 2.0 (effective 2025-26) rationalised the slabs to 0 / 5 / 18 / 40% - most 12%
 // goods moved to 18% and 28% to 40%. Current-rate pickers use these; the rate-change
@@ -3502,7 +3503,7 @@ function CompensationCessCalculator() {
             ))}
           </div>
           {item.cessPct === 0 && <p className="text-[11px] text-[var(--color-muted)] mt-3">This item carries a specific (per-quantity) cess, not ad-valorem - the cess figure above is shown as ₹0; apply ₹400/tonne on quantity instead.</p>}
-          <p className="text-[11px] text-[var(--color-muted)] mt-3">Cess is collected over and above GST and credited to the compensation fund. Rates are indicative - verify the current cess notification for your exact HSN.</p>
+          <p className="text-[11px] text-[var(--color-muted)] mt-3"><DataFreshnessBadge kind="indicative" className="mr-1.5" />Cess is collected over and above GST and credited to the compensation fund. Rates are indicative - verify the current cess notification for your exact HSN.</p>
         </div>
       )}
     </div>
