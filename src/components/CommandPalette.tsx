@@ -90,7 +90,7 @@ type Result = {
   id: string;
   label: string;
   sub?: string;
-  type: "fav" | "recent" | "nav" | "transaction" | "alert";
+  type: "fav" | "recent" | "nav" | "transaction" | "alert" | "invoice" | "customer" | "vendor";
   path?: string;
   action: () => void;
 };
@@ -146,8 +146,28 @@ export function CommandPalette({ open, onClose }: Props) {
     store.alerts.filter(a => a.title.toLowerCase().includes(q) || a.message.toLowerCase().includes(q)).slice(0, 4).forEach(a =>
       out.push({ id: a.id, label: a.title, sub: a.message.slice(0, 60), type: "alert", action: () => { navigate("/alerts"); onClose(); } })
     );
+    // C10: invoices + customers + vendors, so the palette covers the main business
+    // records, not just transactions/alerts. No dedicated customers/vendors table
+    // exists client-side — both are derived from the real records that name them
+    // (invoices, procurement orders), same identity pattern lib/customerScore.js uses.
+    store.invoices.filter(inv =>
+      inv.customer.toLowerCase().includes(q) || inv.description.toLowerCase().includes(q) || (inv.invoiceNumber ?? "").toLowerCase().includes(q)
+    ).slice(0, 6).forEach(inv =>
+      out.push({ id: `inv${inv.id}`, label: inv.invoiceNumber ? `${inv.invoiceNumber} · ${inv.customer}` : inv.customer, sub: `${formatCurrency(inv.amount)} · ${inv.status} · due ${inv.dueDate}`, type: "invoice", action: () => { navigate("/invoices"); onClose(); } })
+    );
+    const customerNames = [...new Set(store.invoices.map(i => i.customer).filter(Boolean))];
+    customerNames.filter(c => c.toLowerCase().includes(q)).slice(0, 5).forEach(c => {
+      const theirs = store.invoices.filter(i => i.customer === c);
+      const outstanding = theirs.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+      out.push({ id: `cust${c}`, label: c, sub: `${theirs.length} invoice${theirs.length === 1 ? "" : "s"} · ${formatCurrency(outstanding)} outstanding`, type: "customer", action: () => { navigate("/receivables"); onClose(); } });
+    });
+    const vendorNames = [...new Set((store.procurement ?? []).map(p => p.supplierName).filter(Boolean))];
+    vendorNames.filter(v => v.toLowerCase().includes(q)).slice(0, 5).forEach(v => {
+      const theirs = store.procurement.filter(p => p.supplierName === v);
+      out.push({ id: `vend${v}`, label: v, sub: `${theirs.length} purchase order${theirs.length === 1 ? "" : "s"}`, type: "vendor", action: () => { navigate("/suppliers"); onClose(); } });
+    });
     return out.slice(0, 16);
-  }, [query, favs, store.transactions, store.alerts, navigate, onClose]);
+  }, [query, favs, store.transactions, store.alerts, store.invoices, store.procurement, navigate, onClose]);
 
   useEffect(() => { setCursor(0); }, [results.length]);
 
@@ -165,7 +185,7 @@ export function CommandPalette({ open, onClose }: Props) {
 
   if (!open) return null;
 
-  const typeLabel: Record<string, string> = { fav: tr("cmdk.favorites"), recent: tr("cmdk.recent"), nav: tr("cmdk.pages"), transaction: tr("Transactions"), alert: tr("Alerts") };
+  const typeLabel: Record<string, string> = { fav: tr("cmdk.favorites"), recent: tr("cmdk.recent"), nav: tr("cmdk.pages"), transaction: tr("Transactions"), alert: tr("Alerts"), invoice: tr("Invoices"), customer: tr("Customers"), vendor: tr("Vendors") };
   let lastType = "";
 
   return (
