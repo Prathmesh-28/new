@@ -56,6 +56,10 @@ interface Company {
   expense: number;
   transactions: number;
   openReceivables: number;
+  // Real tenant_billing record (A9): who actually billed this plan, and how.
+  billing_provider?: string | null;
+  billing_status?: string | null;
+  billing_updated_at?: string | null;
 }
 
 interface Stats {
@@ -73,6 +77,10 @@ interface Metrics {
   mrr: number;
   arr: number;
   paidTenants: number;
+  confirmedMrr: number;
+  confirmedArr: number;
+  confirmedPaidTenants: number;
+  downgradedToFree30d: number;
   currency: string;
   planMix: { free: number; starter: number; growth: number; pro: number };
   signupsByMonth: { month: string; n: number }[];
@@ -148,6 +156,19 @@ function roleLabel(role: string): string {
 function errMsg(err: unknown): string {
   if (err instanceof Error && err.message) return err.message;
   return "Failed";
+}
+
+// A10 (2026-07 gap audit): destructive actions get a real undo, not just a confirm dialog.
+// The caller applies its optimistic UI change FIRST, then hands the actual commit (the API
+// call) here — it's delayed 5s behind a dismissible toast, so clicking Undo means the
+// destructive call never fires at all (not a reversal-after-the-fact).
+function undoableAction(message: string, commit: () => void, revert: () => void) {
+  let undone = false;
+  toast(message, {
+    duration: 5000,
+    action: { label: "Undo", onClick: () => { undone = true; revert(); } },
+  });
+  setTimeout(() => { if (!undone) commit(); }, 5000);
 }
 
 // Deterministic avatar background from an email (one of a small palette).
@@ -378,6 +399,82 @@ function CustomSettingsEditor({ value, onChange }: { value: Record<string, any>;
   );
 }
 
+// A1 (2026-07 gap audit): a single header-level search reachable from every admin
+// section, matching BOTH users and companies — the old box lived buried in the
+// Platform tab and matched users only. Jumps straight into Users/Companies pre-filtered.
+function GlobalOmnibox({
+  companies, users, onFindUser, onFindCompany,
+}: {
+  companies: Company[];
+  users: AdminUser[];
+  onFindUser: (q: string) => void;
+  onFindCompany: (q: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const userMatches = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (needle.length < 2) return [];
+    return users.filter((u) =>
+      u.email.toLowerCase().includes(needle) || (u.display_name || "").toLowerCase().includes(needle) || u.tenant_id.toLowerCase().includes(needle)
+    ).slice(0, 5);
+  }, [q, users]);
+
+  const companyMatches = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (needle.length < 2) return [];
+    return companies.filter((c) =>
+      (c.company_name || "").toLowerCase().includes(needle) || (c.owner_email || "").toLowerCase().includes(needle) || c.tenant_id.toLowerCase().includes(needle)
+    ).slice(0, 5);
+  }, [q, companies]);
+
+  const hasResults = userMatches.length > 0 || companyMatches.length > 0;
+
+  return (
+    <div className="relative mb-4">
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)] pointer-events-none" />
+        <input
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          placeholder="Find anyone or any company — email, name, company, tenant id…"
+          className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg pl-9 pr-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]"
+        />
+      </div>
+      {open && q.trim().length >= 2 && (
+        <div className="absolute z-30 mt-1 w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl max-h-80 overflow-y-auto">
+          {!hasResults && <p className="px-3 py-3 text-xs text-[var(--color-muted)]">No matches.</p>}
+          {userMatches.length > 0 && (
+            <div className="py-1">
+              <p className="px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]">Users</p>
+              {userMatches.map((u) => (
+                <button key={u.id} onClick={() => onFindUser(u.email)} className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 flex items-center justify-between gap-2">
+                  <span className="truncate">{u.display_name || u.email}</span>
+                  <span className="text-[var(--color-muted)] shrink-0">{u.tenant_id}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {companyMatches.length > 0 && (
+            <div className="py-1 border-t border-[var(--color-border)]">
+              <p className="px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]">Companies</p>
+              {companyMatches.map((c) => (
+                <button key={c.tenant_id} onClick={() => onFindCompany(c.company_name || c.owner_email || c.tenant_id)} className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 flex items-center justify-between gap-2">
+                  <span className="truncate">{c.company_name || c.tenant_id}</span>
+                  <span className="text-[var(--color-muted)] shrink-0">{c.owner_email}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PlatformSettingsAdmin() {
   const [data, setData] = useState<Record<string, Record<string, any>>>({});
   const [saving, setSaving] = useState<string | null>(null);
@@ -449,7 +546,7 @@ function PlatformSettingsAdmin() {
 export default function AdminPage() {
   const tr = useT();
   const { user } = useAuth();
-  const { setSelectedClient } = useApp();
+  const { setSelectedClient, setPreviewRole } = useApp();
   const navigate = useNavigate();
 
   // ── Section + lazy-load tracking (loaded gates one-time fetches per section) ──
@@ -473,6 +570,7 @@ export default function AdminPage() {
   // ── Cross-section presets ──
   const [companyPlanPreset, setCompanyPlanPreset] = useState<PlanTier | "all">("all");
   const [usersSearchPreset, setUsersSearchPreset] = useState("");
+  const [companiesSearchPreset, setCompaniesSearchPreset] = useState("");
 
   // ── Fetchers (each try/catch → toast.error; never throws) ──
   const fetchOverview = useCallback(async () => {
@@ -544,8 +642,10 @@ export default function AdminPage() {
     });
   }, [fetchOverview, fetchCompanies, fetchUsers, fetchAudit]);
 
-  // Load the default section on mount.
-  useEffect(() => { openSection("overview"); }, [openSection]);
+  // Load the default section on mount. Also eagerly load companies+users regardless of
+  // which section is active (A1) — the header omnibox below searches both, and it would
+  // otherwise show nothing until the user happened to visit Companies or Users first.
+  useEffect(() => { openSection("overview"); fetchCompanies(); fetchUsers(); }, [openSection, fetchCompanies, fetchUsers]);
 
   // Navigate to Companies pre-filtered to a plan (used by Plans & Platform).
   const gotoCompaniesWithPlan = useCallback((plan: PlanTier | "all") => {
@@ -556,6 +656,11 @@ export default function AdminPage() {
   const gotoUsersWithSearch = useCallback((q: string) => {
     setUsersSearchPreset(q);
     openSection("users");
+  }, [openSection]);
+
+  const gotoCompaniesWithSearch = useCallback((q: string) => {
+    setCompaniesSearchPreset(q);
+    openSection("companies");
   }, [openSection]);
 
   // ── Mutations shared across sections ──
@@ -575,17 +680,26 @@ export default function AdminPage() {
     }
   }, [companies, users]);
 
-  const setTenantStatus = useCallback(async (tenantId: string, suspend: boolean) => {
+  const setTenantStatus = useCallback((tenantId: string, suspend: boolean) => {
     const prevCompanies = companies;
     setCompanies((cs) => cs.map((c) => (c.tenant_id === tenantId ? { ...c, status: suspend ? "suspended" : "active" } : c)));
-    try {
-      if (suspend) await api.post(`/api/admin/tenants/${tenantId}/suspend`, { reason: "Admin suspension" });
-      else await api.post(`/api/admin/tenants/${tenantId}/activate`, {});
-      toast.success(suspend ? "Company suspended" : "Company activated");
-    } catch (err) {
-      setCompanies(prevCompanies);
-      toast.error(errMsg(err));
+    // Reactivating isn't destructive - apply immediately. Suspending locks every user in
+    // the company out, so it gets the undo window (A10).
+    if (!suspend) {
+      api.post(`/api/admin/tenants/${tenantId}/activate`, {})
+        .then(() => toast.success("Company activated"))
+        .catch((err) => { setCompanies(prevCompanies); toast.error(errMsg(err)); });
+      return;
     }
+    undoableAction("Company will be suspended", async () => {
+      try {
+        await api.post(`/api/admin/tenants/${tenantId}/suspend`, { reason: "Admin suspension" });
+        toast.success("Company suspended");
+      } catch (err) {
+        setCompanies(prevCompanies);
+        toast.error(errMsg(err));
+      }
+    }, () => setCompanies(prevCompanies));
   }, [companies]);
 
   const enterTenant = useCallback((c: Company) => {
@@ -594,6 +708,21 @@ export default function AdminPage() {
     toast.success(`Opened ${label}`);
     navigate("/dashboard");
   }, [setSelectedClient, navigate]);
+
+  // A6: true role-preview — enters the target's TENANT (real data, via the existing
+  // X-Tenant-Id impersonation) AND sets previewRole so the UI gates to exactly what
+  // that role sees (not the super_admin's own full nav), and is now audited server-side.
+  const viewAsUserRole = useCallback(async (u: AdminUser) => {
+    try {
+      await api.post("/api/admin/preview-role", { targetUserId: u.id, role: u.role });
+      setSelectedClient(u.tenant_id, u.display_name || u.email);
+      setPreviewRole(u.role as UserRole);
+      toast.success(`Viewing as ${roleLabel(u.role)} — ${u.display_name || u.email}`);
+      navigate("/dashboard");
+    } catch (err) {
+      toast.error(errMsg(err));
+    }
+  }, [setSelectedClient, setPreviewRole, navigate]);
 
   // ── Guard (declared AFTER all hooks so hook order stays stable) ──
   // While `user` is still resolving, render nothing rather than bouncing - a transient
@@ -611,7 +740,9 @@ export default function AdminPage() {
   ];
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 items-start">
+    <div className="w-full">
+      <GlobalOmnibox companies={companies} users={users} onFindUser={gotoUsersWithSearch} onFindCompany={gotoCompaniesWithSearch} />
+      <div className="flex flex-col md:flex-row gap-6 items-start">
       {/* Secondary in-page left rail (renders inside the app's outer Sidebar). */}
       <aside className="w-full md:w-[200px] shrink-0 md:sticky md:top-4 bg-[var(--color-surface)] border border-[var(--color-border)] md:border-0 md:border-r rounded-lg md:rounded-none md:pr-4">
         <div className="hidden md:block px-2 pt-2 pb-4">
@@ -653,6 +784,7 @@ export default function AdminPage() {
             loading={loadingCompanies}
             planPreset={companyPlanPreset}
             setPlanPreset={setCompanyPlanPreset}
+            searchPreset={companiesSearchPreset}
             onEnter={enterTenant}
             onSetPlan={setTenantPlan}
             onSetStatus={setTenantStatus}
@@ -667,12 +799,13 @@ export default function AdminPage() {
             searchPreset={usersSearchPreset}
             setSearchPreset={setUsersSearchPreset}
             onSetPlan={setTenantPlan}
+            onViewAsRole={viewAsUserRole}
             reload={fetchUsers}
             setUsers={setUsers}
           />
         )}
         {section === "plans" && (
-          <PlansSection companies={companies} users={users} onViewCompanies={gotoCompaniesWithPlan} />
+          <PlansSection companies={companies} users={users} metrics={metrics} onViewCompanies={gotoCompaniesWithPlan} />
         )}
         {section === "audit" && <AuditSection rows={audit} loading={loadingAudit} />}
         {section === "platform" && (
@@ -689,6 +822,7 @@ export default function AdminPage() {
             <PlatformSettingsAdmin />
           </div>
         )}
+      </div>
       </div>
     </div>
   );
@@ -815,17 +949,18 @@ function PlanPicker({ current, onPick, onClose }: { current: PlanTier; onPick: (
 }
 
 function CompaniesSection({
-  companies, loading, planPreset, setPlanPreset, onEnter, onSetPlan, onSetStatus,
+  companies, loading, planPreset, setPlanPreset, searchPreset, onEnter, onSetPlan, onSetStatus,
 }: {
   companies: Company[];
   loading: boolean;
   planPreset: PlanTier | "all";
   setPlanPreset: (p: PlanTier | "all") => void;
+  searchPreset: string;
   onEnter: (c: Company) => void;
   onSetPlan: (tenantId: string, plan: PlanTier) => void;
   onSetStatus: (tenantId: string, suspend: boolean) => void;
 }) {
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(searchPreset);
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "suspended">("all");
   const [sort, setSort] = useState<CompanySort>("newest");
   const [openPlan, setOpenPlan] = useState<string | null>(null);
@@ -982,7 +1117,7 @@ const ROLE_SCOPE: Record<string, string> = {
 };
 
 function UsersSection({
-  users, companies, loading, selfId, searchPreset, setSearchPreset, onSetPlan, reload, setUsers,
+  users, companies, loading, selfId, searchPreset, setSearchPreset, onSetPlan, onViewAsRole, reload, setUsers,
 }: {
   users: AdminUser[];
   companies: Company[];
@@ -991,6 +1126,7 @@ function UsersSection({
   searchPreset: string;
   setSearchPreset: (q: string) => void;
   onSetPlan: (tenantId: string, plan: PlanTier) => void;
+  onViewAsRole: (u: AdminUser) => void;
   reload: () => void;
   setUsers: React.Dispatch<React.SetStateAction<AdminUser[]>>;
 }) {
@@ -1098,17 +1234,19 @@ function UsersSection({
     }
   };
 
-  const deleteUser = async (u: AdminUser) => {
+  const deleteUser = (u: AdminUser) => {
     const prev = users;
     setUsers((us) => us.filter((x) => x.id !== u.id));
     setSelected((s) => { const n = new Set(s); n.delete(u.id); return n; });
-    try {
-      await api.delete(`/api/users/${u.id}`);
-      toast.success("User deleted");
-    } catch (err) {
-      setUsers(prev);
-      toast.error(errMsg(err));
-    }
+    undoableAction(`${u.email} will be deleted`, async () => {
+      try {
+        await api.delete(`/api/users/${u.id}`);
+        toast.success("User deleted");
+      } catch (err) {
+        setUsers(prev);
+        toast.error(errMsg(err));
+      }
+    }, () => setUsers(prev));
   };
 
   // Per-user activate / deactivate. A suspended user is locked out immediately.
@@ -1155,18 +1293,22 @@ function UsersSection({
     }
   };
 
-  const bulkDelete = async () => {
+  const bulkDelete = () => {
     const targets = users.filter((u) => selected.has(u.id) && u.id !== selfId);
+    const prev = users;
     setConfirmBulkDelete(false);
-    try {
-      for (const u of targets) await api.delete(`/api/users/${u.id}`);
-      toast.success(`${targets.length} user(s) deleted`);
-    } catch (err) {
-      toast.error(errMsg(err));
-    } finally {
-      setSelected(new Set());
-      reload();
-    }
+    setUsers((us) => us.filter((x) => !targets.some((t) => t.id === x.id)));
+    setSelected(new Set());
+    undoableAction(`${targets.length} user(s) will be deleted`, async () => {
+      try {
+        for (const u of targets) await api.delete(`/api/users/${u.id}`);
+        toast.success(`${targets.length} user(s) deleted`);
+      } catch (err) {
+        toast.error(errMsg(err));
+      } finally {
+        reload();
+      }
+    }, () => setUsers(prev));
   };
 
   const onInvited = (u: AdminUser) => { setUsers((us) => [u, ...us]); };
@@ -1381,6 +1523,7 @@ function UsersSection({
           onClose={() => setDetailUser(null)}
           onEdit={(u) => { setDetailUser(null); setEditUser(u); }}
           onReset={(u) => { setDetailUser(null); resetPassword(u); }}
+          onViewAs={(u) => { setDetailUser(null); onViewAsRole(u); }}
         />
       )}
     </div>
@@ -1487,9 +1630,9 @@ function InviteUserModal({ onClose, onInvited }: { onClose: () => void; onInvite
 }
 
 // Full 360° detail for one user - every field, super-admin only.
-function UserDetailModal({ user, company, isSelf, onClose, onEdit, onReset }: {
+function UserDetailModal({ user, company, isSelf, onClose, onEdit, onReset, onViewAs }: {
   user: AdminUser; company: Company | null; isSelf: boolean;
-  onClose: () => void; onEdit: (u: AdminUser) => void; onReset: (u: AdminUser) => void;
+  onClose: () => void; onEdit: (u: AdminUser) => void; onReset: (u: AdminUser) => void; onViewAs: (u: AdminUser) => void;
 }) {
   const st = userStatus(user);
   const rows: [string, ReactNode][] = [
@@ -1533,7 +1676,12 @@ function UserDetailModal({ user, company, isSelf, onClose, onEdit, onReset }: {
             <div><span className="text-[var(--color-muted)]">Org revenue</span><p className="font-semibold tabular-nums">{fmtINR(company.revenue)}</p></div>
           </div>
         )}
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 flex-wrap">
+          {!isSelf && (
+            <button onClick={() => onViewAs(user)} title={`Open ${user.tenant_id} scoped to exactly what a ${roleLabel(user.role)} sees`} className="text-sm px-3 py-2 rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] flex items-center gap-1.5">
+              <Eye size={13} /> View as {roleLabel(user.role)}
+            </button>
+          )}
           <button onClick={() => onReset(user)} className="text-sm px-3 py-2 rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] flex items-center gap-1.5"><KeyRound size={13} /> Reset password</button>
           <button onClick={() => onEdit(user)} className="text-sm font-semibold px-4 py-2 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90 flex items-center gap-1.5"><Pencil size={13} /> Edit</button>
         </div>
@@ -1639,13 +1787,19 @@ function planHasFeature(plan: PlanTier, feature: FeatureRow): boolean {
   return false;
 }
 
-function PlansSection({ companies, users, onViewCompanies }: { companies: Company[]; users: AdminUser[]; onViewCompanies: (plan: PlanTier) => void }) {
+function PlansSection({ companies, users, metrics, onViewCompanies }: { companies: Company[]; users: AdminUser[]; metrics: Metrics | null; onViewCompanies: (plan: PlanTier) => void }) {
   const byPlan = useMemo(() => {
-    const map: Record<PlanTier, { companies: number; users: number }> = {
-      free: { companies: 0, users: 0 }, starter: { companies: 0, users: 0 },
-      growth: { companies: 0, users: 0 }, pro: { companies: 0, users: 0 },
+    const map: Record<PlanTier, { companies: number; users: number; confirmed: number }> = {
+      free: { companies: 0, users: 0, confirmed: 0 }, starter: { companies: 0, users: 0, confirmed: 0 },
+      growth: { companies: 0, users: 0, confirmed: 0 }, pro: { companies: 0, users: 0, confirmed: 0 },
     };
-    companies.forEach((c) => { map[c.plan].companies += 1; map[c.plan].users += c.user_count; });
+    companies.forEach((c) => {
+      map[c.plan].companies += 1;
+      map[c.plan].users += c.user_count;
+      // Confirmed = actually billed via a payment provider, not an admin comp/override
+      // (A9): the real fact behind the plan flag, not just "what the flag says."
+      if (c.billing_provider && c.billing_provider !== "admin") map[c.plan].confirmed += 1;
+    });
     // Fall back to user records if company list hasn't loaded user counts yet.
     if (companies.length === 0) {
       users.forEach((u) => { const p = u.subscription_plan ?? "free"; map[p].users += 1; });
@@ -1659,6 +1813,17 @@ function PlansSection({ companies, users, onViewCompanies }: { companies: Compan
 
   return (
     <div className="space-y-5">
+      {/* Confirmed (billed) vs list-price MRR, and the one real downgrade signal available
+          today — no cancellation webhook exists yet, so this can't see self-serve churn. */}
+      {metrics && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="List-price MRR" value={fmtINR(metrics.mrr)} sub={`${metrics.paidTenants} on a paid plan`} icon={<Wallet size={13} />} />
+          <StatCard label="Confirmed MRR (billed)" value={fmtINR(metrics.confirmedMrr)} sub={`${metrics.confirmedPaidTenants} paid via Razorpay`} icon={<CreditCard size={13} />} />
+          <StatCard label="Admin-granted plans" value={String(metrics.paidTenants - metrics.confirmedPaidTenants)} sub="Comp / trial / manual override" icon={<Crown size={13} />} />
+          <StatCard label="Downgraded to Free (30d)" value={String(metrics.downgradedToFree30d)} sub="Recorded plan_change events only" icon={<TrendingUp size={13} />} />
+        </div>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {PLAN_ORDER.map((p) => {
           const mrr = byPlan[p].companies * PLAN_PRICE[p];
@@ -1670,6 +1835,7 @@ function PlansSection({ companies, users, onViewCompanies }: { companies: Compan
               </div>
               <p className="text-lg font-bold text-[var(--color-primary)] tabular-nums">{byPlan[p].companies} <span className="text-xs font-normal text-[var(--color-muted)]">companies</span></p>
               <p className="text-xs text-[var(--color-muted)] mt-0.5">{byPlan[p].users} users</p>
+              {PLAN_PRICE[p] > 0 && <p className="text-xs text-[var(--color-muted)] mt-0.5">{byPlan[p].confirmed} confirmed billed · {byPlan[p].companies - byPlan[p].confirmed} admin-granted</p>}
               <p className="text-xs text-[var(--color-muted)] mt-1">MRR <strong className="text-[var(--color-text)]">{fmtINR(mrr)}</strong></p>
               <button onClick={() => onViewCompanies(p)} className="text-xs text-[var(--color-primary)] hover:underline mt-auto pt-2 text-left">View companies →</button>
             </div>

@@ -235,8 +235,12 @@ app.get("/api/admin/companies", _auth, requireSuper, async (_req, res) => {
             MIN(u.created_at) AS created_at,
             MAX(u.last_login_at) AS last_login_at,
             MAX(p.company_name) AS profile_name,
-            COALESCE(MAX(p.status), 'active') AS status
+            COALESCE(MAX(p.status), 'active') AS status,
+            MAX(b.provider) AS billing_provider,
+            MAX(b.status) AS billing_status,
+            MAX(b.updated_at) AS billing_updated_at
      FROM users u LEFT JOIN tenant_profile p ON p.tenant_id = u.tenant_id
+                   LEFT JOIN tenant_billing b ON b.tenant_id = u.tenant_id
      GROUP BY u.tenant_id ORDER BY MIN(u.created_at) DESC`
   );
   const { rows: blobs } = await pool.query(
@@ -257,6 +261,13 @@ app.get("/api/admin/companies", _auth, requireSuper, async (_req, res) => {
       created_at:   t.created_at,
       last_login_at: t.last_login_at || null,
       last_activity: blob?.updated_at || null,
+      // Real tenant_billing record (A9, 2026-07 gap audit) — distinguishes a plan that was
+      // actually billed (provider='razorpay') from one an admin granted for free
+      // (provider='admin', e.g. a comp/trial/manual override), and NULL when the tenant has
+      // never touched billing at all (still on the free default).
+      billing_provider: t.billing_provider || null,
+      billing_status:   t.billing_status || null,
+      billing_updated_at: t.billing_updated_at || null,
       ...companyFinancials(app),
     };
   });
@@ -309,19 +320,42 @@ app.post("/api/admin/tenants/:tid/activate", _auth, requireSuper, async (req, re
   res.json({ ok: true, tenant_id: tid, status: "active" });
 });
 
+// POST /api/admin/preview-role - audit trail for "open as [user]'s role" (A6, 2026-07 gap
+// audit). Open-as itself is client-side (setSelectedClient scopes reads/writes to the
+// target tenant via X-Tenant-Id, per middleware/auth.js; previewRole is a client-only UI
+// gate matching that role's tabs) — this endpoint's only job is to make it ACCOUNTABLE:
+// "who previewed as which role, for which user, when."
+app.post("/api/admin/preview-role", _auth, requireSuper, async (req, res) => {
+  const { targetUserId, role } = req.body || {};
+  if (!targetUserId || typeof role !== "string") return res.status(400).json({ error: "targetUserId and role required" });
+  const { rows } = await pool.query("SELECT id, email, tenant_id, role FROM users WHERE id=$1", [targetUserId]);
+  if (!rows[0]) return res.status(404).json({ error: "User not found" });
+  const target = rows[0];
+  writeAudit(req.user.id, "admin.preview_role", "user", target.id, { email: target.email, tenant_id: target.tenant_id, role: role || target.role });
+  res.json({ ok: true, tenant_id: target.tenant_id, role: role || target.role });
+});
+
 // GET /api/admin/metrics - real platform business metrics (MRR, plan mix, signups)
 app.get("/api/admin/metrics", _auth, requireSuper, async (_req, res) => {
-  // Plan per tenant (max plan held in the tenant), used for MRR + distribution.
+  // Plan per tenant (max plan held in the tenant), used for MRR + distribution. Joined
+  // against tenant_billing so MRR can split CONFIRMED (actually billed via a payment
+  // provider) from ADMIN-GRANTED (comp/trial/manual override) — both are real revenue-
+  // relevant facts, but only the first is money actually collected (A9, 2026-07 audit).
   const { rows: planRows } = await pool.query(
-    "SELECT tenant_id, COALESCE(MAX(subscription_plan),'free') AS plan FROM users GROUP BY tenant_id"
+    `SELECT u.tenant_id, COALESCE(MAX(u.subscription_plan),'free') AS plan, MAX(b.provider) AS provider
+       FROM users u LEFT JOIN tenant_billing b ON b.tenant_id = u.tenant_id
+      GROUP BY u.tenant_id`
   );
   const planMix = { free: 0, starter: 0, growth: 0, pro: 0 };
-  let mrr = 0, paidTenants = 0;
+  let mrr = 0, confirmedMrr = 0, paidTenants = 0, confirmedPaidTenants = 0;
   for (const r of planRows) {
     const p = planMix[r.plan] != null ? r.plan : "free";
     planMix[p] += 1;
     const price = PLAN_MONTHLY_INR[p] || 0;
-    if (price > 0) { mrr += price; paidTenants += 1; }
+    if (price > 0) {
+      mrr += price; paidTenants += 1;
+      if (r.provider && r.provider !== "admin") { confirmedMrr += price; confirmedPaidTenants += 1; }
+    }
   }
   // Signups over the last 12 months (by tenant's first user).
   const { rows: signupRows } = await pool.query(
@@ -334,8 +368,26 @@ app.get("/api/admin/metrics", _auth, requireSuper, async (_req, res) => {
     "SELECT COUNT(*)::int AS n FROM users WHERE last_login_at > now() - interval '30 days'"
   );
   const { rows: pendingInv } = await pool.query("SELECT COUNT(*)::int AS n FROM team_invites WHERE status='pending'");
+  // Downgraded-to-free (30d): the one real churn-adjacent signal this platform can
+  // currently measure — every plan_change is audited (tenant.plan_change), so a tenant
+  // whose most recent change moved them from a paid tier to free is a genuine downgrade.
+  // Deliberately NOT called "churn %": there is no subscription-cancellation webhook and
+  // no self-serve cancel flow yet, so self-initiated churn can't be captured — this counts
+  // only downgrades that were actually recorded, never a fabricated estimate.
+  const { rows: downgradeRows } = await pool.query(`
+    WITH changes AS (
+      SELECT entity_id AS tenant_id, meta->>'plan' AS plan, created_at,
+             LAG(meta->>'plan') OVER (PARTITION BY entity_id ORDER BY created_at) AS prev_plan
+        FROM audit_log WHERE action = 'tenant.plan_change' AND entity = 'tenant'
+    )
+    SELECT COUNT(DISTINCT tenant_id)::int AS n FROM changes
+     WHERE plan = 'free' AND prev_plan IS NOT NULL AND prev_plan <> 'free'
+       AND created_at > now() - interval '30 days'`
+  ).catch(() => ({ rows: [{ n: 0 }] }));
   res.json({
     mrr, arr: mrr * 12, paidTenants,
+    confirmedMrr, confirmedArr: confirmedMrr * 12, confirmedPaidTenants,
+    downgradedToFree30d: downgradeRows[0].n,
     planMix,
     signupsByMonth: signupRows,
     activeUsers30d: actRows[0].n,

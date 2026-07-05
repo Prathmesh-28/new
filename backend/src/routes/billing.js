@@ -2,6 +2,7 @@ const router = require("express").Router();
 const { pool } = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 const razorpay = require("../lib/razorpay");
+const { writeAudit } = require("../lib/audit");
 
 const VALID_PLANS = ["starter", "growth", "pro"];
 
@@ -96,6 +97,11 @@ router.post("/razorpay/verify", authenticate, requireOwnerOrAdmin, async (req, r
     status: "active",
     periodEnd: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
   });
+  // Self-serve plan changes were never audited (only the admin-console override was) —
+  // the same tenant.plan_change action the admin metrics dashboard's downgrade signal
+  // reads, so a real self-serve upgrade now shows up in both the audit trail and,
+  // eventually, downgrade detection once a cancel flow exists.
+  writeAudit(req.user.id, "tenant.plan_change", "tenant", req.user.tenant_id, { plan, via: "razorpay_checkout" });
   res.json({ ok: true, plan });
 });
 
