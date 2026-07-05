@@ -2,6 +2,7 @@ const router = require("express").Router();
 const multer = require("multer");
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
+const { encryptBuffer, decryptBuffer } = require("../lib/fileCrypto");
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -31,11 +32,13 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
     try { tags = JSON.parse(tags); } catch { tags = tags.split(",").map(t => t.trim()).filter(Boolean); }
   }
   if (!Array.isArray(tags)) tags = [];
+  // Encrypt at rest (D3): `size` is recorded from the ORIGINAL plaintext buffer, not the
+  // (slightly larger, iv+tag-prefixed) ciphertext, so downloads/listings show the real file size.
   const { rows } = await pool.query(
-    `INSERT INTO files(tenant_id,uploader_id,name,mime_type,size,data,category,tags,expires_at)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    `INSERT INTO files(tenant_id,uploader_id,name,mime_type,size,data,category,tags,expires_at,encrypted)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,true)
      RETURNING id,name,mime_type,size,created_at,category,tags,expires_at`,
-    [req.user.tenant_id, req.user.id, fileName, req.file.mimetype, req.file.size, req.file.buffer,
+    [req.user.tenant_id, req.user.id, fileName, req.file.mimetype, req.file.size, encryptBuffer(req.file.buffer),
      category || null, tags.slice(0, 20), expires_at || null]
   );
   res.status(201).json(rows[0]);
@@ -53,13 +56,14 @@ router.get("/", authenticate, async (req, res) => {
 // GET /api/files/:id - download
 router.get("/:id", authenticate, async (req, res) => {
   const { rows } = await pool.query(
-    "SELECT name,mime_type,data FROM files WHERE id=$1 AND tenant_id=$2",
+    "SELECT name,mime_type,data,encrypted FROM files WHERE id=$1 AND tenant_id=$2",
     [req.params.id, req.user.tenant_id]
   );
   if (!rows[0]) return res.status(404).json({ error: "Not found" });
   res.set("Content-Type", rows[0].mime_type);
   res.set("Content-Disposition", `attachment; filename="${rows[0].name}"`);
-  res.send(rows[0].data);
+  // Legacy rows (uploaded before D3) are still plaintext — encrypted flags which decode path applies.
+  res.send(rows[0].encrypted ? decryptBuffer(rows[0].data) : rows[0].data);
 });
 
 // DELETE /api/files/:id

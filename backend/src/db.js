@@ -69,6 +69,11 @@ async function initDb() {
     ALTER TABLE files ADD COLUMN IF NOT EXISTS category   TEXT;
     ALTER TABLE files ADD COLUMN IF NOT EXISTS tags       TEXT[];
     ALTER TABLE files ADD COLUMN IF NOT EXISTS expires_at DATE;
+    -- File bytes at rest (D3, 2026-07 gap audit): the data column was plaintext BYTEA. New uploads
+    -- are AES-256-GCM encrypted (lib/fileCrypto.js) with encrypted=true; DEFAULT FALSE
+    -- means every pre-existing row stays readable as plaintext exactly as before — no bulk
+    -- re-encryption migration, no risk of corrupting already-stored files.
+    ALTER TABLE files ADD COLUMN IF NOT EXISTS encrypted BOOLEAN NOT NULL DEFAULT false;
 
     CREATE TABLE IF NOT EXISTS notes (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
