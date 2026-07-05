@@ -213,6 +213,10 @@ router.post("/login", validateBody({
     [user.id, firstLogin]
   );
   require("../modules/analytics").track(user.tenant_id, user.id, { event: "login" }).catch(() => {});
+  pool.query(
+    "INSERT INTO login_events(user_id, tenant_id, ip, user_agent) VALUES($1,$2,$3,$4)",
+    [user.id, user.tenant_id, req.ip || null, (req.headers["user-agent"] || "").slice(0, 300)]
+  ).catch(() => {});
   const payload = { sub: user.id, role: user.role, tenant: user.tenant_id };
   res.json({
     access:  signAccess(payload),

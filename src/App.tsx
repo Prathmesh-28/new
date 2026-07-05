@@ -51,6 +51,7 @@ const AdvisorPage        = lazy(() => import("@/features/advisor/AdvisorPage"));
 const InvestorPage       = lazy(() => import("@/features/investor/InvestorPage"));
 const ConnectorsPage     = lazy(() => import("@/features/connectors/ConnectorsPage"));
 const AdminPage          = lazy(() => import("@/features/admin/AdminPage"));
+const AdminUserDetailPage = lazy(() => import("@/features/admin/AdminUserDetailPage"));
 const AllDataPage        = lazy(() => import("@/features/admin/AllDataPage"));
 const BooksPage          = lazy(() => import("@/features/books/BooksPage"));
 const ErpPage            = lazy(() => import("@/features/erp/ErpPage"));
@@ -265,6 +266,7 @@ function AppShell() {
                 <Route path="/settings"      element={<SettingsPage />} />
                 <Route path="/organization"  element={<OrganizationPage />} />
                 <Route path="/admin"         element={<AdminPage />} />
+                <Route path="/admin/users/:id" element={<AdminUserDetailPage />} />
                 <Route path="/admin/data"    element={<AllDataPage />} />
                 <Route path="/books"         element={<BooksPage />} />
                 <Route path="/crm"           element={<Navigate to="/sales?t=crm" replace />} />

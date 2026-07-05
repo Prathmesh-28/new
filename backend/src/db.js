@@ -578,6 +578,19 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_otp TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_otp_expiry TIMESTAMPTZ;
 
+    -- Per-login device/session history (A2/A3, 2026-07 gap audit): users.last_login_at
+    -- only ever kept the MOST RECENT login — there was no way to see a user's actual
+    -- session history (device, IP, when) for the admin 360 view.
+    CREATE TABLE IF NOT EXISTS login_events (
+      id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+      tenant_id  TEXT NOT NULL,
+      ip         TEXT,
+      user_agent TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_login_events_user ON login_events(user_id, created_at DESC);
+
     -- ── UI locale preference (#169 i18n) — server-side so the chosen language follows
     --    the user across devices/logins instead of living only in per-device localStorage.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS locale         TEXT;  -- en | hi | mr | bn | ta | te | gu | kn | ml | pa (null = follow device default)

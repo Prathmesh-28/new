@@ -456,6 +456,30 @@ app.post("/api/admin/users/:id/reset", _auth, requireSuper, async (req, res) => 
   res.json({ password: tempPass });
 });
 
+// GET /api/admin/users/:id/detail - the 360 view (A2/A3, 2026-07 gap audit): recent
+// login/device history and a per-user slice of the audit trail (both actions THIS user
+// took, and actions taken ON this user by an admin), not just the last-login timestamp
+// UserDetailModal already showed. Note: invoices/transactions have no per-user
+// attribution column in this schema (they're tenant-scoped, not staff-attributed), so
+// there's no honest "this user's own invoices" to add — the org-wide financials already
+// shown on the user record are the real ceiling of what's attributable here.
+app.get("/api/admin/users/:id/detail", _auth, requireSuper, async (req, res) => {
+  const { rows: userRows } = await pool.query("SELECT * FROM users WHERE id=$1", [req.params.id]);
+  if (!userRows[0]) return res.status(404).json({ error: "Not found" });
+  const { rows: recentLogins } = await pool.query(
+    "SELECT ip, user_agent, created_at FROM login_events WHERE user_id=$1 ORDER BY created_at DESC LIMIT 20",
+    [req.params.id]
+  );
+  const { rows: auditTrail } = await pool.query(
+    `SELECT a.id, a.action, a.entity, a.entity_id, a.meta, a.created_at, u.email AS actor_email
+       FROM audit_log a LEFT JOIN users u ON u.id = a.user_id
+      WHERE a.user_id = $1::uuid OR (a.entity = 'user' AND a.entity_id = $1::text)
+      ORDER BY a.created_at DESC LIMIT 50`,
+    [req.params.id]
+  );
+  res.json({ recentLogins, auditTrail });
+});
+
 // Super-admin console API (Users / Organisation / Subscription tabs)
 app.use("/api/admin", require("./routes/adminConsole"));
 

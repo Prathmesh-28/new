@@ -21,12 +21,12 @@ void BASE;
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────────────────────────
-type PlanTier = "free" | "starter" | "growth" | "pro";
+export type PlanTier = "free" | "starter" | "growth" | "pro";
 type UserRole =
   | "super_admin" | "owner" | "finance_manager" | "accountant"
   | "sales" | "operations_manager" | "viewer" | "investor";
 
-interface AdminUser {
+export interface AdminUser {
   id: string;
   email: string;
   display_name?: string;
@@ -41,7 +41,7 @@ interface AdminUser {
   status?: string;
 }
 
-interface Company {
+export interface Company {
   tenant_id: string;
   company_name: string | null;
   owner_email: string | null;
@@ -105,14 +105,14 @@ type SectionId = "overview" | "companies" | "users" | "plans" | "audit" | "platf
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
-function relTime(iso?: string | null): string {
+export function relTime(iso?: string | null): string {
   if (!iso) return "Never";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "Never";
   return formatDistanceToNow(d, { addSuffix: true });
 }
 
-function fmtINR(n: number): string {
+export function fmtINR(n: number): string {
   return (Number.isFinite(n) ? n : 0).toLocaleString("en-IN", {
     style: "currency",
     currency: "INR",
@@ -149,7 +149,7 @@ const PLAN_FILL: Record<PlanTier, string> = {
   pro:     "#a855f7", // purple
 };
 
-function roleLabel(role: string): string {
+export function roleLabel(role: string): string {
   return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -172,7 +172,7 @@ function undoableAction(message: string, commit: () => void, revert: () => void)
 }
 
 // Deterministic avatar background from an email (one of a small palette).
-function avatarBg(email: string): string {
+export function avatarBg(email: string): string {
   const palette = [
     "bg-purple-700", "bg-blue-700", "bg-emerald-700", "bg-amber-700",
     "bg-pink-700", "bg-cyan-700", "bg-rose-700", "bg-indigo-700",
@@ -182,7 +182,7 @@ function avatarBg(email: string): string {
   return palette[h % palette.length];
 }
 
-function initials(u: AdminUser): string {
+export function initials(u: AdminUser): string {
   const base = (u.display_name || u.email || "?").trim();
   const parts = base.split(/[\s@.]+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
@@ -191,7 +191,7 @@ function initials(u: AdminUser): string {
 
 // A user's displayed status is derived purely from its own fields (no per-user
 // status write exists - suspend/activate is a tenant-level operation).
-function userStatus(u: AdminUser): "active" | "pending" | "suspended" {
+export function userStatus(u: AdminUser): "active" | "pending" | "suspended" {
   if (u.status === "suspended") return "suspended";
   if (u.first_login) return "pending";
   return "active";
@@ -200,12 +200,12 @@ function userStatus(u: AdminUser): "active" | "pending" | "suspended" {
 // ─────────────────────────────────────────────────────────────────────────────
 // REUSABLE COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
-function PlanPill({ plan }: { plan: PlanTier }) {
+export function PlanPill({ plan }: { plan: PlanTier }) {
   const s = PLAN_STYLE[plan] ?? PLAN_STYLE.free;
   return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.pill}`}>{s.label}</span>;
 }
 
-function RolePill({ role }: { role: string }) {
+export function RolePill({ role }: { role: string }) {
   const cls = ROLE_STYLE[role] ?? ROLE_STYLE.viewer;
   return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>{roleLabel(role)}</span>;
 }
@@ -254,7 +254,7 @@ function ConfirmPopover({
   );
 }
 
-function CopyId({ id, chars = 8 }: { id: string; chars?: number }) {
+export function CopyId({ id, chars = 8 }: { id: string; chars?: number }) {
   const short = id.length > chars ? id.slice(0, chars) + "…" : id;
   return (
     <button
@@ -546,7 +546,7 @@ function PlatformSettingsAdmin() {
 export default function AdminPage() {
   const tr = useT();
   const { user } = useAuth();
-  const { setSelectedClient, setPreviewRole } = useApp();
+  const { setSelectedClient } = useApp();
   const navigate = useNavigate();
 
   // ── Section + lazy-load tracking (loaded gates one-time fetches per section) ──
@@ -709,20 +709,9 @@ export default function AdminPage() {
     navigate("/dashboard");
   }, [setSelectedClient, navigate]);
 
-  // A6: true role-preview — enters the target's TENANT (real data, via the existing
-  // X-Tenant-Id impersonation) AND sets previewRole so the UI gates to exactly what
-  // that role sees (not the super_admin's own full nav), and is now audited server-side.
-  const viewAsUserRole = useCallback(async (u: AdminUser) => {
-    try {
-      await api.post("/api/admin/preview-role", { targetUserId: u.id, role: u.role });
-      setSelectedClient(u.tenant_id, u.display_name || u.email);
-      setPreviewRole(u.role as UserRole);
-      toast.success(`Viewing as ${roleLabel(u.role)} — ${u.display_name || u.email}`);
-      navigate("/dashboard");
-    } catch (err) {
-      toast.error(errMsg(err));
-    }
-  }, [setSelectedClient, setPreviewRole, navigate]);
+  // A6's "view as role" now lives on the routed AdminUserDetailPage (A2) instead of here —
+  // it needs the same setSelectedClient/setPreviewRole/preview-role-endpoint combination,
+  // reimplemented there since that page isn't a child of this component.
 
   // ── Guard (declared AFTER all hooks so hook order stays stable) ──
   // While `user` is still resolving, render nothing rather than bouncing - a transient
@@ -793,13 +782,11 @@ export default function AdminPage() {
         {section === "users" && (
           <UsersSection
             users={users}
-            companies={companies}
             loading={loadingUsers}
             selfId={user.id}
             searchPreset={usersSearchPreset}
             setSearchPreset={setUsersSearchPreset}
             onSetPlan={setTenantPlan}
-            onViewAsRole={viewAsUserRole}
             reload={fetchUsers}
             setUsers={setUsers}
           />
@@ -1117,16 +1104,14 @@ const ROLE_SCOPE: Record<string, string> = {
 };
 
 function UsersSection({
-  users, companies, loading, selfId, searchPreset, setSearchPreset, onSetPlan, onViewAsRole, reload, setUsers,
+  users, loading, selfId, searchPreset, setSearchPreset, onSetPlan, reload, setUsers,
 }: {
   users: AdminUser[];
-  companies: Company[];
   loading: boolean;
   selfId: string;
   searchPreset: string;
   setSearchPreset: (q: string) => void;
   onSetPlan: (tenantId: string, plan: PlanTier) => void;
-  onViewAsRole: (u: AdminUser) => void;
   reload: () => void;
   setUsers: React.Dispatch<React.SetStateAction<AdminUser[]>>;
 }) {
@@ -1146,8 +1131,8 @@ function UsersSection({
   const [bulkRoleOpen, setBulkRoleOpen] = useState(false);
   const [bulkPlanOpen, setBulkPlanOpen] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
-  const [detailUser, setDetailUser] = useState<AdminUser | null>(null);
   const [showImport, setShowImport] = useState(false);
+  const navigate = useNavigate();
 
   // Apply a preset search coming from another section, then clear it.
   useEffect(() => {
@@ -1331,7 +1316,6 @@ function UsersSection({
     URL.revokeObjectURL(a.href);
     toast.success(`Exported ${filtered.length} user(s)`);
   };
-  const companyFor = (tid: string) => companies.find((c) => c.tenant_id === tid) ?? null;
 
   return (
     <div className="space-y-4">
@@ -1446,7 +1430,7 @@ function UsersSection({
                 <div key={u.id} className={`flex items-center justify-between gap-3 bg-[var(--color-surface)] border rounded-lg px-4 py-3 transition-colors ${selected.has(u.id) ? "border-[var(--color-primary)]/50" : "border-[var(--color-border)] hover:border-[var(--color-border)] hover:bg-white/[0.02]"}`}>
                   <div className="flex items-center gap-3 min-w-0">
                     <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggleSelect(u.id)} className="accent-[var(--color-primary)] shrink-0" aria-label="Select user" />
-                    <button onClick={() => setDetailUser(u)} className="flex items-center gap-3 text-left min-w-0 hover:opacity-90">
+                    <button onClick={() => navigate(`/admin/users/${u.id}`)} className="flex items-center gap-3 text-left min-w-0 hover:opacity-90">
                       <span className={`w-9 h-9 rounded-full ${avatarBg(u.email)} text-white text-xs font-semibold flex items-center justify-center shrink-0`}>{initials(u)}</span>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1463,7 +1447,7 @@ function UsersSection({
                   </div>
                   <div className="flex items-center gap-2.5 shrink-0">
                     {st === "pending" && <button onClick={() => resetPassword(u)} title="Re-issue credentials" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Mail size={15} /></button>}
-                    <button onClick={() => setDetailUser(u)} title="View details" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Eye size={15} /></button>
+                    <button onClick={() => navigate(`/admin/users/${u.id}`)} title="View details" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Eye size={15} /></button>
                     <button onClick={() => setEditUser(u)} title="Edit" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><Pencil size={15} /></button>
                     <button onClick={() => resetPassword(u)} title="Reset password" className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"><KeyRound size={15} /></button>
                     <div className="relative">
@@ -1515,17 +1499,6 @@ function UsersSection({
       {resetInfo && <ResetPasswordModal info={resetInfo} onClose={() => setResetInfo(null)} />}
       {showInvite && <InviteUserModal onClose={() => setShowInvite(false)} onInvited={onInvited} />}
       {showImport && <ImportUsersModal onClose={() => setShowImport(false)} onSetPlan={onSetPlan} onDone={reload} />}
-      {detailUser && (
-        <UserDetailModal
-          user={detailUser}
-          company={companyFor(detailUser.tenant_id)}
-          isSelf={detailUser.id === selfId}
-          onClose={() => setDetailUser(null)}
-          onEdit={(u) => { setDetailUser(null); setEditUser(u); }}
-          onReset={(u) => { setDetailUser(null); resetPassword(u); }}
-          onViewAs={(u) => { setDetailUser(null); onViewAsRole(u); }}
-        />
-      )}
     </div>
   );
 }
@@ -1629,66 +1602,6 @@ function InviteUserModal({ onClose, onInvited }: { onClose: () => void; onInvite
   );
 }
 
-// Full 360° detail for one user - every field, super-admin only.
-function UserDetailModal({ user, company, isSelf, onClose, onEdit, onReset, onViewAs }: {
-  user: AdminUser; company: Company | null; isSelf: boolean;
-  onClose: () => void; onEdit: (u: AdminUser) => void; onReset: (u: AdminUser) => void; onViewAs: (u: AdminUser) => void;
-}) {
-  const st = userStatus(user);
-  const rows: [string, ReactNode][] = [
-    ["User ID", <CopyId id={user.id} chars={36} />],
-    ["Email", user.email],
-    ["Display name", user.display_name || "-"],
-    ["Role", <RolePill role={user.role} />],
-    ["Plan", <PlanPill plan={user.subscription_plan ?? "free"} />],
-    ["Status", st === "active" ? "Active" : st === "pending" ? "Pending setup" : "Suspended"],
-    ["Workspace / Org ID", <CopyId id={user.tenant_id} chars={36} />],
-    ["Company", company?.company_name || "-"],
-    ["First login pending", user.first_login ? "Yes" : "No"],
-    ["Total logins", String(user.login_count ?? 0)],
-    ["Joined", safeFmt(user.created_at)],
-    ["Last login", relTime(user.last_login_at)],
-    ["Last active", relTime(user.last_active_at)],
-  ];
-  return (
-    <Modal title="User details" onClose={onClose}>
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <span className={`w-11 h-11 rounded-full ${avatarBg(user.email)} text-white text-sm font-semibold flex items-center justify-center shrink-0`}>{initials(user)}</span>
-          <div className="min-w-0">
-            <p className="font-semibold truncate">{user.display_name || user.email.split("@")[0]}{isSelf && <span className="ml-1.5 text-[10px] text-[var(--color-muted)]">(you)</span>}</p>
-            <p className="text-xs text-[var(--color-muted)] truncate">{user.email}</p>
-          </div>
-        </div>
-        <dl className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] overflow-hidden">
-          {rows.map(([k, v]) => (
-            <div key={k} className="flex items-start justify-between gap-4 px-3 py-2 text-sm">
-              <dt className="text-[var(--color-muted)] shrink-0">{k}</dt>
-              <dd className="text-right min-w-0 break-words">{v}</dd>
-            </div>
-          ))}
-        </dl>
-        {company && (
-          <div className="rounded-lg border border-[var(--color-border)] p-3 text-xs grid grid-cols-2 gap-2">
-            <div><span className="text-[var(--color-muted)]">Org users</span><p className="font-semibold">{company.user_count}</p></div>
-            <div><span className="text-[var(--color-muted)]">Org plan</span><p className="font-semibold">{PLAN_STYLE[company.plan].label}</p></div>
-            <div><span className="text-[var(--color-muted)]">Org cash</span><p className="font-semibold tabular-nums">{fmtINR(company.cash)}</p></div>
-            <div><span className="text-[var(--color-muted)]">Org revenue</span><p className="font-semibold tabular-nums">{fmtINR(company.revenue)}</p></div>
-          </div>
-        )}
-        <div className="flex justify-end gap-2 flex-wrap">
-          {!isSelf && (
-            <button onClick={() => onViewAs(user)} title={`Open ${user.tenant_id} scoped to exactly what a ${roleLabel(user.role)} sees`} className="text-sm px-3 py-2 rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] flex items-center gap-1.5">
-              <Eye size={13} /> View as {roleLabel(user.role)}
-            </button>
-          )}
-          <button onClick={() => onReset(user)} className="text-sm px-3 py-2 rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] flex items-center gap-1.5"><KeyRound size={13} /> Reset password</button>
-          <button onClick={() => onEdit(user)} className="text-sm font-semibold px-4 py-2 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90 flex items-center gap-1.5"><Pencil size={13} /> Edit</button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
 
 // Minimal quoted-CSV line parser (handles "" escapes inside quoted fields).
 function parseCsvLine(line: string): string[] {
