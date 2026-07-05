@@ -991,8 +991,10 @@ export default function HomePage() {
         <div style={{ borderTop: "1px solid rgba(169,217,188,0.06)", padding: "18px 48px", display: "flex", justifyContent: "space-between", alignItems: "center", maxWidth: 1100, margin: "0 auto" }}>
           <span style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.25)" }}>© {new Date().getFullYear()} Headroom Technologies Pvt. Ltd.</span>
           <div style={{ display: "flex", gap: 24 }}>
-            {([["Privacy", platform.links?.privacyUrl], ["Terms", platform.links?.termsUrl], ["Security", platform.links?.securityUrl]] as [string, string | undefined][]).map(([l, url]) => (
-              <a key={l} href={url || "#"} {...(url ? { target: "_blank", rel: "noopener noreferrer" } : {})} style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.25)", textDecoration: "none" }}>{l}</a>
+            {/* Privacy always has a real, hosted destination now (D1) — the admin-configurable
+                privacyUrl can still override it with an external policy if one is set. */}
+            {([["Privacy", platform.links?.privacyUrl || "/privacy-policy"], ["Terms", platform.links?.termsUrl], ["Security", platform.links?.securityUrl]] as [string, string | undefined][]).map(([l, url]) => (
+              <a key={l} href={url || "#"} {...(url && url.startsWith("http") ? { target: "_blank", rel: "noopener noreferrer" } : {})} style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.25)", textDecoration: "none" }}>{l}</a>
             ))}
           </div>
         </div>

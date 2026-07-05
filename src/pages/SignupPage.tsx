@@ -231,6 +231,11 @@ export default function SignupPage() {
               ) : "Create account →"}
             </button>
 
+            <p className="text-center text-[10px] text-[var(--color-muted)]">
+              By creating an account you agree to our{" "}
+              <Link to="/privacy-policy" target="_blank" className="text-[var(--color-primary)] hover:underline">Privacy Policy</Link>.
+            </p>
+
             <p className="text-center text-xs text-[var(--color-muted)]">
               Already have an account?{" "}
               <Link to="/login" className="text-[var(--color-primary)] hover:underline font-medium">Sign in</Link>
