@@ -29,11 +29,39 @@ router.post("/signup", validateBody({
     .toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   const tenant_id = `${slug}-${crypto.randomBytes(3).toString("hex")}`;
 
+  // Email verification (B2 gap audit 2026-07): gate full access on proving control of the
+  // address, but ONLY when SMTP is actually configured — without it the OTP would never
+  // arrive and every signup would brick. Same "gated, never fake/broken" rule as every other
+  // credentialed integration in this codebase.
+  const emailConfigured = !!process.env.SMTP_USER;
+  let otpHash = null, otpExpiry = null, otp = null;
+  if (emailConfigured) {
+    otp = crypto.randomInt(100000, 999999).toString();
+    otpHash = await bcrypt.hash(otp, 10);
+    otpExpiry = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  }
+
   const { rows } = await pool.query(
-    "INSERT INTO users(email,password,role,tenant_id,first_login) VALUES($1,$2,$3,$4,false) RETURNING id,email,role,tenant_id,first_login",
-    [email.toLowerCase(), hash, role, tenant_id]
+    `INSERT INTO users(email,password,role,tenant_id,first_login,email_verified,email_verify_otp,email_verify_otp_expiry)
+     VALUES($1,$2,$3,$4,false,$5,$6,$7) RETURNING id,email,role,tenant_id,first_login,email_verified`,
+    [email.toLowerCase(), hash, role, tenant_id, !emailConfigured, otpHash, otpExpiry]
   );
   const user = rows[0];
+
+  if (emailConfigured) {
+    await sendOtp({ to: user.email, otp });
+    return res.status(201).json({ verify_required: true, email: user.email });
+  }
+
+  await finishSignup(user);
+  const payload = { sub: user.id, role: user.role, tenant: user.tenant_id };
+  res.status(201).json({ access: signAccess(payload), refresh: signRefresh(payload), user });
+});
+
+// Side effects that must only happen once an account is actually usable (i.e. after
+// verification, or immediately when verification is skipped because SMTP isn't
+// configured) — never for an unverified signup attempt that may never complete.
+async function finishSignup(user) {
   // Record the founding membership (owner of their own new firm) so the multi-firm
   // switcher (#197) lists it. users.tenant_id remains the home firm.
   await pool.query(
@@ -41,8 +69,50 @@ router.post("/signup", validateBody({
     [user.id, user.tenant_id, user.role]
   ).catch(() => {});
   require("../modules/analytics").track(user.tenant_id, user.id, { event: "signup_completed", props: { role: user.role } }).catch(() => {});
+}
+
+// POST /auth/verify-signup - complete signup by proving control of the email (B2)
+router.post("/verify-signup", async (req, res) => {
+  const { email, otp } = req.body || {};
+  if (!email || !otp) return res.status(400).json({ error: "Email and code required" });
+  const { rows } = await pool.query("SELECT * FROM users WHERE email=$1", [email.toLowerCase()]);
+  const user = rows[0];
+  if (!user) return res.status(400).json({ error: "Invalid or expired code" });
+  if (user.email_verified) return res.status(409).json({ error: "This account is already verified — sign in instead." });
+  if (!user.email_verify_otp || !user.email_verify_otp_expiry || new Date(user.email_verify_otp_expiry) < new Date()) {
+    return res.status(400).json({ error: "This code has expired. Request a new one." });
+  }
+  const ok = await bcrypt.compare(String(otp), user.email_verify_otp);
+  if (!ok) return res.status(400).json({ error: "Invalid or expired code" });
+
+  await pool.query(
+    "UPDATE users SET email_verified=true, email_verify_otp=NULL, email_verify_otp_expiry=NULL WHERE id=$1",
+    [user.id]
+  );
+  await finishSignup(user);
   const payload = { sub: user.id, role: user.role, tenant: user.tenant_id };
-  res.status(201).json({ access: signAccess(payload), refresh: signRefresh(payload), user });
+  res.json({
+    access: signAccess(payload), refresh: signRefresh(payload),
+    user: { id: user.id, email: user.email, role: user.role, tenant_id: user.tenant_id, first_login: user.first_login },
+  });
+});
+
+// POST /auth/resend-signup-otp - re-send the verification code (60s cooldown)
+router.post("/resend-signup-otp", async (req, res) => {
+  const { email } = req.body || {};
+  const { rows } = await pool.query("SELECT * FROM users WHERE email=$1", [(email || "").toLowerCase()]);
+  const user = rows[0];
+  if (!user || user.email_verified) return res.json({ ok: true }); // don't leak existence/state
+  if (user.email_verify_otp_expiry && new Date(user.email_verify_otp_expiry).getTime() - Date.now() > 9 * 60 * 1000) {
+    return res.status(429).json({ error: "A code was just sent — check your inbox (or wait a minute to resend)." });
+  }
+  const otp = crypto.randomInt(100000, 999999).toString();
+  await pool.query(
+    "UPDATE users SET email_verify_otp=$1, email_verify_otp_expiry=$2 WHERE id=$3",
+    [await bcrypt.hash(otp, 10), new Date(Date.now() + 10 * 60 * 1000).toISOString(), user.id]
+  );
+  await sendOtp({ to: user.email, otp });
+  res.json({ ok: true });
 });
 
 // POST /auth/login
@@ -117,6 +187,22 @@ router.post("/login", validateBody({
       return res.status(401).json({ error: "Invalid authenticator code.", mfa_required: true });
     }
     if (matched > 0) await pool.query("UPDATE users SET mfa_last_totp_counter=$1 WHERE id=$2", [matched, user.id]);
+  }
+
+  // Password (and MFA) are correct but the signup email was never verified. Only enforce
+  // if SMTP is still configured today — if it was turned off after this account signed up,
+  // fail OPEN rather than lock someone out with no way to ever receive a code. Auto-resend
+  // a fresh code so the frontend can drop them straight into the verify screen.
+  if (!user.email_verified && process.env.SMTP_USER) {
+    if (!user.email_verify_otp_expiry || new Date(user.email_verify_otp_expiry) < new Date()) {
+      const otp = crypto.randomInt(100000, 999999).toString();
+      await pool.query(
+        "UPDATE users SET email_verify_otp=$1, email_verify_otp_expiry=$2 WHERE id=$3",
+        [await bcrypt.hash(otp, 10), new Date(Date.now() + 10 * 60 * 1000).toISOString(), user.id]
+      );
+      await sendOtp({ to: user.email, otp });
+    }
+    return res.status(403).json({ error: "Verify your email to continue — we've sent a fresh code.", verify_required: true, email: user.email });
   }
 
   const firstLogin = viaResetOtp ? true : user.first_login;

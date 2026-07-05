@@ -7,6 +7,7 @@ import type { AuthUser } from "@/data/types";
 import Logo from "@/components/Logo";
 import Turnstile, { turnstileEnabled } from "@/components/Turnstile";
 import PasswordInput from "@/components/PasswordInput";
+import EmailVerifyStep from "@/components/EmailVerifyStep";
 
 export default function SignupAdvisorPage() {
   useSeo({ title: "Headroom for CAs & Accountants - run your client book in one console", description: "Link every client, track GST/TDS/ITR filings, chase documents and send white-label reports - the CA practice console inside Headroom. Free to start." });
@@ -18,6 +19,13 @@ export default function SignupAdvisorPage() {
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
   const [tsToken,  setTsToken]  = useState("");
+  const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
+
+  const enterApp = (access: string, refresh: string) => {
+    localStorage.setItem("hr_access", access);
+    localStorage.setItem("hr_refresh", refresh);
+    window.location.href = "/advisor";
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,10 +47,9 @@ export default function SignupAdvisorPage() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Signup failed"); return; }
+      if (data.verify_required) { setVerifyEmail(data.email); return; }
       const { access, refresh } = data as { access: string; refresh: string; user: AuthUser };
-      localStorage.setItem("hr_access", access);
-      localStorage.setItem("hr_refresh", refresh);
-      window.location.href = "/advisor";
+      enterApp(access, refresh);
     } catch {
       setError("Cannot connect to server. Please try again.");
     } finally {
@@ -109,6 +116,10 @@ export default function SignupAdvisorPage() {
             }
           </div>
 
+          {verifyEmail ? (
+            <EmailVerifyStep email={verifyEmail} onVerified={(d) => enterApp(d.access, d.refresh)} />
+          ) : (
+          <>
           <div className="mb-8">
             <h1 className="text-2xl font-bold mb-1">Join as a CA</h1>
             <p className="text-sm text-[var(--color-muted)]">
@@ -192,6 +203,8 @@ export default function SignupAdvisorPage() {
               <Link to="/signup" className="text-[var(--color-primary)] hover:underline font-medium">Business signup →</Link>
             </p>
           </form>
+          </>
+          )}
         </div>
       </div>
     </div>

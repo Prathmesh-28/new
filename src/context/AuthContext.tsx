@@ -118,8 +118,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: "Login failed" }));
-      const e = new Error(err.error ?? "Login failed") as Error & { mfaRequired?: boolean };
+      const e = new Error(err.error ?? "Login failed") as Error & { mfaRequired?: boolean; verifyRequired?: boolean; verifyEmail?: string };
       if (err.mfa_required) e.mfaRequired = true;  // second factor needed → caller shows the code field
+      if (err.verify_required) { e.verifyRequired = true; e.verifyEmail = err.email; }  // B2: signup email never verified
       throw e;
     }
     const { access, refresh, user: u } = await res.json();

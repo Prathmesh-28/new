@@ -7,6 +7,7 @@ import type { AuthUser } from "@/data/types";
 import Logo from "@/components/Logo";
 import Turnstile, { turnstileEnabled } from "@/components/Turnstile";
 import PasswordInput from "@/components/PasswordInput";
+import EmailVerifyStep from "@/components/EmailVerifyStep";
 
 const ROLE_OPTIONS = [
   {
@@ -37,6 +38,15 @@ export default function SignupPage() {
   const [error,       setError]       = useState("");
   const [loading,     setLoading]     = useState(false);
   const [tsToken,     setTsToken]     = useState("");
+  const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
+
+  const enterApp = (user: AuthUser, access: string, refresh: string) => {
+    localStorage.setItem("hr_access", access);
+    localStorage.setItem("hr_refresh", refresh);
+    // Reload so AuthProvider picks up the new token from localStorage
+    const home = user.role === "investor" ? "/capital" : user.role === "accountant" ? "/advisor" : "/onboarding";
+    window.location.href = home;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,12 +63,9 @@ export default function SignupPage() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Signup failed"); return; }
+      if (data.verify_required) { setVerifyEmail(data.email); return; }
       const { access, refresh, user } = data as { access: string; refresh: string; user: AuthUser };
-      localStorage.setItem("hr_access", access);
-      localStorage.setItem("hr_refresh", refresh);
-      // Reload so AuthProvider picks up the new token from localStorage
-      const home = user.role === "investor" ? "/capital" : user.role === "accountant" ? "/advisor" : "/onboarding";
-      window.location.href = home;
+      enterApp(user, access, refresh);
     } catch {
       setError("Cannot connect to server. Please try again.");
     } finally {
@@ -126,6 +133,10 @@ export default function SignupPage() {
             {serverReady ? <><Wifi size={11} /> Server ready</> : <><WifiOff size={11} /> Server waking up…</>}
           </div>
 
+          {verifyEmail ? (
+            <EmailVerifyStep email={verifyEmail} onVerified={(d) => enterApp(d.user, d.access, d.refresh)} />
+          ) : (
+          <>
           <div className="mb-8">
             <h1 className="text-2xl font-bold mb-1">Create your account</h1>
             <p className="text-sm text-[var(--color-muted)]">
@@ -241,6 +252,8 @@ export default function SignupPage() {
               <Link to="/login" className="text-[var(--color-primary)] hover:underline font-medium">Sign in</Link>
             </p>
           </form>
+          </>
+          )}
         </div>
       </div>
     </div>

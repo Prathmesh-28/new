@@ -565,6 +565,13 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count    INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS status         TEXT NOT NULL DEFAULT 'active';  -- active | suspended
+    -- Signup email verification (B2 gap audit 2026-07). DEFAULT TRUE grandfathers every
+    -- existing row — only NEW signups are created with email_verified=false (and only when
+    -- SMTP is actually configured; see routes/auth.js). Never let a verification gate lock
+    -- anyone out of an account that already existed before this column did.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT true;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_otp TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_otp_expiry TIMESTAMPTZ;
 
     -- ── UI locale preference (#169 i18n) — server-side so the chosen language follows
     --    the user across devices/logins instead of living only in per-device localStorage.

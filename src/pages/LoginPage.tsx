@@ -8,6 +8,7 @@ import Logo from "@/components/Logo";
 import Turnstile, { turnstileEnabled } from "@/components/Turnstile";
 import PasswordInput from "@/components/PasswordInput";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import EmailVerifyStep from "@/components/EmailVerifyStep";
 import { useI18n } from "@/i18n";
 
 export default function LoginPage() {
@@ -23,6 +24,16 @@ export default function LoginPage() {
   const [tsToken, setTsToken]   = useState("");
   const [mfaRequired, setMfaRequired] = useState(false);
   const [mfaCode, setMfaCode]   = useState("");
+  const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
+
+  const goHome = (u: { first_login: boolean; role: string }) => {
+    if (u.first_login) {
+      navigate("/set-password", { replace: true });
+    } else {
+      const defaultHome = u.role === "investor" ? "/investor" : "/dashboard";
+      navigate(params.get("redirect") ?? defaultHome, { replace: true });
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,16 +42,14 @@ export default function LoginPage() {
     setError(""); setLoading(true);
     try {
       const u = await login(email, password, tsToken, mfaRequired ? mfaCode.trim() : undefined);
-      if (u.first_login) {
-        navigate("/set-password", { replace: true });
-      } else {
-        const defaultHome = u.role === "investor" ? "/investor" : "/dashboard";
-        navigate(params.get("redirect") ?? defaultHome, { replace: true });
-      }
+      goHome(u);
     } catch (err) {
-      if ((err as { mfaRequired?: boolean })?.mfaRequired) {
+      const e2 = err as { mfaRequired?: boolean; verifyRequired?: boolean; verifyEmail?: string };
+      if (e2?.mfaRequired) {
         setMfaRequired(true);
         setError(mfaCode ? t("auth.mfaError") : "");
+      } else if (e2?.verifyRequired) {
+        setVerifyEmail(e2.verifyEmail ?? email);
       } else {
         setError(err instanceof Error ? err.message : t("auth.loginFailed"));
       }
@@ -103,6 +112,14 @@ export default function LoginPage() {
             <LanguageSwitcher compact />
           </div>
 
+          {verifyEmail ? (
+            <EmailVerifyStep email={verifyEmail} onVerified={(d) => {
+              localStorage.setItem("hr_access", d.access);
+              localStorage.setItem("hr_refresh", d.refresh);
+              window.location.href = d.user.first_login ? "/set-password" : (d.user.role === "investor" ? "/investor" : "/dashboard");
+            }} />
+          ) : (
+          <>
           <div className="mb-8">
             <h1 className="text-2xl font-bold mb-1">{t("auth.login.title")}</h1>
             <p className="text-sm text-[var(--color-muted)]">{t("auth.login.subtitle")}</p>
@@ -192,6 +209,8 @@ export default function LoginPage() {
             {t("auth.caPrompt")}{" "}
             <Link to="/signup-advisor" className="text-[var(--color-primary)] hover:underline font-medium">{t("auth.joinAdvisor")}</Link>
           </p>
+          </>
+          )}
         </div>
       </div>
     </div>
