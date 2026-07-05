@@ -27,7 +27,10 @@ interface PayrollRun {
   id: string; run_month: number; run_year: number;
   total_gross: number; total_tds: number; total_net: number;
   status: string; disbursed_at?: string; created_at: string;
+  accrual_voucher_id?: string; payment_voucher_id?: string;
   breakdown?: { employee_id: string; name: string; gross: number; tds: number; net: number; bank_account?: string; }[];
+  // GL result attached by /run and /disburse — whether the books voucher actually posted.
+  gl?: { posted: boolean; voucherNumber?: number; replayed?: boolean; reason?: string };
 }
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -173,6 +176,19 @@ export default function PayrollPage() {
   const [showAdd, setShowAdd]     = useState(false);
   const [expandRun, setExpandRun] = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
+  // Bank ledger to pay salaries from — when set, Disburse also posts the real PAYMENT
+  // voucher (Dr Salaries Payable / Cr bank). Ledger list loads once from the books.
+  const [disburseBank, setDisburseBank] = useState("");
+  const [bankLedgers, setBankLedgers] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    api.get<{ id: string; name: string; is_bank: boolean; is_active: boolean }[]>("/api/books/ledgers")
+      .then(rows => {
+        const banks = (Array.isArray(rows) ? rows : []).filter(r => r.is_bank && r.is_active).map(r => ({ id: r.id, name: r.name }));
+        setBankLedgers(banks);
+        if (banks[0]) setDisburseBank(banks[0].id);
+      })
+      .catch(() => {});
+  }, []);
   const [tab, setTab]             = useState<"employees" | "runs" | "ewa" | "slips" | "form16" | "ecr" | "labor" | "fnf" | "variance" | "pt" | "flexi" | "lwf" | "offer" | "esop" | "ctc" | "attendance" | "gratuity" | "reimburse" | "tds192" | "bonus" | "contractor" | "benchmark" | "appraisal" | "journal" | "headcount" | "liability" | "portal" | "overtime" | "leave-encash" | "notice" | "advance" | "nps" | "minwage" | "maternity" | "roi" | "takehome" | "attrition-cost" | "incentive" | "superann" | "gpa" | "pf-challan" | "register" | "penalty" | "lwp">("employees");
   const [slipEmp, setSlipEmp]     = useState<Employee | null>(null);
   const [slipMonth, setSlipMonth] = useState(now.getMonth() + 1);
@@ -228,9 +244,15 @@ export default function PayrollPage() {
   const runPayroll = async () => {
     setRunning(true);
     try {
-      const run = await api.post<PayrollRun>("/api/payroll/run", { run_month: runMonth, run_year: runYear });
+      // Pass the configured structure so the SERVER computes the identical statutory
+      // split it posts to the books — one engine, no client/GL drift.
+      const run = await api.post<PayrollRun>("/api/payroll/run", { run_month: runMonth, run_year: runYear, basic_pct: statCfg.basicPct, cap_pf: statCfg.capPf });
       setRuns(prev => [run, ...prev.filter(r => !(r.run_month === run.run_month && r.run_year === run.run_year))]);
-      toast.success(`Payroll for ${MONTH_NAMES[runMonth - 1]} ${runYear} computed - ${formatCurrency(run.total_net)} net`);
+      if (run.gl?.posted) {
+        toast.success(`Payroll for ${MONTH_NAMES[runMonth - 1]} ${runYear} computed - ${formatCurrency(run.total_net)} net · accrual posted to books${run.gl.voucherNumber ? ` (JV #${run.gl.voucherNumber})` : ""}`);
+      } else {
+        toast.warning(`Payroll computed - ${formatCurrency(run.total_net)} net · NOT posted to books: ${run.gl?.reason ?? "GL posting failed"}`);
+      }
       setTab("runs");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to run payroll");
@@ -239,8 +261,9 @@ export default function PayrollPage() {
 
   const disburse = async (runId: string) => {
     try {
-      await api.post(`/api/payroll/runs/${runId}/disburse`, {});
-      toast.success("Payroll marked as disbursed");
+      const run = await api.post<PayrollRun>(`/api/payroll/runs/${runId}/disburse`, disburseBank ? { bank_ledger_id: disburseBank } : {});
+      if (run.gl?.posted) toast.success(`Payroll disbursed · payment voucher posted to books${run.gl.voucherNumber ? ` (#${run.gl.voucherNumber})` : ""}`);
+      else toast.success(`Payroll marked as disbursed · ${run.gl?.reason ?? "no books entry"}`);
       load();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to disburse");
@@ -497,10 +520,23 @@ export default function PayrollPage() {
                         {run.status === "disbursed" ? <><CheckCircle2 size={9} className="inline mr-1" />Disbursed</> : <><Clock size={9} className="inline mr-1" />Draft</>}
                       </span>
                       {run.status === "draft" && (
-                        <button onClick={() => disburse(run.id)}
-                          className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-2 py-1 rounded hover:opacity-90">
-                          Disburse
-                        </button>
+                        <>
+                          {bankLedgers.length > 0 && (
+                            <select value={disburseBank} onChange={e => setDisburseBank(e.target.value)}
+                              title="Pay from (posts the payment voucher to the books)"
+                              className="text-[10px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-1.5 py-1 max-w-[120px]">
+                              <option value="">No books entry</option>
+                              {bankLedgers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            </select>
+                          )}
+                          <button onClick={() => disburse(run.id)}
+                            className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-2 py-1 rounded hover:opacity-90">
+                            Disburse
+                          </button>
+                        </>
+                      )}
+                      {run.accrual_voucher_id && (
+                        <span title="Salary accrual is posted to the books" className="text-[9px] px-1.5 py-0.5 rounded-full border border-green-800/40 text-green-400 bg-green-950/20">in books</span>
                       )}
                       {hasLines && (
                         <button onClick={() => setExpandRun(expanded ? null : run.id)}
@@ -871,6 +907,20 @@ export default function PayrollPage() {
                 onClick={downloadFromBooks} title="Authoritative Part B for all employees, from posted payslips + the annual TDS true-up"
                 className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-text)] font-semibold px-3 py-2 rounded-lg hover:bg-[var(--color-accent)]">
                 <FileCheck size={12} /> Part B from books (all)
+              </button>
+              <button
+                onClick={async () => {
+                  // The HRMS statutory generators (24Q/Form-16) pull PAN from the LEGACY
+                  // payroll record via a link the backend can only make by exact-email
+                  // match — this button is that linker's first UI trigger.
+                  try {
+                    const r = await api.post<{ linked: number; ambiguous: number; still_unlinked: number }>("/api/hrms/payroll/link-legacy", {});
+                    toast.success(`Linked ${r.linked} record${r.linked === 1 ? "" : "s"} by email · ${r.ambiguous} ambiguous · ${r.still_unlinked} still unlinked`);
+                  } catch (e) { toast.error(e instanceof Error ? e.message : "Linking failed"); }
+                }}
+                title="Match HRMS employees to payroll records by exact email so 24Q/Form-16 can pull PANs"
+                className="flex items-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:bg-[var(--color-accent)]">
+                <Users size={12} /> Link employee records (PAN)
               </button>
             </div>
 

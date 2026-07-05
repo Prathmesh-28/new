@@ -447,6 +447,10 @@ async function initDb() {
       created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
       UNIQUE(tenant_id, run_month, run_year)
     );
+    -- GL bridge (payroll→HRMS convergence): the accrual JOURNAL posted on run and the
+    -- PAYMENT voucher posted on disburse, so the payroll the SMB actually uses hits the books.
+    ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS accrual_voucher_id UUID;
+    ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS payment_voucher_id UUID;
 
     -- ── B2B BNPL ──────────────────────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS bnpl_facilities (
