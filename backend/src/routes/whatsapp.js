@@ -8,6 +8,8 @@ const { sendPush } = require("../lib/push");
 const llm = require("../modules/books/llm");
 const ops = require("../modules/books/ops");
 const { parseExpenseText } = require("../modules/books/voiceExpense");
+const { q, withTenant } = require("../lib/tenantDb"); // invoices is FORCE-RLS
+const { createInvoiceTx } = require("../lib/invoiceCreate");
 
 const sha256 = (s) => crypto.createHash("sha256").update(String(s)).digest("hex");
 
@@ -112,6 +114,42 @@ async function captureExpenseDraft(text, tenantId, userId, phone) {
   return `🧾 *Expense detected*\n\n${fmt(parsed.amount)} - ${parsed.description}\nCategory: *${match.name}*\nPaid from: *${cashLedger.name}*\n\nReply *YES* to book this, or *NO* to cancel.`;
 }
 
+// ── Sales capture ("sold 5000 to Sharma Traders") → real invoice on confirm ───
+const SALE_TRIGGER = /\b(sold|sale|sales|becha)\b/i;
+
+function parseSale(text) {
+  const t = String(text || "");
+  const lc = t.toLowerCase();
+  let amount = null;
+  const lakh = lc.match(/(\d+(?:\.\d+)?)\s*(lakhs?|lac|lakh)\b/);
+  const k = lc.match(/(\d+(?:\.\d+)?)\s*(k|hazaar|hazar|thousand)\b/);
+  const plain = lc.match(/(?:rs\.?|₹|inr)?\s*(\d{1,3}(?:,\d{2,3})+|\d+)(?:\.\d+)?/);
+  if (lakh) amount = parseFloat(lakh[1]) * 100000;
+  else if (k) amount = parseFloat(k[1]) * 1000;
+  else if (plain) amount = parseFloat(plain[1].replace(/,/g, ""));
+  const custM = t.match(/\bto\s+([A-Za-z][A-Za-z .&'-]{1,60})/i);
+  const customer = custM ? custM[1].trim().replace(/\s+/g, " ") : null;
+  return { amount, customer };
+}
+
+// Returns a reply string if the message looks like a sale, else null.
+async function captureSaleDraft(text, tenantId, userId, phone) {
+  if (!SALE_TRIGGER.test(text)) return null;
+  const { amount, customer } = parseSale(text);
+  if (!amount) return null;
+  if (!customer) {
+    return `🧾 I caught a sale of *${fmt(amount)}* but no customer name. Include one, e.g. "sold ${amount} to Sharma Traders".`;
+  }
+  await pool.query(
+    `INSERT INTO whatsapp_pending_actions(phone,tenant_id,user_id,kind,payload,expires_at)
+     VALUES($1,$2,$3,'sale',$4,$5)
+     ON CONFLICT(phone) DO UPDATE SET tenant_id=$2, user_id=$3, kind='sale', payload=$4, expires_at=$5`,
+    [phone, tenantId, userId, JSON.stringify({ amount, customer }),
+     new Date(Date.now() + PENDING_TTL_MS).toISOString()]
+  );
+  return `🧾 *Sale detected*\n\n${fmt(amount)} to *${customer}*\n\nReply *YES* to raise the invoice (no GST applied - edit it later if taxable), or *NO* to cancel.`;
+}
+
 // Returns a reply string if `cmd` resolves an outstanding pending action, else null.
 async function resolvePendingAction(cmd, tenantId, phone) {
   const { rows } = await pool.query(
@@ -125,9 +163,24 @@ async function resolvePendingAction(cmd, tenantId, phone) {
 
   await pool.query("DELETE FROM whatsapp_pending_actions WHERE phone=$1", [phone]);
   if (isNo) return "Cancelled - nothing was booked.";
-  if (new Date(pending.expires_at) < new Date()) return "That draft expired - send the expense again.";
+  if (new Date(pending.expires_at) < new Date()) return "That draft expired - send it again.";
 
   const p = pending.payload;
+  if (pending.kind === "sale") {
+    try {
+      // Same path as the recurring-invoice cron: create inside a tenant-scoped txn,
+      // then recognise revenue on issue (accrual), identical to POST /invoices + /send.
+      const inv = await withTenant(tenantId, (client) => createInvoiceTx(client, tenantId, {
+        customer_name: p.customer, gst_rate: 0, status: "sent",
+        items: [{ description: "Sale (captured via WhatsApp)", quantity: 1, unit_price: p.amount }],
+      }));
+      require("../lib/invoiceGl").postInvoiceSale(tenantId, inv).catch(() => {});
+      return `✅ Invoice *${inv.invoice_number}* raised: ${fmt(p.amount)} to ${p.customer}.\n\nManage it (add GST, send a payment link) at headroom-pi.vercel.app/invoices`;
+    } catch (e) {
+      console.error("[wa sale confirm]", e.message);
+      return "Couldn't raise that invoice - please create it at headroom-pi.vercel.app/invoices.";
+    }
+  }
   try {
     await ops.createExpense(tenantId, pending.user_id, {
       categoryLedgerId: p.categoryLedgerId, amount: p.amount,
@@ -200,6 +253,35 @@ async function dispatch(text, data, tenantId) {
     return `📈 *30-day forecast*\n\nToday: *${fmt(total)}*\nIn 30 days (P50): *${fmt(last.p50)}*\nRange: ${fmt(last.p10)}-${fmt(last.p90)}\nBurn: ${fmt(burn)}/mo`;
   }
 
+  // Statement-on-demand: "statement" → outstanding by customer; "statement sharma"
+  // → that customer's open-invoice ledger. Reads the REAL invoices table (FORCE-RLS).
+  if (/^(statement|ledger|khata)\b/.test(cmd) && tenantId) {
+    const name = cmd.replace(/^(statement|ledger|khata)\s*/, "").trim();
+    const { rows } = await q(tenantId,
+      `SELECT customer_name, invoice_number, total_amount, due_date
+         FROM invoices
+        WHERE tenant_id=$1 AND status NOT IN ('paid','cancelled')
+        ORDER BY created_at ASC`,
+      [tenantId]
+    );
+    if (!rows.length) return "✅ No outstanding invoices - every customer is settled.";
+    if (!name) {
+      const byCust = {};
+      for (const r of rows) byCust[r.customer_name] = (byCust[r.customer_name] || 0) + Number(r.total_amount);
+      const top = Object.entries(byCust).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      const totalAll = Object.values(byCust).reduce((s, v) => s + v, 0);
+      return `📒 *Outstanding: ${fmt(totalAll)}*\n\n${top.map(([c, v]) => `  ${c}: *${fmt(v)}*`).join("\n")}\n\nReply "statement <name>" for one customer's detail.`;
+    }
+    const match = rows.find(r => r.customer_name.toLowerCase().includes(name));
+    if (!match) return `No open invoices found for a customer matching "${name}".`;
+    const custRows = rows.filter(r => r.customer_name === match.customer_name);
+    const total = custRows.reduce((s, r) => s + Number(r.total_amount), 0);
+    const lines = custRows.slice(0, 10).map(r =>
+      `  • ${r.invoice_number} - ${fmt(Number(r.total_amount))}${r.due_date ? ` (due ${new Date(r.due_date).toLocaleDateString("en-IN")})` : ""}`);
+    const more = custRows.length > 10 ? `\n  …and ${custRows.length - 10} more` : "";
+    return `📒 *${match.customer_name} - outstanding ${fmt(total)}*\n\n${lines.join("\n")}${more}`;
+  }
+
   // Credit
   if (/^(credit|loan|borrow|lend|apply)$/.test(cmd)) {
     const apps   = data.creditApplications ?? [];
@@ -216,7 +298,7 @@ async function dispatch(text, data, tenantId) {
 
   // Help
   if (/^(help|hi|hello|helo|commands?|menu|start)$/.test(cmd)) {
-    return `👋 *Headroom CFO Assistant*\n\nReply with:\n  *cash* - current balance\n  *runway* - how many days of cash\n  *burn* - monthly expenses\n  *alerts* - unread alerts\n  *invoices* - outstanding receivables\n  *forecast* - 30-day projection\n  *credit* - loan status\n\nOr ask anything in plain language:\n  "Should I take the credit offer?"\n  "Why is my burn so high?"`;
+    return `👋 *Headroom CFO Assistant*\n\nReply with:\n  *cash* - current balance\n  *runway* - how many days of cash\n  *burn* - monthly expenses\n  *alerts* - unread alerts\n  *invoices* - outstanding receivables\n  *statement <name>* - a customer's open-invoice ledger\n  *forecast* - 30-day projection\n  *credit* - loan status\n\nOr just tell me what happened:\n  "paid 800 to electrician" - books the expense\n  "sold 5000 to Sharma Traders" - raises an invoice\n\nOr ask anything in plain language:\n  "Should I take the credit offer?"`;
   }
 
   // AI fallback - anything else. Runs on the tenant's own engine; if no engine is
@@ -483,8 +565,11 @@ router.post("/", async (req, res) => {
 
   try {
     const cmd = body.trim().toLowerCase().replace(/[^a-z0-9 ]/g, "");
+    // Sale first: "sold 5000 to Sharma, paid cash" mentions both - "sold" is the
+    // more specific signal ("paid" often appears as a mode-of-payment modifier).
     const reply =
       (await resolvePendingAction(cmd, tenant_id, phone)) ??
+      (await captureSaleDraft(body, tenant_id, user_id, phone)) ??
       (await captureExpenseDraft(body, tenant_id, user_id, phone)) ??
       (await dispatch(body, await getTenantData(tenant_id), tenant_id));
     const safe  = reply.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
