@@ -630,6 +630,7 @@ function CorporateCardManager() {
 // ── #96 Subscription / SaaS Spend Tracker ───────────────────────────────────────
 type Sub = { id: string; name: string; amount: number; cycle: "monthly" | "quarterly" | "annual"; renewal: string };
 function SubscriptionSpendTracker() {
+  const { store } = useApp();
   const [subs, setSubs] = useFeatureState<Sub[]>("spend-subscriptions", []);
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
@@ -643,6 +644,18 @@ function SubscriptionSpendTracker() {
     setSubs(prev => [...prev, { id: crypto.randomUUID(), name: name.trim(), amount: parseFloat(amount) || 0, cycle, renewal }]);
     setName(""); setAmount(""); setRenewal("");
     toast.success("Subscription added");
+  };
+
+  // Seed from the SAME recurring-vendor mining the detector below uses (≥3 of the
+  // last 6 months of real transactions) - no more re-typing what the data already knows.
+  const detected = useMemo(() => detectRecurringSpend(store.transactions, today), [store.transactions, today]);
+  const untracked = detected.filter(d => !subs.some(s => s.name.toLowerCase() === d.vendor.toLowerCase()));
+  const importDetected = () => {
+    if (!untracked.length) { toast.info("Everything detected is already tracked"); return; }
+    setSubs(prev => [...prev, ...untracked.map(d => ({
+      id: crypto.randomUUID(), name: d.vendor, amount: Math.round(d.avg), cycle: "monthly" as const, renewal: "",
+    }))]);
+    toast.success(`Imported ${untracked.length} recurring vendor${untracked.length !== 1 ? "s" : ""} from your transactions`);
   };
 
   const monthly = (s: Sub) => s.cycle === "monthly" ? s.amount : s.cycle === "quarterly" ? s.amount / 3 : s.amount / 12;
@@ -673,7 +686,17 @@ function SubscriptionSpendTracker() {
         </select>
         <DatePicker value={renewal} onChange={setRenewal} />
       </div>
-      <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 mb-3">+ Add subscription</button>
+      <div className="flex flex-wrap gap-2 mb-3">
+        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add subscription</button>
+        <button
+          onClick={importDetected}
+          disabled={untracked.length === 0}
+          title={untracked.length === 0 ? "No untracked recurring vendors found in your transactions" : undefined}
+          className="text-xs border border-[var(--color-border)] text-[var(--color-text)] font-medium px-4 py-2 rounded-lg hover:bg-[var(--color-accent)] disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          ⟳ Import {untracked.length > 0 ? `${untracked.length} detected` : "detected"} from transactions
+        </button>
+      </div>
 
       {subs.length > 0 && (
         <>
@@ -928,6 +951,31 @@ function monthKeys(n: number, from: Date): string[] {
   return out;
 }
 
+// Shared implicit-subscription mining: any payee recurring in ≥3 of the last 6
+// months of real transactions. Used by RecurringSpendDetector (display) and the
+// Subscription tracker's "Import detected" (seeding), so the two never drift.
+type DetectedRecurring = { vendor: string; category: string; months: number; avg: number; annualised: number; lastSeen: string };
+function detectRecurringSpend(transactions: { amount: number; date: string; counterparty: string; category: string }[], today: Date): DetectedRecurring[] {
+  const ks = monthKeys(6, today);
+  const byVendor: Record<string, { months: Set<string>; total: number; category: string; last: string }> = {};
+  transactions.filter(t => t.amount < 0).forEach(t => {
+    const mk = t.date.slice(0, 7);
+    if (!ks.includes(mk)) return;
+    const v = byVendor[t.counterparty] ?? { months: new Set<string>(), total: 0, category: t.category, last: t.date };
+    v.months.add(mk);
+    v.total += Math.abs(t.amount);
+    if (t.date > v.last) v.last = t.date;
+    byVendor[t.counterparty] = v;
+  });
+  return Object.entries(byVendor)
+    .filter(([, v]) => v.months.size >= 3)
+    .map(([vendor, v]) => {
+      const avg = v.total / v.months.size;
+      return { vendor, category: v.category, months: v.months.size, avg, annualised: avg * 12, lastSeen: v.last };
+    })
+    .sort((a, b) => b.annualised - a.annualised);
+}
+
 // ── Spend-by-Category Trend (12 months) ──────────────────────────────────────────
 function CategoryTrend12mo() {
   const { store } = useApp();
@@ -1009,30 +1057,11 @@ function RecurringSpendDetector() {
   const { store } = useApp();
   const fc = formatCurrency;
   const today = new Date();
-  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0), [store.transactions]);
 
-  type Rec = { vendor: string; category: string; months: number; avg: number; annualised: number; lastSeen: string };
-  const recurring = useMemo<Rec[]>(() => {
-    const ks = monthKeys(6, today);
-    const byVendor: Record<string, { months: Set<string>; total: number; category: string; last: string }> = {};
-    expenses.forEach(t => {
-      const mk = t.date.slice(0, 7);
-      if (!ks.includes(mk)) return;
-      const v = byVendor[t.counterparty] ?? { months: new Set<string>(), total: 0, category: t.category, last: t.date };
-      v.months.add(mk);
-      v.total += Math.abs(t.amount);
-      if (t.date > v.last) v.last = t.date;
-      byVendor[t.counterparty] = v;
-    });
-    return Object.entries(byVendor)
-      .filter(([, v]) => v.months.size >= 3)
-      .map(([vendor, v]) => {
-        const avg = v.total / v.months.size;
-        return { vendor, category: v.category, months: v.months.size, avg, annualised: avg * 12, lastSeen: v.last };
-      })
-      .sort((a, b) => b.annualised - a.annualised)
-      .slice(0, 10);
-  }, [expenses, today]);
+  const recurring = useMemo<DetectedRecurring[]>(
+    () => detectRecurringSpend(store.transactions, today).slice(0, 10),
+    [store.transactions, today]
+  );
 
   const totalAnnual = recurring.reduce((s, r) => s + r.annualised, 0);
 
