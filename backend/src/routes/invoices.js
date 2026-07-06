@@ -434,13 +434,19 @@ router.post("/confirmations/send", authenticate, canWrite, async (req, res) => {
 
     let sentTo;
     if (channel === "whatsapp") {
-      const phone = open.find((r) => r.customer_phone)?.customer_phone || normalizedPhone;
-      if (!phone) return res.status(422).json({ error: "No phone on file for this customer - enter one and retry." });
+      // Prefer what the caller just typed THIS request over a possibly-stale on-file
+      // value - the contact write itself only happens after send succeeds (above),
+      // so at send time "on file" may not reflect what the user meant to correct.
+      const rawPhone = normalizedPhone || open.find((r) => r.customer_phone)?.customer_phone;
+      if (!rawPhone) return res.status(422).json({ error: "No phone on file for this customer - enter one and retry." });
+      // Normalize on-file values the same way dunning dispatch does (a stored
+      // 10-digit number with no country code would otherwise reach Twilio raw).
+      const phone = rawPhone.startsWith("+") ? rawPhone : `+91${rawPhone.replace(/^0+/, "")}`;
       const delivered = await sendWhatsApp(phone, `*${subject}*\n\n${body}`).catch(() => false);
       if (!delivered) return res.status(503).json({ error: "WhatsApp isn't configured on the server (missing Twilio keys) - nothing was sent." });
       sentTo = phone;
     } else {
-      const email = open.find((r) => r.customer_email)?.customer_email || (newEmail || null);
+      const email = newEmail || open.find((r) => r.customer_email)?.customer_email || null;
       if (!email) return res.status(422).json({ error: "No email on file for this customer - enter one and retry." });
       if (!process.env.SMTP_USER) return res.status(503).json({ error: "Email isn't configured on the server (missing SMTP keys) - nothing was sent." });
       const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

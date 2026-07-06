@@ -67,7 +67,25 @@ function buildContext(data) {
 // The read-side commands below answer questions from the cached KV snapshot; booking a
 // real expense must hit the actual GL (book_ledgers / postVoucher), never the KV cache.
 const EXPENSE_TRIGGER = /\b(paid|spent|kharch|kharcha|kharcho)\b/i;
-const PENDING_TTL_MS  = 10 * 60 * 1000;
+// Kept short deliberately: a stray "ok"/"y" typed as idle chat could otherwise get
+// consumed as a confirmation of a draft the user has forgotten about. 3 minutes (not
+// 10) bounds how long an old, half-remembered draft stays armed for a later reply.
+const PENDING_TTL_MS  = 3 * 60 * 1000;
+
+// A different-kind draft (expense vs sale) already pending for this phone must never
+// be silently clobbered - tell the user to resolve it first instead of losing it.
+async function conflictingPending(phone, tenantId, newKind) {
+  const { rows } = await pool.query(
+    "SELECT kind, payload, expires_at FROM whatsapp_pending_actions WHERE phone=$1 AND tenant_id=$2", [phone, tenantId]
+  );
+  const existing = rows[0];
+  if (!existing || existing.kind === newKind || new Date(existing.expires_at) < new Date()) return null;
+  const p = existing.payload;
+  const summary = existing.kind === "expense"
+    ? `${fmt(p.amount)} expense (${p.description})`
+    : `${fmt(p.amount)} sale to ${p.customer}`;
+  return `You still have a pending ${summary} awaiting *YES*/*NO*. Reply to that first, then try again.`;
+}
 
 async function loadExpenseLedgers(tenantId) {
   const [{ rows: ledgers }, { rows: groups }] = await Promise.all([
@@ -100,6 +118,8 @@ async function captureExpenseDraft(text, tenantId, userId, phone) {
   if (!match) {
     return `🧾 I caught *${fmt(parsed.amount)}* for "${parsed.description}" but couldn't confidently match it to one of your expense ledgers. Log it at headroom-pi.vercel.app/books, or try again naming the category, e.g. "paid 800 fuel to electrician".`;
   }
+  const conflict = await conflictingPending(phone, tenantId, "expense");
+  if (conflict) return conflict;
 
   await pool.query(
     `INSERT INTO whatsapp_pending_actions(phone,tenant_id,user_id,kind,payload,expires_at)
@@ -115,20 +135,33 @@ async function captureExpenseDraft(text, tenantId, userId, phone) {
 }
 
 // ── Sales capture ("sold 5000 to Sharma Traders") → real invoice on confirm ───
-const SALE_TRIGGER = /\b(sold|sale|sales|becha)\b/i;
+// "sales" (plural) is deliberately excluded: it's almost always a noun/adjective
+// ("sales tax", "sales commission"), not a transaction verb, and would otherwise
+// hijack ordinary expense notes like "paid 800 sales tax" before expense-capture
+// ever runs (sale-capture is checked first).
+const SALE_TRIGGER = /\b(sold|sale|becha)\b/i;
 
+// Anchors on the LAST "to <name>" in the message (the customer is named once, at
+// the end, in every real phrasing) and refuses to let the captured name itself
+// contain another "to" - so "sold 5000, need to send invoice to Sharma" resolves
+// to "Sharma", not "send invoice to Sharma". The amount is then read from the text
+// BEFORE that clause, taking the number closest to it - so "sold 5 packs for 5000
+// to Sharma" reads 5000 (the price), not 5 (the quantity).
 function parseSale(text) {
   const t = String(text || "");
-  const lc = t.toLowerCase();
+  const toMatches = [...t.matchAll(/\bto\s+((?:(?!\bto\b)[A-Za-z][A-Za-z.&'-]*)(?:\s+(?!\bto\b)[A-Za-z.&'-]+){0,5})/gi)];
+  const lastTo = toMatches[toMatches.length - 1];
+  const customer = lastTo ? lastTo[1].trim().replace(/\s+/g, " ") : null;
+  const amountText = (lastTo ? t.slice(0, lastTo.index) : t).toLowerCase();
+
   let amount = null;
-  const lakh = lc.match(/(\d+(?:\.\d+)?)\s*(lakhs?|lac|lakh)\b/);
-  const k = lc.match(/(\d+(?:\.\d+)?)\s*(k|hazaar|hazar|thousand)\b/);
-  const plain = lc.match(/(?:rs\.?|₹|inr)?\s*(\d{1,3}(?:,\d{2,3})+|\d+)(?:\.\d+)?/);
+  const lakh = amountText.match(/(\d+(?:\.\d+)?)\s*(lakhs?|lac|lakh)\b/);
+  const k = amountText.match(/(\d+(?:\.\d+)?)\s*(k|hazaar|hazar|thousand)\b/);
+  const plainAll = [...amountText.matchAll(/(?:rs\.?|₹|inr)?\s*(\d{1,3}(?:,\d{2,3})+|\d+)(?:\.\d+)?/g)];
+  const plain = plainAll[plainAll.length - 1];
   if (lakh) amount = parseFloat(lakh[1]) * 100000;
   else if (k) amount = parseFloat(k[1]) * 1000;
   else if (plain) amount = parseFloat(plain[1].replace(/,/g, ""));
-  const custM = t.match(/\bto\s+([A-Za-z][A-Za-z .&'-]{1,60})/i);
-  const customer = custM ? custM[1].trim().replace(/\s+/g, " ") : null;
   return { amount, customer };
 }
 
@@ -138,8 +171,13 @@ async function captureSaleDraft(text, tenantId, userId, phone) {
   const { amount, customer } = parseSale(text);
   if (!amount) return null;
   if (!customer) {
+    // Ambiguous with an ordinary expense note ("spent 500 on sale commission") -
+    // let expense-capture have a shot instead of dead-ending on a sale nudge.
+    if (EXPENSE_TRIGGER.test(text)) return null;
     return `🧾 I caught a sale of *${fmt(amount)}* but no customer name. Include one, e.g. "sold ${amount} to Sharma Traders".`;
   }
+  const conflict = await conflictingPending(phone, tenantId, "sale");
+  if (conflict) return conflict;
   await pool.query(
     `INSERT INTO whatsapp_pending_actions(phone,tenant_id,user_id,kind,payload,expires_at)
      VALUES($1,$2,$3,'sale',$4,$5)
@@ -151,17 +189,23 @@ async function captureSaleDraft(text, tenantId, userId, phone) {
 }
 
 // Returns a reply string if `cmd` resolves an outstanding pending action, else null.
+// "ok"/"y"/"okay" were deliberately dropped from the confirm set - they're common
+// enough as idle chat filler that a stray one could otherwise silently confirm a
+// draft the user has forgotten about within the TTL window.
 async function resolvePendingAction(cmd, tenantId, phone) {
-  const { rows } = await pool.query(
-    "SELECT * FROM whatsapp_pending_actions WHERE phone=$1 AND tenant_id=$2", [phone, tenantId]
-  );
-  const pending = rows[0];
-  if (!pending) return null;
-  const isYes = /^(yes|y|confirm|book|ok|okay)$/.test(cmd);
+  const isYes = /^(yes|confirm|book)$/.test(cmd);
   const isNo  = /^(no|n|cancel)$/.test(cmd);
   if (!isYes && !isNo) return null;
 
-  await pool.query("DELETE FROM whatsapp_pending_actions WHERE phone=$1", [phone]);
+  // Atomic claim: DELETE...RETURNING is one statement, so of two concurrent "YES"
+  // requests for the same phone (a Twilio webhook retry, or a double-tap send)
+  // only the one that actually deletes-and-returns the row proceeds to book; the
+  // other finds the row already gone and bails - instead of both booking.
+  const { rows } = await pool.query(
+    "DELETE FROM whatsapp_pending_actions WHERE phone=$1 AND tenant_id=$2 RETURNING *", [phone, tenantId]
+  );
+  const pending = rows[0];
+  if (!pending) return null;
   if (isNo) return "Cancelled - nothing was booked.";
   if (new Date(pending.expires_at) < new Date()) return "That draft expired - send it again.";
 
