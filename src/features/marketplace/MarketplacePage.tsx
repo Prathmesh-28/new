@@ -16,19 +16,15 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import { useUrlTab } from "@/hooks/useUrlTab";
 
 // Reused TaxPage input class string.
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]";
 const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg";
 
-type MktTab =
-  | "overview" | "settlement" | "commission" | "rto" | "consolidate"
-  | "payout-cycle" | "tcs52" | "sku-pnl" | "channel-compare" | "ondc-ready" | "roas"
-  | "target-price" | "inventory-sync" | "fba-fees" | "ppc-budget" | "repricer"
-  | "reviews" | "gstr8-recon" | "refund-cost" | "listing-quality" | "cod-mix"
-  | "buy-box" | "reserve" | "chargeback" | "bundle" | "break-even" | "festival" | "holding-cost"
-  | "promo-roi" | "conversion" | "return-rate" | "fee-recon"
-  | "place-of-supply" | "cod-remit" | "gateway-fee" | "neg-balance" | "channel-roi";
+// C14 continuation (2026-07 gap audit) — keep in sync with the TabStrip `tabs=` array below.
+const MKT_TAB_IDS = ["overview", "settlement", "commission", "rto", "consolidate", "payout-cycle", "tcs52", "sku-pnl", "channel-compare", "ondc-ready", "roas", "target-price", "inventory-sync", "fba-fees", "ppc-budget", "repricer", "reviews", "gstr8-recon", "refund-cost", "listing-quality", "cod-mix", "buy-box", "reserve", "chargeback", "bundle", "break-even", "festival", "holding-cost", "promo-roi", "conversion", "return-rate", "fee-recon", "place-of-supply", "cod-remit", "gateway-fee", "neg-balance", "channel-roi"] as const;
+type MktTab = (typeof MKT_TAB_IDS)[number];
 
 const CHANNELS = ["Amazon", "Flipkart", "Meesho", "ONDC", "D2C / Shopify"] as const;
 type Channel = typeof CHANNELS[number];
@@ -285,7 +281,7 @@ function ImportedTotalsBanner({ note }: { note: string }) {
 
 export default function MarketplacePage() {
   const tr = useT();
-  const [tab, setTab] = useState<MktTab>("overview");
+  const [tab, setTab] = useUrlTab<MktTab>("overview", { validValues: MKT_TAB_IDS });
 
   return (
     <div className="space-y-5">
@@ -298,7 +294,7 @@ export default function MarketplacePage() {
             {tr("mkt.subtitle")}
           </p>
         </div>
-        <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as MktTab)} tabs={([
+        <TabStrip storageKey="marketplace-tabs" primaryCount={6} active={tab} onChange={(id) => setTab(id as MktTab)} tabs={([
             ["overview", tr("mkt.tab.overview"), ShoppingCart],
             ["settlement", tr("mkt.tab.settlement"), FileSpreadsheet],
             ["commission", tr("mkt.tab.commission"), Calculator],

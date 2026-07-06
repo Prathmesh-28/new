@@ -4,6 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { LoadingState, ErrorState } from "@/components/EmptyState";
 import EmptyState from "@/components/EmptyState";
 import TabStrip from "@/components/TabStrip";
+import { useUrlTab } from "@/hooks/useUrlTab";
 import { Landmark, Gauge, Boxes, FileSpreadsheet, ShieldCheck, Globe2, Banknote, Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,7 +27,7 @@ const TABS = [
 ];
 
 export default function BankCreditPage() {
-  const [tab, setTab] = useState("drawing-power");
+  const [tab, setTab] = useUrlTab<string>("drawing-power", { validValues: TABS.map((t) => t.id) });
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
@@ -36,7 +37,7 @@ export default function BankCreditPage() {
           <p className="text-sm text-[var(--color-muted)]">Drawing power, stock statements, CMA, BG/LC, foreign remittance & 194N — straight from your books.</p>
         </div>
       </div>
-      <TabStrip tabs={TABS} active={tab} onChange={setTab} />
+      <TabStrip tabs={TABS} active={tab} onChange={setTab} storageKey="bankcredit-tabs" />
       {tab === "drawing-power" && <DrawingPower />}
       {tab === "stock-statement" && <StockStatement />}
       {tab === "cma" && <Cma />}

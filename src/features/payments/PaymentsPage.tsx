@@ -21,20 +21,15 @@ import {
 import { toast } from "sonner";
 import { format, addMonths, differenceInCalendarDays } from "date-fns";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import { useUrlTab } from "@/hooks/useUrlTab";
 
 // shared styles (reused from TaxPage/DebtPage convention)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg";
 
-type Tab =
-  | "overview" | "qr" | "links" | "mandates" | "mdr" | "settlement"
-  | "refunds" | "split" | "success" | "collect" | "mix"
-  | "autopay" | "bulk" | "reminders" | "qrbatch" | "disputes"
-  | "emi" | "convfee" | "forecast" | "tip" | "utr"
-  | "nach" | "gwcompare" | "dunning" | "vaccount" | "verify" | "instant" | "dupe"
-  | "feetier" | "allocate" | "reserve" | "downtime"
-  | "retry" | "decode" | "tds" | "preauth" | "cod"
-  | "itc" | "pennydrop" | "approval" | "recovery" | "tippool";
+// C14 continuation (2026-07 gap audit) — keep in sync with the TabStrip `tabs=` array below.
+const PAYMENTS_TAB_IDS = ["overview", "qr", "links", "mandates", "mdr", "settlement", "refunds", "split", "success", "collect", "mix", "autopay", "bulk", "reminders", "qrbatch", "disputes", "emi", "convfee", "forecast", "tip", "utr", "nach", "gwcompare", "dunning", "vaccount", "verify", "instant", "dupe", "feetier", "allocate", "reserve", "downtime", "retry", "decode", "tds", "preauth", "cod", "itc", "pennydrop", "approval", "recovery", "tippool"] as const;
+type Tab = (typeof PAYMENTS_TAB_IDS)[number];
 
 async function copy(text: string, label = "Copied") {
   try {
@@ -46,7 +41,7 @@ async function copy(text: string, label = "Copied") {
 }
 
 export default function PaymentsPage() {
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useUrlTab<Tab>("overview", { validValues: PAYMENTS_TAB_IDS });
   const tr = useT();
 
   return (
@@ -60,7 +55,7 @@ export default function PaymentsPage() {
             {tr("pay.subtitle")}
           </p>
         </div>
-        <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
+        <TabStrip storageKey="payments-tabs" primaryCount={6} active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
             ["overview", tr("pay.tab.overview"), IndianRupee],
             ["qr", tr("pay.tab.qr"), QrCode],
             ["links", tr("pay.tab.links"), Link2],

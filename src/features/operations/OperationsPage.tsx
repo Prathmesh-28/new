@@ -23,12 +23,11 @@ import { detectAnomalies, type Anomaly } from "@/lib/anomalies";
 import EmptyState from "@/components/EmptyState";
 import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
+import { useUrlTab } from "@/hooks/useUrlTab";
 
-type Tab = "overview" | "orders" | "inventory" | "procurement" | "intelligence" | "prices" | "bom" | "leadtime" | "reorder" | "payables"
-  | "stockledger" | "batchtrack" | "jobwork" | "production" | "warehouse" | "stocktake" | "dispatch"
-  | "abc" | "eoq" | "turnover" | "skumargin" | "landed" | "grn" | "scrap" | "returns"
-  | "valuation" | "safetystock" | "carrying" | "aging" | "stockout"
-  | "cyclecount" | "minmax" | "whutil" | "oversell";
+// C14 continuation (2026-07 gap audit) — keep in sync with the TabStrip `tabs=` array below.
+const OPS_TAB_IDS = ["overview", "orders", "inventory", "procurement", "intelligence", "prices", "bom", "leadtime", "reorder", "payables", "stockledger", "batchtrack", "jobwork", "production", "warehouse", "stocktake", "dispatch", "abc", "eoq", "turnover", "skumargin", "landed", "grn", "scrap", "returns", "valuation", "safetystock", "carrying", "aging", "stockout", "cyclecount", "minmax", "whutil", "oversell"] as const;
+type Tab = (typeof OPS_TAB_IDS)[number];
 
 const SOURCE_ICON: Record<OrderSource, React.ReactNode> = {
   whatsapp: <MessageCircle size={13} className="text-green-400" />,
@@ -92,7 +91,7 @@ export default function OperationsPage() {
   const tr = useT();
   const { store, addOrder, updateOrder, deleteOrder, addInventoryItem, deleteInventoryItem, addProcurement, updateProcurement } = useApp();
   const { orders, inventory, procurement, transactions } = store;
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useUrlTab<Tab>("overview", { validValues: OPS_TAB_IDS });
 
   // Real anomaly radar over the tenant's transactions (see src/lib/anomalies.ts).
   const anomalies = useMemo(() => detectAnomalies(transactions), [transactions]);
@@ -186,7 +185,7 @@ export default function OperationsPage() {
       </div>
 
       {/* Tabs */}
-      <TabStrip active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
+      <TabStrip storageKey="operations-tabs" active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
           ["overview",      tr("ops.tab.overview"),     null],
           ["orders",        tr("ops.tab.orders"),       pendingOrders > 0 ? pendingOrders : null],
           ["inventory",     tr("ops.tab.inventory"),    lowStockItems.length > 0 ? lowStockItems.length : null],

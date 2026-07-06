@@ -17,16 +17,11 @@ import {
 import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import { useUrlTab } from "@/hooks/useUrlTab";
 
-type Tab =
-  | "overview" | "vault" | "register" | "gaps" | "suminsured" | "grouphealth"
-  | "assetcover" | "tradecredit" | "claims" | "premvscover" | "keyman" | "riskscore"
-  | "duecal" | "csrcompare" | "ncbtracker" | "deductibleopt" | "bicover"
-  | "marinecover" | "piestimator" | "cyberscore" | "fleettracker" | "wcestimator"
-  | "premiumemi" | "itcchecker"
-  | "tophealth" | "opdwellness" | "lifestage" | "riders" | "tco" | "surrender" | "groupvsindiv"
-  | "renewplanner" | "inflationidx" | "spendbudget" | "claimprep"
-  | "underinsurance" | "overlap" | "pkgrec" | "empgap" | "liability";
+// C14 continuation (2026-07 gap audit) — keep in sync with the TabStrip `tabs=` array below.
+const INSURANCE_TAB_IDS = ["overview", "vault", "register", "gaps", "suminsured", "grouphealth", "assetcover", "tradecredit", "claims", "premvscover", "keyman", "riskscore", "duecal", "csrcompare", "ncbtracker", "deductibleopt", "bicover", "marinecover", "piestimator", "cyberscore", "fleettracker", "wcestimator", "premiumemi", "itcchecker", "tophealth", "opdwellness", "lifestage", "riders", "tco", "surrender", "groupvsindiv", "renewplanner", "inflationidx", "spendbudget", "claimprep", "underinsurance", "overlap", "pkgrec", "empgap", "liability"] as const;
+type Tab = (typeof INSURANCE_TAB_IDS)[number];
 
 // shared styles (reused from Tax/Debt pattern)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -34,7 +29,7 @@ const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] roun
 
 export default function InsurancePage() {
   const tr = useT();
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useUrlTab<Tab>("overview", { validValues: INSURANCE_TAB_IDS });
 
   return (
     <div className="space-y-5">
@@ -47,7 +42,7 @@ export default function InsurancePage() {
             {tr("ins.subtitle")}
           </p>
         </div>
-        <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
+        <TabStrip storageKey="insurance-tabs" primaryCount={6} active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
             ["overview", tr("ins.tab.overview"), ShieldCheck],
             ["vault", "Policy Vault (live)", ShieldAlert],
             ["register", tr("ins.tab.register"), Wallet],

@@ -18,6 +18,7 @@ import AiInsight from "@/components/ai/AiInsight";
 import TabStrip from "@/components/TabStrip";
 import { useT } from "@/i18n";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import { useUrlTab } from "@/hooks/useUrlTab";
 
 // shared styles (reused from TaxPage/DebtPage input convention)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -100,14 +101,9 @@ function useHoldings() {
   return { holdings, loading, add, remove, reload: load };
 }
 
-type Tab =
-  | "overview" | "sweep" | "ladder" | "compare" | "allocate" | "yield"
-  | "tbill" | "goal" | "split" | "posttax" | "maturity"
-  | "sip" | "debteq" | "emergency" | "sweepfd" | "corpfd" | "smallsave"
-  | "swod" | "income" | "capgain" | "rebalance" | "xirr" | "waterfall"
-  | "gold" | "reit" | "mtm" | "dicgc" | "policy" | "accrued" | "almatch"
-  | "incfcast" | "liqtier" | "ylq" | "oppcost"
-  | "fdbreak" | "loanvssurplus" | "ppfnps" | "realyield" | "fdrenew";
+// C14 continuation (2026-07 gap audit) — keep in sync with the TabStrip `tabs=` array below.
+const TREASURY_TAB_IDS = ["overview", "sweep", "ladder", "compare", "allocate", "yield", "tbill", "goal", "split", "posttax", "maturity", "sip", "debteq", "emergency", "sweepfd", "corpfd", "smallsave", "swod", "income", "capgain", "rebalance", "xirr", "waterfall", "gold", "reit", "mtm", "dicgc", "policy", "accrued", "almatch", "incfcast", "liqtier", "ylq", "oppcost", "fdbreak", "loanvssurplus", "ppfnps", "realyield", "fdrenew"] as const;
+type Tab = (typeof TREASURY_TAB_IDS)[number];
 
 export default function TreasuryPage() {
   const tr = useT();
@@ -116,7 +112,7 @@ export default function TreasuryPage() {
     () => store.bankAccounts.reduce((s, b) => s + (b.balance || 0), 0),
     [store.bankAccounts],
   );
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useUrlTab<Tab>("overview", { validValues: TREASURY_TAB_IDS });
 
   return (
     <div className="space-y-5">
@@ -129,7 +125,7 @@ export default function TreasuryPage() {
             {tr("treas.subtitle")}
           </p>
         </div>
-        <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
+        <TabStrip storageKey="treasury-tabs" primaryCount={6} active={tab} onChange={(id) => setTab(id as Tab)} tabs={([
             ["overview", tr("treas.tab.overview"), Wallet],
             ["sweep", tr("treas.tab.sweep"), Droplets],
             ["ladder", tr("treas.tab.ladder"), Layers],

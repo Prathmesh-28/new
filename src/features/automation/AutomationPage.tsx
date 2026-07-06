@@ -6,6 +6,7 @@ import { formatCurrency } from "@/lib/utils";
 import { api } from "@/lib/api";
 import TabStrip from "@/components/TabStrip";
 import { useT } from "@/i18n";
+import { useUrlTab } from "@/hooks/useUrlTab";
 import {
   Workflow, Zap, GitBranch, CheckSquare, BookOpen, Layers, BellRing,
   CalendarClock, ScrollText, Webhook, LayoutTemplate, Plus, Play,
@@ -82,7 +83,7 @@ const PRIMARY_TAB_LABELS: Partial<Record<TabId, string>> = {
 
 export default function AutomationPage() {
   const tr = useT();
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useUrlTab<TabId>("overview", { validValues: TABS.map(([id]) => id) });
 
   return (
     <div className="space-y-5">
@@ -96,6 +97,7 @@ export default function AutomationPage() {
           </p>
         </div>
         <TabStrip
+          storageKey="automation-tabs"
           tabs={TABS.map(([id, label, icon]) => ({ id, label: PRIMARY_TAB_LABELS[id as TabId] ? tr(PRIMARY_TAB_LABELS[id as TabId]!) : label, icon }))}
           active={tab}
           onChange={(id) => setTab(id as TabId)}

@@ -18,24 +18,19 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
+import { useUrlTab } from "@/hooks/useUrlTab";
 
 // ── shared style tokens (matched to TaxPage / DebtPage tools) ───────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 const CARD = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg";
 
-type TabId =
-  | "overview" | "pipeline" | "deals" | "quote" | "commission" | "customer360"
-  | "forecast" | "leads" | "winloss" | "target" | "leaderboard"
-  | "discount-approval" | "territory" | "activity-log" | "quote-expiry"
-  | "cross-sell" | "churn-risk" | "nps" | "playbook" | "renewals" | "referrals"
-  | "source-roi" | "rep-scorecard" | "rfm" | "incentive-sim" | "account-plan"
-  | "rate-card" | "velocity"
-  | "conversion-funnel" | "revenue-per-customer" | "quote-acceptance" | "seasonality"
-  | "negotiation" | "lead-response" | "loyalty" | "reorder-reminder" | "revenue-region";
+// C14 continuation (2026-07 gap audit) — keep in sync with the TabStrip `tabs=` array below.
+const SALES_TAB_IDS = ["overview", "pipeline", "deals", "quote", "commission", "customer360", "forecast", "leads", "winloss", "target", "leaderboard", "discount-approval", "territory", "activity-log", "quote-expiry", "cross-sell", "churn-risk", "nps", "playbook", "renewals", "referrals", "source-roi", "rep-scorecard", "rfm", "incentive-sim", "account-plan", "rate-card", "velocity", "conversion-funnel", "revenue-per-customer", "quote-acceptance", "seasonality", "negotiation", "lead-response", "loyalty", "reorder-reminder", "revenue-region"] as const;
+type TabId = (typeof SALES_TAB_IDS)[number];
 
 export default function SalesPage() {
   const tr = useT();
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useUrlTab<TabId>("overview", { validValues: SALES_TAB_IDS });
 
   return (
     <div className="space-y-5">
@@ -48,7 +43,7 @@ export default function SalesPage() {
             {tr("sales.subtitle")}
           </p>
         </div>
-        <TabStrip primaryCount={6} active={tab} onChange={(id) => setTab(id as TabId)} tabs={([
+        <TabStrip storageKey="sales-tabs" primaryCount={6} active={tab} onChange={(id) => setTab(id as TabId)} tabs={([
             ["overview", tr("sales.tab.overview"), Briefcase],
             ["pipeline", tr("sales.tab.pipeline"), KanbanSquare],
             ["deals", tr("sales.tab.deals"), ClipboardList],
