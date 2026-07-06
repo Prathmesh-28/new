@@ -460,6 +460,22 @@ async function dispatchRun(tenantId, runId, { channel } = {}) {
   const run = rows[0];
   if (!run) throw new PostError("NOT_FOUND", "dunning letter not found", 404);
 
+  // Spam-guard: bound how many dispatches one tenant can fire through the platform's
+  // SHARED Twilio/SMTP identity per day - a write-role user controls the party
+  // ledger's phone/email, so an unbounded dispatch endpoint would let one tenant
+  // burn the platform's sending reputation against arbitrary third parties.
+  const platformConfig = require("../../lib/platformConfig");
+  const cap = await platformConfig.num("limits", "dunningDispatchMaxPerTenantPerDay", 20);
+  if (cap > 0) {
+    const { rows: recent } = await pool.query(
+      "SELECT count(*)::int AS n FROM book_dunning_runs WHERE tenant_id=$1 AND dispatched_at > now() - interval '24 hours'",
+      [tenantId]
+    );
+    if ((recent[0]?.n ?? 0) >= cap) {
+      throw new PostError("RATE_LIMITED", `This account has dispatched ${cap} letters in the last 24 hours - please try again later.`, 429);
+    }
+  }
+
   let sentTo;
   if (ch === "whatsapp") {
     const phone = (run.party_phone || "").replace(/\s/g, "");

@@ -352,9 +352,12 @@ router.get("/:id/reminders", authenticate, async (req, res) => {
 
 // ── AR balance confirmations (auditor-style, one letter per customer) ─────────
 // The letter is composed SERVER-SIDE from that customer's real open invoice rows
-// (never client-supplied text), so this can't be used as an open relay. Contact
-// details are persisted onto the customer's invoice rows, then sent to the
-// stored value - and a send only counts when the channel actually accepted it.
+// (never client-supplied text), so this can't be used as an open relay for arbitrary
+// content. But the RECIPIENT is still caller-supplied (email/phone), and a write-role
+// user can create unlimited fresh "customers" - so the per-customer cap alone is
+// trivially bypassed by spinning a new customer name each time. A tenant-wide cap
+// (below) bounds how much of the platform's SHARED Twilio/SMTP identity one tenant
+// can spend, independent of how many distinct customer names it invents.
 
 // GET /api/invoices/confirmations/log - latest confirmation sent per customer
 router.get("/confirmations/log", authenticate, async (req, res) => {
@@ -380,17 +383,18 @@ router.post("/confirmations/send", authenticate, canWrite, async (req, res) => {
   const asOf = /^\d{4}-\d{2}-\d{2}$/.test(asOfRaw) ? asOfRaw : new Date().toISOString().slice(0, 10);
 
   try {
-    // Optionally persist fresh contact details onto this customer's invoice rows first.
+    // Validate any new contact BEFORE persisting anything - a rejected request must
+    // never have a side effect of silently redirecting the customer's real contact.
     const newEmail = String(req.body?.email || "").trim();
     const newPhone = String(req.body?.phone || "").trim();
-    if (newEmail) {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) return res.status(422).json({ error: "Invalid email" });
-      await q(tenantId, "UPDATE invoices SET customer_email=$1 WHERE tenant_id=$2 AND customer_name=$3", [newEmail, tenantId, customer]);
+    let normalizedPhone = null;
+    if (newEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      return res.status(422).json({ error: "Invalid email" });
     }
     if (newPhone) {
       const digits = newPhone.replace(/[^\d+]/g, "");
       if (!/^\+?[1-9]\d{7,14}$/.test(digits)) return res.status(422).json({ error: "Invalid phone - use country code, e.g. +919876543210" });
-      await q(tenantId, "UPDATE invoices SET customer_phone=$1 WHERE tenant_id=$2 AND customer_name=$3", [digits.startsWith("+") ? digits : `+${digits}`, tenantId, customer]);
+      normalizedPhone = digits.startsWith("+") ? digits : `+${digits}`;
     }
 
     const { rows: open } = await q(tenantId,
@@ -402,13 +406,23 @@ router.post("/confirmations/send", authenticate, canWrite, async (req, res) => {
     );
     if (!open.length) return res.status(404).json({ error: "No open invoices for this customer" });
 
-    // Spam-guard: max 2 confirmations per customer per 7 days.
+    // Spam-guard 1: max 2 confirmations per customer per 7 days.
     const { rows: recent } = await pool.query(
       "SELECT count(*)::int AS n FROM ar_confirmation_log WHERE tenant_id=$1 AND customer_name=$2 AND created_at > now() - interval '7 days'",
       [tenantId, customer]
     ).catch(() => ({ rows: [{ n: 0 }] }));
     if ((recent[0]?.n ?? 0) >= 2) {
       return res.status(429).json({ error: "Already sent 2 confirmations to this customer in the last 7 days." });
+    }
+    // Spam-guard 2: tenant-wide cap, independent of customer name (which the caller
+    // fully controls) - bounds spend against the platform's shared sending identity.
+    const tenantCap = await platformConfig.num("limits", "arConfirmationMaxPerTenantPerDay", 20);
+    const { rows: tenantRecent } = await pool.query(
+      "SELECT count(*)::int AS n FROM ar_confirmation_log WHERE tenant_id=$1 AND created_at > now() - interval '24 hours'",
+      [tenantId]
+    ).catch(() => ({ rows: [{ n: 0 }] }));
+    if (tenantCap > 0 && (tenantRecent[0]?.n ?? 0) >= tenantCap) {
+      return res.status(429).json({ error: `This account has sent ${tenantCap} confirmations in the last 24 hours - please try again later.` });
     }
 
     const total = open.reduce((s, r) => s + Number(r.total_amount || 0), 0);
@@ -420,7 +434,7 @@ router.post("/confirmations/send", authenticate, canWrite, async (req, res) => {
 
     let sentTo;
     if (channel === "whatsapp") {
-      const phone = open.find((r) => r.customer_phone)?.customer_phone || (newPhone || null);
+      const phone = open.find((r) => r.customer_phone)?.customer_phone || normalizedPhone;
       if (!phone) return res.status(422).json({ error: "No phone on file for this customer - enter one and retry." });
       const delivered = await sendWhatsApp(phone, `*${subject}*\n\n${body}`).catch(() => false);
       if (!delivered) return res.status(503).json({ error: "WhatsApp isn't configured on the server (missing Twilio keys) - nothing was sent." });
@@ -436,6 +450,11 @@ router.post("/confirmations/send", authenticate, canWrite, async (req, res) => {
       });
       sentTo = email;
     }
+
+    // Only NOW - after every check passed and the send actually went out - persist
+    // any new contact details onto the customer's invoice rows.
+    if (newEmail) await q(tenantId, "UPDATE invoices SET customer_email=$1 WHERE tenant_id=$2 AND customer_name=$3", [newEmail, tenantId, customer]);
+    if (normalizedPhone) await q(tenantId, "UPDATE invoices SET customer_phone=$1 WHERE tenant_id=$2 AND customer_name=$3", [normalizedPhone, tenantId, customer]);
 
     await pool.query(
       "INSERT INTO ar_confirmation_log(tenant_id, customer_name, channel, sent_to, as_of, total_amount) VALUES($1,$2,$3,$4,$5,$6)",
