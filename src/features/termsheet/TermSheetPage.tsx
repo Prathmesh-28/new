@@ -5,6 +5,7 @@ import { useFeatureState } from "@/hooks/useFeatureState";
 import { termSheetMath, type RoundType } from "@/lib/finance";
 import { formatAmount, formatCurrency } from "@/lib/utils";
 import { ScrollText, Printer, Info, GitCompare, TrendingDown, Users, BookOpen, Percent, Layers, Scale, CalendarClock, ListChecks, Sparkles, Network, Landmark, Milestone, Clock, LineChart, PiggyBank, Coins, SlidersHorizontal } from "lucide-react";
+import CurrencyInput from "@/components/CurrencyInput";
 
 type TermTab = "generator" | "comparator" | "liq-pref" | "esop-topup" | "clause-explainer" | "anti-dilution" | "pro-rata" | "safe-vs-priced" | "vesting" | "checklist" | "multi-class-waterfall" | "board-modeler" | "tranche-planner" | "note-maturity" | "dilution-rounds" | "exit-proceeds" | "esop-exit-value" | "discount-vs-cap";
 
@@ -118,10 +119,10 @@ export default function TermSheetPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="Company"><input value={company} onChange={e => setCompany(e.target.value)} className={inputCls} /></Field>
             <Field label="Investor / Lead"><input value={investor} onChange={e => setInvestor(e.target.value)} placeholder="e.g. Acme Ventures" className={inputCls} /></Field>
-            <Field label="Investment amount (₹)"><input type="number" value={investment} onChange={e => setInvestment(+e.target.value)} className={inputCls} /></Field>
+            <Field label="Investment amount (₹)"><CurrencyInput value={investment} onChange={(v) => setInvestment(v ?? 0)} /></Field>
 
             {roundType === "priced" && (
-              <Field label="Pre-money valuation (₹)"><input type="number" value={preMoney} onChange={e => setPreMoney(+e.target.value)} className={inputCls} /></Field>
+              <Field label="Pre-money valuation (₹)"><CurrencyInput value={preMoney} onChange={(v) => setPreMoney(v ?? 0)} /></Field>
             )}
             {(roundType === "safe" || roundType === "convertible") && (
               <>
