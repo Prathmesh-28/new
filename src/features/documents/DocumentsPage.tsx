@@ -553,7 +553,10 @@ type OcrExpense = {
   category: string;
   fileName: string;
   createdAt: string;
+  voucherNumber?: number; // present when booked as a REAL books expense (GL voucher)
 };
+type BookLedger = { id: string; name: string; group_id: string; is_bank: boolean };
+type OcrResult = { parsed: boolean; note?: string; amount?: number | null; date?: string | null; vendor?: string | null };
 
 // Lightweight parse-hint pass over a filename / typed text. No real OCR backend -
 // we surface best-guess fields the user then confirms before the record is saved.
@@ -581,46 +584,123 @@ function parseReceiptHints(text: string): { vendor?: string; amount?: number; gs
   return out;
 }
 
-const EXPENSE_CATS = ["Office", "Travel", "Utilities", "Marketing", "Supplies", "Professional fees", "Other"] as const;
-
 function ReceiptOcrCapture() {
   const [expenses, setExpenses] = useFeatureState<OcrExpense[]>("ocr-expenses", []);
   const [vendor, setVendor] = useState("");
   const [amount, setAmount] = useState("");
   const [gst, setGst] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [category, setCategory] = useState<string>(EXPENSE_CATS[0]);
   const [fileName, setFileName] = useState("");
-  const [scanned, setScanned] = useState(false);
+  const [fileId, setFileId] = useState<string | null>(null);
+  const [scanNote, setScanNote] = useState<string | null>(null);
+  const [ocrHit, setOcrHit] = useState(false);
+  const [booking, setBooking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const fc = formatCurrency;
 
-  const onPick = (f: File) => {
+  // Real books ledgers - booking posts an actual GL expense voucher, not a KV row.
+  const [ledgers, setLedgers] = useState<BookLedger[]>([]);
+  const [nature, setNature] = useState<Record<string, string>>({});
+  const [catLedger, setCatLedger] = useState("");
+  const [payLedger, setPayLedger] = useState("");
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [lg, gr] = await Promise.all([
+          api.get<BookLedger[]>("/api/books/ledgers").catch(() => [] as BookLedger[]),
+          api.get<{ id: string; nature: string }[]>("/api/books/groups").catch(() => [] as { id: string; nature: string }[]),
+        ]);
+        setLedgers(lg || []);
+        setNature(Object.fromEntries((gr || []).map(g => [g.id, g.nature])));
+      } catch { /* books not reachable - booking stays disabled with a hint */ }
+    })();
+  }, []);
+  const expenseLedgers = ledgers.filter(l => nature[l.group_id] === "EXPENSE");
+  const payLedgers = ledgers.filter(l => l.is_bank || nature[l.group_id] === "ASSET");
+  const booksReady = expenseLedgers.length > 0 && payLedgers.length > 0;
+
+  const onPick = async (f: File) => {
     setFileName(f.name);
+    setFileId(null);
+    setOcrHit(false);
+    setScanNote(null);
+    // 1. Store the receipt in the encrypted vault (ITC claims need the source image).
+    let uploaded: FileRow | null = null;
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      fd.append("name", f.name);
+      fd.append("category", "other");
+      fd.append("tags", JSON.stringify(["receipt"]));
+      const res = await fetch(`${API_BASE}/api/files`, { method: "POST", headers: { Authorization: `Bearer ${token()}` }, body: fd });
+      if (res.ok) { uploaded = await res.json(); setFileId(uploaded!.id); }
+      else setScanNote(res.status === 415 ? "This file type can't be stored in the vault - fields below are from the file name only." : "Couldn't store the receipt in the vault - fields below are from the file name only.");
+    } catch {
+      setScanNote("Couldn't reach the server - fields below are from the file name only.");
+    }
+    // 2. Real OCR on the stored bytes (honest env-gated: without a provider the
+    //    server says so and we fall back to file-name hints).
+    if (uploaded) {
+      try {
+        const r = await api.post<OcrResult>("/api/books/expenses/ocr", { fileId: uploaded.id });
+        if (r.parsed) {
+          if (r.vendor) setVendor(r.vendor);
+          if (r.amount != null) setAmount(String(r.amount));
+          if (r.date) setDate(r.date);
+          setOcrHit(true);
+          setScanNote(null);
+        } else {
+          setScanNote(r.note || "OCR unavailable - fields below are from the file name only.");
+        }
+      } catch {
+        setScanNote("OCR call failed - fields below are from the file name only.");
+      }
+    }
     const hints = parseReceiptHints(f.name);
-    if (hints.vendor && !vendor) setVendor(hints.vendor);
-    if (hints.amount && !amount) setAmount(String(hints.amount));
-    if (hints.gst && !gst) setGst(String(hints.gst));
-    if (hints.date) setDate(hints.date);
-    setScanned(true);
+    setVendor(v => v || hints.vendor || "");
+    setAmount(a => a || (hints.amount ? String(hints.amount) : ""));
+    setGst(g => g || (hints.gst ? String(hints.gst) : ""));
+    if (hints.date) setDate(d => (d === new Date().toISOString().split("T")[0] ? hints.date! : d));
     toast.success("Receipt captured - confirm the fields below");
   };
 
-  const save = () => {
+  const save = async () => {
     const amt = parseFloat(amount) || 0;
     if (!vendor || amt <= 0) { toast.error("Enter a vendor and amount"); return; }
-    setExpenses(prev => [{
-      id: crypto.randomUUID(),
-      vendor,
-      amount: amt,
-      gst: parseFloat(gst) || 0,
-      date,
-      category,
-      fileName: fileName || "manual entry",
-      createdAt: new Date().toISOString(),
-    }, ...prev]);
-    setVendor(""); setAmount(""); setGst(""); setFileName(""); setScanned(false);
-    toast.success("Expense record created");
+    if (!booksReady) { toast.error("Set up your books first (Books → seed the chart of accounts) to book expenses."); return; }
+    if (!catLedger || !payLedger) { toast.error("Pick an expense ledger and a paid-from account"); return; }
+    setBooking(true);
+    try {
+      const gstAmt = parseFloat(gst) || 0;
+      const note = `${vendor}${gstAmt > 0 ? ` (GST in bill ${fc(gstAmt)})` : ""} - receipt capture`;
+      const r = await api.post<{ voucher: { voucherId: string; voucherNumber: number } }>("/api/books/expenses", {
+        categoryLedgerId: catLedger, amount: amt, date, paidFromLedgerId: payLedger, note,
+      });
+      // Link the vault file to the voucher so the receipt is one click from the entry.
+      if (fileId && r?.voucher?.voucherId) {
+        await api.post("/api/books/attachments", {
+          entityType: "voucher", entityId: r.voucher.voucherId,
+          filename: fileName || "receipt", url: `/api/files/${fileId}`,
+        }).catch(() => {});
+      }
+      setExpenses(prev => [{
+        id: crypto.randomUUID(),
+        vendor,
+        amount: amt,
+        gst: gstAmt,
+        date,
+        category: expenseLedgers.find(l => l.id === catLedger)?.name || "Expense",
+        fileName: fileName || "manual entry",
+        createdAt: new Date().toISOString(),
+        voucherNumber: r?.voucher?.voucherNumber,
+      }, ...prev]);
+      setVendor(""); setAmount(""); setGst(""); setFileName(""); setFileId(null); setOcrHit(false); setScanNote(null);
+      toast.success(`Expense booked to the GL${r?.voucher?.voucherNumber ? ` (voucher #${r.voucher.voucherNumber})` : ""}`);
+    } catch (e) {
+      toast.error((e as { message?: string })?.message || "Couldn't book the expense");
+    } finally {
+      setBooking(false);
+    }
   };
 
   const total = expenses.reduce((s, e) => s + e.amount, 0);
@@ -643,18 +723,26 @@ function ReceiptOcrCapture() {
           <input ref={inputRef} type="file" accept="image/*,.pdf" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onPick(f); }} />
         </div>
 
-        {scanned && <p className="text-[11px] text-[var(--color-muted)] mb-3 flex items-center gap-1.5"><CheckCircle2 size={11} className="text-green-400" /> Parsed a few fields from the file name - please verify the amounts before saving.</p>}
+        {ocrHit && <p className="text-[11px] text-[var(--color-muted)] mb-3 flex items-center gap-1.5"><CheckCircle2 size={11} className="text-green-400" /> Fields extracted by OCR from the receipt image - verify the amounts before booking.</p>}
+        {!ocrHit && scanNote && <p className="text-[11px] text-amber-400/90 mb-3">{scanNote}</p>}
+        {!ocrHit && !scanNote && fileName && <p className="text-[11px] text-[var(--color-muted)] mb-3 flex items-center gap-1.5"><CheckCircle2 size={11} className="text-green-400" /> Parsed a few fields from the file name - please verify the amounts before saving.</p>}
+        {!booksReady && <p className="text-[11px] text-amber-400/90 mb-3">Your chart of accounts isn't set up yet - open Books once to seed it, then receipts here book straight into the GL.</p>}
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={INP} />
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Total amount (₹) *" className={INP} />
           <input type="number" value={gst} onChange={e => setGst(e.target.value)} placeholder="GST in bill (₹)" className={INP} />
-          <select value={category} onChange={e => setCategory(e.target.value)} className={INP}>
-            {EXPENSE_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+          <select value={catLedger} onChange={e => setCatLedger(e.target.value)} className={INP} disabled={!booksReady}>
+            <option value="">Expense ledger…</option>
+            {expenseLedgers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+          <select value={payLedger} onChange={e => setPayLedger(e.target.value)} className={INP} disabled={!booksReady}>
+            <option value="">Paid from…</option>
+            {payLedgers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
           <DatePicker value={date} onChange={setDate} />
-          <button onClick={save} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Book expense</button>
         </div>
+        <button onClick={() => void save()} disabled={booking || !booksReady} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"><Plus size={13} /> {booking ? "Booking…" : "Book expense to GL"}</button>
       </div>
 
       {expenses.length > 0 && <>
@@ -672,7 +760,7 @@ function ReceiptOcrCapture() {
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
           <table className="w-full text-sm min-w-[600px]">
-            <thead><tr className="border-b border-[var(--color-border)]">{["Vendor", "Category", "Amount", "GST", "Date", "Source", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <thead><tr className="border-b border-[var(--color-border)]">{["Vendor", "Category", "Amount", "GST", "Date", "Voucher", "Source", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {expenses.map(e => (
                 <tr key={e.id} className="hover:bg-white/2">
@@ -681,6 +769,7 @@ function ReceiptOcrCapture() {
                   <td className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{fc(e.amount)}</td>
                   <td className="px-3 py-2.5 text-xs tabular-nums">{e.gst > 0 ? fc(e.gst) : "-"}</td>
                   <td className="px-3 py-2.5 text-xs">{e.date}</td>
+                  <td className="px-3 py-2.5 text-xs">{e.voucherNumber ? <span className="text-green-400 font-mono">#{e.voucherNumber}</span> : <span className="text-[var(--color-muted)]">log only</span>}</td>
                   <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[140px] truncate flex items-center gap-1"><Receipt size={11} /> {e.fileName}</td>
                   <td className="px-3 py-2.5"><button onClick={() => setExpenses(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                 </tr>
@@ -689,7 +778,7 @@ function ReceiptOcrCapture() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Field detection is a best-effort hint only - always confirm the amount and GST against the original bill before booking. Keep the source image; ITC claims require a valid tax invoice.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Booking posts a real GL payment voucher and files the receipt image in the encrypted vault, linked to the voucher. Always confirm the amount and GST against the original bill; ITC claims require a valid tax invoice (record those as vendor bills).</p>
     </div>
   );
 }

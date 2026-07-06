@@ -1017,7 +1017,25 @@ router.get("/attachments", async (req, res) => { try { res.json(await ops.listAt
 router.post("/einvoice/:voucherId", canPost, async (req, res) => { try { res.status(202).json(await einvoice.enqueue(tenantOf(req), req.params.voucherId)); } catch (e) { fail(res, e); } });
 router.get("/einvoice/:voucherId", async (req, res) => { try { res.json(await einvoice.status(tenantOf(req), req.params.voucherId)); } catch (e) { fail(res, e); } });
 router.post("/einvoice/:voucherId/cancel", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await einvoice.cancelIrn(tenantOf(req), req.user.id, { voucherId: req.params.voucherId, reason: b.reason, remarks: b.remarks })); } catch (e) { fail(res, e); } });
-router.post("/expenses/ocr", canPost, async (req, res) => { try { res.json(await ocr.parseReceipt({ imageUrl: (req.body || {}).imageUrl })); } catch (e) { fail(res, e); } });
+// OCR a receipt: either a fetchable imageUrl, or a fileId from the encrypted vault
+// (the file stays stored for the ITC audit trail; its bytes are decrypted server-side
+// and passed inline since /api/files/:id is auth-gated).
+router.post("/expenses/ocr", canPost, async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (b.fileId) {
+      const { rows } = await pool.query(
+        "SELECT name, mime_type, data, encrypted FROM files WHERE id=$1 AND tenant_id=$2",
+        [b.fileId, tenantOf(req)]
+      );
+      if (!rows[0]) return res.status(404).json({ error: "File not found" });
+      const { decryptBuffer } = require("../../lib/fileCrypto");
+      const buf = rows[0].encrypted ? decryptBuffer(rows[0].data) : rows[0].data;
+      return res.json(await ocr.parseReceipt({ imageBase64: buf.toString("base64"), mimeType: rows[0].mime_type }));
+    }
+    res.json(await ocr.parseReceipt({ imageUrl: b.imageUrl }));
+  } catch (e) { fail(res, e); }
+});
 // Mint a public portal link (the owner shares the returned URL with a customer/vendor).
 router.post("/portal/invoice-link", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.voucherId) return res.status(400).json({ error: "voucherId required" }); const token = portal.signToken({ kind: "invoice", tenant: tenantOf(req), voucherId: b.voucherId }); res.status(201).json({ token, path: `/api/portal/invoice/${token}` }); } catch (e) { fail(res, e); } });
 router.post("/portal/vendor-link", canPost, async (req, res) => { try { const b = req.body || {}; if (!b.vendorLedgerId) return res.status(400).json({ error: "vendorLedgerId required" }); const token = portal.signToken({ kind: "vendor", tenant: tenantOf(req), vendorLedgerId: b.vendorLedgerId }); res.status(201).json({ token, path: `/api/portal/vendor-bill/${token}` }); } catch (e) { fail(res, e); } });
