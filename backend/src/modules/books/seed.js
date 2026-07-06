@@ -40,6 +40,13 @@ const DEFAULT_LEDGERS = [
   ["Late Fee Income", "Indirect Incomes"],
   // HRMS payroll GL ledgers
   ["Salaries", "Indirect Expenses"], ["Salaries Payable", "Provisions"], ["PF Payable", "Duties & Taxes"], ["Staff Deductions", "Provisions"],
+  // Everyday operating-expense categories - these are the exact category names the
+  // natural-language expense parser (voiceExpense.js CATEGORY_RULES) produces, so a fresh
+  // tenant has a real ledger for each one to auto-match against (web quick-capture + WhatsApp).
+  ["Fuel", "Indirect Expenses"], ["Rent", "Indirect Expenses"], ["Meals & Entertainment", "Indirect Expenses"],
+  ["Utilities", "Indirect Expenses"], ["Travel & Transport", "Indirect Expenses"], ["Repairs & Maintenance", "Indirect Expenses"],
+  ["Office Expenses", "Indirect Expenses"], ["Commission", "Indirect Expenses"], ["Taxes", "Indirect Expenses"],
+  ["General Expense", "Indirect Expenses"],
 ];
 
 async function seedBooks(tenantId) {

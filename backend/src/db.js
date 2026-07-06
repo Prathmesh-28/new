@@ -276,6 +276,18 @@ async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
+    -- ── WhatsApp pending actions (e.g. an expense draft awaiting YES/NO) ──────
+    -- One outstanding draft per phone; a fresh capture overwrites any stale one.
+    CREATE TABLE IF NOT EXISTS whatsapp_pending_actions (
+      phone      TEXT PRIMARY KEY,
+      tenant_id  TEXT NOT NULL,
+      user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+      kind       TEXT NOT NULL,
+      payload    JSONB NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
     -- ── Advisor links ─────────────────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS advisor_client_links (
       id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),

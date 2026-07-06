@@ -6,6 +6,8 @@ const { sendWhatsApp, validateSignature, normalizePhone } = require("../lib/what
 const { sendPush } = require("../lib/push");
 // Plain-language replies run on the tenant's own engine (OpenRouter / self-host) - no direct Anthropic.
 const llm = require("../modules/books/llm");
+const ops = require("../modules/books/ops");
+const { parseExpenseText } = require("../modules/books/voiceExpense");
 
 const sha256 = (s) => crypto.createHash("sha256").update(String(s)).digest("hex");
 
@@ -57,6 +59,86 @@ function buildContext(data) {
       .reduce((acc, t) => { acc[t.counterparty] = (acc[t.counterparty] ?? 0) + t.amount; return acc; }, {})
   ).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k}: ${fmt(v)}`).join(", ");
   return `Business data: cash balance ${accounts || "none"} | burn ${fmt(burn)}/mo | runway ${runway} days | ${alerts} unread alerts | overdue receivables ${fmt(overdueAmt)} | top revenue sources: ${topRevenue || "none"}`;
+}
+
+// ── Voice/text expense capture ("paid 800 to electrician") ─────────────────────
+// The read-side commands below answer questions from the cached KV snapshot; booking a
+// real expense must hit the actual GL (book_ledgers / postVoucher), never the KV cache.
+const EXPENSE_TRIGGER = /\b(paid|spent|kharch|kharcha|kharcho)\b/i;
+const PENDING_TTL_MS  = 10 * 60 * 1000;
+
+async function loadExpenseLedgers(tenantId) {
+  const [{ rows: ledgers }, { rows: groups }] = await Promise.all([
+    pool.query("SELECT id,name,group_id,is_bank,is_active FROM book_ledgers WHERE tenant_id=$1", [tenantId]),
+    pool.query("SELECT id,nature FROM book_account_groups WHERE tenant_id=$1", [tenantId]),
+  ]);
+  const nature = Object.fromEntries(groups.map(g => [g.id, g.nature]));
+  const expenseLedgers = ledgers.filter(l => l.is_active !== false && nature[l.group_id] === "EXPENSE");
+  const cashLedger =
+    ledgers.find(l => !l.is_bank && nature[l.group_id] === "ASSET" && /cash/i.test(l.name)) ||
+    ledgers.find(l => l.is_bank && nature[l.group_id] === "ASSET") ||
+    ledgers.find(l => nature[l.group_id] === "ASSET") ||
+    null;
+  return { expenseLedgers, cashLedger };
+}
+
+// Returns a reply string if the message looks like a bookable expense note, else null
+// (falls through to the normal command/AI dispatch untouched).
+async function captureExpenseDraft(text, tenantId, userId, phone) {
+  if (!EXPENSE_TRIGGER.test(text)) return null;
+  const parsed = await parseExpenseText(tenantId, text).catch(() => null);
+  if (!parsed || !parsed.amount) return null;
+
+  const { expenseLedgers, cashLedger } = await loadExpenseLedgers(tenantId);
+  if (!expenseLedgers.length || !cashLedger) {
+    return "Your chart of accounts isn't set up yet - visit headroom-pi.vercel.app/books to get started, then I can book expenses from chat.";
+  }
+  const catLc = parsed.category.toLowerCase();
+  const match = expenseLedgers.find(l => l.name.toLowerCase().includes(catLc) || catLc.includes(l.name.toLowerCase()));
+  if (!match) {
+    return `🧾 I caught *${fmt(parsed.amount)}* for "${parsed.description}" but couldn't confidently match it to one of your expense ledgers. Log it at headroom-pi.vercel.app/books, or try again naming the category, e.g. "paid 800 fuel to electrician".`;
+  }
+
+  await pool.query(
+    `INSERT INTO whatsapp_pending_actions(phone,tenant_id,user_id,kind,payload,expires_at)
+     VALUES($1,$2,$3,'expense',$4,$5)
+     ON CONFLICT(phone) DO UPDATE SET tenant_id=$2, user_id=$3, kind='expense', payload=$4, expires_at=$5`,
+    [phone, tenantId, userId, JSON.stringify({
+      amount: parsed.amount, description: parsed.description,
+      categoryLedgerId: match.id, categoryLedgerName: match.name,
+      paidFromLedgerId: cashLedger.id, paidFromLedgerName: cashLedger.name,
+    }), new Date(Date.now() + PENDING_TTL_MS).toISOString()]
+  );
+  return `🧾 *Expense detected*\n\n${fmt(parsed.amount)} - ${parsed.description}\nCategory: *${match.name}*\nPaid from: *${cashLedger.name}*\n\nReply *YES* to book this, or *NO* to cancel.`;
+}
+
+// Returns a reply string if `cmd` resolves an outstanding pending action, else null.
+async function resolvePendingAction(cmd, tenantId, phone) {
+  const { rows } = await pool.query(
+    "SELECT * FROM whatsapp_pending_actions WHERE phone=$1 AND tenant_id=$2", [phone, tenantId]
+  );
+  const pending = rows[0];
+  if (!pending) return null;
+  const isYes = /^(yes|y|confirm|book|ok|okay)$/.test(cmd);
+  const isNo  = /^(no|n|cancel)$/.test(cmd);
+  if (!isYes && !isNo) return null;
+
+  await pool.query("DELETE FROM whatsapp_pending_actions WHERE phone=$1", [phone]);
+  if (isNo) return "Cancelled - nothing was booked.";
+  if (new Date(pending.expires_at) < new Date()) return "That draft expired - send the expense again.";
+
+  const p = pending.payload;
+  try {
+    await ops.createExpense(tenantId, pending.user_id, {
+      categoryLedgerId: p.categoryLedgerId, amount: p.amount,
+      date: new Date().toISOString().split("T")[0],
+      paidFromLedgerId: p.paidFromLedgerId, note: p.description,
+    });
+    return `✅ Booked ${fmt(p.amount)} to *${p.categoryLedgerName}* (paid from ${p.paidFromLedgerName}).`;
+  } catch (e) {
+    console.error("[wa expense confirm]", e.message);
+    return "Couldn't book that expense - please log it manually at headroom-pi.vercel.app/books.";
+  }
 }
 
 // Dispatch a command from WhatsApp text → response string
@@ -387,7 +469,7 @@ router.post("/", async (req, res) => {
 
   // Look up binding
   const { rows } = await pool.query(
-    "SELECT tenant_id FROM whatsapp_bindings WHERE phone=$1",
+    "SELECT tenant_id, user_id FROM whatsapp_bindings WHERE phone=$1",
     [phone]
   );
 
@@ -397,11 +479,14 @@ router.post("/", async (req, res) => {
     return res.type("text/xml").send(twiml);
   }
 
-  const { tenant_id } = rows[0];
+  const { tenant_id, user_id } = rows[0];
 
   try {
-    const data  = await getTenantData(tenant_id);
-    const reply = await dispatch(body, data, tenant_id);
+    const cmd = body.trim().toLowerCase().replace(/[^a-z0-9 ]/g, "");
+    const reply =
+      (await resolvePendingAction(cmd, tenant_id, phone)) ??
+      (await captureExpenseDraft(body, tenant_id, user_id, phone)) ??
+      (await dispatch(body, await getTenantData(tenant_id), tenant_id));
     const safe  = reply.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${safe}</Message></Response>`;
     res.type("text/xml").send(twiml);
