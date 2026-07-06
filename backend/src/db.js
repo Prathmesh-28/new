@@ -411,6 +411,19 @@ async function initDb() {
       status      TEXT NOT NULL DEFAULT 'sent'
     );
 
+    -- AR balance-confirmation dispatch log (auditor-style per-customer letters).
+    CREATE TABLE IF NOT EXISTS ar_confirmation_log (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id     TEXT NOT NULL,
+      customer_name TEXT NOT NULL,
+      channel       TEXT NOT NULL,
+      sent_to       TEXT NOT NULL,
+      as_of         DATE NOT NULL,
+      total_amount  NUMERIC(15,2) NOT NULL DEFAULT 0,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_ar_confirm_tenant ON ar_confirmation_log(tenant_id, customer_name, created_at);
+
     CREATE TABLE IF NOT EXISTS invoice_items (
       id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       invoice_id   UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,

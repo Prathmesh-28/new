@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
@@ -1108,11 +1108,28 @@ function ConcentrationRisk() {
 function ARConfirmationMailer() {
   const { store } = useApp();
   const invoices = store.invoices ?? [];
-  const firmName = store.firm?.name || "our company";
   const [asOf, setAsOf] = useState(new Date().toISOString().split("T")[0]);
-  // store per-customer contact details + sent log durably
+  // per-customer contact edits (persisted onto the invoice rows by the send call)
   const [contacts, setContacts] = useFeatureState<Record<string, { email?: string; phone?: string }>>("receivables-ar-contacts", {});
-  const [sentLog, setSentLog] = useFeatureState<Record<string, string>>("receivables-ar-confirm-sent", {});
+  // The REAL server-side dispatch log (letters composed + sent by the backend via
+  // Twilio/SMTP - never a client mailto/wa.me draft).
+  const [sentLog, setSentLog] = useState<Record<string, { channel: string; to: string; at: string }>>({});
+  const [sending, setSending] = useState<string | null>(null);
+  const [channels, setChannels] = useState<{ whatsapp: boolean; email: boolean }>({ whatsapp: false, email: false });
+
+  const loadLog = useCallback(async () => {
+    try {
+      const rows = await api.get<{ customer_name: string; channel: string; sent_to: string; created_at: string }[]>("/api/invoices/confirmations/log");
+      setSentLog(Object.fromEntries((rows ?? []).map(r => [r.customer_name, { channel: r.channel, to: r.sent_to, at: r.created_at }])));
+    } catch { /* non-fatal */ }
+  }, []);
+
+  useEffect(() => {
+    void loadLog();
+    api.get<{ whatsapp: boolean; email: boolean }>("/api/capabilities")
+      .then(c => setChannels({ whatsapp: !!c?.whatsapp, email: !!c?.email }))
+      .catch(() => {});
+  }, [loadLog]);
 
   const balances = useMemo(() => {
     const open = invoices.filter(i => i.status !== "paid");
@@ -1121,43 +1138,23 @@ function ARConfirmationMailer() {
     return Object.entries(map).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.total - a.total);
   }, [invoices]);
 
-  const buildMessage = (name: string, total: number, items: Invoice[]): string => {
-    const lines = items
-      .map(i => `  • ${i.invoiceNumber ?? i.id} dated ${format(parseISO(i.invoiceDate), "d MMM yyyy")} - ${formatCurrency(i.amount)}`)
-      .join("\n");
-    return `Dear ${name},
-
-For audit purposes, please confirm the balance receivable by ${firmName} from you as on ${format(parseISO(asOf), "d MMM yyyy")}.
-
-As per our books, the outstanding balance is ${formatCurrency(total)}, comprising:
-${lines}
-
-Kindly reply confirming whether this balance agrees with your records. If you note any discrepancy, please share details.
-
-Thank you,
-${firmName}`;
-  };
-
   const setContact = (name: string, field: "email" | "phone", value: string) =>
     setContacts(prev => ({ ...prev, [name]: { ...prev[name], [field]: value } }));
 
-  const sendEmail = (name: string, total: number, items: Invoice[]) => {
+  const send = async (name: string, channel: "whatsapp" | "email") => {
     const c = contacts[name] || {};
-    const subject = `Balance confirmation request as on ${format(parseISO(asOf), "d MMM yyyy")} - ${firmName}`;
-    const body = buildMessage(name, total, items);
-    const to = c.email ? encodeURIComponent(c.email) : "";
-    window.open(`mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, "_blank");
-    setSentLog(prev => ({ ...prev, [name]: new Date().toISOString() }));
-    toast.success(`Confirmation drafted for ${name}`);
-  };
-
-  const sendWhatsApp = (name: string, total: number, items: Invoice[]) => {
-    const c = contacts[name] || {};
-    const phone = (c.phone || "").replace(/[^0-9]/g, "");
-    const text = encodeURIComponent(buildMessage(name, total, items));
-    window.open(`https://wa.me/${phone}?text=${text}`, "_blank");
-    setSentLog(prev => ({ ...prev, [name]: new Date().toISOString() }));
-    toast.success(`WhatsApp confirmation opened for ${name}`);
+    setSending(name);
+    try {
+      const res = await api.post<{ ok: boolean; to: string; invoices: number }>("/api/invoices/confirmations/send", {
+        customer: name, channel, asOf, email: c.email || undefined, phone: c.phone || undefined,
+      });
+      toast.success(`Confirmation sent to ${res.to} (${res.invoices} invoice${res.invoices !== 1 ? "s" : ""})`);
+      await loadLog();
+    } catch (e) {
+      toast.error((e as { message?: string })?.message || "Couldn't send the confirmation");
+    } finally {
+      setSending(null);
+    }
   };
 
   if (balances.length === 0) {
@@ -1184,34 +1181,48 @@ ${firmName}`;
 
       <div className="space-y-3">
         {balances.map(b => {
-          const sentAt = sentLog[b.name];
+          const sent = sentLog[b.name];
           const c = contacts[b.name] || {};
+          const busy = sending === b.name;
           return (
             <div key={b.name} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold truncate">{b.name}</p>
-                  <p className="text-[10px] text-[var(--color-muted)]">{b.items.length} open invoice{b.items.length !== 1 ? "s" : ""}{sentAt && ` · last sent ${format(parseISO(sentAt), "d MMM yyyy")}`}</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">
+                    {b.items.length} open invoice{b.items.length !== 1 ? "s" : ""}
+                    {sent && ` · sent via ${sent.channel} to ${sent.to} on ${format(parseISO(sent.at), "d MMM yyyy")}`}
+                  </p>
                 </div>
                 <p className="text-base font-bold tabular-nums text-[var(--color-primary)] shrink-0">{formatCurrency(b.total)}</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
                 <input value={c.email ?? ""} onChange={e => setContact(b.name, "email", e.target.value)} placeholder="customer@email.com" className={INP} />
-                <input value={c.phone ?? ""} onChange={e => setContact(b.name, "phone", e.target.value)} placeholder="WhatsApp e.g. 919876543210" className={INP} />
+                <input value={c.phone ?? ""} onChange={e => setContact(b.name, "phone", e.target.value)} placeholder="WhatsApp e.g. +919876543210" className={INP} />
               </div>
               <div className="flex gap-2">
-                <button onClick={() => sendEmail(b.name, b.total, b.items)} className="flex-1 flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-semibold hover:opacity-90">
-                  <Send size={12} /> Email confirmation
+                <button
+                  onClick={() => void send(b.name, "email")}
+                  disabled={busy || !channels.email}
+                  title={!channels.email ? "Email (SMTP) isn't configured on the server" : undefined}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Send size={12} /> {sent ? "Resend email" : "Email confirmation"}
                 </button>
-                <button onClick={() => sendWhatsApp(b.name, b.total, b.items)} className="flex-1 flex items-center justify-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-text)] px-3 py-2 rounded-lg font-medium hover:bg-[var(--color-accent)]">
-                  <MailCheck size={12} /> WhatsApp
+                <button
+                  onClick={() => void send(b.name, "whatsapp")}
+                  disabled={busy || !channels.whatsapp}
+                  title={!channels.whatsapp ? "WhatsApp (Twilio) isn't configured on the server" : undefined}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-xs border border-[var(--color-border)] text-[var(--color-text)] px-3 py-2 rounded-lg font-medium hover:bg-[var(--color-accent)] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <MailCheck size={12} /> {sent ? "Resend WhatsApp" : "WhatsApp"}
                 </button>
               </div>
             </div>
           );
         })}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Drafts a positive-confirmation letter (auditor-style) per customer with the open-invoice breakdown as on the chosen date. Opens your mail / WhatsApp client; nothing is sent automatically.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Sends a positive-confirmation letter (auditor-style) per customer, composed on the server from that customer's real open invoices as on the chosen date, via the business WhatsApp/email channel. Max 2 sends per customer per week.</p>
     </div>
   );
 }

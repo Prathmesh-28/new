@@ -350,6 +350,104 @@ router.get("/:id/reminders", authenticate, async (req, res) => {
   }
 });
 
+// ── AR balance confirmations (auditor-style, one letter per customer) ─────────
+// The letter is composed SERVER-SIDE from that customer's real open invoice rows
+// (never client-supplied text), so this can't be used as an open relay. Contact
+// details are persisted onto the customer's invoice rows, then sent to the
+// stored value - and a send only counts when the channel actually accepted it.
+
+// GET /api/invoices/confirmations/log - latest confirmation sent per customer
+router.get("/confirmations/log", authenticate, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT ON (customer_name) customer_name, channel, sent_to, as_of, total_amount, created_at
+       FROM ar_confirmation_log WHERE tenant_id=$1
+      ORDER BY customer_name, created_at DESC`,
+    [req.user.tenant_id]
+  ).catch(() => ({ rows: [] }));
+  res.json(rows);
+});
+
+// POST /api/invoices/confirmations/send { customer, channel, asOf?, email?, phone? }
+router.post("/confirmations/send", authenticate, canWrite, async (req, res) => {
+  const tenantId = req.user.tenant_id;
+  const customer = String(req.body?.customer || "").trim();
+  const channel  = String(req.body?.channel || "").toLowerCase();
+  if (!customer) return res.status(400).json({ error: "customer required" });
+  if (channel !== "whatsapp" && channel !== "email") {
+    return res.status(422).json({ error: "channel must be 'whatsapp' or 'email'" });
+  }
+  const asOfRaw = String(req.body?.asOf || "").slice(0, 10);
+  const asOf = /^\d{4}-\d{2}-\d{2}$/.test(asOfRaw) ? asOfRaw : new Date().toISOString().slice(0, 10);
+
+  try {
+    // Optionally persist fresh contact details onto this customer's invoice rows first.
+    const newEmail = String(req.body?.email || "").trim();
+    const newPhone = String(req.body?.phone || "").trim();
+    if (newEmail) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) return res.status(422).json({ error: "Invalid email" });
+      await q(tenantId, "UPDATE invoices SET customer_email=$1 WHERE tenant_id=$2 AND customer_name=$3", [newEmail, tenantId, customer]);
+    }
+    if (newPhone) {
+      const digits = newPhone.replace(/[^\d+]/g, "");
+      if (!/^\+?[1-9]\d{7,14}$/.test(digits)) return res.status(422).json({ error: "Invalid phone - use country code, e.g. +919876543210" });
+      await q(tenantId, "UPDATE invoices SET customer_phone=$1 WHERE tenant_id=$2 AND customer_name=$3", [digits.startsWith("+") ? digits : `+${digits}`, tenantId, customer]);
+    }
+
+    const { rows: open } = await q(tenantId,
+      `SELECT invoice_number, total_amount, due_date, created_at, customer_email, customer_phone
+         FROM invoices
+        WHERE tenant_id=$1 AND customer_name=$2 AND status NOT IN ('paid','cancelled')
+        ORDER BY created_at ASC`,
+      [tenantId, customer]
+    );
+    if (!open.length) return res.status(404).json({ error: "No open invoices for this customer" });
+
+    // Spam-guard: max 2 confirmations per customer per 7 days.
+    const { rows: recent } = await pool.query(
+      "SELECT count(*)::int AS n FROM ar_confirmation_log WHERE tenant_id=$1 AND customer_name=$2 AND created_at > now() - interval '7 days'",
+      [tenantId, customer]
+    ).catch(() => ({ rows: [{ n: 0 }] }));
+    if ((recent[0]?.n ?? 0) >= 2) {
+      return res.status(429).json({ error: "Already sent 2 confirmations to this customer in the last 7 days." });
+    }
+
+    const total = open.reduce((s, r) => s + Number(r.total_amount || 0), 0);
+    const firm = (await firmNameOf(tenantId)) || "our company";
+    const fmtDate = (d) => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    const lines = open.map((r) => `  • ${r.invoice_number} dated ${fmtDate(r.created_at)} - ₹${Number(r.total_amount).toLocaleString("en-IN")}`).join("\n");
+    const body = `Dear ${customer},\n\nFor audit purposes, please confirm the balance receivable by ${firm} from you as on ${fmtDate(asOf)}.\n\nAs per our books, the outstanding balance is ₹${total.toLocaleString("en-IN")}, comprising:\n${lines}\n\nKindly reply confirming whether this balance agrees with your records. If you note any discrepancy, please share details.\n\nThank you,\n${firm}`;
+    const subject = `Balance confirmation request as on ${fmtDate(asOf)} - ${firm}`;
+
+    let sentTo;
+    if (channel === "whatsapp") {
+      const phone = open.find((r) => r.customer_phone)?.customer_phone || (newPhone || null);
+      if (!phone) return res.status(422).json({ error: "No phone on file for this customer - enter one and retry." });
+      const delivered = await sendWhatsApp(phone, `*${subject}*\n\n${body}`).catch(() => false);
+      if (!delivered) return res.status(503).json({ error: "WhatsApp isn't configured on the server (missing Twilio keys) - nothing was sent." });
+      sentTo = phone;
+    } else {
+      const email = open.find((r) => r.customer_email)?.customer_email || (newEmail || null);
+      if (!email) return res.status(422).json({ error: "No email on file for this customer - enter one and retry." });
+      if (!process.env.SMTP_USER) return res.status(503).json({ error: "Email isn't configured on the server (missing SMTP keys) - nothing was sent." });
+      const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      await sendMail({
+        to: email, subject,
+        html: `<tr><td style="padding:24px 32px"><p style="font-size:14px;color:#e8e8dc;font-family:system-ui,sans-serif;white-space:pre-wrap;margin:0">${esc(body)}</p></td></tr>`,
+      });
+      sentTo = email;
+    }
+
+    await pool.query(
+      "INSERT INTO ar_confirmation_log(tenant_id, customer_name, channel, sent_to, as_of, total_amount) VALUES($1,$2,$3,$4,$5,$6)",
+      [tenantId, customer, channel, sentTo, asOf, total]
+    ).catch(() => {});
+    res.json({ ok: true, channel, to: sentTo, total, invoices: open.length });
+  } catch (err) {
+    console.error("ar confirmation error", err);
+    res.status(500).json({ error: "Failed to send confirmation" });
+  }
+});
+
 // POST /api/invoices/:id/send - email invoice
 router.post("/:id/send", authenticate, canWrite, async (req, res) => {
   const { rows: [inv] } = await q(req.user.tenant_id,
