@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import AiDraft from "@/components/ai/AiDraft";
 import { useT } from "@/i18n";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import DatePicker from "@/components/DatePicker";
 
 type Aging = "current" | "1-30" | "31-60" | "61-90" | "90+";
 
@@ -1425,7 +1426,7 @@ function PromiseToPay() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Promised by</label>
-            <input type="date" value={promiseDate} onChange={e => setPromiseDate(e.target.value)} className={inp} />
+            <DatePicker value={promiseDate} onChange={setPromiseDate} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Note</label>
@@ -2112,7 +2113,7 @@ function PaymentPlanBuilder() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">First due</label>
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={inp} />
+            <DatePicker value={startDate} onChange={setStartDate} />
           </div>
         </div>
       </div>
@@ -3549,7 +3550,7 @@ function NachMandateTracker() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Next debit</label>
-            <input type="date" value={nextDebit} onChange={e => setNextDebit(e.target.value)} className={inp} />
+            <DatePicker value={nextDebit} onChange={setNextDebit} />
           </div>
           <div className="flex items-end">
             <button onClick={add} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 rounded-lg text-sm hover:opacity-90"><Plus size={13} /> Add mandate</button>
@@ -3745,7 +3746,7 @@ function PartialPaymentTracker() {
             </div>
             <div>
               <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} />
+              <DatePicker value={date} onChange={setDate} />
             </div>
             <div className="md:col-span-3">
               <label className="text-xs text-[var(--color-muted)] block mb-1">Note</label>

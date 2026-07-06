@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useT } from "@/i18n";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import DatePicker from "@/components/DatePicker";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -670,7 +671,7 @@ function SubscriptionSpendTracker() {
           <option value="quarterly">Quarterly</option>
           <option value="annual">Annual</option>
         </select>
-        <input type="date" value={renewal} onChange={e => setRenewal(e.target.value)} className={INP} />
+        <DatePicker value={renewal} onChange={setRenewal} />
       </div>
       <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 mb-3">+ Add subscription</button>
 

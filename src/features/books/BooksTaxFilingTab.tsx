@@ -6,6 +6,7 @@ import {
   FileText, Download, RefreshCw, Calculator, Plus, FileCheck2,
   ScrollText, ListChecks, Landmark, ExternalLink,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES - loose response shapes (mirror backend/src/modules/books/tax.js)
@@ -458,11 +459,11 @@ function LowerDeductionSub({ parties }: { parties: Ledger[] }) {
           </div>
           <div>
             <label className={labelCls}>Valid from</label>
-            <input type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} className={inputCls} />
+            <DatePicker value={validFrom} onChange={setValidFrom} />
           </div>
           <div>
             <label className={labelCls}>Valid to</label>
-            <input type="date" value={validTo} onChange={(e) => setValidTo(e.target.value)} className={inputCls} />
+            <DatePicker value={validTo} onChange={setValidTo} />
           </div>
         </div>
         <button type="button" onClick={submit} disabled={saving} className={`${btnPrimary} mt-4`}>

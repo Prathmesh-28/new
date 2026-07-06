@@ -24,6 +24,7 @@ import EmptyState from "@/components/EmptyState";
 import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
 import { useUrlTab } from "@/hooks/useUrlTab";
+import DatePicker from "@/components/DatePicker";
 
 // C14 continuation (2026-07 gap audit) — keep in sync with the TabStrip `tabs=` array below.
 const OPS_TAB_IDS = ["overview", "orders", "inventory", "procurement", "intelligence", "prices", "bom", "leadtime", "reorder", "payables", "stockledger", "batchtrack", "jobwork", "production", "warehouse", "stocktake", "dispatch", "abc", "eoq", "turnover", "skumargin", "landed", "grn", "scrap", "returns", "valuation", "safetystock", "carrying", "aging", "stockout", "cyclecount", "minmax", "whutil", "oversell"] as const;
@@ -712,7 +713,7 @@ export default function OperationsPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <input placeholder="Supplier name *" value={supplierName} onChange={e => setSupplierName(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" />
-                <input type="date" value={expectedDate} onChange={e => setExpectedDate(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" />
+                <DatePicker value={expectedDate} onChange={setExpectedDate} />
                 <input placeholder="Product name" value={poItemName} onChange={e => setPoItemName(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" />
                 <input type="number" min="1" placeholder="Qty" value={poItemQty} onChange={e => setPoItemQty(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" />
                 <input type="number" min="0" placeholder="Unit cost (₹)" value={poItemCost} onChange={e => setPoItemCost(e.target.value)} className="col-span-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" />
@@ -1676,8 +1677,8 @@ function AgedPayablesTab() {
               <input value={fVendor} onChange={e => setFVendor(e.target.value)} placeholder="Vendor *" className={inp} />
               <input value={fBillNo} onChange={e => setFBillNo(e.target.value)} placeholder="Bill no." className={inp} />
               <input type="number" value={fAmount} onChange={e => setFAmount(e.target.value)} placeholder="Amount (₹) *" className={inp} />
-              <div><label className="text-[10px] text-[var(--color-muted)] block">Bill date</label><input type="date" value={fBillDate} onChange={e => setFBillDate(e.target.value)} className={inp} /></div>
-              <div><label className="text-[10px] text-[var(--color-muted)] block">Due date *</label><input type="date" value={fDueDate} onChange={e => setFDueDate(e.target.value)} className={inp} /></div>
+              <div><label className="text-[10px] text-[var(--color-muted)] block">Bill date</label><DatePicker value={fBillDate} onChange={setFBillDate} /></div>
+              <div><label className="text-[10px] text-[var(--color-muted)] block">Due date *</label><DatePicker value={fDueDate} onChange={setFDueDate} /></div>
               <label className="flex items-center gap-2 text-xs cursor-pointer mt-4"><input type="checkbox" checked={fMsme} onChange={e => setFMsme(e.target.checked)} className="accent-[var(--color-primary)]" /> MSME vendor</label>
             </div>
             <div className="flex gap-2 mt-2">
@@ -1841,7 +1842,7 @@ function StockLedgerTab() {
       {showForm && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inp} /></div>
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><DatePicker value={fDate} onChange={setFDate} /></div>
             <input value={fProduct} onChange={e => setFProduct(e.target.value)} placeholder="Product *" className={inp} list="ledger-products" />
             <datalist id="ledger-products">{store.inventory.map(i => <option key={i.id} value={i.productName} />)}</datalist>
             <input value={fSku} onChange={e => setFSku(e.target.value)} placeholder="SKU (optional)" className={inp} />
@@ -1997,8 +1998,8 @@ function BatchExpiryTab() {
             <input value={fBatch} onChange={e => setFBatch(e.target.value)} placeholder="Batch / lot no. *" className={inp} />
             <input value={fSerial} onChange={e => setFSerial(e.target.value)} placeholder="Serial (optional)" className={inp} />
             <input type="number" value={fQty} onChange={e => setFQty(e.target.value)} placeholder="Qty" className={inp} />
-            <div><label className="text-[10px] text-[var(--color-muted)] block">Mfg date</label><input type="date" value={fMfg} onChange={e => setFMfg(e.target.value)} className={inp} /></div>
-            <div><label className="text-[10px] text-[var(--color-muted)] block">Expiry date</label><input type="date" value={fExp} onChange={e => setFExp(e.target.value)} className={inp} /></div>
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Mfg date</label><DatePicker value={fMfg} onChange={setFMfg} /></div>
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Expiry date</label><DatePicker value={fExp} onChange={setFExp} /></div>
             <input value={fLoc} onChange={e => setFLoc(e.target.value)} placeholder="Location" className={`${inp} md:col-span-2`} />
           </div>
           <div className="flex gap-2 mt-2">
@@ -2122,8 +2123,8 @@ function JobWorkTab() {
             <input value={fProduct} onChange={e => setFProduct(e.target.value)} placeholder="Goods / product *" className={inp} />
             <input type="number" value={fSent} onChange={e => setFSent(e.target.value)} placeholder="Qty sent *" className={inp} />
             <input value={fProcess} onChange={e => setFProcess(e.target.value)} placeholder="Process (e.g. galvanising)" className={inp} />
-            <div><label className="text-[10px] text-[var(--color-muted)] block">Sent date</label><input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inp} /></div>
-            <div><label className="text-[10px] text-[var(--color-muted)] block">Expected return</label><input type="date" value={fDue} onChange={e => setFDue(e.target.value)} className={inp} /></div>
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Sent date</label><DatePicker value={fDate} onChange={setFDate} /></div>
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Expected return</label><DatePicker value={fDue} onChange={setFDue} /></div>
           </div>
           <div className="flex gap-2 mt-2">
             <button onClick={addRow} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
@@ -2252,7 +2253,7 @@ function ProductionCostingTab() {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           <input value={pProduct} onChange={e => setPProduct(e.target.value)} placeholder="Finished product *" className={inp} />
           <input type="number" value={pQty} onChange={e => setPQty(e.target.value)} placeholder="Planned qty" className={inp} />
-          <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><input type="date" value={pDate} onChange={e => setPDate(e.target.value)} className={inp} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><DatePicker value={pDate} onChange={setPDate} /></div>
         </div>
         <button onClick={createRun} className="mt-2 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Create run</button>
       </div>
@@ -2672,7 +2673,7 @@ function DispatchPlannerTab() {
       {showForm && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inp} /></div>
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><DatePicker value={fDate} onChange={setFDate} /></div>
             <input value={fCustomer} onChange={e => setFCustomer(e.target.value)} placeholder="Customer *" className={inp} />
             <input value={fArea} onChange={e => setFArea(e.target.value)} placeholder="Area / zone" className={inp} />
             <input type="number" value={fWeight} onChange={e => setFWeight(e.target.value)} placeholder="Weight (kg)" className={inp} />
@@ -3240,7 +3241,7 @@ function GrnDiscrepancyTab() {
       {showForm && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inp} /></div>
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><DatePicker value={fDate} onChange={setFDate} /></div>
             <input value={fPo} onChange={e => setFPo(e.target.value)} placeholder="PO reference" className={inp} />
             <input value={fVendor} onChange={e => setFVendor(e.target.value)} placeholder="Vendor *" className={inp} />
             <input value={fItem} onChange={e => setFItem(e.target.value)} placeholder="Item *" className={inp} />
@@ -3370,7 +3371,7 @@ function ScrapWastageTab() {
       {showForm && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inp} /></div>
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><DatePicker value={fDate} onChange={setFDate} /></div>
             <input value={fProduct} onChange={e => onPick(e.target.value)} placeholder="Product *" className={inp} list="scrap-products" />
             <datalist id="scrap-products">{store.inventory.map(i => <option key={i.id} value={i.productName} />)}</datalist>
             <input type="number" value={fQty} onChange={e => setFQty(e.target.value)} placeholder="Qty *" className={inp} />
@@ -3496,7 +3497,7 @@ function ReturnsRegisterTab() {
             ))}
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inp} /></div>
+            <div><label className="text-[10px] text-[var(--color-muted)] block">Date</label><DatePicker value={fDate} onChange={setFDate} /></div>
             <input value={fParty} onChange={e => setFParty(e.target.value)} placeholder={fKind === "rtv" ? "Vendor *" : "Customer *"} className={inp} />
             <input value={fProduct} onChange={e => onPick(e.target.value)} placeholder="Product *" className={inp} list="returns-products" />
             <datalist id="returns-products">{store.inventory.map(i => <option key={i.id} value={i.productName} />)}</datalist>

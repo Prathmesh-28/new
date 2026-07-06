@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import DatePicker from "@/components/DatePicker";
 
 // shared styles (reused from TaxPage/DebtPage convention)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -2829,7 +2830,7 @@ function CallPlanner() {
         <p className="text-xs text-[var(--color-muted)]">Plan tomorrow's calls tonight - schedule customers by date and priority so the beat starts with a clear list. Works fully offline.</p>
         <div className="grid grid-cols-2 gap-3">
           <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer *" className={INP} />
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          <DatePicker value={date} onChange={setDate} />
         </div>
         <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason (order / collection / demo)" className={INP} />
         <div className="flex items-center gap-2">

@@ -9,6 +9,7 @@ import { Plus, X, AlertTriangle, TrendingUp, TrendingDown, RotateCcw, Building2,
 import { toast } from "sonner";
 import { startOfMonth, endOfMonth, format, subMonths } from "date-fns";
 import type { Budget } from "@/data/types";
+import DatePicker from "@/components/DatePicker";
 
 function AddBudgetModal({ existing, onSave, onClose }: {
   existing?: Budget;
@@ -631,7 +632,7 @@ function CapexBudgetTracker() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <input value={asset} onChange={e => setAsset(e.target.value)} placeholder="Asset / project *" className={INP} />
           <input type="number" min="1" value={planned} onChange={e => setPlanned(e.target.value)} placeholder="Planned ₹ *" className={INP} />
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          <DatePicker value={date} onChange={setDate} />
           <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add capex</button>
         </div>
       </div>

@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import DatePicker from "@/components/DatePicker";
 
 // ── shared styles (reused from TaxPage/DebtPage convention) ──────────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -1327,7 +1328,7 @@ function VoiceReminderSetter() {
           </button>
         </div>
         <div className="flex gap-2">
-          <input type="date" value={when} onChange={e => setWhen(e.target.value)} className={INP} />
+          <DatePicker value={when} onChange={setWhen} />
           <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap"><Plus size={13} /> {tr("voi.add")}</button>
         </div>
         {listening && <p className="text-[11px] text-[var(--color-primary)] animate-pulse">{tr("voi.listeningSpeakNow")}</p>}

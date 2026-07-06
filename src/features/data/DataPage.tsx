@@ -13,6 +13,7 @@ import TransactionImportModal from "@/components/TransactionImportModal";
 import MigrationWizard from "@/components/MigrationWizard";
 import type { Transaction } from "@/data/types";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import DatePicker from "@/components/DatePicker";
 
 function downloadCsv(name: string, content: string) {
   const blob = new Blob([content], { type: "text/csv" });
@@ -1268,7 +1269,7 @@ function ArchivePurge({ editable }: { editable: boolean }) {
         <p className="text-xs text-[var(--color-muted)] mb-4">Years of stale transactions slow down charts and reports. Pick a cut-off, download everything older as a CSV archive, then purge it from the working set. Statutory records should be kept 8 years - store the archive safely.</p>
         <div className="max-w-xs mb-4">
           <label className="text-xs text-[var(--color-muted)] block mb-1">Cut-off date (remove transactions before)</label>
-          <input type="date" value={cutoff} onChange={e => setCutoff(e.target.value)} className={inpCls} />
+          <DatePicker value={cutoff} onChange={setCutoff} />
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
           <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">
@@ -1940,8 +1941,8 @@ function DateRangeExport() {
         </div>
         <p className="text-xs text-[var(--color-muted)] mb-4">Pull a clean CSV of just the transactions in a chosen window - handy for a quarter, a financial year, or an audit request. Leave "from" blank to start at the earliest record.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md">
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">From</label><input type="date" value={from} onChange={e => setFrom(e.target.value)} className={inpCls} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">To</label><input type="date" value={to} onChange={e => setTo(e.target.value)} className={inpCls} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">From</label><DatePicker value={from} onChange={setFrom} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">To</label><DatePicker value={to} onChange={setTo} /></div>
         </div>
         <div className="grid grid-cols-2 gap-3 mt-4 max-w-md">
           <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-4">

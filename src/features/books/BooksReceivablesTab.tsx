@@ -5,6 +5,7 @@ import ExportMenu from "@/components/ExportMenu";
 import {
   Wallet, RefreshCw, ArrowLeftRight, FileText, Receipt, Undo2, Plus, Link2,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES (loose - backend response shapes inlined)
@@ -259,7 +260,7 @@ function AgingSection() {
         </div>
         <div>
           <label className={labelCls}>As of</label>
-          <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className={inputCls} />
+          <DatePicker value={asOf} onChange={setAsOf} />
         </div>
         <button type="button" onClick={() => void load()} className="text-[var(--color-muted)] hover:text-[var(--color-text)] pb-2.5" title="Refresh">
           <RefreshCw size={16} className={busy ? "animate-spin" : ""} />
@@ -393,11 +394,11 @@ function StatementSection({ parties }: { parties: LedgerLite[] }) {
           </div>
           <div>
             <label className={labelCls}>From</label>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputCls} />
+            <DatePicker value={from} onChange={setFrom} />
           </div>
           <div>
             <label className={labelCls}>To</label>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputCls} />
+            <DatePicker value={to} onChange={setTo} />
           </div>
         </div>
         <div className="flex justify-end mt-4">
@@ -742,7 +743,7 @@ function DebitNoteCard({ parties }: { parties: LedgerLite[] }) {
           </div>
           <div>
             <label className={labelCls}>Date</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
         </div>
         <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -825,7 +826,7 @@ function RefundCard({ parties, banks }: { parties: LedgerLite[]; banks: LedgerLi
           </div>
           <div>
             <label className={labelCls}>Date</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
         </div>
         <p className="text-[11px] text-[var(--color-muted)]">

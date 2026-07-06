@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
+import DatePicker from "@/components/DatePicker";
 
 // shared styles (mirrors TaxPage / DebtPage input + card conventions)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -2007,7 +2008,7 @@ function KeyRotationReminder() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Last rotated</label>
-            <input type="date" value={lastRotated} max={today} onChange={e => setLastRotated(e.target.value)} className={INP} />
+            <DatePicker value={lastRotated} onChange={setLastRotated} max={today} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Rotate every (days)</label>

@@ -9,6 +9,7 @@ import AiInsight from "@/components/ai/AiInsight";
 import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2, LineChart, Layers, Network, FileCheck2, Gavel, PiggyBank, FileBadge, BadgePercent, Ban, CreditCard, Repeat, Truck, CopyCheck, Hourglass, Scale, Pencil, Building2, BadgeCheck, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import DatePicker from "@/components/DatePicker";
 
 /* ─────────────────────────────────────────────────────────────────────────
    Vendor master record - REAL persistence via /api/vendors (GET/POST/PATCH/DELETE).
@@ -419,7 +420,7 @@ function ScheduleModal({ vendor, onClose }: { vendor: Vendor; onClose: () => voi
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Payment date *</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} required className={inp} min={new Date().toISOString().split("T")[0]} />
+            <DatePicker value={date} onChange={setDate} required min={new Date().toISOString().split("T")[0]} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Note (optional)</label>
@@ -1135,11 +1136,11 @@ function PurchaseOrderManager() {
             </div>
             <div>
               <label className="text-xs text-[var(--color-muted)] block mb-1">PO Date</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inpCls} />
+              <DatePicker value={date} onChange={setDate} />
             </div>
             <div>
               <label className="text-xs text-[var(--color-muted)] block mb-1">Expected Delivery</label>
-              <input type="date" value={expected} onChange={e => setExpected(e.target.value)} className={inpCls} />
+              <DatePicker value={expected} onChange={setExpected} />
             </div>
           </div>
 
@@ -1422,7 +1423,7 @@ function VendorTdsLedger() {
             {TDS_SECTIONS.map(s => <option key={s.code} value={s.code}>{s.label} ({s.rate}%)</option>)}
           </select>
           <input type="number" value={gross} onChange={e => setGross(e.target.value)} placeholder="Gross amount (₹) *" className={inpCls} />
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inpCls} />
+          <DatePicker value={date} onChange={setDate} />
         </div>
         {(() => {
           const prof = masterByName[vendor.trim().toLowerCase()];
@@ -1828,7 +1829,7 @@ function PayRunScheduler() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center gap-3 flex-wrap">
         <CalendarClock size={16} className="text-[var(--color-primary)]" />
         <label className="text-sm">Settlement date</label>
-        <input type="date" value={runDate} min={new Date().toISOString().split("T")[0]} onChange={e => setRunDate(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+        <DatePicker value={runDate} onChange={setRunDate} min={new Date().toISOString().split("T")[0]} />
         <label className="text-sm ml-2">Include due within</label>
         <select value={horizon} onChange={e => setHorizon(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]">
           {["7", "15", "30", "60", "90"].map(d => <option key={d} value={d}>{d} days</option>)}
@@ -2138,7 +2139,7 @@ function RequisitionToPo() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
           <input value={requester} onChange={e => setRequester(e.target.value)} placeholder="Requested by *" className={inpCls} />
           <input value={item} onChange={e => setItem(e.target.value)} placeholder="Item / service *" className={inpCls} />
-          <input type="date" value={needBy} onChange={e => setNeedBy(e.target.value)} className={inpCls} />
+          <DatePicker value={needBy} onChange={setNeedBy} />
           <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)} placeholder="Qty" className={inpCls} />
           <input type="number" value={estCost} onChange={e => setEstCost(e.target.value)} placeholder="Est. unit cost (₹)" className={inpCls} />
           <input value={justification} onChange={e => setJustification(e.target.value)} placeholder="Justification" className={inpCls} />
@@ -2510,7 +2511,7 @@ function AdvancesTracker() {
           <input list="adv-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
           <datalist id="adv-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Advance ₹ *" className={inpCls} />
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inpCls} />
+          <DatePicker value={date} onChange={setDate} />
           <input value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="Purpose / PO ref" className={inpCls} />
         </div>
         <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Record Advance</button>
@@ -2636,7 +2637,7 @@ function DebitNoteTracker() {
           <select value={reason} onChange={e => setReason(e.target.value as DnReason)} className={inpCls}>
             {(Object.keys(DN_REASON) as DnReason[]).map(r => <option key={r} value={r}>{DN_REASON[r]}</option>)}
           </select>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inpCls} />
+          <DatePicker value={date} onChange={setDate} />
         </div>
         <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Raise Debit Note</button>
       </div>
@@ -2863,7 +2864,7 @@ function BlanketPoDrawdown() {
           <input list="bpo-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
           <datalist id="bpo-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
           <input type="number" value={totalValue} onChange={e => setTotalValue(e.target.value)} placeholder="Annual value ₹ *" className={inpCls} />
-          <input type="date" value={validTill} onChange={e => setValidTill(e.target.value)} className={inpCls} />
+          <DatePicker value={validTill} onChange={setValidTill} />
         </div>
         <button onClick={create} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Create Blanket PO</button>
       </div>
@@ -4159,7 +4160,7 @@ function DuplicateInvoiceDetector() {
           </div>
           <input value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} placeholder="Invoice #" className={inpCls} />
           <input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount *" className={inpCls} />
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inpCls} />
+          <DatePicker value={date} onChange={setDate} />
         </div>
         <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Log Bill</button>
       </div>
@@ -4263,8 +4264,8 @@ function ApprovalSlaTracker() {
           <input value={approver} onChange={e => setApprover(e.target.value)} placeholder="Approver *" className={inpCls} />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
-          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Requested</label><input type="date" value={requested} onChange={e => setRequested(e.target.value)} className={inpCls} /></div>
-          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Decided</label><input type="date" value={decided} onChange={e => setDecided(e.target.value)} className={inpCls} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Requested</label><DatePicker value={requested} onChange={setRequested} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Decided</label><DatePicker value={decided} onChange={setDecided} /></div>
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-1">Outcome</label>
             <select value={outcome} onChange={e => setOutcome(e.target.value as "approved" | "rejected")} className={inpCls}>
@@ -4651,7 +4652,7 @@ function BillsPayables({ focus }: { focus?: { vendorId: string; n: number } }) {
             <h3 className="text-sm font-semibold flex items-center gap-2"><Banknote size={15} className="text-[var(--color-primary)]" /> Record Bill</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <input value={billNumber} onChange={e => setBillNumber(e.target.value)} placeholder="Bill / invoice no. *" className={inpCls} />
-              <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Bill date</label><input type="date" value={billDate} onChange={e => setBillDate(e.target.value)} className={inpCls} /></div>
+              <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Bill date</label><DatePicker value={billDate} onChange={setBillDate} /></div>
               <input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder={rcm ? "Taxable value ₹ *" : "Amount ₹ (pre-GST) *"} className={inpCls} />
               <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Description" className={inpCls} />
               <select value={gstRate} onChange={e => setGstRate(e.target.value)} className={inpCls}>{AP_GST_RATES.map(r => <option key={r} value={r}>GST {r}%</option>)}</select>
@@ -4734,7 +4735,7 @@ function BillsPayables({ focus }: { focus?: { vendorId: string; n: number } }) {
                   {bankLedgers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
               </div>
-              <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Date</label><input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className={inpCls} /></div>
+              <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Date</label><DatePicker value={payDate} onChange={setPayDate} /></div>
               <input value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="Reference (UTR / cheque no.)" className={inpCls} />
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-[var(--color-border)]">

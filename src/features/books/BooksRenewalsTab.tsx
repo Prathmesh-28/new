@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { CalendarClock, Plus, RefreshCw, Trash2 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // Renewals / expiry registry UI (books/expiry.js): licenses, DSCs, AMCs, agreements, insurance —
 // anything with an expiry date. Shows days-to-expiry + status and lets you renew (carries the
@@ -125,7 +126,7 @@ export default function BooksRenewalsTab() {
                       <td className="px-3 py-2.5 text-right whitespace-nowrap">
                         {renewing === i.id ? (
                           <span className="inline-flex items-center gap-1">
-                            <input type="date" value={renewDate} onChange={(e) => setRenewDate(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none" />
+                            <DatePicker value={renewDate} onChange={setRenewDate} />
                             <button onClick={() => renew(i.id)} className="text-xs px-2 py-1 rounded bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold">Save</button>
                           </span>
                         ) : (

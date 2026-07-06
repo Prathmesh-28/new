@@ -16,6 +16,7 @@ import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import { useUrlTab } from "@/hooks/useUrlTab";
+import DatePicker from "@/components/DatePicker";
 
 // C14 (2026-07 gap audit) — keep in sync with the TabStrip `tabs=` array below.
 const PAYROLL_TAB_IDS = ["employees", "runs", "ewa", "slips", "form16", "ecr", "labor", "fnf", "variance", "pt", "flexi", "lwf", "offer", "esop", "ctc", "attendance", "gratuity", "reimburse", "tds192", "bonus", "contractor", "benchmark", "appraisal", "journal", "headcount", "liability", "portal", "overtime", "leave-encash", "notice", "advance", "nps", "minwage", "maternity", "roi", "takehome", "attrition-cost", "incentive", "superann", "gpa", "pf-challan", "register", "penalty", "lwp"] as const;
@@ -1982,7 +1983,7 @@ Signature: _______________________   Date: ___________`;
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date of Joining</label>
-            <input type="date" value={joiningDate} onChange={e => setJoiningDate(e.target.value)} className={inp} />
+            <DatePicker value={joiningDate} onChange={setJoiningDate} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Probation (months)</label>

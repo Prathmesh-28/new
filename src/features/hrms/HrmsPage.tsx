@@ -8,6 +8,7 @@ import {
   Users, UserPlus, CalendarCheck, Plane, Wallet, Plus, RefreshCw,
   CheckCircle2, XCircle, FileText, Layers, Trash2, Play, Eye,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES - response shapes mirror the HRMS backend (Frappe-HR port)
@@ -358,7 +359,7 @@ function EmployeesTab({ loading, employees, canWrite, onReload }: {
             <div><label className={labelCls}>Phone (optional)</label><input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="98xxxxxxxx" className={inputCls} /></div>
             <div><label className={labelCls}>Department (optional)</label><input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Finance" className={inputCls} /></div>
             <div><label className={labelCls}>Designation (optional)</label><input value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="e.g. Accountant" className={inputCls} /></div>
-            <div><label className={labelCls}>Date of joining</label><input type="date" value={dateOfJoining} onChange={(e) => setDateOfJoining(e.target.value)} className={inputCls} /></div>
+            <div><label className={labelCls}>Date of joining</label><DatePicker value={dateOfJoining} onChange={setDateOfJoining} /></div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button type="button" onClick={() => setOpen(false)} className="px-3 py-2 text-sm rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-bg)]">Cancel</button>
@@ -620,8 +621,8 @@ function LeaveTab({ employees, canWrite }: { employees: Employee[]; canWrite: bo
             <select value={reqEmp} onChange={(e) => setReqEmp(e.target.value)} className={inputCls}>{employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select>
             <select value={reqType} onChange={(e) => setReqType(e.target.value)} className={inputCls}>{types.map((t) => <option key={t.id} value={t.leave_type_name}>{t.leave_type_name}</option>)}</select>
             <div className="flex gap-2">
-              <input type="date" value={reqFrom} onChange={(e) => setReqFrom(e.target.value)} className={inputCls} />
-              <input type="date" value={reqTo} onChange={(e) => setReqTo(e.target.value)} className={inputCls} />
+              <DatePicker value={reqFrom} onChange={setReqFrom} />
+              <DatePicker value={reqTo} onChange={setReqTo} />
             </div>
             <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={reqHalf} onChange={(e) => setReqHalf(e.target.checked)} /> Half day (−0.5)</label>
             <button type="button" onClick={apply} className={btnPrimary}><Plus size={14} /> Apply</button>

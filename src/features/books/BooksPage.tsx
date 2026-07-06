@@ -38,6 +38,7 @@ import BooksAgentsTab from "./BooksAgentsTab";
 import BulkUpload from "@/components/BulkUpload";
 import ExportMenu from "@/components/ExportMenu";
 import { useT } from "@/i18n";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES (response shapes inlined - backend confirmed)
@@ -1215,7 +1216,7 @@ function SalesCard({ customers, onPosted }: { customers: Ledger[]; onPosted: () 
         <div className="grid grid-cols-2 gap-3 items-end">
           <div>
             <label className={labelCls}>Date</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <label className="flex items-center gap-2 text-sm cursor-pointer pb-2">
             <input type="checkbox" checked={interState} onChange={(e) => setInterState(e.target.checked)} className="accent-[var(--color-primary)] w-4 h-4" />
@@ -1333,7 +1334,7 @@ function ReceiptPaymentCard({
           </div>
           <div>
             <label className={labelCls}>Date</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
         </div>
         <div>
@@ -1652,7 +1653,7 @@ function DocumentEditor({ customers, onSaved }: { customers: Ledger[]; onSaved: 
         </div>
         <div>
           <label className={labelCls}>Date</label>
-          <input type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} className={inputCls} />
+          <DatePicker value={docDate} onChange={setDocDate} />
         </div>
         <div>
           <label className={labelCls}>Reference (optional)</label>
@@ -1841,11 +1842,11 @@ function ReportsTab() {
             <>
               <div>
                 <span className="text-[10px] text-[var(--color-muted)] block">From</span>
-                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+                <DatePicker value={from} onChange={setFrom} />
               </div>
               <div>
                 <span className="text-[10px] text-[var(--color-muted)] block">To</span>
-                <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-[var(--color-primary)]" />
+                <DatePicker value={to} onChange={setTo} />
               </div>
             </>
           ) : (

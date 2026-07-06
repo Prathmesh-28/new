@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Scale, Plus } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // Debt covenant tracker UI (books/covenants.js — real table). Define loan covenants and record
 // periodic readings; each is auto-evaluated met/breached against the operator + threshold.
@@ -83,7 +84,7 @@ export default function BooksCovenantsTab() {
                   {testing === c.id && (
                     <div className="mt-3 flex items-center gap-2 border-t border-[var(--color-border)] pt-3 flex-wrap">
                       <input type="number" step="0.01" value={tVal} onChange={(e) => setTVal(e.target.value)} placeholder={`Actual ${c.metric}`} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm w-40 outline-none" />
-                      <input type="date" value={tDate} onChange={(e) => setTDate(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none" />
+                      <DatePicker value={tDate} onChange={setTDate} />
                       <button onClick={() => recordTest(c.id)} className="text-xs px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold">Save reading</button>
                     </div>
                   )}

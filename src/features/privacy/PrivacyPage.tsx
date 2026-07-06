@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { differenceInCalendarDays, addDays, parseISO } from "date-fns";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import DatePicker from "@/components/DatePicker";
 
 // shared styles (reused from Tax/Debt input class)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -2591,7 +2592,7 @@ function PurgeScheduler() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Last collected / touched</label>
-            <input type="date" value={lastDataDate} onChange={e => setLastDataDate(e.target.value)} className={INP} />
+            <DatePicker value={lastDataDate} onChange={setLastDataDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /> Schedule</button>
         </div>

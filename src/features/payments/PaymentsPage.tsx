@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { format, addMonths, differenceInCalendarDays } from "date-fns";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import { useUrlTab } from "@/hooks/useUrlTab";
+import DatePicker from "@/components/DatePicker";
 
 // shared styles (reused from TaxPage/DebtPage convention)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -704,7 +705,7 @@ function MandateTracker() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Next debit</label>
-            <input type="date" value={nextDebit} onChange={e => setNextDebit(e.target.value)} className={INP} />
+            <DatePicker value={nextDebit} onChange={setNextDebit} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
             <Plus size={13} /> Add
@@ -879,7 +880,7 @@ function SettlementRecon() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Settlement date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Gross sales ₹</label>
@@ -1664,7 +1665,7 @@ function ReminderScheduler() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Due date</label>
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+            <DatePicker value={dueDate} onChange={setDueDate} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Channel</label>
@@ -1998,7 +1999,7 @@ function EmiOnInvoiceBuilder() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">First instalment</label>
-            <input type="date" value={start} onChange={e => setStart(e.target.value)} className={INP} />
+            <DatePicker value={start} onChange={setStart} />
           </div>
         </div>
       </div>
@@ -2168,7 +2169,7 @@ function SettlementForecaster() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Capture date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Gross captured ₹</label>
@@ -2529,11 +2530,11 @@ function NachRegister() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Valid from</label>
-            <input type="date" value={start} onChange={e => setStart(e.target.value)} className={INP} />
+            <DatePicker value={start} onChange={setStart} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Valid until</label>
-            <input type="date" value={end} onChange={e => setEnd(e.target.value)} className={INP} />
+            <DatePicker value={end} onChange={setEnd} />
           </div>
         </div>
       </div>
@@ -3143,7 +3144,7 @@ function DuplicateGuard() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Window (days)</label>
@@ -3672,7 +3673,7 @@ function MandateRetryPlanner() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Failed on</label>
-            <input type="date" value={failDate} onChange={e => setFailDate(e.target.value)} className={INP} />
+            <DatePicker value={failDate} onChange={setFailDate} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Payer's payday (day of month)</label>
@@ -3788,7 +3789,7 @@ function SettlementTdsTagger() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Settlement date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Source</label>

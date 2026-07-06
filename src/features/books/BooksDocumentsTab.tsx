@@ -6,6 +6,7 @@ import {
   GitBranch, Link2, Plus, ExternalLink, Copy, Wallet, HandCoins, ReceiptText,
   ScrollText, Banknote, FileX2,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES - shapes mirror backend/src/modules/books/{documents,payments,portal}.js
@@ -585,7 +586,7 @@ function AdvanceReceiptForm({ parties, banks, canWrite }: { parties: Ledger[]; b
           </div>
           <div>
             <label className={labelCls}>Date</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <button type="button" onClick={submit} disabled={saving} className={`${btnPrimary} w-full`}>
             {saving ? <RefreshCw size={14} className="animate-spin" /> : <HandCoins size={14} />} Post advance receipt
@@ -637,7 +638,7 @@ function VendorAdvanceForm({ parties, banks, canWrite }: { parties: Ledger[]; ba
             </div>
             <div>
               <label className={labelCls}>Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+              <DatePicker value={date} onChange={setDate} />
             </div>
           </div>
           <button type="button" onClick={submit} disabled={saving} className={`${btnPrimary} w-full`}>
@@ -703,7 +704,7 @@ function CreditNoteForm({ parties, canWrite }: { parties: Ledger[]; canWrite: bo
           </label>
           <div>
             <label className={labelCls}>Date</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-xs flex justify-between">
             <span className="text-[var(--color-muted)]">GST @ {gstRate}%</span>
@@ -757,7 +758,7 @@ function WriteOffForm({ parties, canWrite }: { parties: Ledger[]; canWrite: bool
             </div>
             <div>
               <label className={labelCls}>Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+              <DatePicker value={date} onChange={setDate} />
             </div>
           </div>
           <button type="button" onClick={submit} disabled={saving} className={`${btnPrimary} w-full`}>

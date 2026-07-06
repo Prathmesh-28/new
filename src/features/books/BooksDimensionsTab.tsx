@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import BulkUpload from "@/components/BulkUpload";
 import ExportMenu from "@/components/ExportMenu";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES - shapes mirror backend/src/modules/books/{costcentres,reports,ops}.js
@@ -938,7 +939,7 @@ function BranchesSection({ canWrite }: { canWrite: boolean }) {
         </div>
         <div>
           <label className={labelCls}>As of (optional)</label>
-          <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className={inputCls} />
+          <DatePicker value={asOf} onChange={setAsOf} />
         </div>
         <button type="button" onClick={runReports} disabled={reportBusy} className={btnPrimary}>
           {reportBusy ? <RefreshCw size={14} className="animate-spin" /> : <BarChart3 size={14} />} Run branch reports

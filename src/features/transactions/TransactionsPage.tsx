@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import { useT } from "@/i18n";
 import ReconcileModal from "./ReconcileModal";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import DatePicker from "@/components/DatePicker";
 
 const CATEGORIES = ["revenue", "expense", "payroll", "loan", "tax", "transfer"] as const;
 const PAGE_SIZE  = 50;
@@ -1250,7 +1251,7 @@ function UpiDashboard() {
                 <option value="paid">Paid</option>
               </select>
               <input value={fRef}  onChange={e => setFRef(e.target.value)}   placeholder="UPI ref / UTR" className={inp} />
-              <input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inp} />
+              <DatePicker value={fDate} onChange={setFDate} />
               <input value={fNote} onChange={e => setFNote(e.target.value)}  placeholder="Note" className={`${inp} md:col-span-2`} />
             </div>
             <button onClick={addEntry} className="mt-3 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
@@ -1351,7 +1352,7 @@ function BankReconStatement() {
         {showForm && (
           <div className="p-4 border-b border-[var(--color-border)] bg-[var(--color-accent)]">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <input type="date" value={fDate}   onChange={e => setFDate(e.target.value)}   className={inp} />
+              <DatePicker value={fDate} onChange={setFDate} />
               <input value={fDesc}  onChange={e => setFDesc(e.target.value)}  placeholder="Description *" className={inp} />
               <input type="number" value={fDebit}  onChange={e => setFDebit(e.target.value)}  placeholder="Debit (₹)" className={inp} />
               <input type="number" value={fCredit} onChange={e => setFCredit(e.target.value)} placeholder="Credit (₹)" className={inp} />
@@ -1496,7 +1497,7 @@ function RecurringTemplates() {
               <select value={fFreq} onChange={e => setFFreq(e.target.value as Freq)} className={inp}>
                 <option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annual">Annual</option>
               </select>
-              <div><label className="text-[10px] text-[var(--color-muted)] block">Next date</label><input type="date" value={fNext} onChange={e => setFNext(e.target.value)} className={inp} /></div>
+              <div><label className="text-[10px] text-[var(--color-muted)] block">Next date</label><DatePicker value={fNext} onChange={setFNext} /></div>
               <input value={fParty} onChange={e => setFParty(e.target.value)} placeholder="Counterparty" className={`${inp} md:col-span-2`} />
             </div>
             <div className="flex gap-2 mt-2">
@@ -1735,7 +1736,7 @@ function ReconciliationWorkbench() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <div className="flex items-center gap-2 mb-3"><GitCompareArrows size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Add Bank Statement Line</h3></div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <input type="date" value={bDate} onChange={e => setBDate(e.target.value)} className={inp} />
+          <DatePicker value={bDate} onChange={setBDate} />
           <input type="number" value={bAmt} onChange={e => setBAmt(e.target.value)} placeholder="Amount ± (₹)" className={inp} />
           <input value={bNar} onChange={e => setBNar(e.target.value)} placeholder="Narration" className={inp} />
           <button onClick={addLine} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add line</button>
@@ -2325,7 +2326,7 @@ function JournalEntryComposer() {
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-              <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} /></div>
+              <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Date</label><DatePicker value={date} onChange={setDate} /></div>
               <input value={narration} onChange={e => setNarration(e.target.value)} placeholder="Narration / being…" className={`${inp} md:col-span-2 self-end`} />
             </div>
             <div className="space-y-2">
@@ -2546,7 +2547,7 @@ function DayBook() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2"><BookOpen size={14} className="text-[var(--color-primary)]" /><span className="text-sm font-semibold">Day Book / Cash Book</span></div>
           <button onClick={() => shift(-1)} className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"><ChevronLeft size={14} /></button>
-          <input type="date" value={day} onChange={e => setDay(e.target.value)} className={inp} />
+          <DatePicker value={day} onChange={setDay} />
           <button onClick={() => shift(1)} className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"><ChevronRight size={14} /></button>
         </div>
       </div>
@@ -2696,7 +2697,7 @@ function OpeningBalanceSetup() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2"><Wallet size={14} className="text-[var(--color-primary)]" /><span className="text-sm font-semibold">Opening Balance Setup</span></div>
           <label className="text-xs text-[var(--color-muted)] ml-auto">Opening as of</label>
-          <input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+          <DatePicker value={asOf} onChange={setAsOf} />
         </div>
       </div>
 
@@ -2798,7 +2799,7 @@ function WriteOffComposer() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <div className="flex items-center gap-2 mb-3"><Eraser size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Record a Write-Off</h3></div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} />
+          <DatePicker value={date} onChange={setDate} />
           <input value={party} onChange={e => setParty(e.target.value)} placeholder="Party *" list="writeoff-parties" className={inp} />
           <datalist id="writeoff-parties">{parties.map(p => <option key={p} value={p} />)}</datalist>
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹) *" className={inp} />
@@ -2867,7 +2868,7 @@ function PeriodLockManager() {
         <div className="flex items-center gap-2 mb-3"><Lock size={14} className="text-[var(--color-primary)]" /><h3 className="text-sm font-semibold">Period Lock</h3></div>
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-xs text-[var(--color-muted)]">Lock all entries up to and including</label>
-          <input type="date" value={draft} onChange={e => setDraft(e.target.value)} className={inp} />
+          <DatePicker value={draft} onChange={setDraft} />
           <button onClick={lock} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Lock period</button>
           {lockedUpto && <button onClick={unlock} className="text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-4 py-2 rounded-lg hover:text-[var(--color-text)]">Unlock</button>}
         </div>

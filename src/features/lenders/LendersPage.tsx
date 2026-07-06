@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import PreviewBadge from "@/components/PreviewBadge";
+import DatePicker from "@/components/DatePicker";
 
 interface Bid {
   id: string;
@@ -1197,7 +1198,7 @@ function DisbursementPlanner() {
       <div className={`${card} p-4 space-y-3`}>
         <h3 className="text-sm font-semibold">Add tranche</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} />
+          <DatePicker value={date} onChange={setDate} />
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount ₹" className={inp} />
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" className={inp} />
         </div>
@@ -1783,7 +1784,7 @@ function LenderCrm() {
           <input value={lender} onChange={e => setLender(e.target.value)} placeholder="Lender" className={inp} />
           <input value={contact} onChange={e => setContact(e.target.value)} placeholder="Contact / RM" className={inp} />
           <input value={action} onChange={e => setAction(e.target.value)} placeholder="Next action" className={inp} />
-          <input type="date" value={nextDate} onChange={e => setNextDate(e.target.value)} className={inp} />
+          <DatePicker value={nextDate} onChange={setNextDate} />
         </div>
         <button onClick={add} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={12} /> Add relationship</button>
       </div>

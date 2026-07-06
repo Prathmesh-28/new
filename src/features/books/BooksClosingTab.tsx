@@ -5,6 +5,7 @@ import {
   CalendarRange, Lock, LockOpen, Archive, RefreshCw, Plus, Trash2,
   ShieldCheck, Scale, Upload, ListChecks, BookLock, Info,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES - shapes mirror backend/src/modules/books/{ops,closing,vouchertools,importer}.js
@@ -759,11 +760,11 @@ function ReversingJournalCard() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className={labelCls}>Entry date</label>
-            <input type="date" value={voucherDate} onChange={(e) => setVoucherDate(e.target.value)} className={inputCls} />
+            <DatePicker value={voucherDate} onChange={setVoucherDate} />
           </div>
           <div>
             <label className={labelCls}>Reverse on (optional)</label>
-            <input type="date" value={reverseDate} onChange={(e) => setReverseDate(e.target.value)} className={inputCls} />
+            <DatePicker value={reverseDate} onChange={setReverseDate} />
           </div>
           <div>
             <label className={labelCls}>Narration</label>

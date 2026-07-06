@@ -7,6 +7,7 @@ import {
   ScrollText, FileJson, Ship, Truck, RefreshCw, Download, Plus,
   Calculator, ClipboardList, FileCheck2, Pencil, UserCog, CalendarClock, Ban,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES - shapes mirror backend/src/modules/books/{gst,itr,billofentry,ewaybill}.js
@@ -849,7 +850,7 @@ function BoeCard({ canWrite }: { canWrite: boolean }) {
               </select>
             </div>
             <div><label className={labelCls}>BoE number</label><input value={boeNo} onChange={(e) => setBoeNo(e.target.value)} placeholder="e.g. 1234567" className={`${inputCls} font-mono`} /></div>
-            <div><label className={labelCls}>BoE date</label><input type="date" value={boeDate} onChange={(e) => setBoeDate(e.target.value)} className={inputCls} /></div>
+            <div><label className={labelCls}>BoE date</label><DatePicker value={boeDate} onChange={setBoeDate} /></div>
             <div><label className={labelCls}>Port code</label><input value={portCode} onChange={(e) => setPortCode(e.target.value)} placeholder="e.g. INNSA1" className={`${inputCls} font-mono`} /></div>
             <div><label className={labelCls}>HSN</label><input value={hsn} onChange={(e) => setHsn(e.target.value)} placeholder="optional" className={`${inputCls} font-mono`} /></div>
             <div><label className={labelCls}>Assessable value (CIF)</label><input value={assessableValue} onChange={(e) => setAssessableValue(e.target.value)} inputMode="decimal" placeholder="0.00" className={`${inputCls} font-mono tabular-nums`} /></div>
@@ -1061,7 +1062,7 @@ function Itc04Card({ canWrite }: { canWrite: boolean }) {
               </select>
             </div>
             <div><label className={labelCls}>Challan no</label><input value={challanNo} onChange={(e) => setChallanNo(e.target.value)} placeholder="Challan number" className={`${inputCls} font-mono`} /></div>
-            <div><label className={labelCls}>Challan date</label><input type="date" value={challanDate} onChange={(e) => setChallanDate(e.target.value)} className={inputCls} /></div>
+            <div><label className={labelCls}>Challan date</label><DatePicker value={challanDate} onChange={setChallanDate} /></div>
             <div><label className={labelCls}>Job-worker GSTIN</label><input value={jobWorkerGstin} onChange={(e) => setJobWorkerGstin(e.target.value)} placeholder="optional" className={`${inputCls} font-mono`} /></div>
             <div><label className={labelCls}>Job-worker name</label><input value={jobWorkerName} onChange={(e) => setJobWorkerName(e.target.value)} placeholder="optional" className={inputCls} /></div>
             <div>

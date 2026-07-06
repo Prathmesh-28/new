@@ -9,6 +9,7 @@ import {
   LayoutTemplate, CalendarClock, Download, GitPullRequestArrow, Gavel,
   ListChecks, FileDigit,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API base - all books routes are mounted under /api/books
@@ -1171,7 +1172,7 @@ function ReversingJournalPanel() {
         </div>
         <div>
           <label className={labelCls}>Reversal date (optional - defaults to today)</label>
-          <input type="date" value={reversalDate} onChange={(e) => setReversalDate(e.target.value)} className={inputCls} />
+          <DatePicker value={reversalDate} onChange={setReversalDate} />
         </div>
         <div>
           <label className={labelCls}>Narration (optional)</label>
@@ -1510,7 +1511,7 @@ function PdcRegisterPanel() {
           </div>
           <div className="flex-1 min-w-[120px]">
             <label className={labelCls}>Cheque date</label>
-            <input type="date" value={chequeDate} onChange={(e) => setChequeDate(e.target.value)} className={inputCls} />
+            <DatePicker value={chequeDate} onChange={setChequeDate} />
           </div>
           <div className="min-w-[110px]">
             <label className={labelCls}>Direction</label>

@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
 import { useUrlTab } from "@/hooks/useUrlTab";
+import DatePicker from "@/components/DatePicker";
 
 // ── shared style tokens (matched to TaxPage / DebtPage tools) ───────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -1015,7 +1016,7 @@ function LeadFollowUps() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Next follow-up</label>
-            <input type="date" value={nextFollowUp} onChange={e => setNextFollowUp(e.target.value)} className={INP} />
+            <DatePicker value={nextFollowUp} onChange={setNextFollowUp} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Note</label>
@@ -1751,7 +1752,7 @@ function QuoteExpiryTracker() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Valid until</label>
-            <input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} className={INP} />
+            <DatePicker value={validUntil} onChange={setValidUntil} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
             <Plus size={13} /> Add
@@ -2179,7 +2180,7 @@ function RenewalTracker() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Renewal date</label>
-            <input type="date" value={renewalDate} onChange={e => setRenewalDate(e.target.value)} className={INP} />
+            <DatePicker value={renewalDate} onChange={setRenewalDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
             <Plus size={13} /> Add
@@ -3506,7 +3507,7 @@ function ReorderReminder() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Last order date</label>
-            <input type="date" value={lastOrder} onChange={e => setLastOrder(e.target.value)} className={INP} />
+            <DatePicker value={lastOrder} onChange={setLastOrder} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Reorder cycle (days)</label>

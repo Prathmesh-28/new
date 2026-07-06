@@ -6,6 +6,7 @@ import ExportMenu from "@/components/ExportMenu";
 import {
   Tag, Ticket, Truck, Plus, Trash2, RefreshCw, FlaskConical, Gift, Percent,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES - response shapes mirror backend/src/modules/books/pricing.js
@@ -311,11 +312,11 @@ function PricingRulesPanel({ canWrite }: { canWrite: boolean }) {
 
           <div>
             <label className={labelCls}>Valid from</label>
-            <input type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} className={inputCls} />
+            <DatePicker value={validFrom} onChange={setValidFrom} />
           </div>
           <div>
             <label className={labelCls}>Valid to</label>
-            <input type="date" value={validTo} onChange={(e) => setValidTo(e.target.value)} className={inputCls} />
+            <DatePicker value={validTo} onChange={setValidTo} />
           </div>
         </div>
         <div className="flex justify-end mt-4">
@@ -527,7 +528,7 @@ function PricingTestPanel() {
         </div>
         <div>
           <label className={labelCls}>Date (optional)</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+          <DatePicker value={date} onChange={setDate} />
         </div>
       </div>
       <div className="space-y-2">
@@ -662,11 +663,11 @@ function CouponsPanel() {
           </div>
           <div>
             <label className={labelCls}>Valid from</label>
-            <input type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} className={inputCls} />
+            <DatePicker value={validFrom} onChange={setValidFrom} />
           </div>
           <div>
             <label className={labelCls}>Valid to</label>
-            <input type="date" value={validTo} onChange={(e) => setValidTo(e.target.value)} className={inputCls} />
+            <DatePicker value={validTo} onChange={setValidTo} />
           </div>
           <div>
             <label className={labelCls}>Max redemptions (blank = ∞)</label>

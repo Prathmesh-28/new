@@ -9,6 +9,7 @@ import EmptyState from "@/components/EmptyState";
 import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import DatePicker from "@/components/DatePicker";
 
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
@@ -542,11 +543,11 @@ function RateContractManager() {
           </select>
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Valid from</label>
-            <input type="date" value={validFrom} onChange={e => setValidFrom(e.target.value)} className={INP} />
+            <DatePicker value={validFrom} onChange={setValidFrom} />
           </div>
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Valid to</label>
-            <input type="date" value={validTo} onChange={e => setValidTo(e.target.value)} className={INP} />
+            <DatePicker value={validTo} onChange={setValidTo} />
           </div>
         </div>
         <button onClick={add} className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add rate contract</button>
@@ -668,7 +669,7 @@ function MsmeVerificationBatch() {
           <input type="number" value={outstanding} onChange={e => setOutstanding(e.target.value)} placeholder="Outstanding (₹)" className={INP} />
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Invoice date</label>
-            <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className={INP} />
+            <DatePicker value={invoiceDate} onChange={setInvoiceDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add to batch</button>
         </div>
@@ -871,7 +872,7 @@ function PriceTrendTracker() {
           <input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="Quoted price (₹)" className={INP} />
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Quote date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Log quote</button>
         </div>
@@ -1445,7 +1446,7 @@ function PaymentPriorityPlanner() {
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount due (₹)" className={INP} />
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Due date</label>
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+            <DatePicker value={dueDate} onChange={setDueDate} />
           </div>
           <input type="number" value={discountPct} onChange={e => setDiscountPct(e.target.value)} placeholder="Early-pay discount %" className={INP} />
           <label className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
@@ -1984,7 +1985,7 @@ function ContractExpiryCalendar() {
           <input type="number" value={noticeDays} onChange={e => setNoticeDays(e.target.value)} placeholder="Notice period (days)" className={INP} />
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Expiry date</label>
-            <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} className={INP} />
+            <DatePicker value={expiry} onChange={setExpiry} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Add contract</button>
         </div>
@@ -2403,7 +2404,7 @@ function VendorAdvanceTracker() {
           <input type="number" value={adjusted} onChange={e => setAdjusted(e.target.value)} placeholder="Already adjusted (₹)" className={INP} />
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Advance date</label>
-            <input type="date" value={paidDate} onChange={e => setPaidDate(e.target.value)} className={INP} />
+            <DatePicker value={paidDate} onChange={setPaidDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Record advance</button>
         </div>
@@ -2620,7 +2621,7 @@ function DuplicateInvoiceGuard() {
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹)" className={INP} />
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Invoice date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90"><Plus size={13} /> Log & check</button>
         </div>

@@ -13,6 +13,7 @@ import type { ActiveLoan } from "@/data/types";
 import PreviewBadge from "@/components/PreviewBadge";
 import AiInsight from "@/components/ai/AiInsight";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import DatePicker from "@/components/DatePicker";
 
 function emi(principal: number, annualRate: number, months: number): number {
   const r = annualRate / 100 / 12;
@@ -2221,7 +2222,7 @@ function CommercialScoreTracker() {
           </div>
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">As of date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Note (optional)</label>
@@ -2358,7 +2359,7 @@ function InvoiceDiscountingConnector() {
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Invoice amount (₹) *" className={inp} />
           <div>
             <label className="block text-[10px] text-[var(--color-muted)] mb-1">Due date</label>
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={`w-full ${inp}`} />
+            <DatePicker value={dueDate} onChange={setDueDate} />
           </div>
           <div>
             <label className="block text-[10px] text-[var(--color-muted)] mb-1">Discount rate (% p.a.)</label>

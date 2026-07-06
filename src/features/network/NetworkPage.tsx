@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import DatePicker from "@/components/DatePicker";
 
 // ── shared styles (reuse TaxPage input class) ────────────────────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -1207,7 +1208,7 @@ function BalanceConfirmation({ live }: { live: Live[] }) {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">As on date</label>
-            <input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} className={INP} />
+            <DatePicker value={asOf} onChange={setAsOf} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Manual adjustment (₹)</label>
@@ -1383,8 +1384,8 @@ function TradeTermsTracker({ live }: { live: Live[] }) {
           <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Credit limit (₹)</label><input type="number" value={creditLimit} onChange={e => setCreditLimit(e.target.value)} placeholder="500000" className={INP} /></div>
           <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Early-pay disc %</label><input type="number" value={earlyPay} onChange={e => setEarlyPay(e.target.value)} placeholder="2" className={INP} /></div>
           <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Late penalty %/mo</label><input type="number" value={latePenalty} onChange={e => setLatePenalty(e.target.value)} placeholder="1.5" className={INP} /></div>
-          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Effective from</label><input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)} className={INP} /></div>
-          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Review on</label><input type="date" value={reviewOn} onChange={e => setReviewOn(e.target.value)} className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Effective from</label><DatePicker value={effectiveFrom} onChange={setEffectiveFrom} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Review on</label><DatePicker value={reviewOn} onChange={setReviewOn} /></div>
           <div className="flex items-end"><button onClick={add} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Record</button></div>
         </div>
         <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" className={INP} />
@@ -1498,7 +1499,7 @@ function JointReconExport({ live }: { live: Live[] }) {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">As on date</label>
-            <input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} className={INP} />
+            <DatePicker value={asOf} onChange={setAsOf} />
           </div>
         </div>
       </div>
@@ -2179,7 +2180,7 @@ function MeetingLog({ live }: { live: Live[] }) {
             <input list="net-ml-parties" value={party} onChange={e => setParty(e.target.value)} placeholder="Party name" className={INP} />
             <datalist id="net-ml-parties">{options.map(o => <option key={o} value={o} />)}</datalist>
           </div>
-          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Date</label><DatePicker value={date} onChange={setDate} /></div>
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-1">Channel</label>
             <select value={channel} onChange={e => setChannel(e.target.value as MeetingEntry["channel"])} className={INP}><option value="call">Call</option><option value="video">Video</option><option value="in-person">In-person</option><option value="event">Event</option></select>
@@ -2544,7 +2545,7 @@ function CoMarketingPlanner({ live }: { live: Live[] }) {
           </div>
           <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">My budget (₹)</label><input type="number" value={myBudget} onChange={e => setMyBudget(e.target.value)} placeholder="20000" className={INP} /></div>
           <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Their budget (₹)</label><input type="number" value={theirBudget} onChange={e => setTheirBudget(e.target.value)} placeholder="20000" className={INP} /></div>
-          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} /></div>
+          <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Date</label><DatePicker value={date} onChange={setDate} /></div>
         </div>
         <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add campaign</button>
       </div>

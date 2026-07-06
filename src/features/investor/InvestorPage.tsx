@@ -13,6 +13,7 @@ import { differenceInCalendarDays, format } from "date-fns";
 import { useT } from "@/i18n";
 import type { CapitalRaise } from "@/data/types";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import DatePicker from "@/components/DatePicker";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1779,7 +1780,7 @@ function BoardAgenda({ user }: { user: { email: string } }) {
         </div>
         <div>
           <label className="text-[10px] text-[var(--color-muted)] block mb-1">Meeting date</label>
-          <input type="date" value={meetingDate} onChange={e => setMeetingDate(e.target.value)} className={inp} />
+          <DatePicker value={meetingDate} onChange={setMeetingDate} />
         </div>
       </div>
 

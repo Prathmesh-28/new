@@ -9,6 +9,7 @@ import {
   Hash, Layers, Package, ScanLine, Search, Wrench,
   History, Ship, RotateCcw, LifeBuoy,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES (API responses typed loosely - backend shapes inferred from sibling tabs)
@@ -650,11 +651,11 @@ function ReceiveCard({ items, onPosted }: { items: Item[]; onPosted: () => Promi
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>Mfg date (optional)</label>
-            <input type="date" value={mfgDate} onChange={(e) => setMfgDate(e.target.value)} className={inputCls} />
+            <DatePicker value={mfgDate} onChange={setMfgDate} />
           </div>
           <div>
             <label className={labelCls}>Expiry date (optional)</label>
-            <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className={inputCls} />
+            <DatePicker value={expiryDate} onChange={setExpiryDate} />
           </div>
         </div>
       </div>
@@ -822,7 +823,7 @@ function ManufactureSection({
       <div className="space-y-5">
         <div className="md:w-1/3">
           <label className={labelCls}>Date</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+          <DatePicker value={date} onChange={setDate} />
         </div>
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)] mb-2">Consumes (raw materials out)</h4>
@@ -897,7 +898,7 @@ function AdjustSection({
             </div>
             <div>
               <label className={labelCls}>Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+              <DatePicker value={date} onChange={setDate} />
             </div>
           </div>
           <div>
@@ -1089,11 +1090,11 @@ function SummarySection() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-end gap-3 flex-wrap">
         <div>
           <label className={labelCls}>From</label>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputCls} />
+          <DatePicker value={from} onChange={setFrom} />
         </div>
         <div>
           <label className={labelCls}>To</label>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputCls} />
+          <DatePicker value={to} onChange={setTo} />
         </div>
         <button type="button" onClick={() => void load(from, to)} disabled={busy} className={btnPrimary}>
           {busy ? <RefreshCw size={14} className="animate-spin" /> : <BarChart3 size={14} />}
@@ -1267,7 +1268,7 @@ function SerialsSection({ items, canWrite }: { items: Item[]; canWrite: boolean 
                 </div>
                 <div>
                   <label className={labelCls}>Date</label>
-                  <input type="date" value={recDate} onChange={(e) => setRecDate(e.target.value)} className={inputCls} />
+                  <DatePicker value={recDate} onChange={setRecDate} />
                 </div>
               </div>
             </div>
@@ -1286,7 +1287,7 @@ function SerialsSection({ items, canWrite }: { items: Item[]; canWrite: boolean 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Date</label>
-                  <input type="date" value={issDate} onChange={(e) => setIssDate(e.target.value)} className={inputCls} />
+                  <DatePicker value={issDate} onChange={setIssDate} />
                 </div>
               </div>
               <p className="text-[11px] text-[var(--color-muted)]">Marks the listed serials as issued / sold.</p>
@@ -1631,7 +1632,7 @@ function KitsSection({
                 </div>
                 <div>
                   <label className={labelCls}>Date</label>
-                  <input type="date" value={buildDate} onChange={(e) => setBuildDate(e.target.value)} className={inputCls} />
+                  <DatePicker value={buildDate} onChange={setBuildDate} />
                 </div>
               </div>
               <p className="text-[11px] text-[var(--color-muted)]">
@@ -1941,7 +1942,7 @@ function RepostSection({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>From date</label>
-                  <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className={inputCls} />
+                  <DatePicker value={fromDate} onChange={setFromDate} />
                 </div>
                 <div>
                   <label className={labelCls}>Reason (optional)</label>
@@ -2161,7 +2162,7 @@ function LandedCostSection({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className={labelCls}>Date</label>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+                <DatePicker value={date} onChange={setDate} />
               </div>
               <div>
                 <label className={labelCls}>Reference (optional)</label>
@@ -2255,8 +2256,8 @@ function LandedCostSection({
             <span className="text-[var(--color-muted)] tabular-nums font-normal">· {rows.length}</span>
           </h3>
           <div className="flex items-center gap-2">
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1 text-sm outline-none" />
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1 text-sm outline-none" />
+            <DatePicker value={from} onChange={setFrom} />
+            <DatePicker value={to} onChange={setTo} />
             <button type="button" onClick={() => void load(from, to)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]" title="Refresh">
               <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
             </button>

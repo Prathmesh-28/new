@@ -18,6 +18,7 @@ import { format, differenceInCalendarDays, parseISO } from "date-fns";
 import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import DatePicker from "@/components/DatePicker";
 
 // ── shared styles (mirrors TaxPage/DebtPage input + card classes) ────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -512,7 +513,7 @@ function DailyCashPosition() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Clears on</label>
-            <input type="date" value={pDate} onChange={e => setPDate(e.target.value)} className={INP} />
+            <DatePicker value={pDate} onChange={setPDate} />
           </div>
           <button onClick={addPending} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>
@@ -910,7 +911,7 @@ function ChequeRegister() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>
@@ -1000,7 +1001,7 @@ function ChargeRecoveryTracker() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Raised on</label>
-            <input type="date" value={raisedOn} onChange={e => setRaisedOn(e.target.value)} className={INP} />
+            <DatePicker value={raisedOn} onChange={setRaisedOn} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Log</button>
         </div>
@@ -1187,7 +1188,7 @@ function PositivePayRegister() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>
@@ -1299,7 +1300,7 @@ function MandateTracker() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Next debit</label>
-            <input type="date" value={nextDebit} onChange={e => setNextDebit(e.target.value)} className={INP} />
+            <DatePicker value={nextDebit} onChange={setNextDebit} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>
@@ -1409,7 +1410,7 @@ function GuaranteeLimitTracker() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Expiry</label>
-            <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} className={INP} />
+            <DatePicker value={expiry} onChange={setExpiry} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>
@@ -2028,7 +2029,7 @@ function PaymentDatePicker() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Intended date</label>
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={INP} />
+            <DatePicker value={startDate} onChange={setStartDate} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Extra holiday dates (YYYY-MM-DD, comma/space separated)</label>
@@ -2134,7 +2135,7 @@ function BalanceConfirmationGenerator() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Balance as on</label>
-            <input type="date" value={asOn} onChange={e => setAsOn(e.target.value)} className={INP} />
+            <DatePicker value={asOn} onChange={setAsOn} />
           </div>
         </div>
       </div>
@@ -2205,7 +2206,7 @@ function ForexSpreadTracker() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>
@@ -2719,7 +2720,7 @@ function CashDepositSlip() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -2832,7 +2833,7 @@ function ClearingTracker() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Deposited on</label>
-            <input type="date" value={depositDate} onChange={e => setDepositDate(e.target.value)} className={INP} />
+            <DatePicker value={depositDate} onChange={setDepositDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Track</button>
         </div>
@@ -2932,7 +2933,7 @@ function OdRenewalReminder() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Renewal due</label>
-            <input type="date" value={renewalDate} onChange={e => setRenewalDate(e.target.value)} className={INP} />
+            <DatePicker value={renewalDate} onChange={setRenewalDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>

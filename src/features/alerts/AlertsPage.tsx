@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { AlertTriangle, Bell, Info, CheckCircle2, X, Settings2, SlidersHorizontal, CalendarClock, Droplets, ShieldAlert, BellOff, Mail, Users, FileText, Wallet, Boxes, ArrowUpRight, PieChart, Inbox, Layers, BadgeCheck, HandCoins, Repeat, Landmark, CheckCheck, Cloud, CloudOff } from "lucide-react";
 import { toast } from "sonner";
 import { addMonths, addQuarters, addYears } from "date-fns";
+import DatePicker from "@/components/DatePicker";
 
 // ── Backend alert read-state sync ─────────────────────────────────────────────
 // The Active/History UI renders from the synced client store (context), but alert
@@ -558,7 +559,7 @@ function ComplianceDueDateAlerts() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Obligation *" className={INP} />
-          <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+          <DatePicker value={dueDate} onChange={setDueDate} />
           <select value={recurrence} onChange={e => setRecurrence(e.target.value as ComplianceItem["recurrence"])} className={INP}>
             <option value="once">One-time</option>
             <option value="monthly">Monthly</option>
@@ -1771,7 +1772,7 @@ function LicenceExpiryAlerts() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-end">
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Licence / certificate *" className={INP} />
-          <input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className={INP} />
+          <DatePicker value={expiryDate} onChange={setExpiryDate} />
           <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add licence</button>
         </div>
       </div>

@@ -5,6 +5,7 @@ import {
   Globe, RefreshCw, Plus, ArrowRightLeft, Coins, Scale, Banknote,
   TrendingUp, TrendingDown, Calculator, Wallet,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES - shapes mirror backend/src/modules/books/fx.js
@@ -296,7 +297,7 @@ function FxRateMaster() {
           </div>
           <div>
             <label className={labelCls}>Rate date</label>
-            <input type="date" value={rateDate} onChange={(e) => setRateDate(e.target.value)} className={inputCls} />
+            <DatePicker value={rateDate} onChange={setRateDate} />
           </div>
           <div>
             <label className={labelCls}>Rate (₹ per 1 unit)</label>
@@ -594,7 +595,7 @@ function RevalueAllCard() {
         <div className="flex items-end gap-3">
           <div>
             <label className={labelCls}>As of date</label>
-            <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className={inputCls} />
+            <DatePicker value={asOf} onChange={setAsOf} />
           </div>
           <button type="button" onClick={run} disabled={busy} className={btnPrimary}>
             {busy ? <RefreshCw size={14} className="animate-spin" /> : <Scale size={14} />} Revalue all
@@ -728,7 +729,7 @@ function FxSettlementCard({ parties }: { parties: Ledger[] }) {
           </div>
           <div>
             <label className={labelCls}>Date</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
         </div>
         <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-xs space-y-1">

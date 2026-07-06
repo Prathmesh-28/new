@@ -6,6 +6,7 @@ import {
   Landmark, Download, RefreshCw, Calculator, FileJson, Receipt, Plus,
   Percent, Banknote, ShieldAlert, Ban, GitCompareArrows,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES - response shapes mirror backend/src/modules/books/{gst,tds}.js
@@ -737,7 +738,7 @@ function RcmBillForm({ vendors }: { vendors: Ledger[] }) {
         </div>
         <div>
           <label className={labelCls}>Date</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+          <DatePicker value={date} onChange={setDate} />
         </div>
         <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 text-xs space-y-1">
           <div className="flex justify-between"><span className="text-[var(--color-muted)]">Taxable</span><span className="tabular-nums">₹{base.toFixed(2)}</span></div>
@@ -953,7 +954,7 @@ function GstChallanCard({ period }: { period: string }) {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div><label className={labelCls}>CIN (challan id)</label><input value={cin} onChange={(e) => setCin(e.target.value)} placeholder="optional" className={inputCls} /></div>
             <div><label className={labelCls}>Bank ref</label><input value={bankRef} onChange={(e) => setBankRef(e.target.value)} placeholder="optional" className={inputCls} /></div>
-            <div><label className={labelCls}>Paid on</label><input type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} className={inputCls} /></div>
+            <div><label className={labelCls}>Paid on</label><DatePicker value={paidOn} onChange={setPaidOn} /></div>
           </div>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => { setOpen(false); reset(); }} className="px-3 py-2 text-sm rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-bg)]">Cancel</button>

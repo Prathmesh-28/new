@@ -11,6 +11,7 @@ import EmptyState from "@/components/EmptyState";
 import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
 import type { Invoice } from "@/data/types";
+import DatePicker from "@/components/DatePicker";
 
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
@@ -1177,7 +1178,7 @@ ${firmName}`;
         </div>
         <div>
           <label className="text-xs text-[var(--color-muted)] block mb-1">Confirm balance as on</label>
-          <input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} className={`${INP} w-44`} />
+          <DatePicker value={asOf} onChange={setAsOf} />
         </div>
       </div>
 
@@ -1902,7 +1903,7 @@ function PromiseToPay() {
             <option value="">Select open invoice…</option>
             {open.map(i => <option key={i.id} value={i.id}>{i.customer} · {i.invoiceNumber ?? i.id} · {formatCurrency(i.amount)}</option>)}
           </select>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          <DatePicker value={date} onChange={setDate} />
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (optional)" className={INP} />
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (e.g. spoke to accounts)" className={`${INP} md:col-span-3`} />
           <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold text-sm rounded-lg px-3 py-2 hover:opacity-90">Log promise</button>
@@ -2893,7 +2894,7 @@ function PaymentPlanBuilder() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">First payment</label>
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={INP} />
+            <DatePicker value={startDate} onChange={setStartDate} />
           </div>
         </div>
       </div>

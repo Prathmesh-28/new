@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   Landmark, Plus, RefreshCw, Calculator, Tag, Trash2, Layers, FolderTree, Scale,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 interface ItBlockRow { block: string; rate: number; opening_wdv: number; additions: number; additions_lt180: number; disposals: number; depreciation: number; closing_wdv: number; stcg: number; stcl: number }
 interface ItDep { fy: string; blocks: ItBlockRow[]; total: { opening_wdv: number; additions: number; disposals: number; it_depreciation: number; closing_wdv: number; stcg: number; stcl: number }; book_depreciation_fy: number; timing_difference: number; committed: boolean; warnings: string[] }
@@ -267,7 +268,7 @@ export default function BooksAssetsTab() {
           <div className="space-y-3">
             <div>
               <label className={labelCls}>Depreciate up to (as-of date)</label>
-              <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className={inputCls} />
+              <DatePicker value={asOf} onChange={setAsOf} />
             </div>
             <p className="text-[11px] text-[var(--color-muted)]">
               Posts one journal per asset per elapsed month from each asset's last run (or acquisition) up to and
@@ -563,7 +564,7 @@ function AddAssetForm({ onCreated }: { onCreated: () => Promise<void> | void }) 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>Acquired on</label>
-            <input type="date" value={acquiredOn} onChange={(e) => setAcquiredOn(e.target.value)} className={inputCls} />
+            <DatePicker value={acquiredOn} onChange={setAcquiredOn} />
           </div>
           <div>
             <label className={labelCls}>Annual rate %</label>
@@ -700,7 +701,7 @@ function ManageAssetRow({
           </div>
           <div>
             <label className={labelCls}>Date</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <div>
             <label className={labelCls}>Bank ledger (if proceeds &gt; 0)</label>

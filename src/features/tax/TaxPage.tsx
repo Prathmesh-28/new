@@ -20,6 +20,7 @@ import { format, differenceInCalendarDays, startOfYear } from "date-fns";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import { useUrlTab } from "@/hooks/useUrlTab";
 import TabStrip from "@/components/TabStrip";
+import DatePicker from "@/components/DatePicker";
 
 // C1/C2/C14 (2026-07 gap audit): TaxPage rendered all 39 tabs as flat wrapping pills with
 // no overflow/search at all — worse than GST/Payroll, which at least folded into
@@ -1404,7 +1405,7 @@ function TdsReturnGenerator() {
             {TDS_SECTIONS.filter(s => s.section !== "192").map(s => <option key={s.section} value={s.section}>{s.section} - {s.nature}</option>)}
           </select>
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Payment amount (₹) *" className={INP} />
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          <DatePicker value={date} onChange={setDate} />
           <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add deduction</button>
         </div>
       </div>
@@ -1678,7 +1679,7 @@ function LowerDeductionTracker() {
             {TDS_SECTIONS.map(s => <option key={s.section} value={s.section}>{s.section} (normal {s.rate}%)</option>)}
           </select>
           <input type="number" value={certRate} onChange={e => setCertRate(e.target.value)} placeholder="Cert. rate %" className={INP} />
-          <input type="date" value={validTill} onChange={e => setValidTill(e.target.value)} className={INP} />
+          <DatePicker value={validTill} onChange={setValidTill} />
           <input type="number" value={payment} onChange={e => setPayment(e.target.value)} placeholder="Payment YTD (₹)" className={INP} />
         </div>
         <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add certificate</button>
@@ -2189,7 +2190,7 @@ function EqualisationLevyTracker() {
             {(Object.keys(RATES) as ElRow["type"][]).map(k => <option key={k} value={k}>{RATES[k].label}</option>)}
           </select>
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹) *" className={INP} />
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          <DatePicker value={date} onChange={setDate} />
         </div>
         <p className="text-[11px] text-[var(--color-muted)] mb-3">{RATES[type].desc}</p>
         <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add entry</button>
@@ -2349,7 +2350,7 @@ function TaxNoticeResponder() {
             {Object.keys(NOTICE_TYPES).map(t => <option key={t}>{t}</option>)}
           </select>
           <input type="number" value={demand} onChange={e => setDemand(e.target.value)} placeholder="Demand amount (₹)" className={INP} />
-          <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+          <DatePicker value={dueDate} onChange={setDueDate} />
           <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Log notice</button>
         </div>
         <p className="text-[11px] text-[var(--color-muted)]">Action for {type}: <span className="text-[var(--color-text)]">{NOTICE_TYPES[type]}</span></p>
@@ -3126,8 +3127,8 @@ function Interest234Calc() {
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Percent size={14} className="text-[var(--color-primary)]" /> Compute precisely (AY {defaultAy})</h3>
         <p className="text-xs text-[var(--color-muted)] mb-3">Uses the “assessed tax” and “advance tax paid” entered above, with the exact return dates + cumulative advance paid by each instalment.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Return due date</label><input type="date" value={pDue} onChange={e => setPDue(e.target.value)} className={INP} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Return filed on</label><input type="date" value={pFiled} onChange={e => setPFiled(e.target.value)} className={INP} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Return due date</label><DatePicker value={pDue} onChange={setPDue} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Return filed on</label><DatePicker value={pFiled} onChange={setPFiled} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">Cum. paid by 15 Jun</label><input type="number" value={pCum.jun} onChange={e => setPCum({ ...pCum, jun: e.target.value })} placeholder="optional" className={INP} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">by 15 Sep</label><input type="number" value={pCum.sep} onChange={e => setPCum({ ...pCum, sep: e.target.value })} placeholder="optional" className={INP} /></div>
           <div><label className="text-xs text-[var(--color-muted)] block mb-1">by 15 Dec</label><input type="number" value={pCum.dec} onChange={e => setPCum({ ...pCum, dec: e.target.value })} placeholder="optional" className={INP} /></div>

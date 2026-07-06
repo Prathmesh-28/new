@@ -15,6 +15,7 @@ import { parse2BJson, parseRegisterRows, reconcile, type ReconResult, type Recon
 import { addDays, format } from "date-fns";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import { useUrlTab } from "@/hooks/useUrlTab";
+import DatePicker from "@/components/DatePicker";
 
 // C14 (2026-07 gap audit): the tab ids, lifted out so useUrlTab can validate a `?tab=`
 // URL param against the real list (falls back to the default instead of rendering blank
@@ -1330,7 +1331,7 @@ function GstRefundTracker() {
               </div>
               <div>
                 <label className="text-xs text-[var(--color-muted)] block mb-1">Filed Date</label>
-                <input type="date" value={rFiled} onChange={e => setRFiled(e.target.value)} className={inp} />
+                <DatePicker value={rFiled} onChange={setRFiled} />
               </div>
               <div>
                 <label className="text-xs text-[var(--color-muted)] block mb-1">Notes</label>
@@ -2583,7 +2584,7 @@ function VendorComplianceScore() {
           <input type="number" value={filed} onChange={e => setFiled(e.target.value)} placeholder="Returns filed on time" className={inp} />
           <input type="number" value={total} onChange={e => setTotal(e.target.value)} placeholder="Total returns due" className={inp} />
           <input type="number" value={itc} onChange={e => setItc(e.target.value)} placeholder="Your ITC exposure (₹)" className={inp} />
-          <input type="date" value={last} onChange={e => setLast(e.target.value)} className={inp} />
+          <DatePicker value={last} onChange={setLast} />
         </div>
         <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add vendor</button>
       </div>
@@ -2651,8 +2652,8 @@ function Drc03Helper() {
               <option value="excess-itc">Excess ITC reversal</option>
             </select>
           </div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Original due date</label><input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inp} /></div>
-          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Payment date</label><input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className={inp} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Original due date</label><DatePicker value={dueDate} onChange={setDueDate} /></div>
+          <div><label className="text-xs text-[var(--color-muted)] block mb-1">Payment date</label><DatePicker value={payDate} onChange={setPayDate} /></div>
         </div>
       </div>
 
@@ -2711,7 +2712,7 @@ function GstAdvancesTracker() {
           <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Customer *" className={inp} />
           <input type="number" value={advance} onChange={e => setAdvance(e.target.value)} placeholder="Advance received ₹ *" className={inp} />
           <select value={rate} onChange={e => setRate(Number(e.target.value))} className={inp}>{GST_RATES.map(r => <option key={r} value={r}>{r}% GST</option>)}</select>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} />
+          <DatePicker value={date} onChange={setDate} />
         </div>
         <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Record advance</button>
       </div>
@@ -2991,11 +2992,11 @@ function GstInterestLateFee() {
           </label>
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Original due date</label>
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={GST_INPUT} />
+            <DatePicker value={dueDate} onChange={setDueDate} />
           </div>
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Actual / planned filing date</label>
-            <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className={GST_INPUT} />
+            <DatePicker value={payDate} onChange={setPayDate} />
           </div>
         </div>
       </div>
@@ -3213,7 +3214,7 @@ function Rule180ReversalTracker() {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Supplier name *" className={GST_INPUT} />
           <input value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} placeholder="Invoice no" className={GST_INPUT} />
-          <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className={GST_INPUT} />
+          <DatePicker value={invoiceDate} onChange={setInvoiceDate} />
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Taxable amount (₹) *" className={GST_INPUT} />
           <select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{GST_RATES.map(r => <option key={r} value={r}>{r}% GST</option>)}</select>
           <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add</button>
@@ -3288,7 +3289,7 @@ function EInvoice30DayTracker() {
         <h3 className="text-sm font-semibold">Add invoice to track</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <input value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} placeholder="Invoice no *" className={GST_INPUT} />
-          <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className={GST_INPUT} />
+          <DatePicker value={invoiceDate} onChange={setInvoiceDate} />
           <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder="Invoice value (₹)" className={GST_INPUT} />
           <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add</button>
         </div>
@@ -3414,7 +3415,7 @@ function CreditDebitNoteRegister() {
           <select value={kind} onChange={e => setKind(e.target.value as typeof kind)} className={GST_INPUT}><option value="credit">Credit note</option><option value="debit">Debit note</option></select>
           <input value={party} onChange={e => setParty(e.target.value)} placeholder="Party name" className={GST_INPUT} />
           <input value={origInvoice} onChange={e => setOrigInvoice(e.target.value)} placeholder="Original invoice no" className={GST_INPUT} />
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={GST_INPUT} />
+          <DatePicker value={date} onChange={setDate} />
           <input type="number" value={taxable} onChange={e => setTaxable(e.target.value)} placeholder="Taxable value (₹) *" className={GST_INPUT} />
           <select value={rate} onChange={e => setRate(Number(e.target.value))} className={GST_INPUT}>{GST_RATES.map(r => <option key={r} value={r}>{r}% GST</option>)}</select>
           <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add note</button>
@@ -3797,7 +3798,7 @@ function JobWorkItc04Tracker() {
           <input value={challanNo} onChange={e => setChallanNo(e.target.value)} placeholder="Challan no *" className={GST_INPUT} />
           <input value={jobWorker} onChange={e => setJobWorker(e.target.value)} placeholder="Job worker *" className={GST_INPUT} />
           <input value={goods} onChange={e => setGoods(e.target.value)} placeholder="Goods / description" className={GST_INPUT} />
-          <input type="date" value={sentDate} onChange={e => setSentDate(e.target.value)} className={GST_INPUT} />
+          <DatePicker value={sentDate} onChange={setSentDate} />
           <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder="Value (₹)" className={GST_INPUT} />
           <select value={type} onChange={e => setType(e.target.value as typeof type)} className={GST_INPUT}><option value="inputs">Inputs (1 yr)</option><option value="capital">Capital goods (3 yrs)</option></select>
           <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 md:col-span-2">+ Add challan</button>

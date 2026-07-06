@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { format, addMonths, setDate, isBefore, differenceInDays } from "date-fns";
 import { useT } from "@/i18n";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import DatePicker from "@/components/DatePicker";
 
 type ComplianceTab =
   | "overview" | "roc-prep" | "kyc-dpt3" | "board-agm" | "registers"
@@ -784,7 +785,7 @@ function InsuranceCalendar() {
             <input value={iInsurer} onChange={e => setIInsurer(e.target.value)} placeholder="Insurer / broker" className={inp} />
             <input type="number" value={iPremium} onChange={e => setIPremium(e.target.value)} placeholder="Annual premium (₹)" className={inp} />
             <input type="number" value={iSum}    onChange={e => setISum(e.target.value)}    placeholder="Sum insured (₹)" className={inp} />
-            <input type="date"   value={iRenewal} onChange={e => setIRenewal(e.target.value)} className={inp} />
+            <DatePicker value={iRenewal} onChange={setIRenewal} />
             <input value={iNotes}  onChange={e => setINotes(e.target.value)}   placeholder="Notes (optional)" className={`${inp} md:col-span-3`} />
           </div>
           <div className="flex gap-2 mt-3">
@@ -900,7 +901,7 @@ function RocAutoPrep() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">AGM Date (default: 30 Sep)</label>
-            <input type="date" value={agm} onChange={e => setAgm(e.target.value)} className={CINP} />
+            <DatePicker value={agm} onChange={setAgm} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Entity Type</label>
@@ -1102,7 +1103,7 @@ function BoardAgmManager() {
           <select value={kind} onChange={e => setKind(e.target.value as Meeting["kind"])} className={CINP}>
             {(["Board", "AGM", "EGM", "Committee"] as const).map(k => <option key={k} value={k}>{k} Meeting</option>)}
           </select>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={CINP} />
+          <DatePicker value={date} onChange={setDate} />
           <input value={agenda} onChange={e => setAgenda(e.target.value)} placeholder="Agenda items" className={`${CINP} md:col-span-2`} />
           <input value={resolutions} onChange={e => setResolutions(e.target.value)} placeholder="Resolutions passed" className={`${CINP} md:col-span-3`} />
           <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold rounded-lg hover:opacity-90 flex items-center justify-center gap-1"><Plus size={12} /> Add meeting</button>
@@ -1556,7 +1557,7 @@ function TrademarkIpRenewal() {
           </select>
           <input className={INP} placeholder="Reg. no." value={regNo} onChange={e => setRegNo(e.target.value)} />
           <input className={INP} placeholder="Class / field" value={cls} onChange={e => setCls(e.target.value)} />
-          <input type="date" className={INP} value={regDate} onChange={e => setRegDate(e.target.value)} />
+          <DatePicker value={regDate} onChange={setRegDate} />
         </div>
         <button onClick={add} className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium bg-[var(--color-primary)] text-[var(--color-bg)]"><Plus size={12} /> Add IP asset</button>
       </div>
@@ -1618,7 +1619,7 @@ function IecComplianceTracker() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Last DGFT update date</label>
-            <input type="date" className={INP} value={updated} onChange={e => setUpdated(e.target.value)} />
+            <DatePicker value={updated} onChange={setUpdated} />
           </div>
         </div>
         <div className={`mt-3 rounded-lg p-3 border text-xs ${updatedThisFy ? "bg-green-950/20 border-green-800/40 text-green-400" : "bg-yellow-950/20 border-yellow-800/40 text-yellow-300"}`}>
@@ -1694,8 +1695,8 @@ function PollutionConsentTracker() {
             {(["Red", "Orange", "Green", "White"] as const).map(c => <option key={c} value={c}>{c} category</option>)}
           </select>
           <input className={INP} placeholder="Consent no." value={number} onChange={e => setNumber(e.target.value)} />
-          <input type="date" className={INP} title="Issued" value={issued} onChange={e => setIssued(e.target.value)} />
-          <input type="date" className={INP} title="Valid until" value={valid} onChange={e => setValid(e.target.value)} />
+          <DatePicker value={issued} onChange={setIssued} />
+          <DatePicker value={valid} onChange={setValid} />
         </div>
         <p className="text-[10px] text-[var(--color-muted)] mt-2">Validity for {category}: <span className={CAT_COLOR[category]}>{CAT_VALIDITY[category]}</span></p>
         <button onClick={add} className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium bg-[var(--color-primary)] text-[var(--color-bg)]"><Plus size={12} /> Add consent</button>
@@ -1753,7 +1754,7 @@ function FireNocTracker() {
             {(["Provisional NOC", "Final NOC", "Fire Safety Certificate"] as const).map(t => <option key={t} value={t}>{t}</option>)}
           </select>
           <input className={INP} placeholder="Certificate no." value={number} onChange={e => setNumber(e.target.value)} />
-          <input type="date" className={INP} title="Valid until" value={valid} onChange={e => setValid(e.target.value)} />
+          <DatePicker value={valid} onChange={setValid} />
         </div>
         <button onClick={add} className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium bg-[var(--color-primary)] text-[var(--color-bg)]"><Plus size={12} /> Add NOC</button>
       </div>
@@ -1869,7 +1870,7 @@ function RelatedPartyRegister() {
           <select className={INP} value={basis} onChange={e => setBasis(e.target.value as Rpt["basis"])}>
             {(["Arm's length", "Not arm's length"] as const).map(b => <option key={b} value={b}>{b}</option>)}
           </select>
-          <input type="date" className={INP} value={date} onChange={e => setDate(e.target.value)} />
+          <DatePicker value={date} onChange={setDate} />
         </div>
         <button onClick={add} className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium bg-[var(--color-primary)] text-[var(--color-bg)]"><Plus size={12} /> Log transaction</button>
       </div>
@@ -2003,7 +2004,7 @@ function EventBasedRocTracker() {
           <select className={INP} value={form} onChange={e => setForm(e.target.value)}>
             {FORMS.map(f => <option key={f.form} value={f.form}>{f.form} - {f.event}</option>)}
           </select>
-          <input type="date" className={INP} title="Event date" value={eventDate} onChange={e => setEventDate(e.target.value)} />
+          <DatePicker value={eventDate} onChange={setEventDate} />
           <button onClick={add} className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-lg font-medium bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90"><Plus size={12} /> Add filing</button>
         </div>
         <p className="text-[10px] text-[var(--color-muted)] mt-2">{meta(form).note}</p>
@@ -2173,7 +2174,7 @@ function MsmeForm1Tracker() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <input className={INP} placeholder="MSE supplier name" value={supplier} onChange={e => setSupplier(e.target.value)} />
           <input className={INP} placeholder="Udyam no. (optional)" value={udyam} onChange={e => setUdyam(e.target.value)} />
-          <input type="date" className={INP} title="Invoice / supply date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} />
+          <DatePicker value={invoiceDate} onChange={setInvoiceDate} />
           <input type="number" className={INP} placeholder="Amount due (₹)" value={amount} onChange={e => setAmount(e.target.value)} />
         </div>
         <button onClick={add} className="mt-3 flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg font-medium bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90"><Plus size={12} /> Add outstanding due</button>

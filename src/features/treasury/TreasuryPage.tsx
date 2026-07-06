@@ -19,6 +19,7 @@ import TabStrip from "@/components/TabStrip";
 import { useT } from "@/i18n";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import { useUrlTab } from "@/hooks/useUrlTab";
+import DatePicker from "@/components/DatePicker";
 
 // shared styles (reused from TaxPage/DebtPage input convention)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -861,7 +862,7 @@ function GoalPlanner() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Deadline</label>
-            <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} className={INP} />
+            <DatePicker value={deadline} onChange={setDeadline} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Yield %</label>
@@ -1132,11 +1133,11 @@ function MaturityCalendar() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Start date</label>
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={INP} />
+            <DatePicker value={startDate} onChange={setStartDate} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Matures on</label>
-            <input type="date" value={maturityDate} onChange={e => setMaturityDate(e.target.value)} className={INP} />
+            <DatePicker value={maturityDate} onChange={setMaturityDate} />
           </div>
         </div>
         <button onClick={submit} disabled={saving} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50">
@@ -1804,7 +1805,7 @@ function IncomeTracker() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
             <Plus size={13} /> Add
@@ -2122,7 +2123,7 @@ function XirrCalculator() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
@@ -2763,11 +2764,11 @@ function AccruedInterestCalculator() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Last paid / start date</label>
-            <input type="date" value={start} onChange={e => setStart(e.target.value)} className={INP} />
+            <DatePicker value={start} onChange={setStart} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">As-of date</label>
-            <input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} className={INP} />
+            <DatePicker value={asOf} onChange={setAsOf} />
           </div>
         </div>
         <div className="flex gap-2">
@@ -2860,7 +2861,7 @@ function AssetLiabilityMatcher() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
             <Plus size={13} /> Add

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays, addMonths, addQuarters, differenceInCalendarDays, parseISO } from "date-fns";
+import DatePicker from "@/components/DatePicker";
 
 // ── shared styles (mirrors TaxPage input + DebtPage card) ──────────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -491,7 +492,7 @@ function ReminderScheduler() {
               </div>
               <div>
                 <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-                <input type="date" value={manualDate} onChange={e => setManualDate(e.target.value)} className={INP} />
+                <DatePicker value={manualDate} onChange={setManualDate} />
               </div>
             </>
           ) : (
@@ -1057,7 +1058,7 @@ function RecurringTasks() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Starting</label>
-            <input type="date" value={anchor} onChange={e => setAnchor(e.target.value)} className={INP} />
+            <DatePicker value={anchor} onChange={setAnchor} />
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
@@ -1741,7 +1742,7 @@ function RecurringJournals() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">First post</label>
-            <input type="date" value={anchor} onChange={e => setAnchor(e.target.value)} className={INP} />
+            <DatePicker value={anchor} onChange={setAnchor} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
             <Plus size={13} /> Save template
@@ -1980,7 +1981,7 @@ function ScheduledReports() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">First delivery</label>
-            <input type="date" value={anchor} onChange={e => setAnchor(e.target.value)} className={INP} />
+            <DatePicker value={anchor} onChange={setAnchor} />
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
@@ -3069,7 +3070,7 @@ function RecurringInvoiceRules() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">First invoice on</label>
-            <input type="date" value={nextDate} onChange={e => setNextDate(e.target.value)} className={INP} />
+            <DatePicker value={nextDate} onChange={setNextDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
             <Plus size={13} /> Add rule

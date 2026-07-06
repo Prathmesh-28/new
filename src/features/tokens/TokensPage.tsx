@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import DatePicker from "@/components/DatePicker";
 
 // ── Real-store helpers (local to this page; reads store.invoices / store.transactions) ──
 type RealInvoiceOption = { id: string; number: string; customer: string; amount: number; dueDate: string; status: string };
@@ -273,7 +274,7 @@ function ERupeeLedger() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <button onClick={addEntry} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> {tr("tok.add")}</button>
         </div>

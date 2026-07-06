@@ -7,6 +7,7 @@ import {
   BookOpen, GitCompareArrows, Target, Users, Package, FolderKanban,
   FileCode2, FileJson, TrendingUp,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES - response shapes mirror backend/src/modules/books/reports.js
@@ -758,11 +759,11 @@ function DayBookCard() {
         <div className="flex flex-wrap items-end gap-2">
           <div>
             <label className={labelCls}>From</label>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputCls} />
+            <DatePicker value={from} onChange={setFrom} />
           </div>
           <div>
             <label className={labelCls}>To</label>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputCls} />
+            <DatePicker value={to} onChange={setTo} />
           </div>
           <button type="button" onClick={load} disabled={busy} className={btnGhost}>
             <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Load

@@ -21,6 +21,7 @@ import SimpleHome from "@/components/SimpleHome";
 import FinancingNudgeCard from "@/features/dashboard/FinancingNudgeCard";
 import { api } from "@/lib/api";
 import type { BankAccount } from "@/data/types";
+import DatePicker from "@/components/DatePicker";
 
 const SEV_COLOR: Record<string, string> = {
   critical: "text-red-400 border-red-700/60 bg-red-900/40",
@@ -532,7 +533,7 @@ function AddAccountModal({ onClose, onAdd }: { onClose: () => void; onAdd: (a: A
             </div>
             <div>
               <label className={lbl}>Balance as of</label>
-              <input type="date" value={asOf} max={new Date().toISOString().split("T")[0]} onChange={e => setAsOf(e.target.value)} className={field} />
+              <DatePicker value={asOf} onChange={setAsOf} max={new Date().toISOString().split("T")[0]} />
             </div>
           </div>
 

@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { differenceInCalendarDays, parseISO, format } from "date-fns";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import { useUrlTab } from "@/hooks/useUrlTab";
+import DatePicker from "@/components/DatePicker";
 
 // C14 continuation (2026-07 gap audit) — keep in sync with the TabStrip `tabs=` array below.
 const INSURANCE_TAB_IDS = ["overview", "vault", "register", "gaps", "suminsured", "grouphealth", "assetcover", "tradecredit", "claims", "premvscover", "keyman", "riskscore", "duecal", "csrcompare", "ncbtracker", "deductibleopt", "bicover", "marinecover", "piestimator", "cyberscore", "fleettracker", "wcestimator", "premiumemi", "itcchecker", "tophealth", "opdwellness", "lifestage", "riders", "tco", "surrender", "groupvsindiv", "renewplanner", "inflationidx", "spendbudget", "claimprep", "underinsurance", "overlap", "pkgrec", "empgap", "liability"] as const;
@@ -289,11 +290,11 @@ function PolicyRegister() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Start date</label>
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={INP} />
+            <DatePicker value={startDate} onChange={setStartDate} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Renewal date</label>
-            <input type="date" value={renewalDate} onChange={e => setRenewalDate(e.target.value)} className={INP} />
+            <DatePicker value={renewalDate} onChange={setRenewalDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
             <Plus size={13} /> Add
@@ -851,7 +852,7 @@ function ClaimsTracker() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
             <Plus size={13} /> Log
@@ -1903,7 +1904,7 @@ function FleetInsuranceTracker() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Expiry</label>
-            <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} className={INP} />
+            <DatePicker value={expiry} onChange={setExpiry} />
           </div>
         </div>
         <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium w-fit">
@@ -2345,7 +2346,7 @@ function OPDWellnessTracker() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium">
             <Plus size={13} /> Log

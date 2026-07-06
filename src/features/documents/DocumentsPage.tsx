@@ -9,6 +9,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { api } from "@/lib/api";
 import { useT } from "@/i18n";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import DatePicker from "@/components/DatePicker";
 
 type DocCategory = "gst" | "banking" | "legal" | "tax" | "payroll" | "other";
 type DocStatus = "valid" | "expiring" | "expired" | "uploaded";
@@ -651,7 +652,7 @@ function ReceiptOcrCapture() {
           <select value={category} onChange={e => setCategory(e.target.value)} className={INP}>
             {EXPENSE_CATS.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+          <DatePicker value={date} onChange={setDate} />
           <button onClick={save} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Book expense</button>
         </div>
       </div>
@@ -857,7 +858,7 @@ function ExpiryRenewalVault() {
           <input value={owner} onChange={e => setOwner(e.target.value)} placeholder="Owner / dept" className={INP} />
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Expiry date *</label>
-            <input type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} className={INP} />
+            <DatePicker value={expiresAt} onChange={setExpiresAt} />
           </div>
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Alert (days before)</label>
@@ -1568,7 +1569,7 @@ function ContractKeyDates() {
           <input value={counterparty} onChange={e => setCounterparty(e.target.value)} placeholder="Counterparty" className={INP} />
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Date *</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" className={INP} />
           <div className="flex items-end"><button onClick={add} className="w-full text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Add date</button></div>
@@ -1667,7 +1668,7 @@ function BillFilingTracker() {
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹)" className={INP} />
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Bill date</label>
-            <input type="date" value={billDate} onChange={e => setBillDate(e.target.value)} className={INP} />
+            <DatePicker value={billDate} onChange={setBillDate} />
           </div>
           <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Where filed (folder / drive)" className={INP} />
           <div className="flex items-end"><button onClick={add} className="w-full text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Add bill</button></div>
@@ -2018,7 +2019,7 @@ function DocumentRequestTracker() {
           </select>
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Due by</label>
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+            <DatePicker value={dueDate} onChange={setDueDate} />
           </div>
         </div>
         <textarea value={itemsText} onChange={e => setItemsText(e.target.value)} rows={3}
@@ -2131,7 +2132,7 @@ function NamingHelper() {
           </select>
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Document date</label>
-            <input type="date" value={docDate} onChange={e => setDocDate(e.target.value)} className={INP} />
+            <DatePicker value={docDate} onChange={setDocDate} />
           </div>
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (₹)" className={INP} />
         </div>
@@ -2196,7 +2197,7 @@ function ComplianceCalendar() {
           </select>
           <div>
             <label className="text-[10px] text-[var(--color-muted)] block mb-0.5">Due date *</label>
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+            <DatePicker value={dueDate} onChange={setDueDate} />
           </div>
           <div className="flex items-end"><button onClick={add} className="w-full text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Plus size={13} /> Add filing</button></div>
         </div>
@@ -3012,7 +3013,7 @@ function ObligationTracker() {
           <input value={contract} onChange={e => setContract(e.target.value)} placeholder="Contract / party *" className={INP} />
           <input value={obligation} onChange={e => setObligation(e.target.value)} placeholder="Obligation *" className={INP} />
           <input value={owner} onChange={e => setOwner(e.target.value)} placeholder="Owner" className={INP} />
-          <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+          <DatePicker value={dueDate} onChange={setDueDate} />
         </div>
         <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Plus size={13} /> Add obligation</button>
       </div>

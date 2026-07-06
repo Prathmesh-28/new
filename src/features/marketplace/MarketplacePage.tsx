@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import { useUrlTab } from "@/hooks/useUrlTab";
+import DatePicker from "@/components/DatePicker";
 
 // Reused TaxPage input class string.
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -984,7 +985,7 @@ function PayoutCalendar() {
             <select value={channel} onChange={e => setChannel(e.target.value as Channel)} className={INP}>{CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}</select>
           </div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Cycle (days)</label><input type="number" value={cycleDays} onChange={e => setCycleDays(e.target.value)} placeholder="7" className={INP} /></div>
-          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Last payout date</label><input type="date" value={lastPayout} onChange={e => setLastPayout(e.target.value)} className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Last payout date</label><DatePicker value={lastPayout} onChange={setLastPayout} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Pending / unsettled (₹)</label><input type="number" value={pending} onChange={e => setPending(e.target.value)} placeholder="180000" className={INP} /></div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -2297,7 +2298,7 @@ function ReserveReleaseTracker() {
             <select value={channel} onChange={e => setChannel(e.target.value as Channel)} className={INP}>{CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}</select>
           </div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Held amount (₹)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="120000" className={INP} /></div>
-          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Held on</label><input type="date" value={heldOn} onChange={e => setHeldOn(e.target.value)} className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Held on</label><DatePicker value={heldOn} onChange={setHeldOn} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Release in (days)</label><input type="number" value={releaseDays} onChange={e => setReleaseDays(e.target.value)} placeholder="7" className={INP} /></div>
         </div>
         <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add reserve</button>
@@ -2387,7 +2388,7 @@ function ChargebackLedger() {
             <select value={reason} onChange={e => setReason(e.target.value)} className={INP}>{REASONS.map(r => <option key={r} value={r}>{r}</option>)}</select>
           </div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Amount (₹)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="1499" className={INP} /></div>
-          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Raised on</label><input type="date" value={raisedOn} onChange={e => setRaisedOn(e.target.value)} className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Raised on</label><DatePicker value={raisedOn} onChange={setRaisedOn} /></div>
         </div>
         <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Log chargeback</button>
       </div>
@@ -2631,7 +2632,7 @@ function FestivalPlanner() {
         <p className="text-xs text-[var(--color-muted)]">Big Billion Days, Great Indian Festival and Diwali sales make or break the quarter. Set the event date and the checklist auto-dates each prep task backwards from it - so stock, pricing, ads and cash are ready in time.</p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
           <div className="md:col-span-2"><label className="block text-xs text-[var(--color-muted)] mb-1">Event</label><input value={eventName} onChange={e => setEventName(e.target.value)} placeholder="Big Billion Days" className={INP} /></div>
-          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Event date</label><input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Event date</label><DatePicker value={eventDate} onChange={setEventDate} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Proj. units</label><input type="number" value={projUnits} onChange={e => setProjUnits(e.target.value)} placeholder="2000" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">AOV (₹)</label><input type="number" value={aov} onChange={e => setAov(e.target.value)} placeholder="700" className={INP} /></div>
         </div>
@@ -3182,7 +3183,7 @@ function CodRemittanceTracker() {
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">COD orders</label><input type="number" value={orders} onChange={e => setOrders(e.target.value)} placeholder="120" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Collected (₹)</label><input type="number" value={collected} onChange={e => setCollected(e.target.value)} placeholder="180000" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Remitted (₹)</label><input type="number" value={remitted} onChange={e => setRemitted(e.target.value)} placeholder="120000" className={INP} /></div>
-          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Remit due by</label><input type="date" value={expectedOn} onChange={e => setExpectedOn(e.target.value)} className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Remit due by</label><DatePicker value={expectedOn} onChange={setExpectedOn} /></div>
         </div>
         <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Add COD batch</button>
       </div>
@@ -3357,7 +3358,7 @@ function NegativeBalanceTracker() {
           <div className="col-span-2 md:col-span-1"><label className="block text-xs text-[var(--color-muted)] mb-1">Reason</label><input value={reason} onChange={e => setReason(e.target.value)} placeholder="Refund > sales" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Amount (₹)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="14000" className={INP} /></div>
           <div><label className="block text-xs text-[var(--color-muted)] mb-1">Recovered (₹)</label><input type="number" value={recovered} onChange={e => setRecovered(e.target.value)} placeholder="0" className={INP} /></div>
-          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Raised on</label><input type="date" value={raisedOn} onChange={e => setRaisedOn(e.target.value)} className={INP} /></div>
+          <div><label className="block text-xs text-[var(--color-muted)] mb-1">Raised on</label><DatePicker value={raisedOn} onChange={setRaisedOn} /></div>
         </div>
         <button onClick={add} className="flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium"><Plus size={13} /> Log negative balance</button>
       </div>

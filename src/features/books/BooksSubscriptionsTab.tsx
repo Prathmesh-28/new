@@ -5,6 +5,7 @@ import {
   Layers, Repeat, RefreshCw, Plus, Zap, PlayCircle, Pause, XCircle, ArrowLeftRight,
   Gauge, Send, BarChart3, Receipt,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES (loose - backend response shapes inlined)
@@ -893,11 +894,11 @@ function UsageSection() {
           </div>
           <div>
             <label className={labelCls}>From</label>
-            <input type="date" value={aFrom} onChange={(e) => setAFrom(e.target.value)} className={inputCls} />
+            <DatePicker value={aFrom} onChange={setAFrom} />
           </div>
           <div>
             <label className={labelCls}>To</label>
-            <input type="date" value={aTo} onChange={(e) => setATo(e.target.value)} className={inputCls} />
+            <DatePicker value={aTo} onChange={setATo} />
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 mt-4">
@@ -931,11 +932,11 @@ function UsageSection() {
           </div>
           <div>
             <label className={labelCls}>From</label>
-            <input type="date" value={cFrom} onChange={(e) => setCFrom(e.target.value)} className={inputCls} />
+            <DatePicker value={cFrom} onChange={setCFrom} />
           </div>
           <div>
             <label className={labelCls}>To</label>
-            <input type="date" value={cTo} onChange={(e) => setCTo(e.target.value)} className={inputCls} />
+            <DatePicker value={cTo} onChange={setCTo} />
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 mt-4">

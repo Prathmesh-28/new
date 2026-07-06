@@ -7,6 +7,7 @@ import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency } from "@/lib/utils";
 import { DEFAULT_WA_PREFS, type WhatsAppPreferences } from "@/data/types";
 import { useT } from "@/i18n";
+import DatePicker from "@/components/DatePicker";
 
 // Build a wa.me deep link that pre-fills a message (no backend call). If a
 // recipient phone is supplied, it opens that chat; otherwise WhatsApp asks who.
@@ -1665,7 +1666,7 @@ function WaServiceReminder() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Due date</label>
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={WA_INP} />
+            <DatePicker value={dueDate} onChange={setDueDate} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹, optional)</label>
@@ -2081,7 +2082,7 @@ function WaAppointmentReminder() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={WA_INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Time (optional)</label>
@@ -2200,7 +2201,7 @@ function WaPaymentPlan() {
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">First due (optional)</label>
-            <input type="date" value={start} onChange={e => setStart(e.target.value)} className={WA_INP} />
+            <DatePicker value={start} onChange={setStart} />
           </div>
           <div className="md:col-span-2">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer WhatsApp number (optional)</label>

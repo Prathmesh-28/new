@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { format, differenceInCalendarDays } from "date-fns";
 import { useT } from "@/i18n";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
+import DatePicker from "@/components/DatePicker";
 
 // shared styles - reused TaxPage/DebtPage input class string
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -486,11 +487,11 @@ function FircBrcTracker() {
           </div>
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Export date</label>
-            <input type="date" value={exportDate} onChange={e => setExportDate(e.target.value)} className={INP} />
+            <DatePicker value={exportDate} onChange={setExportDate} />
           </div>
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Remit date</label>
-            <input type="date" value={remitDate} onChange={e => setRemitDate(e.target.value)} className={INP} />
+            <DatePicker value={remitDate} onChange={setRemitDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>
@@ -586,7 +587,7 @@ function LetterOfCreditTracker() {
           </div>
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Expiry</label>
-            <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} className={INP} />
+            <DatePicker value={expiry} onChange={setExpiry} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>
@@ -1400,7 +1401,7 @@ function EefcAccountTracker() {
           </div>
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Credit date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INP} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>
@@ -1595,7 +1596,7 @@ function AdvanceAuthEpcgTracker() {
           </div>
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">EO period ends</label>
-            <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} className={INP} />
+            <DatePicker value={expiry} onChange={setExpiry} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>
@@ -1760,7 +1761,7 @@ function IecAdCodeTracker() {
           </div>
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Renewal / valid till</label>
-            <input type="date" value={renewal} onChange={e => setRenewal(e.target.value)} className={INP} />
+            <DatePicker value={renewal} onChange={setRenewal} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>
@@ -1921,7 +1922,7 @@ function SoftexTracker() {
           </div>
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Invoice date</label>
-            <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className={INP} />
+            <DatePicker value={invoiceDate} onChange={setInvoiceDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>
@@ -2064,7 +2065,7 @@ function FemaComplianceCalendar() {
           </div>
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Due</label>
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={INP} />
+            <DatePicker value={dueDate} onChange={setDueDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>
@@ -2156,7 +2157,7 @@ function OdiFdiTracker() {
           <div className="flex gap-2">
             <div className="flex-1">
               <label className="block text-xs text-[var(--color-muted)] mb-1">Event date</label>
-              <input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} className={INP} />
+              <DatePicker value={eventDate} onChange={setEventDate} />
             </div>
           </div>
           <button onClick={add} className="md:col-span-5 flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add flow</button>
@@ -2627,7 +2628,7 @@ function ExportRealisationAging() {
           </div>
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">Export date</label>
-            <input type="date" value={exportDate} onChange={e => setExportDate(e.target.value)} className={INP} />
+            <DatePicker value={exportDate} onChange={setExportDate} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Add</button>
         </div>

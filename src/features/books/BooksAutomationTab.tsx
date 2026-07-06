@@ -6,6 +6,7 @@ import {
   Mail, FileUp, FolderTree, ListChecks, ChevronRight, AlertTriangle,
   CalendarClock, Eye, Pencil, X,
 } from "lucide-react";
+import DatePicker from "@/components/DatePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES - shapes mirror backend/src/modules/books/{rules,recurrence,dunning,importconfig}.js
@@ -751,7 +752,7 @@ function RecurrencesSection() {
           <div className="flex items-end gap-2">
             <div>
               <label className={labelCls}>As of</label>
-              <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className={inputCls} />
+              <DatePicker value={asOf} onChange={setAsOf} />
             </div>
             <button type="button" onClick={() => void load()} className={btnGhost}><RefreshCw size={14} className={busy ? "animate-spin" : ""} /></button>
             <button type="button" onClick={runDue} disabled={running} className={btnPrimary}>
@@ -905,7 +906,7 @@ function RecurrenceCreateCard({ onReload }: { onReload: () => Promise<void> }) {
           </div>
           <div>
             <label className={labelCls}>Start date</label>
-            <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className={inputCls} />
+            <DatePicker value={start} onChange={setStart} />
           </div>
         </div>
 
@@ -970,7 +971,7 @@ function RecurrenceCreateCard({ onReload }: { onReload: () => Promise<void> }) {
           {endKind === "date" && (
             <div>
               <label className={labelCls}>End date</label>
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputCls} />
+              <DatePicker value={endDate} onChange={setEndDate} />
             </div>
           )}
           {endKind === "count" && (
@@ -1154,7 +1155,7 @@ function DunningSection() {
           <div className="flex items-end gap-2">
             <div>
               <label className={labelCls}>As of</label>
-              <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className={inputCls} />
+              <DatePicker value={asOf} onChange={setAsOf} />
             </div>
             <button type="button" onClick={() => runDun(true)} disabled={running} className={btnGhost}>
               <FlaskConical size={14} /> Dry run
