@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Workflow, Plus, RefreshCw, Trash2, Play, FlaskConical, Repeat,
   Mail, FileUp, FolderTree, ListChecks, ChevronRight, AlertTriangle,
-  CalendarClock, Eye, Pencil, X,
+  CalendarClock, Eye, Pencil, X, Send, MessageCircle, CheckCircle2,
 } from "lucide-react";
 import DatePicker from "@/components/DatePicker";
 
@@ -92,6 +92,26 @@ interface DunRunResult {
   skippedAlready: number;
   dryRun: boolean;
   letters: { voucherId: string; invoiceNumber: string; partyName: string; level: number; levelName: string; tone: string; subject: string; body: string; totalDue: string }[];
+}
+
+interface DunRunRow {
+  id: string;
+  voucherId: string;
+  partyName: string;
+  hasEmail: boolean;
+  hasPhone: boolean;
+  level: number;
+  levelName: string;
+  tone: string;
+  asOf: string;
+  daysOverdue: number;
+  totalDue: string;
+  subject: string;
+  body: string;
+  createdAt: string;
+  dispatchedAt: string | null;
+  dispatchChannel: string | null;
+  dispatchTo: string | null;
 }
 
 interface ImportConfig {
@@ -1016,6 +1036,9 @@ function DunningSection() {
   const [dueBusy, setDueBusy] = useState(false);
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<DunRunResult | null>(null);
+  const [letters, setLetters] = useState<DunRunRow[]>([]);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [channels, setChannels] = useState<{ whatsapp: boolean; email: boolean }>({ whatsapp: false, email: false });
 
   const loadProc = useCallback(async () => {
     setBusy(true);
@@ -1046,6 +1069,32 @@ function DunningSection() {
   }, []);
 
   useEffect(() => { void loadDue(asOf); }, [loadDue, asOf]);
+
+  const loadLetters = useCallback(async () => {
+    try { setLetters(await api.get<DunRunRow[]>("/api/books/dunning/runs") ?? []); } catch { /* non-fatal */ }
+  }, []);
+
+  useEffect(() => {
+    void loadLetters();
+    // Which real send channels the server has configured (Twilio / SMTP) - buttons
+    // stay honest: an unconfigured channel is disabled, never a silent no-op.
+    api.get<{ whatsapp: boolean; email: boolean }>("/api/capabilities")
+      .then((c) => setChannels({ whatsapp: !!c?.whatsapp, email: !!c?.email }))
+      .catch(() => {});
+  }, [loadLetters]);
+
+  const dispatchLetter = async (row: DunRunRow, channel: "whatsapp" | "email") => {
+    setSendingId(row.id);
+    try {
+      const res = await api.post<{ ok: boolean; to: string }>(`/api/books/dunning/runs/${row.id}/dispatch`, { channel });
+      toast.success(`Sent to ${res.to} via ${channel === "whatsapp" ? "WhatsApp" : "email"}`);
+      await loadLetters();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSendingId(null);
+    }
+  };
 
   const setLevel = (i: number, p: Partial<DunLevel>) => setLevels((ls) => ls.map((l, j) => (j === i ? { ...l, ...p } : l)));
 
@@ -1081,7 +1130,7 @@ function DunningSection() {
       const res = await api.post<DunRunResult>("/api/books/dunning/run", { asOf, procedure, dryRun });
       setRunResult(res);
       toast.success(`${dryRun ? "Dry run" : "Run"}: ${res.advanced} advanced, ${res.skippedAlready} already at level, ${res.skippedNotDue} not due`);
-      if (!dryRun) await loadDue(asOf);
+      if (!dryRun) { await loadDue(asOf); await loadLetters(); }
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -1229,6 +1278,64 @@ function DunningSection() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+      </Card>
+
+      <Card
+        title="Generated letters"
+        icon={<Send size={15} />}
+        action={<button type="button" onClick={() => void loadLetters()} className={btnGhost}><RefreshCw size={14} /></button>}
+      >
+        {letters.length === 0 ? (
+          <p className="text-sm text-[var(--color-muted)]">No letters generated yet - run dunning above (not a dry run) to create them.</p>
+        ) : (
+          <div className="space-y-2">
+            {!channels.whatsapp && !channels.email && (
+              <Hint>Neither WhatsApp (Twilio) nor email (SMTP) is configured on the server, so letters can be reviewed here but not sent yet.</Hint>
+            )}
+            {letters.map((lt) => (
+              <details key={lt.id} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                <summary className="cursor-pointer text-sm flex items-center gap-2 flex-wrap">
+                  <Pill tone={toneTint(lt.tone)}>L{lt.level}</Pill>
+                  <span className="font-medium">{lt.partyName}</span>
+                  <span className="text-[var(--color-muted)] text-xs">{lt.asOf} · {lt.daysOverdue}d overdue</span>
+                  {lt.dispatchedAt && (
+                    <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                      <CheckCircle2 size={12} /> sent via {lt.dispatchChannel} to {lt.dispatchTo}
+                    </span>
+                  )}
+                  <span className="ml-auto tabular-nums font-semibold text-red-400">{rupee(lt.totalDue)}</span>
+                </summary>
+                <div className="mt-2 text-sm space-y-2">
+                  <p className="font-semibold">{lt.subject}</p>
+                  <pre className="whitespace-pre-wrap text-xs text-[var(--color-muted)] font-sans">{lt.body}</pre>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => void dispatchLetter(lt, "whatsapp")}
+                      disabled={sendingId === lt.id || !channels.whatsapp || !lt.hasPhone}
+                      title={!channels.whatsapp ? "WhatsApp (Twilio) isn't configured on the server" : !lt.hasPhone ? "Customer ledger has no phone - add one under Books → Ledgers" : undefined}
+                      className={btnGhost}
+                    >
+                      <MessageCircle size={14} /> {lt.dispatchedAt ? "Resend WhatsApp" : "Send WhatsApp"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void dispatchLetter(lt, "email")}
+                      disabled={sendingId === lt.id || !channels.email || !lt.hasEmail}
+                      title={!channels.email ? "Email (SMTP) isn't configured on the server" : !lt.hasEmail ? "Customer ledger has no email - add one under Books → Ledgers" : undefined}
+                      className={btnGhost}
+                    >
+                      <Mail size={14} /> {lt.dispatchedAt ? "Resend email" : "Send email"}
+                    </button>
+                    {!lt.hasPhone && !lt.hasEmail && (
+                      <span className="text-xs text-[var(--color-muted)]">No phone or email on this customer's ledger.</span>
+                    )}
+                  </div>
+                </div>
+              </details>
+            ))}
           </div>
         )}
       </Card>

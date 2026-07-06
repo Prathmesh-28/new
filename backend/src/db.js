@@ -1216,6 +1216,11 @@ async function initDb() {
       interest NUMERIC(19,4) NOT NULL DEFAULT 0, fee NUMERIC(19,4) NOT NULL DEFAULT 0, total_due NUMERIC(19,4) NOT NULL,
       subject TEXT, body TEXT, created_by UUID, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    -- Dispatch trail: a letter is only "sent" when it actually left via a real
+    -- channel (Twilio WhatsApp / SMTP email) - never a client-side mailto/wa.me.
+    ALTER TABLE book_dunning_runs ADD COLUMN IF NOT EXISTS dispatched_at TIMESTAMPTZ;
+    ALTER TABLE book_dunning_runs ADD COLUMN IF NOT EXISTS dispatch_channel TEXT;
+    ALTER TABLE book_dunning_runs ADD COLUMN IF NOT EXISTS dispatch_to TEXT;
     -- (8) Payment webhook idempotency + ordering store.
     CREATE TABLE IF NOT EXISTS book_payment_webhook_events (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(), provider TEXT NOT NULL, event_id TEXT NOT NULL,

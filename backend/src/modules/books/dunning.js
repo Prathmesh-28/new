@@ -391,12 +391,119 @@ async function generateDunnings(tenantId, asOfDate, opts = {}) {
   }
 }
 
+// ── dispatch (send a generated letter through a REAL channel) ────────────────
+// A letter is only marked dispatched when Twilio/SMTP actually accepted it.
+// Unconfigured channel or missing party contact → honest PostError, no fake send.
+
+// Recent persisted runs with dispatch status + whether the party is reachable.
+async function listRuns(tenantId, { voucherId, limit } = {}) {
+  if (!tenantId) throw new PostError("BAD_INPUT", "tenantId required", 400);
+  const cap = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  const params = [tenantId];
+  let where = "r.tenant_id=$1";
+  if (voucherId) { params.push(voucherId); where += ` AND r.voucher_id=$${params.length}`; }
+  params.push(cap);
+  const { rows } = await pool.query(
+    `SELECT r.id, r.voucher_id, r.party_ledger_id, r.procedure, r.level, r.level_name, r.tone,
+            r.as_of_date, r.days_overdue, r.outstanding, r.interest, r.fee, r.total_due,
+            r.subject, r.body, r.created_at, r.dispatched_at, r.dispatch_channel, r.dispatch_to,
+            pl.name AS party_name, pl.email AS party_email, pl.phone AS party_phone
+       FROM book_dunning_runs r
+       LEFT JOIN book_ledgers pl ON pl.id=r.party_ledger_id AND pl.tenant_id=r.tenant_id
+      WHERE ${where}
+      ORDER BY r.created_at DESC
+      LIMIT $${params.length}`,
+    params
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    voucherId: r.voucher_id,
+    partyLedgerId: r.party_ledger_id,
+    partyName: r.party_name || "Customer",
+    hasEmail: !!(r.party_email && String(r.party_email).trim()),
+    hasPhone: !!(r.party_phone && String(r.party_phone).trim()),
+    procedure: r.procedure,
+    level: r.level,
+    levelName: r.level_name,
+    tone: r.tone,
+    asOf: ymd(parseYmd(r.as_of_date)),
+    daysOverdue: Number(r.days_overdue),
+    outstanding: toRupees(money(r.outstanding)),
+    interest: toRupees(money(r.interest)),
+    fee: toRupees(money(r.fee)),
+    totalDue: toRupees(money(r.total_due)),
+    subject: r.subject,
+    body: r.body,
+    createdAt: r.created_at,
+    dispatchedAt: r.dispatched_at,
+    dispatchChannel: r.dispatch_channel,
+    dispatchTo: r.dispatch_to,
+  }));
+}
+
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+async function dispatchRun(tenantId, runId, { channel } = {}) {
+  if (!tenantId) throw new PostError("BAD_INPUT", "tenantId required", 400);
+  const ch = String(channel || "").toLowerCase();
+  if (ch !== "whatsapp" && ch !== "email") {
+    throw new PostError("BAD_CHANNEL", "channel must be 'whatsapp' or 'email'", 422);
+  }
+  const { rows } = await pool.query(
+    `SELECT r.id, r.subject, r.body, r.party_ledger_id,
+            pl.name AS party_name, pl.email AS party_email, pl.phone AS party_phone
+       FROM book_dunning_runs r
+       LEFT JOIN book_ledgers pl ON pl.id=r.party_ledger_id AND pl.tenant_id=r.tenant_id
+      WHERE r.id=$1 AND r.tenant_id=$2`,
+    [runId, tenantId]
+  );
+  const run = rows[0];
+  if (!run) throw new PostError("NOT_FOUND", "dunning letter not found", 404);
+
+  let sentTo;
+  if (ch === "whatsapp") {
+    const phone = (run.party_phone || "").replace(/\s/g, "");
+    if (!phone) {
+      throw new PostError("NO_PHONE", `${run.party_name || "This customer"} has no phone on their ledger - add one under Books → Ledgers, then retry.`, 422);
+    }
+    const to = phone.startsWith("+") ? phone : `+91${phone.replace(/^0+/, "")}`;
+    const { sendWhatsApp } = require("../../lib/whatsapp");
+    const delivered = await sendWhatsApp(to, `*${run.subject}*\n\n${run.body}`);
+    if (!delivered) {
+      throw new PostError("CHANNEL_NOT_CONFIGURED", "WhatsApp isn't configured on the server (missing Twilio keys) - the letter was NOT sent.", 503);
+    }
+    sentTo = to;
+  } else {
+    const email = (run.party_email || "").trim();
+    if (!email) {
+      throw new PostError("NO_EMAIL", `${run.party_name || "This customer"} has no email on their ledger - add one under Books → Ledgers, then retry.`, 422);
+    }
+    if (!process.env.SMTP_USER) {
+      throw new PostError("CHANNEL_NOT_CONFIGURED", "Email isn't configured on the server (missing SMTP keys) - the letter was NOT sent.", 503);
+    }
+    const { sendMail } = require("../../lib/email");
+    const html = `<tr><td style="padding:24px 32px"><p style="font-size:14px;color:#e8e8dc;font-family:system-ui,sans-serif;white-space:pre-wrap;margin:0">${esc(run.body)}</p></td></tr>`;
+    await sendMail({ to: email, subject: run.subject, html });
+    sentTo = email;
+  }
+
+  const { rows: upd } = await pool.query(
+    `UPDATE book_dunning_runs SET dispatched_at=now(), dispatch_channel=$3, dispatch_to=$4
+      WHERE id=$1 AND tenant_id=$2
+      RETURNING id, dispatched_at, dispatch_channel, dispatch_to`,
+    [runId, tenantId, ch, sentTo]
+  );
+  return { ok: true, id: upd[0].id, dispatchedAt: upd[0].dispatched_at, channel: upd[0].dispatch_channel, to: upd[0].dispatch_to };
+}
+
 module.exports = {
   setDunningProcedure,
   listDunningLevels,
   generateDunnings,
   dueDunnings,
   openReceivables,
+  listRuns,
+  dispatchRun,
   // pure helpers (exported for testability)
   validateLevels,
   matchLevel,
