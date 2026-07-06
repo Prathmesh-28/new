@@ -126,7 +126,7 @@ export default function TermSheetPage() {
             )}
             {(roundType === "safe" || roundType === "convertible") && (
               <>
-                <Field label="Valuation cap (₹)"><input type="number" value={valuationCap} onChange={e => setCap(+e.target.value)} className={inputCls} /></Field>
+                <Field label="Valuation cap (₹)"><CurrencyInput value={valuationCap} onChange={(v) => setCap(v ?? 0)} /></Field>
                 <Field label="Discount %" hint="Discount to next round's price"><input type="number" value={discountPct} onChange={e => setDiscount(+e.target.value)} className={inputCls} /></Field>
               </>
             )}
@@ -478,10 +478,10 @@ function LiquidationPrefModeller() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <label className="text-xs text-[var(--color-muted)] block">Exit / sale value (₹)
-            <input type="number" value={exitValue} onChange={e => setExitValue(+e.target.value)} className={tsInp} />
+            <CurrencyInput value={exitValue} onChange={(v) => setExitValue(v ?? 0)} />
           </label>
           <label className="text-xs text-[var(--color-muted)] block">Investor capital (₹)
-            <input type="number" value={investment} onChange={e => setInvestment(+e.target.value)} className={tsInp} />
+            <CurrencyInput value={investment} onChange={(v) => setInvestment(v ?? 0)} />
           </label>
           <label className="text-xs text-[var(--color-muted)] block">Investor ownership %
             <input type="number" value={investorPct} onChange={e => setInvestorPct(+e.target.value)} className={tsInp} />
@@ -874,7 +874,7 @@ function ProRataCalc() {
             <input type="number" value={roundSize} onChange={e => setRoundSize(+e.target.value)} className={tsInp} />
           </label>
           <label className="text-xs text-[var(--color-muted)] block">Pre-money of new round (₹)
-            <input type="number" value={preMoney} onChange={e => setPreMoney(+e.target.value)} className={tsInp} />
+            <CurrencyInput value={preMoney} onChange={(v) => setPreMoney(v ?? 0)} />
           </label>
         </div>
         <p className="text-[11px] text-[var(--color-muted)]">Post-money: <span className="tabular-nums text-[var(--color-text)]">{formatAmount(postMoney)}</span></p>
@@ -941,7 +941,7 @@ function SafeVsPriced() {
             <input type="number" value={discount} onChange={e => setDiscount(+e.target.value)} className={tsInp} />
           </label>
           <label className="text-xs text-[var(--color-muted)] block">Priced-round pre-money (₹)
-            <input type="number" value={preMoney} onChange={e => setPreMoney(+e.target.value)} className={tsInp} />
+            <CurrencyInput value={preMoney} onChange={(v) => setPreMoney(v ?? 0)} />
           </label>
           <label className="text-xs text-[var(--color-muted)] block">Next round pre (SAFE converts) (₹)
             <input type="number" value={nextPre} onChange={e => setNextPre(+e.target.value)} className={tsInp} />
@@ -1234,7 +1234,7 @@ function MultiClassWaterfall() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <label className="text-xs text-[var(--color-muted)] block">Exit / sale value (₹)
-            <input type="number" value={exitValue} onChange={e => setExitValue(+e.target.value)} className={tsInp} />
+            <CurrencyInput value={exitValue} onChange={(v) => setExitValue(v ?? 0)} />
           </label>
           <label className="text-xs text-[var(--color-muted)] block">Common ownership % (founders + ESOP)
             <input type="number" value={commonShares} onChange={e => setCommonShares(+e.target.value)} className={tsInp} />
@@ -1438,7 +1438,7 @@ function TranchePlanner() {
           )}
         </div>
         <label className="text-xs text-[var(--color-muted)] block md:w-1/3">Pre-money valuation (₹)
-          <input type="number" value={preMoney} onChange={e => setPreMoney(+e.target.value)} className={tsInp} />
+          <CurrencyInput value={preMoney} onChange={(v) => setPreMoney(v ?? 0)} />
         </label>
         <div className="space-y-2.5">
           {tranches.map(t => (
@@ -1561,7 +1561,7 @@ function NoteMaturityScenarios() {
             <input type="number" value={discount} onChange={e => setDiscount(+e.target.value)} className={tsInp} />
           </label>
           <label className="text-xs text-[var(--color-muted)] block">Maturity pre-money (₹)
-            <input type="number" value={maturityPre} onChange={e => setMaturityPre(+e.target.value)} className={tsInp} />
+            <CurrencyInput value={maturityPre} onChange={(v) => setMaturityPre(v ?? 0)} />
           </label>
         </div>
       </div>
@@ -1652,7 +1652,7 @@ function DilutionOverRounds() {
             <input type="number" value={startFounderPct} onChange={e => setStartFounderPct(+e.target.value)} className={tsInp} />
           </label>
           <label className="text-xs text-[var(--color-muted)] block">Eventual exit value (₹)
-            <input type="number" value={exitValue} onChange={e => setExitValue(+e.target.value)} className={tsInp} />
+            <CurrencyInput value={exitValue} onChange={(v) => setExitValue(v ?? 0)} />
           </label>
         </div>
         <div className="space-y-2.5">
@@ -1798,7 +1798,7 @@ function ExitProceedsDistribution() {
           <p className="text-xs text-[var(--color-muted)] mt-0.5">Split a sale across the preferred stack and common after liquidation preferences. Non-participating preferred takes the greater of its pref or as-converted equity.</p>
         </div>
         <label className="text-xs text-[var(--color-muted)] block max-w-xs">Exit / sale value (₹)
-          <input type="number" value={exitValue} onChange={e => setExitValue(+e.target.value)} className={tsInp} />
+          <CurrencyInput value={exitValue} onChange={(v) => setExitValue(v ?? 0)} />
         </label>
         <div className="space-y-2">
           {rows.map(r => (
@@ -1925,7 +1925,7 @@ function EsopExitValue() {
             <input type="number" step="0.01" value={grantPct} onChange={e => setGrantPct(+e.target.value)} className={tsInp} />
           </label>
           <label className="text-xs text-[var(--color-muted)] block">Strike price / share (₹)
-            <input type="number" value={strikePrice} onChange={e => setStrikePrice(+e.target.value)} className={tsInp} />
+            <CurrencyInput value={strikePrice} onChange={(v) => setStrikePrice(v ?? 0)} />
           </label>
           <label className="text-xs text-[var(--color-muted)] block">Implied price / share at grant (₹)
             <input type="number" value={grantPrice} onChange={e => setGrantPrice(+e.target.value)} className={tsInp} />
@@ -1934,7 +1934,7 @@ function EsopExitValue() {
             <input type="number" value={futureDilution} onChange={e => setFutureDilution(+e.target.value)} className={tsInp} />
           </label>
           <label className="text-xs text-[var(--color-muted)] block">Exit valuation (₹)
-            <input type="number" value={exitValue} onChange={e => setExitValue(+e.target.value)} className={tsInp} />
+            <CurrencyInput value={exitValue} onChange={(v) => setExitValue(v ?? 0)} />
           </label>
           <label className="text-xs text-[var(--color-muted)] block">Vested at exit %
             <input type="number" value={vestedPct} onChange={e => setVestedPct(+e.target.value)} className={tsInp} />
@@ -2030,7 +2030,7 @@ function DiscountVsCapChooser() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <label className="text-xs text-[var(--color-muted)] block">Investment (₹)
-            <input type="number" value={investment} onChange={e => setInvestment(+e.target.value)} className={tsInp} />
+            <CurrencyInput value={investment} onChange={(v) => setInvestment(v ?? 0)} />
           </label>
           <label className="text-xs text-[var(--color-muted)] block">Discount %
             <input type="number" value={discountPct} onChange={e => setDiscountPct(+e.target.value)} className={tsInp} />
