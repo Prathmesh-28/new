@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="16dp" android:background="#0D1117">
+    <TextView android:id="@+id/w_label" android:text="CASH BALANCE"
+        android:textColor="#5FBE7C" android:textSize="10sp" android:letterSpacing="0.1"
+        android:layout_width="wrap_content" android:layout_height="wrap_content" />
+    <TextView android:id="@+id/w_balance" android:text="—"
+        android:textColor="#FDFAF0" android:textSize="22sp" android:textStyle="bold"
+        android:layout_width="wrap_content" android:layout_height="wrap_content" />
+    <TextView android:id="@+id/w_runway" android:text=""
+        android:textColor="#96B83D" android:textSize="12sp" android:layout_marginTop="4dp"
+        android:layout_width="wrap_content" android:layout_height="wrap_content" />
+</LinearLayout>

@@ -42,6 +42,14 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Home-screen widget: balance + runway (docs/WIDGET_SETUP.md) -->
+        <receiver android:name=".HeadroomWidget" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_headroom_info" />
+        </receiver>
     </application>
 
     <!-- Permissions -->
