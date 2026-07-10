@@ -296,15 +296,26 @@ export function buildLedger(store: AppStore, recurring: RecurringSeries[], today
     if (amt < 0) ledger[t].scheduledOutflow += -amt;
   };
 
-  // (a) recurring series projected forward
+  // (a) recurring series projected forward.
+  // De-dup vs. authoritative obligations is PER OCCURRENCE, not per category: an audit
+  // found the old category-existence skip dropped EVERY future recurring GST outflow the
+  // moment ONE tax obligation existed (the app auto-adds exactly one next-due GSTR-3B),
+  // and even a stale past-due obligation kept suppressing the whole series forever -
+  // systematically overstating cash for GST-registered tenants. Now a projected
+  // occurrence is skipped only when an obligation of the same type is due within a week
+  // of it (that specific payment is authoritatively covered); "loan" keeps the blanket
+  // skip because the backend bridges the loan's FULL schedule into obligations.
   const obligationCats = new Set((store.obligations ?? []).map(o => o.type));
+  const OCCURRENCE_WINDOW_DAYS = 7;
+  const covered = (category: string, dateStr: string): boolean => {
+    const type = category === "payroll" ? "payroll" : category === "tax" ? "tax" : null;
+    if (!type) return false;
+    return (store.obligations ?? []).some(o =>
+      o.type === type && Math.abs(dayDiff(o.dueDate, new Date(dateStr))) <= OCCURRENCE_WINDOW_DAYS);
+  };
   for (const r of recurring) {
     if (r.cadence === "irregular") continue;
-    // skip recurring that an authoritative obligation already covers (de-dup by category)
-    const overlapCat = (r.category === "payroll" && obligationCats.has("payroll")) ||
-                       (r.category === "tax" && obligationCats.has("tax")) ||
-                       (r.category === "loan" && obligationCats.has("loan"));
-    if (overlapCat) continue;
+    if (r.category === "loan" && obligationCats.has("loan")) continue;
     const step = r.cadence === "weekly" ? 7 : r.cadence === "quarterly" ? 91 : 30;
     let cursor = new Date(r.lastDate);
     // advance to first occurrence after today
@@ -312,7 +323,7 @@ export function buildLedger(store: AppStore, recurring: RecurringSeries[], today
     while (cursor <= today && guard++ < 5000) cursor = addDays(cursor, step);
     guard = 0;
     while (cursor <= addDays(today, horizon) && guard++ < 5000) {
-      place(idxOf(iso(cursor)), r.meanAmount);
+      if (!covered(r.category, iso(cursor))) place(idxOf(iso(cursor)), r.meanAmount);
       cursor = addDays(cursor, step);
     }
   }

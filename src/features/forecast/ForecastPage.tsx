@@ -107,23 +107,39 @@ export default function ForecastPage() {
     chartDate: format(new Date(o.dueDate), "MMM d"),
   })).filter(o => chartDates.has(o.chartDate));
 
-  // Auto-add GSTR-3B obligation when GST is enabled (run after any forecast generation)
-  const autoAddGSTObligation = () => {
+  // Auto-add GSTR-3B obligation when GST is enabled (run after any forecast generation).
+  // The amount comes from the REAL GSTR-3B engine (GET /api/gst/liability - the same
+  // number the GST page shows) whenever the books have data; the flat firm-wide
+  // gstSummary estimate is only the fallback (an audit measured it ~4x wrong for a
+  // mixed-rate SMB, and it disagreed with the GST page for the same month). Stale
+  // past-due auto-added GSTR-3B rows are pruned so they can't suppress or distort
+  // future forecasts.
+  const autoAddGSTObligation = async () => {
     if (!firm.gstRegistered || !firm.gstRate) return;
     const now       = new Date();
     const lastM     = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMStr  = `${lastM.getFullYear()}-${String(lastM.getMonth() + 1).padStart(2, "0")}`;
-    const liability = gstSummary(transactions, firm.gstRate, lastMStr).netPayable;
-    if (liability <= 0) return;
+    let liability = 0;
+    try {
+      const real = await api.get<{ net_liability?: number }>(`/api/gst/liability?month=${lastM.getMonth() + 1}&year=${lastM.getFullYear()}`);
+      liability = Number(real?.net_liability ?? 0);
+    } catch { /* books unavailable → fall back to the flat estimate below */ }
+    if (!(liability > 0)) liability = gstSummary(transactions, firm.gstRate, lastMStr).netPayable;
     // GSTR-3B is due on the 20th of the current month for last month's returns
     const due = new Date(now.getFullYear(), now.getMonth(), 20);
     if (due < now) { due.setMonth(due.getMonth() + 1); } // already passed → next month
     const dueStr = due.toISOString().split("T")[0];
     const name   = `GSTR-3B (${lastM.toLocaleString("en-IN", { month: "short" })})`;
+    const todayStr = now.toISOString().split("T")[0];
     setStore(s => {
-      const alreadyExists = s.obligations.some(o => o.name === name);
-      if (alreadyExists) return s;
-      return { ...s, obligations: [...s.obligations, { id: generateId(), name, amount: liability, dueDate: dueStr, type: "tax" as const }] };
+      // Drop past-due auto-added GSTR-3B rows (their payment date is gone; keeping them
+      // suppressed the recurring-GST projection and marked phantom outflows).
+      const pruned = s.obligations.filter(o => !(/^GSTR-3B \(/.test(o.name) && o.dueDate < todayStr));
+      const alreadyExists = pruned.some(o => o.name === name);
+      if (liability <= 0 || alreadyExists) {
+        return pruned.length === s.obligations.length ? s : { ...s, obligations: pruned };
+      }
+      return { ...s, obligations: [...pruned, { id: generateId(), name, amount: liability, dueDate: dueStr, type: "tax" as const }] };
     });
   };
 
@@ -141,7 +157,7 @@ export default function ForecastPage() {
       setStore(s => ({ ...s, forecast: base }));
       toast.success("90-day probabilistic forecast generated");
     } finally {
-      autoAddGSTObligation();
+      void autoAddGSTObligation(); // async (fetches the real GSTR-3B liability) - updates obligations when it lands
       setGenerating(false);
     }
   };

@@ -329,7 +329,7 @@ function FlipCard() {
         </div>
         {/* back */}
         <div style={{ ...face, transform: "rotateY(180deg)", justifyContent: "center", gap: 12, background: `linear-gradient(135deg, ${C.mid}, ${C.deepest})`, border: "1px solid rgba(95,190,124,0.35)" }}>
-          {[["Up to ₹50L", "revolving credit line"], ["0 bureau pulls", "silent pre-qualification"], ["Repay on revenue", "no fixed EMI lock-in"]].map(([a, b]) => (
+          {[["Sized from data", "your cash flow sets the limit"], ["0 bureau pulls", "silent pre-qualification"], ["Repay on revenue", "no fixed EMI lock-in"]].map(([a, b]) => (
             <div key={a}>
               <div style={{ fontFamily: serif, fontSize: 20, color: C.goldL, letterSpacing: -0.5 }}>{a}</div>
               <div style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.6)" }}>{b}</div>
@@ -661,7 +661,10 @@ export default function HomePage() {
                   Traditional credit is a separate conversation. Headroom embeds it directly - so you see what borrowing costs in the context of your own forecast, not a generic APR table.
                 </p>
                 <div style={{ display: "flex", gap: 24, marginBottom: 28 }}>
-                  {[{ n:"48 hrs", d:"Avg to first offer"}, { n:"0", d:"Bureau pulls"}, { n:"3 types", d:"Capital available"}].map(({ n, d }, i) => (
+                  {/* Every number here must be a real product fact, never an invented
+                      stat - offers are recomputed daily from the tenant's own data
+                      (refreshStandingOffers cron), zero bureau pulls, three products. */}
+                  {[{ n:"Daily", d:"Offers refresh from your data"}, { n:"0", d:"Bureau pulls"}, { n:"3 types", d:"Capital available"}].map(({ n, d }, i) => (
                     <div key={d} style={{ paddingRight: i < 2 ? 24 : 0, borderRight: i < 2 ? `1px solid rgba(74,94,26,0.15)` : "none" }}>
                       <div style={{ fontFamily: serif, fontSize: 28, color: C.mid }}>{n}</div>
                       <div style={{ fontFamily: sans, fontSize: 12, color: C.txtMut, marginTop: 2 }}>{d}</div>
@@ -672,9 +675,12 @@ export default function HomePage() {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {[
-                  { icon:TrendingUp,  t:"Revenue-based advance",  d:"Repay as % of monthly revenue. No fixed EMI.",         amt:"Up to 3× monthly revenue" },
+                  // These three map 1:1 to the REAL lending products (invoice_finance
+                  // bullet advances, working_capital EMI loans, revenue-linked offers)
+                  // - no invented products or caps the engine doesn't actually have.
+                  { icon:TrendingUp,  t:"Revenue-based advance",  d:"Repay as % of monthly revenue. No fixed EMI.",         amt:"Sized from your revenue" },
                   { icon:ReceiptText, t:"Invoice financing",      d:"Get paid on outstanding invoices today.",               amt:"Up to 90% of invoice value" },
-                  { icon:RefreshCw,   t:"Revolving credit line",  d:"Draw what you need. Pay interest only on usage.",       amt:inr ? "Up to ₹50L" : "Up to $60K" },
+                  { icon:RefreshCw,   t:"Working-capital loan",   d:"A lump sum repaid in monthly EMIs - terms simulated on your forecast first.", amt:"Limit sized from your cash flow" },
                 ].map(({ icon: Icon, t, d, amt }) => (
                   <div key={t} data-h3d-tilt style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 12, padding: "16px 18px", display: "flex", alignItems: "center", gap: 16 }}>
                     <IconTile icon={Icon} size={42} />
@@ -718,14 +724,14 @@ export default function HomePage() {
               track:"Track B", badge:"Angel / AIF", title:"Angel & AIF round",
               range:"₹50L - ₹5Cr",
               best:"Businesses ready for institutional angels and AIF participation.",
-              features:["Private-placement framework","Companies Act 2013 compliant","Investor & cap-table dashboard","SEBI-registered AIF network"],
+              features:["Private-placement framework","Companies Act 2013 compliant","Investor & cap-table dashboard","Built for AIF participation"],
               featured: true,
             },
             {
               track:"Track C", badge:"SME IPO", title:"SME IPO listing",
               range:"₹5Cr - ₹50Cr+",
               best:"Growth-stage SMBs ready to list on NSE Emerge / BSE SME.",
-              features:["NSE Emerge / BSE SME platform","Merchant-banker support included","Shares tradeable after listing","Full SEBI compliance layer"],
+              features:["Targets NSE Emerge / BSE SME","Merchant-banker-ready data room","Shares tradeable after listing","SEBI-compliance workflow"],
               featured: false,
             },
           ] : [
@@ -834,7 +840,7 @@ export default function HomePage() {
               { icon:Bell,       t:"Alert feed",                d:"One feed across all clients, sorted by severity - act on the right thing first." },
               { icon:CreditCard, t:"Credit rescue context",     d:"See which clients are pre-qualified and for how much before they ask." },
               { icon:Award,      t:"Capital readiness scoring", d:"Know which clients are raise-ready and which track suits them best." },
-              { icon:Palette,    t:"White-label ready",         d:"Your brand, your portal. Headroom powers it behind the scenes." },
+              { icon:Palette,    t:"Your brand on reports",     d:"Client-facing reports and PDFs carry your letterhead and brand kit." },
             ].map(({ icon: Icon, t, d }) => (
               <div key={t} data-h3d-tilt style={{ background: C.wash, border: "1px solid rgba(74,94,26,0.1)", borderRadius: 12, padding: "20px 20px" }}>
                 <div style={{ marginBottom: 12 }}><IconTile icon={Icon} size={42} /></div>
@@ -857,29 +863,25 @@ export default function HomePage() {
       <section data-h3d-deco="orbs" style={{ background: C.deep, padding: "80px 48px" }}>
         <Reveal>
           <div style={{ maxWidth: 1100, margin: "0 auto 48px" }}>
-            <Label text="What owners say" dark />
-            <h2 style={{ fontFamily: serif, fontSize: 36, color: C.creamW, letterSpacing: -1 }}>The tool I wish I had in year one.</h2>
+            {/* These are ILLUSTRATIVE scenarios, not real customer endorsements - an
+                audit flagged the old version (invented named businesses + 5-star rows)
+                as fabricated testimonials. Swap in real, permissioned quotes when they
+                exist; until then the section is honestly labelled. */}
+            <Label text="How operators use Headroom" dark />
+            <h2 style={{ fontFamily: serif, fontSize: 36, color: C.creamW, letterSpacing: -1 }}>The tool built for year one.</h2>
+            <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.4)", marginTop: 10 }}>Illustrative scenarios of the problems Headroom is built to catch - not customer endorsements.</p>
           </div>
         </Reveal>
         <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20 }}>
           {[
-            { initials:"RK", name:"Rajiv Kumar",  biz:"Spice Route Restaurant, Mumbai",      quote:"I knew something was wrong in March but I couldn't see it until it hit. Headroom showed me the problem in January. I had two months to fix it." },
-            { initials:"AP", name:"Aditi Patel",  biz:"Meridian Creative Agency, Bangalore", quote:"We were running the business like a guessing game. Clients pay in 60 days, payroll every two weeks. Headroom made that manageable." },
-            { initials:"VS", name:"Vikram Shah",  biz:"Shah Construction, Pune",             quote:"The credit feature saved us during the monsoon gap. Headroom offered us options before it hit, and we got through it clean." },
-          ].map(({ initials, name, biz, quote }, i) => (
-            <Reveal key={name} delay={i * 80}>
+            { label:"A restaurant", scenario:"A slow quarter that only becomes visible in March. The 90-day forecast surfaces the dip in January - two months of room to fix it instead of a crisis." },
+            { label:"A creative agency", scenario:"Clients pay in 60 days, payroll leaves every two weeks. The weekly cash calendar shows exactly which weeks are tight before they arrive." },
+            { label:"A construction firm", scenario:"A seasonal monsoon gap in collections. Pre-qualified credit options appear in the forecast before the gap hits, priced from the firm's own data." },
+          ].map(({ label, scenario }, i) => (
+            <Reveal key={label} delay={i * 80}>
               <div data-h3d-tilt style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(169,217,188,0.1)", borderRadius: 14, padding: 24 }}>
-                <div style={{ display: "flex", gap: 3, marginBottom: 12 }}>
-                  {Array.from({length:5}).map((_,s) => <span key={s} style={{ width: 11, height: 11, background: C.gold, clipPath: "polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)", display: "inline-block" }} />)}
-                </div>
-                <p style={{ fontFamily: serif, fontSize: 15, lineHeight: 1.65, color: "rgba(244,241,228,0.8)", fontStyle: "italic", marginBottom: 20 }}>"{quote}"</p>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.mid, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: sans, fontSize: 12, fontWeight: 600, color: C.pale, flexShrink: 0 }}>{initials}</div>
-                  <div>
-                    <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.pale }}>{name}</div>
-                    <div style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.4)" }}>{biz}</div>
-                  </div>
-                </div>
+                <div style={{ fontFamily: mono, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.goldL, marginBottom: 12 }}>{label}</div>
+                <p style={{ fontFamily: serif, fontSize: 15, lineHeight: 1.65, color: "rgba(244,241,228,0.8)", marginBottom: 4 }}>{scenario}</p>
               </div>
             </Reveal>
           ))}
@@ -1033,7 +1035,7 @@ export default function HomePage() {
           </div>
           {[
             { h:"Platform",    links:["Features","Forecasting","Credit rescue","Community capital","Scenario planner"] },
-            { h:"For advisors",links:["Chartered Accountants","Fractional CFOs","Business Bankers","Startup Advisors","White-label"] },
+            { h:"For advisors",links:["Chartered Accountants","Fractional CFOs","Business Bankers","Startup Advisors","Branded reports"] },
             { h:"Company",     links:["Pricing","About","Blog","Careers","Contact"] },
           ].map(({ h, links }) => (
             <div key={h}>
