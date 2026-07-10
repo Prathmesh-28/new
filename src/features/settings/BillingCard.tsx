@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { CreditCard, Check, Sparkles, Loader2, Clock, Gift, X } from "lucide-react";
+import { CreditCard, Check, Sparkles, Loader2, Clock, Gift, X, Download, Receipt } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { PLAN_LABEL, PLAN_RANK, type PlanTier } from "@/data/types";
-import { fetchBilling, fetchFoundingMemberStatus, upgradePlan, cancelSubscription, regionCurrency, type BillingState, type FoundingMemberStatus } from "@/lib/billing";
+import {
+  fetchBilling, fetchFoundingMemberStatus, upgradePlan, cancelSubscription, regionCurrency,
+  fetchSubscriptionInvoices, downloadSubscriptionInvoice,
+  type BillingState, type FoundingMemberStatus, type SubscriptionInvoice,
+} from "@/lib/billing";
 
 const PLANS: { id: Exclude<PlanTier, "free">; inr: number; usd: string; tagline: string }[] = [
   { id: "starter", inr: 799,  usd: "$9",  tagline: "Unlimited invoicing + WhatsApp/UPI collections & GST prep" },
@@ -21,6 +25,7 @@ export default function BillingCard() {
   const { user, refreshUser } = useAuth();
   const [billing, setBilling] = useState<BillingState | null>(null);
   const [founding, setFounding] = useState<FoundingMemberStatus | null>(null);
+  const [invoices, setInvoices] = useState<SubscriptionInvoice[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [cycle, setCycle] = useState<"monthly" | "annual">("monthly");
   const inr = regionCurrency() === "inr";
@@ -28,6 +33,7 @@ export default function BillingCard() {
   const load = useCallback(() => { fetchBilling().then(setBilling).catch(() => {}); }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { fetchFoundingMemberStatus().then(setFounding).catch(() => {}); }, []);
+  useEffect(() => { fetchSubscriptionInvoices().then(setInvoices).catch(() => {}); }, [billing]);
 
   const plan = (billing?.plan ?? user?.plan ?? "free") as PlanTier;
   const rank = PLAN_RANK[plan];
@@ -145,6 +151,28 @@ export default function BillingCard() {
       </div>
 
       <p className="text-[11px] text-[var(--color-muted)] mt-4 text-center">🔒 UPI Autopay · cards · netbanking · wallets - auto-renews securely via Razorpay, cancel anytime</p>
+
+      {invoices.length > 0 && (
+        <div className="mt-6 pt-5 border-t border-[var(--color-border)]">
+          <h3 className="text-xs font-semibold flex items-center gap-1.5 mb-3"><Receipt size={13} /> GST invoices</h3>
+          <div className="space-y-1.5">
+            {invoices.map(inv => (
+              <div key={inv.id} className="flex items-center justify-between gap-3 py-1.5 text-xs border-b border-[var(--color-border)] last:border-0">
+                <div className="min-w-0">
+                  <p className="font-mono font-medium truncate">{inv.invoice_number}</p>
+                  <p className="text-[var(--color-muted)]">{new Date(inv.created_at).toLocaleDateString("en-IN")} · {PLAN_LABEL[inv.plan as PlanTier] ?? inv.plan} ({inv.cycle})</p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="font-semibold tabular-nums">₹{Number(inv.total_amount).toLocaleString("en-IN")}</span>
+                  <button onClick={() => void downloadSubscriptionInvoice(inv)} className="text-[var(--color-muted)] hover:text-[var(--color-primary)]" title="Download PDF">
+                    <Download size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

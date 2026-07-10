@@ -3,10 +3,11 @@
 // post-Checkout verify call) into a tenant_billing state transition, so the two
 // paths - first charge vs every later renewal - can never drift apart.
 const { pool } = require("../db");
+const subscriptionInvoice = require("./subscriptionInvoice");
 
 async function findTenantBySubscription(subscriptionId) {
   const { rows } = await pool.query(
-    "SELECT tenant_id, plan FROM tenant_billing WHERE razorpay_subscription_id=$1", [subscriptionId]
+    "SELECT tenant_id, plan, cycle FROM tenant_billing WHERE razorpay_subscription_id=$1", [subscriptionId]
   );
   return rows[0] || null;
 }
@@ -23,8 +24,10 @@ async function setBillingState(tenantId, { status, periodEndUnix }) {
 }
 
 // eventType: 'subscription.activated' | '.charged' | '.cancelled' | '.halted' | '.completed'
-// `sub` is the Razorpay subscription entity from payload.subscription.entity.
-async function handleWebhookEvent(eventType, sub) {
+// `sub` is the Razorpay subscription entity (payload.subscription.entity); `payment`
+// is the paired payload.payment.entity, present on subscription.charged - the
+// authoritative per-cycle charge (id + amount), used to mint that renewal's GST invoice.
+async function handleWebhookEvent(eventType, sub, payment) {
   const row = await findTenantBySubscription(sub.id);
   if (!row) { console.warn(`[subscription] no tenant_billing row for subscription ${sub.id} - ignoring`); return; }
   const periodEndUnix = sub.current_end || null;
@@ -38,6 +41,12 @@ async function handleWebhookEvent(eventType, sub) {
   const status = STATUS_BY_EVENT[eventType];
   if (!status) return; // unrecognised/irrelevant subscription.* event - ignore, don't guess
   await setBillingState(row.tenant_id, { status, periodEndUnix });
+
+  if (eventType === "subscription.charged" && payment?.id && Number.isFinite(payment.amount)) {
+    await subscriptionInvoice.recordInvoice(row.tenant_id, {
+      plan: row.plan, cycle: row.cycle || "monthly", amountPaise: payment.amount, razorpayPaymentId: payment.id,
+    }).catch((e) => console.error("[subscription] invoice record failed:", e.message));
+  }
 }
 
 module.exports = { findTenantBySubscription, setBillingState, handleWebhookEvent };

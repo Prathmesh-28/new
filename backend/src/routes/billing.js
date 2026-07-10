@@ -3,6 +3,7 @@ const { pool } = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 const razorpay = require("../lib/razorpay");
 const { writeAudit } = require("../lib/audit");
+const subscriptionInvoice = require("../lib/subscriptionInvoice");
 
 const VALID_PLANS = ["starter", "growth", "pro"];
 
@@ -140,6 +141,9 @@ router.post("/razorpay/verify", authenticate, requireOwnerOrAdmin, async (req, r
   // reads, so a real self-serve upgrade now shows up in both the audit trail and,
   // eventually, downgrade detection once a cancel flow exists.
   writeAudit(req.user.id, "tenant.plan_change", "tenant", req.user.tenant_id, { plan, via: "razorpay_checkout" });
+  await subscriptionInvoice.recordInvoice(req.user.tenant_id, {
+    plan, cycle: "monthly", amountPaise: PLAN_PRICING[plan].inr, razorpayPaymentId: razorpay_payment_id,
+  }).catch((e) => console.error("[billing] invoice record failed:", e.message));
   res.json({ ok: true, plan });
 });
 
@@ -212,7 +216,7 @@ router.post("/razorpay/subscription/verify", authenticate, requireOwnerOrAdmin, 
   // Must be THIS tenant's own pending subscription - never apply an arbitrary
   // subscription_id's success to the caller's tenant.
   const { rows } = await pool.query(
-    "SELECT plan, cycle FROM tenant_billing WHERE tenant_id=$1 AND razorpay_subscription_id=$2",
+    "SELECT plan, cycle, is_founding_member FROM tenant_billing WHERE tenant_id=$1 AND razorpay_subscription_id=$2",
     [req.user.tenant_id, razorpay_subscription_id]
   );
   if (!rows[0]) return res.status(404).json({ error: "No matching subscription for this account." });
@@ -229,6 +233,15 @@ router.post("/razorpay/subscription/verify", authenticate, requireOwnerOrAdmin, 
   );
   await pool.query("UPDATE users SET subscription_plan=$1 WHERE tenant_id=$2", [rows[0].plan, req.user.tenant_id]);
   writeAudit(req.user.id, "tenant.plan_change", "tenant", req.user.tenant_id, { plan: rows[0].plan, cycle: rows[0].cycle, via: "razorpay_subscription" });
+  // GST invoice for this first charge - the Plan object is immutable-priced, so the
+  // cached amount IS what Razorpay actually charged for cycle #1.
+  const planKey = rows[0].is_founding_member ? `founding_${rows[0].plan}_annual` : `${rows[0].plan}_${rows[0].cycle}`;
+  const { rows: cachedPlan } = await pool.query("SELECT amount FROM razorpay_plans WHERE plan_key=$1", [planKey]);
+  if (cachedPlan[0]) {
+    await subscriptionInvoice.recordInvoice(req.user.tenant_id, {
+      plan: rows[0].plan, cycle: rows[0].cycle, amountPaise: cachedPlan[0].amount, razorpayPaymentId: razorpay_payment_id,
+    }).catch((e) => console.error("[billing] invoice record failed:", e.message));
+  }
   res.json({ ok: true, plan: rows[0].plan });
 });
 
@@ -258,6 +271,82 @@ router.get("/founding-member-status", async (req, res) => {
   const { rows } = await pool.query("SELECT count(*)::int AS n FROM tenant_billing WHERE is_founding_member=true");
   const claimed = rows[0]?.n ?? 0;
   res.json({ cap: FOUNDING_MEMBER_CAP, claimed, remaining: Math.max(0, FOUNDING_MEMBER_CAP - claimed), sold_out: claimed >= FOUNDING_MEMBER_CAP });
+});
+
+// ── GST invoices for Headroom's OWN subscription charges (B2B ITC compliance) ──
+
+// GET /api/billing/invoices - this tenant's subscription-charge invoice history.
+router.get("/invoices", authenticate, async (req, res) => {
+  try { res.json(await subscriptionInvoice.listInvoices(req.user.tenant_id)); }
+  catch (e) { console.error("[billing] list invoices", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
+// GET /api/billing/invoices/:id/pdf - download one, tenant-scoped.
+router.get("/invoices/:id/pdf", authenticate, async (req, res) => {
+  const inv = await subscriptionInvoice.getInvoice(req.user.tenant_id, req.params.id);
+  if (!inv) return res.status(404).json({ error: "Invoice not found" });
+
+  const { rows: profRows } = await pool.query("SELECT legal_name FROM tenant_profile WHERE tenant_id=$1 LIMIT 1", [req.user.tenant_id]).catch(() => ({ rows: [] }));
+  const { rows: kvRows } = await pool.query("SELECT value FROM kv_store WHERE tenant_id=$1 AND namespace='app' AND key='store' LIMIT 1", [req.user.tenant_id]);
+  const firm = kvRows[0]?.value?.value?.firm ?? {};
+  const buyerName = profRows[0]?.legal_name || firm.name || "Customer";
+
+  const PDFDoc = require("pdfkit");
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${inv.invoice_number}.pdf"`);
+  const doc = new PDFDoc({ margin: 50, size: "A4" });
+  doc.pipe(res);
+
+  doc.fontSize(20).font("Helvetica-Bold").text("TAX INVOICE", 50, 50);
+  doc.fontSize(10).font("Helvetica").fillColor("#666")
+    .text(inv.invoice_number, 50, 76)
+    .text(`Date: ${new Date(inv.created_at).toLocaleDateString("en-IN")}`, 50, 90);
+
+  const right = 350;
+  doc.fillColor("#000").font("Helvetica-Bold").text(subscriptionInvoice.platformLegalName(), right, 50, { align: "right", width: 200 });
+  doc.font("Helvetica").fillColor("#666")
+    .text(subscriptionInvoice.platformAddress(), right, 66, { align: "right", width: 200 })
+    .text(subscriptionInvoice.platformGstin() ? `GSTIN: ${subscriptionInvoice.platformGstin()}` : "GSTIN not configured", right, 80, { align: "right", width: 200 });
+
+  doc.fillColor("#000").font("Helvetica-Bold").text("Billed To:", 50, 140);
+  doc.font("Helvetica").text(buyerName, 50, 156);
+  if (inv.buyer_gstin) doc.text(`GSTIN: ${inv.buyer_gstin}`, 50, 170);
+  doc.fillColor("#666").fontSize(9)
+    .text(inv.inter_state ? "Inter-state supply (IGST)" : "Intra-state supply (CGST+SGST)", 50, inv.buyer_gstin ? 184 : 170)
+    .fillColor("#000").fontSize(10);
+
+  const tableTop = 220;
+  doc.fillColor("#1A6B55").rect(50, tableTop, 500, 22).fill();
+  doc.fillColor("#fff").font("Helvetica-Bold").fontSize(9)
+    .text("Description", 55, tableTop + 6, { width: 300 })
+    .text("Amount", 480, tableTop + 6, { width: 60, align: "right" });
+
+  const planLabel = inv.plan.charAt(0).toUpperCase() + inv.plan.slice(1);
+  doc.fillColor("#000").font("Helvetica").fontSize(10)
+    .text(`Headroom ${planLabel} Plan Subscription (${inv.cycle})`, 55, tableTop + 30, { width: 300 })
+    .text(`Rs. ${Number(inv.base_amount).toFixed(2)}`, 480, tableTop + 30, { width: 60, align: "right" });
+
+  let y = tableTop + 55;
+  doc.fontSize(9).fillColor("#666");
+  if (inv.inter_state) {
+    doc.text(`IGST (${Number(inv.gst_rate).toFixed(0)}%)`, 55, y, { width: 300 }).text(`Rs. ${Number(inv.gst_amount).toFixed(2)}`, 480, y, { width: 60, align: "right" });
+    y += 16;
+  } else {
+    const half = Number(inv.gst_amount) / 2;
+    doc.text(`CGST (${(Number(inv.gst_rate) / 2).toFixed(1)}%)`, 55, y, { width: 300 }).text(`Rs. ${half.toFixed(2)}`, 480, y, { width: 60, align: "right" });
+    y += 16;
+    doc.text(`SGST (${(Number(inv.gst_rate) / 2).toFixed(1)}%)`, 55, y, { width: 300 }).text(`Rs. ${half.toFixed(2)}`, 480, y, { width: 60, align: "right" });
+    y += 16;
+  }
+  doc.moveTo(50, y + 4).lineTo(550, y + 4).strokeColor("#ddd").stroke();
+  doc.font("Helvetica-Bold").fillColor("#000").fontSize(11)
+    .text("Total", 55, y + 12, { width: 300 })
+    .text(`Rs. ${Number(inv.total_amount).toFixed(2)}`, 480, y + 12, { width: 60, align: "right" });
+
+  doc.fontSize(8).fillColor("#999")
+    .text("This is a computer-generated tax invoice for a SaaS subscription and does not require a signature.", 50, y + 50, { width: 500 });
+
+  doc.end();
 });
 
 module.exports = router;

@@ -579,6 +579,28 @@ async function initDb() {
       received_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
+    -- GST invoices for HEADROOM'S OWN subscription charge (distinct from a tenant's
+    -- customer invoices) - B2B buyers need one to claim ITC on the SaaS spend.
+    -- One global consecutive series across all tenants (Rule 46: a registered person's
+    -- tax invoices must be numbered in a consecutive series it maintains itself).
+    CREATE SEQUENCE IF NOT EXISTS subscription_invoice_seq START 1;
+    CREATE TABLE IF NOT EXISTS subscription_invoices (
+      id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id           TEXT NOT NULL,
+      invoice_number      TEXT UNIQUE NOT NULL,
+      plan                TEXT NOT NULL,
+      cycle               TEXT NOT NULL,
+      base_amount         NUMERIC(12,2) NOT NULL,
+      gst_rate            NUMERIC(5,2) NOT NULL DEFAULT 18,
+      gst_amount          NUMERIC(12,2) NOT NULL,
+      total_amount        NUMERIC(12,2) NOT NULL,
+      razorpay_payment_id TEXT UNIQUE NOT NULL,
+      buyer_gstin         TEXT,
+      inter_state         BOOLEAN NOT NULL DEFAULT false,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_sub_invoices_tenant ON subscription_invoices(tenant_id, created_at DESC);
+
     -- Per-tenant monthly usage counters for plan quota metering (entitlements engine).
     -- 'period' is the YYYY-MM bucket so a new month resets automatically (no cron).
     CREATE TABLE IF NOT EXISTS usage_counters (

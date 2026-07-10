@@ -200,9 +200,10 @@ router.post("/", async (req, res) => {
       if (!ins.length) return res.json({ ok: true, dedup: true });
     }
     const sub = req.body.payload?.subscription?.entity;
+    const chargedPayment = req.body.payload?.payment?.entity; // present on subscription.charged - the actual per-cycle charge
     const subId = sub?.id;
     if (subId) {
-      try { await require("../lib/subscriptionLifecycle").handleWebhookEvent(event, sub); }
+      try { await require("../lib/subscriptionLifecycle").handleWebhookEvent(event, sub, chargedPayment); }
       catch (e) { console.error(`[razorpay] subscription event ${event} for ${subId} failed:`, e.message); return res.status(500).json({ error: "handler failed" }); }
     }
   }

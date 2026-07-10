@@ -1,4 +1,5 @@
-import { api } from "@/lib/api";
+import { api, authHeaders } from "@/lib/api";
+import { API_BASE } from "@/lib/apiBase";
 import { toast } from "sonner";
 import type { PlanTier } from "@/data/types";
 import { haptic } from "@/lib/mobile";
@@ -36,6 +37,31 @@ export async function fetchBilling(): Promise<BillingState> {
 
 export async function fetchFoundingMemberStatus(): Promise<FoundingMemberStatus> {
   return api.get<FoundingMemberStatus>("/api/billing/founding-member-status");
+}
+
+export interface SubscriptionInvoice {
+  id: string; invoice_number: string; plan: string; cycle: string;
+  base_amount: string; gst_amount: string; total_amount: string; created_at: string;
+}
+
+export async function fetchSubscriptionInvoices(): Promise<SubscriptionInvoice[]> {
+  return api.get<SubscriptionInvoice[]>("/api/billing/invoices");
+}
+
+// Auth-gated PDF download - fetch as a blob (a plain <a href> can't carry the token).
+export async function downloadSubscriptionInvoice(inv: SubscriptionInvoice): Promise<void> {
+  try {
+    const res = await fetch(`${API_BASE}/api/billing/invoices/${inv.id}/pdf`, { headers: authHeaders() });
+    if (!res.ok) throw new Error(String(res.status));
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `${inv.invoice_number}.pdf`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch {
+    toast.error("Couldn't download the invoice.");
+  }
 }
 
 // Unified upgrade entry point - real recurring billing (Razorpay Subscriptions +
