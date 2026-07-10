@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import TabStrip from "@/components/TabStrip";
@@ -2492,42 +2492,96 @@ function WarehouseStockTab() {
 }
 
 /* ───────────────────────── #74 Barcode / QR stock-take reconciliation ───────────────────────── */
+type BookStockItem = { id: string; name: string; barcode?: string | null; current_qty: number };
+
 function StockTakeTab() {
-  const { store } = useApp();
-  type Count = { id: string; sku: string; product: string; systemQty: number; countedQty: number };
-  const [counts, setCounts] = useFeatureState<Count[]>("stock-take-counts", []);
+  type Count = { id: string; itemId: string | null; sku: string; product: string; systemQty: number; countedQty: number };
+  const [counts, setCounts] = useFeatureState<Count[]>("stock-take-counts-v2", []);
   const [scan, setScan] = useState("");
+  const [items, setItems] = useState<BookStockItem[]>([]);
+  const [applying, setApplying] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Scan/lookup: matches an inventory SKU or product name, seeds the system qty.
-  const submitScan = () => {
+  const loadItems = useCallback(async (): Promise<BookStockItem[]> => {
+    try {
+      const fresh = await api.get<BookStockItem[]>("/api/books/inventory/items");
+      setItems(fresh);
+      return fresh;
+    } catch {
+      return [];
+    }
+  }, []);
+  useEffect(() => { void loadItems(); }, [loadItems]);
+
+  // Scan/lookup: real barcode lookup first (server-side, exact), then a local
+  // name-match fallback against the loaded item list (many SMBs won't have every
+  // item barcoded yet). An unmatched code still gets counted (visibility into
+  // what's not in the system) but is flagged and can't be applied to inventory.
+  const submitScan = async () => {
     const code = scan.trim();
     if (!code) return;
-    const match = store.inventory.find(i =>
-      (i.sku && i.sku.toLowerCase() === code.toLowerCase()) || i.productName.toLowerCase() === code.toLowerCase()
-    );
-    const sku = match?.sku || code;
-    setCounts(prev => {
-      const ex = prev.find(c => c.sku.toLowerCase() === sku.toLowerCase());
-      if (ex) return prev.map(c => c.id === ex.id ? { ...c, countedQty: c.countedQty + 1 } : c);
-      return [...prev, { id: generateId(), sku, product: match?.productName || code, systemQty: match?.quantity ?? 0, countedQty: 1 }];
-    });
     setScan("");
+    let match: BookStockItem | undefined;
+    try {
+      const found = await api.get<BookStockItem | null>(`/api/books/inventory/barcode/${encodeURIComponent(code)}`);
+      if (found?.id) match = found;
+    } catch { /* not found via barcode - fall through to name match */ }
+    if (!match) match = items.find(i => i.name.toLowerCase() === code.toLowerCase());
+
+    setCounts(prev => {
+      const key = match?.id || code.toLowerCase();
+      const ex = prev.find(c => (c.itemId || c.sku.toLowerCase()) === key);
+      if (ex) return prev.map(c => c.id === ex.id ? { ...c, countedQty: c.countedQty + 1 } : c);
+      return [...prev, {
+        id: generateId(), itemId: match?.id ?? null, sku: match?.barcode || code,
+        product: match?.name || code, systemQty: match?.current_qty ?? 0, countedQty: 1,
+      }];
+    });
     inputRef.current?.focus();
   };
 
   const setCounted = (id: string, v: number) => setCounts(prev => prev.map(c => c.id === id ? { ...c, countedQty: Math.max(0, v) } : c));
   const variances = counts.map(c => ({ ...c, variance: c.countedQty - c.systemQty }));
   const mismatches = variances.filter(v => v.variance !== 0);
+  const matchedMismatches = mismatches.filter(v => v.itemId);
   const netVar = variances.reduce((s, v) => s + v.variance, 0);
 
   const exportCsv = () => {
-    const header = ["SKU", "Product", "System Qty", "Counted Qty", "Variance"];
-    const lines = variances.map(v => [v.sku, v.product, v.systemQty, v.countedQty, v.variance].join(","));
+    const header = ["SKU", "Product", "System Qty", "Counted Qty", "Variance", "Matched"];
+    const lines = variances.map(v => [v.sku, v.product, v.systemQty, v.countedQty, v.variance, v.itemId ? "yes" : "no"].join(","));
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" }));
     a.download = "stock-take.csv"; a.click(); URL.revokeObjectURL(a.href);
   };
+
+  // Posts a REAL stock adjustment (books/inventory.js physicalAdjust) for every
+  // matched mismatch - this is the write-back the scan UI never did before.
+  // Succeeded lines are removed from the sheet; failed ones stay so they can be retried.
+  const applyToInventory = async () => {
+    if (!matchedMismatches.length) return;
+    setApplying(true);
+    const succeededIds = new Set<string>();
+    let failed = 0;
+    for (const v of matchedMismatches) {
+      try {
+        await api.post("/api/books/inventory/physical-adjust", { itemId: v.itemId, countedQty: v.countedQty });
+        succeededIds.add(v.id);
+      } catch {
+        failed++;
+      }
+    }
+    setCounts(prev => prev.filter(c => !succeededIds.has(c.id)));
+    await loadItems(); // refresh system quantities for any remaining/failed lines
+    toast[failed ? "error" : "success"](`Applied ${succeededIds.size} adjustment${succeededIds.size === 1 ? "" : "s"} to inventory${failed ? `, ${failed} failed` : ""}`);
+    setApplying(false);
+  };
+
+  if (items.length === 0 && counts.length === 0) {
+    return (
+      <EmptyState icon={ScanLine} title="No inventory items yet"
+        description="Add items under Books → Inventory first, then come back to run a stock take." />
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -2536,7 +2590,7 @@ function StockTakeTab() {
           <ScanLine size={16} className="text-[var(--color-primary)]" />
           <div>
             <h2 className="text-sm font-semibold">Barcode / QR Stock-Take</h2>
-            <p className="text-[11px] text-[var(--color-muted)]">Scan or type a code; each scan adds 1. Reconcile counted vs system stock.</p>
+            <p className="text-[11px] text-[var(--color-muted)]">Scan or type a code; each scan adds 1. System qty is read live from Books inventory.</p>
           </div>
         </div>
         {counts.length > 0 && (
@@ -2551,11 +2605,11 @@ function StockTakeTab() {
         <div className="flex gap-2">
           <div className="relative flex-1">
             <ScanLine size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
-            <input ref={inputRef} value={scan} onChange={e => setScan(e.target.value)} onKeyDown={e => e.key === "Enter" && submitScan()} autoFocus
-              placeholder="Scan barcode / QR or type SKU, then Enter"
+            <input ref={inputRef} value={scan} onChange={e => setScan(e.target.value)} onKeyDown={e => e.key === "Enter" && void submitScan()} autoFocus
+              placeholder="Scan barcode / QR or type item name, then Enter"
               className="w-full pl-9 pr-3 py-2.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)] font-mono" />
           </div>
-          <button onClick={submitScan} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 whitespace-nowrap">+ Count</button>
+          <button onClick={() => void submitScan()} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 whitespace-nowrap">+ Count</button>
         </div>
         <p className="text-[10px] text-[var(--color-muted)] mt-2">USB / Bluetooth scanners type the code and send Enter automatically - this field is ready for them.</p>
       </div>
@@ -2575,16 +2629,19 @@ function StockTakeTab() {
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
         {counts.length === 0 ? (
-          <p className="p-8 text-sm text-[var(--color-muted)] text-center">Start scanning to build a count sheet. Known SKUs pull their system quantity automatically.</p>
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">Start scanning to build a count sheet. Known items pull their live system quantity automatically.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[560px]">
-              <thead><tr className="border-b border-[var(--color-border)]">{["SKU", "Product", "System", "Counted", "Variance", ""].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
+            <table className="w-full text-sm min-w-[620px]">
+              <thead><tr className="border-b border-[var(--color-border)]">{["Code", "Product", "System", "Counted", "Variance", ""].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
               <tbody>
                 {variances.map(v => (
                   <tr key={v.id} className={`border-b border-[var(--color-border)] last:border-0 ${v.variance !== 0 ? "bg-yellow-950/10" : "hover:bg-[var(--color-accent)]"}`}>
                     <td className="px-4 py-2.5 font-mono text-xs">{v.sku}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{v.product}</td>
+                    <td className="px-4 py-2.5 font-medium text-xs">
+                      {v.product}
+                      {!v.itemId && <span className="ml-1.5 text-[10px] text-yellow-500" title="No matching item in Books inventory - counted for visibility only, won't be applied">unmatched</span>}
+                    </td>
                     <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{v.systemQty}</td>
                     <td className="px-4 py-2.5">
                       <input type="number" value={v.countedQty} onChange={e => setCounted(v.id, parseFloat(e.target.value) || 0)}
@@ -2599,7 +2656,13 @@ function StockTakeTab() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Positive variance = more physical stock than system (under-recorded); negative = shrinkage / loss. Export the variance sheet to adjust your inventory.</p>
+      {matchedMismatches.length > 0 && (
+        <button onClick={() => void applyToInventory()} disabled={applying}
+          className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold bg-[var(--color-primary)] text-[var(--color-bg)] py-2.5 rounded-lg hover:opacity-90 disabled:opacity-60">
+          <CheckCircle2 size={14} /> {applying ? "Applying…" : `Apply ${matchedMismatches.length} adjustment${matchedMismatches.length === 1 ? "" : "s"} to inventory`}
+        </button>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Positive variance = more physical stock than system (under-recorded); negative = shrinkage / loss. Applying posts a real stock adjustment (and GL entry) per matched item; unmatched codes are counted but not written back.</p>
     </div>
   );
 }

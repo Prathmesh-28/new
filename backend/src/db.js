@@ -1183,6 +1183,10 @@ async function initDb() {
     ALTER TABLE book_stock_movements ADD COLUMN IF NOT EXISTS value_after  NUMERIC(19,4);
     ALTER TABLE book_stock_movements ADD COLUMN IF NOT EXISTS fifo_queue   JSONB;
     ALTER TABLE book_stock_movements ADD COLUMN IF NOT EXISTS reposted_at  TIMESTAMPTZ;
+    -- physicalAdjust's shortage path needs issue()'s REAL cogs (FIFO-accurate) to size
+    -- the GL journal, so the movement row is written before its voucher exists and the
+    -- voucher_id is backfilled right after posting - nullable to allow that brief gap.
+    ALTER TABLE book_stock_movements ALTER COLUMN voucher_id DROP NOT NULL;
     UPDATE book_stock_movements SET posting_date = created_at::date WHERE posting_date IS NULL;
     CREATE INDEX IF NOT EXISTS idx_book_stock_mv_chron ON book_stock_movements(tenant_id, item_id, posting_date, created_at, id);
     CREATE TABLE IF NOT EXISTS book_repost_runs (

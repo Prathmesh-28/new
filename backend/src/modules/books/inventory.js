@@ -153,7 +153,7 @@ async function receive(tenantId, itemId, qty, rate, opts = {}) {
     await client.query("COMMIT");
     // A back-dated inward shifts the WAvg/FIFO basis of every later movement - repost.
     if (backdated && !opts.skipRepost) await _maybeRepost(tenantId, itemId, opts.warehouseId || null, date, opts.actorId);
-    return { qty: toDb(next.qty), value: toDb(next.value), avg: toDb(next.avg) };
+    return { qty: toDb(next.qty), value: toDb(next.value), avg: toDb(next.avg), movementId: mvId };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
@@ -199,7 +199,7 @@ async function issue(tenantId, itemId, qty, opts = {}) {
     backdated = await _isBackdated(client, tenantId, itemId, date, mvId);
     await client.query("COMMIT");
     if (backdated && !opts.skipRepost) await _maybeRepost(tenantId, itemId, opts.warehouseId || null, date, opts.actorId);
-    return { cogs: toDb(cogs) };
+    return { cogs: toDb(cogs), movementId: mvId };
   } catch (e) { await client.query("ROLLBACK").catch(() => {}); throw e; } finally { client.release(); }
 }
 
@@ -334,6 +334,12 @@ async function physicalAdjust(tenantId, actorId, { itemId, countedQty, warehouse
   const variance = counted.minus(before); // + surplus, − shortage
   if (variance.isZero()) return { before: toDb(before), counted: toDb(counted), variance: toDb(0), adjusted: null };
 
+  // Resolve the GL ledgers BEFORE mutating any stock - the most common way this used
+  // to fail (ledgers never seeded) must never leave a physical count half-applied.
+  const stockLedger = await ledgerIdByName(tenantId, "Stock-in-hand");
+  const adjLedger = await ledgerIdByName(tenantId, "Stock Adjustment");
+  if (!stockLedger || !adjLedger) throw new PostError("NOT_SEEDED", "Stock-in-hand / Stock Adjustment ledgers missing - seed first", 422);
+
   const avg = money(item.current_qty).greaterThan(0) ? money(item.current_value).div(item.current_qty) : money(0);
   let valueDelta, adjusted;
   if (gt(variance, 0)) {
@@ -349,18 +355,25 @@ async function physicalAdjust(tenantId, actorId, { itemId, countedQty, warehouse
   }
 
   // GL: keep Stock-in-hand in step with the subsidiary against Stock Adjustment.
+  // The stock movement receive()/issue() just wrote (real-time above) has no voucher
+  // yet - the shortage side needs issue()'s ACTUAL cogs (FIFO-accurate) to size this
+  // journal, so the voucher can only be created AFTER, then backfilled onto that row.
+  // (Ledgers are already confirmed to exist above; a residual failure here - e.g. the
+  // period locking between the check and this post - leaves the physical count applied
+  // (correct - that's the point of a stock take) with a voucher_id-less movement row,
+  // a clear, queryable signal to backdate the journal manually rather than a crash.)
   if (!valueDelta.isZero()) {
-    const stockLedger = await ledgerIdByName(tenantId, "Stock-in-hand");
-    const adjLedger = await ledgerIdByName(tenantId, "Stock Adjustment");
-    if (!stockLedger || !adjLedger) throw new PostError("NOT_SEEDED", "Stock-in-hand / Stock Adjustment ledgers missing - seed first", 422);
     const amt = valueDelta.abs();
     const surplus = gt(valueDelta, 0);
     // Surplus → Dr Stock-in-hand / Cr Stock Adjustment; shortage → reverse.
-    await postVoucher(tenantId, actorId,
+    const gl = await postVoucher(tenantId, actorId,
       { voucherType: "JOURNAL", voucherDate: date || new Date().toISOString().slice(0, 10), narration: `Stock adjustment: ${item.name}`, source: "api" },
       surplus
         ? [{ ledgerId: stockLedger, debit: toDb(amt), credit: "0" }, { ledgerId: adjLedger, debit: "0", credit: toDb(amt) }]
         : [{ ledgerId: adjLedger, debit: toDb(amt), credit: "0" }, { ledgerId: stockLedger, debit: "0", credit: toDb(amt) }]);
+    if (adjusted?.movementId) {
+      await pool.query("UPDATE book_stock_movements SET voucher_id=$1 WHERE id=$2 AND tenant_id=$3", [gl.voucherId, adjusted.movementId, tenantId]);
+    }
   }
 
   return { before: toDb(before), counted: toDb(counted), variance: toDb(variance), adjusted };
