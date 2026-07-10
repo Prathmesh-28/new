@@ -68,6 +68,9 @@ async function finishSignup(user) {
     "INSERT INTO tenant_memberships(user_id, tenant_id, role, status) VALUES($1,$2,$3,'active') ON CONFLICT (user_id, tenant_id) DO NOTHING",
     [user.id, user.tenant_id, user.role]
   ).catch(() => {});
+  // 14-day trial of the flagship (Growth) plan - the pricing page's headline offer.
+  // ON CONFLICT DO NOTHING inside startTrial makes this safe to call once per tenant.
+  await require("../lib/billingLifecycle").startTrial(user.tenant_id).catch((e) => console.error("[signup] trial start failed:", e.message));
   require("../modules/analytics").track(user.tenant_id, user.id, { event: "signup_completed", props: { role: user.role } }).catch(() => {});
 }
 

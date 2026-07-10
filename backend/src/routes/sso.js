@@ -97,9 +97,13 @@ router.get("/callback", async (req, res) => {
     } else {
       if (!cfg.jit_provision) return bounce(res, req, "/login?sso_error=no_account");
       const unusable = await bcrypt.hash("sso:" + crypto.randomBytes(24).toString("hex"), 10); // password login impossible for SSO users
+      // Inherit the tenant's current plan - SSO is itself a paid-tier feature, so a JIT-
+      // provisioned user must not default to 'free' and get blocked from plan features.
+      const { rows: billingRow } = await pool.query("SELECT plan FROM tenant_billing WHERE tenant_id=$1", [st.tenant]);
+      const tenantPlan = billingRow[0]?.plan || "free";
       const ins = await pool.query(
-        "INSERT INTO users(email, password, role, tenant_id, first_login, full_name) VALUES($1,$2,$3,$4,false,$5) RETURNING *",
-        [email, unusable, safeRole(cfg.default_role), st.tenant, info.name || info.given_name || null]); // clamp: never provision super_admin via SSO
+        "INSERT INTO users(email, password, role, tenant_id, first_login, full_name, subscription_plan) VALUES($1,$2,$3,$4,false,$5,$6) RETURNING *",
+        [email, unusable, safeRole(cfg.default_role), st.tenant, info.name || info.given_name || null, tenantPlan]); // clamp: never provision super_admin via SSO
       user = ins.rows[0];
       await pool.query("INSERT INTO tenant_memberships(user_id, tenant_id, role, status) VALUES($1,$2,$3,'active') ON CONFLICT (user_id, tenant_id) DO NOTHING", [user.id, st.tenant, user.role]);
     }

@@ -21,23 +21,37 @@ export interface BillingState {
   status: string | null;
   current_period_end: string | null;
   provider: string | null;
+  is_trialing: boolean;
+  cycle: "monthly" | "annual" | null;
+  is_founding_member: boolean;
+  has_subscription: boolean;
   configured: boolean; // Razorpay keys present on the server
 }
+
+export interface FoundingMemberStatus { cap: number; claimed: number; remaining: number; sold_out: boolean }
 
 export async function fetchBilling(): Promise<BillingState> {
   return api.get<BillingState>("/api/billing/current");
 }
 
-// Unified upgrade entry point - Razorpay Standard Checkout.
-export async function upgradePlan(
-  plan: Exclude<PlanTier, "free">,
-  opts: { email?: string; name?: string; onComplete?: () => void } = {},
-): Promise<void> {
-  return startRazorpayCheckout(plan, opts);
+export async function fetchFoundingMemberStatus(): Promise<FoundingMemberStatus> {
+  return api.get<FoundingMemberStatus>("/api/billing/founding-member-status");
 }
 
-// ── Razorpay Standard Checkout ──────────────────────────────────────────────
+// Unified upgrade entry point - real recurring billing (Razorpay Subscriptions +
+// UPI Autopay/e-mandate): the customer authorizes once, Razorpay re-charges each
+// cycle itself - no cron re-billing, no "forgot to renew" churn.
+export async function upgradePlan(
+  plan: Exclude<PlanTier, "free">,
+  opts: { email?: string; name?: string; cycle?: "monthly" | "annual"; coupon?: string; onComplete?: () => void } = {},
+): Promise<void> {
+  return startSubscriptionCheckout(plan, { ...opts, cycle: opts.cycle ?? "monthly" });
+}
+
+// ── Razorpay Standard Checkout (legacy one-time order path - kept for anything
+// still calling it directly; upgradePlan no longer uses this) ───────────────
 interface RazorpaySuccess { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }
+interface RazorpaySubscriptionSuccess { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }
 interface RazorpayInstance { open: () => void; on: (event: string, handler: (resp: { error?: { description?: string } }) => void) => void }
 declare global {
   interface Window {
@@ -110,6 +124,68 @@ export async function startRazorpayCheckout(
     rzp.open();
   } catch (e) {
     toast.error(apiMessage(e) || "Couldn't start Razorpay checkout.");
+  }
+}
+
+// Create a subscription, open Razorpay Checkout in subscription mode (the customer
+// sets up UPI Autopay / an e-mandate on this first charge), verify server-side, then
+// reflect the upgrade. Every later renewal is charged by Razorpay itself and applied
+// by the webhook - nothing further to do client-side after this call succeeds.
+export async function startSubscriptionCheckout(
+  plan: Exclude<PlanTier, "free">,
+  opts: { email?: string; name?: string; cycle?: "monthly" | "annual"; coupon?: string; onComplete?: () => void } = {},
+): Promise<void> {
+  try {
+    haptic("medium");
+    const cycle = opts.cycle ?? "monthly";
+    const sub = await api.post<{ subscription_id: string; key_id: string; amount: number; founding_member: boolean }>(
+      "/api/billing/razorpay/subscription", { plan, cycle, coupon: opts.coupon || undefined },
+    );
+    const ready = await loadRazorpay();
+    if (!ready || !window.Razorpay) {
+      toast.error("Couldn't load Razorpay. Check your connection and try again.");
+      return;
+    }
+    const rzp = new window.Razorpay({
+      key: sub.key_id,
+      subscription_id: sub.subscription_id,
+      name: "Headroom",
+      description: `${plan.charAt(0).toUpperCase() + plan.slice(1)} plan - ${cycle}${sub.founding_member ? " (founding member)" : ""}`,
+      prefill: { email: opts.email || undefined, name: opts.name || undefined },
+      theme: { color: "#5FBE7C" },
+      handler: async (resp: RazorpaySubscriptionSuccess) => {
+        try {
+          const v = await api.post<{ ok: boolean }>("/api/billing/razorpay/subscription/verify", {
+            razorpay_payment_id: resp.razorpay_payment_id,
+            razorpay_subscription_id: resp.razorpay_subscription_id,
+            razorpay_signature: resp.razorpay_signature,
+          });
+          if (v.ok) { haptic("success"); toast.success("You're upgraded - welcome aboard! 🎉"); opts.onComplete?.(); }
+          else { haptic("error"); toast.error("Payment couldn't be verified."); }
+        } catch (e) {
+          haptic("error");
+          toast.error(apiMessage(e) || "Payment verification failed.");
+        }
+      },
+      modal: { ondismiss: () => { /* user closed the modal - no charge, no mandate created */ } },
+    });
+    rzp.on("payment.failed", (resp) => {
+      haptic("error");
+      toast.error(resp?.error?.description || "Payment failed. Please try again.");
+    });
+    rzp.open();
+  } catch (e) {
+    toast.error(apiMessage(e) || "Couldn't start Razorpay checkout.");
+  }
+}
+
+export async function cancelSubscription(onComplete?: () => void): Promise<void> {
+  try {
+    await api.post<{ ok: boolean }>("/api/billing/razorpay/subscription/cancel", {});
+    toast.success("Subscription cancelled - you'll keep access until the current period ends.");
+    onComplete?.();
+  } catch (e) {
+    toast.error(apiMessage(e) || "Couldn't cancel the subscription.");
   }
 }
 

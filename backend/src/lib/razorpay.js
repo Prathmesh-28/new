@@ -65,6 +65,16 @@ function verifyPaymentSignature({ orderId, paymentId, signature }) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// Subscription Checkout returns a DIFFERENT signature formula from Orders Checkout:
+//   HMAC_SHA256(payment_id + "|" + subscription_id, KEY_SECRET) === razorpay_signature
+function verifySubscriptionSignature({ paymentId, subscriptionId, signature }) {
+  if (!paymentId || !subscriptionId || !signature || !keySecret()) return false;
+  const expected = crypto.createHmac("sha256", keySecret()).update(`${paymentId}|${subscriptionId}`).digest("hex");
+  const a = Buffer.from(expected);
+  const b = Buffer.from(String(signature));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 // Create a hosted Payment Link (Razorpay Payment Links API). amount in paise.
 async function createPaymentLink({ amount, description, customer, notes, referenceId, callbackUrl }) {
   if (!isConfigured()) throw new Error("Razorpay not configured");
@@ -99,4 +109,77 @@ async function getPaymentLink(id) {
   return data;
 }
 
-module.exports = { keyId, isConfigured, configProblem, createOrder, verifyPaymentSignature, createPaymentLink, getPaymentLink };
+// ── Subscriptions API (real recurring billing + UPI Autopay mandates) ───────
+// API_BASE is overridable so tests can point at a local stub instead of the real
+// Razorpay endpoint - the request/response shape is identical either way.
+const API_BASE = () => (process.env.RAZORPAY_API_BASE || "https://api.razorpay.com/v1").replace(/\/$/, "");
+
+async function rpFetch(path, { method = "GET", body } = {}) {
+  if (!isConfigured()) throw new Error("Razorpay not configured");
+  const auth = Buffer.from(`${keyId()}:${keySecret()}`).toString("base64");
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  let resp;
+  try {
+    resp = await fetch(`${API_BASE()}${path}`, {
+      method,
+      headers: { "Content-Type": "application/json", Authorization: `Basic ${auth}` },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: ctrl.signal,
+    });
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error("Timed out reaching Razorpay - please try again.");
+    throw new Error(`Couldn't reach Razorpay: ${err.message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const e = new Error(data?.error?.description || `Razorpay ${method} ${path} failed (${resp.status})`);
+    e.statusCode = resp.status;
+    throw e;
+  }
+  return data;
+}
+
+// Plan objects are immutable once created - the caller (billing.js) caches the
+// returned id in razorpay_plans so a given (name, period, amount) is created once.
+async function createPlan({ period, interval = 1, name, amount, currency = "INR" }) {
+  return rpFetch("/plans", { method: "POST", body: { period, interval, item: { name, amount, currency } } });
+}
+
+// total_count is required by the API (a subscription isn't literally "forever") -
+// 120 monthly cycles (10y) / 10 annual cycles (10y) reads as "until cancelled" for
+// any real SMB customer lifetime, while still satisfying the API's contract.
+async function createSubscription({ planId, totalCount, tenantId, plan, cycle, customerNotify = 1 }) {
+  return rpFetch("/subscriptions", {
+    method: "POST",
+    body: { plan_id: planId, total_count: totalCount, customer_notify: customerNotify, notes: { tenant_id: tenantId, plan, cycle } },
+  });
+}
+
+async function cancelSubscription(id, { cancelAtCycleEnd = false } = {}) {
+  return rpFetch(`/subscriptions/${encodeURIComponent(id)}/cancel`, { method: "POST", body: { cancel_at_cycle_end: cancelAtCycleEnd ? 1 : 0 } });
+}
+
+async function getSubscription(id) {
+  return rpFetch(`/subscriptions/${encodeURIComponent(id)}`);
+}
+
+// Webhook signature: HMAC_SHA256(rawBody, RAZORPAY_WEBHOOK_SECRET) === X-Razorpay-Signature.
+// A DIFFERENT secret from the API key pair (set once when the webhook URL is
+// registered in the Razorpay dashboard). Deliberately no insecure bypass when unset -
+// this endpoint moves subscription state, unlike a read-only dev convenience.
+function verifyWebhookSignature(rawBody, signature) {
+  const secret = (process.env.RAZORPAY_WEBHOOK_SECRET || "").trim();
+  if (!secret || !signature) return false;
+  const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  const a = Buffer.from(expected);
+  const b = Buffer.from(String(signature));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+module.exports = {
+  keyId, isConfigured, configProblem, createOrder, verifyPaymentSignature, createPaymentLink, getPaymentLink,
+  createPlan, createSubscription, cancelSubscription, getSubscription, verifyWebhookSignature, verifySubscriptionSignature,
+};

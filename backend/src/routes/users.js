@@ -90,9 +90,14 @@ router.post("/", authenticate, async (req, res) => {
 
   const tempPass = crypto.randomBytes(8).toString("hex");
   const hash     = await bcrypt.hash(tempPass, 10);
+  // Inherit the TENANT's current plan (trial or paid) - without this a newly-added
+  // team member defaults to 'free' and gets wrongly blocked from features the rest
+  // of their team can already use, until an unrelated billing event re-syncs everyone.
+  const { rows: billingRow } = await pool.query("SELECT plan FROM tenant_billing WHERE tenant_id=$1", [tid]);
+  const tenantPlan = billingRow[0]?.plan || actor.subscription_plan || "free";
   const { rows } = await pool.query(
-    "INSERT INTO users(email,password,role,tenant_id) VALUES($1,$2,$3,$4) RETURNING id,email,role,tenant_id,first_login",
-    [email.toLowerCase(), hash, role, tid]
+    "INSERT INTO users(email,password,role,tenant_id,subscription_plan) VALUES($1,$2,$3,$4,$5) RETURNING id,email,role,tenant_id,first_login,subscription_plan",
+    [email.toLowerCase(), hash, role, tid, tenantPlan]
   );
   await addMembership(rows[0].id, tid, role);
   sendWelcome({ to: email, password: tempPass }).catch(() => {});

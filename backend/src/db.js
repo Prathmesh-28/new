@@ -556,6 +556,28 @@ async function initDb() {
     -- Gateway-agnostic columns (Stripe or Razorpay paid the subscription)
     ALTER TABLE tenant_billing ADD COLUMN IF NOT EXISTS provider TEXT;
     ALTER TABLE tenant_billing ADD COLUMN IF NOT EXISTS razorpay_payment_id TEXT;
+    -- Real recurring billing (Razorpay Subscriptions + UPI Autopay), trial + coupon.
+    ALTER TABLE tenant_billing ADD COLUMN IF NOT EXISTS razorpay_subscription_id TEXT;
+    ALTER TABLE tenant_billing ADD COLUMN IF NOT EXISTS cycle TEXT; -- 'monthly' | 'annual'
+    ALTER TABLE tenant_billing ADD COLUMN IF NOT EXISTS is_founding_member BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE tenant_billing ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tenant_billing_razorpay_sub ON tenant_billing(razorpay_subscription_id) WHERE razorpay_subscription_id IS NOT NULL;
+
+    -- One row per Razorpay Plan object we've created (plan objects are immutable and
+    -- priced once, so we cache the id instead of re-creating one on every checkout).
+    CREATE TABLE IF NOT EXISTS razorpay_plans (
+      plan_key   TEXT PRIMARY KEY, -- e.g. 'growth_annual', 'founding_pro_annual'
+      plan_id    TEXT NOT NULL,
+      amount     INTEGER NOT NULL, -- paise, for drift detection if pricing.js ever changes
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    -- Webhook delivery idempotency (Razorpay retries on non-2xx / timeout).
+    CREATE TABLE IF NOT EXISTS razorpay_webhook_events (
+      event_id   TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
 
     -- Per-tenant monthly usage counters for plan quota metering (entitlements engine).
     -- 'period' is the YYYY-MM bucket so a new month resets automatically (no cron).

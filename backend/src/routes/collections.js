@@ -185,6 +185,28 @@ router.post("/", async (req, res) => {
     }
   }
 
+  // ── Subscription lifecycle (Headroom's OWN plan billing, not a customer invoice) ──
+  // Same signature already verified above. Dedup via X-Razorpay-Event-Id (Razorpay
+  // retries on any non-2xx/timeout) - when the header is absent we still process, since
+  // every branch below writes an ABSOLUTE new state (not an increment), so a duplicate
+  // delivery is harmless rather than double-applying.
+  if (event && event.startsWith("subscription.")) {
+    const eventId = req.headers["x-razorpay-event-id"];
+    if (eventId) {
+      const { rows: ins } = await pool.query(
+        "INSERT INTO razorpay_webhook_events(event_id, event_type) VALUES($1,$2) ON CONFLICT (event_id) DO NOTHING RETURNING event_id",
+        [eventId, event]
+      );
+      if (!ins.length) return res.json({ ok: true, dedup: true });
+    }
+    const sub = req.body.payload?.subscription?.entity;
+    const subId = sub?.id;
+    if (subId) {
+      try { await require("../lib/subscriptionLifecycle").handleWebhookEvent(event, sub); }
+      catch (e) { console.error(`[razorpay] subscription event ${event} for ${subId} failed:`, e.message); return res.status(500).json({ error: "handler failed" }); }
+    }
+  }
+
   res.json({ ok: true });
 });
 

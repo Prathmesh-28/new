@@ -627,6 +627,14 @@ initDb()
         }
       } catch (err) { console.error("[retention-statutory]", err.message); }
     }, { timezone: "UTC" });
+    // Billing lifecycle: trials that ran out, and cancelled/halted Razorpay
+    // subscriptions past the period already billed for - both fall back to Free.
+    cron.schedule("0 5 * * *", async () => {
+      try {
+        const n = await require("./lib/billingLifecycle").runExpirySweep();
+        if (n) console.log(`[billing] ${n} tenant(s) reverted to Free (trial/subscription ended)`);
+      } catch (err) { console.error("[billing-expiry-sweep]", err.message); }
+    }, { timezone: "UTC" });
     // Books: durable e-invoice worker (registers QUEUED vouchers with the GSP).
     require("./modules/books/einvoice").startWorker();
     // SMB agents: run scheduled (daily/weekly) agents each hour - read-only autonomous runs.
