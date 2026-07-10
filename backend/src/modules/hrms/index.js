@@ -799,6 +799,7 @@ async function runPayroll(tenantId, actorId, month, opts = {}) {
   const { rows: emps } = await q(tenantId,"SELECT id, name FROM hrms_employees WHERE tenant_id=$1 AND status='ACTIVE' ORDER BY name", [tenantId]);
 
   const slips = [];
+  const tdsWarnings = [];
   for (const e of emps) {
     const ssa = await activeAssignment(tenantId, e.id, onDate);
     if (!ssa || ssa.is_active === false) continue;
@@ -810,7 +811,9 @@ async function runPayroll(tenantId, actorId, month, opts = {}) {
     });
     // (1) ANNUALIZED TDS: deduct the stored per-month projected TDS (mid-year true-up).
     // If a TDS row already exists on the structure, the projection takes precedence.
-    const monthlyTds = money(await monthlyTdsFor(tenantId, e.id, month));
+    const tdsRes = await monthlyTdsFor(tenantId, e.id, month);
+    if (tdsRes.error) tdsWarnings.push({ employeeId: e.id, employeeName: e.name, warning: `TDS projection failed - no income-tax TDS deducted this run: ${tdsRes.error}` });
+    const monthlyTds = money(tdsRes.tds);
     let slipTds = money(0);
     if (monthlyTds.greaterThan(0)) {
       slip.deductions = slip.deductions.filter((d) => !(d.abbr === "TDS" || /tds|income tax/i.test(d.name)));
@@ -891,6 +894,9 @@ async function runPayroll(tenantId, actorId, month, opts = {}) {
     gross: toRupees(gross), total_deduction: toRupees(totalDeduction), net: toRupees(net),
     breakdown: { pf: toRupees(pf), tds: toRupees(tds), esi: toRupees(esi), pt: toRupees(pt), other: toRupees(otherDed) },
     slips,
+    // Per-employee TDS-projection failures (if any) - the run still completes, but
+    // the caller is told exactly whose income-tax TDS could not be computed.
+    ...(tdsWarnings.length ? { tdsWarnings } : {}),
   };
 }
 
@@ -937,6 +943,18 @@ function fyForMonth(month) {
   const [y, m] = month.split("-").map(Number);
   const startYear = m >= 4 ? y : y - 1;
   return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+}
+
+// §16(ia) standard deduction is fixed by law, not preference: ₹75,000 under the new
+// regime (Finance (No.2) Act 2024, FY2024-25 onward) vs ₹50,000 under the old. The
+// hrms_payroll_periods column predates the ₹75k change with a DEFAULT 50000, so a
+// stored value that IS one of the two statutory figures is treated as "not customised"
+// and re-derived from the regime (an audit found every new-regime period silently
+// under-deducting by ₹25k). A genuinely custom value (anything else) is honoured.
+function statutoryStdDeduction(stored, regime) {
+  const statutory = regime === "old" ? 50000 : 75000;
+  const s = Number(stored || 0);
+  return money(s === 0 || s === 50000 || s === 75000 ? statutory : s);
 }
 
 async function getOrCreatePayrollPeriod(tenantId, fy) {
@@ -1054,7 +1072,7 @@ async function computeTdsProjection(tenantId, employeeId, fy, opts = {}) {
 
   // Standard deduction applies to the NEW regime too (post-FY2023-24). HRA exemption
   // only under the OLD regime (new regime forgoes most exemptions).
-  const stdDed = money(period.standard_deduction || 50000);
+  const stdDed = statutoryStdDeduction(period.standard_deduction, regime);
   let exemptions = stdDed;
   let hraEx = money(0);
   let via = { total: money(0), capped: {} };
@@ -1142,12 +1160,22 @@ const listTdsProjections = async (tenantId, fy) => (await q(tenantId,
     WHERE pr.tenant_id=$1 AND pr.fy=$2 ORDER BY e.name`, [tenantId, fy])).rows;
 
 // The per-month TDS to deduct for an employee in a given payroll month. Reads the
-// stored projection (computing one if absent). Returns a money string.
+// stored projection (computing one if absent). Returns { tds, error } - an audit
+// found the old bare `catch { return "0.00" }` here silently deducted ZERO salary
+// TDS for every employee for all of FY2026-27 (the tax engine threw UNSUPPORTED_AY
+// for the live year and nothing ever surfaced). A projection failure must be LOUD:
+// it is reported per-employee in the payroll-run response, never a quiet zero.
 async function monthlyTdsFor(tenantId, employeeId, month) {
   const fy = fyForMonth(month);
   let proj = await getTdsProjection(tenantId, employeeId, fy);
-  if (!proj) { try { proj = await computeTdsProjection(tenantId, employeeId, fy); } catch { return "0.00"; } }
-  return toRupees(money(proj.tds_per_month));
+  if (!proj) {
+    try { proj = await computeTdsProjection(tenantId, employeeId, fy); }
+    catch (e) {
+      console.error(`[hrms-tds] projection failed for employee ${employeeId} fy ${fy}:`, e.message);
+      return { tds: "0.00", error: e.message };
+    }
+  }
+  return { tds: toRupees(money(proj.tds_per_month)), error: null };
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1649,7 +1677,7 @@ async function generateForm16B(tenantId, fyStartYear) {
   const declBy = new Map(decls.rows.map((r) => [r.employee_id, r]));
   const ptBy = new Map(pt.rows.map((r) => [r.employee_id, Number(r.pt) || 0]));
   const period = periods.rows[0] || {};
-  const stdDed = R(period.standard_deduction) || 50000;
+  const stdDed = Number(toRupees(statutoryStdDeduction(period.standard_deduction, period.regime || "new")));
 
   let withoutPan = 0;
   const employees = paid.rows.map((r) => {

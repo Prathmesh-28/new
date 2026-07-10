@@ -34,7 +34,17 @@ const { ayToDate, resolveParam, slabTax, applyRebate87A, surcharge: surchargeOf,
 // NOTE: only the individual path was AY-gated historically; company/firm used static
 // FLAT_RATES regardless of AY (see flatRulesFor), so that path is intentionally NOT
 // gated here.
-const SUPPORTED_AYS = new Set(["2024-25", "2025-26", "2026-27"]);
+//
+// AY 2027-28 (FY 2026-27, the LIVE payroll year): an audit found this gate made the
+// whole HRMS payroll deduct ZERO salary TDS for FY2026-27 - computeTdsProjection threw
+// UNSUPPORTED_AY and a swallowed catch turned that into a silent "0.00" per employee.
+// Under-withholding nothing at all is far worse than withholding on last-enacted law,
+// so 2027-28 is supported and resolves (via the dated store) to the Finance Act 2025
+// parameters until Finance Act 2026 changes are reviewed and encoded in taxrules.js
+// as dated from-2026-04-01 entries. rulesFor() flags this via `provisional` below.
+const SUPPORTED_AYS = new Set(["2024-25", "2025-26", "2026-27", "2027-28"]);
+// AYs computing on carried-forward (not yet Finance-Act-reviewed) parameters.
+const PROVISIONAL_AYS = new Set(["2027-28"]);
 
 // Resolve the INDIVIDUAL slab/rebate/surcharge rule set for an AY from the dated
 // parameter store. Mirrors the old IT_RULES[ay] shape. Throws UNSUPPORTED_AY for an
@@ -197,6 +207,9 @@ function computeIncomeTax({ taxableIncome, regime, entityType, ay, companyRate25
     cess: toRupees(cess),
     total: toRupees(total),
     effectiveRate: effectiveRate.toFixed(2),
+    // True when this AY computes on carried-forward parameters pending a Finance-Act
+    // review (see PROVISIONAL_AYS) - surface this to the user, never hide it.
+    ...(entity === "individual" && PROVISIONAL_AYS.has(String(ay)) ? { provisional: true } : {}),
   };
 }
 

@@ -11,22 +11,22 @@ const decEmp = (r) => fc.decryptFields(r, EMP_PII);
 const WRITE_ROLES = ["super_admin", "owner", "finance_manager"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
-// New-regime FY25-26 slabs (matches the frontend computeStatutoryNet engine):
-// ₹75,000 standard deduction, 87A rebate (≤ ₹7L taxable → nil), + 4% cess.
-const TDS_STD_DEDUCTION = 75000;
-const NEW_REGIME_SLABS = [
-  [300000, 0], [700000, 0.05], [1000000, 0.10], [1200000, 0.15], [1500000, 0.20], [Infinity, 0.30],
-];
+// New-regime TDS via the REAL income-tax engine (modules/books/incometax -
+// dated Finance-Act slabs, 87A rebate, surcharge, cess). This route used to keep
+// its own hardcoded slab table here; an audit found it was the FY2024-25 table
+// mislabeled "FY25-26" (87A nil-limit ₹7L instead of ₹12L), over-deducting TDS
+// for every employee earning ₹7-12L. One engine, one truth - never a second copy.
+const incometax = require("../modules/books/incometax");
+const TDS_STD_DEDUCTION = 75000; // §16(ia) new-regime standard deduction (FY2024-25 onward)
+function currentAy() {
+  const d = new Date();
+  const fyStart = d.getMonth() + 1 >= 4 ? d.getFullYear() : d.getFullYear() - 1;
+  return `${fyStart + 1}-${String((fyStart + 2) % 100).padStart(2, "0")}`;
+}
 function computeTds(grossAnnual) {
   const taxable = Math.max(0, grossAnnual - TDS_STD_DEDUCTION);
-  let tax = 0, prev = 0;
-  for (const [upTo, rate] of NEW_REGIME_SLABS) {
-    if (taxable <= prev) break;
-    tax += (Math.min(taxable, upTo) - prev) * rate;
-    prev = upTo;
-  }
-  if (taxable <= 700000) tax = 0;        // 87A rebate
-  return tax * 1.04;                     // + 4% health & education cess
+  const t = incometax.computeIncomeTax({ taxableIncome: taxable, regime: "new", entityType: "individual", ay: currentAy() });
+  return Number(t.total);
 }
 
 // Full statutory split for ONE employee-month — an exact server-side mirror of the

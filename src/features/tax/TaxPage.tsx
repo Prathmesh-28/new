@@ -175,15 +175,16 @@ export default function TaxPage() {
         const presumptiveIncome = Math.round(turnover * presumptivePct / 100);
         const stdDeduction = 75000;
         const netTaxable = Math.max(0, presumptiveIncome - stdDeduction);
+        // New-regime slabs per Finance Act 2025 (FY2025-26 onward) - matches backend taxrules.js.
         const slabs: [number, number, number][] = [
-          [0, 300000, 0], [300000, 700000, 0.05], [700000, 1000000, 0.10],
-          [1000000, 1200000, 0.15], [1200000, 1500000, 0.20], [1500000, Infinity, 0.30],
+          [0, 400000, 0], [400000, 800000, 0.05], [800000, 1200000, 0.10],
+          [1200000, 1600000, 0.15], [1600000, 2000000, 0.20], [2000000, 2400000, 0.25], [2400000, Infinity, 0.30],
         ];
         let slabTax = 0;
         let rem = netTaxable;
         for (const [lo, hi, r] of slabs) { if (rem <= 0) break; const t = Math.min(rem, hi - lo); slabTax += t * r; rem -= t; }
-        // Section 87A rebate (new regime): full rebate if taxable income ≤ ₹7L
-        if (netTaxable <= 700000) slabTax = 0;
+        // Section 87A rebate (new regime): full rebate if taxable income ≤ ₹12L
+        if (netTaxable <= 1200000) slabTax = 0;
         const cess = Math.round(slabTax * 0.04);
         const totalTax = Math.round(slabTax + cess);
         const limit44AD  = 30000000; // ₹3 crore (digital only above ₹2 crore)
@@ -1075,9 +1076,10 @@ function slabTax(income: number, bands: SlabBand[]): number {
   return tax;
 }
 
+// Finance Act 2025 (FY2025-26 onward) - matches backend taxrules.js dated store.
 const NEW_BANDS: SlabBand[] = [
-  { upTo: 300000, rate: 0 }, { upTo: 700000, rate: 5 }, { upTo: 1000000, rate: 10 },
-  { upTo: 1200000, rate: 15 }, { upTo: 1500000, rate: 20 }, { upTo: Infinity, rate: 30 },
+  { upTo: 400000, rate: 0 }, { upTo: 800000, rate: 5 }, { upTo: 1200000, rate: 10 },
+  { upTo: 1600000, rate: 15 }, { upTo: 2000000, rate: 20 }, { upTo: 2400000, rate: 25 }, { upTo: Infinity, rate: 30 },
 ];
 const OLD_BANDS: SlabBand[] = [
   { upTo: 250000, rate: 0 }, { upTo: 500000, rate: 5 }, { upTo: 1000000, rate: 20 }, { upTo: Infinity, rate: 30 },
@@ -1103,7 +1105,8 @@ function RegimeOptimizer() {
   // New regime
   const newTaxable = Math.max(0, g - 75000);
   const newSlab    = slabTax(newTaxable, NEW_BANDS);
-  const newRebate  = newTaxable <= 700000 ? newSlab : 0;
+  const newRebate  = newTaxable <= 1200000 ? newSlab : 0; // §87A FY25-26: ≤ ₹12L → nil
+
   const newAfter   = newSlab - newRebate;
   const newCess    = newAfter * 0.04;
   const newTotal   = Math.round(newAfter + newCess);
@@ -3758,12 +3761,14 @@ function PresumptiveVsBooks() {
   const [actualExpenses, setActualExpenses] = useState("");
 
   const slabTax = (taxable: number) => {
+    // Finance Act 2025 new-regime slabs + §87A (≤ ₹12L → nil) - matches backend taxrules.js.
     const slabs: [number, number, number][] = [
-      [0, 300000, 0], [300000, 700000, 0.05], [700000, 1000000, 0.10],
-      [1000000, 1200000, 0.15], [1200000, 1500000, 0.20], [1500000, Infinity, 0.30],
+      [0, 400000, 0], [400000, 800000, 0.05], [800000, 1200000, 0.10],
+      [1200000, 1600000, 0.15], [1600000, 2000000, 0.20], [2000000, 2400000, 0.25], [2400000, Infinity, 0.30],
     ];
     let tax = 0, rem = taxable;
     for (const [lo, hi, r] of slabs) { if (rem <= 0) break; const t = Math.min(rem, hi - lo); tax += t * r; rem -= t; }
+    if (taxable <= 1200000) tax = 0; // §87A rebate
     return Math.round(tax * 1.04); // incl 4% cess
   };
 
@@ -3859,9 +3864,10 @@ function SurchargeMarginalRelief() {
   };
 
   const baseTax = (taxable: number) => {
+    // Finance Act 2025 new-regime slabs - matches backend taxrules.js.
     const slabsNew: [number, number, number][] = [
-      [0, 300000, 0], [300000, 700000, 0.05], [700000, 1000000, 0.10],
-      [1000000, 1200000, 0.15], [1200000, 1500000, 0.20], [1500000, Infinity, 0.30],
+      [0, 400000, 0], [400000, 800000, 0.05], [800000, 1200000, 0.10],
+      [1200000, 1600000, 0.15], [1600000, 2000000, 0.20], [2000000, 2400000, 0.25], [2400000, Infinity, 0.30],
     ];
     const slabsOld: [number, number, number][] = [
       [0, 250000, 0], [250000, 500000, 0.05], [500000, 1000000, 0.20], [1000000, Infinity, 0.30],

@@ -205,7 +205,10 @@ const HRMS_SCHEMA = `
     start_date      DATE NOT NULL,            -- 1-Apr
     end_date        DATE NOT NULL,            -- 31-Mar
     regime          TEXT NOT NULL DEFAULT 'new' CHECK (regime IN ('new','old')),
-    standard_deduction NUMERIC(19,2) NOT NULL DEFAULT 50000,
+    -- ₹75,000 = new-regime §16(ia) figure (Finance (No.2) Act 2024, FY2024-25 onward);
+    -- statutoryStdDeduction() in index.js re-derives by regime whenever the stored
+    -- value is one of the two statutory figures, so old-regime periods still get 50k.
+    standard_deduction NUMERIC(19,2) NOT NULL DEFAULT 75000,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (tenant_id, fy)
   );

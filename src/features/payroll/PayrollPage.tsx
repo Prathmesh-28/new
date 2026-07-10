@@ -43,11 +43,15 @@ interface PayrollRun {
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 // ── Statutory salary engine (local, frontend-only) ─────────────────────────────
-// New-regime FY25-26 slabs used for the actual payroll run so TDS reflects the
-// ₹75k standard deduction and the 87A rebate, and PF/ESI/PT are deducted inline.
+// New-regime slabs per Finance Act 2025 (FY2025-26 onward): ₹75k standard deduction
+// and the ₹12L 87A nil-rebate. An audit found the previous table here was actually
+// the FY2024-25 slabs (rebate ≤ ₹7L) mislabeled FY25-26, over-deducting TDS for
+// every employee earning ₹7-12L. Must match backend modules/books/taxrules.js
+// (the authoritative dated store) - if you change one, change both.
 const RUN_NEW_SLABS: [number, number][] = [
-  [300000, 0], [700000, 0.05], [1000000, 0.10], [1200000, 0.15], [1500000, 0.20], [Infinity, 0.30],
+  [400000, 0], [800000, 0.05], [1200000, 0.10], [1600000, 0.15], [2000000, 0.20], [2400000, 0.25], [Infinity, 0.30],
 ];
+const NEW_REGIME_REBATE_LIMIT = 1200000; // §87A: taxable ≤ ₹12L → nil (max rebate ₹60k)
 function runSlabTax(taxable: number, bands: [number, number][]): number {
   let tax = 0, prev = 0;
   for (const [upTo, rate] of bands) {
@@ -75,11 +79,11 @@ function computeStatutoryNet(grossMonthly: number, cfg: StatutoryConfig): Statut
   const esi = gross <= 21000 ? Math.round(gross * 0.0075) : 0;
   // Professional Tax: simple ~₹200/mo state slab (nil for very low wages).
   const pt = gross >= 15000 ? 200 : (gross > 7500 ? 100 : 0);
-  // TDS - new regime FY25-26 with ₹75,000 standard deduction + 87A rebate (≤ ₹7L taxable → nil).
+  // TDS - new regime with ₹75,000 standard deduction + 87A rebate (≤ ₹12L taxable → nil).
   const annualGross = gross * 12;
   const taxable = Math.max(0, annualGross - 75000);
   let annualTax = runSlabTax(taxable, RUN_NEW_SLABS);
-  if (taxable <= 700000) annualTax = 0;                    // 87A rebate
+  if (taxable <= NEW_REGIME_REBATE_LIMIT) annualTax = 0;   // 87A rebate
   annualTax = Math.round(annualTax * 1.04);                // + 4% health & education cess
   const tds = Math.round(annualTax / 12);
   const totalDeductions = pf + esi + pt + tds;
@@ -826,23 +830,11 @@ export default function PayrollPage() {
         const standardDeduction = 75000;
         const netTaxable = Math.max(0, annualGross - standardDeduction);
 
-        // New regime tax slabs FY25 onwards
-        let slabTax = 0;
-        const slabs: [number, number, number][] = [
-          [0, 300000, 0],
-          [300000, 700000, 0.05],
-          [700000, 1000000, 0.10],
-          [1000000, 1200000, 0.15],
-          [1200000, 1500000, 0.20],
-          [1500000, Infinity, 0.30],
-        ];
-        let remaining = netTaxable;
-        for (const [low, high, rate] of slabs) {
-          if (remaining <= 0) break;
-          const taxable = Math.min(remaining, high - low);
-          slabTax += taxable * rate;
-          remaining -= taxable;
-        }
+        // New-regime slabs + 87A rebate - same shared table as the run engine (the
+        // old inline copy here was the stale FY2024-25 slabs AND skipped 87A, so
+        // Form 16 overstated TDS for every ≤₹12L employee).
+        let slabTax = runSlabTax(netTaxable, RUN_NEW_SLABS);
+        if (netTaxable <= NEW_REGIME_REBATE_LIMIT) slabTax = 0; // 87A rebate
         const cess = Math.round(slabTax * 0.04);
         const annualTDS = Math.round(slabTax + cess);
         const monthlyTDS = Math.round(annualTDS / 12);
@@ -2240,9 +2232,9 @@ function EsopTab({ employees }: { employees: { id: string; name: string; gross_s
 // ── Shared helpers for new Payroll & HR tools ──────────────────────────────────
 type EmpLite = { id: string; name: string; gross_salary: number; tds_monthly?: number; status?: string; joining_date?: string; pan?: string; email?: string; phone?: string };
 
-const NEW_SLAB_BANDS: [number, number][] = [
-  [300000, 0], [700000, 0.05], [1000000, 0.10], [1200000, 0.15], [1500000, 0.20], [Infinity, 0.30],
-];
+// Same Finance Act 2025 table as RUN_NEW_SLABS above - kept as one shared constant
+// per band shape; if you change one, change both (and backend taxrules.js).
+const NEW_SLAB_BANDS: [number, number][] = RUN_NEW_SLABS;
 const OLD_SLAB_BANDS: [number, number][] = [
   [250000, 0], [500000, 0.05], [1000000, 0.20], [Infinity, 0.30],
 ];
@@ -2769,8 +2761,8 @@ function Tds192ProjectionTab({ employees }: { employees: EmpLite[] }) {
   const taxable = Math.max(0, annualGross - stdDeduction - deductions);
   const bands = regime === "new" ? NEW_SLAB_BANDS : OLD_SLAB_BANDS;
   const slab = computeSlabTax(taxable, bands);
-  const rebateLimit = regime === "new" ? 700000 : 500000;
-  const rebateCap   = regime === "new" ? Infinity : 12500;
+  const rebateLimit = regime === "new" ? NEW_REGIME_REBATE_LIMIT : 500000; // §87A FY25-26: ₹12L (new) / ₹5L (old)
+  const rebateCap   = regime === "new" ? 60000 : 12500;
   const rebate = taxable <= rebateLimit ? Math.min(slab, rebateCap) : 0;
   const afterRebate = slab - rebate;
   const cess = afterRebate * 0.04;
@@ -4078,14 +4070,15 @@ function NpsOptimizerTab({ employees }: { employees: EmpLite[] }) {
   const cappedPct = Math.min(pct, cap * 100);
   const npsAnnual = Math.round(basicDaAnnual * (cappedPct / 100));
 
-  // Marginal-rate proxy off taxable income (new regime, std deduction 75k).
+  // Marginal-rate proxy off taxable income (new regime FY25-26, std deduction 75k).
   const taxableNoNps = Math.max(0, annualGross - 75000);
   const marginalRate =
-    taxableNoNps > 1500000 ? 0.30 :
-    taxableNoNps > 1200000 ? 0.20 :
-    taxableNoNps > 1000000 ? 0.15 :
-    taxableNoNps > 700000  ? 0.10 :
-    taxableNoNps > 300000  ? 0.05 : 0;
+    taxableNoNps > 2400000 ? 0.30 :
+    taxableNoNps > 2000000 ? 0.25 :
+    taxableNoNps > 1600000 ? 0.20 :
+    taxableNoNps > 1200000 ? 0.15 :
+    taxableNoNps > 800000  ? 0.10 :
+    taxableNoNps > 400000  ? 0.05 : 0;
   const taxSaved = Math.round(npsAnnual * marginalRate * 1.04); // incl. 4% cess
 
   const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -4395,9 +4388,10 @@ function TakeHomeBreakupTab({ employees }: { employees: EmpLite[] }) {
   const eePf = Math.round(Math.min(monthlyBasic, 15000) * 0.12);
   const pt   = monthlyGross > 0 ? 200 : 0;
   const stdDed = regime === "new" ? 75000 : 50000;
-  const taxable = Math.max(0, annualGross - stdDed - eePf * 12);
+  // Employee PF is an 80C deduction - available under the OLD regime only.
+  const taxable = Math.max(0, annualGross - stdDed - (regime === "old" ? eePf * 12 : 0));
   const slabTax = computeSlabTax(taxable, regime === "new" ? NEW_SLAB_BANDS : OLD_SLAB_BANDS);
-  const rebateLimit = regime === "new" ? 700000 : 500000;
+  const rebateLimit = regime === "new" ? NEW_REGIME_REBATE_LIMIT : 500000; // §87A FY25-26
   const afterRebate = taxable <= rebateLimit ? 0 : slabTax;
   const annualTax = Math.round(afterRebate * 1.04); // + 4% cess
   const tds = Math.round(annualTax / 12);
