@@ -16,6 +16,7 @@ const router = express.Router();
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
 const platformConfig = require("../lib/platformConfig");
+const platformStats = require("../lib/platformStats");
 
 const GROUPS = {
   // ── public: marketing + app chrome ──────────────────────────────────────────
@@ -107,11 +108,54 @@ const GROUPS = {
     bool: ["allowAdvisorSignup"],
     defaults: { mode: "open", defaultPlan: "free", defaultRole: "owner", allowAdvisorSignup: true },
   },
+  // NOTE: deprecated/orphaned - real plan pricing now lives ONLY in
+  // routes/billing.js's PLAN_PRICING, served publicly via GET /api/billing/plans.
+  // Kept here (unused by the frontend) so any existing DB row doesn't 404; do not
+  // wire new UI to this group - it is a second, driftable copy of a real number.
   pricing: {
     public: true,
     keys: ["freeLabel", "starterPrice", "growthPrice", "proPrice", "currencySymbol"],
     num: ["starterPrice", "growthPrice", "proPrice"],
     defaults: { freeLabel: "Free", starterPrice: 999, growthPrice: 2999, proPrice: 7999, currencySymbol: "₹" },
+  },
+
+  // Real editorial content - genuinely fine for the super-admin to hand-edit anytime.
+  // Defaults below correct the two factual errors an audit found in the previously
+  // hardcoded HomePage.tsx array (a 90-day-trial claim that contradicted the real
+  // 14-day trial, and an unverified accounting-software integration list).
+  faqs: {
+    public: true,
+    list: true,
+    itemShape: ["q", "a"],
+    maxItems: 50,
+    defaults: {
+      items: [
+        { q: "Do I need an accountant to use Headroom?", a: "No. Headroom is built for owner-operators to run day-to-day finance themselves - invoicing, expenses, GST, and cash forecasting - without needing a CA for routine bookkeeping. Most owners still use a CA for annual filing and audit sign-off." },
+        { q: "Which accounting software does Headroom connect to?", a: "Headroom is a standalone books-of-record - you don't need Tally, Zoho Books, or QuickBooks alongside it. We're building direct import/export tooling for teams migrating from those tools; check the Connectors page in-app for what's live today." },
+        { q: "What do the confidence bands on my forecast mean?", a: "Each forecast runs thousands of Monte Carlo simulations over your real cash flows to produce a P10/P50/P90 range - P50 is our median expectation, and the P10-P90 band is where we expect your actual balance to land 80% of the time." },
+        { q: "How does silent underwriting work?", a: "With your permission, lenders can view a read-only credit summary computed from your real books - no separate loan application, no re-entering financials, no answering the same questions twice." },
+        { q: "Can investors see my data?", a: "Only what you explicitly share. Nothing is visible to any third party by default." },
+        { q: "Is there a free trial?", a: "Yes - every plan starts with a 14-day free trial, no card required." },
+      ],
+    },
+  },
+
+  // Read-only, computed-only. The super-admin can trigger a recompute
+  // (POST /settings/stats/recompute) but cannot hand-type these numbers - see
+  // lib/platformStats.js for why (an audit found HomePage.tsx fabricating every
+  // one of these as plain string literals).
+  stats: {
+    public: true,
+    readOnly: true,
+    keys: [],
+    defaults: {
+      smbCount: 0, cashTrackedInr: 0,
+      forecastAccuracyPct: null, forecastAccuracySamples: 0,
+      avgDaysToFirstInsight: null, avgDaysToFirstInsightSamples: 0,
+      minAccuracySamples: platformStats.MIN_ACCURACY_SAMPLES,
+      minInsightSamples: platformStats.MIN_INSIGHT_SAMPLES,
+      computedAt: null,
+    },
   },
 
   // ── the escape hatch: any key/value the owner wants, now or in 10 years ───────
@@ -155,16 +199,41 @@ function sanitizeCustomValue(v) {
   return String(v).slice(0, MAX_VAL_LEN);
 }
 
+// SUPER-ADMIN - recompute the read-only `stats` group on demand (real DB queries,
+// never hand-typed - see lib/platformStats.js).
+router.post("/settings/stats/recompute", authenticate, async (req, res) => {
+  if (req.user.role !== "super_admin") return res.status(403).json({ error: "Forbidden" });
+  try {
+    const stats = await platformStats.computeStats();
+    platformConfig.bust();
+    try { require("../lib/realtime").publishAll({ type: "platform", group: "stats", updatedAt: Date.now() }); } catch { /* best-effort */ }
+    res.json(stats);
+  } catch (e) {
+    require("../lib/logger").error("platform_stats_recompute_error", { msg: e.message });
+    res.status(500).json({ error: "Could not recompute stats." });
+  }
+});
+
 // SUPER-ADMIN - update one group.
 router.put("/settings/:group", authenticate, async (req, res) => {
   if (req.user.role !== "super_admin") return res.status(403).json({ error: "Forbidden" });
   const group = req.params.group;
   const schema = GROUPS[group];
   if (!schema) return res.status(404).json({ error: "Unknown settings group" });
+  if (schema.readOnly) return res.status(400).json({ error: "This group is computed automatically and cannot be edited directly." });
   const body = req.body || {};
   let clean = {};
 
-  if (schema.custom) {
+  if (schema.list) {
+    // Array-of-objects group (e.g. FAQs) - validate shape, cap count + string length.
+    const items = Array.isArray(body.items) ? body.items.slice(0, schema.maxItems || 100) : [];
+    const shape = schema.itemShape || [];
+    clean.items = items.map((item) => {
+      const out = {};
+      for (const field of shape) out[field] = typeof item?.[field] === "string" ? item[field].trim().slice(0, MAX_VAL_LEN) : "";
+      return out;
+    }).filter((item) => shape.some((field) => item[field]));
+  } else if (schema.custom) {
     // Arbitrary key/value - sanitize, cap count + size. This is the zero-code
     // extension point: add any setting here and read it from platform_settings.
     const entries = Object.entries(body).filter(([k]) => /^[A-Za-z0-9_.-]{1,64}$/.test(k)).slice(0, MAX_CUSTOM_KEYS);

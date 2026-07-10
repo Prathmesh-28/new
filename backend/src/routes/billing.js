@@ -273,6 +273,30 @@ router.get("/founding-member-status", async (req, res) => {
   res.json({ cap: FOUNDING_MEMBER_CAP, claimed, remaining: Math.max(0, FOUNDING_MEMBER_CAP - claimed), sold_out: claimed >= FOUNDING_MEMBER_CAP });
 });
 
+// GET /api/billing/plans - PUBLIC. The single real source for trial length, plan
+// prices, and the founding-member terms, read directly from the constants that
+// actually govern checkout/enforcement above - never a second, editable copy that
+// could drift (an audit found the marketing site showing three different price
+// sets: its own hardcoded numbers, a stale unused platform_settings.pricing group,
+// and what Razorpay actually charges. This endpoint is the fix: there is now
+// exactly one number for each fact, and every surface reads it from here).
+router.get("/plans", async (req, res) => {
+  const { TRIAL_DAYS, TRIAL_PLAN } = require("../lib/billingLifecycle");
+  const plans = {};
+  for (const plan of VALID_PLANS) {
+    const monthlyInr = PLAN_PRICING[plan].inr / 100;
+    plans[plan] = { monthlyInr, annualInr: annualAmount(PLAN_PRICING[plan].inr) / 100, annualMonthlyEquivalentInr: Math.round(annualAmount(PLAN_PRICING[plan].inr) / 100 / 12) };
+  }
+  res.json({
+    trialDays: TRIAL_DAYS,
+    trialPlan: TRIAL_PLAN,
+    plans,
+    annualMonthsCharged: ANNUAL_MONTHS_CHARGED,
+    foundingMemberCap: FOUNDING_MEMBER_CAP,
+    foundingDiscountPct: Math.round((1 - FOUNDING_DISCOUNT) * 100),
+  });
+});
+
 // ── GST invoices for Headroom's OWN subscription charges (B2B ITC compliance) ──
 
 // GET /api/billing/invoices - this tenant's subscription-charge invoice history.

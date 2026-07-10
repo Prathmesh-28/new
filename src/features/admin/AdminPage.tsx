@@ -346,7 +346,7 @@ function EmptyState({ icon, message }: { icon: ReactNode; message: string }) {
 // PUTs its own group to /api/platform/settings/:group and goes live immediately.
 type FieldType = "text" | "number" | "bool" | "url" | "email" | "textarea" | "select";
 interface FieldDef { key: string; label: string; type?: FieldType; options?: string[] }
-interface PlatformGroup { title: string; hint: string; fields: FieldDef[]; custom?: boolean }
+interface PlatformGroup { title: string; hint: string; fields: FieldDef[]; custom?: boolean; list?: boolean }
 const PLATFORM_GROUPS: Record<string, PlatformGroup> = {
   brand: { title: "Brand & contact", hint: "Company identity used in the footer and documents.", fields: [{ key: "companyName", label: "Company name" }, { key: "supportEmail", label: "Support email", type: "email" }, { key: "salesEmail", label: "Sales email", type: "email" }, { key: "phone", label: "Phone" }, { key: "address", label: "Address" }, { key: "tagline", label: "Tagline" }] },
   social: { title: "Social links (footer icons)", hint: "Full https:// URLs. Blank hides that icon.", fields: [{ key: "linkedin", label: "LinkedIn", type: "url" }, { key: "instagram", label: "Instagram", type: "url" }, { key: "twitter", label: "X / Twitter", type: "url" }, { key: "youtube", label: "YouTube", type: "url" }, { key: "facebook", label: "Facebook", type: "url" }] },
@@ -361,7 +361,12 @@ const PLATFORM_GROUPS: Record<string, PlatformGroup> = {
   ai: { title: "AI engine defaults", hint: "Default models used when a tenant hasn't picked their own. Runs on your OpenRouter key.", fields: [{ key: "defaultModel", label: "Default chat model" }, { key: "visionModel", label: "Vision model" }, { key: "embedModel", label: "Embedding model" }, { key: "allowByoKey", label: "Allow tenant's own key", type: "bool" }, { key: "engineNote", label: "Engine note", type: "textarea" }] },
   limits: { title: "Limits & quotas", hint: "Platform caps & thresholds - changes take effect immediately. 0 means unlimited.", fields: [{ key: "maxAgentsPerTenant", label: "Max agents / tenant", type: "number" }, { key: "monthlyTokenCap", label: "Monthly token cap", type: "number" }, { key: "maxUploadMb", label: "Max upload (MB)", type: "number" }, { key: "maxBulkRows", label: "Max bulk rows", type: "number" }, { key: "trialDays", label: "Trial days", type: "number" }, { key: "reminderMaxPer7d", label: "Max reminders / invoice / 7d", type: "number" }, { key: "creditMinScore", label: "Credit pre-qual min score", type: "number" }] },
   signup: { title: "Signup", hint: "How new accounts are created and what they default to.", fields: [{ key: "mode", label: "Signup mode", type: "select", options: ["open", "invite-only", "closed"] }, { key: "defaultPlan", label: "Default plan", type: "select", options: ["free", "starter", "growth", "pro"] }, { key: "defaultRole", label: "Default role" }, { key: "allowAdvisorSignup", label: "Allow advisor signup", type: "bool" }] },
-  pricing: { title: "Pricing", hint: "Plan labels and prices shown on the pricing page.", fields: [{ key: "freeLabel", label: "Free label" }, { key: "starterPrice", label: "Starter price", type: "number" }, { key: "growthPrice", label: "Growth price", type: "number" }, { key: "proPrice", label: "Pro price", type: "number" }, { key: "currencySymbol", label: "Currency symbol" }] },
+  // NOTE: no "Pricing" group here anymore. Real plan pricing is served publicly
+  // from GET /api/billing/plans, read directly from the same constants Razorpay
+  // checkout charges (backend routes/billing.js) - an editable second copy here
+  // would just drift out of sync with what customers are actually charged again
+  // (which is exactly the bug an audit found: three different price sets).
+  faqs: { title: "FAQs (public homepage)", hint: "Shown on the public marketing site. Edit anytime - goes live immediately, no redeploy.", fields: [], list: true },
   custom: { title: "Custom settings", hint: "Add ANY key/value you need - now or in future. Read it anywhere via the platform settings API. Your zero-code escape hatch.", fields: [], custom: true },
 };
 
@@ -395,6 +400,80 @@ function CustomSettingsEditor({ value, onChange }: { value: Record<string, any>;
           className="w-40 shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs font-mono outline-none focus:border-[var(--color-primary)]" />
         <button onClick={add} className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs hover:border-[var(--color-primary)]">+ Add field</button>
       </div>
+    </div>
+  );
+}
+
+// Array-of-{q,a} editor for the `faqs` group - the public homepage's FAQ section.
+interface FaqItemT { q: string; a: string }
+function FaqListEditor({ value, onChange }: { value: { items?: FaqItemT[] }; onChange: (v: { items: FaqItemT[] }) => void }) {
+  const items = value?.items || [];
+  const update = (i: number, patch: Partial<FaqItemT>) => onChange({ items: items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)) });
+  const remove = (i: number) => onChange({ items: items.filter((_, idx) => idx !== i) });
+  const add = () => onChange({ items: [...items, { q: "", a: "" }] });
+  return (
+    <div className="space-y-3">
+      {items.length === 0 && <p className="text-xs text-[var(--color-muted)]">No FAQs yet - add one below.</p>}
+      {items.map((it, i) => (
+        <div key={i} className="border border-[var(--color-border)] rounded-lg p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <input value={it.q} onChange={e => update(i, { q: e.target.value })} placeholder="Question" className={SETTING_INPUT} />
+            <button onClick={() => remove(i)} className="shrink-0 text-[var(--color-muted)] hover:text-red-400 text-xs px-2 py-1">Remove</button>
+          </div>
+          <textarea value={it.a} onChange={e => update(i, { a: e.target.value })} placeholder="Answer" rows={2} className={`${SETTING_INPUT} w-full`} />
+        </div>
+      ))}
+      <button onClick={add} className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs hover:border-[var(--color-primary)]">+ Add FAQ</button>
+    </div>
+  );
+}
+
+// Read-only panel for the `stats` group - the public homepage's stat strip. These
+// are computed server-side (backend lib/platformStats.js), never hand-typed; the
+// admin can only trigger a fresh computation, not edit the numbers themselves.
+interface PlatformStatsT {
+  smbCount?: number; cashTrackedInr?: number;
+  forecastAccuracyPct?: number | null; forecastAccuracySamples?: number;
+  avgDaysToFirstInsight?: number | null; avgDaysToFirstInsightSamples?: number;
+  minAccuracySamples?: number; minInsightSamples?: number;
+  computedAt?: string | null;
+}
+function PlatformStatsPanel() {
+  const [stats, setStats] = useState<PlatformStatsT | null>(null);
+  const [loading, setLoading] = useState(false);
+  const load = () => api.get<Record<string, any>>("/api/platform/settings/all").then(d => setStats(d?.stats || null)).catch(() => { /* keep last good values */ });
+  useEffect(() => { load(); }, []);
+  const recompute = async () => {
+    setLoading(true);
+    try { const res = await api.post<PlatformStatsT>("/api/platform/settings/stats/recompute", {}); setStats(res); toast.success("Stats recomputed"); }
+    catch (err) { toast.error(errMsg(err)); }
+    finally { setLoading(false); }
+  };
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
+      <h3 className="text-sm font-semibold mb-1">Public marketing stats</h3>
+      <p className="text-xs text-[var(--color-muted)] mb-4">Computed from real data - never hand-typed. A stat with not-enough-data-yet is hidden on the public site rather than shown as a placeholder.</p>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs mb-4">
+        <div><span className="text-[var(--color-muted)]">SMBs on platform:</span> {stats?.smbCount ?? "—"}</div>
+        <div><span className="text-[var(--color-muted)]">Cash tracked:</span> {stats?.cashTrackedInr != null ? `₹${Number(stats.cashTrackedInr).toLocaleString("en-IN")}` : "—"}</div>
+        <div>
+          <span className="text-[var(--color-muted)]">Forecast accuracy:</span>{" "}
+          {stats?.forecastAccuracyPct != null
+            ? `${stats.forecastAccuracyPct}% (${stats.forecastAccuracySamples} samples)`
+            : `not enough data yet (${stats?.forecastAccuracySamples ?? 0}/${stats?.minAccuracySamples ?? "?"} samples)`}
+        </div>
+        <div>
+          <span className="text-[var(--color-muted)]">Avg days to first insight:</span>{" "}
+          {stats?.avgDaysToFirstInsight != null
+            ? `${stats.avgDaysToFirstInsight} days (${stats.avgDaysToFirstInsightSamples} samples)`
+            : `not enough data yet (${stats?.avgDaysToFirstInsightSamples ?? 0}/${stats?.minInsightSamples ?? "?"} samples)`}
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)] mb-3">{stats?.computedAt ? `Last computed ${new Date(stats.computedAt).toLocaleString()}` : "Not computed yet"}</p>
+      <button onClick={recompute} disabled={loading}
+        className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-[var(--color-bg)] disabled:opacity-50">
+        {loading ? "Recomputing…" : "Recompute now"}
+      </button>
     </div>
   );
 }
@@ -524,12 +603,15 @@ function PlatformSettingsAdmin() {
   return (
     <div className="space-y-4">
       <p className="text-xs text-[var(--color-muted)]">Everything below is editable here and goes live immediately - no redeploy.</p>
+      <PlatformStatsPanel />
       {Object.entries(PLATFORM_GROUPS).map(([g, cfg]) => (
         <div key={g} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
           <h3 className="text-sm font-semibold mb-1">{cfg.title}</h3>
           <p className="text-xs text-[var(--color-muted)] mb-4">{cfg.hint}</p>
           {cfg.custom ? (
             <CustomSettingsEditor value={data[g] || {}} onChange={v => setData(s => ({ ...s, [g]: v }))} />
+          ) : cfg.list ? (
+            <FaqListEditor value={data[g] || {}} onChange={v => setData(s => ({ ...s, [g]: v }))} />
           ) : (
             <div className="space-y-2.5">{cfg.fields.map(f => field(g, f))}</div>
           )}

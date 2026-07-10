@@ -13,6 +13,33 @@ import Odometer from "@/components/Odometer";
 import Logo from "@/components/Logo";
 import SocialLinks from "@/components/SocialLinks";
 import { usePlatformSettings } from "@/lib/usePlatformSettings";
+import { API_BASE } from "@/lib/apiBase";
+
+/* Real trial length, plan pricing, and founding-member terms - read directly from
+   the constants that actually govern checkout/enforcement (backend routes/billing.js),
+   never a second hand-typed copy that can drift from what's actually charged. Falls
+   back to sane placeholders (hidden, not fabricated numbers) until the fetch resolves. */
+interface BillingPlanInfo { monthlyInr: number; annualInr: number; annualMonthlyEquivalentInr: number }
+interface BillingPlans {
+  trialDays: number;
+  trialPlan: string;
+  plans: { starter: BillingPlanInfo; growth: BillingPlanInfo; pro: BillingPlanInfo };
+  annualMonthsCharged: number;
+  foundingMemberCap: number;
+  foundingDiscountPct: number;
+}
+function useBillingPlans(): BillingPlans | null {
+  const [plans, setPlans] = useState<BillingPlans | null>(null);
+  useEffect(() => {
+    let on = true;
+    fetch(`${API_BASE}/api/billing/plans`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (on && d) setPlans(d); })
+      .catch(() => { /* keep null - callers fall back gracefully */ });
+    return () => { on = false; };
+  }, []);
+  return plans;
+}
 
 /* ─── Colour tokens ─── */
 const C = {
@@ -40,6 +67,16 @@ function detectUS(): boolean {
     if (lang === "en-us" || lang === "es-us") return true;
   } catch { /* ignore */ }
   return false; // default → India (₹) for India + everywhere else
+}
+
+/* Real cash-tracked stat is a sum of tenants' own bank balances (always INR - this
+   is an India-first ledger, not a currency-converted marketing figure), formatted
+   in Cr/L the way an Indian SMB owner reads it regardless of the visitor's detected
+   locale used for the (cosmetic) $ vs ₹ toggle elsewhere on this page. */
+function formatCr(n: number): string {
+  if (n >= 1e7) return `₹${(n / 1e7).toFixed(n / 1e7 >= 10 ? 0 : 1)}Cr+`;
+  if (n >= 1e5) return `₹${(n / 1e5).toFixed(n / 1e5 >= 10 ? 0 : 1)}L+`;
+  return `₹${Math.round(n).toLocaleString("en-IN")}`;
 }
 
 /* ─── Scroll reveal ─── */
@@ -308,7 +345,16 @@ function FlipCard() {
 export default function HomePage() {
   useSeo({ title: "Headroom - GST Billing, Accounting & Cash-Flow Software for Indian SMBs", description: "All-in-one finance platform for Indian SMBs - GST billing & e-invoicing, double-entry accounting, GST/TDS filing, invoicing, collections, payroll and 90-day cash-flow forecasts. Your CA works in it too. Free to start." });
   const navigate = useNavigate();
-  const platform = usePlatformSettings(); // super-admin-controlled footer links, banner, contact
+  const platform = usePlatformSettings(); // super-admin-controlled footer links, banner, contact, FAQs, real stats
+  const billing = useBillingPlans(); // real trial length + plan pricing + founding-member terms
+  const trialDays = billing?.trialDays ?? 14; // 14 = the real default (lib/billingLifecycle.js) shown only until the fetch resolves
+  const stats = platform.stats;
+  const visibleStats: { n: string; d: string }[] = [
+    ...(stats.cashTrackedInr ? [{ n: formatCr(stats.cashTrackedInr), d: "Cash tracked" }] : []),
+    ...(stats.smbCount ? [{ n: `${stats.smbCount.toLocaleString("en-IN")}+`, d: "SMBs on the platform" }] : []),
+    ...(stats.forecastAccuracyPct != null ? [{ n: `${stats.forecastAccuracyPct}%`, d: "Forecast accuracy at 30 days" }] : []),
+    ...(stats.avgDaysToFirstInsight != null ? [{ n: `${stats.avgDaysToFirstInsight} days`, d: "Avg time to first insight" }] : []),
+  ];
   const [scrolled, setScrolled] = useState(false);
   const [inr] = useState(() => !detectUS()); // India-first: ₹ by default, $ only for US visitors
 
@@ -425,7 +471,7 @@ export default function HomePage() {
         </ul>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={() => navigate("/login")} style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: C.pale, background: "none", border: "none", cursor: "pointer", whiteSpace: "nowrap" }}>Sign in</button>
-          <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 13, fontWeight: 700, padding: "9px 18px", borderRadius: 6, border: "none", cursor: "pointer", whiteSpace: "nowrap" }}>Try 14 days free</button>
+          <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 13, fontWeight: 700, padding: "9px 18px", borderRadius: 6, border: "none", cursor: "pointer", whiteSpace: "nowrap" }}>Try {trialDays} days free</button>
         </div>
       </nav>
 
@@ -454,7 +500,7 @@ export default function HomePage() {
               </a>
             </div>
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-              {["Free for first 90 days","No credit card","Setup in 3 minutes"].map(t => (
+              {[`Free for first ${trialDays} days`,"No credit card","Setup in 3 minutes"].map(t => (
                 <span key={t} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.5)" }}>
                   <CheckCircle2 size={12} style={{ color: C.light }} />{t}
                 </span>
@@ -478,7 +524,12 @@ export default function HomePage() {
         <div className="hr-ticker">
           {[0, 1].map(dup => (
             <div key={dup} style={{ display: "flex", gap: 56, paddingLeft: 56 }} aria-hidden={dup === 1}>
-              {["Free for 90 days","No credit card required","Setup in 3 minutes","10-layer cash intelligence","91% forecast accuracy at 30 days","Capital access network"].map((t, i) => (
+              {[
+                `Free for ${trialDays} days`, "No credit card required", "Setup in 3 minutes", "10-layer cash intelligence",
+                // Real backtested accuracy (lib/platformStats.js) - omitted, never faked, until enough matured samples exist.
+                ...(platform.stats.forecastAccuracyPct != null ? [`${platform.stats.forecastAccuracyPct}% forecast accuracy at 30 days`] : []),
+                "Capital access network",
+              ].map((t, i) => (
                 <span key={i} style={{ fontFamily: mono, fontSize: 11, color: "rgba(169,217,188,0.6)", whiteSpace: "nowrap", letterSpacing: 2, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 12 }}>
                   <span style={{ color: C.gold, fontSize: 13 }}>◆</span>{t}
                 </span>
@@ -488,20 +539,21 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ═══ STATS STRIP ══════════════════════════════════════════════════════ */}
-      <div data-h3d="stats" style={{ background: C.mid, padding: "28px 48px", display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}>
-        {[
-          { n:inr ? "₹340Cr+" : "$40M+",  d:"Forecasted cash tracked"     },
-          { n:"12,000+",  d:"SMBs on the platform"         },
-          { n:"91%",      d:"Forecast accuracy at 30 days" },
-          { n:"4.8 days", d:"Avg time to first insight"    },
-        ].map(({ n, d }, i) => (
-          <div key={d} className="hr-stat" style={{ textAlign: "center", padding: "0 24px", borderRight: i < 3 ? "1px solid rgba(169,217,188,0.15)" : "none" }}>
-            <div style={{ fontFamily: serif, fontSize: 32, color: C.pale, letterSpacing: -1 }}><Odometer value={n} depth3d /></div>
-            <div style={{ fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.55)", marginTop: 3 }}>{d}</div>
-          </div>
-        ))}
-      </div>
+      {/* ═══ STATS STRIP ══════════════════════════════════════════════════════
+          Every number here is computed server-side from real data (backend
+          lib/platformStats.js) - never hand-typed. A stat with no real data yet
+          (e.g. forecast accuracy needs 30-day-matured backtest samples) is simply
+          omitted rather than shown as a placeholder. */}
+      {visibleStats.length > 0 && (
+        <div data-h3d="stats" style={{ background: C.mid, padding: "28px 48px", display: "grid", gridTemplateColumns: `repeat(${visibleStats.length},1fr)` }}>
+          {visibleStats.map(({ n, d }, i) => (
+            <div key={d} className="hr-stat" style={{ textAlign: "center", padding: "0 24px", borderRight: i < visibleStats.length - 1 ? "1px solid rgba(169,217,188,0.15)" : "none" }}>
+              <div style={{ fontFamily: serif, fontSize: 32, color: C.pale, letterSpacing: -1 }}><Odometer value={n} depth3d /></div>
+              <div style={{ fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.55)", marginTop: 3 }}>{d}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ═══ PRODUCT WALKTHROUGH (scroll-pinned) ═════════════════════════════ */}
       <Walkthrough inr={inr} />
@@ -795,7 +847,7 @@ export default function HomePage() {
 
         <Reveal>
           <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", justifyContent: "center", gap: 16 }}>
-            <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "13px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>Start free 14-day trial</button>
+            <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "13px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>Start free {trialDays}-day trial</button>
             <a href="#pricing" style={{ fontFamily: sans, fontSize: 14, color: C.mid, textDecoration: "none", padding: "13px 28px", border: `1px solid rgba(74,94,26,0.2)`, borderRadius: 8, display: "inline-flex", alignItems: "center" }}>View pricing</a>
           </div>
         </Reveal>
@@ -843,7 +895,7 @@ export default function HomePage() {
               Choose the operating layer<br />your cash flow needs.
             </h2>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(61,154,96,0.08)", border: "1px solid rgba(61,154,96,0.2)", borderRadius: 20, padding: "5px 14px", marginBottom: 12 }}>
-              <span style={{ fontFamily: sans, fontSize: 12, color: C.gold }}>✦ Free for 90 days · no card · 🔥 founding price locked for the first 1,000 SMBs</span>
+              <span style={{ fontFamily: sans, fontSize: 12, color: C.gold }}>✦ Free for {trialDays} days · no card{billing ? ` · 🔥 founding price locked for the first ${billing.foundingMemberCap} SMBs` : ""}</span>
             </div>
             <div style={{ fontFamily: sans, fontSize: 11, color: C.txtMut, marginBottom: 52 }}>
               Showing prices in {inr ? "₹ INR (India)" : "$ USD"} · detected from your location
@@ -864,8 +916,14 @@ export default function HomePage() {
             },
             {
               id:"growth" as const,
-              name:"Growth", price:inr ? "₹999" : "$39", period:"/mo", featured: true,
-              note:inr ? "billed yearly · ₹1,499 monthly · 🔥 founding price locked for life" : "billed yearly · $59 monthly · 🔥 founding price locked for life",
+              name:"Growth",
+              // Real price, read from the same constants Razorpay checkout charges
+              // (backend routes/billing.js PLAN_PRICING) - never a second hardcoded number.
+              price: inr ? (billing ? `₹${billing.plans.growth.annualMonthlyEquivalentInr.toLocaleString("en-IN")}` : "…") : "$39",
+              period:"/mo", featured: true,
+              note: inr
+                ? (billing ? `billed yearly · ₹${billing.plans.growth.monthlyInr.toLocaleString("en-IN")} monthly · 🔥 founding price locked for life` : "billed yearly")
+                : "billed yearly · $59 monthly · 🔥 founding price locked for life",
               desc:inr ? "For growing SMBs that need full visibility and credit. Cheaper than a half-day of an accountant." : "For growing businesses that need full visibility and credit access.",
               features:["Everything in Free","90-day P10/P50/P90 forecast","Unlimited bank accounts","Scenario planner","AI cash insights","WhatsApp commands + alerts","Embedded credit rescue","Silent underwriting"],
               disabled:[],
@@ -873,8 +931,12 @@ export default function HomePage() {
             },
             {
               id:"pro" as const,
-              name:"Pro", price:inr ? "₹2,999" : "$99", period:"/mo", featured: false,
-              note:inr ? "billed yearly · ₹3,999 monthly" : "billed yearly · $129 monthly",
+              name:"Pro",
+              price: inr ? (billing ? `₹${billing.plans.pro.annualMonthlyEquivalentInr.toLocaleString("en-IN")}` : "…") : "$99",
+              period:"/mo", featured: false,
+              note: inr
+                ? (billing ? `billed yearly · ₹${billing.plans.pro.monthlyInr.toLocaleString("en-IN")} monthly` : "billed yearly")
+                : "billed yearly · $129 monthly",
               desc:"For businesses raising capital or managing investors.",
               features:["Everything in Growth","Investor dashboard","Multi-entity support","Capital raise tools","API access","Priority support","Advisor access"],
               disabled:[],
@@ -933,14 +995,9 @@ export default function HomePage() {
             <Label text="FAQ" />
             <h2 style={{ fontFamily: serif, fontSize: 34, color: C.txt, letterSpacing: -1, marginBottom: 40 }}>Common questions</h2>
             <div style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 14, padding: "0 24px" }}>
-              {[
-                { q:"Do I need an accountant to use Headroom?",            a:"No. Headroom is built for founders. It translates raw transactions into plain language - runway, burn, risk. Your CA can also get their own login with accountant-level access." },
-                { q:"Which accounting software does Headroom connect to?",  a:"Tally ERP, Zoho Books, QuickBooks, Xero, and 50+ others. Bank feeds work with most Indian and international banks through secure open-banking APIs." },
-                { q:"What does 'confidence bands' mean?",                   a:"Instead of one forecast line, Headroom shows P10 (worst case), P50 (expected), and P90 (best case) for every day. This is more honest than a single-point projection." },
-                { q:"How does silent underwriting work?",                   a:"Headroom computes a live credit score from your monthly revenue, burn, runway, and business age - using your own data. No bureau pull. The higher your score, the better the offers." },
-                { q:"Can investors see my full financial data?",            a:"No. Investors get a dedicated portal showing only the raise they're part of - their investment, equity %, and progress. All other financials are invisible." },
-                { q:"Is there a free trial?",                               a:"Yes - all plans include a free 90-day trial with no credit card required. You keep your data if you downgrade after the trial." },
-              ].map(f => <FaqItem key={f.q} q={f.q} a={f.a} />)}
+              {/* Real editorial content, super-admin editable anytime (platform_settings
+                  "faqs" group) - never a hardcoded array that can drift out of date. */}
+              {platform.faqs.items.map(f => <FaqItem key={f.q} q={f.q} a={f.a} />)}
             </div>
           </div>
         </section>
@@ -951,13 +1008,13 @@ export default function HomePage() {
         <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 0%, rgba(61,154,96,0.25) 0%, transparent 65%)", pointerEvents: "none" }} />
         <div style={{ position: "relative" }}>
           <h2 style={{ fontFamily: serif, fontSize: 44, color: C.creamW, letterSpacing: -1.5, marginBottom: 16 }}>Get your first Headroom forecast.</h2>
-          <p style={{ fontFamily: sans, fontSize: 16, color: "rgba(169,217,188,0.55)", marginBottom: 40 }}>Free for 90 days. No credit card. Connect your bank in under 3 minutes.</p>
+          <p style={{ fontFamily: sans, fontSize: 16, color: "rgba(169,217,188,0.55)", marginBottom: 40 }}>Free for {trialDays} days. No credit card. Connect your bank in under 3 minutes.</p>
           <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
             <input type="email" placeholder="your@email.com" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(169,217,188,0.2)", borderRadius: 8, padding: "13px 18px", fontFamily: sans, fontSize: 14, color: C.creamW, width: 280, outline: "none" }} />
             <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "13px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>Start free trial →</button>
           </div>
           <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.25)", marginTop: 20 }}>
-            Trusted by 12,000+ SMBs &nbsp;·&nbsp; Free for 90 days &nbsp;·&nbsp; No credit card required
+            {stats.smbCount ? <>Trusted by {stats.smbCount.toLocaleString("en-IN")}+ SMBs &nbsp;·&nbsp; </> : null}Free for {trialDays} days &nbsp;·&nbsp; No credit card required
           </p>
         </div>
       </section>

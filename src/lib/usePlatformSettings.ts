@@ -20,12 +20,25 @@ export interface PlatformSettings {
   payments: Record<string, string>;
   pricing: Record<string, string | number>;
   signup: Record<string, string | boolean>;
+  // Real editorial content, super-admin editable anytime.
+  faqs: { items: { q: string; a: string }[] };
+  // Real, DB-computed marketing stats - never hand-typed (lib/platformStats.js on
+  // the backend). Null fields mean "not enough real data yet" - render nothing,
+  // never a placeholder.
+  stats: {
+    smbCount?: number; cashTrackedInr?: number;
+    forecastAccuracyPct?: number | null; forecastAccuracySamples?: number;
+    avgDaysToFirstInsight?: number | null; avgDaysToFirstInsightSamples?: number;
+    minAccuracySamples?: number; minInsightSamples?: number;
+    computedAt?: string | null;
+  };
 }
 
 const EMPTY: PlatformSettings = {
   social: {}, brand: {}, links: {}, banner: { enabled: false },
   features: {}, maintenance: { enabled: false }, localization: {},
   support: {}, seo: {}, payments: {}, pricing: {}, signup: {},
+  faqs: { items: [] }, stats: {},
 };
 
 const SLOW_REFRESH_MS = 120_000;

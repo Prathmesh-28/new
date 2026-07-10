@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSeo } from "@/lib/seo";
 import { Link } from "react-router-dom";
 import { useAuth, BASE } from "@/context/AuthContext";
@@ -39,6 +39,17 @@ export default function SignupPage() {
   const [loading,     setLoading]     = useState(false);
   const [tsToken,     setTsToken]     = useState("");
   const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
+  // Real trial length (backend lib/billingLifecycle.js TRIAL_DAYS), fetched from the
+  // same source of truth as the rest of the app - never a second hardcoded number
+  // that can drift (an audit found this page claiming a 90-day trial elsewhere in
+  // the app claimed the real 14 days).
+  const [trialDays, setTrialDays] = useState(14);
+  useEffect(() => {
+    fetch(`${BASE}/api/billing/plans`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d?.trialDays) setTrialDays(d.trialDays); })
+      .catch(() => { /* keep the 14-day default */ });
+  }, []);
 
   const enterApp = (user: AuthUser, access: string, refresh: string) => {
     localStorage.setItem("hr_access", access);
@@ -89,7 +100,7 @@ export default function SignupPage() {
             { n: "10-layer",  l: "Cash flow intelligence"         },
             { n: "90 days",   l: "Forecast horizon with P10/P90"  },
             { n: "3 tracks",  l: "Capital raise pathways"         },
-            { n: "Free",      l: "First 90 days, no card needed"  },
+            { n: "Free",      l: `First ${trialDays} days, no card needed`  },
           ].map(({ n, l }) => (
             <div key={l} className="flex items-center gap-4 py-4 border-b border-[var(--color-border)] last:border-0">
               <span className="text-2xl font-bold text-[var(--color-primary)] w-24 shrink-0">{n}</span>
@@ -140,7 +151,7 @@ export default function SignupPage() {
           <div className="mb-8">
             <h1 className="text-2xl font-bold mb-1">Create your account</h1>
             <p className="text-sm text-[var(--color-muted)]">
-              Free for 90 days · No credit card
+              Free for {trialDays} days · No credit card
             </p>
           </div>
 

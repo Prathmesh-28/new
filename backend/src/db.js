@@ -603,6 +603,24 @@ async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_sub_invoices_tenant ON subscription_invoices(tenant_id, created_at DESC);
 
+    -- Real forecast-accuracy backtest (the marketing site must never show a fabricated
+    -- accuracy %). Whenever a tenant's own browser computes a real 90-day forecast, it
+    -- reports today's P50-at-day-30 prediction here; a daily cron "matures" any snapshot
+    -- 30+ days old by filling in what that tenant's REAL cash balance actually was, so
+    -- accuracy is only ever derived from real predicted-vs-actual pairs.
+    CREATE TABLE IF NOT EXISTS forecast_snapshots (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id      TEXT NOT NULL,
+      snapshot_date  DATE NOT NULL,
+      target_date    DATE NOT NULL,
+      predicted_p50  NUMERIC(18,2),
+      actual_balance NUMERIC(18,2),
+      matured        BOOLEAN NOT NULL DEFAULT false,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(tenant_id, snapshot_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_forecast_snap_mature ON forecast_snapshots(matured, target_date);
+
     -- Per-tenant monthly usage counters for plan quota metering (entitlements engine).
     -- 'period' is the YYYY-MM bucket so a new month resets automatically (no cron).
     CREATE TABLE IF NOT EXISTS usage_counters (

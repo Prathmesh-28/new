@@ -80,6 +80,19 @@ export default function ForecastPage() {
   const risk = result.risk;
   const pressureDay = risk.expectedTimeToBreachDays;
 
+  // Real forecast-accuracy backtest (never a fabricated marketing number - see
+  // backend lib/platformStats.js): record today's real +30-day P50 prediction,
+  // once per day per tenant, best-effort.
+  const predictedP50In30d = result.points[29]?.p50;
+  useEffect(() => {
+    if (!Number.isFinite(predictedP50In30d)) return;
+    const todayKey = `hr_fc_snapshot_${new Date().toISOString().slice(0, 10)}`;
+    if (localStorage.getItem(todayKey)) return;
+    api.post("/api/forecast/snapshot", { predictedP50: predictedP50In30d })
+      .then(() => localStorage.setItem(todayKey, "1"))
+      .catch(() => { /* best-effort - never blocks the UI */ });
+  }, [predictedP50In30d]);
+
   const chartData = result.points.map(f => ({
     date: format(new Date(f.date), "MMM d"),
     p50: Math.round(f.p50 / 100000),

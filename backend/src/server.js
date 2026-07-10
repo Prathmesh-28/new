@@ -685,6 +685,22 @@ initDb()
         if (n) console.log(`[subscriptions] generated ${n} due invoice(s)`);
       } catch (e) { console.error("[subscriptions-cron]", e.message); }
     }, { timezone: "UTC" });
-    console.log("[cron] daily digest 07:00 IST · Monday CFO brief 08:00 IST · books recurring 07:30 IST · overdue reminders 08:30 IST · subscriptions 07:45 IST · e-invoice worker on");
+    // Public marketing stats (real DB-computed, never hand-typed - lib/platformStats.js):
+    // refresh daily at 06:30 IST (01:00 UTC).
+    cron.schedule("0 1 * * *", async () => {
+      try {
+        const s = await require("./lib/platformStats").computeStats();
+        console.log(`[platform-stats] recomputed: ${s.smbCount} SMB(s), accuracy samples=${s.forecastAccuracySamples}, insight samples=${s.avgDaysToFirstInsightSamples}`);
+      } catch (err) { console.error("[platform-stats]", err.message); }
+    }, { timezone: "UTC" });
+    // Forecast-accuracy backtest: mature any snapshot whose target date has arrived by
+    // filling in the tenant's REAL observed balance. Daily at 06:45 IST (01:15 UTC).
+    cron.schedule("15 1 * * *", async () => {
+      try {
+        const n = await require("./lib/forecastSnapshots").matureDueSnapshots();
+        if (n) console.log(`[forecast-snapshots] matured ${n} snapshot(s)`);
+      } catch (err) { console.error("[forecast-snapshots]", err.message); }
+    }, { timezone: "UTC" });
+    console.log("[cron] daily digest 07:00 IST · Monday CFO brief 08:00 IST · books recurring 07:30 IST · overdue reminders 08:30 IST · subscriptions 07:45 IST · platform stats 06:30 IST · forecast-snapshot maturity 06:45 IST · e-invoice worker on");
   })
   .catch(err => { console.error("[fatal]", err); process.exit(1); });
