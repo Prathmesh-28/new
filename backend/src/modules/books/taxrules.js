@@ -158,15 +158,41 @@ const TDS = {
   ],
   "194J": [
     {
+      from: "2025-04-01", // Finance Act 2025: threshold ₹30,000 → ₹50,000
+      section: "194J",
+      description: "Professional fees, royalty (10%); technical fees / call-centre (2%)",
+      rate: 10,
+      rateFts: 2, // fees for technical services + call-centre operators (FA 2020, §194J(a))
+      threshold: 50000,
+      noPan: NO_PAN_RATE,
+    },
+    {
       from: "2020-04-01",
       section: "194J",
-      description: "Professional / technical fees, royalty",
+      description: "Professional fees, royalty (10%); technical fees / call-centre (2%)",
       rate: 10,
+      rateFts: 2,
       threshold: 30000,
       noPan: NO_PAN_RATE,
     },
   ],
   "194H": [
+    {
+      from: "2025-04-01", // Finance Act 2025: threshold ₹15,000 → ₹20,000
+      section: "194H",
+      description: "Commission or brokerage",
+      rate: 2,
+      threshold: 20000,
+      noPan: NO_PAN_RATE,
+    },
+    {
+      from: "2024-10-01", // Finance (No.2) Act 2024: rate 5% → 2%
+      section: "194H",
+      description: "Commission or brokerage",
+      rate: 2,
+      threshold: 15000,
+      noPan: NO_PAN_RATE,
+    },
     {
       from: "2020-04-01",
       section: "194H",
@@ -178,10 +204,20 @@ const TDS = {
   ],
   "194I": [
     {
+      from: "2025-04-01", // Finance Act 2025: ₹2,40,000/yr → ₹50,000/month (₹6,00,000/yr)
+      section: "194I",
+      description: "Rent (plant/machinery 2%, land/building/furniture 10%)",
+      rate: 10,
+      ratePlantMachinery: 2, // §194-I(a)
+      threshold: 600000,
+      noPan: NO_PAN_RATE,
+    },
+    {
       from: "2020-04-01",
       section: "194I",
       description: "Rent (plant/machinery 2%, land/building/furniture 10%)",
       rate: 10,
+      ratePlantMachinery: 2,
       threshold: 240000,
       noPan: NO_PAN_RATE,
     },
@@ -438,6 +474,8 @@ function validateParams() {
     for (const e of entries) {
       assert(isRate(e.rate), `tds.${sec}@${e.from}: rate ${e.rate} out of 0-100`);
       if (e.rateOther !== undefined) assert(isRate(e.rateOther), `tds.${sec}@${e.from}: rateOther out of 0-100`);
+      if (e.rateFts !== undefined) assert(isRate(e.rateFts), `tds.${sec}@${e.from}: rateFts out of 0-100`);
+      if (e.ratePlantMachinery !== undefined) assert(isRate(e.ratePlantMachinery), `tds.${sec}@${e.from}: ratePlantMachinery out of 0-100`);
       assert(isRate(e.noPan), `tds.${sec}@${e.from}: noPan ${e.noPan} out of 0-100`);
       if (e.threshold !== undefined) assert(typeof e.threshold === "number" && e.threshold >= 0, `tds.${sec}@${e.from}: threshold negative`);
       if (e.aggregateThreshold !== undefined) assert(typeof e.aggregateThreshold === "number" && e.aggregateThreshold >= 0, `tds.${sec}@${e.from}: aggregateThreshold negative`);

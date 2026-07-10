@@ -4516,12 +4516,19 @@ function ApAgingBoard({ onSelectVendor }: { onSelectVendor: (vendorId: string) =
   );
 }
 
-const TDS_SECTIONS_UI = [
-  { code: "194C", label: "194C - Contractor payments (1%)" },
-  { code: "194J", label: "194J - Professional / technical fees (10%)" },
-  { code: "194H", label: "194H - Commission / brokerage (5%)" },
-  { code: "194I", label: "194I - Rent (10%)" },
-  { code: "194Q", label: "194Q - Purchase of goods above ₹50L (0.1%)" },
+// Each option carries the payee-type / statutory-variant the law rates differently
+// (§194C 1% vs 2% by payee, §194-I 10% vs 2% by asset class, §194J 10% vs 2% FTS).
+// The backend computeTds applies the matching rate - the old single-rate list here
+// made the 2% legs unreachable and showed 194H's pre-Oct-2024 5%.
+const TDS_SECTIONS_UI: { key: string; code: string; payeeType?: string; variant?: string; label: string }[] = [
+  { key: "194C", code: "194C", label: "194C - Contractor payments, individual/HUF payee (1%)" },
+  { key: "194C:other", code: "194C", payeeType: "company", label: "194C - Contractor payments, company/firm payee (2%)" },
+  { key: "194J", code: "194J", label: "194J - Professional fees / royalty (10%)" },
+  { key: "194J:fts", code: "194J", variant: "fts", label: "194J - Technical services / call-centre (2%)" },
+  { key: "194H", code: "194H", label: "194H - Commission / brokerage (2%)" },
+  { key: "194I", code: "194I", label: "194I - Rent: land / building / furniture (10%)" },
+  { key: "194I:pm", code: "194I", variant: "plant_machinery", label: "194I - Rent: plant & machinery (2%)" },
+  { key: "194Q", code: "194Q", label: "194Q - Purchase of goods above ₹50L (0.1%)" },
 ];
 const AP_GST_RATES = [0, 5, 12, 18, 28];
 
@@ -4588,7 +4595,10 @@ function BillsPayables({ focus }: { focus?: { vendorId: string; n: number } }) {
         lineTotal: amt, gstRate: Number(gstRate), interState, rcm,
         items: rcm ? undefined : [{ description: description.trim() || billNumber.trim(), quantity: 1, unit_price: amt, gst_rate: Number(gstRate) }],
       };
-      if (tdsSection) body.tds = { section: tdsSection, panAvailable, lowerRate: lowerRate ? Number(lowerRate) : undefined };
+      if (tdsSection) {
+        const opt = TDS_SECTIONS_UI.find(s => s.key === tdsSection);
+        body.tds = { section: opt?.code ?? tdsSection, payeeType: opt?.payeeType, variant: opt?.variant, panAvailable, lowerRate: lowerRate ? Number(lowerRate) : undefined };
+      }
       const res = await api.post<{ voucherNumber: number; tds?: { tdsAmount: string; vendorNet: string; section: string } }>("/api/vendor-bills", body);
       toast.success(res.tds
         ? `Bill recorded (PUR-${res.voucherNumber}) · TDS ${res.tds.section} ₹${Number(res.tds.tdsAmount).toLocaleString("en-IN")} withheld · net payable ₹${Number(res.tds.vendorNet).toLocaleString("en-IN")}`
@@ -4668,7 +4678,7 @@ function BillsPayables({ focus }: { focus?: { vendorId: string; n: number } }) {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 <select value={tdsSection} onChange={e => setTdsSection(e.target.value)} className={inpCls}>
                   <option value="">No TDS</option>
-                  {TDS_SECTIONS_UI.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+                  {TDS_SECTIONS_UI.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
                 </select>
                 {tdsSection && (
                   <>

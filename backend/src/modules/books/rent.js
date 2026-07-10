@@ -1,12 +1,15 @@
 "use strict";
 // Rent register with §194-I TDS + escalation (roadmap #194). Tracks rent agreements and derives
 // the escalated current rent, the 194-I TDS (10% land/building, 2% plant & machinery; 20% under
-// §206AA when the landlord has no PAN; only when annual rent crosses the ₹2,40,000 threshold),
+// §206AA when the landlord has no PAN; only when annual rent crosses the §194-I threshold),
 // and a forward monthly schedule. Pure computation over a non-RLS book_ table.
 const { pool } = require("../../db");
 const { PostError } = require("./posting-engine");
+const taxrules = require("./taxrules");
 
-const TDS_THRESHOLD = 240000; // §194-I annual aggregate (per landlord)
+// §194-I annual threshold (per landlord), from the dated store - an audit found a
+// hardcoded 240000 here after Finance Act 2025 raised it to ₹50,000/month (₹6L/yr).
+const TDS_THRESHOLD = taxrules.resolveParam("tds", "194I", new Date().toISOString().slice(0, 10)).threshold;
 const r2 = (x) => Math.round(Number(x) * 100) / 100;
 const monthsBetween = (from, to) => { const a = new Date(from), b = new Date(to); return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()); };
 

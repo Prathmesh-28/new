@@ -95,7 +95,7 @@ async function recordBill(tenantId, actorId, opts = {}) {
     const vendorCredit = entries.filter((e) => e.ledgerId === vendorLedgerId).reduce((s, e) => s.plus(money(e.credit || 0)), money(0));
     const tdsPayableLedgerId = await ledgerIdByName(tenantId, "TDS Payable");
     if (!tdsPayableLedgerId) throw new PostError("NOT_SEEDED", "TDS Payable ledger missing - seed the books first", 422);
-    const d = buildTdsDeduction({ vendorLedgerId, tdsPayableLedgerId, grossAmount: toDb(vendorCredit), section: tds.section, panAvailable: tds.panAvailable !== false, lowerRate: tds.lowerRate });
+    const d = buildTdsDeduction({ vendorLedgerId, tdsPayableLedgerId, grossAmount: toDb(vendorCredit), section: tds.section, panAvailable: tds.panAvailable !== false, lowerRate: tds.lowerRate, payeeType: tds.payeeType, variant: tds.variant });
     entries = [...entries.filter((e) => e.ledgerId !== vendorLedgerId), ...d.entries];
     taxes = [...taxes, ...d.taxes];
     tdsResult = d.tds;

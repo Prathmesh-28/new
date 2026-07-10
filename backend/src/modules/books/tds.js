@@ -60,10 +60,32 @@ function _section(section) {
 //     CANNOT lower it (a 197 certificate is issued against a valid PAN).
 //   - lowerRate overrides the section rate for a §197 lower/nil-deduction
 //     certificate (pass 0 for a nil certificate). Must be ≤ the section rate.
-function computeTds({ section, amount, panAvailable = true, lowerRate } = {}) {
+//   - payeeType: for sections with a payee-dependent rate (§194C: 1% individual/HUF,
+//     2% any other payee) pass 'company' | 'firm' | 'other' to get rateOther - an
+//     audit found rateOther was dead data and every company payee was under-deducted
+//     at 1%. Default stays 'individual' (the prior behavior) for callers that don't say.
+//   - variant: 'plant_machinery' (§194-I(a) 2%) or 'fts' (§194J technical fees /
+//     call-centre 2%) picks the section's statutory variant rate.
+function computeTds({ section, amount, panAvailable = true, lowerRate, payeeType, variant } = {}) {
   const s = _section(section);
   const amt = money(amount);
   if (amt.lessThan(0)) throw new PostError("BAD_TDS_AMOUNT", "TDS amount cannot be negative", 422);
+
+  // Resolve the applicable STATUTORY rate for this payee/variant before any
+  // no-PAN / certificate overrides.
+  let sectionRate = s.rate;
+  const pt = String(payeeType || "").toLowerCase();
+  if (s.rateOther !== undefined && pt && pt !== "individual" && pt !== "huf") sectionRate = s.rateOther;
+  const v = String(variant || "").toLowerCase();
+  if (v === "plant_machinery") {
+    if (s.ratePlantMachinery === undefined) throw new PostError("BAD_TDS_RATE", `§${s.section} has no plant/machinery variant`, 422);
+    sectionRate = s.ratePlantMachinery;
+  } else if (v === "fts") {
+    if (s.rateFts === undefined) throw new PostError("BAD_TDS_RATE", `§${s.section} has no technical-services variant`, 422);
+    sectionRate = s.rateFts;
+  } else if (v && v !== "") {
+    throw new PostError("BAD_TDS_RATE", `Unknown TDS variant "${variant}"`, 422);
+  }
 
   let rate;
   if (!panAvailable) {
@@ -71,12 +93,12 @@ function computeTds({ section, amount, panAvailable = true, lowerRate } = {}) {
   } else if (lowerRate !== undefined && lowerRate !== null && lowerRate !== "") {
     const lr = money(lowerRate);
     if (lr.lessThan(0)) throw new PostError("BAD_TDS_RATE", "lowerRate cannot be negative", 422);
-    if (lr.greaterThan(money(s.rate))) {
-      throw new PostError("BAD_TDS_RATE", `lowerRate ${toRupees(lr)}% exceeds §${s.section} rate ${s.rate}%`, 422);
+    if (lr.greaterThan(money(sectionRate))) {
+      throw new PostError("BAD_TDS_RATE", `lowerRate ${toRupees(lr)}% exceeds §${s.section} rate ${sectionRate}%`, 422);
     }
     rate = lr;
   } else {
-    rate = money(s.rate);
+    rate = money(sectionRate);
   }
 
   // round(amount*rate/100): TDS is rounded to the nearest rupee (CBDT convention,
@@ -107,14 +129,14 @@ function computeTds({ section, amount, panAvailable = true, lowerRate } = {}) {
 //
 // We emit BOTH the reduced vendor credit and the TDS Payable credit as the
 // spliceable `entries` so a payment-style caller can drop in two clean lines.
-function buildTdsDeduction({ vendorLedgerId, tdsPayableLedgerId, grossAmount, section, panAvailable = true, lowerRate } = {}) {
+function buildTdsDeduction({ vendorLedgerId, tdsPayableLedgerId, grossAmount, section, panAvailable = true, lowerRate, payeeType, variant } = {}) {
   if (!vendorLedgerId) throw new PostError("BAD_INPUT", "vendorLedgerId required", 422);
   if (!tdsPayableLedgerId) throw new PostError("BAD_INPUT", "tdsPayableLedgerId required", 422);
 
   const gross = money(grossAmount);
   if (!gross.greaterThan(0)) throw new PostError("BAD_INPUT", "grossAmount must be positive", 422);
 
-  const tds = computeTds({ section, amount: gross, panAvailable, lowerRate });
+  const tds = computeTds({ section, amount: gross, panAvailable, lowerRate, payeeType, variant });
   const tdsAmount = money(tds.tdsAmount);
   const vendorNet = gross.minus(tdsAmount);
   if (vendorNet.lessThan(0)) throw new PostError("BAD_TDS_AMOUNT", "TDS exceeds gross payable", 422);
