@@ -78,11 +78,22 @@ async function runServicing(tenantId, asOf = iso(new Date())) {
 
     let charge = 0;
     if (dpd > 0 && n(loan.outstanding_principal) > 0 && n(loan.penal_rate_pct) > 0) {
+      // Penal base = the amount actually IN DEFAULT (overdue installments net of
+      // everything repaid), per the RBI Penal Charges circular (Aug 2023, effective
+      // Apr 2024) - NOT the whole outstanding principal. An audit measured a 16x
+      // overcharge on a single late EMI of an amortizing loan under the old base.
+      // Repayments settle earliest installments first (recordRepayment's greedy
+      // marker), so amount-in-default = cumulative due-to-date - cumulative paid.
+      // A bullet loan past maturity owes its whole contract, so that path is
+      // effectively unchanged.
+      const { rows: repAgg } = await q(tenantId, "SELECT COALESCE(SUM(amount),0) AS p FROM loan_repayments WHERE loan_id=$1", [loan.id]);
+      const dueToDate = sch.filter((s) => iso(s.due_date) < asOf).reduce((s2, x) => s2 + n(x.total_due), 0);
+      const overdueAmount = Math.max(0, r2(dueToDate - n(repAgg[0].p)));
       // Accrue from the last accrual (or the earliest overdue date on first accrual) up to asOf.
       const from = loan.penal_last_accrued_on ? iso(loan.penal_last_accrued_on) : earliestOverdue;
       const days = from ? daysBetween(from, asOf) : 0;
-      if (days > 0) {
-        charge = r2(n(loan.outstanding_principal) * (n(loan.penal_rate_pct) / 100) * (days / 365));
+      if (days > 0 && overdueAmount > 0) {
+        charge = r2(overdueAmount * (n(loan.penal_rate_pct) / 100) * (days / 365));
         if (charge > 0) {
           const v = await postPenal(tenantId, loan, charge, asOf);
           if (v) { penalPosted++; penalAmount = r2(penalAmount + charge); }

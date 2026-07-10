@@ -335,12 +335,12 @@ async function acceptOffer(tenantId, offerId, actorId) {
     );
   }
   await q(tenantId,"UPDATE loan_offers SET status='accepted' WHERE id=$1", [offer.id]);
-  const voucherId = await postDisbursal(tenantId, actorId, loan, net);
-  if (voucherId) await q(tenantId,"UPDATE loans SET disbursal_voucher_id=$2 WHERE id=$1", [loan.id, voucherId]);
   // Track the actual lender→SMB transfer on the shared payouts rail (money-rail is gated: with
-  // no RazorpayX/Setu creds it stays 'pending' in manual mode — never faked). Best-effort: a
-  // rail hiccup must not fail the accept. GL for a disbursal stays with lending (payouts skips
-  // kind='disbursal'). Lazy require avoids a lending↔payouts load-time cycle.
+  // no RazorpayX/Setu creds it stays 'pending' in manual mode — never faked). The disbursal GL
+  // (Dr Bank / Cr Borrowings) is NOT posted here anymore: an audit found it was booked
+  // unconditionally at accept, so a pending/failed payout left the tenant's Bank ledger
+  // showing money that never arrived. It now posts when the payout SETTLES — payouts calls
+  // postDisbursalOnSettlement below (lazy require avoids a lending↔payouts load-time cycle).
   try {
     const payouts = require("../payouts/index");
     const po = await payouts.requestPayout(tenantId, {
@@ -348,8 +348,26 @@ async function acceptOffer(tenantId, offerId, actorId) {
       refType: "loan", refId: loan.id, idempotencyKey: `disburse:${loan.id}`, actorId,
     });
     if (po && po.id) await q(tenantId, "UPDATE loans SET disbursal_payout_id=$2 WHERE id=$1", [loan.id, po.id]);
-  } catch (e) { console.warn("[lending] disbursal payout skipped:", e.message); }
+  } catch (e) {
+    // Without a payout row there is no settlement event to trigger the GL - the loan is
+    // live but the books will not show the cash until it is recorded manually. Loud, not
+    // silent: this needs operator attention.
+    console.error("[lending] disbursal payout request FAILED - GL will not post until recorded manually:", loan.id, e.message);
+  }
   return getLoan(tenantId, loan.id);
+}
+
+// Called by payouts when a disbursal payout SETTLES — the only moment book cash may
+// increase. Idempotent per loan (postDisbursal's key is loan_disburse_<id>, same as
+// the old accept-time posting, so already-posted historic loans can never double-post).
+async function postDisbursalOnSettlement(tenantId, actorId, payout) {
+  if (!payout || payout.kind !== "disbursal" || !payout.ref_id) return null;
+  const { rows } = await q(tenantId, "SELECT * FROM loans WHERE tenant_id=$1 AND id=$2", [tenantId, payout.ref_id]);
+  const loan = rows[0];
+  if (!loan) return null;
+  const voucherId = await postDisbursal(tenantId, actorId, loan, n(payout.amount));
+  if (voucherId) await q(tenantId, "UPDATE loans SET disbursal_voucher_id=$2 WHERE id=$1 AND disbursal_voucher_id IS NULL", [loan.id, voucherId]);
+  return voucherId;
 }
 
 // ── LMS: loans, repayments, DPD ──────────────────────────────────────────────
@@ -383,7 +401,14 @@ function dpdDays(scheduleRows) {
 }
 const dpdBucket = (d) => (d <= 0 ? "current" : d <= 30 ? "1-30" : d <= 60 ? "31-60" : d <= 90 ? "61-90" : "90+");
 
-// Allocate a repayment: interest first (across scheduled interest), then principal.
+// Allocate a repayment: ACCRUED interest first, then principal, then (only if the
+// payer sent more than principal + accrued - e.g. paying a full contract off early)
+// the remaining future interest. An audit found the old waterfall allocated against
+// LIFETIME scheduled interest, so EMI#1 on an amortizing loan booked as ~100%
+// interest / 0 principal (correct split for a 12L @24% 12mo loan: 24,000 interest /
+// 89,472 principal) - misstating P&L, keeping outstanding_principal overstated
+// (which feeds underwriting existingDebt, penal accrual and settlement quotes),
+// and overcharging unaccrued interest on early settlement.
 async function recordRepayment(tenantId, loanId, { amount, method = "manual", ref, actorId } = {}) {
   const amt = n(amount);
   if (!(amt > 0)) throw new LendError("BAD_INPUT", "amount must be > 0", 400);
@@ -394,10 +419,23 @@ async function recordRepayment(tenantId, loanId, { amount, method = "manual", re
 
   const { rows: sch } = await q(tenantId,"SELECT * FROM loan_schedule WHERE loan_id=$1 ORDER BY installment_no", [loanId]);
   const { rows: prevRep } = await q(tenantId,"SELECT COALESCE(SUM(interest_component),0) AS i FROM loan_repayments WHERE loan_id=$1", [loanId]);
-  const scheduledInterest = sch.reduce((s, x) => s + n(x.interest_due), 0);
-  const interestOutstanding = Math.max(0, r2(scheduledInterest - n(prevRep[0].i)));
-  const payInterest = r2(Math.min(amt, interestOutstanding));
-  const payPrincipal = r2(Math.min(amt - payInterest, n(loan.outstanding_principal)));
+  const today = new Date().toISOString().slice(0, 10);
+  const isoDue = (d) => (typeof d === "string" ? d.slice(0, 10) : new Date(d).toISOString().slice(0, 10));
+  // Interest is due installment-by-installment: what has accrued = interest_due on
+  // installments whose due date has arrived (a bullet loan's single row matures at
+  // its due date, so at/after maturity this is the full contract interest).
+  const accruedInterest = sch.filter((x) => isoDue(x.due_date) <= today).reduce((s, x) => s + n(x.interest_due), 0);
+  const lifetimeInterest = sch.reduce((s, x) => s + n(x.interest_due), 0);
+  const prevInterest = n(prevRep[0].i);
+  const accruedOutstanding = Math.max(0, r2(accruedInterest - prevInterest));
+  const payInterestAccrued = r2(Math.min(amt, accruedOutstanding));
+  const payPrincipal = r2(Math.min(amt - payInterestAccrued, n(loan.outstanding_principal)));
+  // Surplus beyond accrued interest + full principal = the payer chose to clear
+  // future interest too (early full-contract payoff). Cap at the contract total so
+  // components never exceed what was ever owed.
+  const surplus = r2(amt - payInterestAccrued - payPrincipal);
+  const futureInterestCap = Math.max(0, r2(lifetimeInterest - prevInterest - payInterestAccrued));
+  const payInterest = r2(payInterestAccrued + Math.min(Math.max(0, surplus), futureInterestCap));
   const newOutstanding = r2(n(loan.outstanding_principal) - payPrincipal);
 
   let repaymentId;
@@ -607,6 +645,7 @@ module.exports = {
   LendError, eligibility, conductLadder, refreshStandingOffers,
   createOffer, createOffersBulk, listOffers, getOffer, acceptOffer, acceptOffersBulk, declineOffer,
   getLoan, listLoans, recordRepayment, onInvoicePaid, financeableInvoices, financingPosition,
+  postDisbursalOnSettlement, // payouts posts the disbursal GL when the payout settles
   amortize, bullet, buildKFS, dpdBucket, // pure helpers exported for tests
   ledgerByName, firstBankLedger, ensureByNature, // GL helpers reused by servicing.js
 };

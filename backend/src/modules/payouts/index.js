@@ -163,9 +163,14 @@ const shape = (p) => ({ ...p, amount: n(p.amount), provider_configured: payoutPr
 // Reuses lending's ledger helpers (lazy require — avoids a load-time cycle since lending also
 // calls payouts). Per kind: money genuinely leaving the bank posts a PAYMENT; a BNPL drawdown
 // clears the supplier payable against a new borrowing (no bank leg — the lender fronts it); a
-// lending disbursal is NOT posted here (the lending module already books cash-in/Borrowings).
+// lending disbursal posts LENDING's own voucher (Dr Bank / Cr Borrowings) here at settlement —
+// an audit found it was previously booked at ACCEPT time regardless of whether the payout ever
+// settled, overstating the tenant's bank balance whenever the rail was gated/manual/pending.
 async function postSettlementGl(tenantId, actorId, payout) {
-  if (payout.kind === "disbursal") return null; // lending owns its disbursal voucher
+  if (payout.kind === "disbursal") {
+    try { return await require("../lending/index").postDisbursalOnSettlement(tenantId, actorId, payout); }
+    catch (e) { console.warn("[payouts] disbursal GL skipped:", e.message); return null; }
+  }
   try {
     const { firstBankLedger, ledgerByName, ensureByNature } = require("../lending/index");
     const amt = n(payout.amount);
