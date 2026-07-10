@@ -468,6 +468,8 @@ async function initDb() {
       joining_date DATE,
       created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    -- WhatsApp payslip delivery (#38 - was a hardcoded empty phone / mailto compose).
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS phone TEXT;
 
     CREATE TABLE IF NOT EXISTS payroll_runs (
       id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),

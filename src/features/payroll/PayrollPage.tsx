@@ -26,7 +26,7 @@ type PayrollTab = (typeof PAYROLL_TAB_IDS)[number];
 const PAYROLL_WRITE_ROLES = new Set(["super_admin", "owner", "finance_manager"]);
 
 interface Employee {
-  id: string; name: string; email?: string; pan?: string;
+  id: string; name: string; email?: string; phone?: string; pan?: string;
   bank_account?: string; bank_ifsc?: string;
   gross_salary: number; tds_monthly: number; status: string; joining_date?: string;
 }
@@ -88,7 +88,7 @@ function computeStatutoryNet(grossMonthly: number, cfg: StatutoryConfig): Statut
 }
 
 function AddEmployeeModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
-  const [form, setForm] = useState({ name: "", email: "", pan: "", bank_account: "", bank_ifsc: "", gross_salary: "", joining_date: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", pan: "", bank_account: "", bank_ifsc: "", gross_salary: "", joining_date: "" });
   const [saving, setSaving] = useState(false);
 
   const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -125,6 +125,10 @@ function AddEmployeeModal({ onClose, onAdded }: { onClose: () => void; onAdded: 
             <div>
               <label className={lbl}>Email</label>
               <input type="email" value={form.email} onChange={e => f("email", e.target.value)} className={inp} />
+            </div>
+            <div>
+              <label className={lbl}>Phone (WhatsApp)</label>
+              <input type="tel" value={form.phone} onChange={e => f("phone", e.target.value)} className={inp} placeholder="+919876543210" />
             </div>
             <div>
               <label className={lbl}>PAN</label>
@@ -2234,7 +2238,7 @@ function EsopTab({ employees }: { employees: { id: string; name: string; gross_s
 }
 
 // ── Shared helpers for new Payroll & HR tools ──────────────────────────────────
-type EmpLite = { id: string; name: string; gross_salary: number; tds_monthly?: number; status?: string; joining_date?: string; pan?: string; email?: string };
+type EmpLite = { id: string; name: string; gross_salary: number; tds_monthly?: number; status?: string; joining_date?: string; pan?: string; email?: string; phone?: string };
 
 const NEW_SLAB_BANDS: [number, number][] = [
   [300000, 0], [700000, 0.05], [1000000, 0.10], [1200000, 0.15], [1500000, 0.20], [Infinity, 0.30],
@@ -3622,11 +3626,13 @@ function StatutoryLiabilityTab({ employees }: { employees: EmpLite[] }) {
 }
 
 // ── 38. Employee Self-Service Payslip Portal link ──────────────────────────────
-function PayslipPortalTab({ employees, firmName }: { employees: EmpLite[]; firmName: string }) {
+function PayslipPortalTab({ employees }: { employees: EmpLite[]; firmName: string }) {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [channel, setChannel] = useState<"whatsapp" | "email">("whatsapp");
   const [declarations, setDeclarations] = useFeatureState<Record<string, boolean>>("payroll-it-declarations", {});
   const [copied, setCopied] = useState<string | null>(null);
+  const [sending, setSending] = useState<string | null>(null);
+  const [sentLog, setSentLog] = useState<Record<string, string>>({});
   const fc = formatCurrency;
 
   const monthLabel = (() => { const [y, m] = month.split("-"); return `${MONTH_NAMES[Number(m) - 1]} ${y}`; })();
@@ -3635,21 +3641,19 @@ function PayslipPortalTab({ employees, firmName }: { employees: EmpLite[]; firmN
     const token = btoa(`${emp.id}:${month}`).replace(/=/g, "");
     return `https://portal.headroom.in/payslip/${token}`;
   };
-  const messageFor = (emp: EmpLite) => {
-    const gross = Number(emp.gross_salary);
-    const net = gross - Number(emp.tds_monthly ?? 0);
-    return `Hi ${emp.name}, your payslip for ${monthLabel} from ${firmName} is ready. Net pay: ${fc(net)}. View & download: ${linkFor(emp)}\nPlease submit your IT investment declaration if pending.`;
-  };
 
-  const share = (emp: EmpLite) => {
-    const msg = messageFor(emp);
-    if (channel === "whatsapp") {
-      const phone = ""; // no stored phone; open compose
-      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
-    } else if (emp.email) {
-      window.open(`mailto:${emp.email}?subject=${encodeURIComponent(`Payslip - ${monthLabel}`)}&body=${encodeURIComponent(msg)}`, "_blank");
-    } else {
-      toast.error(`No email on file for ${emp.name}`);
+  const share = async (emp: EmpLite) => {
+    if (channel === "whatsapp" && !emp.phone) { toast.error(`No phone on file for ${emp.name} - add one under the Employees tab.`); return; }
+    if (channel === "email" && !emp.email) { toast.error(`No email on file for ${emp.name}`); return; }
+    setSending(emp.id);
+    try {
+      const res = await api.post<{ ok: boolean; to: string }>(`/api/payroll/employees/${emp.id}/send-payslip`, { month, channel });
+      toast.success(`Payslip sent to ${res.to} via ${channel === "whatsapp" ? "WhatsApp" : "email"}`);
+      setSentLog(prev => ({ ...prev, [emp.id]: new Date().toISOString() }));
+    } catch (e) {
+      toast.error((e as { message?: string })?.message || "Couldn't send the payslip");
+    } finally {
+      setSending(null);
     }
   };
   const copyLink = (emp: EmpLite) => {
@@ -3720,9 +3724,10 @@ function PayslipPortalTab({ employees, firmName }: { employees: EmpLite[]; firmN
                     </label>
                   </td>
                   <td className="px-3 py-2.5">
-                    <button onClick={() => share(e)} className="flex items-center gap-1 text-[var(--color-primary)] hover:underline">
-                      <Send size={11} /> {channel === "whatsapp" ? "WhatsApp" : "Email"}
+                    <button onClick={() => void share(e)} disabled={sending === e.id} className="flex items-center gap-1 text-[var(--color-primary)] hover:underline disabled:opacity-50">
+                      <Send size={11} /> {sending === e.id ? "Sending…" : channel === "whatsapp" ? "WhatsApp" : "Email"}
                     </button>
+                    {sentLog[e.id] && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">Sent {new Date(sentLog[e.id]).toLocaleTimeString()}</p>}
                   </td>
                 </tr>
               );

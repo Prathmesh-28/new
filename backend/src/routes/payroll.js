@@ -134,7 +134,7 @@ router.get("/employees", authenticate, canWrite, async (req, res) => {
 
 // POST /api/payroll/employees
 router.post("/employees", authenticate, canWrite, async (req, res) => {
-  const { name, email, pan, bank_account, bank_ifsc, gross_salary, joining_date } = req.body;
+  const { name, email, phone, pan, bank_account, bank_ifsc, gross_salary, joining_date } = req.body;
   if (!name || !gross_salary) return res.status(400).json({ error: "name and gross_salary required" });
 
   const annualSalary = parseFloat(gross_salary) * 12;
@@ -142,9 +142,9 @@ router.post("/employees", authenticate, canWrite, async (req, res) => {
   const tds_monthly  = parseFloat((annualTds / 12).toFixed(2));
 
   const { rows: [emp] } = await pool.query(
-    `INSERT INTO employees(tenant_id, name, email, pan, bank_account, bank_ifsc, gross_salary, tds_monthly, joining_date)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-    [req.user.tenant_id, name, email ?? null, fc.encrypt(pan ?? null), fc.encrypt(bank_account ?? null), bank_ifsc ?? null,
+    `INSERT INTO employees(tenant_id, name, email, phone, pan, bank_account, bank_ifsc, gross_salary, tds_monthly, joining_date)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [req.user.tenant_id, name, email ?? null, phone ?? null, fc.encrypt(pan ?? null), fc.encrypt(bank_account ?? null), bank_ifsc ?? null,
      gross_salary, tds_monthly, joining_date ?? null]
   );
   res.status(201).json(decEmp(emp));
@@ -152,7 +152,7 @@ router.post("/employees", authenticate, canWrite, async (req, res) => {
 
 // PATCH /api/payroll/employees/:id
 router.patch("/employees/:id", authenticate, canWrite, async (req, res) => {
-  const { name, email, gross_salary, bank_account, bank_ifsc, pan, status } = req.body;
+  const { name, email, phone, gross_salary, bank_account, bank_ifsc, pan, status } = req.body;
   const { rows: exRows } = await pool.query(
     "SELECT * FROM employees WHERE id=$1 AND tenant_id=$2",
     [req.params.id, req.user.tenant_id]
@@ -166,14 +166,48 @@ router.patch("/employees/:id", authenticate, canWrite, async (req, res) => {
 
   const { rows: [updated] } = await pool.query(
     `UPDATE employees SET
-       name=$1, email=$2, gross_salary=$3, tds_monthly=$4, bank_account=$5, bank_ifsc=$6,
-       pan=$7, status=COALESCE($8, status)
-     WHERE id=$9 AND tenant_id=$10 RETURNING *`,
-    [name ?? existing.name, email ?? existing.email, newSalary, tds_monthly,
+       name=$1, email=$2, phone=$3, gross_salary=$4, tds_monthly=$5, bank_account=$6, bank_ifsc=$7,
+       pan=$8, status=COALESCE($9, status)
+     WHERE id=$10 AND tenant_id=$11 RETURNING *`,
+    [name ?? existing.name, email ?? existing.email, phone ?? existing.phone, newSalary, tds_monthly,
      fc.encrypt(bank_account ?? existing.bank_account), bank_ifsc ?? existing.bank_ifsc,
      fc.encrypt(pan ?? existing.pan), status ?? null, req.params.id, req.user.tenant_id]
   );
   res.json(decEmp(updated));
+});
+
+// POST /api/payroll/employees/:id/send-payslip - real WhatsApp/email send (was a
+// client-side wa.me/mailto compose with no stored phone number at all).
+router.post("/employees/:id/send-payslip", authenticate, canWrite, async (req, res) => {
+  const { month, channel } = req.body || {};
+  if (!/^\d{4}-\d{2}$/.test(month || "")) return res.status(400).json({ error: "month must be YYYY-MM" });
+  if (channel !== "whatsapp" && channel !== "email") return res.status(422).json({ error: "channel must be 'whatsapp' or 'email'" });
+
+  const { rows } = await pool.query("SELECT * FROM employees WHERE id=$1 AND tenant_id=$2", [req.params.id, req.user.tenant_id]);
+  if (!rows[0]) return res.status(404).json({ error: "Employee not found" });
+  const emp = decEmp(rows[0]);
+
+  const { rows: kvRows } = await pool.query("SELECT value FROM kv_store WHERE tenant_id=$1 AND namespace='app' AND key='store' LIMIT 1", [req.user.tenant_id]);
+  const firmName = kvRows[0]?.value?.value?.firm?.name || "your employer";
+  const [y, m] = month.split("-");
+  const monthLabel = `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][Number(m) - 1]} ${y}`;
+  const net = Number(emp.gross_salary) - Number(emp.tds_monthly || 0);
+  const portalToken = Buffer.from(`${emp.id}:${month}`).toString("base64url");
+  const portalUrl = `https://headroom-pi.vercel.app/payslip/${portalToken}`;
+  const text = `Hi ${emp.name}, your payslip for ${monthLabel} from ${firmName} is ready. Net pay: ₹${net.toLocaleString("en-IN")}. View & download: ${portalUrl}`;
+
+  if (channel === "whatsapp") {
+    if (!emp.phone) return res.status(422).json({ error: `No phone on file for ${emp.name} - add one and retry.` });
+    const { sendWhatsApp } = require("../lib/whatsapp");
+    const delivered = await sendWhatsApp(emp.phone, text).catch(() => false);
+    if (!delivered) return res.status(503).json({ error: "WhatsApp isn't configured on the server (missing Twilio keys) - nothing was sent." });
+  } else {
+    if (!emp.email) return res.status(422).json({ error: `No email on file for ${emp.name} - add one and retry.` });
+    if (!process.env.SMTP_USER) return res.status(503).json({ error: "Email isn't configured on the server (missing SMTP keys) - nothing was sent." });
+    const { sendMail } = require("../lib/email");
+    await sendMail({ to: emp.email, subject: `Payslip - ${monthLabel}`, html: `<p>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>` });
+  }
+  res.json({ ok: true, channel, to: channel === "whatsapp" ? emp.phone : emp.email });
 });
 
 // GET /api/payroll/runs - payroll totals expose pay data; owner/admin only.
