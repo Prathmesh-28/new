@@ -27,11 +27,20 @@ async function createInvoiceTx(client, tenantId, {
   const gst_amount = parseFloat(gstSum.toFixed(2));
   const total = parseFloat((subtotal + gst_amount).toFixed(2));
 
-  const { rows: existing } = await client.query(
-    "SELECT invoice_number FROM invoices WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 50",
+  // Serialize numbering per tenant for the rest of this transaction. The old
+  // unlocked read-max-insert let two concurrent creates mint the SAME number
+  // (and the Razorpay webhook resolves invoices BY number, so a duplicate could
+  // mark the wrong customer's invoice paid). The advisory xact-lock is the
+  // primary guard; the unique index from migration 0031 is the backstop. MAX is
+  // taken over ALL rows, not a last-50 window (which could repeat a number for
+  // tenants whose recent 50 don't include the highest-numbered invoice).
+  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`${tenantId}:invoice-number`]);
+  const { rows: [mx] } = await client.query(
+    `SELECT COALESCE(MAX((regexp_match(invoice_number, 'INV-\\d{4}-(\\d+)$'))[1]::int), 0) AS maxn
+       FROM invoices WHERE tenant_id=$1`,
     [tenantId]
   );
-  const invoice_number = nextInvoiceNumber(existing.map((r) => r.invoice_number));
+  const invoice_number = `INV-${new Date().getFullYear()}-${String(Number(mx.maxn) + 1).padStart(3, "0")}`;
   const { rows: [row] } = await client.query(
     `INSERT INTO invoices(tenant_id, invoice_number, customer_name, customer_gstin, customer_email,
        customer_phone, subtotal, gst_rate, gst_amount, total_amount, status, due_date)

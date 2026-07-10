@@ -643,12 +643,15 @@ router.post("/:id/credit-notes", authenticate, canWrite, async (req, res) => {
       const noteGst = round2(amount * gstShare);
       const noteSubtotal = round2(amount - noteGst);
 
-      // CN-YYYY-NNN per tenant, same style as invoice numbering.
-      const { rows: existing } = await client.query(
-        "SELECT note_number FROM invoice_credit_notes WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 50", [t]);
+      // CN-YYYY-NNN per tenant, same style as invoice numbering - and the same
+      // race-safety: advisory xact-lock serializes numbering, MAX over all rows,
+      // unique index (migration 0031) as the backstop.
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`${t}:credit-note-number`]);
+      const { rows: [mxCn] } = await client.query(
+        `SELECT COALESCE(MAX((regexp_match(note_number, 'CN-\\d{4}-(\\d+)$'))[1]::int), 0) AS maxn
+           FROM invoice_credit_notes WHERE tenant_id=$1`, [t]);
       const year = new Date().getFullYear();
-      const nums = existing.map((r) => { const m = r.note_number.match(/CN-\d{4}-(\d+)$/); return m ? parseInt(m[1]) : 0; }).filter(Boolean);
-      const note_number = `CN-${year}-${String(nums.length ? Math.max(...nums) + 1 : 1).padStart(3, "0")}`;
+      const note_number = `CN-${year}-${String(Number(mxCn.maxn) + 1).padStart(3, "0")}`;
 
       const { rows: [note] } = await client.query(
         "INSERT INTO invoice_credit_notes(tenant_id, invoice_id, note_number, reason, subtotal, gst_amount, total_amount, created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
