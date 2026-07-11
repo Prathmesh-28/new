@@ -372,7 +372,7 @@ const bn: Record<string, string> = {
   "docs.stat.tenantScoped": "আপনার টেন্যান্টে সীমাবদ্ধ",
   "docs.tab.vault": "ভল্ট",
   "docs.tab.ocr": "রসিদ OCR ক্যাপচার",
-  "docs.tab.esign": "e-Sign ওয়ার্কফ্লো",
+  "docs.tab.sendTrack": "পাঠান ও ট্র্যাক করুন",
   "docs.tab.expiry": "মেয়াদ / নবায়ন ভল্ট",
   "docs.tab.stmtParser": "ব্যাঙ্ক স্টেটমেন্ট পার্সার",
   "docs.tab.auditTrail": "অডিট ট্রেইল",

@@ -372,7 +372,7 @@ const ml: Record<string, string> = {
   "docs.stat.tenantScoped": "നിങ്ങളുടെ ടെനന്റിലേക്ക് പരിമിതം",
   "docs.tab.vault": "വോൾട്ട്",
   "docs.tab.ocr": "രസീത് OCR ക്യാപ്ചർ",
-  "docs.tab.esign": "e-Sign വർക്ക്ഫ്ലോ",
+  "docs.tab.sendTrack": "അയച്ച് ട്രാക്ക് ചെയ്യുക",
   "docs.tab.expiry": "കാലാവധി / പുതുക്കൽ വോൾട്ട്",
   "docs.tab.stmtParser": "ബാങ്ക് സ്റ്റേറ്റ്‌മെന്റ് പാഴ്‌സർ",
   "docs.tab.auditTrail": "ഓഡിറ്റ് ട്രെയിൽ",

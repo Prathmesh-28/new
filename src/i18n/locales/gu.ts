@@ -372,7 +372,7 @@ const gu: Record<string, string> = {
   "docs.stat.tenantScoped": "તમારા ટેનન્ટ પૂરતું મર્યાદિત",
   "docs.tab.vault": "વૉલ્ટ",
   "docs.tab.ocr": "રસીદ OCR કૅપ્ચર",
-  "docs.tab.esign": "e-Sign વર્કફ્લો",
+  "docs.tab.sendTrack": "મોકલો અને ટ્રૅક કરો",
   "docs.tab.expiry": "એક્સપાયરી / રિન્યુઅલ વૉલ્ટ",
   "docs.tab.stmtParser": "બૅન્ક સ્ટેટમેન્ટ પાર્સર",
   "docs.tab.auditTrail": "ઑડિટ ટ્રેઇલ",

@@ -13293,13 +13293,13 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "createdAt": "2026-05-28T11:15:00.000Z"
     }
   ],
-  "esign-docs": [
+  "doc-send-track": [
     {
       "id": "es01",
       "title": "Vendor Supply Agreement - Shakti Tools",
       "signer": "Mohan Shakti",
       "email": "mohan@shaktitools.in",
-      "method": "aadhaar",
+      "channel": "physical",
       "sentAt": "2026-06-12T10:00:00.000Z",
       "status": "signed"
     },
@@ -13308,16 +13308,16 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "title": "Employment Offer - Priya Menon",
       "signer": "Priya Menon",
       "email": "priya.menon@gmail.com",
-      "method": "email",
+      "channel": "email",
       "sentAt": "2026-06-16T09:30:00.000Z",
-      "status": "viewed"
+      "status": "sent"
     },
     {
       "id": "es03",
       "title": "NDA - Wipro Procurement",
       "signer": "Sanjay Rao",
       "email": "sanjay.rao@wipro.com",
-      "method": "dsc",
+      "channel": "email",
       "sentAt": "2026-06-18T15:20:00.000Z",
       "status": "sent"
     },
@@ -13326,7 +13326,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "title": "Board Resolution - CC Renewal",
       "signer": "Suresh Venkataraman",
       "email": "suresh@acmemfg.in",
-      "method": "dsc",
+      "channel": "email",
       "sentAt": "2026-06-08T12:00:00.000Z",
       "status": "signed"
     },
@@ -13335,7 +13335,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "title": "Lease Renewal - Peenya Unit",
       "signer": "Sai Estates",
       "email": "accounts@saiestates.in",
-      "method": "aadhaar",
+      "channel": "physical",
       "sentAt": "2026-06-14T11:45:00.000Z",
       "status": "declined"
     }
@@ -13459,58 +13459,6 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
     "tender::PAN card": true,
     "tender::Udyam (MSME) certificate": false
   },
-  "doc-share-links": [
-    {
-      "id": "sl01",
-      "docName": "Audited Financials FY25-26",
-      "recipient": "ramesh@iyerassociates.in",
-      "access": "download",
-      "createdAt": "2026-06-10T10:00:00.000Z",
-      "expiresAt": "2026-07-10T10:00:00.000Z",
-      "token": "a1b2c3d4",
-      "revoked": false
-    },
-    {
-      "id": "sl02",
-      "docName": "GST Certificate",
-      "recipient": "vendor.onboard@jsw.in",
-      "access": "view",
-      "createdAt": "2026-06-15T11:30:00.000Z",
-      "expiresAt": "2026-06-22T11:30:00.000Z",
-      "token": "e5f6g7h8",
-      "revoked": false
-    },
-    {
-      "id": "sl03",
-      "docName": "Company PAN Card",
-      "recipient": "kyc@hdfcbank.com",
-      "access": "view",
-      "createdAt": "2026-05-20T09:00:00.000Z",
-      "expiresAt": "2026-05-27T09:00:00.000Z",
-      "token": "i9j0k1l2",
-      "revoked": false
-    },
-    {
-      "id": "sl04",
-      "docName": "Udyam Certificate",
-      "recipient": "tender@gem.gov.in",
-      "access": "download",
-      "createdAt": "2026-06-01T14:00:00.000Z",
-      "expiresAt": "2026-06-15T14:00:00.000Z",
-      "token": "m3n4o5p6",
-      "revoked": true
-    },
-    {
-      "id": "sl05",
-      "docName": "Board Resolution - Banking",
-      "recipient": "relationship.mgr@icici.com",
-      "access": "view",
-      "createdAt": "2026-06-17T16:20:00.000Z",
-      "expiresAt": "2026-07-17T16:20:00.000Z",
-      "token": "q7r8s9t0",
-      "revoked": false
-    }
-  ],
   "doc-kyc-parties": [
     {
       "id": "kp01",
@@ -20304,49 +20252,7 @@ export const DEMO_FEATURE_DATA: Record<string, unknown> = {
       "cap": 300000
     }
   ],
-  "spd-approval-queue": [
-    {
-      "id": "aq-1",
-      "vendor": "Precision Tooling Works",
-      "amount": 275000,
-      "requester": "Suresh K (Production)",
-      "note": "Die-set replacement",
-      "status": "pending",
-      "created": "2026-06-18T10:20:00.000Z"
-    },
-    {
-      "id": "aq-2",
-      "vendor": "AWS India",
-      "amount": 38000,
-      "requester": "Priya Nair",
-      "note": "Monthly cloud hosting",
-      "status": "approved",
-      "created": "2026-06-15T08:00:00.000Z"
-    },
-    {
-      "id": "aq-3",
-      "vendor": "GreenBuild Infra",
-      "amount": 640000,
-      "requester": "Rajesh Mehta",
-      "note": "Warehouse civil milestone-3",
-      "status": "pending",
-      "created": "2026-06-19T14:35:00.000Z"
-    },
-    {
-      "id": "aq-4",
-      "vendor": "Lavish Events",
-      "amount": 220000,
-      "requester": "Sales team",
-      "note": "Annual dealer meet",
-      "status": "rejected",
-      "created": "2026-06-10T09:10:00.000Z"
-    }
-  ],
   "spd-itc-rate": "18",
-  "spd-approval-decided": {
-    "aq-2": "2026-06-15T11:30:00.000Z",
-    "aq-4": "2026-06-11T16:45:00.000Z"
-  },
   "lender-covenants": [
     {
       "id": "c1",

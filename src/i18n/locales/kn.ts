@@ -372,7 +372,7 @@ const kn: Record<string, string> = {
   "docs.stat.tenantScoped": "ನಿಮ್ಮ ಟೆನೆಂಟ್‌ಗೆ ಸೀಮಿತ",
   "docs.tab.vault": "ವಾಲ್ಟ್",
   "docs.tab.ocr": "ರಸೀದಿ OCR ಸೆರೆ",
-  "docs.tab.esign": "e-Sign ವರ್ಕ್‌ಫ್ಲೋ",
+  "docs.tab.sendTrack": "ಕಳುಹಿಸಿ ಮತ್ತು ಟ್ರ್ಯಾಕ್ ಮಾಡಿ",
   "docs.tab.expiry": "ಅವಧಿ / ನವೀಕರಣ ವಾಲ್ಟ್",
   "docs.tab.stmtParser": "ಬ್ಯಾಂಕ್ ಸ್ಟೇಟ್‌ಮೆಂಟ್ ಪಾರ್ಸರ್",
   "docs.tab.auditTrail": "ಆಡಿಟ್ ಜಾಡು",

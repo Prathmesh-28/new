@@ -372,7 +372,7 @@ const te: Record<string, string> = {
   "docs.stat.tenantScoped": "మీ టెనెంట్‌కు పరిమితం",
   "docs.tab.vault": "వాల్ట్",
   "docs.tab.ocr": "రసీదు OCR క్యాప్చర్",
-  "docs.tab.esign": "e-Sign వర్క్‌ఫ్లో",
+  "docs.tab.sendTrack": "పంపి ట్రాక్ చేయండి",
   "docs.tab.expiry": "గడువు / రెన్యూవల్ వాల్ట్",
   "docs.tab.stmtParser": "బ్యాంక్ స్టేట్‌మెంట్ పార్సర్",
   "docs.tab.auditTrail": "ఆడిట్ ట్రయిల్",

@@ -372,7 +372,7 @@ const pa: Record<string, string> = {
   "docs.stat.tenantScoped": "ਤੁਹਾਡੇ ਟੈਨੈਂਟ ਤੱਕ ਸੀਮਿਤ",
   "docs.tab.vault": "ਵਾਲਟ",
   "docs.tab.ocr": "ਰਸੀਦ OCR ਕੈਪਚਰ",
-  "docs.tab.esign": "e-Sign ਵਰਕਫਲੋ",
+  "docs.tab.sendTrack": "ਭੇਜੋ ਅਤੇ ਟਰੈਕ ਕਰੋ",
   "docs.tab.expiry": "ਮਿਆਦ / ਨਵੀਨੀਕਰਨ ਵਾਲਟ",
   "docs.tab.stmtParser": "ਬੈਂਕ ਸਟੇਟਮੈਂਟ ਪਾਰਸਰ",
   "docs.tab.auditTrail": "ਆਡਿਟ ਟ੍ਰੇਲ",

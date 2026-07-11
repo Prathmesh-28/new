@@ -400,7 +400,7 @@ const hi: Record<string, string> = {
   "docs.stat.tenantScoped": "आपके टेनेंट तक सीमित",
   "docs.tab.vault": "वॉल्ट",
   "docs.tab.ocr": "रसीद OCR कैप्चर",
-  "docs.tab.esign": "e-Sign वर्कफ़्लो",
+  "docs.tab.sendTrack": "भेजें और ट्रैक करें",
   "docs.tab.expiry": "समाप्ति / नवीनीकरण वॉल्ट",
   "docs.tab.stmtParser": "बैंक स्टेटमेंट पार्सर",
   "docs.tab.auditTrail": "ऑडिट ट्रेल",

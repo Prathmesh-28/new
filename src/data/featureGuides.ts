@@ -335,13 +335,13 @@ export const FEATURE_GUIDES: Record<string, FeatureGuide> = {
     ]
   },
   "documents": {
-    "what": "A secure online filing cabinet for all your business paperwork - GST certificate, PAN, bank statements, licences, agreements, payroll registers - kept in one searchable place instead of scattered across email, WhatsApp and laptops. Beyond the core Vault it bundles a long set of helper trackers (receipt capture, e-sign status, expiry/renewal reminders, KYC collection, approval flow, compliance calendar and more) so your team can manage the paperwork side of compliance from one screen.",
+    "what": "A secure online filing cabinet for all your business paperwork - GST certificate, PAN, bank statements, licences, agreements, payroll registers - kept in one searchable place instead of scattered across email, WhatsApp and laptops. Beyond the core Vault it bundles a long set of helper trackers (receipt capture, a manual send-and-track log for documents out for signature, expiry/renewal reminders, KYC collection, approval flow, compliance calendar and more) so your team can manage the paperwork side of compliance from one screen.",
     "steps": [
       "Stay on the Vault tab (the first one) and click 'Upload document' at the top right.",
       "Drag a file onto the box or click to browse - PDF, image, Excel, Word or CSV up to 10 MB - then set the Name, pick a Category (GST, Banking, Legal, Tax/IT, Payroll, Other) and add comma-separated Tags.",
       "If the document expires (licence, insurance, certificate), switch on 'Has expiry date' and pick the date, then click Upload - it will then be tracked as Expiring/Expired and counted in the 'expiring soon' KPI.",
       "Use the left category list and the 'Search by name or tag' box to find anything fast; on each row use the eye to Preview, the down-arrow to Download, or the bin to Delete.",
-      "Switch tabs along the top for the helper tools - e.g. Receipt OCR Capture to snap a bill and book the expense, Expiry / Renewal Vault for renewal alerts, e-Sign Workflow to track signatures, or Compliance Calendar for filing dates."
+      "Switch tabs along the top for the helper tools - e.g. Receipt OCR Capture to snap a bill and book the expense, Expiry / Renewal Vault for renewal alerts, Send & Track to log documents out for signature, or Compliance Calendar for filing dates."
     ],
     "tips": [
       "Set an expiry date on every licence, GST registration, FSSAI/trade licence and insurance policy - the Vault and Expiry/Renewal tabs then flag 'expiring soon' so nothing lapses and triggers penalties.",

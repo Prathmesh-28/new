@@ -236,7 +236,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
   );
 }
 
-type DocTab = "vault" | "ocr" | "esign" | "expiry" | "stmt-parser" | "audit-trail" | "checklist" | "templates" | "share" | "kyc" | "contract-dates" | "filing" | "approval" | "gstin-check" | "doc-requests" | "naming" | "compliance-cal" | "bundles" | "storage" | "access-matrix" | "watermark" | "statutory-pack" | "version-log" | "signatory-register" | "redaction-log" | "retention-policy" | "obligation-tracker" | "agreements";
+type DocTab = "vault" | "ocr" | "send-track" | "expiry" | "stmt-parser" | "audit-trail" | "checklist" | "templates" | "share" | "kyc" | "contract-dates" | "filing" | "approval" | "gstin-check" | "doc-requests" | "naming" | "compliance-cal" | "bundles" | "storage" | "access-matrix" | "watermark" | "statutory-pack" | "version-log" | "signatory-register" | "redaction-log" | "retention-policy" | "obligation-tracker" | "agreements";
 
 export default function DocumentsPage() {
   const tr = useT();
@@ -339,7 +339,7 @@ export default function DocumentsPage() {
 
       {/* Section selector */}
       <div className="flex flex-wrap gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1">
-        {([["vault", tr("docs.tab.vault"), FolderOpen], ["ocr", tr("docs.tab.ocr"), ScanLine], ["esign", tr("docs.tab.esign"), PenTool], ["expiry", tr("docs.tab.expiry"), CalendarClock], ["stmt-parser", tr("docs.tab.stmtParser"), FileSpreadsheet], ["audit-trail", tr("docs.tab.auditTrail"), History], ["checklist", tr("docs.tab.checklist"), ListChecks], ["templates", tr("docs.tab.templates"), Files], ["share", "Share-Link Tracker", Link2], ["kyc", "KYC Collector", UserCheck], ["contract-dates", "Contract Key-Dates", CalendarRange], ["filing", "Bill Filing Tracker", Archive], ["approval", "Approval Flow", ClipboardCheck], ["gstin-check", "GSTIN Validator", BadgeCheck], ["doc-requests", "Document Requests", Inbox], ["naming", "Naming Helper", Wand2], ["compliance-cal", "Compliance Calendar", CalendarDays], ["bundles", "Document Bundles", Layers], ["storage", "Storage Summary", HardDrive], ["access-matrix", "Access Matrix", KeyRound], ["watermark", "Watermark Note", Stamp], ["statutory-pack", "Statutory Pack", PackageCheck], ["version-log", "Version Log", GitBranch], ["signatory-register", "Signatory Register", Signature], ["redaction-log", "Redaction Checklist", EyeOff], ["retention-policy", "Retention Policy", CalendarX], ["obligation-tracker", "Obligation Tracker", ListTodo], ["agreements", "Agreement Repository", Signature]] as const).map(([id, label, Icon]) => (
+        {([["vault", tr("docs.tab.vault"), FolderOpen], ["ocr", tr("docs.tab.ocr"), ScanLine], ["send-track", tr("docs.tab.sendTrack"), PenTool], ["expiry", tr("docs.tab.expiry"), CalendarClock], ["stmt-parser", tr("docs.tab.stmtParser"), FileSpreadsheet], ["audit-trail", tr("docs.tab.auditTrail"), History], ["checklist", tr("docs.tab.checklist"), ListChecks], ["templates", tr("docs.tab.templates"), Files], ["share", "Share-Link Tracker", Link2], ["kyc", "KYC Collector", UserCheck], ["contract-dates", "Contract Key-Dates", CalendarRange], ["filing", "Bill Filing Tracker", Archive], ["approval", "Approval Flow", ClipboardCheck], ["gstin-check", "GSTIN Validator", BadgeCheck], ["doc-requests", "Document Requests", Inbox], ["naming", "Naming Helper", Wand2], ["compliance-cal", "Compliance Calendar", CalendarDays], ["bundles", "Document Bundles", Layers], ["storage", "Storage Summary", HardDrive], ["access-matrix", "Access Matrix", KeyRound], ["watermark", "Watermark Note", Stamp], ["statutory-pack", "Statutory Pack", PackageCheck], ["version-log", "Version Log", GitBranch], ["signatory-register", "Signatory Register", Signature], ["redaction-log", "Redaction Checklist", EyeOff], ["retention-policy", "Retention Policy", CalendarX], ["obligation-tracker", "Obligation Tracker", ListTodo], ["agreements", "Agreement Repository", Signature]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setDocTab(id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-colors ${docTab === id ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             <Icon size={11} />{label}
@@ -348,13 +348,13 @@ export default function DocumentsPage() {
       </div>
 
       {docTab === "ocr"            && <ReceiptOcrCapture />}
-      {docTab === "esign"          && <ESignWorkflow />}
+      {docTab === "send-track"     && <DocumentSendTrack />}
       {docTab === "expiry"         && <ExpiryRenewalVault />}
       {docTab === "stmt-parser"    && <BankStatementParser />}
       {docTab === "audit-trail"    && <AuditTrailLog />}
       {docTab === "checklist"      && <DocumentChecklist />}
       {docTab === "templates"      && <TemplateLibrary />}
-      {docTab === "share"          && <ShareLinkTracker />}
+      {docTab === "share"          && <ShareLinkTracker docs={docs} />}
       {docTab === "kyc"            && <KycCollector />}
       {docTab === "contract-dates" && <ContractKeyDates />}
       {docTab === "filing"         && <BillFilingTracker />}
@@ -783,76 +783,75 @@ function ReceiptOcrCapture() {
   );
 }
 
-// ── #158 e-Sign / Aadhaar-eSign Workflow ─────────────────────────────────────────
+// ── #158 Document Send & Track (manual log - no real e-signature happens here) ──
 type SignDoc = {
   id: string;
   title: string;
   signer: string;
   email: string;
-  method: "aadhaar" | "dsc" | "email";
+  channel: "email" | "whatsapp" | "physical" | "other";
   sentAt: string;
-  status: "draft" | "sent" | "viewed" | "signed" | "declined";
+  status: "draft" | "sent" | "signed" | "declined";
 };
-const SIGN_STATUSES: SignDoc["status"][] = ["draft", "sent", "viewed", "signed", "declined"];
-const SIGN_FLOW: Record<SignDoc["status"], SignDoc["status"]> = { draft: "sent", sent: "viewed", viewed: "signed", signed: "signed", declined: "sent" };
+const SIGN_STATUSES: SignDoc["status"][] = ["draft", "sent", "signed", "declined"];
+const SIGN_FLOW: Record<SignDoc["status"], SignDoc["status"]> = { draft: "sent", sent: "signed", signed: "signed", declined: "sent" };
 
-function ESignWorkflow() {
-  const [docs, setDocs] = useFeatureState<SignDoc[]>("esign-docs", []);
+function DocumentSendTrack() {
+  const [docs, setDocs] = useFeatureState<SignDoc[]>("doc-send-track", []);
   const [title, setTitle] = useState("");
   const [signer, setSigner] = useState("");
   const [email, setEmail] = useState("");
-  const [method, setMethod] = useState<SignDoc["method"]>("aadhaar");
+  const [channel, setChannel] = useState<SignDoc["channel"]>("email");
 
-  const METHODS: Record<SignDoc["method"], string> = {
-    aadhaar: "Aadhaar e-Sign (OTP)",
-    dsc: "Digital Signature Certificate",
-    email: "Email click-to-sign",
+  const CHANNELS: Record<SignDoc["channel"], string> = {
+    email: "Email",
+    whatsapp: "WhatsApp",
+    physical: "Physical / courier",
+    other: "Other",
   };
   const STATUS_STYLE: Record<SignDoc["status"], string> = {
     draft: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]",
     sent: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
-    viewed: "bg-blue-900/30 text-blue-400 border-blue-800/40",
     signed: "bg-green-900/30 text-green-400 border-green-800/40",
     declined: "bg-red-900/30 text-red-400 border-red-800/40",
   };
 
-  const send = () => {
+  const logSent = () => {
     if (!title || !signer) { toast.error("Enter a document title and signer"); return; }
     setDocs(prev => [{
-      id: crypto.randomUUID(), title, signer, email, method,
+      id: crypto.randomUUID(), title, signer, email, channel,
       sentAt: new Date().toISOString(), status: "sent",
     }, ...prev]);
     setTitle(""); setSigner(""); setEmail("");
-    toast.success("Sent for signature");
+    toast.success("Logged as sent");
   };
 
   const advance = (id: string) => setDocs(prev => prev.map(d => d.id === id ? { ...d, status: SIGN_FLOW[d.status] } : d));
   const decline = (id: string) => setDocs(prev => prev.map(d => d.id === id ? { ...d, status: "declined" } : d));
 
   const counts = SIGN_STATUSES.reduce<Record<string, number>>((a, s) => { a[s] = docs.filter(d => d.status === s).length; return a; }, {});
-  const pending = (counts.sent || 0) + (counts.viewed || 0);
 
   return (
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><PenTool size={14} className="text-[var(--color-primary)]" /> e-Sign / Aadhaar-eSign Workflow</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Send agreements, NDAs and contracts for signature and track them from sent → viewed → signed. Supports Aadhaar e-Sign, DSC and email click-to-sign methods.</p>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><PenTool size={14} className="text-[var(--color-primary)]" /> Document Send & Track</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-4">A manual log for agreements, NDAs and contracts you send out for someone to sign - by email, WhatsApp or physically - and mark received back signed. Headroom does not send anything or capture a signature itself; for a legally-binding electronic signature, use a licensed ASP (NSDL/CDSL e-Sign, Digio, Leegality) or a Digital Signature Certificate.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Document title *" className={INP} />
           <input value={signer} onChange={e => setSigner(e.target.value)} placeholder="Signer name *" className={INP} />
           <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Signer email" className={INP} />
-          <select value={method} onChange={e => setMethod(e.target.value as SignDoc["method"])} className={INP}>
-            {(Object.keys(METHODS) as SignDoc["method"][]).map(m => <option key={m} value={m}>{METHODS[m]}</option>)}
+          <select value={channel} onChange={e => setChannel(e.target.value as SignDoc["channel"])} className={INP}>
+            {(Object.keys(CHANNELS) as SignDoc["channel"][]).map(c => <option key={c} value={c}>{CHANNELS[c]}</option>)}
           </select>
         </div>
-        <button onClick={send} className="mt-3 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Send size={13} /> Send for signature</button>
+        <button onClick={logSent} className="mt-3 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Send size={13} /> Log as sent</button>
       </div>
 
       {docs.length > 0 && <>
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: "Awaiting signature", value: String(pending), color: pending > 0 ? "text-yellow-400" : "text-green-400" },
-            { label: "Signed", value: String(counts.signed || 0), color: "text-green-400" },
+            { label: "Out for signature", value: String(counts.sent || 0), color: (counts.sent || 0) > 0 ? "text-yellow-400" : "text-green-400" },
+            { label: "Signed & received", value: String(counts.signed || 0), color: "text-green-400" },
             { label: "Declined", value: String(counts.declined || 0), color: (counts.declined || 0) > 0 ? "text-red-400" : "text-[var(--color-muted)]" },
           ].map(c => (
             <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -863,13 +862,13 @@ function ESignWorkflow() {
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
           <table className="w-full text-sm min-w-[640px]">
-            <thead><tr className="border-b border-[var(--color-border)]">{["Document", "Signer", "Method", "Sent", "Status", "Actions"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
+            <thead><tr className="border-b border-[var(--color-border)]">{["Document", "Signer", "Sent via", "Sent", "Status", "Actions"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {docs.map(d => (
                 <tr key={d.id} className="hover:bg-white/2">
                   <td className="px-3 py-2.5 text-xs font-medium">{d.title}</td>
                   <td className="px-3 py-2.5 text-xs">{d.signer}{d.email ? <span className="block text-[10px] text-[var(--color-muted)]">{d.email}</span> : null}</td>
-                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{METHODS[d.method]}</td>
+                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{CHANNELS[d.channel]}</td>
                   <td className="px-3 py-2.5 text-xs">{format(new Date(d.sentAt), "d MMM")}</td>
                   <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[d.status]}`}>{d.status}</span></td>
                   <td className="px-3 py-2.5">
@@ -889,7 +888,7 @@ function ESignWorkflow() {
           </table>
         </div>
       </>}
-      <p className="text-[10px] text-[var(--color-muted)]">Statuses are tracked manually here - wire to an ASP/eSign provider (NSDL/CDSL e-Sign, eMudhra) for legally-timestamped audit trails under the IT Act, 2000.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">This is a manual log, not a real e-signature: nothing is emailed, no signature is captured, and no identity is verified by Headroom. Update each row yourself once you've actually sent the document and received it back signed.</p>
     </div>
   );
 }
@@ -1431,55 +1430,106 @@ function TemplateLibrary() {
 }
 
 // ── Document Share-Link Tracker ──────────────────────────────────────────────────
-// A register of share links handed out for documents - who got it, when it expires,
-// and whether it's been revoked - so external access stays accountable.
+// A register of REAL public links into the vault - each one is a server-verified
+// token (POST /api/files/:id/share) resolved against a live DB row on every open
+// (GET /api/files/public/:token), so "Expires" and "Revoke" are actually enforced,
+// not just display state.
 type ShareLink = {
   id: string;
   docName: string;
   recipient: string;
   access: "view" | "download";
   createdAt: string;
-  expiresAt: string;
-  token: string;
-  revoked: boolean;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  path: string;
 };
+type ShareLinkRow = {
+  id: string; doc_name: string; recipient: string | null; access: "view" | "download";
+  created_at: string; expires_at: string | null; revoked_at: string | null; path: string;
+};
+function rowToShareLink(r: ShareLinkRow): ShareLink {
+  return {
+    id: r.id, docName: r.doc_name, recipient: r.recipient || "", access: r.access,
+    createdAt: r.created_at, expiresAt: r.expires_at, revokedAt: r.revoked_at, path: r.path,
+  };
+}
 
-function ShareLinkTracker() {
-  const [links, setLinks] = useFeatureState<ShareLink[]>("doc-share-links", []);
-  const [docName, setDocName] = useState("");
+function ShareLinkTracker({ docs }: { docs: Doc[] }) {
+  const [links, setLinks] = useState<ShareLink[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [docId, setDocId] = useState("");
   const [recipient, setRecipient] = useState("");
   const [access, setAccess] = useState<ShareLink["access"]>("view");
   const [days, setDays] = useState("7");
+  const [busy, setBusy] = useState(false);
 
-  const create = () => {
-    if (!docName || !recipient) { toast.error("Enter a document name and recipient"); return; }
-    const exp = new Date(); exp.setDate(exp.getDate() + (parseInt(days) || 7));
-    setLinks(prev => [{
-      id: crypto.randomUUID(), docName, recipient, access,
-      createdAt: new Date().toISOString(), expiresAt: exp.toISOString(),
-      token: Math.random().toString(36).slice(2, 10), revoked: false,
-    }, ...prev]);
-    setDocName(""); setRecipient("");
-    toast.success("Share link created");
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const rows = await api.get<ShareLinkRow[]>("/api/files/shares");
+      setLinks(rows.map(rowToShareLink));
+    } catch {
+      toast.error("Couldn't load share links.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const create = async () => {
+    if (!docId || !recipient) { toast.error("Pick a document and enter a recipient"); return; }
+    setBusy(true);
+    try {
+      const r = await api.post<ShareLinkRow>(`/api/files/${docId}/share`, { recipient, access, days: parseInt(days) || 7 });
+      setLinks(prev => [rowToShareLink({ ...r, doc_name: docs.find(d => d.id === docId)?.name || "Document" }), ...prev]);
+      setRecipient("");
+      toast.success("Share link created");
+    } catch {
+      toast.error("Couldn't create the share link");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const revoke = (id: string) => { setLinks(prev => prev.map(l => l.id === id ? { ...l, revoked: true } : l)); toast.success("Link revoked"); };
-  const copyLink = (l: ShareLink) => { navigator.clipboard?.writeText(`https://share.headroom.app/d/${l.token}`); toast.success("Link copied"); };
+  const revoke = async (id: string) => {
+    try {
+      await api.post(`/api/files/shares/${id}/revoke`, {});
+      setLinks(prev => prev.map(l => l.id === id ? { ...l, revokedAt: new Date().toISOString() } : l));
+      toast.success("Link revoked");
+    } catch {
+      toast.error("Couldn't revoke the link");
+    }
+  };
+
+  const remove = async (id: string) => {
+    try {
+      await api.delete(`/api/files/shares/${id}`);
+      setLinks(prev => prev.filter(l => l.id !== id));
+    } catch {
+      toast.error("Couldn't remove the link");
+    }
+  };
+
+  const copyLink = (l: ShareLink) => { navigator.clipboard?.writeText(`${window.location.origin}${l.path}`); toast.success("Link copied"); };
 
   const linkState = (l: ShareLink) => {
-    if (l.revoked) return { label: "Revoked", style: "bg-red-900/30 text-red-400 border-red-800/40" };
-    if (differenceInCalendarDays(new Date(l.expiresAt), new Date()) < 0) return { label: "Expired", style: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]" };
+    if (l.revokedAt) return { label: "Revoked", style: "bg-red-900/30 text-red-400 border-red-800/40" };
+    if (l.expiresAt && differenceInCalendarDays(new Date(l.expiresAt), new Date()) < 0) return { label: "Expired", style: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]" };
     return { label: "Active", style: "bg-green-900/30 text-green-400 border-green-800/40" };
   };
-  const active = links.filter(l => !l.revoked && differenceInCalendarDays(new Date(l.expiresAt), new Date()) >= 0).length;
+  const active = links.filter(l => !l.revokedAt && !(l.expiresAt && differenceInCalendarDays(new Date(l.expiresAt), new Date()) < 0)).length;
 
   return (
     <div className="space-y-4 max-w-3xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Link2 size={14} className="text-[var(--color-primary)]" /> Document Share-Link Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Generate trackable links when you share a document externally, set how long they last, and revoke access the moment it's no longer needed.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Create a real link into a vault document, set how long it lasts, and revoke access the moment it's no longer needed - checked on Headroom's server every time the link is opened, not just tracked in this list.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-          <input value={docName} onChange={e => setDocName(e.target.value)} placeholder="Document name *" className={INP} />
+          <select value={docId} onChange={e => setDocId(e.target.value)} className={INP}>
+            <option value="">Document…</option>
+            {docs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
           <input value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="Recipient / email *" className={INP} />
           <select value={access} onChange={e => setAccess(e.target.value as ShareLink["access"])} className={INP}>
             <option value="view">View only</option>
@@ -1490,17 +1540,18 @@ function ShareLinkTracker() {
             <input type="number" value={days} onChange={e => setDays(e.target.value)} placeholder="7" className={INP} />
           </div>
         </div>
-        <button onClick={create} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5"><Link2 size={13} /> Create link</button>
+        <button onClick={() => void create()} disabled={busy || docs.length === 0} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"><Link2 size={13} /> {busy ? "Creating…" : "Create link"}</button>
+        {docs.length === 0 && <p className="text-[11px] text-amber-400/90 mt-2">Upload a document in the Vault tab first - a share link points at a real stored file.</p>}
       </div>
 
-      {links.length > 0 && (
+      {!loading && links.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center gap-3">
           <ShieldCheck size={16} className={active > 0 ? "text-green-400" : "text-[var(--color-muted)]"} />
           <p className="text-sm"><span className="font-bold tabular-nums">{active}</span> <span className="text-[var(--color-muted)]">active link{active === 1 ? "" : "s"} out of {links.length} issued</span></p>
         </div>
       )}
 
-      {links.length > 0 && (
+      {!loading && links.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
           <table className="w-full text-sm min-w-[660px]">
             <thead><tr className="border-b border-[var(--color-border)]">{["Document", "Recipient", "Access", "Created", "Expires", "Status", "Actions"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
@@ -1510,16 +1561,16 @@ function ShareLinkTracker() {
                 return (
                   <tr key={l.id} className="hover:bg-white/2">
                     <td className="px-3 py-2.5 text-xs font-medium">{l.docName}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{l.recipient}</td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{l.recipient || "-"}</td>
                     <td className="px-3 py-2.5 text-xs capitalize">{l.access === "download" ? "Download" : "View"}</td>
                     <td className="px-3 py-2.5 text-xs">{format(new Date(l.createdAt), "d MMM")}</td>
-                    <td className="px-3 py-2.5 text-xs">{format(new Date(l.expiresAt), "d MMM yyyy")}</td>
+                    <td className="px-3 py-2.5 text-xs">{l.expiresAt ? format(new Date(l.expiresAt), "d MMM yyyy") : "Never"}</td>
                     <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${s.style}`}>{s.label}</span></td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2">
                         <button onClick={() => copyLink(l)} className="text-[10px] text-[var(--color-primary)] hover:underline flex items-center gap-0.5"><Copy size={10} /> Copy</button>
-                        {!l.revoked && <button onClick={() => revoke(l.id)} className="text-[10px] text-red-400 hover:underline">Revoke</button>}
-                        <button onClick={() => setLinks(prev => prev.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                        {!l.revokedAt && <button onClick={() => void revoke(l.id)} className="text-[10px] text-red-400 hover:underline">Revoke</button>}
+                        <button onClick={() => void remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
                       </div>
                     </td>
                   </tr>
@@ -1529,7 +1580,7 @@ function ShareLinkTracker() {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">This is a sharing register - the links shown are illustrative tokens. Wire to a server-side signed-URL service to enforce real expiry and revocation on the file itself.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Anyone with an active link can open it without logging in - only share it with people who should have that access.</p>
     </div>
   );
 }

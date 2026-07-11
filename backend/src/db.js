@@ -75,6 +75,23 @@ async function initDb() {
     -- re-encryption migration, no risk of corrupting already-stored files.
     ALTER TABLE files ADD COLUMN IF NOT EXISTS encrypted BOOLEAN NOT NULL DEFAULT false;
 
+    -- Public share links for vault documents: the link itself is a stateless
+    -- HMAC token (portal.signToken/verifyToken) carrying this row's id, so
+    -- revoking/expiring is enforced by re-checking THIS row on every fetch,
+    -- not by anything encoded in the token.
+    CREATE TABLE IF NOT EXISTS file_shares (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id   TEXT NOT NULL,
+      file_id     UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      recipient   TEXT,
+      access      TEXT NOT NULL DEFAULT 'view',
+      created_by  UUID REFERENCES users(id),
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at  TIMESTAMPTZ,
+      revoked_at  TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_file_shares_tenant ON file_shares(tenant_id, created_at DESC);
+
     CREATE TABLE IF NOT EXISTS notes (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       tenant_id  TEXT NOT NULL,

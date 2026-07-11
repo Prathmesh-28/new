@@ -3,6 +3,7 @@ const multer = require("multer");
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
 const { encryptBuffer, decryptBuffer } = require("../lib/fileCrypto");
+const { signToken, verifyToken } = require("../modules/books/portal");
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -51,6 +52,76 @@ router.get("/", authenticate, async (req, res) => {
     [req.user.tenant_id]
   );
   res.json(rows);
+});
+
+// A share link is a stateless HMAC token carrying only the file_shares row id -
+// so the same row always reproduces the same path, and revoking/expiring is
+// enforced by re-checking the row (not anything encoded in the token) on every fetch.
+function sharePath(tenantId, shareId) {
+  return `/api/files/public/${signToken({ kind: "file-share", tenant: tenantId, shareId })}`;
+}
+
+// GET /api/files/shares - this tenant's share-link register
+router.get("/shares", authenticate, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT s.id, s.recipient, s.access, s.created_at, s.expires_at, s.revoked_at, f.name AS doc_name
+       FROM file_shares s JOIN files f ON f.id = s.file_id
+      WHERE s.tenant_id=$1 ORDER BY s.created_at DESC`,
+    [req.user.tenant_id]
+  );
+  res.json(rows.map(r => ({ ...r, path: sharePath(req.user.tenant_id, r.id) })));
+});
+
+// POST /api/files/:id/share - mint a share link for a vault document
+router.post("/:id/share", authenticate, async (req, res) => {
+  const { rows: fileRows } = await pool.query("SELECT id FROM files WHERE id=$1 AND tenant_id=$2", [req.params.id, req.user.tenant_id]);
+  if (!fileRows[0]) return res.status(404).json({ error: "Document not found" });
+  const access = req.body?.access === "download" ? "download" : "view";
+  const days = parseInt(req.body?.days, 10);
+  const expiresAt = Number.isFinite(days) && days > 0 ? new Date(Date.now() + days * 86400000) : null;
+  const { rows } = await pool.query(
+    `INSERT INTO file_shares(tenant_id,file_id,recipient,access,created_by,expires_at)
+     VALUES($1,$2,$3,$4,$5,$6) RETURNING id, recipient, access, created_at, expires_at, revoked_at`,
+    [req.user.tenant_id, req.params.id, req.body?.recipient || null, access, req.user.id, expiresAt]
+  );
+  res.status(201).json({ ...rows[0], path: sharePath(req.user.tenant_id, rows[0].id) });
+});
+
+// POST /api/files/shares/:id/revoke
+router.post("/shares/:id/revoke", authenticate, async (req, res) => {
+  const { rows } = await pool.query(
+    "UPDATE file_shares SET revoked_at=now() WHERE id=$1 AND tenant_id=$2 AND revoked_at IS NULL RETURNING id",
+    [req.params.id, req.user.tenant_id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Share link not found" });
+  res.json({ ok: true });
+});
+
+// DELETE /api/files/shares/:id - drop from the register (does not itself revoke;
+// use the /revoke endpoint above to kill live access before deleting the row).
+router.delete("/shares/:id", authenticate, async (req, res) => {
+  await pool.query("DELETE FROM file_shares WHERE id=$1 AND tenant_id=$2", [req.params.id, req.user.tenant_id]);
+  res.json({ ok: true });
+});
+
+// GET /api/files/public/:token - PUBLIC, no auth. Serves the file iff the backing
+// file_shares row is still live (not revoked, not past its expiry).
+router.get("/public/:token", async (req, res) => {
+  const p = verifyToken(req.params.token);
+  if (!p || p.kind !== "file-share" || !p.shareId || !p.tenant) return res.status(401).json({ error: "Invalid or expired link" });
+  const { rows } = await pool.query(
+    `SELECT s.access, s.expires_at, s.revoked_at, f.name, f.mime_type, f.data, f.encrypted
+       FROM file_shares s JOIN files f ON f.id = s.file_id
+      WHERE s.id=$1 AND s.tenant_id=$2`,
+    [p.shareId, p.tenant]
+  );
+  const row = rows[0];
+  if (!row) return res.status(404).json({ error: "Link not found" });
+  if (row.revoked_at) return res.status(410).json({ error: "This link has been revoked" });
+  if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) return res.status(410).json({ error: "This link has expired" });
+  res.set("Content-Type", row.mime_type);
+  res.set("Content-Disposition", `${row.access === "download" ? "attachment" : "inline"}; filename="${row.name}"`);
+  res.send(row.encrypted ? decryptBuffer(row.data) : row.data);
 });
 
 // GET /api/files/:id - download

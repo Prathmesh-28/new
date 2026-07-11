@@ -372,7 +372,7 @@ const ta: Record<string, string> = {
   "docs.stat.tenantScoped": "உங்கள் டெனன்ட்டுக்கு மட்டும்",
   "docs.tab.vault": "பெட்டகம்",
   "docs.tab.ocr": "ரசீது OCR படமெடுப்பு",
-  "docs.tab.esign": "e-Sign பணிப்பாய்வு",
+  "docs.tab.sendTrack": "அனுப்பி கண்காணிக்கவும்",
   "docs.tab.expiry": "காலாவதி / புதுப்பிப்புப் பெட்டகம்",
   "docs.tab.stmtParser": "வங்கி அறிக்கை பாகுபடுத்தி",
   "docs.tab.auditTrail": "தணிக்கைத் தடம்",
