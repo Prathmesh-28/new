@@ -43,7 +43,7 @@ const AGING_COLOR: Record<string, string> = {
   current: "text-green-400", "30d": "text-yellow-400", "60d": "text-orange-400", "90d+": "text-red-400",
 };
 
-function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void; onCreated: () => void; initial?: { customer?: string; amount?: string; desc?: string } }) {
+function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void; onCreated: () => void; initial?: { customer?: string; amount?: string; desc?: string; dealId?: string } }) {
   const tr = useT();
   const [customerName, setCustomerName] = useState(initial?.customer ?? "");
   const [customerGstin, setCustomerGstin] = useState("");
@@ -72,7 +72,7 @@ function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void;
     }
     setSaving(true);
     try {
-      await api.post("/api/invoices", {
+      const inv = await api.post<{ id: string }>("/api/invoices", {
         customer_name: customerName, customer_gstin: customerGstin || undefined,
         customer_email: customerEmail || undefined,
         customer_phone: customerPhone || undefined,
@@ -85,6 +85,13 @@ function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void;
         })),
       });
       toast.success("Invoice created");
+      // Best-effort: link this invoice back onto the CRM deal that spawned it, so the
+      // deal's Won Value reconciles against the real invoice from here on. Awaited so it
+      // isn't dropped by an immediate navigation away, but a failure here must never
+      // block the invoice the user just created.
+      if (initial?.dealId) {
+        try { await api.post(`/api/crm/deals/${initial.dealId}/link-invoice`, { invoiceId: inv.id }); } catch { /* best-effort */ }
+      }
       onCreated();
       onClose();
     } catch (err: unknown) {
@@ -378,22 +385,25 @@ export default function InvoicesPage() {
   const [loading, setLoading]   = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [showNew, setShowNew]   = useState(false);
-  const [composeInitial, setComposeInitial] = useState<{ customer?: string; amount?: string; desc?: string } | undefined>();
+  const [composeInitial, setComposeInitial] = useState<{ customer?: string; amount?: string; desc?: string; dealId?: string } | undefined>();
   const [searchParams, setSearchParams] = useSearchParams();
   const [qrInvoice, setQrInvoice] = useState<Invoice | null>(null);
   const [payInvoice, setPayInvoice] = useState<Invoice | null>(null);
 
-  // Open a pre-filled new-invoice form when the assistant deep-links here
-  // (/invoices?compose=1&customer=&amount=&desc=), then strip the params.
+  // Open a pre-filled new-invoice form when the assistant/CRM deep-links here
+  // (/invoices?compose=1&customer=&amount=&desc=&dealId=), then strip the params.
+  // dealId (set by CrmPage's raiseInvoice) lets the composer link the invoice it
+  // creates back onto the deal, so CRM's Won Value can reconcile against it.
   useEffect(() => {
     if (searchParams.get("compose") === "1") {
       setComposeInitial({
         customer: searchParams.get("customer") ?? undefined,
         amount: searchParams.get("amount") ?? undefined,
         desc: searchParams.get("desc") ?? undefined,
+        dealId: searchParams.get("dealId") ?? undefined,
       });
       setShowNew(true);
-      ["compose", "customer", "amount", "desc"].forEach(k => searchParams.delete(k));
+      ["compose", "customer", "amount", "desc", "dealId"].forEach(k => searchParams.delete(k));
       setSearchParams(searchParams, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

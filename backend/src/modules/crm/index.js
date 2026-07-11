@@ -578,7 +578,14 @@ async function createDeal(tenantId, actorId, d) {
   );
   return rows[0];
 }
-const listDeals = async (tenantId) => (await q(tenantId,"SELECT * FROM crm_deals WHERE tenant_id=$1 ORDER BY created_at DESC", [tenantId])).rows;
+// LEFT JOIN the linked invoice's live total/paid so a won deal that has actually been
+// billed shows what was really invoiced/collected, not just its (possibly stale) value.
+const listDeals = async (tenantId) => (await q(tenantId,
+  `SELECT d.*, i.invoice_number AS invoice_number, i.status AS invoice_status,
+          i.total_amount AS invoice_total_amount, i.paid_amount AS invoice_paid_amount
+     FROM crm_deals d
+     LEFT JOIN invoices i ON i.id = d.invoice_id AND i.tenant_id = d.tenant_id
+    WHERE d.tenant_id=$1 ORDER BY d.created_at DESC`, [tenantId])).rows;
 async function getDeal(tenantId, dealId) {
   const { rows } = await q(tenantId,"SELECT * FROM crm_deals WHERE tenant_id=$1 AND id=$2", [tenantId, dealId]);
   if (!rows[0]) throw new CrmError("Deal not found", 404);
@@ -652,6 +659,20 @@ async function deleteDeal(tenantId, dealId) {
   return { ok: true, deleted: rows.length };
 }
 
+// Persist the invoice raiseInvoice() actually produced onto the deal, so pipeline() can
+// reconcile Won Value against the invoice's live total_amount/paid_amount instead of
+// trusting deal.value forever - the composer invoice can be discounted, re-lined, or only
+// partially delivered after being pre-filled from the deal. invoiceId must be a real
+// invoice belonging to the same tenant as the deal.
+async function linkDealInvoice(tenantId, dealId, invoiceId) {
+  if (!invoiceId) throw new CrmError("invoiceId required");
+  const { rows: ir } = await q(tenantId, "SELECT id FROM invoices WHERE tenant_id=$1 AND id=$2", [tenantId, invoiceId]);
+  if (!ir[0]) throw new CrmError("Invoice not found", 404);
+  const { rows } = await q(tenantId, "UPDATE crm_deals SET invoice_id=$3 WHERE tenant_id=$1 AND id=$2 RETURNING *", [tenantId, dealId, invoiceId]);
+  if (!rows[0]) throw new CrmError("Deal not found", 404);
+  return rows[0];
+}
+
 // Win → mark WON + create/link a Sundry-Debtors customer ledger in the books.
 async function winDeal(tenantId, actorId, dealId) {
   const deal = await moveStage(tenantId, actorId, dealId, "WON");
@@ -683,13 +704,37 @@ async function pipeline(tenantId) {
   }
   const won = deals.filter((d) => d.status === "WON");
   const lost = deals.filter((d) => d.status === "LOST");
+
+  // Reconcile Won Value: a deal that has a real linked invoice (see linkDealInvoice) counts
+  // at the invoice's current total_amount/paid_amount, since the invoice may have since been
+  // discounted, re-lined, or only partially delivered - the deal.value typed at creation time
+  // is no longer trustworthy. A won deal never actually invoiced keeps its deal.value
+  // (legitimate pipeline forecasting - there's nothing real yet to reconcile against).
+  let wonValuePipeline = 0, wonValueReal = 0, wonInvoicedValue = 0, wonCollectedValue = 0, wonLinkedCount = 0;
+  for (const d of won) {
+    const aspirational = Number(d.value || 0);
+    wonValuePipeline += aspirational;
+    if (d.invoice_id && d.invoice_total_amount != null) {
+      wonLinkedCount++;
+      wonValueReal += Number(d.invoice_total_amount || 0);
+      wonInvoicedValue += Number(d.invoice_total_amount || 0);
+      wonCollectedValue += Number(d.invoice_paid_amount || 0);
+    } else {
+      wonValueReal += aspirational;
+    }
+  }
+
   return {
     stages: byStage,
     stageOrder: OPEN_STAGES,
     weightedValue: Math.round(weightedValue(open)),
     openCount: open.length,
     wonCount: won.length,
-    wonValue: won.reduce((x, d) => x + Number(d.value || 0), 0),
+    wonValue: wonValueReal,
+    wonValuePipeline,
+    wonInvoicedValue,
+    wonCollectedValue,
+    wonLinkedCount,
     lostCount: lost.length,
   };
 }
@@ -961,7 +1006,7 @@ module.exports = {
   // leads
   createLead, listLeads, getLead, setLeadStatus, setLeadLostReason, convertLead, refreshLeadSla,
   // deals
-  createDeal, listDeals, getDeal, updateDeal, moveStage, winDeal, deleteDeal, pipeline, setPrimaryContact,
+  createDeal, listDeals, getDeal, updateDeal, moveStage, winDeal, deleteDeal, pipeline, setPrimaryContact, linkDealInvoice,
   // tasks / notes
   createTask, listTasks, setTaskStatus, completeTask, createNote, listNotes,
   // activities / status / timeline

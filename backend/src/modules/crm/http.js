@@ -51,6 +51,7 @@ router.get("/deals/:id", async (req, res) => { try { res.json(await crm.getDeal(
 router.patch("/deals/:id", canWrite, async (req, res) => { try { res.json(await crm.updateDeal(tenantOf(req), req.params.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/deals/:id/stage", canWrite, async (req, res) => { try { res.json(await crm.moveStage(tenantOf(req), req.user.id, req.params.id, (req.body || {}).stage, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/deals/:id/win", canWrite, async (req, res) => { try { res.json(await crm.winDeal(tenantOf(req), req.user.id, req.params.id)); } catch (e) { fail(res, e); } });
+router.post("/deals/:id/link-invoice", canWrite, async (req, res) => { try { res.json(await crm.linkDealInvoice(tenantOf(req), req.params.id, (req.body || {}).invoiceId)); } catch (e) { fail(res, e); } });
 router.delete("/deals/:id", canWrite, async (req, res) => { try { res.json(await crm.deleteDeal(tenantOf(req), req.params.id)); } catch (e) { fail(res, e); } });
 router.post("/deals/:id/primary-contact", canWrite, async (req, res) => { try { res.json(await crm.setPrimaryContact(tenantOf(req), req.params.id, (req.body || {}).contactId)); } catch (e) { fail(res, e); } });
 router.get("/deals/:id/timeline", async (req, res) => { try { res.json(await crm.timeline(tenantOf(req), "DEAL", req.params.id)); } catch (e) { fail(res, e); } });

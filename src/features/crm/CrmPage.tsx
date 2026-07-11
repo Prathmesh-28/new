@@ -31,6 +31,11 @@ interface Deal {
   sla_status: string | null;
   response_by: string | null;
   escalated: boolean | null;
+  invoice_id: string | null;
+  invoice_number: string | null;
+  invoice_status: string | null;
+  invoice_total_amount: number | null;
+  invoice_paid_amount: number | null;
 }
 
 interface StageBucket {
@@ -46,6 +51,10 @@ interface Pipeline {
   openCount: number;
   wonCount: number;
   wonValue: number;
+  wonValuePipeline: number;
+  wonInvoicedValue: number;
+  wonCollectedValue: number;
+  wonLinkedCount: number;
   lostCount: number;
 }
 
@@ -187,11 +196,11 @@ const btnGhost =
 // ─────────────────────────────────────────────────────────────────────────────
 // SMALL REUSABLE PIECES
 // ─────────────────────────────────────────────────────────────────────────────
-function StatCard({ label, value, tint }: { label: string; value: string; tint?: "green" | "muted" }) {
+function StatCard({ label, value, tint, hint }: { label: string; value: string; tint?: "green" | "muted"; hint?: string }) {
   const color =
     tint === "green" ? "text-green-400" : tint === "muted" ? "text-[var(--color-text)]" : "text-[var(--color-primary)]";
   return (
-    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex-1 min-w-[150px]">
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex-1 min-w-[150px]" title={hint}>
       <p className="text-[11px] text-[var(--color-muted)]">{label}</p>
       <p className={`text-lg font-bold tabular-nums mt-1 ${color}`}>{value}</p>
     </div>
@@ -399,10 +408,13 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
   // Deep-link to the invoice composer, pre-filled from the won deal. Uses the
   // /invoices?compose=1 surface (POST /api/invoices - which DOES permit "sales"),
   // never the books documents/sales ledger path (which excludes sales). Customer
-  // defaults to the linked account name, falling back to the deal title.
+  // defaults to the linked account name, falling back to the deal title. Carries
+  // dealId through so the composer can call back and link the real invoice it
+  // creates onto this deal (POST /api/crm/deals/:id/link-invoice) - without that
+  // link, Won Value can never reconcile against what was actually invoiced.
   const raiseInvoice = (deal: Deal) => {
     const customer = accountName(deal.account_id) ?? deal.title;
-    const params = new URLSearchParams({ compose: "1", customer, desc: deal.title });
+    const params = new URLSearchParams({ compose: "1", customer, desc: deal.title, dealId: deal.id });
     if (deal.value != null && Number(deal.value) > 0) params.set("amount", String(deal.value));
     navigate(`/invoices?${params.toString()}`);
   };
@@ -528,8 +540,15 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
       <div className="flex flex-wrap gap-3">
         <StatCard label={tr("crm.statWeightedPipeline")} value={rupee(pipeline?.weightedValue)} />
         <StatCard label={tr("crm.statOpenDeals")} value={String(pipeline?.openCount ?? 0)} tint="muted" />
-        <StatCard label={tr("crm.statWonValue")} value={rupee(pipeline?.wonValue)} tint="green" />
+        <StatCard label={tr("crm.statWonValue")} value={rupee(pipeline?.wonValue)} tint="green" hint={tr("crm.statWonValueHint")} />
+        <StatCard label={tr("crm.statActualInvoiced")} value={rupee(pipeline?.wonInvoicedValue)} tint="muted" hint={tr("crm.statActualInvoicedHint")} />
+        <StatCard label={tr("crm.statActualCollected")} value={rupee(pipeline?.wonCollectedValue)} tint="muted" hint={tr("crm.statActualCollectedHint")} />
       </div>
+      {(pipeline?.wonCount ?? 0) > 0 && (
+        <p className="text-[11px] text-[var(--color-muted)] -mt-2">
+          {pipeline?.wonLinkedCount ?? 0} of {pipeline?.wonCount ?? 0} won deals reconciled to a real invoice - the rest still show their typed pipeline value.
+        </p>
+      )}
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-sm text-[var(--color-muted)] tabular-nums">
@@ -695,38 +714,59 @@ function PipelineTab({ canWrite }: { canWrite: boolean }) {
       </div>
       )}
 
-      {/* WON - READY TO INVOICE. A won deal leaves the open board, so this is
-          where a rep closes the loop: raise the invoice for what they just won
-          (or come back to bill it later). Routes to /invoices?compose=1, which
-          posts to /api/invoices - the path that permits the "sales" role. */}
+      {/* WON DEALS. A won deal leaves the open board, so this is where a rep closes
+          the loop: raise the invoice for what they just won (or come back to bill
+          it later). Routes to /invoices?compose=1, which posts to /api/invoices -
+          the path that permits the "sales" role - carrying dealId so the composer
+          can link the real invoice back onto the deal. Once linked, this shows
+          the real invoiced/collected amount instead of the typed deal value. */}
       {wonDeals.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
             <Trophy size={14} className="text-green-400" />
-            <h3 className="text-sm font-semibold">Won - ready to invoice</h3>
+            <h3 className="text-sm font-semibold">Won deals</h3>
             <span className="text-[11px] text-[var(--color-muted)] tabular-nums">{wonDeals.length}</span>
           </div>
           <div className="divide-y divide-[var(--color-border)]">
-            {wonDeals.map((d) => (
-              <div key={d.id} className="px-4 py-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{d.title}</p>
-                  <p className="text-xs text-[var(--color-muted)] tabular-nums">
-                    {rupee(d.value)}{accountName(d.account_id) ? ` · ${accountName(d.account_id)}` : ""}
-                  </p>
+            {wonDeals.map((d) => {
+              const linked = !!d.invoice_id;
+              return (
+                <div key={d.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{d.title}</p>
+                    {linked ? (
+                      <p className="text-xs tabular-nums">
+                        <span className="text-[var(--color-muted)]">{tr("crm.wonInvoicedLabel")} </span>
+                        <span className="font-semibold text-[var(--color-text)]">{rupee(d.invoice_total_amount)}</span>
+                        <span className="text-[var(--color-muted)]"> · {tr("crm.wonCollectedLabel")} </span>
+                        <span className="font-semibold text-green-400">{rupee(d.invoice_paid_amount)}</span>
+                        {d.invoice_number ? <span className="text-[var(--color-muted)]"> · {d.invoice_number}</span> : null}
+                        {accountName(d.account_id) ? <span className="text-[var(--color-muted)]"> · {accountName(d.account_id)}</span> : null}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-[var(--color-muted)] tabular-nums">
+                        {tr("crm.wonPipelineValue")}: {rupee(d.value)}{accountName(d.account_id) ? ` · ${accountName(d.account_id)}` : ""}
+                      </p>
+                    )}
+                  </div>
+                  {canWrite && !linked && (
+                    <button
+                      type="button"
+                      onClick={() => raiseInvoice(d)}
+                      title="Create invoice for this won deal"
+                      className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+                    >
+                      <FileText size={13} /> Create invoice
+                    </button>
+                  )}
+                  {linked && (
+                    <span className="shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full border border-green-700/40 bg-green-900/20 text-green-300">
+                      Reconciled
+                    </span>
+                  )}
                 </div>
-                {canWrite && (
-                  <button
-                    type="button"
-                    onClick={() => raiseInvoice(d)}
-                    title="Create invoice for this won deal"
-                    className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
-                  >
-                    <FileText size={13} /> Create invoice
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
