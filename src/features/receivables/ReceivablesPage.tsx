@@ -1501,7 +1501,7 @@ function CreditUtilization() {
   // the same figure the invoice-send credit-limit gate itself checks, instead of a
   // local KV number that gate never saw and that could disagree with Collections'
   // and Invoices' own separate KV credit-limit trackers for the same customer.
-  const { credit, loading, refresh } = useCustomerCredit();
+  const { credit, loading, error, refresh } = useCustomerCredit();
   const [savingName, setSavingName] = useState<string | null>(null);
 
   // Customers who only have unsent (draft) invoices don't have a ledger yet - show
@@ -1538,6 +1538,14 @@ function CreditUtilization() {
     finally { setSavingName(null); }
   };
 
+  if (error && rows.length === 0) {
+    return (
+      <div className="border border-red-800/40 bg-red-950/10 rounded-xl p-10 text-center space-y-2">
+        <p className="text-sm text-red-400">Couldn't load real credit/exposure data - {error}</p>
+        <button onClick={() => refresh()} className="text-xs text-[var(--color-primary)] hover:underline">Retry</button>
+      </div>
+    );
+  }
   if (loading && rows.length === 0) {
     return (
       <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
@@ -2008,7 +2016,10 @@ function DisputeTracker() {
     toast.success("Dispute logged - undisputed balance keeps chasing");
     setInvoiceId(""); setAmount("");
   };
-  const toggle = (id: string) => setDisputes(prev => prev.map(d => d.id === id ? { ...d, status: d.status === "open" ? "resolved" : "open" } : d));
+  // "in-review"/"written-off" can be set from Invoices' richer 4-state dispute
+  // tracker (shared list) - toggle here just flips between settled and open.
+  const isUnresolved = (s: ArDispute["status"]) => s === "open" || s === "in-review";
+  const toggle = (id: string) => setDisputes(prev => prev.map(d => d.id === id ? { ...d, status: isUnresolved(d.status) ? "resolved" : "open" } : d));
   const remove = (id: string) => setDisputes(prev => prev.filter(d => d.id !== id));
 
   const rows = useMemo(() => disputes.map(d => {
@@ -2016,11 +2027,11 @@ function DisputeTracker() {
     const disputed = Math.min(d.amount, inv?.amount ?? d.amount);
     const chaseable = (inv?.amount ?? 0) - disputed;
     return { ...d, inv, disputed, chaseable };
-  }).sort((a, b) => Number(a.status === "resolved") - Number(b.status === "resolved")), [disputes, invoices]);
+  }).sort((a, b) => Number(!isUnresolved(a.status)) - Number(!isUnresolved(b.status))), [disputes, invoices]);
 
-  const openDisputed = rows.filter(r => r.status === "open").reduce((s, r) => s + r.disputed, 0);
-  const quarantined = rows.filter(r => r.status === "open").length;
-  const stillChaseable = rows.filter(r => r.status === "open").reduce((s, r) => s + r.chaseable, 0);
+  const openDisputed = rows.filter(r => isUnresolved(r.status)).reduce((s, r) => s + r.disputed, 0);
+  const quarantined = rows.filter(r => isUnresolved(r.status)).length;
+  const stillChaseable = rows.filter(r => isUnresolved(r.status)).reduce((s, r) => s + r.chaseable, 0);
 
   return (
     <div className="space-y-4">
@@ -2065,16 +2076,18 @@ function DisputeTracker() {
           <div className="px-4 py-3 border-b border-[var(--color-border)]"><h3 className="text-sm font-semibold">Disputes &amp; deductions</h3></div>
           <div className="divide-y divide-[var(--color-border)]">
             {rows.map(r => (
-              <div key={r.id} className={`px-4 py-3 flex items-center gap-3 ${r.status === "resolved" ? "opacity-50" : ""}`}>
+              <div key={r.id} className={`px-4 py-3 flex items-center gap-3 ${!isUnresolved(r.status) ? "opacity-50" : ""}`}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <p className="text-sm font-semibold truncate">{r.inv?.customer ?? r.customer}</p>
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 bg-[var(--color-accent)] text-[var(--color-muted)]">{r.reason}</span>
+                    {r.status === "in-review" && <span className="text-[10px] font-bold text-yellow-400 shrink-0">In review</span>}
                     {r.status === "resolved" && <span className="text-[10px] font-bold text-green-400 shrink-0">Resolved</span>}
+                    {r.status === "written-off" && <span className="text-[10px] font-bold text-[var(--color-muted)] shrink-0">Written off</span>}
                   </div>
                   <p className="text-[10px] text-[var(--color-muted)]">{r.inv?.invoiceNumber ?? r.invoiceNumber ?? r.invoiceId} · disputed {formatCurrency(Math.round(r.disputed))} · {formatCurrency(Math.round(r.chaseable))} still chaseable</p>
                 </div>
-                <button onClick={() => toggle(r.id)} className="shrink-0 text-[10px] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-green-400 hover:border-green-700/40 px-2 py-1.5 rounded-md transition-colors">{r.status === "open" ? "Mark resolved" : "Reopen"}</button>
+                <button onClick={() => toggle(r.id)} className="shrink-0 text-[10px] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-green-400 hover:border-green-700/40 px-2 py-1.5 rounded-md transition-colors">{isUnresolved(r.status) ? "Mark resolved" : "Reopen"}</button>
                 <button onClick={() => remove(r.id)} title="Remove" className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-red-400 transition-colors shrink-0"><X size={13} /></button>
               </div>
             ))}

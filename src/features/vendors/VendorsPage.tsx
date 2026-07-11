@@ -4380,8 +4380,16 @@ function WorkingCapitalSimulator() {
    ───────────────────────────────────────────────────────────────────────── */
 
 function ApAgingBoard({ onSelectVendor }: { onSelectVendor: (vendorId: string) => void }) {
-  const { aging, loading, refresh } = useApAging();
+  const { aging, loading, error, refresh } = useApAging();
 
+  if (error && aging.vendors.length === 0) {
+    return (
+      <div className="border border-red-800/40 bg-red-950/10 rounded-xl p-10 text-center space-y-2">
+        <p className="text-sm text-red-400">Couldn't load real payables data - {error}</p>
+        <button onClick={() => refresh()} className="text-xs text-[var(--color-primary)] hover:underline">Retry</button>
+      </div>
+    );
+  }
   if (loading && aging.vendors.length === 0) {
     return (
       <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">

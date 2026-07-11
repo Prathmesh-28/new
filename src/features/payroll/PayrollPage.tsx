@@ -194,6 +194,7 @@ export default function PayrollPage() {
   // Bank ledger to pay salaries from — when set, Disburse also posts the real PAYMENT
   // voucher (Dr Salaries Payable / Cr bank). Ledger list loads once from the books.
   const [disburseBank, setDisburseBank] = useState("");
+  const [disbursingId, setDisbursingId] = useState<string | null>(null);
   const [bankLedgers, setBankLedgers] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => {
     api.get<{ id: string; name: string; is_bank: boolean; is_active: boolean }[]>("/api/books/ledgers")
@@ -275,6 +276,7 @@ export default function PayrollPage() {
   };
 
   const disburse = async (runId: string) => {
+    if (disbursingId) return; // guard against a fast double-click firing two POSTs (double payment voucher)
     const run0 = runs.find(r => r.id === runId);
     const bankName = bankLedgers.find(b => b.id === disburseBank)?.name;
     const amountTxt = run0 ? formatCurrency(run0.total_net) : "this run's";
@@ -282,6 +284,7 @@ export default function PayrollPage() {
       ? `Disburse ${amountTxt} net payroll from ${bankName ?? "the selected bank"}? This posts a real payment voucher to the books - Dr Salaries Payable / Cr ${bankName ?? "bank"}.`
       : `Mark ${amountTxt} net payroll as disbursed WITHOUT posting anything to the books (no bank account selected)?`;
     if (!window.confirm(confirmMsg)) return;
+    setDisbursingId(runId);
     try {
       const run = await api.post<PayrollRun>(`/api/payroll/runs/${runId}/disburse`, disburseBank ? { bank_ledger_id: disburseBank } : {});
       if (run.gl?.posted) toast.success(`Payroll disbursed · payment voucher posted to books${run.gl.voucherNumber ? ` (#${run.gl.voucherNumber})` : ""}`);
@@ -289,7 +292,7 @@ export default function PayrollPage() {
       load();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to disburse");
-    }
+    } finally { setDisbursingId(null); }
   };
 
   const totalMonthly = employees.filter(e => e.status === "active").reduce((s, e) => s + parseFloat(String(e.gross_salary)), 0);
@@ -551,9 +554,9 @@ export default function PayrollPage() {
                               {bankLedgers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                             </select>
                           )}
-                          <button onClick={() => disburse(run.id)}
-                            className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-2 py-1 rounded hover:opacity-90">
-                            Disburse
+                          <button onClick={() => disburse(run.id)} disabled={disbursingId === run.id}
+                            className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-2 py-1 rounded hover:opacity-90 disabled:opacity-50">
+                            {disbursingId === run.id ? "Disbursing…" : "Disburse"}
                           </button>
                         </>
                       )}

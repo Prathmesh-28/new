@@ -1231,7 +1231,7 @@ function CreditDebitNoteManager({ invoices, onChanged }: { invoices: Invoice[]; 
 // ever saw. "Hold if overdue > days" has no real backend equivalent (the actual
 // gate only checks the flat limit), so it stays a small per-customer KV memo.
 function CreditLimitManager({ invoices }: { invoices: Invoice[] }) {
-  const { credit, loading, refresh } = useCustomerCredit();
+  const { credit, loading, error, refresh } = useCustomerCredit();
   const [holdDays, setHoldDays] = useFeatureState<Record<string, string>>("invoice-credit-hold-days", {});
   const [customer, setCustomer] = useState("");
   const [newLimit, setNewLimit] = useState("");
@@ -1294,7 +1294,12 @@ function CreditLimitManager({ invoices }: { invoices: Invoice[] }) {
         </div>
         <button onClick={add} disabled={saving} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Set limit"}</button>
       </div>
-      {loading && rows.length === 0 ? <p className="text-xs text-[var(--color-muted)]">Loading real exposure from the books…</p> : rows.length > 0 && (
+      {error ? (
+        <div className="border border-red-800/40 bg-red-950/10 rounded-lg p-4 flex items-center justify-between gap-3">
+          <p className="text-xs text-red-400">Couldn't load real credit/exposure data - {error}. Figures below may be missing or stale.</p>
+          <button onClick={() => refresh()} className="text-xs text-[var(--color-primary)] hover:underline shrink-0">Retry</button>
+        </div>
+      ) : loading && rows.length === 0 ? <p className="text-xs text-[var(--color-muted)]">Loading real exposure from the books…</p> : rows.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
           <table className="w-full text-sm min-w-[680px]">
             <thead><tr className="border-b border-[var(--color-border)]">{["Customer", "Limit", "Outstanding", "Utilisation", "Overdue", "Status", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
@@ -1444,7 +1449,10 @@ function ApprovalWorkflow({ invoices }: { invoices: Invoice[] }) {
   const threshold = rules.length ? Math.min(...rules.map(r => Number(r.min_amount))) : null;
   const approvalByInvoiceId = useMemo(() => {
     const idx: Record<string, ServerApproval> = {};
-    for (const a of approvals) if (a.entity_id) idx[a.entity_id] = a; // last one wins (most recent, since API returns created_at DESC)
+    // API returns created_at DESC, so the FIRST match seen per invoice is the most
+    // recent one - only assign when not already set (assigning unconditionally
+    // while iterating newest-to-oldest would leave the OLDEST row as the winner).
+    for (const a of approvals) if (a.entity_id && !idx[a.entity_id]) idx[a.entity_id] = a;
     return idx;
   }, [approvals]);
   const highValue = threshold == null ? [] : invoices.filter(i => (Number(i.total_amount) || 0) >= threshold && i.status !== "cancelled");
@@ -1524,8 +1532,13 @@ function ApprovalWorkflow({ invoices }: { invoices: Invoice[] }) {
                   <span><span className="font-mono text-xs">{i.invoice_number}</span> · {i.customer_name} · <span className="font-semibold">{formatCurrency(Number(i.total_amount) || 0)}</span></span>
                   {!a ? (
                     <button onClick={() => route(i)} disabled={busyId === i.id} className="text-xs text-[var(--color-primary)] hover:underline disabled:opacity-50">Route for approval</button>
+                  ) : a.status === "REJECTED" ? (
+                    <span className="flex items-center gap-2">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full border font-semibold bg-red-900/30 text-red-400 border-red-800/40">rejected</span>
+                      <button onClick={() => route(i)} disabled={busyId === i.id} className="text-xs text-[var(--color-primary)] hover:underline disabled:opacity-50">Re-route</button>
+                    </span>
                   ) : (
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${a.status === "APPROVED" ? "bg-green-900/30 text-green-400 border-green-800/40" : a.status === "REJECTED" ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{a.status.toLowerCase()}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${a.status === "APPROVED" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{a.status.toLowerCase()}</span>
                   )}
                 </div>
               );

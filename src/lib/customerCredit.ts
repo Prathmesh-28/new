@@ -13,14 +13,19 @@ export interface CustomerCreditRow { ledgerId: string; name: string; creditLimit
 export function useCustomerCredit() {
   const [credit, setCredit] = useState<CustomerCreditRow[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed fetch used to look identical to "no credit limits configured" - an
+  // empty array either way, no error surfaced - so a network blip could quietly
+  // hide every customer's real limit/exposure. Callers should show `error` rather
+  // than silently rendering the empty state.
+  const [error, setError] = useState<string | null>(null);
   const refresh = useCallback(async () => {
     setLoading(true);
-    try { setCredit(await api.get<CustomerCreditRow[]>("/api/books/customers/credit")); }
-    catch (e) { console.warn("[customer-credit] load failed", e); }
+    try { setCredit(await api.get<CustomerCreditRow[]>("/api/books/customers/credit")); setError(null); }
+    catch (e) { setError(e instanceof Error ? e.message : "Failed to load customer credit data"); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
-  return { credit, loading, refresh };
+  return { credit, loading, error, refresh };
 }
 
 export function setCustomerCreditLimit(name: string, limit: number) {

@@ -36,12 +36,15 @@ export const AP_BUCKET_META: Record<keyof ApAgingResponse["totals"], { label: st
 export function useApAging() {
   const [aging, setAging] = useState<ApAgingResponse>(EMPTY_AGING);
   const [loading, setLoading] = useState(true);
+  // A failed fetch used to look identical to "no open bills" - callers should
+  // show `error` rather than silently rendering the empty state as if it were real.
+  const [error, setError] = useState<string | null>(null);
   const refresh = useCallback(async () => {
     setLoading(true);
-    try { setAging(await api.get<ApAgingResponse>("/api/vendor-bills/aging")); }
-    catch (e) { console.warn("[vendor-bills] aging load failed", e); }
+    try { setAging(await api.get<ApAgingResponse>("/api/vendor-bills/aging")); setError(null); }
+    catch (e) { setError(e instanceof Error ? e.message : "Failed to load payables aging"); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
-  return { aging, loading, refresh };
+  return { aging, loading, error, refresh };
 }

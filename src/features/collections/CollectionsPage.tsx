@@ -2751,10 +2751,13 @@ function DisputeLogger() {
     setInvoiceId(""); setAmount("");
     toast.success("Dispute logged");
   };
-  const toggle = (id: string) => setRows(prev => prev.map(r => r.id === id ? { ...r, status: r.status === "open" ? "resolved" : "open" } : r));
+  // "in-review"/"written-off" can be set from Invoices' richer 4-state dispute
+  // tracker (shared list) - toggle here just flips between settled and open,
+  // never silently reclassifies a written-off dispute as merely "resolved".
+  const toggle = (id: string) => setRows(prev => prev.map(r => r.id === id ? { ...r, status: (r.status === "open" || r.status === "in-review") ? "resolved" : "open" } : r));
   const remove = (id: string) => setRows(prev => prev.filter(r => r.id !== id));
 
-  const openDisputes = rows.filter(r => r.status === "open");
+  const openDisputes = rows.filter(r => r.status === "open" || r.status === "in-review");
   const disputedValue = openDisputes.reduce((s, r) => s + r.amount, 0);
   // Quarantine view: per disputed invoice, how much remains clean (still chaseable).
   const cleanByInvoice = openDisputes.map(r => {
@@ -2832,8 +2835,13 @@ function DisputeLogger() {
                   <td className="px-4 py-3 text-[var(--color-muted)]">{r.reason}</td>
                   <td className="px-4 py-3 text-[var(--color-muted)] text-xs">{format(parseISO(r.raisedAt), "d MMM yyyy")}</td>
                   <td className="px-4 py-3">
-                    <button onClick={() => toggle(r.id)} className={`text-xs font-bold px-2 py-0.5 rounded-full ${r.status === "open" ? "bg-orange-950/30 text-orange-400" : "bg-green-950/30 text-green-400"}`}>
-                      {r.status === "open" ? "Open" : "Resolved"}
+                    <button onClick={() => toggle(r.id)} title="Click to toggle open/resolved" className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                      r.status === "open" ? "bg-orange-950/30 text-orange-400"
+                      : r.status === "in-review" ? "bg-yellow-950/30 text-yellow-400"
+                      : r.status === "written-off" ? "bg-[var(--color-accent)] text-[var(--color-muted)]"
+                      : "bg-green-950/30 text-green-400"
+                    }`}>
+                      {r.status === "open" ? "Open" : r.status === "in-review" ? "In review" : r.status === "written-off" ? "Written off" : "Resolved"}
                     </button>
                   </td>
                   <td className="px-4 py-3">
@@ -3931,7 +3939,7 @@ function CreditLimitEngine() {
   // the same figure Receivables' Credit-Limit Utilization tab and the invoice-send
   // credit-limit gate itself use, instead of a separate KV number that could (and
   // did) disagree with them for the same customer.
-  const { credit, loading, refresh } = useCustomerCredit();
+  const { credit, loading, error, refresh } = useCustomerCredit();
   const [savingCustomer, setSavingCustomer] = useState<string | null>(null);
 
   const draftOnlyCustomers = useMemo(() => {
@@ -3975,7 +3983,12 @@ function CreditLimitEngine() {
 
   return (
     <div className="space-y-4">
-      {loading && customers.length === 0 ? (
+      {error && customers.length === 0 ? (
+        <div className="border border-red-800/40 bg-red-950/10 rounded-xl p-10 text-center space-y-2">
+          <p className="text-sm text-red-400">Couldn't load real credit/exposure data - {error}</p>
+          <button onClick={() => refresh()} className="text-xs text-[var(--color-primary)] hover:underline">Retry</button>
+        </div>
+      ) : loading && customers.length === 0 ? (
         <p className="text-sm text-[var(--color-muted)]">Loading real exposure from the books…</p>
       ) : customers.length === 0 ? (
         <EmptyState icon={CreditCard} title="No customers yet" description="Add invoices to set per-customer credit ceilings and watch exposure against them." />

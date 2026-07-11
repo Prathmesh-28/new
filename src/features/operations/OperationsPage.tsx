@@ -124,14 +124,23 @@ export default function OperationsPage() {
   const [poItemQty,     setPoItemQty]     = useState("1");
   const [poItemCost,    setPoItemCost]    = useState("");
 
+  // Guards each of the 3 create forms independently against a fast double-click
+  // firing two concurrent POSTs (and thus two real backend rows) before the
+  // first request resolves.
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [savingInv, setSavingInv] = useState(false);
+  const [savingPo, setSavingPo] = useState(false);
+
   const totalOrderValue  = orders.filter(o => o.status !== "cancelled").reduce((s, o) => s + o.totalValue, 0);
   const pendingOrders    = orders.filter(o => o.status === "pending").length;
   const lowStockItems    = inventory.filter(i => i.quantity <= i.reorderLevel);
   const totalInventoryVal= inventory.reduce((s, i) => s + i.quantity * i.unitCost, 0);
 
   const handleAddOrder = async () => {
+    if (savingOrder) return;
     if (!buyerName || !itemName || !itemPrice) { toast.error("Fill buyer name, item name, and price"); return; }
     const items = [{ id: generateId(), productName: itemName, sku: "", quantity: Number(itemQty), unitPrice: Number(itemPrice) }];
+    setSavingOrder(true);
     try {
       // Create on the server first so its real id is what handleStatusChange later
       // PATCHes against - an order that only ever existed in local KV would 404 the
@@ -153,7 +162,7 @@ export default function OperationsPage() {
       setShowOrderForm(false);
     } catch {
       toast.error("Couldn't create the order on the server");
-    }
+    } finally { setSavingOrder(false); }
   };
 
   const handleStatusChange = async (o: Order, status: Order["status"]) => {
@@ -200,7 +209,9 @@ export default function OperationsPage() {
   };
 
   const handleAddInventory = async () => {
+    if (savingInv) return;
     if (!invName) { toast.error("Product name required"); return; }
+    setSavingInv(true);
     try {
       const row = await api.post<{
         id: string; product_name: string; sku: string | null; category: string; quantity: number;
@@ -219,12 +230,14 @@ export default function OperationsPage() {
       setShowInvForm(false);
     } catch {
       toast.error("Couldn't save the product on the server");
-    }
+    } finally { setSavingInv(false); }
   };
 
   const handleCreatePo = async () => {
+    if (savingPo) return;
     if (!supplierName || !poItemName || !poItemCost) { toast.error("Fill supplier name and at least one item"); return; }
     const items = [{ productName: poItemName, sku: "", quantity: Number(poItemQty), unitCost: Number(poItemCost) }];
+    setSavingPo(true);
     try {
       const row = await api.post<{
         id: string; supplier_name: string; status: ProcurementOrder["status"]; total_value: string | number;
@@ -242,7 +255,7 @@ export default function OperationsPage() {
       setShowPoForm(false);
     } catch {
       toast.error("Couldn't create the purchase order on the server");
-    }
+    } finally { setSavingPo(false); }
   };
 
   return (
@@ -440,7 +453,7 @@ export default function OperationsPage() {
                   </button>
                 ))}
               </div>
-              <button onClick={handleAddOrder} className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2 rounded-lg text-sm hover:opacity-90">Add Order</button>
+              <button onClick={handleAddOrder} disabled={savingOrder} className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">{savingOrder ? "Adding…" : "Add Order"}</button>
             </div>
           )}
 
@@ -548,7 +561,7 @@ export default function OperationsPage() {
                   {["general","fmcg","pharma","electronics","apparel","food","raw_material"].map(c => <option key={c}>{c}</option>)}
                 </select>
               </div>
-              <button onClick={handleAddInventory} className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2 rounded-lg text-sm hover:opacity-90">Add Product</button>
+              <button onClick={handleAddInventory} disabled={savingInv} className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">{savingInv ? "Adding…" : "Add Product"}</button>
             </div>
           )}
 
@@ -794,7 +807,7 @@ export default function OperationsPage() {
                 <input type="number" min="0" placeholder="Unit cost (₹)" value={poItemCost} onChange={e => setPoItemCost(e.target.value)} className="col-span-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" />
               </div>
               {poItemQty && poItemCost && <p className="text-xs text-[var(--color-muted)]">Total: {formatCurrency(Number(poItemQty) * Number(poItemCost))}</p>}
-              <button onClick={handleCreatePo} className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2 rounded-lg text-sm hover:opacity-90">Create Draft PO</button>
+              <button onClick={handleCreatePo} disabled={savingPo} className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">{savingPo ? "Creating…" : "Create Draft PO"}</button>
             </div>
           )}
 
@@ -1671,7 +1684,7 @@ function AgedPayablesTab() {
   // for the same company because each kept its own parallel truth. Bills are recorded and
   // paid from Vendors -> Bills (a real PURCHASE/payment voucher, GST + TDS included); this
   // tab is a read-only aging view.
-  const { aging, loading, refresh } = useApAging();
+  const { aging, loading, error, refresh } = useApAging();
   const fc = formatCurrency;
 
   type FlatBill = ApAgingBill & { vendorName: string; isMsme: boolean };
@@ -1696,6 +1709,14 @@ function AgedPayablesTab() {
     URL.revokeObjectURL(a.href);
   };
 
+  if (error && aging.vendors.length === 0) {
+    return (
+      <div className="border border-red-800/40 bg-red-950/10 rounded-xl p-10 text-center space-y-2">
+        <p className="text-sm text-red-400">Couldn't load real payables data - {error}</p>
+        <button onClick={() => refresh()} className="text-xs text-[var(--color-primary)] hover:underline">Retry</button>
+      </div>
+    );
+  }
   if (loading && aging.vendors.length === 0) {
     return (
       <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
