@@ -386,7 +386,15 @@ async function getLoan(tenantId, id) {
   };
 }
 async function listLoans(tenantId) {
-  const { rows } = await q(tenantId,"SELECT * FROM loans WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 100", [tenantId]);
+  // disbursal_status: the payout rail's real state for this loan's disbursal
+  // ('pending' in manual/gated mode, 'settled' once money actually moved, 'failed'
+  // when the rail rejected it). Surfaced so an accepted loan can't read as
+  // "money arrived" while the transfer is still pending - the GL also only books
+  // the cash on settlement (postDisbursalOnSettlement).
+  const { rows } = await q(tenantId,
+    `SELECT l.*, pr.status AS disbursal_status
+       FROM loans l LEFT JOIN payout_requests pr ON pr.id = l.disbursal_payout_id AND pr.tenant_id = l.tenant_id
+      WHERE l.tenant_id=$1 ORDER BY l.created_at DESC LIMIT 100`, [tenantId]);
   return rows.map((l) => ({ ...l, principal: n(l.principal), apr: n(l.apr), outstanding_principal: n(l.outstanding_principal) }));
 }
 

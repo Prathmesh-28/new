@@ -20,6 +20,7 @@ import AiInsight from "@/components/ai/AiInsight";
 import SimpleHome from "@/components/SimpleHome";
 import FinancingNudgeCard from "@/features/dashboard/FinancingNudgeCard";
 import { api } from "@/lib/api";
+import { txnFromApi, txnToApiBody } from "@/lib/txnApi";
 import type { BankAccount } from "@/data/types";
 import DatePicker from "@/components/DatePicker";
 
@@ -58,9 +59,13 @@ function getUpcomingTaxDates() {
   return dates.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 4);
 }
 
-function StatCard({ label, raw, display, icon: Icon, color, trend, delta, onClick }: {
+function StatCard({ label, raw, display, icon: Icon, color, trend, delta, deltaGoodWhen = "up", onClick }: {
   label: string; raw: number; display: string; icon: React.ElementType;
-  color: string; trend?: "up" | "down" | null; delta?: number | null; onClick?: () => void;
+  color: string; trend?: "up" | "down" | null; delta?: number | null;
+  // Arrow always shows the TRUE direction of change; this only controls whether that
+  // direction renders green or red (burn rising = red even though the arrow is ▲ -
+  // the old code negated burn's delta to force a red color, inverting the arrow).
+  deltaGoodWhen?: "up" | "down"; onClick?: () => void;
 }) {
   const animated = useCountUp(raw, 900);
   const isFormatted = display.includes("₹") || display.includes("days");
@@ -86,7 +91,7 @@ function StatCard({ label, raw, display, icon: Icon, color, trend, delta, onClic
           </div>
         )}
         {delta != null && Math.abs(delta) > 0.5 && (
-          <span className={`text-[10px] font-semibold tabular-nums ml-auto ${delta > 0 ? "text-green-400" : "text-red-400"}`}>
+          <span className={`text-[10px] font-semibold tabular-nums ml-auto ${(delta > 0) === (deltaGoodWhen === "up") ? "text-green-400" : "text-red-400"}`}>
             {delta > 0 ? "▲" : "▼"}{Math.abs(delta).toFixed(0)}% vs last mo
           </span>
         )}
@@ -257,12 +262,14 @@ function TreasuryBanner() {
   const handleEnable = async () => {
     setEnabling(true);
     try {
-      await api.post("/api/treasury/sweep-enable", {});
-      toast.success("Auto-sweep enrollment queued. Our team will contact you shortly.");
+      const res = await api.post<{ message?: string }>("/api/treasury/sweep-enable", {});
+      // Honest: interest is recorded (a real alert row) but automatic sweeps aren't
+      // live - the old toast promised "our team will contact you" with nothing behind it.
+      toast.info(res?.message || "Interest recorded. Use Treasury → Sweep to move idle cash today - automatic sweeps aren't live yet.", { duration: 8000 });
       setDismissed(true);
       localStorage.setItem("hr_treasury_dismissed", "true");
-    } catch {
-      toast.error("Could not enable auto-sweep");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not record your request");
     } finally { setEnabling(false); }
   };
 
@@ -439,7 +446,11 @@ function AddAccountModal({ onClose, onAdd }: { onClose: () => void; onAdd: (a: A
     e.preventDefault();
     if (!bank) { toast.error("Enter your IFSC to auto-fetch the bank, or type the bank name"); return; }
     const bal = parseFloat(balance);
-    if (isNaN(bal) || bal < 0) { toast.error("Enter a valid current balance"); return; }
+    // CC/OD accounts are usually drawn down - a negative balance is their normal
+    // state. Rejecting it forced owners to overstate total cash (and everything
+    // downstream: runway, forecasts).
+    const allowNegative = accountType === "cc" || accountType === "od";
+    if (isNaN(bal) || (!allowNegative && bal < 0)) { toast.error(allowNegative ? "Enter a valid balance" : "Enter a valid current balance (₹0 or more)"); return; }
     if (accountNumber && (digits.length < 9 || digits.length > 18)) { toast.error("Account number looks off - it should be 9-18 digits"); return; }
     onAdd({
       name: name.trim() || `${bank} ${ACCOUNT_TYPES.find(t => t.id === accountType)?.label ?? ""}`.trim(),
@@ -528,7 +539,8 @@ function AddAccountModal({ onClose, onAdd }: { onClose: () => void; onAdd: (a: A
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={lbl}>Current balance (₹)</label>
-              <input required type="number" min="0" step="0.01" value={balance} onChange={e => setBalance(e.target.value)} placeholder="0.00"
+              {/* CC/OD accounts may legitimately be negative (drawn down). */}
+              <input required type="number" min={accountType === "cc" || accountType === "od" ? undefined : "0"} step="0.01" value={balance} onChange={e => setBalance(e.target.value)} placeholder={accountType === "cc" || accountType === "od" ? "e.g. -250000 if drawn" : "0.00"}
                 className={field} />
             </div>
             <div>
@@ -2196,11 +2208,15 @@ export default function DashboardPage() {
             const thisRevenue = transactions.filter(t => t.date.startsWith(thisM) && t.amount > 0).reduce((s,t)=>s+t.amount,0);
             const lastRevenue = transactions.filter(t => t.date.startsWith(lastM) && t.amount > 0).reduce((s,t)=>s+t.amount,0);
             const revDelta = lastRevenue > 0 ? ((thisRevenue - lastRevenue)/lastRevenue)*100 : null;
-            void lastBal; void thisBalance;
+            void lastBal; void thisBalance; void revDelta;
             return (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-                <StatCard label="Total Balance" raw={Math.round(totalBalance/100000)} display={formatCurrency(totalBalance)} icon={Landmark} color="text-[var(--color-primary)]" trend="up" delta={revDelta} onClick={() => navigate("/transactions")} />
-                <StatCard label="Monthly Burn"  raw={Math.round(burn/100000)}         display={formatCurrency(burn)}         icon={TrendingDown} color="text-red-400" trend="down" delta={burnDelta !== null ? -burnDelta : null} onClick={() => navigate("/transactions")} />
+                {/* Balance is point-in-time - no fabricated trend/delta (the old card
+                    showed the REVENUE delta + a hardcoded "Healthy" under it). Burn's
+                    delta is passed un-negated: the arrow shows the true direction and
+                    deltaGoodWhen colors a burn increase red. */}
+                <StatCard label="Total Balance" raw={Math.round(totalBalance/100000)} display={formatCurrency(totalBalance)} icon={Landmark} color="text-[var(--color-primary)]" onClick={() => navigate("/transactions")} />
+                <StatCard label="Monthly Burn"  raw={Math.round(burn/100000)}         display={formatCurrency(burn)}         icon={TrendingDown} color="text-red-400" delta={burnDelta} deltaGoodWhen="down" onClick={() => navigate("/transactions")} />
                 <StatCard label="Cash Runway"   raw={runway}                           display={`${runway} days`}            icon={AlertTriangle} color={runway<30?"text-red-400":runway<90?"text-yellow-400":"text-green-400"} trend={runway<30?"down":"up"} onClick={() => navigate("/forecast")} />
                 <StatCard label="Unread Alerts" raw={unread}                           display={unread.toString()}           icon={Bell} color="text-orange-400" onClick={() => navigate("/alerts")} />
               </div>
@@ -2333,10 +2349,15 @@ export default function DashboardPage() {
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <h2 className="text-sm font-semibold mb-3">Monthly burn by category</h2>
               {(() => {
+                // Trailing 30 days - the SAME window as the "Monthly Burn" stat card
+                // (monthlyBurn() in lib/utils). This used to sum ALL-TIME outflows, so
+                // the bars grew forever and could be many multiples of the stat card
+                // two rows above on the same screen.
+                const cutoff = format(addDays(new Date(), -30), "yyyy-MM-dd");
                 const cats = ["payroll","expense","loan","tax","transfer"];
                 const totals = cats.map(c => ({
                   cat: c,
-                  val: Math.abs(transactions.filter(t => t.category === c && t.amount < 0).reduce((s, t) => s + t.amount, 0)),
+                  val: Math.abs(transactions.filter(t => t.category === c && t.amount < 0 && t.date >= cutoff).reduce((s, t) => s + t.amount, 0)),
                 })).filter(x => x.val > 0).sort((a, b) => b.val - a.val);
                 const max = totals[0]?.val ?? 1;
                 const CAT_CLR: Record<string, string> = { payroll:"bg-blue-500", expense:"bg-red-500", loan:"bg-purple-500", tax:"bg-orange-500", transfer:"bg-[var(--color-muted)]" };
@@ -2559,18 +2580,44 @@ export default function DashboardPage() {
           }}
         />
       )}
+      {/* Persist server-side FIRST (same path as the Transactions page) - KV-only rows
+          were silently replaced by server rows the next time Transactions mounted, so
+          dashboard-added data vanished behind a success toast. */}
       {showAddTx && bankAccounts[0] && (
         <AddTransactionModal
           accountId={bankAccounts[0].id}
           onClose={() => setShowAddTx(false)}
-          onAdd={tx => { addTransaction(tx as Parameters<typeof addTransaction>[0]); toast.success("Transaction recorded"); }}
+          onAdd={async tx => {
+            const draft = tx as Parameters<typeof addTransaction>[0];
+            try {
+              const created = await api.post<any>("/api/transactions", txnToApiBody(draft));
+              const saved = Array.isArray(created) ? created[0] : created;
+              addTransaction(saved ? txnFromApi(saved) : draft);
+              toast.success("Transaction recorded");
+            } catch (e) {
+              addTransaction(draft); // offline fallback: keep it locally, but say so
+              toast.warning(`Saved locally - couldn't reach the server (${e instanceof Error ? e.message : "offline"}). Re-add it from Transactions if it's missing later.`);
+            }
+          }}
         />
       )}
       {showImport && bankAccounts[0] && (
         <TransactionImportModal
           bankAccountId={bankAccounts[0].id}
           onClose={() => setShowImport(false)}
-          onImport={txns => txns.forEach(t => addTransaction(t))}
+          onImport={async txns => {
+            const results = await Promise.allSettled(txns.map(t => api.post<any>("/api/transactions", txnToApiBody(t))));
+            results.forEach((r, i) => {
+              if (r.status === "fulfilled") {
+                const saved = Array.isArray(r.value) ? r.value[0] : r.value;
+                addTransaction(saved ? txnFromApi(saved) : txns[i]);
+              } else {
+                addTransaction(txns[i]); // keep locally so nothing silently vanishes
+              }
+            });
+            const failed = results.filter(r => r.status === "rejected").length;
+            if (failed) toast.warning(`${txns.length - failed} of ${txns.length} rows saved to the server; ${failed} kept locally only (server unreachable).`);
+          }}
         />
       )}
     </div>

@@ -79,8 +79,18 @@ export async function authFetch<T = unknown>(
   }
 
   if (!res.ok) {
-    const err = await res.text().catch(() => res.statusText);
-    throw new Error(`${res.status}: ${err}`);
+    // Human-readable failures everywhere: the raw body used to be thrown verbatim,
+    // so users saw toasts like `422: {"error":"GST Output ledgers missing...","code":
+    // "NOT_SEEDED"}`. Extract the backend's own message; fall back to status + body
+    // only when the response isn't the standard {error} shape.
+    const raw = await res.text().catch(() => "");
+    let msg = "";
+    try {
+      const body = JSON.parse(raw);
+      msg = body?.error || body?.message || "";
+      if (msg && body?.code === "NOT_SEEDED") msg += " (open Books and run the one-time setup first)";
+    } catch { /* not JSON */ }
+    throw new Error(msg || `${res.status}: ${raw || res.statusText}`);
   }
 
   if (res.status === 204) return {} as T;

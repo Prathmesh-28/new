@@ -122,12 +122,25 @@ export default function TaxPage() {
   const tdsBase = transactions.filter(t => t.amount < 0 && t.date.startsWith(thisM) && t.category === "expense").reduce((s, t) => s + Math.abs(t.amount), 0);
   const tdsEst  = Math.round(tdsBase * 0.02);
 
-  // GST liability
+  // GST liability - prefer the REAL GSTR-3B net (output tax minus eligible ITC, from
+  // the ledger via GET /api/gst/liability - the same figure the GST page shows). The
+  // old revenue×rate estimate ignored ITC entirely, so a purchase-heavy firm saw a
+  // "due" figure several times its real net liability and could push that into the
+  // forecast as a phantom cash obligation. Flat estimate only as a no-books fallback.
   const gstRate = firm?.gstRate ?? 18;
   const lastM   = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const lastMStr = `${lastM.getFullYear()}-${String(lastM.getMonth() + 1).padStart(2, "0")}`;
   const lastMRevenue = transactions.filter(t => t.amount > 0 && t.date.startsWith(lastMStr)).reduce((s, t) => s + t.amount, 0);
-  const gstLiability = firm?.gstRegistered && lastMRevenue > 0 ? Math.round(lastMRevenue * (gstRate / 100)) : 0;
+  const gstFlatEstimate = firm?.gstRegistered && lastMRevenue > 0 ? Math.round(lastMRevenue * (gstRate / 100)) : 0;
+  const [gstReal, setGstReal] = useState<number | null>(null);
+  useEffect(() => {
+    if (!firm?.gstRegistered) return;
+    api.get<{ net_liability?: number }>(`/api/gst/liability?month=${lastM.getMonth() + 1}&year=${lastM.getFullYear()}`)
+      .then(d => { const n = Number(d?.net_liability); if (Number.isFinite(n) && n > 0) setGstReal(Math.round(n)); })
+      .catch(() => { /* books unavailable → keep the flat estimate */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firm?.gstRegistered, lastMStr]);
+  const gstLiability = gstReal ?? gstFlatEstimate;
 
   const TYPE_COLOR: Record<string, string> = {
     advance_tax: "text-orange-400 bg-orange-950/30 border-orange-800/30",

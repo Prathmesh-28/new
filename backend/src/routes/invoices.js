@@ -482,16 +482,29 @@ router.post("/:id/send", authenticate, canWrite, async (req, res) => {
   if (!inv) return res.status(404).json({ error: "Invoice not found" });
   if (!inv.customer_email) return res.status(400).json({ error: "Invoice has no customer email" });
 
-  await sendMail({
-    to:      inv.customer_email,
-    subject: `Invoice ${inv.invoice_number} - ₹${parseFloat(inv.total_amount).toLocaleString("en-IN")}`,
-    text:    `Please find your invoice ${inv.invoice_number} for ₹${parseFloat(inv.total_amount).toLocaleString("en-IN")}. Due by ${inv.due_date || "on receipt"}.`,
-    html:    `<p>Dear ${inv.customer_name},</p><p>Please find your invoice <strong>${inv.invoice_number}</strong> for <strong>₹${parseFloat(inv.total_amount).toLocaleString("en-IN")}</strong>.</p><p>Due date: <strong>${inv.due_date || "On receipt"}</strong></p><p>Thank you for your business.</p>`,
-  }).catch(() => {});
+  // Report delivery HONESTLY: sendMail silently no-ops when SMTP isn't configured,
+  // and the old `.catch(() => {})` + unconditional ok:true told the user their
+  // customer was emailed when nothing ever left the server. Status/GL still advance
+  // (the invoice IS issued), but the response says whether the email went out.
+  let delivered = false;
+  if (process.env.SMTP_USER) {
+    delivered = await sendMail({
+      to:      inv.customer_email,
+      subject: `Invoice ${inv.invoice_number} - ₹${parseFloat(inv.total_amount).toLocaleString("en-IN")}`,
+      text:    `Please find your invoice ${inv.invoice_number} for ₹${parseFloat(inv.total_amount).toLocaleString("en-IN")}. Due by ${inv.due_date || "on receipt"}.`,
+      html:    `<p>Dear ${inv.customer_name},</p><p>Please find your invoice <strong>${inv.invoice_number}</strong> for <strong>₹${parseFloat(inv.total_amount).toLocaleString("en-IN")}</strong>.</p><p>Due date: <strong>${inv.due_date || "On receipt"}</strong></p><p>Thank you for your business.</p>`,
+    }).then(() => true).catch(() => false);
+  }
 
   await q(req.user.tenant_id, "UPDATE invoices SET status='sent' WHERE id=$1 AND tenant_id=$2", [inv.id, req.user.tenant_id]);
   require("../lib/invoiceGl").postInvoiceSale(req.user.tenant_id, { ...inv, status: "sent" }).catch(() => {}); // accrual: Dr Debtor / Cr Sales + Output GST on issue
-  res.json({ ok: true });
+  res.json({
+    ok: true,
+    delivered,
+    message: delivered
+      ? `Invoice emailed to ${inv.customer_email}`
+      : "Invoice marked sent and booked - but the email was NOT delivered (email service not configured). Share the PDF or payment link with the customer yourself.",
+  });
 });
 
 // POST /api/invoices/:id/upi-link - generate UPI QR (Razorpay optional, fallback to static UPI)

@@ -114,9 +114,30 @@ router.get("/analysis", authenticate, requireOwnerOrAdmin, async (req, res) => {
   }
 });
 
-// POST /sweep-enable - Enable auto-sweep (enrollment)
+// POST /sweep-enable - record genuine interest in auto-sweep. An audit found this
+// was a pure no-op returning "enrollment queued. Our team will contact you" - a
+// fabricated promise (nothing was written, nobody would ever call). It now records
+// a REAL, durable interest marker (an in-app alert the tenant can see) and the
+// response says exactly what did and didn't happen. Actual sweeps already work
+// today via POST /sweep (manual, per-transfer, rail-gated).
 router.post("/sweep-enable", authenticate, requireOwnerOrAdmin, async (req, res) => {
-  res.json({ success: true, message: "Auto-sweep enrollment queued. Our team will contact you to complete setup." });
+  try {
+    await pool.query(
+      `INSERT INTO alerts(tenant_id, rule_id, severity, title, message, meta)
+       VALUES($1,'treasury.sweep_interest','low',$2,$3,$4)`,
+      [req.user.tenant_id, "Auto-sweep interest recorded",
+       "You asked for automatic idle-cash sweeps. Until that ships, use Treasury → Sweep to move idle cash into an FD/liquid fund per transfer - each sweep is tracked end-to-end.",
+       JSON.stringify({ requested_by: req.user.id, requested_at: new Date().toISOString() })]
+    );
+    res.json({
+      success: true,
+      enrolled: false,
+      message: "Interest recorded. Automatic sweeps aren't live yet - use the Sweep action to move idle cash today; each transfer is tracked and booked for real.",
+    });
+  } catch (e) {
+    console.error("[treasury] sweep-enable", e.message);
+    res.status(500).json({ error: "Could not record your request - try again." });
+  }
 });
 
 // POST /sweep - Move idle cash into a destination (FD / liquid fund) via the shared payouts rail.

@@ -80,67 +80,38 @@ router.get("/marketplace", authenticate, async (req, res) => {
   }
 });
 
-// POST /pay-early - record a REAL early payment as an expense transaction.
+// POST /pay-early - compute the terms of an early-payment PLAN. An audit found the
+// old version INSERTing a real negative row into `transactions` for an ESTIMATED
+// invoice (the offers above are averages of past bills with an indicative discount)
+// with no confirmation and no money movement - permanently skewing cash/spend
+// analytics with a payment that never happened. No ledger write happens here
+// anymore: the real payment path is Vendors → Record Bill → Pay (real vendor bill,
+// real GL voucher). This endpoint returns the plan so the UI presents it honestly
+// and points the user at the real flow.
 // Body: { offer_id, supplier_name, amount, discount?, saving? }
 router.post("/pay-early", authenticate, canWrite, async (req, res) => {
   try {
-    const tenantId = scopeTenant(req);
-    const { offer_id, supplier_name, amount, discount, saving } = req.body || {};
+    const { offer_id, supplier_name, amount, saving } = req.body || {};
     if (!offer_id) return res.status(400).json({ error: "offer_id required" });
 
     const gross = Math.round(Number(amount) || 0);
     const savedAmt = Math.round(Number(saving) || 0);
-    // Cash actually leaving the account today = invoice minus the early-pay discount.
     const payable = Math.max(0, gross - (savedAmt > 0 ? savedAmt : 0));
     if (payable <= 0) return res.status(400).json({ error: "Invalid payment amount" });
-
     const vendor = (supplier_name && String(supplier_name).trim()) || "Supplier";
-    const discPct = Number(discount) || 0;
-    const desc = `Early payment to ${vendor}${discPct ? ` (${discPct}% discount, saved ₹${savedAmt})` : ""}`;
-
-    // Idempotency: a deterministic external_id keyed on vendor + current period (month)
-    // means a given vendor's early-pay for a period can be booked at most once. Combined
-    // with the unique index on (tenant_id, source, external_id), repeat clicks no-op.
-    const period = new Date().toISOString().slice(0, 7); // YYYY-MM
-    const vendorKey = vendor.toLowerCase().replace(/\s+/g, "-").slice(0, 80);
-    const externalId = `earlypay-${vendorKey}-${period}`;
-
-    // Outflow => negative amount, in the procurement bucket.
-    // ON CONFLICT DO NOTHING so a duplicate (same tenant/source/external_id) is not booked twice.
-    const { rows } = await pool.query(
-      `INSERT INTO transactions
-         (tenant_id, amount, description_raw, merchant_name, category, transaction_date, source, external_id)
-       VALUES ($1, $2, $3, $4, 'procurement', CURRENT_DATE, 'early-pay', $5)
-       ON CONFLICT (tenant_id, source, external_id) DO NOTHING
-       RETURNING id, amount, transaction_date`,
-      [tenantId, -payable, desc, vendor, externalId]
-    );
-
-    // No row returned => the conflict fired: this vendor's early-pay for the period
-    // was already recorded. Report success idempotently without double-booking.
-    if (!rows.length) {
-      return res.json({
-        success: true,
-        already_paid: true,
-        amount_paid: payable,
-        saving: savedAmt,
-        supplier_name: vendor,
-        message: `Early payment to ${vendor} for this period was already recorded - not booked again.`,
-      });
-    }
 
     res.json({
       success: true,
-      transaction_id: rows[0].id,
+      planned: true,
+      booked: false,
       amount_paid: payable,
       saving: savedAmt,
       supplier_name: vendor,
-      transaction_date: rows[0].transaction_date,
-      message: `Early payment of ₹${payable.toLocaleString("en-IN")} to ${vendor} recorded${savedAmt > 0 ? `. You saved ₹${savedAmt.toLocaleString("en-IN")}.` : "."}`,
+      message: `Plan noted: paying ${vendor} early would cost ₹${payable.toLocaleString("en-IN")} and save ~₹${savedAmt.toLocaleString("en-IN")}. Nothing was booked - when you actually pay them, record it under Vendors → Record Bill so the books stay true.`,
     });
   } catch (e) {
     console.error("suppliers/pay-early", e);
-    res.status(500).json({ error: "Failed to record early payment" });
+    res.status(500).json({ error: "Failed to compute early-payment plan" });
   }
 });
 

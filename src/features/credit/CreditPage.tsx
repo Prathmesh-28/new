@@ -449,7 +449,10 @@ export default function CreditPage() {
         <div className="space-y-4">
           {activeLoans.length === 0 ? (
             <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center text-sm text-[var(--color-muted)]">
-              No active loans. Accept an offer from the Overview tab to start tracking repayments here.
+              {/* Overview's Accept was retired (illustrative comparisons only) - pointing
+                  there sent users in a dead-end loop. The REAL financing flow is the
+                  Get Financing tab. */}
+              No active loans. Take real financing from the <span className="text-[var(--color-text)] font-medium">Get Financing</span> tab (offers priced from your own data) - repayments are tracked here once a loan is live.
             </div>
           ) : (
             activeLoans.map((loan: ActiveLoan) => {

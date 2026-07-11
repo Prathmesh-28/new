@@ -1,5 +1,6 @@
 import { useState, useMemo, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
 import { generateId, formatCurrency } from "@/lib/utils";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { api } from "@/lib/api";
@@ -74,9 +75,11 @@ const PROVIDERS: {
     desc: "Sync all Razorpay settlements, payment links, and refunds as transactions automatically. Real-time webhooks.",
     tag: "Indian Payments",
     icon: "💙",
+    // No webhook-secret field: an audit found the old password input captured a LIVE
+    // secret and silently discarded it (the save only ever sent account_name). Never
+    // ask for a credential nothing stores or uses.
     setupFields: [
       { key: "accountName", label: "Razorpay account name", placeholder: "My Business" },
-      { key: "webhookSecret", label: "Webhook secret key", placeholder: "whsec_…", type: "password" },
     ],
   },
   {
@@ -87,7 +90,6 @@ const PROVIDERS: {
     icon: "💳",
     setupFields: [
       { key: "accountName", label: "Stripe account name", placeholder: "My Company" },
-      { key: "webhookSecret", label: "Stripe webhook secret", placeholder: "whsec_…", type: "password" },
     ],
     webhookNote: undefined,
   },
@@ -112,6 +114,7 @@ const STATUS_UI = {
 
 export default function ConnectorsPage() {
   const tr = useT();
+  const { user } = useAuth();
   const { store, addConnector, updateConnector, deleteConnector } = useApp();
   const { connectors } = store;
   const [setupFor, setSetupFor] = useState<ConnectorProvider | null>(null);
@@ -120,13 +123,12 @@ export default function ConnectorsPage() {
 
   const connectedMap = new Map(connectors.map(c => [c.provider, c]));
 
+  // Throws on failure - the old version fell back to a client-side generateId() and
+  // showed "connector added" for a row that existed only locally, whose Sync then
+  // failed with an unexplained "Not found".
   const persistConnector = async (providerId: ConnectorProvider, accountName: string): Promise<string> => {
-    try {
-      const res = await api.post<{ id: string }>("/api/connectors", { provider: providerId, account_name: accountName });
-      return res.id;
-    } catch {
-      return generateId();
-    }
+    const res = await api.post<{ id: string }>("/api/connectors", { provider: providerId, account_name: accountName });
+    return res.id;
   };
 
   const handleConnect = async (providerId: ConnectorProvider) => {
@@ -134,9 +136,13 @@ export default function ConnectorsPage() {
     if (existing) { toast("Already connected. Disconnect first to reconfigure."); return; }
     const provider = PROVIDERS.find(p => p.id === providerId)!;
     if (provider.webhookNote) {
-      const id = await persistConnector(providerId, "Tally ERP");
-      addConnector({ id, provider: providerId, label: provider.name, accountName: "Tally ERP", status: "pending", lastSync: null, accountCount: 0, consentExpiry: null });
-      toast.success("Tally connector added. Install the sync agent to complete setup.");
+      try {
+        const id = await persistConnector(providerId, "Tally ERP");
+        addConnector({ id, provider: providerId, label: provider.name, accountName: "Tally ERP", status: "pending", lastSync: null, accountCount: 0, consentExpiry: null });
+        toast.success("Tally connector added. Install the sync agent to complete setup.");
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Couldn't add the connector - server unreachable. Try again.");
+      }
     } else {
       setSetupFor(providerId);
       setFields({});
@@ -147,10 +153,14 @@ export default function ConnectorsPage() {
     if (!setupFor) return;
     const provider    = PROVIDERS.find(p => p.id === setupFor)!;
     const accountName = fields.accountName || provider.name;
-    const id          = await persistConnector(setupFor, accountName);
-    addConnector({ id, provider: setupFor, label: provider.name, accountName, status: "pending", lastSync: null, accountCount: 0, consentExpiry: null });
-    toast.success(`${provider.name} connector added - complete consent to activate.`);
-    setSetupFor(null); setFields({});
+    try {
+      const id = await persistConnector(setupFor, accountName);
+      addConnector({ id, provider: setupFor, label: provider.name, accountName, status: "pending", lastSync: null, accountCount: 0, consentExpiry: null });
+      toast.success(`${provider.name} connector added - complete consent to activate.`);
+      setSetupFor(null); setFields({});
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't add the connector - server unreachable. Try again.");
+    }
   };
 
   const handleSync = async (c: BankConnector) => {
@@ -304,8 +314,10 @@ export default function ConnectorsPage() {
                   </div>
                   <p className="text-xs text-[var(--color-muted)] mb-3 leading-relaxed">{p.webhookNote || p.desc}</p>
                   {p.webhookNote && existing && (
+                    // The REAL tenant id - the Tally sync agent keys its webhook pushes on
+                    // this. A hardcoded placeholder here meant Tally setup could never work.
                     <div className="text-xs bg-[var(--color-bg)] rounded-lg p-2 border border-[var(--color-border)] mb-2 font-mono break-all">
-                      Tenant ID: {`demo-tenant-id`}
+                      Tenant ID: {user?.tenant_id || "(sign in to see your tenant id)"}
                     </div>
                   )}
                   {!existing ? (

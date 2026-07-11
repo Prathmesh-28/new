@@ -1791,9 +1791,12 @@ function DunningFunnel() {
   const totalCnt = data.reduce((s, d) => s + d.count, 0);
   const actionable = data.filter(d => d.key !== "not-due").reduce((s, d) => s + d.amount, 0);
 
+  // Nothing is "queued" anywhere - this is guidance, not an action (the old success
+  // toast claimed a queue while doing literally nothing). Reminders really dispatch
+  // from Invoices → Collections → Remind.
   const handleChaseStage = (label: string, count: number) => {
     if (count === 0) { toast.error("No invoices in this stage"); return; }
-    toast.success(`${count} invoice${count !== 1 ? "s" : ""} queued for "${label}" - open each customer to send the reminder`);
+    toast.info(`${count} invoice${count !== 1 ? "s" : ""} sit in "${label}". Use Invoices → Collections → Remind to actually send reminders - nothing is queued from here.`);
   };
 
   if (totalCnt === 0) {

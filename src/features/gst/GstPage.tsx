@@ -4436,16 +4436,22 @@ function GstDepthServer() {
   const [hoCost, setHoCost] = useState("");
   const [isd, setIsd] = useState<any>(null);
   const [cc, setCc] = useState<any>(null);
-  const runIsd = () => api.get(`/api/books/gst/isd?period=${period}&common_itc=${Number(commonItc) || 0}`).then(setIsd).catch(() => {});
-  const runCc = () => api.get(`/api/books/gst/cross-charge?period=${period}&ho_cost=${Number(hoCost) || 0}`).then(setCc).catch(() => {});
+  const runIsd = () => api.get(`/api/books/gst/isd?period=${period}&common_itc=${Number(commonItc) || 0}`).then(setIsd).catch((e) => toast.error(e instanceof Error ? e.message : "ISD computation failed"));
+  const runCc = () => api.get(`/api/books/gst/cross-charge?period=${period}&ho_cost=${Number(hoCost) || 0}`).then(setCc).catch((e) => toast.error(e instanceof Error ? e.message : "Cross-charge computation failed"));
   const box = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4";
+  // Errors land in a visible state - the old bare .catch(() => {}) left the cards
+  // saying "Loading…" forever on any failure, with no retry and no explanation.
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const failedTo = (e: unknown) => setLoadErr(e instanceof Error ? e.message : "couldn't reach the server");
   useEffect(() => {
-    api.get(`/api/books/gst/composition-cmp08?fy_start=${nowY}&quarter=${quarter}`).then(setCmp).catch(() => {});
-    api.get(`/api/books/gst/qrmp?fy_start=${nowY}&quarter=${quarter}`).then(setQr).catch(() => {});
+    setLoadErr(null);
+    api.get(`/api/books/gst/composition-cmp08?fy_start=${nowY}&quarter=${quarter}`).then(setCmp).catch(failedTo);
+    api.get(`/api/books/gst/qrmp?fy_start=${nowY}&quarter=${quarter}`).then(setQr).catch(failedTo);
   }, [quarter, nowY]);
   useEffect(() => {
-    api.get(`/api/books/gst/rule-86b?period=${period}`).then(setR86).catch(() => {});
-    api.get(`/api/books/gst/late-fee?period=${period}`).then(setLate).catch(() => {});
+    setLoadErr(null);
+    api.get(`/api/books/gst/rule-86b?period=${period}`).then(setR86).catch(failedTo);
+    api.get(`/api/books/gst/late-fee?period=${period}`).then(setLate).catch(failedTo);
   }, [period]);
   const fc = (v: number) => "₹" + Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
   return (
@@ -4456,6 +4462,11 @@ function GstDepthServer() {
         <label className="text-xs text-[var(--color-muted)] ml-3">Month</label>
         <input type="month" value={period} onChange={e => setPeriod(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-sm" />
       </div>
+      {loadErr && (
+        <div className="text-xs bg-red-950/30 border border-red-800/40 text-red-400 rounded-lg px-3 py-2">
+          Couldn't load some figures ({loadErr}) - cards stuck on "Loading…" reflect that, not missing data. Change the period to retry.
+        </div>
+      )}
       <div className="grid md:grid-cols-2 gap-4">
         <div className={box}>
           <p className="text-sm font-semibold mb-2">Composition CMP-08 ({quarter})</p>

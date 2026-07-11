@@ -177,6 +177,22 @@ router.post("/razorpay/subscription", authenticate, requireOwnerOrAdmin, async (
     planKey = `founding_${plan}_annual`;
   }
 
+  // One live mandate at a time. An audit found that creating a second subscription
+  // while one was active (a) left BOTH mandates charging the customer - the old
+  // subscription id was overwritten so even self-serve cancel couldn't reach it,
+  // and (b) merely opening-and-dismissing the upgrade checkout flipped the active
+  // row to 'created', hiding the Cancel button. Refuse with clear instructions
+  // instead; the create path below can then never clobber an active subscription.
+  const { rows: existingSub } = await pool.query(
+    "SELECT status, plan AS cur_plan, razorpay_subscription_id FROM tenant_billing WHERE tenant_id=$1",
+    [req.user.tenant_id]
+  );
+  if (existingSub[0]?.status === "active" && existingSub[0]?.razorpay_subscription_id) {
+    return res.status(409).json({
+      error: `You already have an active ${existingSub[0].cur_plan} subscription. To change plans, cancel it first (your access continues to the end of the paid period), then subscribe to the new plan - two live mandates would double-charge you.`,
+    });
+  }
+
   try {
     const planId = await getOrCreatePlan(planKey, {
       period: cycle === "annual" ? "yearly" : "monthly",

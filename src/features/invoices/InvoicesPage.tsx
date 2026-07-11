@@ -216,15 +216,23 @@ function CollectionAutoPanel({ invoices, onRefresh }: { invoices: Invoice[]; onR
   const [reminding, setReminding] = useState<Record<string, boolean>>({});
   const [reminded, setReminded]   = useState<Set<string>>(new Set());
 
-  const sendReminder = async (id: string) => {
+  // Shows what ACTUALLY happened: the backend reports channel + delivered honestly
+  // (WhatsApp/email may be unconfigured, in which case nothing left the server), but
+  // the old toast claimed "WhatsApp reminder sent with UPI payment link" regardless.
+  const sendReminder = async (id: string, opts: { quiet?: boolean } = {}): Promise<boolean> => {
     setReminding(r => ({ ...r, [id]: true }));
     try {
-      await api.post(`/api/invoices/${id}/remind`, {});
+      const res = await api.post<{ channel?: string; delivered?: boolean; message?: string }>(`/api/invoices/${id}/remind`, {});
       setReminded(s => new Set([...s, id]));
-      toast.success("WhatsApp reminder sent with UPI payment link");
+      if (!opts.quiet) {
+        if (res.delivered) toast.success(res.message || `Reminder sent via ${res.channel}`);
+        else toast.warning(res.message || "Reminder recorded but NOT delivered - messaging isn't configured.");
+      }
       onRefresh();
-    } catch {
-      toast.error("Could not send reminder");
+      return !!res.delivered;
+    } catch (e) {
+      if (!opts.quiet) toast.error(e instanceof Error ? e.message : "Could not send reminder");
+      return false;
     } finally {
       setReminding(r => ({ ...r, [id]: false }));
     }
@@ -232,8 +240,11 @@ function CollectionAutoPanel({ invoices, onRefresh }: { invoices: Invoice[]; onR
 
   const remindAll = async () => {
     const unreminded = overdue.filter(i => !reminded.has(i.id));
-    for (const inv of unreminded) await sendReminder(inv.id);
-    toast.success(`${unreminded.length} reminders sent`);
+    let delivered = 0;
+    for (const inv of unreminded) { if (await sendReminder(inv.id, { quiet: true })) delivered++; }
+    // Honest tally - some sends fail (rate caps, no contact, unconfigured provider).
+    if (delivered === unreminded.length) toast.success(`${delivered} reminders sent`);
+    else toast.warning(`${delivered} of ${unreminded.length} reminders delivered - the rest were rate-capped, missing contact details, or messaging isn't configured.`);
   };
 
   if (overdue.length === 0) {
@@ -465,11 +476,14 @@ export default function InvoicesPage() {
 
   const sendInvoice = async (id: string) => {
     try {
-      await api.post(`/api/invoices/${id}/send`, {});
-      toast.success("Invoice emailed to customer");
+      // Honest delivery: the invoice is issued/booked either way, but the backend
+      // now says whether the email actually left the server (SMTP may be unconfigured).
+      const res = await api.post<{ delivered?: boolean; message?: string }>(`/api/invoices/${id}/send`, {});
+      if (res.delivered) toast.success(res.message || "Invoice emailed to customer");
+      else toast.warning(res.message || "Invoice marked sent - but the email was NOT delivered (email service not configured).", { duration: 8000 });
       load();
-    } catch {
-      toast.error("Failed to send");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to send");
     }
   };
 
@@ -676,8 +690,12 @@ export default function InvoicesPage() {
                           </button>
                           {inv.aging && inv.aging !== "current" && (
                             <button onClick={async () => {
-                              try { await api.post(`/api/invoices/${inv.id}/remind`, {}); toast.success("Reminder sent"); }
-                              catch { toast.error("Failed to send reminder"); }
+                              try {
+                                const r = await api.post<{ delivered?: boolean; message?: string }>(`/api/invoices/${inv.id}/remind`, {});
+                                if (r.delivered) toast.success(r.message || "Reminder sent");
+                                else toast.warning(r.message || "Reminder recorded but NOT delivered - messaging isn't configured.");
+                              }
+                              catch (e) { toast.error(e instanceof Error ? e.message : "Failed to send reminder"); }
                             }} title="Send WhatsApp reminder"
                               className="p-1.5 text-[var(--color-muted)] hover:text-green-400 hover:bg-green-900/10 rounded">
                               <MessageCircle size={13} />

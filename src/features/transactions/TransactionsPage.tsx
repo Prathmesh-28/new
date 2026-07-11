@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import type { Transaction, Invoice } from "@/data/types";
 import { capturePhoto } from "@/lib/nativeFeatures";
 import { api } from "@/lib/api";
+import { catFromApi, catToApi, txnFromApi, txnToApiBody } from "@/lib/txnApi";
 import { useT } from "@/i18n";
 import ReconcileModal from "./ReconcileModal";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
@@ -41,61 +42,9 @@ type SortDir   = "asc" | "desc";
 // every sub-view (which read `store.transactions`) keep working unchanged.
 const TXN_PAGE_LIMIT = 200; // backend caps page size at 200
 
-// backend category → one of the UI's six buckets
-function catFromApi(c: string | null | undefined): Transaction["category"] {
-  switch (c) {
-    case "revenue":        return "revenue";
-    case "payroll":        return "payroll";
-    case "tax":            return "tax";
-    case "transfer":       return "transfer";
-    case "loan_repayment": return "loan";
-    default:               return "expense"; // rent/software/inventory/utilities/marketing/uncategorized
-  }
-}
-// UI bucket → backend category (used on create/update). When the row already carries a full
-// backend category whose bucket MATCHES what's being written, preserve it — before this, any
-// edit (merchant fix, bulk action, rule) silently corrupted rent/software/inventory/… back to
-// "uncategorized". Only a deliberate bucket CHANGE re-maps.
-function catToApi(c: Transaction["category"], apiCategory?: string): string {
-  if (apiCategory && catFromApi(apiCategory) === c) return apiCategory;
-  switch (c) {
-    case "revenue":  return "revenue";
-    case "payroll":  return "payroll";
-    case "tax":      return "tax";
-    case "transfer": return "transfer";
-    case "loan":     return "loan_repayment";
-    case "expense":  return "uncategorized";
-    default:         return "uncategorized";
-  }
-}
-// API row → frontend Transaction
-function txnFromApi(r: any): Transaction {
-  return {
-    id:            String(r.id),
-    date:          (r.transaction_date ?? "").toString().slice(0, 10),
-    amount:        Number(r.amount) || 0,
-    description:   r.description_raw ?? r.account_name ?? "Transaction",
-    category:      catFromApi(r.category),
-    apiCategory:   r.category ?? undefined, // full backend category, preserved for round-trips
-    counterparty:  r.merchant_name ?? "",
-    isRecurring:   !!r.is_recurring,
-    bankAccountId: r.bank_account_id ? String(r.bank_account_id) : "",
-    notes:         r.notes ?? undefined,
-  };
-}
-// frontend Transaction → POST body
-function txnToApiBody(t: Transaction) {
-  return {
-    bank_account_id:  t.bankAccountId || undefined,
-    amount:           t.amount,
-    description_raw:  t.description,
-    merchant_name:    t.counterparty || undefined,
-    category:         catToApi(t.category, t.apiCategory),
-    is_recurring:     t.isRecurring,
-    transaction_date: t.date,
-    source:           "manual",
-  };
-}
+// (catFromApi / catToApi / txnFromApi / txnToApiBody moved to src/lib/txnApi.ts -
+// shared with the Dashboard quick-add + CSV import so EVERY transaction-creating
+// surface persists through the same server path.)
 
 function getRules(): Record<string, string> {
   try { return JSON.parse(localStorage.getItem("hr_cat_rules") ?? "{}"); } catch { return {}; }

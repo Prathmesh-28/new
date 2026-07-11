@@ -51,6 +51,9 @@ export default function BillingCard() {
   };
 
   const cancel = async () => {
+    // One misclick used to cancel the live Razorpay mandate immediately -
+    // re-subscribing needs a whole fresh checkout, so confirm first.
+    if (!window.confirm("Cancel your subscription? You keep access until the end of the period you've already paid for, but auto-renewal stops and re-subscribing needs a fresh checkout.")) return;
     setBusy("cancel");
     await cancelSubscription(() => { load(); refreshUser(); });
     setBusy(null);

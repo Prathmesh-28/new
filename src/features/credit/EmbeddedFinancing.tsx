@@ -11,7 +11,7 @@ interface Eligibility { limit: number; grade: string; score: number; decision: s
 interface KFS { net_disbursal: number; total_repayable: number; all_in_cost: number; annual_interest_rate_pct: number; installments: number; recovery?: string }
 interface Offer { id: string; kind: string; principal: number; processing_fee: number; apr: number; status: string; kfs: KFS }
 interface ScheduleRow { installment_no: number; due_date: string; total_due: number; status: string }
-interface Loan { id: string; kind: string; principal: number; outstanding_principal: number; status: string; dpd_bucket?: string; asset_class?: string; dpd?: number; penal_accrued?: number; settled_at?: string; schedule?: ScheduleRow[] }
+interface Loan { id: string; kind: string; principal: number; outstanding_principal: number; status: string; dpd_bucket?: string; asset_class?: string; dpd?: number; penal_accrued?: number; settled_at?: string; schedule?: ScheduleRow[]; disbursal_status?: string | null }
 interface Servicing { active: number; byClass: { standard: number; overdue: number; npa: number }; overdueAmount: number; npaAmount: number; penalAccrued: number; outstanding: number }
 interface Mandate { id: string; loan_id: string; status: string; provider: string; provider_configured: boolean; collected: number; bounced: number }
 interface FinInvoice { id: string; invoice_number: string; customer_name: string; total_amount: number; due_date: string | null; indicative_advance: number }
@@ -36,19 +36,26 @@ export default function EmbeddedFinancing({ presetInvoiceId }: { presetInvoiceId
   const [financeable, setFinanceable] = useState<FinInvoice[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]); // checked financeable invoices ([] = custom amount)
 
+  const [loadError, setLoadError] = useState<string | null>(null);
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      // A failed fetch must NOT read as "₹0 pre-approved / no loans" - that's false
+      // and alarming for a borrower with live advances. Track whether the primary
+      // calls failed so the page can show an error state instead of zeros.
+      let failed: string | null = null;
+      const catchAs = <T,>(fallback: T) => (e: unknown) => { failed = e instanceof Error ? e.message : "couldn't reach the server"; return fallback; };
       const [e, o, l, s, mn, fi, pos] = await Promise.all([
-        api.get<Eligibility>("/api/lending/eligibility").catch(() => null),
-        api.get<Offer[]>("/api/lending/offers").catch(() => []),
-        api.get<Loan[]>("/api/lending/loans").catch(() => []),
+        api.get<Eligibility>("/api/lending/eligibility").catch(catchAs<Eligibility | null>(null)),
+        api.get<Offer[]>("/api/lending/offers").catch(catchAs<Offer[]>([])),
+        api.get<Loan[]>("/api/lending/loans").catch(catchAs<Loan[]>([])),
         api.get<Servicing>("/api/lending/servicing").catch(() => null),
         api.get<Mandate[]>("/api/lending/mandates").catch(() => []),
         api.get<FinInvoice[]>("/api/lending/financeable-invoices").catch(() => []),
         api.get<Position>("/api/lending/position").catch(() => null),
       ]);
       setElig(e); setOffers(o || []); setLoans(l || []); setSvc(s); setMandates(mn || []); setFinanceable(fi || []); setPosition(pos);
+      setLoadError(failed);
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -127,11 +134,20 @@ export default function EmbeddedFinancing({ presetInvoiceId }: { presetInvoiceId
 
   return (
     <div className="space-y-5">
+      {/* Couldn't load ≠ not approved: without this banner an outage or plan-gate 403
+          rendered as "Pre-approved limit ₹0 / No loans yet" - false and alarming for
+          a borrower with live advances. */}
+      {loadError && (
+        <div className="rounded-xl border border-amber-800/40 bg-amber-950/20 p-3 text-xs text-amber-400 flex items-center justify-between gap-3 flex-wrap">
+          <span>Couldn't load your financing data ({loadError}) - the figures below may be incomplete, not zero.</span>
+          <button onClick={() => void load()} className="shrink-0 border border-amber-700/40 rounded-lg px-3 py-1 hover:bg-amber-900/20">Retry</button>
+        </div>
+      )}
       {/* Eligibility */}
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs text-[var(--color-muted)] mb-1 flex items-center gap-1.5"><Zap size={13} className="text-[var(--color-primary)]" /> Pre-approved limit · grade {elig?.grade ?? "-"}</p>
-          <p className="text-2xl font-bold">{formatCurrency(elig?.limit ?? 0)}</p>
+          <p className="text-2xl font-bold">{loadError && !elig ? "—" : formatCurrency(elig?.limit ?? 0)}</p>
         </div>
         <span className={`text-[10px] px-2 py-1 rounded-full ${railsLive ? "bg-green-900/30 text-green-400" : "bg-amber-900/30 text-amber-400"}`}>
           {railsLive ? "Disbursal rails: Live" : "Disbursal: Preview (connect a gateway)"}
@@ -273,6 +289,12 @@ export default function EmbeddedFinancing({ presetInvoiceId }: { presetInvoiceId
                 <p className="text-sm font-semibold flex items-center gap-2">
                   {l.kind === "invoice_finance" ? "Invoice advance" : "Working capital"} · {formatCurrency(l.principal)}
                   {l.status === "active" && cls !== "standard" && <span className={`text-[10px] px-2 py-0.5 rounded-full ${clsColor}`}>{cls === "npa" ? "NPA" : "Overdue"}{l.dpd ? ` · ${l.dpd} DPD` : ""}</span>}
+                  {/* Accepted ≠ money arrived: the transfer's real rail state, until settled. */}
+                  {l.status === "active" && l.disbursal_status && l.disbursal_status !== "settled" && (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${l.disbursal_status === "failed" ? "bg-red-900/30 text-red-400" : "bg-amber-900/30 text-amber-400"}`}>
+                      {l.disbursal_status === "failed" ? "Disbursal failed - contact support" : "Disbursal pending - money not in your bank yet"}
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs text-[var(--color-muted)]">Outstanding {formatCurrency(l.outstanding_principal)} · {l.status}{l.penal_accrued && l.penal_accrued > 0 ? ` · penal ${formatCurrency(l.penal_accrued)}` : ""}</p>
                 {l.status === "active" && adv?.source_invoice && (

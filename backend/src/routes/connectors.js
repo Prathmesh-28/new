@@ -82,7 +82,11 @@ router.post("/:id/sync", authenticate, canWrite, async (req, res) => {
       if (!process.env.QB_CLIENT_ID) return res.status(503).json({ error: "Set QB_CLIENT_ID to enable QuickBooks sync" });
       break;
     default:
-      break;
+      // No sync implementation exists for this provider. Marking it "connected"
+      // with a fresh last_sync would fabricate an integration (an audit caught
+      // exactly that: a green Connected badge for providers where zero data will
+      // ever flow). Honest 503 instead - same pattern as unconfigured providers.
+      return res.status(503).json({ error: `Sync for "${c[0].provider}" isn't built yet - the connector saves your preference, but no data flows from it today.` });
   }
 
   await pool.query(

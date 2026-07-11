@@ -138,6 +138,9 @@ function EarlyPaySection() {
 
   useEffect(load, []);
 
+  // Planning only - no money moves and NOTHING is booked (the old version silently
+  // inserted a fabricated expense into the real transactions table for an ESTIMATED
+  // invoice). The real payment path is Vendors → Record Bill → Pay.
   const payEarly = async (offer: SupplierOffer) => {
     setPaying(p => ({ ...p, [offer.id]: true }));
     try {
@@ -149,11 +152,9 @@ function EarlyPaySection() {
         saving: offer.saving,
       });
       setPaid(s => ({ ...s, [offer.id]: true }));
-      toast.success(res?.message || `Early payment to ${offer.supplier_name} recorded. You saved ${formatCurrency(offer.saving)}.`);
-      // Refresh candidates so the recorded expense is reflected in the tenant's data.
-      load();
-    } catch {
-      toast.error("Payment failed");
+      toast.info(res?.message || `Early-pay plan for ${offer.supplier_name}: save ~${formatCurrency(offer.saving)}. Nothing was booked - record the real payment under Vendors → Record Bill.`, { duration: 8000 });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't compute the early-pay plan");
     } finally {
       setPaying(p => ({ ...p, [offer.id]: false }));
     }
@@ -240,11 +241,11 @@ function EarlyPaySection() {
                   <p className="text-sm font-bold tabular-nums">{formatCurrency(offer.invoice_amount - offer.saving)}</p>
                   <p className="text-[10px] text-[var(--color-muted)]">Pay today</p>
                   {paid[offer.id] ? (
-                    <span className="flex items-center gap-1 text-xs text-green-400 mt-1"><Check size={11} /> Paid</span>
+                    <span className="flex items-center gap-1 text-xs text-green-400 mt-1"><Check size={11} /> Planned</span>
                   ) : (
                     <button onClick={() => payEarly(offer)} disabled={paying[offer.id]}
                       className="mt-2 flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-50">
-                      <Zap size={11} /> {paying[offer.id] ? "Paying…" : "Pay Early"}
+                      <Zap size={11} /> {paying[offer.id] ? "Computing…" : "Plan early pay"}
                     </button>
                   )}
                 </div>

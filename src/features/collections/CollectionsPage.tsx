@@ -301,16 +301,21 @@ export default function CollectionsPage() {
         const dueDate = (r.due_date ?? r.dueDate ?? "") as string;
         const dueIso = dueDate ? String(dueDate).slice(0, 10) : "";
         const overdue = Number(r.days_overdue ?? 0);
+        // BALANCE outstanding, never the gross total: a half-paid or part-credited
+        // customer used to be shown - and sent a payment link for - the FULL invoice
+        // amount (an audit caught this overcharging real customers).
+        const gross = Number(r.total_amount ?? r.amount ?? 0);
+        const balance = Math.max(0, gross - Number(r.paid_amount ?? 0) - Number(r.credited_amount ?? 0));
         return {
           id: r.id as string,
           clientName: (r.customer_name ?? r.customer ?? "Unknown") as string,
-          amount: Number(r.total_amount ?? r.amount ?? 0),
+          amount: balance,
           dueDate: dueIso,
           status: (r.status ?? "sent") as "pending" | "overdue" | "paid",
           aging: getAging(dueIso),
           daysOverdue: Number.isFinite(overdue) ? Math.max(0, overdue) : 0,
         };
-      });
+      }).filter((r) => r.amount > 0);
       setBackendRows(mapped);
     } catch {
       // Graceful fallback: keep using the local KV-derived view.

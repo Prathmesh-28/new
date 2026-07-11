@@ -1812,13 +1812,16 @@ function PayRunScheduler() {
   const available = store.bankAccounts.reduce((s, a) => s + (a.balance ?? 0), 0);
   const shortfall = runTotal - available;
 
+  // Honest: this tool CHECKS a batch against your balance - it persists no schedule
+  // and pays nobody (the old toast said "Pay run scheduled" while writing nothing
+  // anywhere; the run vanished on navigation). Real payments: Record Bill → Pay.
   const schedule = () => {
     const n = payables.filter(p => selSet.has(p.id)).length;
     if (n === 0) { toast.error("Select at least one payable for the run"); return; }
     if (shortfall > 0) {
       toast.warning(`Pay run of ${formatCurrency(runTotal)} on ${format(new Date(runDate), "dd MMM")} exceeds available balance by ${formatCurrency(shortfall)}`);
     } else {
-      toast.success(`Pay run scheduled - ${n} payable${n !== 1 ? "s" : ""} totalling ${formatCurrency(runTotal)} on ${format(new Date(runDate), "dd MMM")}`);
+      toast.info(`Balance check passed: ${n} payable${n !== 1 ? "s" : ""} totalling ${formatCurrency(runTotal)} fits your balance for ${format(new Date(runDate), "dd MMM")}. Nothing is scheduled - pay each bill via Record Bill → Pay when the day comes.`, { duration: 8000 });
     }
   };
 
@@ -1862,7 +1865,7 @@ function PayRunScheduler() {
               <button onClick={selectAll} className="text-xs text-[var(--color-primary)] hover:underline">Select all</button>
               <button onClick={clear} className="text-xs text-[var(--color-muted)] hover:underline">Clear</button>
             </div>
-            <button onClick={schedule} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-1.5 rounded-lg hover:opacity-90">Schedule Pay Run</button>
+            <button onClick={schedule} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-1.5 rounded-lg hover:opacity-90">Check run vs balance</button>
           </div>
           <table className="w-full text-sm min-w-[560px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">

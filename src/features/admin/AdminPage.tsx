@@ -558,12 +558,21 @@ function PlatformSettingsAdmin() {
   const [data, setData] = useState<Record<string, Record<string, any>>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  useEffect(() => {
+  // Save is DISABLED until the live values actually loaded: PUT replaces the whole
+  // group, so saving blank fields rendered after a failed load silently ERASED live
+  // footer/FAQ/banner content behind a "Saved - live now" toast.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const loadAll = () => {
+    setLoadFailed(false);
     api.get<Record<string, Record<string, any>>>("/api/platform/settings/all")
-      .then(d => setData(d || {})).catch(() => { /* keep blanks */ }).finally(() => setLoaded(true));
-  }, []);
+      .then(d => { setData(d || {}); setLoadFailed(false); })
+      .catch(() => setLoadFailed(true))
+      .finally(() => setLoaded(true));
+  };
+  useEffect(() => { loadAll(); }, []);
   const set = (g: string, k: string, v: any) => setData(s => ({ ...s, [g]: { ...(s[g] || {}), [k]: v } }));
   const save = async (g: string) => {
+    if (loadFailed) { toast.error("Settings didn't load - saving now would wipe the live values. Retry loading first."); return; }
     setSaving(g);
     try { const res = await api.put<Record<string, any>>(`/api/platform/settings/${g}`, data[g] || {}); setData(s => ({ ...s, [g]: res })); toast.success("Saved - live now"); }
     catch (err) { toast.error(errMsg(err)); }
@@ -600,6 +609,12 @@ function PlatformSettingsAdmin() {
     );
   };
   if (!loaded) return <div className="text-xs text-[var(--color-muted)]">Loading platform settings…</div>;
+  if (loadFailed) return (
+    <div className="text-xs bg-red-950/30 border border-red-800/40 text-red-400 rounded-lg px-4 py-3 flex items-center justify-between gap-3">
+      <span>Couldn't load the live settings - editing now would risk overwriting them with blanks.</span>
+      <button onClick={loadAll} className="shrink-0 border border-red-700/40 rounded-lg px-3 py-1 hover:bg-red-900/20">Retry</button>
+    </div>
+  );
   return (
     <div className="space-y-4">
       <p className="text-xs text-[var(--color-muted)]">Everything below is editable here and goes live immediately - no redeploy.</p>
