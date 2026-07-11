@@ -4,6 +4,7 @@ import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
 import { formatCurrency, formatAmount, generateId } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { API_BASE } from "@/lib/apiBase";
 import EmptyState from "@/components/EmptyState";
 import AiInsight from "@/components/ai/AiInsight";
 import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2, LineChart, Layers, Network, FileCheck2, Gavel, PiggyBank, FileBadge, BadgePercent, Ban, CreditCard, Repeat, Truck, CopyCheck, Hourglass, Scale, Pencil, Building2, BadgeCheck, Loader2, RefreshCw } from "lucide-react";
@@ -3424,51 +3425,106 @@ function SavingsTracker() {
 
 /* ─────────────────────────────────────────────────────────────────────────
    TDS Form-16A Issuance Tracker - track quarterly TDS certificates owed to vendors.
+   Real TDS-per-quarter, off the same GET /api/books/tax/vendor-tds-ledger source
+   as VendorTdsLedger above - this used to be a hand-typed KV list, so a user
+   could type a different TDS figure here than what a bill actually withheld,
+   and could mark a certificate "Issued" without ever generating the real,
+   TRACES-compliant document. "Generate" now opens the actual Form 16A HTML
+   (GET /api/books/tax/form16a) for that vendor/quarter/FY.
    ───────────────────────────────────────────────────────────────────────── */
 type F16Status = "pending" | "downloaded" | "issued";
-interface F16Cert { id: string; vendor: string; pan: string; quarter: string; fy: string; tdsAmount: number; status: F16Status; }
-
 const F16_STATUS_META: Record<F16Status, { label: string; cls: string }> = {
   pending:    { label: "Pending",    cls: "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]" },
   downloaded: { label: "Downloaded", cls: "bg-blue-950/30 text-blue-400 border-blue-800/30" },
   issued:     { label: "Issued",     cls: "bg-green-950/30 text-green-400 border-green-800/30" },
 };
-const F16_QUARTERS = ["Q1 (Apr-Jun)", "Q2 (Jul-Sep)", "Q3 (Oct-Dec)", "Q4 (Jan-Mar)"] as const;
+const F16_QUARTER_LABEL: Record<string, string> = { Q1: "Q1 (Apr-Jun)", Q2: "Q2 (Jul-Sep)", Q3: "Q3 (Oct-Dec)", Q4: "Q4 (Jan-Mar)" };
+function quarterOf(dateStr: string): "Q1" | "Q2" | "Q3" | "Q4" {
+  const m = new Date(dateStr).getMonth();
+  if (m >= 3 && m <= 5) return "Q1";
+  if (m >= 6 && m <= 8) return "Q2";
+  if (m >= 9 && m <= 11) return "Q3";
+  return "Q4";
+}
 
 function Form16ATracker() {
-  const { store } = useApp();
-  const [certs, setCerts] = useFeatureState<F16Cert[]>("ven-f16a-certs", []);
-  const [vendor, setVendor] = useState("");
-  const [pan, setPan] = useState("");
-  const [quarter, setQuarter] = useState<string>(F16_QUARTERS[0]);
-  const [fy, setFy] = useState("2025-26");
-  const [tds, setTds] = useState("");
+  const now = new Date();
+  const defaultFyStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const [fyStart, setFyStart] = useState(defaultFyStart);
+  const fy = `${fyStart}-${(fyStart + 1).toString().slice(2)}`;
+  const [data, setData] = useState<VendorTdsResponse>(EMPTY_VENDOR_TDS);
+  const [loading, setLoading] = useState(true);
+  const [generatingKey, setGeneratingKey] = useState<string | null>(null);
+  // "Issued" is a personal reminder only - there's no real event to verify a
+  // certificate was actually handed to the vendor, same pattern as VendorTdsLedger's
+  // "Deposited?" memo.
+  const [statusByKey, setStatusByKey] = useFeatureState<Record<string, F16Status>>("ven-f16a-status", {});
 
-  const knownVendors = useMemo(() =>
-    Array.from(new Set(store.transactions.filter(t => t.amount < 0 && t.counterparty).map(t => t.counterparty))).sort(),
-  [store.transactions]);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api.get<VendorTdsResponse>(`/api/books/tax/vendor-tds-ledger?fy=${fy}`)
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setData(EMPTY_VENDOR_TDS); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [fy]);
 
-  const add = () => {
-    const amt = parseFloat(tds) || 0;
-    if (!vendor.trim() || amt <= 0) { toast.error("Enter vendor and TDS amount"); return; }
-    const c: F16Cert = { id: crypto.randomUUID(), vendor: vendor.trim(), pan: pan.trim().toUpperCase(), quarter, fy: fy.trim(), tdsAmount: amt, status: "pending" };
-    setCerts(prev => [c, ...prev]);
-    setVendor(""); setPan(""); setTds("");
-    toast.success(`Form 16A queued for ${c.vendor}`);
+  // One row per (vendor, quarter) that has real TDS entries this FY.
+  const rows = useMemo(() => {
+    const out: { key: string; vendorLedgerId: string | null; vendorName: string; vendorPan: string | null; quarter: string; totalTds: number }[] = [];
+    for (const v of data.vendors) {
+      const byQ = new Map<string, number>();
+      for (const e of v.entries) byQ.set(quarterOf(e.date), (byQ.get(quarterOf(e.date)) ?? 0) + Number(e.taxAmount));
+      for (const [q, amt] of byQ) out.push({ key: `${fy}:${v.vendorLedgerId}:${q}`, vendorLedgerId: v.vendorLedgerId, vendorName: v.vendorName, vendorPan: v.vendorPan, quarter: q, totalTds: amt });
+    }
+    return out.sort((a, b) => a.quarter.localeCompare(b.quarter) || b.totalTds - a.totalTds);
+  }, [data, fy]);
+
+  const cycle = (key: string) => setStatusByKey(prev => {
+    const cur = prev[key] ?? "pending";
+    const next: F16Status = cur === "pending" ? "downloaded" : cur === "downloaded" ? "issued" : "pending";
+    return { ...prev, [key]: next };
+  });
+
+  const generate = async (r: (typeof rows)[number]) => {
+    if (!r.vendorLedgerId) { toast.error("No ledger linked for this vendor"); return; }
+    setGeneratingKey(r.key);
+    try {
+      // This endpoint returns real HTML, not JSON - api.get always parses JSON, so
+      // fetch it directly (same pattern as InvoicesPage.tsx's PDF download).
+      const token = localStorage.getItem("hr_access");
+      const res = await fetch(`${API_BASE}/api/books/tax/form16a?partyLedgerId=${r.vendorLedgerId}&quarter=${r.quarter}&fy=${fy}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Failed to generate Form 16A (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      setStatusByKey(prev => ({ ...prev, [r.key]: prev[r.key] === "issued" ? "issued" : "downloaded" }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to generate Form 16A");
+    } finally { setGeneratingKey(null); }
   };
-  const cycle = (id: string) => setCerts(prev => prev.map(c => c.id === id ? { ...c, status: c.status === "pending" ? "downloaded" : c.status === "downloaded" ? "issued" : "pending" } : c));
-  const remove = (id: string) => setCerts(prev => prev.filter(c => c.id !== id));
 
-  const pending = certs.filter(c => c.status !== "issued").length;
-  const totalTds = certs.reduce((s, c) => s + c.tdsAmount, 0);
+  const pending = rows.filter(r => (statusByKey[r.key] ?? "pending") !== "issued").length;
+  const totalTds = rows.reduce((s, r) => s + r.totalTds, 0);
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Every quarter you must issue Form 16A (TDS certificate) to vendors you deducted tax from, within 15 days of filing the TDS return. Miss it and you face a ₹100/day penalty per certificate. Track each one from TRACES download to handover here.</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-sm text-[var(--color-muted)] max-w-2xl">Every quarter you must issue Form 16A (TDS certificate) to vendors you deducted tax from, within 15 days of filing the TDS return. Miss it and you face a ₹100/day penalty per certificate. Real per-vendor, per-quarter TDS below - "Generate" opens the actual certificate.</p>
+        <select value={fyStart} onChange={e => setFyStart(Number(e.target.value))} className={inpCls}>
+          {Array.from({ length: 6 }, (_, i) => defaultFyStart - i).map(y => (
+            <option key={y} value={y}>FY {y}-{(y + 1).toString().slice(2)}</option>
+          ))}
+        </select>
+      </div>
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Certificates", value: certs.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Certificates", value: rows.length.toString(), color: "text-[var(--color-primary)]" },
           { label: "Awaiting Issue", value: pending.toString(), color: pending > 0 ? "text-orange-400" : "text-green-400" },
           { label: "Total TDS Covered", value: formatCurrency(Math.round(totalTds)), color: "text-blue-400" },
         ].map(s => (
@@ -3479,55 +3535,49 @@ function Form16ATracker() {
         ))}
       </div>
 
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2"><FileBadge size={15} className="text-[var(--color-primary)]" /> Add Certificate</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <input list="f16-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
-          <datalist id="f16-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
-          <input value={pan} onChange={e => setPan(e.target.value)} placeholder="Vendor PAN" className={inpCls} />
-          <select value={quarter} onChange={e => setQuarter(e.target.value)} className={inpCls}>
-            {F16_QUARTERS.map(q => <option key={q} value={q}>{q}</option>)}
-          </select>
-          <input value={fy} onChange={e => setFy(e.target.value)} placeholder="FY (e.g. 2025-26)" className={inpCls} />
-          <input type="number" value={tds} onChange={e => setTds(e.target.value)} placeholder="TDS deducted ₹ *" className={inpCls} />
+      {loading ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <p className="text-sm text-[var(--color-muted)]">Loading real TDS withholding from the books…</p>
         </div>
-        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Add Certificate</button>
-      </div>
-
-      {certs.length === 0 ? (
+      ) : rows.length === 0 ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <FileBadge size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-          <p className="text-sm text-[var(--color-muted)]">No certificates tracked. Add one per vendor per quarter to stay ahead of the 15-day issuance deadline.</p>
+          <p className="text-sm text-[var(--color-muted)]">No TDS withheld yet for FY {fy}. Post a vendor bill with a TDS section in the Bills tab to see certificates owed here.</p>
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[620px]">
+          <table className="w-full text-sm min-w-[680px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
-                {["Vendor", "Quarter", "TDS", "Status", ""].map(h => (
+                {["Vendor", "Quarter", "TDS", "Status", "Certificate"].map(h => (
                   <th key={h || "act"} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${h === "Vendor" || h === "Quarter" ? "text-left" : "text-right"}`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
-              {certs.map(c => (
-                <tr key={c.id} className="hover:bg-white/2">
-                  <td className="px-4 py-3">
-                    <p className="font-medium">{c.vendor}</p>
-                    {c.pan && <p className="text-[10px] text-[var(--color-muted)] font-mono">{c.pan}</p>}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{c.quarter} · {c.fy}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(Math.round(c.tdsAmount))}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button onClick={() => cycle(c.id)} className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${F16_STATUS_META[c.status].cls}`}>{F16_STATUS_META[c.status].label}</button>
-                  </td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => remove(c.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
-                </tr>
-              ))}
+              {rows.map(r => {
+                const status = statusByKey[r.key] ?? "pending";
+                return (
+                  <tr key={r.key} className="hover:bg-white/2">
+                    <td className="px-4 py-3">
+                      <p className="font-medium">{r.vendorName}</p>
+                      {r.vendorPan && <p className="text-[10px] text-[var(--color-muted)] font-mono">{r.vendorPan}</p>}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{F16_QUARTER_LABEL[r.quarter]} · {fy}</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(Math.round(r.totalTds))}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button onClick={() => cycle(r.key)} title="Personal reminder only - not verified against a real handover" className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${F16_STATUS_META[status].cls}`}>{F16_STATUS_META[status].label}</button>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button onClick={() => generate(r)} disabled={generatingKey === r.key} className="text-xs text-[var(--color-primary)] hover:underline disabled:opacity-50">{generatingKey === r.key ? "Generating…" : "Generate"}</button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           <div className="px-4 py-2.5 bg-[var(--color-bg)] border-t border-[var(--color-border)]">
-            <p className="text-xs text-[var(--color-muted)]">Tip: click a status chip to advance Pending → Downloaded → Issued.</p>
+            <p className="text-xs text-[var(--color-muted)]">Tip: click a status chip to advance Pending → Downloaded → Issued (a reminder only). "Generate" opens the real certificate built from the books.</p>
           </div>
         </div>
       )}

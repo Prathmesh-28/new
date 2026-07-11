@@ -3060,11 +3060,13 @@ function RegistrationThresholdAdvisor() {
   const [special, setSpecial]       = useState(false); // special-category state (₹10L/₹20L)
   const [manual, setManual]         = useState("");
 
-  // Trailing-12-month turnover from positive transactions (inflows = outward supply proxy).
-  const autoTurnover = useMemo(() => {
-    const cutoff = Date.now() - 365 * 86400000;
-    return store.transactions.filter(t => t.amount > 0 && new Date(t.date).getTime() >= cutoff).reduce((s, t) => s + t.amount, 0);
-  }, [store.transactions]);
+  // Annualized revenue-only turnover - same helper CompositionChecker/QrmpChecker/
+  // EInvoiceReadiness use. This used to sum EVERY positive-amount transaction
+  // (loans, capital infusions, refunds...), not just revenue, so a business
+  // taking on debt could be pushed toward a false "must register"/"exceeded
+  // composition cap" verdict that disagreed with what those other tabs showed
+  // for the identical period.
+  const autoTurnover = useMemo(() => annualizeRevenue(store.transactions ?? []), [store.transactions]);
 
   const turnover = manual.trim() ? (parseFloat(manual) || 0) : autoTurnover;
   // Thresholds: goods ₹40L (₹20L special); services ₹20L (₹10L special). E-invoice ₹5cr, audit/9C ₹5cr.
