@@ -418,6 +418,9 @@ router.post("/tcs/compute", async (req, res) => { try { res.json(tds.computeTcs(
 // ── Tax filing (TDS/TCS return file, Form 16A, lower-deduction certs, 26AS, ITR) ──
 router.post("/tax/tds-return", canPost, async (req, res) => { try { res.json(await taxfiling.tdsReturnFile(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/tax/form16a", async (req, res) => { try { const html = await taxfiling.form16A(tenantOf(req), { partyLedgerId: req.query.partyLedgerId, quarter: req.query.quarter, fy: fyOf(req) }); res.type("text/html").send(html); } catch (e) { fail(res, e); } });
+// Real per-vendor TDS withheld for a whole FY (source: book_tax_entries) - the
+// "Vendor TDS Ledger" tab's actual number, replacing what used to be a hand-typed list.
+router.get("/tax/vendor-tds-ledger", async (req, res) => { try { res.json(await taxfiling.vendorTdsLedger(tenantOf(req), fyOf(req))); } catch (e) { fail(res, e); } });
 router.post("/tax/tds-certificates", canPost, async (req, res) => { try { res.status(201).json(await taxfiling.addTdsCertificate(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
 router.get("/tax/tds-certificates", async (req, res) => { try { res.json(await taxfiling.listTdsCertificates(tenantOf(req), req.query.partyLedgerId)); } catch (e) { fail(res, e); } });
 router.post("/tax/26as-reconcile", canPost, async (req, res) => { try { res.json(await taxfiling.reconcile26AS(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });

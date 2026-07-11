@@ -14,6 +14,19 @@ const { pool } = require("../../db");
 const { money, toDb, toRupees } = require("./money");
 const { PostError } = require("./posting-engine");
 
+// voucher_date is a SQL DATE column; node-postgres's default parser builds the JS
+// Date from LOCAL-timezone components, so letting it flow straight into res.json()
+// (serialized via toISOString(), true UTC) silently rolls the calendar date back a
+// day on any positive-offset server timezone. Read it back via local getters - the
+// exact inverse of how it was constructed - instead of a UTC conversion.
+function isoDate(d) {
+  if (d instanceof Date) {
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  return String(d).slice(0, 10);
+}
+
 // gross side per voucher type: SALES bills sit as a party DEBIT (receivable),
 // PURCHASE bills as a party CREDIT (payable).
 function grossSideExpr(alias) {
@@ -54,7 +67,7 @@ async function openBills(tenantId, partyLedgerId) {
       voucherId: r.id,
       voucherType: r.voucher_type,
       number: r.voucher_number,
-      date: r.voucher_date,
+      date: isoDate(r.voucher_date),
       dueDate,
       gross: toRupees(gross),
       allocated: toRupees(allocated),

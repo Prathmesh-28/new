@@ -3949,14 +3949,25 @@ function NoticeRecoveryTab({ employees }: { employees: EmpLite[] }) {
   );
 }
 
-// ── 42. Salary Advance / Loan Tracker ──────────────────────────────────────────
-// Issue advances against salary, set EMI recovery, and track outstanding.
+// ── 42. Salary Advance / Loan Memo ─────────────────────────────────────────────
+// A manual outstanding-balance memo, NOT a real ledger or payroll integration.
+// This UI used to promise "recover via EMI in subsequent runs" - it never did:
+// this data is a browser-local KV list, and neither payroll run in this codebase
+// (routes/payroll.js's monthly run, or hrms/index.js's runPayroll) reads it at
+// all. The only REAL employee-loan mechanism in this codebase is
+// hrms_employee_loans - a separate table keyed to hrms_employees (the HRMS
+// module's own employee records, not this page's payroll `employees` table) -
+// and it is recovered in FULL at Full & Final settlement on exit, not via a
+// monthly EMI schedule. This tab can't safely post there (different employee
+// ID space) without a larger cross-module integration, so it stays an honest,
+// clearly-labelled memo: track what's owed, record recoveries by hand when you
+// actually adjust an employee's pay, nothing here touches payroll runs or the GL.
 function SalaryAdvanceTab({ employees }: { employees: EmpLite[] }) {
-  type Advance = { id: string; empId: string; principal: number; emi: number; paid: number; date: string };
+  type Advance = { id: string; empId: string; principal: number; paid: number; date: string };
   const [advances, setAdvances] = useFeatureState<Advance[]>("payroll-salary-advances", []);
   const [empId, setEmpId]       = useState(employees[0]?.id ?? "");
   const [principal, setPrincipal] = useState("");
-  const [tenure, setTenure]       = useState(6);
+  const [recoverAmt, setRecoverAmt] = useState<Record<string, string>>({});
   const fc = formatCurrency;
 
   if (employees.length === 0) return <EmptyState icon={HandCoins} msg={EMPTY_HINT} />;
@@ -3967,17 +3978,22 @@ function SalaryAdvanceTab({ employees }: { employees: EmpLite[] }) {
     const emp = employees.find(e => e.id === empId);
     const maxAdvance = emp ? Number(emp.gross_salary) * 3 : Infinity;
     if (p > maxAdvance) { toast.error(`Advance exceeds 3× monthly gross (${fc(maxAdvance)})`); return; }
-    const emi = Math.ceil(p / Math.max(1, tenure));
-    setAdvances(prev => [{ id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, empId, principal: p, emi, paid: 0, date: new Date().toISOString().slice(0, 10) }, ...prev]);
+    setAdvances(prev => [{ id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, empId, principal: p, paid: 0, date: new Date().toISOString().slice(0, 10) }, ...prev]);
     setPrincipal("");
-    toast.success(`Advance of ${fc(p)} issued · EMI ${fc(emi)} × ${tenure}`);
+    toast.success(`Noted ${fc(p)} advance for tracking - remember to actually pay it out and adjust their take-home when you recover it`);
   };
-  const recordEmi = (id: string) => setAdvances(prev => prev.map(a => a.id === id ? { ...a, paid: Math.min(a.principal, a.paid + a.emi) } : a));
+  const recordRecovery = (id: string, advance: Advance) => {
+    const amt = Number(recoverAmt[id]);
+    if (!(amt > 0)) { toast.error("Enter a recovery amount"); return; }
+    if (amt > advance.principal - advance.paid + 0.01) { toast.error("More than the outstanding balance"); return; }
+    setAdvances(prev => prev.map(a => a.id === id ? { ...a, paid: Math.min(a.principal, a.paid + amt) } : a));
+    setRecoverAmt(prev => ({ ...prev, [id]: "" }));
+    toast.info("Recorded here only - this does not change any payslip or GL entry. Make sure you actually deducted it from their pay.");
+  };
   const remove = (id: string) => setAdvances(prev => prev.filter(a => a.id !== id));
 
   const nameOf = (id: string) => employees.find(e => e.id === id)?.name ?? "-";
   const totalOutstanding = advances.reduce((s, a) => s + Math.max(0, a.principal - a.paid), 0);
-  const monthlyRecovery  = advances.filter(a => a.paid < a.principal).reduce((s, a) => s + a.emi, 0);
 
   const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
   const lbl = "text-xs text-[var(--color-muted)] block mb-1";
@@ -3985,9 +4001,13 @@ function SalaryAdvanceTab({ employees }: { employees: EmpLite[] }) {
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2"><HandCoins size={14} /> Salary Advance / Loan Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">Issue interest-free advances against salary (capped at 3× monthly gross) and recover via EMI in subsequent runs.</p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+        <h3 className="text-sm font-semibold flex items-center gap-2"><HandCoins size={14} /> Salary Advance Memo</h3>
+        <p className="text-xs text-[var(--color-muted)]">
+          A manual tracker for advances against salary (suggested cap: 3× monthly gross). This does <strong>not</strong> book the
+          disbursal to the GL and does <strong>not</strong> deduct anything from payroll runs automatically - you record both the
+          issue and any recovery here purely for your own memory, and must actually move the money / adjust take-home yourself.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className={lbl}>Employee</label>
             <select value={empId} onChange={e => setEmpId(e.target.value)} className={`${inp} w-full`}>
@@ -3995,16 +4015,14 @@ function SalaryAdvanceTab({ employees }: { employees: EmpLite[] }) {
             </select>
           </div>
           <div><label className={lbl}>Advance amount (₹)</label><input type="number" min="0" value={principal} onChange={e => setPrincipal(e.target.value)} className={`${inp} w-full`} placeholder="25000" /></div>
-          <div><label className={lbl}>Recovery tenure (months)</label><input type="number" min="1" value={tenure} onChange={e => setTenure(Math.max(1, Number(e.target.value)))} className={`${inp} w-full`} /></div>
-          <button onClick={issue} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg text-sm hover:opacity-90">Issue Advance</button>
+          <button onClick={issue} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg text-sm hover:opacity-90">Note advance</button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         {[
-          { label: "Active advances", value: advances.filter(a => a.paid < a.principal).length.toString(), color: "text-[var(--color-text)]" },
+          { label: "Open advances", value: advances.filter(a => a.paid < a.principal).length.toString(), color: "text-[var(--color-text)]" },
           { label: "Total outstanding", value: fc(totalOutstanding), color: "text-orange-400" },
-          { label: "Monthly EMI recovery", value: fc(monthlyRecovery), color: "text-[var(--color-primary)]" },
         ].map(c => (
           <div key={c.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{c.label}</p>
@@ -4014,12 +4032,12 @@ function SalaryAdvanceTab({ employees }: { employees: EmpLite[] }) {
       </div>
 
       {advances.length === 0 ? (
-        <p className="text-sm text-[var(--color-muted)] border border-dashed border-[var(--color-border)] rounded-lg p-6 text-center">No advances issued yet.</p>
+        <p className="text-sm text-[var(--color-muted)] border border-dashed border-[var(--color-border)] rounded-lg p-6 text-center">No advances tracked yet.</p>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-xs min-w-[680px]">
+          <table className="w-full text-xs min-w-[720px]">
             <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
-              {["Employee", "Issued", "Principal", "EMI", "Recovered", "Outstanding", ""].map(h => <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>)}
+              {["Employee", "Issued", "Principal", "Recovered", "Outstanding", "Record a recovery", ""].map(h => <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>)}
             </tr></thead>
             <tbody>
               {advances.map(a => {
@@ -4030,14 +4048,18 @@ function SalaryAdvanceTab({ employees }: { employees: EmpLite[] }) {
                     <td className="px-3 py-2.5 font-medium">{nameOf(a.empId)}</td>
                     <td className="px-3 py-2.5 text-[var(--color-muted)]">{a.date}</td>
                     <td className="px-3 py-2.5 tabular-nums">{fc(a.principal)}</td>
-                    <td className="px-3 py-2.5 tabular-nums text-blue-400">{fc(a.emi)}</td>
                     <td className="px-3 py-2.5 tabular-nums text-green-400">{fc(a.paid)}</td>
                     <td className={`px-3 py-2.5 tabular-nums font-semibold ${cleared ? "text-green-400" : "text-orange-400"}`}>{cleared ? "Cleared" : fc(outstanding)}</td>
                     <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2">
-                        {!cleared && <button onClick={() => recordEmi(a.id)} className="text-[var(--color-primary)] hover:underline">Record EMI</button>}
-                        <button onClick={() => remove(a.id)} className="text-red-400 hover:underline">Remove</button>
-                      </div>
+                      {!cleared && (
+                        <div className="flex items-center gap-1.5">
+                          <input type="number" min="0" max={outstanding} placeholder="Amount" value={recoverAmt[a.id] ?? ""} onChange={e => setRecoverAmt(prev => ({ ...prev, [a.id]: e.target.value }))} className={`${inp} w-24 !py-1`} />
+                          <button onClick={() => recordRecovery(a.id, a)} className="text-[var(--color-primary)] hover:underline whitespace-nowrap">Record</button>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <button onClick={() => remove(a.id)} className="text-red-400 hover:underline">Remove</button>
                     </td>
                   </tr>
                 );
@@ -4046,7 +4068,7 @@ function SalaryAdvanceTab({ employees }: { employees: EmpLite[] }) {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Advances persist &amp; sync across devices. Interest-free advances above ₹20,000 may attract perquisite valuation under Rule 3(7)(i) - check with your CA.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Memo only - persists per device/tenant but never touches a payslip, payroll run, or the GL. Interest-free advances above ₹20,000 may attract perquisite valuation under Rule 3(7)(i) - check with your CA.</p>
     </div>
   );
 }

@@ -8,7 +8,7 @@ import EmptyState from "@/components/EmptyState";
 import AiInsight from "@/components/ai/AiInsight";
 import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Clock, AlertTriangle, CheckCircle2, ShieldAlert, ClipboardList, GitCompareArrows, Receipt, Contact, Percent, Plus, Trash2, ShieldCheck, Banknote, CalendarClock, PieChart, Copy, FileInput, Star, ListChecks, Wallet, Undo2, LineChart, Layers, Network, FileCheck2, Gavel, PiggyBank, FileBadge, BadgePercent, Ban, CreditCard, Repeat, Truck, CopyCheck, Hourglass, Scale, Pencil, Building2, BadgeCheck, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import { format, subMonths, startOfMonth, endOfMonth, differenceInDays, parseISO } from "date-fns";
 import DatePicker from "@/components/DatePicker";
 import { useApAging, AP_BUCKET_META, AP_BUCKET_KEYS } from "@/lib/apAging";
 
@@ -1298,72 +1298,64 @@ function ThreeWayMatch() {
 /* ─────────────────────────────────────────────────────────────────────────
    #62 Vendor TDS Ledger - per-vendor TDS deducted/deposited (194C/194J/194Q).
    ───────────────────────────────────────────────────────────────────────── */
-const TDS_SECTIONS = [
-  { code: "194C", label: "194C - Contractors (company/firm)", rate: 2 },
-  { code: "194C-ind", label: "194C - Contractors (individual/HUF)", rate: 1 },
-  { code: "194J", label: "194J - Professional / technical fees", rate: 10 },
-  { code: "194J-tech", label: "194J - Technical services", rate: 2 },
-  { code: "194Q", label: "194Q - Purchase of goods >₹50L", rate: 0.1 },
-  { code: "194I-rent", label: "194I - Rent of plant/machinery", rate: 2 },
-  { code: "194I-land", label: "194I - Rent of land/building", rate: 10 },
-  { code: "194H", label: "194H - Commission / brokerage", rate: 5 },
-] as const;
 
-interface TdsEntry {
-  id: string;
-  vendor: string;
-  section: string;
-  grossAmount: number;
-  rate: number;
-  date: string;
-  deposited: boolean;
-}
+interface VendorTdsEntry { section: string | null; rate: string; taxableValue: string; taxAmount: string; date: string; voucherNumber: number; reference: string | null; }
+interface VendorTdsRow { vendorLedgerId: string | null; vendorName: string; vendorPan: string | null; entries: VendorTdsEntry[]; totalTaxableValue: string; totalTds: string; }
+interface VendorTdsResponse { fy: string; from: string; to: string; vendors: VendorTdsRow[]; grandTotalTds: string; }
+const EMPTY_VENDOR_TDS: VendorTdsResponse = { fy: "", from: "", to: "", vendors: [], grandTotalTds: "0" };
 
+// Real per-vendor TDS actually withheld this FY (GET /api/books/tax/vendor-tds-ledger,
+// straight off book_tax_entries - the same source Form 16A / the 26Q file already use).
+// This used to be a hand-typed KV list that could show a different "TDS deducted" number
+// than what was actually withheld when a bill was posted with a TDS section.
 function VendorTdsLedger() {
-  const [entries, setEntries] = useFeatureState<TdsEntry[]>("vendor-tds-ledger", []);
-  // Pull saved vendor master so TDS entries reference real profiles, not free text.
-  const { vendors: master } = useVendorMaster();
-  const masterByName = useMemo(() => {
-    const idx: Record<string, VendorMaster> = {};
-    for (const v of master) idx[v.name.toLowerCase()] = v;
-    return idx;
-  }, [master]);
-  const [vendor, setVendor] = useState("");
-  const [section, setSection] = useState<string>(TDS_SECTIONS[0].code);
-  const [gross, setGross] = useState("");
-  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const now = new Date();
+  const defaultFyStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const [fyStart, setFyStart] = useState(defaultFyStart);
+  const fy = `${fyStart}-${(fyStart + 1).toString().slice(2)}`;
+  const [data, setData] = useState<VendorTdsResponse>(EMPTY_VENDOR_TDS);
+  const [loading, setLoading] = useState(true);
+  // Deposit status is a personal reminder only - there's no single "TDS Payable" GL
+  // event that's exclusively vendor-TDS deposits (payroll TDS shares the same ledger),
+  // so this can't be derived from the books; it's stored as a plain KV memo per voucher.
+  const [depositedKeys, setDepositedKeys] = useFeatureState<string[]>("vendor-tds-deposited-vouchers", []);
+  const depositedSet = useMemo(() => new Set(depositedKeys), [depositedKeys]);
+  const toggleDeposit = (key: string) => setDepositedKeys(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
 
-  const curRate = TDS_SECTIONS.find(s => s.code === section)?.rate ?? 0;
-  const previewTds = gross ? Math.round((parseFloat(gross) || 0) * curRate / 100) : 0;
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api.get<VendorTdsResponse>(`/api/books/tax/vendor-tds-ledger?fy=${fy}`)
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setData(EMPTY_VENDOR_TDS); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [fy]);
 
-  const add = () => {
-    if (!vendor.trim() || !gross) { toast.error("Enter vendor and gross amount"); return; }
-    const entry: TdsEntry = {
-      id: crypto.randomUUID(), vendor: vendor.trim(), section,
-      grossAmount: parseFloat(gross) || 0, rate: curRate, date, deposited: false,
-    };
-    setEntries(prev => [entry, ...prev]);
-    setVendor(""); setGross("");
-    toast.success(`TDS recorded for ${entry.vendor}`);
-  };
-  const remove = (id: string) => setEntries(prev => prev.filter(e => e.id !== id));
-  const toggleDeposit = (id: string) => setEntries(prev => prev.map(e => e.id === id ? { ...e, deposited: !e.deposited } : e));
-
-  const tdsOf = (e: TdsEntry) => Math.round(e.grossAmount * e.rate / 100);
-  const totalTds = entries.reduce((s, e) => s + tdsOf(e), 0);
-  const deposited = entries.filter(e => e.deposited).reduce((s, e) => s + tdsOf(e), 0);
-  const pending = totalTds - deposited;
-
-  const sectionLabel = (code: string) => TDS_SECTIONS.find(s => s.code === code)?.label.split(" - ")[0] ?? code;
+  const sectionLabel = (code: string | null) => (code || "-").toUpperCase();
+  const allEntries = data.vendors.flatMap(v => v.entries.map(e => ({ ...e, vendorName: v.vendorName })));
+  const totalTds = Number(data.grandTotalTds) || 0;
+  const depositedTotal = allEntries.filter(e => depositedSet.has(`${fy}:${e.voucherNumber}`)).reduce((s, e) => s + Number(e.taxAmount), 0);
+  const pending = totalTds - depositedTotal;
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">Per-vendor TDS deducted and deposited. Feeds your quarterly 26Q. Deposit TDS by the 7th of the following month to avoid interest under Sec 201(1A).</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-sm text-[var(--color-muted)] max-w-2xl">
+          Real per-vendor TDS withheld when bills were posted with a TDS section - feeds your quarterly 26Q. Deposit by the 7th of
+          the following month to avoid interest under Sec 201(1A).
+        </p>
+        <select value={fyStart} onChange={e => setFyStart(Number(e.target.value))} className={inpCls}>
+          {Array.from({ length: 6 }, (_, i) => defaultFyStart - i).map(y => (
+            <option key={y} value={y}>FY {y}-{(y + 1).toString().slice(2)}</option>
+          ))}
+        </select>
+      </div>
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Total TDS Deducted", value: formatCurrency(totalTds), color: "text-[var(--color-primary)]" },
-          { label: "Deposited", value: formatCurrency(deposited), color: "text-green-400" },
+          { label: "Total TDS Withheld", value: formatCurrency(totalTds), color: "text-[var(--color-primary)]" },
+          { label: "Marked Deposited", value: formatCurrency(depositedTotal), color: "text-green-400" },
           { label: "Pending Deposit", value: formatCurrency(pending), color: pending > 0 ? "text-red-400" : "text-green-400" },
         ].map(s => (
           <div key={s.label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -1373,66 +1365,52 @@ function VendorTdsLedger() {
         ))}
       </div>
 
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
-        <h3 className="text-sm font-semibold">Record TDS Deduction</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-          <div>
-            <input list="tds-master-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
-            <datalist id="tds-master-vendors">{master.map(v => <option key={v.id} value={v.name} />)}</datalist>
-          </div>
-          <select value={section} onChange={e => setSection(e.target.value)} className={inpCls}>
-            {TDS_SECTIONS.map(s => <option key={s.code} value={s.code}>{s.label} ({s.rate}%)</option>)}
-          </select>
-          <input type="number" value={gross} onChange={e => setGross(e.target.value)} placeholder="Gross amount (₹) *" className={inpCls} />
-          <DatePicker value={date} onChange={setDate} />
+      {loading ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <p className="text-sm text-[var(--color-muted)]">Loading real TDS withholding from the books…</p>
         </div>
-        {(() => {
-          const prof = masterByName[vendor.trim().toLowerCase()];
-          if (!vendor.trim()) return null;
-          return prof
-            ? <p className="text-xs text-[var(--color-muted)]">From master: PAN <span className="font-mono">{prof.pan || "- (no PAN, 20% rate applies)"}</span>{prof.gstin ? ` · GSTIN ${prof.gstin}` : ""}</p>
-            : <p className="text-[11px] text-orange-400">No saved profile for "{vendor.trim()}" - add one in the Directory to capture PAN for 26Q.</p>;
-        })()}
-        {gross && <p className="text-xs text-[var(--color-muted)]">TDS @ {curRate}% = <span className="font-semibold text-[var(--color-primary)]">{formatCurrency(previewTds)}</span> · Net payable: {formatCurrency((parseFloat(gross) || 0) - previewTds)}</p>}
-        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">+ Record</button>
-      </div>
-
-      {entries.length === 0 ? (
+      ) : allEntries.length === 0 ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <Receipt size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-          <p className="text-sm text-[var(--color-muted)]">No TDS entries yet. Record a deduction to build your 26Q feed.</p>
+          <p className="text-sm text-[var(--color-muted)]">No TDS withheld yet for FY {fy}. Post a vendor bill with a TDS section in the Bills tab to see it here.</p>
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[680px]">
+          <table className="w-full text-sm min-w-[720px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
-                {["Vendor", "Section", "Gross", "Rate", "TDS", "Date", "Status", ""].map((h, i) => (
+                {["Vendor", "Section", "Taxable Value", "Rate", "TDS", "Date", "Deposited?"].map((h, i) => (
                   <th key={h} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i >= 2 && i <= 4 ? "text-right" : "text-left"}`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
-              {entries.map(e => (
-                <tr key={e.id} className="hover:bg-white/2">
-                  <td className="px-4 py-3 font-medium">{e.vendor}</td>
-                  <td className="px-4 py-3"><span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded border bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]">{sectionLabel(e.section)}</span></td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(e.grossAmount)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-xs">{e.rate}%</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-[var(--color-primary)]">{formatCurrency(tdsOf(e))}</td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(e.date), "dd MMM")}</td>
-                  <td className="px-4 py-3">
-                    <button onClick={() => toggleDeposit(e.id)} className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${e.deposited ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
-                      {e.deposited ? "Deposited" : "Pending"}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button></td>
-                </tr>
-              ))}
+              {allEntries.sort((a, b) => (a.date || "").localeCompare(b.date || "")).map((e, i) => {
+                // voucher_number resets per financial year (unique only within tenant+voucher_type+FY),
+                // so the reminder key must include the FY to avoid two different years' bills colliding.
+                const key = `${fy}:${e.voucherNumber}`;
+                const dep = depositedSet.has(key);
+                return (
+                  <tr key={`${e.voucherNumber}-${i}`} className="hover:bg-white/2">
+                    <td className="px-4 py-3 font-medium">{e.vendorName}</td>
+                    <td className="px-4 py-3"><span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded border bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]">{sectionLabel(e.section)}</span></td>
+                    <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(Number(e.taxableValue))}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-xs">{e.rate}%</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-[var(--color-primary)]">{formatCurrency(Number(e.taxAmount))}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{e.date ? format(new Date(e.date), "dd MMM") : "-"}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => toggleDeposit(key)} title="Personal reminder only - not a real challan record" className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${dep ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
+                        {dep ? "Deposited" : "Pending"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
+      <p className="text-[10px] text-[var(--color-muted)]">"Deposited?" is a personal reminder you toggle by hand - Headroom doesn't file your TDS challan, so it can't verify a deposit actually happened.</p>
     </div>
   );
 }
@@ -4048,63 +4026,72 @@ function LandedCostCalculator() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   #87 Duplicate Invoice Detector - log bills as you receive them; the moment
-   the same vendor + invoice number, or the same vendor + amount + date,
-   repeats, it is flagged so you never pay it twice.
+   #87 Duplicate Invoice Detector - reads REAL bills (GET /api/vendor-bills/recent,
+   posted for real via the Bills tab) instead of a separate hand-typed register.
+   The backend already refuses an EXACT repeat (same vendor ledger + same bill
+   number -> 409 in recordBill's idempotency check); this flags what that can't
+   catch - the same bill re-typed under a different bill number, or the same real
+   vendor billed under two different name spellings (each its own ledger, so the
+   per-ledger uniqueness never sees them as one party).
    ───────────────────────────────────────────────────────────────────────── */
-interface BillEntry { id: string; vendor: string; invoiceNo: string; amount: number; date: string; }
+interface RecentBill { voucherId: string; voucherNumber: number; billNumber: string | null; vendorLedgerId: string; vendorName: string; amount: string; date: string; }
+
+const DUP_DATE_WINDOW_DAYS = 10;
 
 function DuplicateInvoiceDetector() {
-  const { store } = useApp();
-  const [bills, setBills] = useFeatureState<BillEntry[]>("ven-bill-register", []);
-  const [vendor, setVendor] = useState("");
-  const [invoiceNo, setInvoiceNo] = useState("");
-  const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [bills, setBills] = useState<RecentBill[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [days, setDays] = useState(180);
 
-  const knownVendors = useMemo(() =>
-    Array.from(new Set(store.transactions.filter(t => t.amount < 0 && t.counterparty).map(t => t.counterparty))).sort(),
-  [store.transactions]);
-
-  const add = () => {
-    const amt = parseFloat(amount) || 0;
-    if (!vendor.trim() || amt <= 0) { toast.error("Enter vendor and amount"); return; }
-    const e: BillEntry = { id: crypto.randomUUID(), vendor: vendor.trim(), invoiceNo: invoiceNo.trim(), amount: amt, date };
-    // warn on entry if it collides with something already in the register
-    const collides = bills.some(b =>
-      b.vendor.toLowerCase() === e.vendor.toLowerCase() &&
-      ((e.invoiceNo && b.invoiceNo.toLowerCase() === e.invoiceNo.toLowerCase()) ||
-       (Math.abs(b.amount - e.amount) < 0.01 && b.date === e.date)));
-    setBills(prev => [e, ...prev]);
-    setVendor(""); setInvoiceNo(""); setAmount("");
-    if (collides) toast.error(`Possible duplicate for ${e.vendor} - flagged in the register`);
-    else toast.success(`Bill logged for ${e.vendor}`);
-  };
-  const remove = (id: string) => setBills(prev => prev.filter(b => b.id !== id));
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setBills(await api.get<RecentBill[]>(`/api/vendor-bills/recent?days=${days}`)); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Failed to load bills"); setBills([]); }
+    finally { setLoading(false); }
+  }, [days]);
+  useEffect(() => { void load(); }, [load]);
 
   const flagged = useMemo(() => {
-    const dupIds = new Set<string>();
+    const dupIds = new Map<string, string>(); // voucherId -> reason
     for (let i = 0; i < bills.length; i++) {
       for (let j = i + 1; j < bills.length; j++) {
         const a = bills[i], b = bills[j];
-        if (a.vendor.toLowerCase() !== b.vendor.toLowerCase()) continue;
-        const sameInv = a.invoiceNo && b.invoiceNo && a.invoiceNo.toLowerCase() === b.invoiceNo.toLowerCase();
-        const sameAmtDate = Math.abs(a.amount - b.amount) < 0.01 && a.date === b.date;
-        if (sameInv || sameAmtDate) { dupIds.add(a.id); dupIds.add(b.id); }
+        const sameVendor = a.vendorLedgerId === b.vendorLedgerId;
+        const sameVendorFuzzy = !sameVendor && normVendor(a.vendorName) === normVendor(b.vendorName) && normVendor(a.vendorName).length >= 2;
+        if (!sameVendor && !sameVendorFuzzy) continue;
+        const sameAmt = Math.abs(Number(a.amount) - Number(b.amount)) < 0.01;
+        if (!sameAmt) continue;
+        const daysApart = Math.abs(differenceInDays(parseISO(a.date), parseISO(b.date)));
+        if (daysApart > DUP_DATE_WINDOW_DAYS) continue;
+        const differentBillNo = (a.billNumber || "").toLowerCase() !== (b.billNumber || "").toLowerCase();
+        if (!differentBillNo) continue; // identical bill number on one ledger can't exist (server-blocked); on two ledgers it's still worth flagging below via sameVendorFuzzy, so don't skip that case
+        const reason = sameVendorFuzzy ? `Possible duplicate vendor ("${a.vendorName}" / "${b.vendorName}")` : "Same amount, close dates, different bill number";
+        dupIds.set(a.voucherId, reason); dupIds.set(b.voucherId, reason);
       }
     }
     return dupIds;
   }, [bills]);
 
-  const dupExposure = bills.filter(b => flagged.has(b.id)).reduce((s, b) => s + b.amount, 0) / 2;
+  const dupExposure = bills.filter(b => flagged.has(b.voucherId)).reduce((s, b) => s + Number(b.amount), 0) / 2;
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">The single most common AP leak is paying the same invoice twice - once from email, once from a chase. Log each bill in this register and any repeat of a vendor + invoice number (or vendor + amount + date) is flagged before it gets paid.</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-sm text-[var(--color-muted)] max-w-2xl">
+          The single most common AP leak is paying the same invoice twice. This scans your real posted bills (Bills tab) for
+          near-duplicates the ledger's own exact-match guard can't catch - same vendor/amount within {DUP_DATE_WINDOW_DAYS} days
+          under a different bill number, or the same vendor billed under two different name spellings.
+        </p>
+        <select value={days} onChange={e => setDays(Number(e.target.value))} className={inpCls}>
+          <option value={90}>Last 90 days</option>
+          <option value={180}>Last 180 days</option>
+          <option value={365}>Last 365 days</option>
+        </select>
+      </div>
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Bills Logged", value: bills.length.toString(), color: "text-[var(--color-primary)]" },
+          { label: "Bills Scanned", value: bills.length.toString(), color: "text-[var(--color-primary)]" },
           { label: "Suspected Duplicates", value: flagged.size.toString(), color: flagged.size > 0 ? "text-red-400" : "text-green-400" },
           { label: "Double-Pay Exposure", value: formatCurrency(Math.round(dupExposure)), color: dupExposure > 0 ? "text-orange-400" : "text-green-400" },
         ].map(s => (
@@ -4115,52 +4102,41 @@ function DuplicateInvoiceDetector() {
         ))}
       </div>
 
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
-        <h3 className="text-sm font-semibold">Log a Bill</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-          <div>
-            <input list="dupinv-vendors" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={inpCls} />
-            <datalist id="dupinv-vendors">{knownVendors.map(v => <option key={v} value={v} />)}</datalist>
-          </div>
-          <input value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} placeholder="Invoice #" className={inpCls} />
-          <input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount *" className={inpCls} />
-          <DatePicker value={date} onChange={setDate} />
+      {loading ? (
+        <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+          <p className="text-sm text-[var(--color-muted)]">Scanning real bills…</p>
         </div>
-        <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Log Bill</button>
-      </div>
-
-      {bills.length === 0 ? (
+      ) : bills.length === 0 ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <CopyCheck size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-          <p className="text-sm text-[var(--color-muted)]">No bills logged yet. Add invoices here as they arrive to catch duplicates before payment.</p>
+          <p className="text-sm text-[var(--color-muted)]">No bills posted in this window. Record a bill in the Bills tab to start scanning for duplicates.</p>
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[560px]">
+          <table className="w-full text-sm min-w-[640px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
-                {["Vendor", "Invoice #", "Date", "Amount", "Status", ""].map((h, i) => (
+                {["Vendor", "Bill #", "Date", "Amount", "Status"].map((h, i) => (
                   <th key={h} className={`px-4 py-3 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i === 3 ? "text-right" : "text-left"}`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
-              {bills.map(b => {
-                const dup = flagged.has(b.id);
+              {[...bills].sort((a, b) => (flagged.has(b.voucherId) ? 1 : 0) - (flagged.has(a.voucherId) ? 1 : 0)).map(b => {
+                const reason = flagged.get(b.voucherId);
                 return (
-                  <tr key={b.id} className={`hover:bg-white/2 ${dup ? "bg-red-950/10" : ""}`}>
-                    <td className="px-4 py-3 font-medium">{b.vendor}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-[var(--color-muted)]">{b.invoiceNo || "-"}</td>
-                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(b.date), "dd MMM yyyy")}</td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(b.amount)}</td>
+                  <tr key={b.voucherId} className={`hover:bg-white/2 ${reason ? "bg-red-950/10" : ""}`}>
+                    <td className="px-4 py-3 font-medium">{b.vendorName}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-[var(--color-muted)]">{b.billNumber || "-"}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(parseISO(b.date), "dd MMM yyyy")}</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(Number(b.amount))}</td>
                     <td className="px-4 py-3">
-                      {dup ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-950/30 text-red-400 border-red-800/30 w-fit flex items-center gap-1"><AlertTriangle size={10} /> Duplicate</span>
+                      {reason ? (
+                        <span title={reason} className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-950/30 text-red-400 border-red-800/30 w-fit flex items-center gap-1"><AlertTriangle size={10} /> Possible duplicate</span>
                       ) : (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-green-950/30 text-green-400 border-green-800/30 w-fit flex items-center gap-1"><CheckCircle2 size={10} /> Unique</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right"><button onClick={() => remove(b.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button></td>
                   </tr>
                 );
               })}

@@ -26,6 +26,12 @@ router.get("/aging", async (req, res) => {
   try { res.json(await vb.apAgingSummary(tenantOf(req))); } catch (e) { fail(res, e); }
 });
 
+// GET /api/vendor-bills/recent?days=180 - every real bill across ALL vendors, for
+// near-duplicate detection (the exact-repeat case is already blocked server-side).
+router.get("/recent", async (req, res) => {
+  try { res.json(await vb.recentBills(tenantOf(req), req.query.days ? Number(req.query.days) : undefined)); } catch (e) { fail(res, e); }
+});
+
 // GET /api/vendor-bills?vendor_id=... - bill history/register for one vendor.
 router.get("/", async (req, res) => {
   try {

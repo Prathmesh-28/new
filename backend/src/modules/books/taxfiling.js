@@ -34,6 +34,20 @@ function quarterRange(quarter, fy) {
   return { q, from, to };
 }
 
+// voucher_date is a SQL DATE column; node-postgres's default parser constructs the JS
+// Date using LOCAL-timezone components (new Date(y, m, d) semantics), so reading it
+// back via toISOString() (which converts to true UTC) rolls the date back a day on
+// any positive-offset server timezone (e.g. IST) - String(dateObj).slice(0,10) was
+// even worse, grabbing the start of Date#toString() ("Mon Jun 01 2026..."). Reading
+// the LOCAL calendar getters is the correct round-trip inverse of how it was built.
+function isoDate(d) {
+  if (d instanceof Date) {
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  return String(d).slice(0, 10);
+}
+
 // HTML-escape for the Form-16A certificate (untrusted ledger names / addresses).
 function esc(s) {
   return String(s == null ? "" : s)
@@ -240,11 +254,41 @@ async function tdsReturnFile(tenantId, { quarter, fy, form } = {}) {
       amountPaid: toRupees(r.taxable_value),
       taxDeducted: toRupees(r.tax_amount),
       rate: toRupees(r.rate),
-      date: String(r.voucher_date).slice(0, 10),
+      date: isoDate(r.voucher_date),
       reference: r.reference || null,
       label: partyLabel,
     })),
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// (1b) Vendor TDS ledger - real per-vendor TDS withheld across a whole FY, straight
+// off book_tax_entries (the same source form16A/tdsReturnFile already use). Exists
+// because the frontend "Vendor TDS Ledger" tab used to be a hand-typed KV list that
+// silently diverged from what was actually withheld when bills were posted with a
+// TDS section - this is the real number instead.
+async function vendorTdsLedger(tenantId, fy) {
+  const startYear = parseInt(String(fy).slice(0, 4), 10);
+  if (!startYear) throw new PostError("BAD_INPUT", `fy must look like "YYYY-YY", got ${fy}`, 422);
+  const from = `${startYear}-04-01`, to = `${startYear + 1}-03-31`;
+  const rows = await _withholdingRows(tenantId, "TDS", from, to);
+
+  const byVendor = new Map();
+  for (const r of rows) {
+    const key = r.party_id || r.party_name || "unknown";
+    if (!byVendor.has(key)) byVendor.set(key, { vendorLedgerId: r.party_id, vendorName: r.party_name || "-", vendorPan: r.party_pan || null, entries: [] });
+    byVendor.get(key).entries.push({
+      section: r.section || null, rate: toRupees(r.rate), taxableValue: toRupees(r.taxable_value), taxAmount: toRupees(r.tax_amount),
+      date: isoDate(r.voucher_date), voucherNumber: r.voucher_number, reference: r.reference || null,
+    });
+  }
+  const vendors = [...byVendor.values()].map((v) => ({
+    ...v,
+    totalTaxableValue: toRupees(sum(v.entries.map((e) => e.taxableValue))),
+    totalTds: toRupees(sum(v.entries.map((e) => e.taxAmount))),
+  })).sort((a, b) => Number(b.totalTds) - Number(a.totalTds));
+
+  return { fy, from, to, vendors, grandTotalTds: toRupees(sum(rows.map((r) => r.tax_amount))) };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -270,7 +314,7 @@ async function form16A(tenantId, { partyLedgerId, quarter, fy } = {}) {
           <td class="num">${esc(toRupees(r.taxable_value))}</td>
           <td class="num">${esc(toRupees(r.rate))}%</td>
           <td class="num">${esc(toRupees(r.tax_amount))}</td>
-          <td>${esc(String(r.voucher_date).slice(0, 10))}</td>
+          <td>${esc(isoDate(r.voucher_date))}</td>
         </tr>`).join("") || `
         <tr><td colspan="5" style="text-align:center;color:#888">No TDS transactions for ${esc(q)} ${esc(fy)}</td></tr>`;
 
@@ -500,6 +544,7 @@ async function reconcile26AS(tenantId, { rows } = {}) {
 module.exports = {
   tdsReturnFile,
   form16A,
+  vendorTdsLedger,
   addTdsCertificate,
   listTdsCertificates,
   effectiveTdsRate,

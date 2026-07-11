@@ -17,6 +17,19 @@ const { ledgerIdByName } = require("./books/seed");
 const { computeTds, buildTdsDeduction } = require("./books/tds");
 const billwise = require("./books/billwise");
 
+// voucher_date is a SQL DATE column; node-postgres's default parser builds the JS
+// Date from LOCAL-timezone components, so letting it flow straight into res.json()
+// (which serializes via toISOString(), true UTC) silently rolls the calendar date
+// back a day on any positive-offset server timezone. Read it back via local getters
+// - the exact inverse of how it was constructed - instead of a UTC conversion.
+function isoDate(d) {
+  if (d instanceof Date) {
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  return String(d).slice(0, 10);
+}
+
 async function getVendor(tenantId, vendorId) {
   const { rows } = await pool.query("SELECT * FROM vendor_master WHERE tenant_id=$1 AND id=$2", [tenantId, vendorId]);
   if (!rows[0]) throw new PostError("NOT_FOUND", "Vendor not found", 404);
@@ -174,12 +187,37 @@ async function listBills(tenantId, vendorId) {
   return rows.map((r) => {
     const gross = money(r.gross), allocated = money(r.allocated);
     return {
-      voucherId: r.id, billNumber: r.reference, voucherNumber: r.voucher_number, date: r.voucher_date,
+      voucherId: r.id, billNumber: r.reference, voucherNumber: r.voucher_number, date: isoDate(r.voucher_date),
       narration: r.narration, cancelled: r.is_cancelled,
       gross: toRupees(gross), allocated: toRupees(allocated), outstanding: toRupees(gross.minus(allocated)),
       status: r.is_cancelled ? "cancelled" : gross.minus(allocated).lessThanOrEqualTo(0) ? "settled" : allocated.greaterThan(0) ? "partial" : "open",
     };
   }).map((b) => ({ ...b, vendorId, vendorName: vendor.name }));
+}
+
+// Every real PURCHASE bill across ALL vendors in the last `days` (default 180), for
+// near-duplicate detection. The backend already refuses an EXACT repeat (same vendor +
+// same bill number → idempotency_key collision → 409 DUPLICATE_BILL in recordBill), so
+// this exists for what that guard can't catch: the same invoice re-typed under a
+// slightly different bill number, or two genuinely different vendor spellings for one
+// real vendor - same amount, dates close together, different reference text.
+async function recentBills(tenantId, days = 180) {
+  const { rows } = await pool.query(
+    `SELECT v.id, v.voucher_number, v.voucher_date, v.reference, v.party_ledger_id,
+            l.name AS vendor_name,
+            COALESCE((SELECT SUM(e.credit) FROM book_voucher_entries e WHERE e.voucher_id=v.id AND e.ledger_id=v.party_ledger_id),0) AS gross
+       FROM book_vouchers v
+       JOIN book_ledgers l ON l.id=v.party_ledger_id
+      WHERE v.tenant_id=$1 AND v.voucher_type='PURCHASE' AND v.is_cancelled=false
+        AND v.voucher_date >= (CURRENT_DATE - $2::int)
+      ORDER BY v.voucher_date DESC, v.voucher_number DESC LIMIT 500`,
+    [tenantId, days]
+  );
+  return rows.map((r) => ({
+    voucherId: r.id, voucherNumber: r.voucher_number, billNumber: r.reference,
+    vendorLedgerId: r.party_ledger_id, vendorName: r.vendor_name,
+    amount: toRupees(money(r.gross)), date: isoDate(r.voucher_date),
+  }));
 }
 
 // Real AP aging across every vendor with at least one open bill — replaces the old
@@ -219,4 +257,4 @@ async function apAgingSummary(tenantId) {
   return { vendors: out, totals, grandTotal: BUCKETS.reduce((s, b) => s + totals[b], 0) };
 }
 
-module.exports = { getVendor, resolveVendorLedger, recordBill, payBill, listBills, apAgingSummary, computeTds, bucketOf };
+module.exports = { getVendor, resolveVendorLedger, recordBill, payBill, listBills, recentBills, apAgingSummary, computeTds, bucketOf };
