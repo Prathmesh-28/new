@@ -29,9 +29,9 @@ export function runwayDays(balances: number[], monthlyBurn: number): number {
   return Math.max(0, Math.floor(total / dailyBurn));
 }
 
-export function monthlyBurn(transactions: { amount: number; date: string }[]): number {
+export function monthlyBurn(transactions: { amount: number; date: string; category?: string }[]): number {
   const last30 = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
-  const expenses = transactions.filter(t => t.amount < 0 && t.date >= last30);
+  const expenses = transactions.filter(t => t.amount < 0 && t.date >= last30 && t.category !== "transfer");
   return Math.abs(expenses.reduce((a, t) => a + t.amount, 0));
 }
 

@@ -193,7 +193,7 @@ export default function ForecastPage() {
     try {
       const balance = bankAccounts.reduce((a, b) => a + b.balance, 0);
       const runway  = pressureDay != null ? `${pressureDay} days` : "90+ days";
-      const burn    = transactions.filter(t => t.amount < 0).reduce((a, t) => a + t.amount, 0) / Math.max(1, transactions.length / 30);
+      const burn    = transactions.filter(t => t.amount < 0 && t.category !== "transfer").reduce((a, t) => a + t.amount, 0) / Math.max(1, transactions.length / 30);
       const context = `Balance: ₹${(balance / 100000).toFixed(1)}L. Monthly burn: ₹${(Math.abs(burn) / 100000).toFixed(1)}L. P10 runway: ${runway}. Active scenario: ${activeScenario?.name ?? "none"}.`;
       const res = await api.post<{ content: string }>("/api/ai/ask", {
         system: "You are a cash flow advisor for an Indian SMB. Be concise, practical, and use INR terminology. 3-4 sentences max.",

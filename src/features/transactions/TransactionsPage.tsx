@@ -1740,16 +1740,18 @@ function ReconciliationWorkbench() {
 // ── #188 SPLIT-TRANSACTION TOOL ─────────────────────────────────────────────
 // Take one payment and split it across multiple categories/heads.
 function SplitTransactionTool() {
-  const { store } = useApp();
+  const { store, addTransaction, deleteTransaction } = useApp();
   type Leg = { id: string; category: Transaction["category"]; label: string; amount: string };
   const [txnId, setTxnId] = useState("");
   const [legs, setLegs] = useState<Leg[]>([{ id: generateId(), category: "expense", label: "", amount: "" }]);
+  const [applying, setApplying] = useState(false);
 
   const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
   const selected = txns.find(t => t.id === txnId) ?? null;
   const total = selected ? Math.abs(selected.amount) : 0;
   const allocated = legs.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
   const remaining = total - allocated;
+  const balanced = Math.abs(remaining) < 0.5;
   const fc = formatCurrency;
   const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
@@ -1761,6 +1763,51 @@ function SplitTransactionTool() {
     const each = Math.round((total / legs.length) * 100) / 100;
     setLegs(prev => prev.map((l, i) => ({ ...l, amount: String(i === prev.length - 1 ? Math.round((total - each * (prev.length - 1)) * 100) / 100 : each) })));
     toast.success("Split equally");
+  };
+
+  // Split lines only expose category/label/amount per leg, so date, bank account
+  // and counterparty always carry over from the original transaction unchanged.
+  const applySplit = async () => {
+    if (!selected || applying || !balanced) return;
+    if (legs.some(l => !((parseFloat(l.amount) || 0) > 0))) { toast.error("Every split line needs a positive amount."); return; }
+    setApplying(true);
+    const sign = selected.amount < 0 ? -1 : 1;
+    const drafts: Transaction[] = legs.map(l => ({
+      id: generateId(),
+      date: selected.date,
+      amount: sign * (parseFloat(l.amount) || 0),
+      description: l.label.trim() || selected.description,
+      category: l.category,
+      apiCategory: selected.apiCategory,
+      counterparty: selected.counterparty,
+      isRecurring: selected.isRecurring,
+      bankAccountId: selected.bankAccountId,
+    }));
+    try {
+      const results = await Promise.allSettled(drafts.map(d => api.post<any>("/api/transactions", txnToApiBody(d))));
+      const created: Transaction[] = [];
+      let failed = 0;
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled") {
+          const row = Array.isArray(r.value) ? r.value[0] : r.value;
+          created.push(row ? txnFromApi(row) : drafts[i]);
+        } else failed++;
+      });
+      created.forEach(c => addTransaction(c));
+      if (failed > 0) {
+        toast.error(`${created.length} of ${drafts.length} split line(s) saved, ${failed} failed - the original transaction was left in place so nothing is missing. Delete the saved line(s), fix the issue, and retry the split.`);
+        return;
+      }
+      await api.delete(`/api/transactions/${selected.id}`);
+      deleteTransaction(selected.id);
+      toast.success(`Split "${selected.description}" into ${created.length} transactions`);
+      setTxnId("");
+      setLegs([{ id: generateId(), category: "expense", label: "", amount: "" }]);
+    } catch (e) {
+      toast.error(`Split lines were saved, but the original transaction couldn't be removed (${e instanceof Error ? e.message : "server error"}) - delete it manually to avoid double-counting.`);
+    } finally {
+      setApplying(false);
+    }
   };
 
   return (
@@ -1806,9 +1853,12 @@ function SplitTransactionTool() {
               <button onClick={addLeg} className="text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)]">+ Add split</button>
               <button onClick={splitEqually} className="text-xs border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-1.5 rounded-lg hover:text-[var(--color-text)]">Split equally</button>
             </div>
-            <div className={`rounded-lg p-3 border text-xs ${Math.abs(remaining) < 0.5 ? "border-green-800/40 bg-green-950/20 text-green-400" : "border-orange-800/40 bg-orange-950/20 text-orange-400"}`}>
-              {Math.abs(remaining) < 0.5 ? "✓ Splits balance to the transaction total." : `Splits are off by ${fc(Math.abs(remaining))} - adjust the legs to balance.`}
+            <div className={`rounded-lg p-3 border text-xs ${balanced ? "border-green-800/40 bg-green-950/20 text-green-400" : "border-orange-800/40 bg-orange-950/20 text-orange-400"}`}>
+              {balanced ? "✓ Splits balance to the transaction total." : `Splits are off by ${fc(Math.abs(remaining))} - adjust the legs to balance.`}
             </div>
+            <button onClick={applySplit} disabled={!balanced || applying} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40">
+              {applying ? "Applying…" : "Apply split"}
+            </button>
           </div>
         </>
       )}
@@ -2008,7 +2058,7 @@ function TransferDetection() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Tagging both legs as "transfer" gives them the correct category label for your records. Note: Dashboard/Forecast revenue and spend totals currently filter by amount sign only, not category - tagging a pair here does not yet remove it from those totals.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Tagging both legs as "transfer" nets the pair out of your Dashboard and Forecast revenue/spend totals - self-transfers between your own accounts are excluded from category breakdowns, burn, runway and forecast run-rates once tagged.</p>
     </div>
   );
 }

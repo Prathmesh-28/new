@@ -121,7 +121,7 @@ function CashThisWeekWidget() {
     const inflows = [1, 2, 3, 4].map(w => {
       const d = addDays(date, -w * 7);
       const key = d.toISOString().split("T")[0];
-      return transactions.filter(t => t.date === key && t.amount > 0).reduce((s, t) => s + t.amount, 0);
+      return transactions.filter(t => t.date === key && t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
     });
     const avgInflow = inflows.reduce((s, v) => s + v, 0) / 4;
 
@@ -319,8 +319,8 @@ function HealthScoreWidget() {
   const m1s = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
   const m2s = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split("T")[0];
   const m2e = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split("T")[0];
-  const thisRev = transactions.filter(t => t.date >= m1s && t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const lastRev = transactions.filter(t => t.date >= m2s && t.date <= m2e && t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const thisRev = transactions.filter(t => t.date >= m1s && t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+  const lastRev = transactions.filter(t => t.date >= m2s && t.date <= m2e && t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
 
   const scores = [
     {
@@ -712,8 +712,8 @@ function KpiWidgetBuilder() {
   const balance  = bankAccounts.reduce((s, a) => s + a.balance, 0);
   const burn     = monthlyBurn(transactions);
   const runway   = runwayDays(bankAccounts.map(b => b.balance), burn);
-  const revMtd   = transactions.filter(t => t.date.startsWith(monthStr) && t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const outMtd   = transactions.filter(t => t.date.startsWith(monthStr) && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const revMtd   = transactions.filter(t => t.date.startsWith(monthStr) && t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+  const outMtd   = transactions.filter(t => t.date.startsWith(monthStr) && t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
   const topBank  = bankAccounts.reduce<typeof bankAccounts[number] | null>((best, a) => (!best || a.balance > best.balance ? a : best), null);
 
   const valueFor = (k: KpiKey): { value: string; color: string } => {
@@ -807,8 +807,8 @@ function DailyCashSnapshot() {
 
   const todays = transactions.filter(t => t.date === todayStr);
   const totalBalance = bankAccounts.reduce((s, a) => s + a.balance, 0);
-  const inflow  = todays.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const outflow = todays.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const inflow  = todays.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+  const outflow = todays.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
   const net = inflow - outflow;
 
   const perAccount = bankAccounts.map(a => {
@@ -883,8 +883,8 @@ function GoalTracker() {
   const [target, setTarget] = useState("");
 
   const monthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
-  const revMtd = transactions.filter(t => t.date.startsWith(monthStr) && t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const outMtd = transactions.filter(t => t.date.startsWith(monthStr) && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const revMtd = transactions.filter(t => t.date.startsWith(monthStr) && t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+  const outMtd = transactions.filter(t => t.date.startsWith(monthStr) && t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
   const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
 
   const actualFor = (m: Goal["metric"]) => m === "revenue" ? revMtd : m === "profit" ? revMtd - outMtd : balance;
@@ -988,7 +988,7 @@ function MorningBriefCard() {
   const dueToday = getUpcomingTaxDates().filter(d => isToday(d.date));
 
   // Recurring outflows landing today (overnight commitments)
-  const recurringToday = todayTx.filter(t => t.isRecurring && t.amount < 0);
+  const recurringToday = todayTx.filter(t => t.isRecurring && t.amount < 0 && t.category !== "transfer");
 
   const items: { icon: React.ElementType; tone: string; text: string }[] = [];
   items.push({
@@ -1115,7 +1115,7 @@ function UpcomingDuesWidget() {
 
   // Recurring outflows: project this month's recurring debits onto the 7-day window.
   transactions
-    .filter(t => t.isRecurring && t.amount < 0)
+    .filter(t => t.isRecurring && t.amount < 0 && t.category !== "transfer")
     .forEach(t => {
       const dom = new Date(t.date).getDate();
       const proj = new Date(now.getFullYear(), now.getMonth(), dom);
@@ -1285,13 +1285,13 @@ function MiniPnLWidget() {
   const monthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
   const mtd = transactions.filter(t => t.date.startsWith(monthStr));
 
-  const revenue = mtd.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const revenue = mtd.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
   const cat = (c: string) => Math.abs(mtd.filter(t => t.category === c && t.amount < 0).reduce((s, t) => s + t.amount, 0));
   const payroll = cat("payroll");
   const opex = cat("expense");
   const tax = cat("tax");
   const loan = cat("loan");
-  const otherOut = Math.abs(mtd.filter(t => t.amount < 0 && !["payroll", "expense", "tax", "loan"].includes(t.category)).reduce((s, t) => s + t.amount, 0));
+  const otherOut = Math.abs(mtd.filter(t => t.amount < 0 && t.category !== "transfer" && !["payroll", "expense", "tax", "loan"].includes(t.category)).reduce((s, t) => s + t.amount, 0));
   const totalCost = payroll + opex + tax + loan + otherOut;
   const net = revenue - totalCost;
   const margin = revenue > 0 ? (net / revenue) * 100 : 0;
@@ -1349,7 +1349,7 @@ function SpendByPayeeDonut() {
 
   const data = useMemo(() => {
     const byPayee: Record<string, number> = {};
-    transactions.filter(t => t.amount < 0).forEach(t => {
+    transactions.filter(t => t.amount < 0 && t.category !== "transfer").forEach(t => {
       const key = t.counterparty || t.category || "Other";
       byPayee[key] = (byPayee[key] ?? 0) + Math.abs(t.amount);
     });
@@ -1423,8 +1423,8 @@ function NetCashFlowTrend() {
     const months = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const inMo = transactions.filter(t => t.date.startsWith(key) && t.amount > 0).reduce((s, t) => s + t.amount, 0);
-      const outMo = transactions.filter(t => t.date.startsWith(key) && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+      const inMo = transactions.filter(t => t.date.startsWith(key) && t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+      const outMo = transactions.filter(t => t.date.startsWith(key) && t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
       const net = inMo - outMo;
       return { label: format(d, "MMM"), net: Math.round(net / 1000), raw: net };
     });
@@ -1477,7 +1477,7 @@ function ExpenseMoversWidget() {
 
     const sumByCat = (month: string) => {
       const map: Record<string, number> = {};
-      transactions.filter(t => t.amount < 0 && t.date.startsWith(month)).forEach(t => {
+      transactions.filter(t => t.amount < 0 && t.category !== "transfer" && t.date.startsWith(month)).forEach(t => {
         const c = t.category || "other";
         map[c] = (map[c] ?? 0) + Math.abs(t.amount);
       });
@@ -1623,8 +1623,8 @@ function CashGaugeWidget() {
   const daysCash = burn > 0 ? Math.round((balance / burn) * 30) : 999;
 
   const monthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
-  const inMo = transactions.filter(t => t.date.startsWith(monthStr) && t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const outMo = transactions.filter(t => t.date.startsWith(monthStr) && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const inMo = transactions.filter(t => t.date.startsWith(monthStr) && t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+  const outMo = transactions.filter(t => t.date.startsWith(monthStr) && t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
   const savingsRate = inMo > 0 ? ((inMo - outMo) / inMo) * 100 : 0;
 
   // Cap the gauge at 180 days for the visual sweep.
@@ -1689,7 +1689,7 @@ function WeekdayInflowWidget() {
     const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const totals = new Array<number>(7).fill(0);
     const counts = new Array<number>(7).fill(0);
-    transactions.filter(t => t.amount > 0).forEach(t => {
+    transactions.filter(t => t.amount > 0 && t.category !== "transfer").forEach(t => {
       const dow = new Date(t.date).getDay(); // 0=Sun..6=Sat
       const idx = dow === 0 ? 6 : dow - 1; // Mon-first
       totals[idx] += t.amount;
@@ -1748,7 +1748,7 @@ function TopVendorsWidget() {
     const monthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
     const byVendor: Record<string, number> = {};
     transactions
-      .filter(t => t.amount < 0 && t.date.startsWith(monthStr))
+      .filter(t => t.amount < 0 && t.category !== "transfer" && t.date.startsWith(monthStr))
       .forEach(t => {
         const key = t.counterparty || t.description || t.category || "Other";
         byVendor[key] = (byVendor[key] ?? 0) + Math.abs(t.amount);
@@ -1860,7 +1860,7 @@ function BurnTrendWidget() {
     return Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const out = transactions.filter(t => t.date.startsWith(key) && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+      const out = transactions.filter(t => t.date.startsWith(key) && t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
       return { label: format(d, "MMM"), burn: Math.round(out / 1000), raw: out };
     });
   }, [transactions]);
@@ -2041,7 +2041,7 @@ export default function DashboardPage() {
 
   // Concentration intelligence (computed from transactions)
   const revenueByCounterparty = transactions
-    .filter(t => t.amount > 0 && t.counterparty)
+    .filter(t => t.amount > 0 && t.category !== "transfer" && t.counterparty)
     .reduce<Record<string, number>>((acc, t) => {
       acc[t.counterparty] = (acc[t.counterparty] ?? 0) + t.amount;
       return acc;
@@ -2050,7 +2050,7 @@ export default function DashboardPage() {
     .map(([name, total]) => ({ name, total }))
     .sort((a, b) => b.total - a.total)
     .slice(0, 5);
-  const totalRevenue = transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const totalRevenue = transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
   const topConcentration = topRevenueSources[0] && totalRevenue > 0
     ? (topRevenueSources[0].total / totalRevenue) * 100
     : 0;
@@ -2072,7 +2072,7 @@ export default function DashboardPage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   })();
   const lastMonthRevenue = transactions
-    .filter(t => t.amount > 0 && t.date.startsWith(lastMonthStr))
+    .filter(t => t.amount > 0 && t.category !== "transfer" && t.date.startsWith(lastMonthStr))
     .reduce((s, t) => s + t.amount, 0);
   const gstEstimate = firm.gstRegistered && firm.gstRate && lastMonthRevenue > 0
     ? Math.round(lastMonthRevenue * (firm.gstRate / 100))
@@ -2240,11 +2240,11 @@ export default function DashboardPage() {
             const lastM = `${lastMDate.getFullYear()}-${String(lastMDate.getMonth()+1).padStart(2,"0")}`;
             const thisBalance = bankAccounts.reduce((s,b) => s+b.balance, 0);
             const lastBal = thisBalance; // balance is point-in-time, use txn net instead
-            const thisBurn  = Math.abs(transactions.filter(t => t.date.startsWith(thisM) && t.amount < 0).reduce((s,t)=>s+t.amount,0));
-            const lastBurn  = Math.abs(transactions.filter(t => t.date.startsWith(lastM) && t.amount < 0).reduce((s,t)=>s+t.amount,0));
+            const thisBurn  = Math.abs(transactions.filter(t => t.date.startsWith(thisM) && t.amount < 0 && t.category !== "transfer").reduce((s,t)=>s+t.amount,0));
+            const lastBurn  = Math.abs(transactions.filter(t => t.date.startsWith(lastM) && t.amount < 0 && t.category !== "transfer").reduce((s,t)=>s+t.amount,0));
             const burnDelta = lastBurn > 0 ? ((thisBurn - lastBurn)/lastBurn)*100 : null;
-            const thisRevenue = transactions.filter(t => t.date.startsWith(thisM) && t.amount > 0).reduce((s,t)=>s+t.amount,0);
-            const lastRevenue = transactions.filter(t => t.date.startsWith(lastM) && t.amount > 0).reduce((s,t)=>s+t.amount,0);
+            const thisRevenue = transactions.filter(t => t.date.startsWith(thisM) && t.amount > 0 && t.category !== "transfer").reduce((s,t)=>s+t.amount,0);
+            const lastRevenue = transactions.filter(t => t.date.startsWith(lastM) && t.amount > 0 && t.category !== "transfer").reduce((s,t)=>s+t.amount,0);
             const revDelta = lastRevenue > 0 ? ((thisRevenue - lastRevenue)/lastRevenue)*100 : null;
             void lastBal; void thisBalance; void revDelta;
             return (
@@ -2425,10 +2425,10 @@ export default function DashboardPage() {
                 const thisM = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
                 const lastM = new Date(now.getFullYear(), now.getMonth()-1, 1);
                 const lastMStr = `${lastM.getFullYear()}-${String(lastM.getMonth()+1).padStart(2,"0")}`;
-                const thisIn  = transactions.filter(t => t.date.startsWith(thisM) && t.amount > 0).reduce((s,t) => s+t.amount, 0);
-                const thisOut = transactions.filter(t => t.date.startsWith(thisM) && t.amount < 0).reduce((s,t) => s+Math.abs(t.amount), 0);
-                const lastIn  = transactions.filter(t => t.date.startsWith(lastMStr) && t.amount > 0).reduce((s,t) => s+t.amount, 0);
-                const lastOut = transactions.filter(t => t.date.startsWith(lastMStr) && t.amount < 0).reduce((s,t) => s+Math.abs(t.amount), 0);
+                const thisIn  = transactions.filter(t => t.date.startsWith(thisM) && t.amount > 0 && t.category !== "transfer").reduce((s,t) => s+t.amount, 0);
+                const thisOut = transactions.filter(t => t.date.startsWith(thisM) && t.amount < 0 && t.category !== "transfer").reduce((s,t) => s+Math.abs(t.amount), 0);
+                const lastIn  = transactions.filter(t => t.date.startsWith(lastMStr) && t.amount > 0 && t.category !== "transfer").reduce((s,t) => s+t.amount, 0);
+                const lastOut = transactions.filter(t => t.date.startsWith(lastMStr) && t.amount < 0 && t.category !== "transfer").reduce((s,t) => s+Math.abs(t.amount), 0);
                 const rows = [
                   { label: "Inflow",  this: thisIn,  last: lastIn,  color: "text-green-400" },
                   { label: "Outflow", this: thisOut, last: lastOut, color: "text-red-400" },

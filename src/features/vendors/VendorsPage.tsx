@@ -2545,7 +2545,7 @@ function DebitNoteTracker() {
     };
     setNotes(prev => [dn, ...prev]);
     setVendor(""); setAmount("");
-    toast.success(`${dn.dnNo} raised - reduces what you owe ${dn.vendor}`);
+    toast.success(`${dn.dnNo} recorded - remember to net this manually against ${dn.vendor}'s next bill; it doesn't change your Bills Payable or AP aging automatically.`);
   };
   const remove = (id: string) => setNotes(prev => prev.filter(n => n.id !== id));
   const toggleAdjust = (id: string) => setNotes(prev => prev.map(n => n.id === id ? { ...n, status: n.status === "open" ? "adjusted" : "open" } : n));
@@ -2559,7 +2559,7 @@ function DebitNoteTracker() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--color-muted)] max-w-2xl">When you return goods, get short-supplied, or claim a rate difference, raise a debit note - it reduces what you owe the vendor. Track open debit notes here and net them against the next bill so credits never lapse unclaimed.</p>
+      <p className="text-sm text-[var(--color-muted)] max-w-2xl">When you return goods, get short-supplied, or claim a rate difference, log a debit note here as a reminder of what the vendor owes you. This is a memo only - it does NOT reduce your Bills Payable or touch AP aging automatically. Net it against the vendor's next bill yourself so credits never lapse unclaimed.</p>
 
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -2590,7 +2590,7 @@ function DebitNoteTracker() {
 
       {byVendor.length > 0 && (
         <div className="bg-green-950/15 border border-green-800/30 rounded-lg px-4 py-3">
-          <p className="text-xs text-[var(--color-muted)]">Net these open credits against the next bill: {byVendor.map(([v, amt]) => <span key={v} className="text-green-400 font-medium">{v} {formatCurrency(amt)}{byVendor[byVendor.length - 1][0] !== v ? " · " : ""}</span>)}</p>
+          <p className="text-xs text-[var(--color-muted)]">Remember to manually net these against the next bill - they haven't reduced Bills Payable or AP aging yet: {byVendor.map(([v, amt]) => <span key={v} className="text-green-400 font-medium">{v} {formatCurrency(amt)}{byVendor[byVendor.length - 1][0] !== v ? " · " : ""}</span>)}</p>
         </div>
       )}
 

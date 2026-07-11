@@ -773,7 +773,11 @@ function Customer360() {
 
   const profile = useMemo(() => {
     const invoices = store.invoices.filter(i => i.customer === active);
-    const txns = store.transactions.filter(t => t.counterparty === active && t.amount > 0);
+    // Exclude only transactions reconciled against an invoice ALREADY counted in
+    // `collected` (status paid) - a blanket !t.invoiceId filter would also drop
+    // partial payments against still-open invoices, whose cash appears nowhere else.
+    const paidInvoiceIds = new Set(invoices.filter(i => i.status === "paid").map(i => i.id));
+    const txns = store.transactions.filter(t => t.counterparty === active && t.amount > 0 && !(t.invoiceId && paidInvoiceIds.has(t.invoiceId)));
     const billed = invoices.reduce((s, i) => s + i.amount, 0);
     const collected = invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
     const outstanding = invoices.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
