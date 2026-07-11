@@ -11,6 +11,7 @@ import { LoadingState, ErrorState } from "@/components/EmptyState";
 import DatePicker from "@/components/DatePicker";
 import CurrencyInput from "@/components/CurrencyInput";
 import RecordPaymentModal from "@/components/RecordPaymentModal";
+import { useCustomerCredit, setCustomerCreditLimit } from "@/lib/customerCredit";
 import {
   Plus, FileText, Send, Download, QrCode, X, Check, Clock, AlertCircle, MessageCircle, Bell, Zap,
   FileSignature, FilePlus2, Repeat, Link2, FileMinus2, ShieldAlert, Globe, GitPullRequestArrow,
@@ -1220,22 +1221,39 @@ function CreditDebitNoteManager({ invoices, onChanged }: { invoices: Invoice[]; 
 
 
 // #44 ── Customer Credit Limit & Hold ────────────────────────────────────────
-interface CreditCfg { id: string; customer: string; limit: string; overdueDaysHold: string; }
+// Real limit + real GL exposure (book_ledgers.credit_limit) - the same figure
+// Receivables/Collections' credit tabs and the actual invoice-send credit-limit
+// gate (routes/invoices.js) use. This used to be its OWN KV list (a different
+// shape entirely - an array of {customer, limit, overdueDaysHold} vs the other
+// two pages' name-keyed maps), so the same customer could show three different
+// limits depending which page you checked, none of which the real send-time gate
+// ever saw. "Hold if overdue > days" has no real backend equivalent (the actual
+// gate only checks the flat limit), so it stays a small per-customer KV memo.
 function CreditLimitManager({ invoices }: { invoices: Invoice[] }) {
-  const [cfgs, setCfgs] = useFeatureState<CreditCfg[]>("invoice-credit-limits", []);
+  const { credit, loading, refresh } = useCustomerCredit();
+  const [holdDays, setHoldDays] = useFeatureState<Record<string, string>>("invoice-credit-hold-days", {});
   const [customer, setCustomer] = useState("");
-  const [limit, setLimit] = useState("");
-  const [holdDays, setHoldDays] = useState("30");
+  const [newLimit, setNewLimit] = useState("");
+  const [newHoldDays, setNewHoldDays] = useState("30");
+  const [saving, setSaving] = useState(false);
+  const [savingCustomer, setSavingCustomer] = useState<string | null>(null);
 
-  const add = () => {
-    if (!customer || !limit) { toast.error("Add customer and limit"); return; }
-    setCfgs(p => [...p.filter(c => c.customer.toLowerCase() !== customer.toLowerCase()), { id: uid(), customer, limit, overdueDaysHold: holdDays }]);
-    setCustomer(""); setLimit("");
-    toast.success("Credit limit set");
+  const add = async () => {
+    if (!customer || !newLimit) { toast.error("Add customer and limit"); return; }
+    setSaving(true);
+    try {
+      await setCustomerCreditLimit(customer, parseFloat(newLimit) || 0);
+      setHoldDays(prev => ({ ...prev, [customer]: newHoldDays }));
+      setCustomer(""); setNewLimit("");
+      toast.success("Credit limit set");
+      await refresh();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to set credit limit"); }
+    finally { setSaving(false); }
   };
 
-  // Outstanding (unpaid) exposure per customer from live invoices.
-  const exposure = useMemo(() => {
+  // Outstanding (unpaid) exposure per customer from live invoices - used only for
+  // customers with no ledger yet (never sent an invoice, so no real GL exposure).
+  const kvExposure = useMemo(() => {
     const map: Record<string, { outstanding: number; overdue: number }> = {};
     const now = Date.now();
     invoices.forEach(i => {
@@ -1249,38 +1267,52 @@ function CreditLimitManager({ invoices }: { invoices: Invoice[] }) {
     return map;
   }, [invoices]);
 
+  const rows = useMemo(() => {
+    const known = new Set(credit.map(c => c.name.toLowerCase()));
+    const real = credit.map(c => ({ customer: c.name, limit: c.creditLimit, outstanding: c.outstanding, overdue: kvExposure[c.name]?.overdue ?? 0 }));
+    const draftOnly = Object.keys(kvExposure).filter(name => !known.has(name.toLowerCase()))
+      .map(name => ({ customer: name, limit: 0, outstanding: kvExposure[name].outstanding, overdue: kvExposure[name].overdue }));
+    return [...real, ...draftOnly].filter(r => r.limit > 0 || r.outstanding > 0);
+  }, [credit, kvExposure]);
+
+  const removeLimit = async (name: string) => {
+    setSavingCustomer(name);
+    try { await setCustomerCreditLimit(name, 0); await refresh(); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Failed to clear credit limit"); }
+    finally { setSavingCustomer(null); }
+  };
+
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
         <h2 className="text-sm font-semibold flex items-center gap-2"><ShieldAlert size={14} className="text-[var(--color-primary)]" /> Customer Credit Limit & Hold</h2>
         <div className="grid grid-cols-3 gap-3">
           <input value={customer} onChange={e => setCustomer(e.target.value)} className={INP} placeholder="Customer *" />
-          <input type="number" value={limit} onChange={e => setLimit(e.target.value)} className={INP} placeholder="Credit limit ₹ *" />
-          <input type="number" value={holdDays} onChange={e => setHoldDays(e.target.value)} className={INP} placeholder="Hold if overdue > days" />
+          <input type="number" value={newLimit} onChange={e => setNewLimit(e.target.value)} className={INP} placeholder="Credit limit ₹ *" />
+          <input type="number" value={newHoldDays} onChange={e => setNewHoldDays(e.target.value)} className={INP} placeholder="Hold if overdue > days" />
         </div>
-        <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90">Set limit</button>
+        <button onClick={add} disabled={saving} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Set limit"}</button>
       </div>
-      {cfgs.length > 0 && (
+      {loading && rows.length === 0 ? <p className="text-xs text-[var(--color-muted)]">Loading real exposure from the books…</p> : rows.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
           <table className="w-full text-sm min-w-[680px]">
             <thead><tr className="border-b border-[var(--color-border)]">{["Customer", "Limit", "Outstanding", "Utilisation", "Overdue", "Status", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
-              {cfgs.map(c => {
-                const lim = parseFloat(c.limit) || 0;
-                const ex = exposure[c.customer] || { outstanding: 0, overdue: 0 };
-                const util = lim > 0 ? Math.round((ex.outstanding / lim) * 100) : 0;
-                const onHold = ex.outstanding > lim || ex.overdue > 0;
+              {rows.map(r => {
+                const holdThreshold = parseFloat(holdDays[r.customer] ?? "") || 0;
+                const util = r.limit > 0 ? Math.round((r.outstanding / r.limit) * 100) : 0;
+                const onHold = (r.limit > 0 && r.outstanding > r.limit) || (holdThreshold > 0 && r.overdue > 0);
                 return (
-                  <tr key={c.id} className={`hover:bg-white/2 ${onHold ? "bg-red-950/10" : ""}`}>
-                    <td className="px-4 py-2.5 font-medium">{c.customer}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(lim)}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(ex.outstanding))}</td>
+                  <tr key={r.customer} className={`hover:bg-white/2 ${onHold ? "bg-red-950/10" : ""}`}>
+                    <td className="px-4 py-2.5 font-medium">{r.customer}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{r.limit > 0 ? formatCurrency(r.limit) : "-"}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.outstanding))}</td>
                     <td className="px-4 py-2.5 w-32">
-                      <div className="flex items-center gap-2"><div className="flex-1 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${Math.min(100, util)}%`, background: util > 100 ? "#ef4444" : util > 80 ? "#f97316" : "#22c55e" }} /></div><span className="text-[10px] tabular-nums">{util}%</span></div>
+                      {r.limit > 0 ? <div className="flex items-center gap-2"><div className="flex-1 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${Math.min(100, util)}%`, background: util > 100 ? "#ef4444" : util > 80 ? "#f97316" : "#22c55e" }} /></div><span className="text-[10px] tabular-nums">{util}%</span></div> : <span className="text-xs text-[var(--color-muted)]">-</span>}
                     </td>
-                    <td className="px-4 py-2.5 tabular-nums text-red-400">{ex.overdue > 0 ? formatCurrency(Math.round(ex.overdue)) : "-"}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-red-400">{r.overdue > 0 ? formatCurrency(Math.round(r.overdue)) : "-"}</td>
                     <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${onHold ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>{onHold ? "ON HOLD" : "OK to bill"}</span></td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => setCfgs(p => p.filter(x => x.id !== c.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    <td className="px-4 py-2.5 text-right">{r.limit > 0 && <button onClick={() => removeLimit(r.customer)} disabled={savingCustomer === r.customer} className="text-[var(--color-muted)] hover:text-red-400 disabled:opacity-50" title="Clear limit"><Trash2 size={13} /></button>}</td>
                   </tr>
                 );
               })}
@@ -1288,7 +1320,7 @@ function CreditLimitManager({ invoices }: { invoices: Invoice[] }) {
           </table>
         </div>
       )}
-      {NOTE("Exposure is computed from unpaid live invoices. ON HOLD when outstanding exceeds the limit or any invoice is past its due date - block new orders until cleared.")}
+      {NOTE("Limit + outstanding are real (book_ledgers.credit_limit and actual GL exposure) - the same figures the invoice-send credit-limit gate itself checks. \"Hold if overdue\" is a local reminder only; the server gate only enforces the flat limit.")}
     </div>
   );
 }

@@ -495,6 +495,32 @@ router.post("/:id/send", authenticate, canWrite, async (req, res) => {
     if (!ap[0]) return res.status(409).json({ error: `This invoice (₹${Number(inv.total_amount).toLocaleString("en-IN")}) needs approval before it can be sent - request approval first`, code: "NEEDS_APPROVAL" });
   }
 
+  // Real credit-limit gate (book_ledgers.credit_limit) - the same check
+  // documents.js's convertDocument already applies to estimate/PO-derived
+  // invoices, now also covering the direct invoice-create flow this route
+  // serves. Gated at SEND, not create, because that's when postInvoiceSale
+  // below actually books the receivable - a draft invoice doesn't yet consume
+  // credit headroom. Pass overrideCreditLimit:true to push through anyway.
+  if (!req.body?.overrideCreditLimit) {
+    const { resolvePartyLedgerByName } = require("../modules/books/documents");
+    const partyLedgerId = await resolvePartyLedgerByName(req.user.tenant_id, inv.customer_name, "SALES");
+    const { rows: cl } = await pool.query("SELECT credit_limit FROM book_ledgers WHERE tenant_id=$1 AND id=$2", [req.user.tenant_id, partyLedgerId]);
+    const limit = cl[0] && cl[0].credit_limit ? Number(cl[0].credit_limit) : 0;
+    if (limit > 0) {
+      const { rows: o } = await pool.query(
+        "SELECT COALESCE(SUM(e.debit-e.credit),0) AS bal FROM book_voucher_entries e JOIN book_vouchers v ON v.id=e.voucher_id AND v.is_cancelled=false WHERE e.tenant_id=$1 AND e.ledger_id=$2",
+        [req.user.tenant_id, partyLedgerId]
+      );
+      const outstanding = Number(o[0].bal) || 0;
+      if (outstanding + Number(inv.total_amount) > limit) {
+        return res.status(409).json({
+          error: `Sending this invoice would put ${inv.customer_name} at ₹${(outstanding + Number(inv.total_amount)).toLocaleString("en-IN")} outstanding, over their ₹${limit.toLocaleString("en-IN")} credit limit`,
+          code: "CREDIT_LIMIT_EXCEEDED",
+        });
+      }
+    }
+  }
+
   // Report delivery HONESTLY: sendMail silently no-ops when SMTP isn't configured,
   // and the old `.catch(() => {})` + unconditional ok:true told the user their
   // customer was emailed when nothing ever left the server. Status/GL still advance

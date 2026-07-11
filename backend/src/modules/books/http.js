@@ -16,6 +16,7 @@ const ledgersadmin = require("./ledgersadmin");
 const items = require("./items");
 const vt = require("./vouchertools");
 const taxfiling = require("./taxfiling");
+const customerCredit = require("./customerCredit");
 const incometax = require("./incometax");
 const pricing = require("./pricing");
 const payterms = require("./payterms");
@@ -149,6 +150,17 @@ router.patch("/ledgers/:id", canPost, async (req, res) => {
     const { rows } = await pool.query(`UPDATE book_ledgers SET ${sets.join(",")} WHERE tenant_id=$${vals.length - 1} AND id=$${vals.length} RETURNING *`, vals);
     if (!rows[0]) return res.status(404).json({ error: "Not found" });
     res.json(rows[0]);
+  } catch (e) { fail(res, e); }
+});
+
+// Real per-customer credit limits (book_ledgers.credit_limit) - the single source
+// every customer-facing page should read/write instead of its own KV tracker.
+router.get("/customers/credit", async (req, res) => { try { res.json(await customerCredit.listCustomerCredit(tenantOf(req))); } catch (e) { fail(res, e); } });
+router.post("/customers/credit-limit", canPost, async (req, res) => {
+  try {
+    const { name, limit } = req.body || {};
+    if (!name) return res.status(400).json({ error: "name required" });
+    res.json(await customerCredit.setCustomerCreditLimit(tenantOf(req), name, limit));
   } catch (e) { fail(res, e); }
 });
 

@@ -22,6 +22,7 @@ import { useT } from "@/i18n";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import DatePicker from "@/components/DatePicker";
 import RecordPaymentModal from "@/components/RecordPaymentModal";
+import { useCustomerCredit, setCustomerCreditLimit } from "@/lib/customerCredit";
 
 type Aging = "current" | "1-30" | "31-60" | "61-90" | "90+";
 
@@ -3925,22 +3926,40 @@ function UnappliedCashApplicator() {
 // it. Flags customers at or over their limit so sales can hold new orders.
 function CreditLimitEngine() {
   const { store } = useApp();
-  const customers = useMemo(() => Array.from(new Set((store.invoices ?? []).map(i => i.customer).filter(Boolean))), [store.invoices]);
-  const [limits, setLimits] = useFeatureState<Record<string, number>>("col-credit-limits", {});
+  // Real per-customer credit limit + real GL exposure (book_ledgers.credit_limit) -
+  // the same figure Receivables' Credit-Limit Utilization tab and the invoice-send
+  // credit-limit gate itself use, instead of a separate KV number that could (and
+  // did) disagree with them for the same customer.
+  const { credit, loading, refresh } = useCustomerCredit();
+  const [savingCustomer, setSavingCustomer] = useState<string | null>(null);
 
-  const exposure = useMemo(() => {
-    const map: Record<string, number> = {};
-    (store.invoices ?? []).filter(i => i.status !== "paid").forEach(i => { map[i.customer] = (map[i.customer] ?? 0) + i.amount; });
-    return map;
-  }, [store.invoices]);
+  const draftOnlyCustomers = useMemo(() => {
+    const known = new Set(credit.map(c => c.name.toLowerCase()));
+    const names = new Set<string>();
+    (store.invoices ?? []).filter(i => i.status !== "paid" && i.customer).forEach(i => { if (!known.has(i.customer.toLowerCase())) names.add(i.customer); });
+    return [...names];
+  }, [credit, store.invoices]);
 
-  const rows = useMemo(() => customers.map(c => {
-    const limit = limits[c] ?? 0;
-    const used = exposure[c] ?? 0;
-    const pct = limit > 0 ? Math.round((used / limit) * 100) : 0;
-    const state = limit <= 0 ? "none" : used >= limit ? "over" : pct >= 80 ? "warn" : "ok";
-    return { customer: c, limit, used, headroom: Math.max(0, limit - used), pct, state };
-  }).sort((a, b) => b.pct - a.pct), [customers, limits, exposure]);
+  const rows = useMemo(() => {
+    const all = [
+      ...credit.map(c => ({ customer: c.name, limit: c.creditLimit, used: c.outstanding })),
+      ...draftOnlyCustomers.map(customer => ({ customer, limit: 0, used: 0 })),
+    ];
+    return all.map(r => {
+      const pct = r.limit > 0 ? Math.round((r.used / r.limit) * 100) : 0;
+      const state = r.limit <= 0 ? "none" : r.used >= r.limit ? "over" : pct >= 80 ? "warn" : "ok";
+      return { ...r, headroom: Math.max(0, r.limit - r.used), pct, state };
+    }).sort((a, b) => b.pct - a.pct);
+  }, [credit, draftOnlyCustomers]);
+
+  const setLimit = async (customer: string, value: number) => {
+    setSavingCustomer(customer);
+    try { await setCustomerCreditLimit(customer, value); await refresh(); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Failed to save credit limit"); }
+    finally { setSavingCustomer(null); }
+  };
+
+  const customers = rows.map(r => r.customer);
 
   const over = rows.filter(r => r.state === "over").length;
   const warn = rows.filter(r => r.state === "warn").length;
@@ -3955,7 +3974,9 @@ function CreditLimitEngine() {
 
   return (
     <div className="space-y-4">
-      {customers.length === 0 ? (
+      {loading && customers.length === 0 ? (
+        <p className="text-sm text-[var(--color-muted)]">Loading real exposure from the books…</p>
+      ) : customers.length === 0 ? (
         <EmptyState icon={CreditCard} title="No customers yet" description="Add invoices to set per-customer credit ceilings and watch exposure against them." />
       ) : (
         <>
@@ -3993,7 +4014,9 @@ function CreditLimitEngine() {
                       <td className="px-4 py-3 font-semibold">{r.customer}</td>
                       <td className="px-4 py-3 tabular-nums">{formatCurrency(r.used)}</td>
                       <td className="px-4 py-3 text-right">
-                        <input type="number" value={limits[r.customer] ?? ""} onChange={e => setLimits({ ...limits, [r.customer]: Math.max(0, Number(e.target.value) || 0) })} placeholder="set" className={inp} />
+                        <input type="number" key={`${r.customer}-${r.limit}`} defaultValue={r.limit || ""}
+                          onBlur={e => { const v = Math.max(0, Number(e.target.value) || 0); if (v !== r.limit) void setLimit(r.customer, v); }}
+                          disabled={savingCustomer === r.customer} placeholder="set" className={inp} />
                       </td>
                       <td className="px-4 py-3">
                         {r.limit > 0 ? (

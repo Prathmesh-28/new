@@ -13,6 +13,7 @@ import { useT } from "@/i18n";
 import type { Invoice } from "@/data/types";
 import DatePicker from "@/components/DatePicker";
 import RecordPaymentModal from "@/components/RecordPaymentModal";
+import { useCustomerCredit, setCustomerCreditLimit } from "@/lib/customerCredit";
 
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
@@ -1495,31 +1496,54 @@ function ECLProvisioning() {
 function CreditUtilization() {
   const { store } = useApp();
   const invoices = store.invoices ?? [];
-  // per-customer credit limit, durable
-  const [limits, setLimits] = useFeatureState<Record<string, number>>("rec-credit-limits", {});
+  // Real per-customer credit limit + real GL exposure (book_ledgers.credit_limit) -
+  // the same figure the invoice-send credit-limit gate itself checks, instead of a
+  // local KV number that gate never saw and that could disagree with Collections'
+  // and Invoices' own separate KV credit-limit trackers for the same customer.
+  const { credit, loading, refresh } = useCustomerCredit();
+  const [savingName, setSavingName] = useState<string | null>(null);
+
+  // Customers who only have unsent (draft) invoices don't have a ledger yet - show
+  // them too (0 real exposure until sent) so the "set a limit" action still works.
+  const draftOnlyNames = useMemo(() => {
+    const known = new Set(credit.map(c => c.name.toLowerCase()));
+    const names = new Set<string>();
+    invoices.filter(i => i.status !== "paid").forEach(i => { if (!known.has(i.customer.toLowerCase())) names.add(i.customer); });
+    return [...names];
+  }, [credit, invoices]);
 
   const rows = useMemo(() => {
-    const open = invoices.filter(i => i.status !== "paid");
-    const map: Record<string, number> = {};
-    open.forEach(i => { map[i.customer] = (map[i.customer] || 0) + i.amount; });
-    return Object.entries(map).map(([name, exposure]) => {
-      const limit = limits[name] ?? 0;
-      const util = limit > 0 ? (exposure / limit) * 100 : 0;
-      const headroom = limit - exposure;
-      const status = limit <= 0 ? "unset" : util >= 100 ? "over" : util >= 80 ? "near" : "ok";
-      return { name, exposure, limit, util, headroom, status };
+    const all = [
+      ...credit.map(c => ({ name: c.name, exposure: c.outstanding, limit: c.creditLimit })),
+      ...draftOnlyNames.map(name => ({ name, exposure: 0, limit: 0 })),
+    ];
+    return all.map(r => {
+      const util = r.limit > 0 ? (r.exposure / r.limit) * 100 : 0;
+      const headroom = r.limit - r.exposure;
+      const status = r.limit <= 0 ? "unset" : util >= 100 ? "over" : util >= 80 ? "near" : "ok";
+      return { ...r, util, headroom, status };
     }).sort((a, b) => b.util - a.util || b.exposure - a.exposure);
-  }, [invoices, limits]);
+  }, [credit, draftOnlyNames]);
 
   const overCount = rows.filter(r => r.status === "over").length;
   const nearCount = rows.filter(r => r.status === "near").length;
   const unsetCount = rows.filter(r => r.status === "unset").length;
 
-  const setLimit = (name: string, value: string) => {
+  const setLimit = async (name: string, value: string) => {
     const v = parseFloat(value);
-    setLimits(prev => ({ ...prev, [name]: isNaN(v) ? 0 : v }));
+    setSavingName(name);
+    try { await setCustomerCreditLimit(name, isNaN(v) ? 0 : v); await refresh(); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Failed to save credit limit"); }
+    finally { setSavingName(null); }
   };
 
+  if (loading && rows.length === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <p className="text-sm text-[var(--color-muted)]">Loading real exposure from the books…</p>
+      </div>
+    );
+  }
   if (rows.length === 0) {
     return (
       <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
@@ -1578,8 +1602,10 @@ function CreditUtilization() {
                 </div>
                 <div className="shrink-0">
                   <label className="text-[10px] text-[var(--color-muted)] block mb-0.5 text-right">Limit (₹)</label>
-                  <input type="number" value={r.limit || ""} onChange={e => setLimit(r.name, e.target.value)} placeholder="-"
-                    className="w-28 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-sm text-right tabular-nums outline-none focus:border-[var(--color-primary)]" />
+                  <input type="number" defaultValue={r.limit || ""} key={`${r.name}-${r.limit}`}
+                    onBlur={e => { if (e.target.value !== String(r.limit || "")) void setLimit(r.name, e.target.value); }}
+                    disabled={savingName === r.name} placeholder="-"
+                    className="w-28 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-sm text-right tabular-nums outline-none focus:border-[var(--color-primary)] disabled:opacity-50" />
                 </div>
               </div>
             );
@@ -2148,7 +2174,8 @@ function EarlyPaymentDiscount() {
 function CreditHoldList() {
   const { store } = useApp();
   const invoices = store.invoices ?? [];
-  const [limits] = useFeatureState<Record<string, number>>("rec-credit-limits", {});
+  const { credit } = useCustomerCredit();
+  const limits = useMemo(() => Object.fromEntries(credit.map(c => [c.name, c.creditLimit])), [credit]);
   const [overdueDays, setOverdueDays] = useState("45");
   const [cleared, setCleared] = useFeatureState<Record<string, true>>("rec-credit-hold-cleared", {});
 
