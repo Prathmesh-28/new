@@ -945,7 +945,8 @@ router.get("/audit/number-gaps", async (req, res) => { try { res.json(await auto
 
 // ── M8: automation + ops ─────────────────────────────────────────────────────
 router.post("/approval-rules", canPost, async (req, res) => { try { res.status(201).json(await auto.createRule(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
-router.get("/approvals", async (req, res) => { try { res.json(await auto.listApprovals(tenantOf(req), req.query.status)); } catch (e) { fail(res, e); } });
+router.get("/approval-rules", async (req, res) => { try { res.json(await auto.listRules(tenantOf(req), req.query.entityType)); } catch (e) { fail(res, e); } });
+router.get("/approvals", async (req, res) => { try { res.json(await auto.listApprovals(tenantOf(req), req.query.status, req.query.entityType)); } catch (e) { fail(res, e); } });
 router.post("/approvals", canPost, async (req, res) => { try { res.status(201).json(await auto.requestApproval(tenantOf(req), req.user.id, req.body || {})); } catch (e) { fail(res, e); } });
 router.post("/approvals/:id/decide", canPost, async (req, res) => { try { const b = req.body || {}; res.json(await auto.decideApproval(tenantOf(req), req.user.id, req.params.id, !!b.approve, b.note)); } catch (e) { fail(res, e); } });
 router.post("/number-formats", canPost, async (req, res) => { try { res.status(201).json(await auto.setNumberFormat(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });

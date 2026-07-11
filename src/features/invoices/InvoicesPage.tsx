@@ -20,6 +20,7 @@ import {
   Table2, CalendarClock, CopyCheck, BadgePercent,
 } from "lucide-react";
 import { toast } from "sonner";
+import { format } from "date-fns";
 
 interface InvoiceItem { description: string; hsn_sac: string; quantity: number; unit_price: number; gst_rate: number; amount: number; }
 interface Invoice {
@@ -1377,77 +1378,153 @@ function MultiCurrencyInvoicing() {
 }
 
 // #46 ── Invoice Approval Workflow (maker-checker) ───────────────────────────
-interface ApprovalReq { id: string; invoiceNumber: string; customer: string; amount: number; maker: string; status: "pending" | "approved" | "rejected"; note: string; createdAt: string; }
+// REAL gate: backed by books §M8 (book_approval_rules / book_approvals). This used
+// to be a local KV toggle that POST /api/invoices/:id/send never looked at, so
+// "routing for approval" and never approving it had zero effect on whether the
+// invoice could actually be sent. The server now blocks /send with 409
+// NEEDS_APPROVAL until a matching APPROVED row exists (routes/invoices.js).
+interface ServerApprovalRule { id: string; entity_type: string; min_amount: string; approver_role: string; }
+interface ServerApproval { id: string; entity_type: string; entity_id: string | null; amount: string; status: "PENDING" | "APPROVED" | "REJECTED"; requested_by: string | null; note: string | null; created_at: string; }
 function ApprovalWorkflow({ invoices }: { invoices: Invoice[] }) {
-  const { store } = useApp();
-  const [threshold, setThreshold] = useFeatureState<number>("invoice-approval-threshold", 100000);
-  const [reqs, setReqs] = useFeatureState<ApprovalReq[]>("invoice-approvals", []);
-  const maker = store.firm?.name ?? "Maker";
+  const [rules, setRules] = useState<ServerApprovalRule[]>([]);
+  const [approvals, setApprovals] = useState<ServerApproval[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newThreshold, setNewThreshold] = useState("100000");
+  const [approverRole, setApproverRole] = useState("owner");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  // High-value live invoices not yet routed for approval.
-  const highValue = invoices.filter(i => (Number(i.total_amount) || 0) >= threshold && i.status !== "cancelled");
-  const routed = new Set(reqs.map(r => r.invoiceNumber));
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [r, a] = await Promise.all([
+        api.get<ServerApprovalRule[]>("/api/books/approval-rules?entityType=invoice"),
+        api.get<ServerApproval[]>("/api/books/approvals?entityType=invoice"),
+      ]);
+      setRules(r); setApprovals(a);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load approval rules");
+    } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
 
-  const route = (i: Invoice) => {
-    setReqs(p => [{ id: uid(), invoiceNumber: i.invoice_number, customer: i.customer_name, amount: Number(i.total_amount) || 0, maker, status: "pending", note: "", createdAt: new Date().toISOString() }, ...p]);
-    toast.success(`${i.invoice_number} routed for checker approval`);
+  // The effective threshold is the LOWEST configured rule - any rule crossed requires approval.
+  const threshold = rules.length ? Math.min(...rules.map(r => Number(r.min_amount))) : null;
+  const approvalByInvoiceId = useMemo(() => {
+    const idx: Record<string, ServerApproval> = {};
+    for (const a of approvals) if (a.entity_id) idx[a.entity_id] = a; // last one wins (most recent, since API returns created_at DESC)
+    return idx;
+  }, [approvals]);
+  const highValue = threshold == null ? [] : invoices.filter(i => (Number(i.total_amount) || 0) >= threshold && i.status !== "cancelled");
+
+  const createRule = async () => {
+    const min = parseFloat(newThreshold);
+    if (!(min >= 0)) { toast.error("Enter a valid threshold"); return; }
+    try {
+      await api.post("/api/books/approval-rules", { entityType: "invoice", minAmount: min, approverRole });
+      toast.success("Approval rule saved");
+      void load();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to save rule"); }
   };
-  const decide = (id: string, status: "approved" | "rejected") => {
-    setReqs(p => p.map(r => r.id === id ? { ...r, status } : r));
-    toast.success(`Invoice ${status}`);
+
+  const route = async (i: Invoice) => {
+    setBusyId(i.id);
+    try {
+      await api.post("/api/books/approvals", { entityType: "invoice", entityId: i.id, amount: Number(i.total_amount) || 0, note: i.invoice_number });
+      toast.success(`${i.invoice_number} routed for checker approval`);
+      void load();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to route for approval"); }
+    finally { setBusyId(null); }
+  };
+  const decide = async (a: ServerApproval, approve: boolean) => {
+    setBusyId(a.id);
+    try {
+      await api.post(`/api/books/approvals/${a.id}/decide`, { approve });
+      toast.success(`Invoice ${approve ? "approved" : "rejected"} - it can now ${approve ? "be sent" : "not be sent until re-routed"}`);
+      void load();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to record decision"); }
+    finally { setBusyId(null); }
   };
 
-  const pending = reqs.filter(r => r.status === "pending");
+  const pending = approvals.filter(a => a.status === "PENDING");
 
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5 space-y-3">
         <h2 className="text-sm font-semibold flex items-center gap-2"><GitPullRequestArrow size={14} className="text-[var(--color-primary)]" /> Invoice Approval Workflow</h2>
-        <div className="max-w-xs">
-          <label className={LBL}>Approval threshold (₹) - invoices above this need a checker</label>
-          <input type="number" value={threshold} onChange={e => setThreshold(parseFloat(e.target.value) || 0)} className={INP} />
+        <p className="text-xs text-[var(--color-muted)]">
+          Real server-side gate - once a threshold is set, <code>POST /api/invoices/:id/send</code> is blocked for any invoice at or
+          above it until a checker approves it here.
+          {threshold != null && <> Current effective threshold: <span className="font-semibold text-[var(--color-text)]">{formatCurrency(threshold)}</span>.</>}
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-end max-w-xl">
+          <div>
+            <label className={LBL}>New threshold (₹)</label>
+            <input type="number" value={newThreshold} onChange={e => setNewThreshold(e.target.value)} className={INP} />
+          </div>
+          <div>
+            <label className={LBL}>Approver role</label>
+            <select value={approverRole} onChange={e => setApproverRole(e.target.value)} className={INP}>
+              {["owner", "admin", "finance_manager", "accountant"].map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <button onClick={createRule} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg text-sm hover:opacity-90">Save rule</button>
         </div>
+        {rules.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {rules.map(r => <span key={r.id} className="text-[11px] bg-[var(--color-accent)] border border-[var(--color-border)] rounded-lg px-2.5 py-1">≥ {formatCurrency(Number(r.min_amount))} → {r.approver_role}</span>)}
+          </div>
+        )}
       </div>
-      {highValue.length > 0 && (
+
+      {loading ? <p className="text-xs text-[var(--color-muted)]">Loading…</p> : threshold == null ? (
+        <p className="text-xs text-[var(--color-muted)]">No approval rule set for invoices yet - every invoice can be sent freely. Set a threshold above to require checker sign-off.</p>
+      ) : highValue.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)]">No live invoices at or above the threshold right now.</p>
+      ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
           <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-2">High-value invoices ({formatCurrency(threshold)}+)</p>
           <div className="space-y-2">
-            {highValue.map(i => (
-              <div key={i.id} className="flex items-center justify-between gap-3 text-sm">
-                <span><span className="font-mono text-xs">{i.invoice_number}</span> · {i.customer_name} · <span className="font-semibold">{formatCurrency(Number(i.total_amount) || 0)}</span></span>
-                {routed.has(i.invoice_number) ? <span className="text-[10px] text-[var(--color-muted)]">routed</span> : <button onClick={() => route(i)} className="text-xs text-[var(--color-primary)] hover:underline">Route for approval</button>}
-              </div>
-            ))}
+            {highValue.map(i => {
+              const a = approvalByInvoiceId[i.id];
+              return (
+                <div key={i.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span><span className="font-mono text-xs">{i.invoice_number}</span> · {i.customer_name} · <span className="font-semibold">{formatCurrency(Number(i.total_amount) || 0)}</span></span>
+                  {!a ? (
+                    <button onClick={() => route(i)} disabled={busyId === i.id} className="text-xs text-[var(--color-primary)] hover:underline disabled:opacity-50">Route for approval</button>
+                  ) : (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${a.status === "APPROVED" ? "bg-green-900/30 text-green-400 border-green-800/40" : a.status === "REJECTED" ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{a.status.toLowerCase()}</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
-      {reqs.length > 0 ? (
+
+      {pending.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
-            <thead><tr className="border-b border-[var(--color-border)]">{["Invoice", "Customer", "Amount", "Maker", "Status", "Checker action"].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+          <p className="px-4 pt-3 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Pending checker decisions</p>
+          <table className="w-full text-sm min-w-[560px]">
+            <thead><tr className="border-b border-[var(--color-border)]">{["Invoice", "Amount", "Requested", "Checker action"].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
-              {reqs.map(r => (
-                <tr key={r.id} className="hover:bg-white/2">
-                  <td className="px-4 py-2.5 font-mono text-xs">{r.invoiceNumber}</td>
-                  <td className="px-4 py-2.5">{r.customer}</td>
-                  <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(r.amount)}</td>
-                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.maker}</td>
-                  <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${r.status === "approved" ? "bg-green-900/30 text-green-400 border-green-800/40" : r.status === "rejected" ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{r.status}</span></td>
+              {pending.map(a => (
+                <tr key={a.id} className="hover:bg-white/2">
+                  <td className="px-4 py-2.5 font-mono text-xs">{a.note || a.entity_id}</td>
+                  <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(Number(a.amount))}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{format(new Date(a.created_at), "dd MMM, HH:mm")}</td>
                   <td className="px-4 py-2.5">
-                    {r.status === "pending" ? (
-                      <div className="flex gap-2">
-                        <button onClick={() => decide(r.id, "approved")} className="text-xs text-green-400 hover:underline flex items-center gap-1"><Check size={11} /> Approve</button>
-                        <button onClick={() => decide(r.id, "rejected")} className="text-xs text-red-400 hover:underline flex items-center gap-1"><X size={11} /> Reject</button>
-                      </div>
-                    ) : <span className="text-[10px] text-[var(--color-muted)]">closed</span>}
+                    <div className="flex gap-2">
+                      <button onClick={() => decide(a, true)} disabled={busyId === a.id} className="text-xs text-green-400 hover:underline flex items-center gap-1 disabled:opacity-50"><Check size={11} /> Approve</button>
+                      <button onClick={() => decide(a, false)} disabled={busyId === a.id} className="text-xs text-red-400 hover:underline flex items-center gap-1 disabled:opacity-50"><X size={11} /> Reject</button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      ) : <p className="text-xs text-[var(--color-muted)]">No approval requests yet.{pending.length === 0 && highValue.length === 0 ? " No high-value invoices above the threshold." : ""}</p>}
-      {NOTE("Maker routes, a separate checker approves/rejects before the invoice is sent. Approved high-value invoices are safe to email/dispatch.")}
+      )}
+      {NOTE("Maker routes, a separate checker approves/rejects before the invoice is sent - this is enforced server-side, not just a UI toggle.")}
     </div>
   );
 }

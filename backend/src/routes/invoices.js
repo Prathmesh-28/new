@@ -482,6 +482,19 @@ router.post("/:id/send", authenticate, canWrite, async (req, res) => {
   if (!inv) return res.status(404).json({ error: "Invoice not found" });
   if (!inv.customer_email) return res.status(400).json({ error: "Invoice has no customer email" });
 
+  // Maker-checker gate: if a "invoice" approval rule matches this amount, the
+  // invoice can only be sent once an APPROVED book_approvals row exists for it.
+  // This used to be entirely decorative - InvoicesPage.tsx's "route for approval"
+  // toggle lived in local KV and this send handler never looked at it at all.
+  const auto = require("../modules/books/automation");
+  if (await auto.requiresApproval(req.user.tenant_id, "invoice", Number(inv.total_amount))) {
+    const { rows: ap } = await pool.query(
+      "SELECT 1 FROM book_approvals WHERE tenant_id=$1 AND entity_type='invoice' AND entity_id=$2 AND status='APPROVED' LIMIT 1",
+      [req.user.tenant_id, inv.id]
+    );
+    if (!ap[0]) return res.status(409).json({ error: `This invoice (₹${Number(inv.total_amount).toLocaleString("en-IN")}) needs approval before it can be sent - request approval first`, code: "NEEDS_APPROVAL" });
+  }
+
   // Report delivery HONESTLY: sendMail silently no-ops when SMTP isn't configured,
   // and the old `.catch(() => {})` + unconditional ok:true told the user their
   // customer was emailed when nothing ever left the server. Status/GL still advance

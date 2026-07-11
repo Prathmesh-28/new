@@ -28,6 +28,12 @@ async function requiresApproval(tenantId, entityType, amount) {
   const { rows } = await pool.query("SELECT * FROM book_approval_rules WHERE tenant_id=$1 AND entity_type=$2", [tenantId, entityType]);
   return ruleRequiresApproval(rows, entityType, amount);
 }
+async function listRules(tenantId, entityType) {
+  const { rows } = entityType
+    ? await pool.query("SELECT * FROM book_approval_rules WHERE tenant_id=$1 AND entity_type=$2 ORDER BY min_amount", [tenantId, entityType])
+    : await pool.query("SELECT * FROM book_approval_rules WHERE tenant_id=$1 ORDER BY entity_type, min_amount", [tenantId]);
+  return rows;
+}
 async function requestApproval(tenantId, actorId, a) {
   const { rows } = await pool.query("INSERT INTO book_approvals(tenant_id,entity_type,entity_id,amount,requested_by,note) VALUES($1,$2,$3,$4,$5,$6) RETURNING *", [tenantId, a.entityType, a.entityId || null, toDb(a.amount || 0), actorId || null, a.note || null]);
   return rows[0];
@@ -37,10 +43,11 @@ async function decideApproval(tenantId, actorId, id, approve, note) {
   if (!rows[0]) throw new PostError("BAD_STATE", "Approval not found or already decided", 409);
   return rows[0];
 }
-async function listApprovals(tenantId, status) {
-  const { rows } = status
-    ? await pool.query("SELECT * FROM book_approvals WHERE tenant_id=$1 AND status=$2 ORDER BY created_at DESC", [tenantId, status])
-    : await pool.query("SELECT * FROM book_approvals WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 500", [tenantId]);
+async function listApprovals(tenantId, status, entityType) {
+  const clauses = ["tenant_id=$1"]; const params = [tenantId];
+  if (status) { params.push(status); clauses.push(`status=$${params.length}`); }
+  if (entityType) { params.push(entityType); clauses.push(`entity_type=$${params.length}`); }
+  const { rows } = await pool.query(`SELECT * FROM book_approvals WHERE ${clauses.join(" AND ")} ORDER BY created_at DESC LIMIT 500`, params);
   return rows;
 }
 
@@ -142,4 +149,4 @@ async function numberGaps(tenantId, fy, voucherType) {
   return out;
 }
 
-module.exports = { formatDocNumber, computeLateFee, ruleRequiresApproval, createRule, requiresApproval, requestApproval, decideApproval, listApprovals, setNumberFormat, formattedNumber, overdue, postLateFee, dunningDue, numberGaps };
+module.exports = { formatDocNumber, computeLateFee, ruleRequiresApproval, createRule, requiresApproval, listRules, requestApproval, decideApproval, listApprovals, setNumberFormat, formattedNumber, overdue, postLateFee, dunningDue, numberGaps };
