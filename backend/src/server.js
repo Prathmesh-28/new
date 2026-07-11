@@ -560,10 +560,18 @@ initDb()
     // In an uncaught-exception the process state is undefined — log SYNCHRONOUSLY to
     // stderr (not via the async forwarder, which could itself fault) and drain-restart.
     process.on("uncaughtException", (err) => { console.error("[uncaughtException]", err && err.stack ? err.stack : String(err)); shutdown("uncaughtException"); });
-    // Daily digest at 7:00 AM IST (01:30 UTC) - email + WhatsApp
-    cron.schedule("30 1 * * *", async () => {
+    // Alert Digest Scheduler (Alerts -> Digest): each owner picks enabled/frequency/
+    // hour/channel, persisted in their KV featureData - sendDailyDigest reads those
+    // per-owner and no-ops unless the current IST hour matches theirs, so this must
+    // run hourly rather than once at a fixed time (an audit found the old fixed
+    // 7am-for-everyone cron ignored all four settings).
+    cron.schedule("30 * * * *", () => {
       sendDailyDigest().catch(err => console.error("[digest-email]", err.message));
-      // Fire WhatsApp digest (self-call so it uses the same route logic)
+    }, { timezone: "UTC" });
+    // Separate, pre-existing WhatsApp morning brief (per-tenant whatsappPreferences
+    // toggles - low_cash/overdue/weekly/etc., not the Alert Digest Scheduler above) -
+    // stays on its own fixed 7:00 AM IST (01:30 UTC) schedule.
+    cron.schedule("30 1 * * *", async () => {
       try {
         await fetch(`http://localhost:${PORT}/api/whatsapp/send-digest`, {
           method: "POST",
@@ -701,6 +709,6 @@ initDb()
         if (n) console.log(`[forecast-snapshots] matured ${n} snapshot(s)`);
       } catch (err) { console.error("[forecast-snapshots]", err.message); }
     }, { timezone: "UTC" });
-    console.log("[cron] daily digest 07:00 IST · Monday CFO brief 08:00 IST · books recurring 07:30 IST · overdue reminders 08:30 IST · subscriptions 07:45 IST · platform stats 06:30 IST · forecast-snapshot maturity 06:45 IST · e-invoice worker on");
+    console.log("[cron] alert digest hourly (per-owner hour) · WA morning brief 07:00 IST · Monday CFO brief 08:00 IST · books recurring 07:30 IST · overdue reminders 08:30 IST · subscriptions 07:45 IST · platform stats 06:30 IST · forecast-snapshot maturity 06:45 IST · e-invoice worker on");
   })
   .catch(err => { console.error("[fatal]", err); process.exit(1); });

@@ -4,6 +4,8 @@ import { FilePlus, IndianRupee, Receipt, Wallet, HelpCircle, Bell, LayoutGrid } 
 import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
 import { useT } from "@/i18n";
+import { useLiveAlerts } from "@/hooks/useLiveAlerts";
+import { unmuted, type MuteRule } from "@/lib/alertMute";
 
 // Assisted / simple mode (roadmap #173): a stripped-down home with a handful of large, clearly
 // labelled buttons for low-digital-literacy owners — the daily jobs and nothing else. Toggled on
@@ -20,9 +22,13 @@ export default function SimpleHome({ onExit }: { onExit: () => void }) {
   const navigate = useNavigate();
   const t = useT();
   const { store } = useApp();
-  const { bankAccounts = [], alerts = [] } = store;
+  const { bankAccounts = [] } = store;
   const balance = useMemo(() => bankAccounts.reduce((a, b) => a + (b.balance || 0), 0), [bankAccounts]);
-  const unread = alerts.filter((a) => !a.isRead).length;
+  // Real backend-raised alerts (see useLiveAlerts.ts) - reading store.alerts
+  // directly never reflected anything server-side raised.
+  const alerts = useLiveAlerts();
+  const muteRules = store.featureData?.["alr-mute-rules"] as MuteRule[] | undefined;
+  const unread = unmuted(alerts, muteRules).filter((a) => !a.isRead).length;
 
   return (
     <div className="min-h-[70vh] max-w-2xl mx-auto">

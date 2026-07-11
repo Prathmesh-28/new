@@ -8,14 +8,17 @@ import { AlertTriangle, Bell, Info, CheckCircle2, X, Settings2, SlidersHorizonta
 import { toast } from "sonner";
 import { addMonths, addQuarters, addYears } from "date-fns";
 import DatePicker from "@/components/DatePicker";
+import { unmuted, type MuteRule } from "@/lib/alertMute";
+import { useLiveAlerts } from "@/hooks/useLiveAlerts";
 
 // ── Backend alert read-state sync ─────────────────────────────────────────────
-// The Active/History UI renders from the synced client store (context), but alert
-// read / resolved state is also persisted server-side via backend/src/routes/alerts.js
-// so it survives across devices and matches the unread badge the rest of the app uses.
-// Endpoints: GET /api/alerts, GET /api/alerts/unread-count, PATCH /api/alerts/:id,
-// POST /api/alerts/mark-all-read. Everything is best-effort: if the backend is
-// unreachable the page still works fully on the local KV store.
+// The Active/History UI renders from `useLiveAlerts()` (real backend-raised alerts
+// merged with the local KV store - see src/hooks/useLiveAlerts.ts for why that
+// merge exists at all). Read/resolved state is ALSO mirrored server-side via
+// backend/src/routes/alerts.js so it survives across devices. Endpoints used here:
+// GET /api/alerts/unread-count, GET /api/alerts?limit=100 (reconciliation only),
+// PATCH /api/alerts/:id, POST /api/alerts/mark-all-read. Everything is best-effort:
+// if the backend is unreachable the page still works fully on the local KV store.
 type ServerAlert = { id: string; is_read?: boolean; is_resolved?: boolean };
 type AlertsListResponse = { data?: ServerAlert[]; total?: number };
 
@@ -30,8 +33,8 @@ const SEV: Record<string, { color: string; bg: string; icon: React.ElementType; 
 
 export default function AlertsPage() {
   const tr = useT();
-  const { store, markAlertRead, deleteAlert, updateFirm, resolveAlert } = useApp();
-  const { alerts, transactions } = store;
+  const { store, markAlertRead: kvMarkAlertRead, deleteAlert: kvDeleteAlert, updateFirm, resolveAlert: kvResolveAlert } = useApp();
+  const { transactions } = store;
   const safetyDays = store.firm.safetyThresholdDays ?? 14;
 
   // Backend read-state sync. `synced` is null until the first probe completes,
@@ -39,6 +42,39 @@ export default function AlertsPage() {
   const [synced, setSynced] = useState<boolean | null>(null);
   const [serverUnread, setServerUnread] = useState<number | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
+
+  // Real backend-raised alerts (overdue invoices, expiry/DSC reminders, flow
+  // triggers, team-invite reminders, ...) merged with the local KV list - the
+  // shared hook every notification surface (nav bell, dashboard count, this page)
+  // now reads from. `locallyResolved` lets a mark-read/resolve on a backend-only
+  // row (never present in the KV array) show instantly here without waiting for
+  // the next poll to confirm it server-side.
+  const liveAlerts = useLiveAlerts();
+  const [locallyResolved, setLocallyResolved] = useState<Record<string, string | undefined>>({});
+  const [locallyDeleted, setLocallyDeleted] = useState<Set<string>>(new Set());
+  const alerts = useMemo(
+    () => liveAlerts
+      .filter(a => !locallyDeleted.has(a.id))
+      .map(a => locallyResolved[a.id] !== undefined ? { ...a, isRead: true, actionTaken: locallyResolved[a.id] || a.actionTaken } : a),
+    [liveAlerts, locallyResolved, locallyDeleted]
+  );
+
+  // Wrapped so a backend-only alert (never in the KV array) actually reflects
+  // read/resolved/deleted here too - a plain KV mutation is a no-op for a row
+  // that was never in that array, which is exactly why muting/digesting/
+  // escalating never seemed to matter: the real alerts were invisible.
+  const markAlertRead = useCallback((id: string) => {
+    kvMarkAlertRead(id);
+    setLocallyResolved(s => (s[id] !== undefined ? s : { ...s, [id]: undefined }));
+  }, [kvMarkAlertRead]);
+  const resolveAlert = useCallback((id: string, note?: string) => {
+    kvResolveAlert(id, note);
+    setLocallyResolved(s => ({ ...s, [id]: note?.trim() || s[id] || "Resolved" }));
+  }, [kvResolveAlert]);
+  const deleteAlert = useCallback((id: string) => {
+    kvDeleteAlert(id); // no-op for backend-only rows (there's no DELETE /api/alerts/:id) - hide it locally instead
+    setLocallyDeleted(s => new Set(s).add(id));
+  }, [kvDeleteAlert]);
 
   const refreshServerCount = useCallback(async () => {
     try {
@@ -54,6 +90,8 @@ export default function AlertsPage() {
 
   // On mount, pull the server's read/resolved state and reconcile the local
   // store so a dismissal made on another device shows here too. Best-effort.
+  // (Kept alongside the backend-alerts fetch above for any locally-added KV
+  // alert whose id happens to also exist server-side - harmless no-op otherwise.)
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -112,7 +150,10 @@ export default function AlertsPage() {
   const burn = monthlyBurn(transactions);
   const safetyBuffer = (burn / 30) * safetyDays;
 
-  const active   = alerts.filter(a => !a.isRead).sort((a, b) => {
+  // Mutes actually suppress here now (previously computed-but-never-consulted):
+  // a muted category disappears from Active/unread everywhere except criticals.
+  const muteRules = store.featureData?.["alr-mute-rules"] as MuteRule[] | undefined;
+  const active   = unmuted(alerts.filter(a => !a.isRead), muteRules).sort((a, b) => {
     const sevOrder = { critical: 0, high: 1, medium: 2, low: 3 };
     return (sevOrder[a.severity] ?? 4) - (sevOrder[b.severity] ?? 4);
   });
@@ -801,8 +842,8 @@ function FraudAnomalyAlerts() {
 // ── Snooze / Mute Config ─────────────────────────────────────────────────────────
 // Mute whole alert categories (by `type`) for a chosen window. Active mutes hide
 // matching live alerts and auto-expire; nothing is deleted, only suppressed.
-type MuteRule = { id: string; type: string; until: string; createdAt: string };
-
+// (MuteRule type + the actual suppression logic live in src/lib/alertMute.ts,
+// shared with every unread surface across the app.)
 function SnoozeMuteConfig() {
   const { store } = useApp();
   const [rules, setRules] = useFeatureState<MuteRule[]>("alr-mute-rules", []);

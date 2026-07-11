@@ -2,6 +2,7 @@ const router = require("express").Router();
 const { pool } = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 const payouts = require("../modules/payouts/index");
+const { raiseAlert } = require("../lib/alerts");
 
 // super_admin may target any tenant via ?tenant_id; everyone else is scoped to their own.
 const tenantOf = (req) =>
@@ -122,13 +123,12 @@ router.get("/analysis", authenticate, requireOwnerOrAdmin, async (req, res) => {
 // today via POST /sweep (manual, per-transfer, rail-gated).
 router.post("/sweep-enable", authenticate, requireOwnerOrAdmin, async (req, res) => {
   try {
-    await pool.query(
-      `INSERT INTO alerts(tenant_id, rule_id, severity, title, message, meta)
-       VALUES($1,'treasury.sweep_interest','low',$2,$3,$4)`,
-      [req.user.tenant_id, "Auto-sweep interest recorded",
-       "You asked for automatic idle-cash sweeps. Until that ships, use Treasury → Sweep to move idle cash into an FD/liquid fund per transfer - each sweep is tracked end-to-end.",
-       JSON.stringify({ requested_by: req.user.id, requested_at: new Date().toISOString() })]
-    );
+    await raiseAlert(req.user.tenant_id, {
+      ruleId: "treasury.sweep_interest", severity: "low",
+      title: "Auto-sweep interest recorded",
+      message: "You asked for automatic idle-cash sweeps. Until that ships, use Treasury → Sweep to move idle cash into an FD/liquid fund per transfer - each sweep is tracked end-to-end.",
+      meta: { requested_by: req.user.id, requested_at: new Date().toISOString() },
+    });
     res.json({
       success: true,
       enrolled: false,

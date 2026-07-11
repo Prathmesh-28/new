@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell } from "lucide-react";
 import { useApp } from "@/context/AppContext";
+import { useLiveAlerts } from "@/hooks/useLiveAlerts";
+import { unmuted, type MuteRule } from "@/lib/alertMute";
 
 const SEV_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 const SEV_DOT: Record<string, string> = {
@@ -17,14 +19,19 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const alerts = store.alerts ?? [];
-  const unread = alerts.filter((a) => !a.isRead).length;
+  // Real backend-raised alerts merged with the local KV list (see useLiveAlerts.ts) -
+  // this bell used to read store.alerts directly, which nothing server-side ever
+  // populated, so it never reflected real overdue-invoice/expiry/flow alerts.
+  const alerts = useLiveAlerts();
+  const muteRules = store.featureData?.["alr-mute-rules"] as MuteRule[] | undefined;
+  const visible = unmuted(alerts, muteRules);
+  const unread = visible.filter((a) => !a.isRead).length;
   const top = useMemo(
-    () => [...alerts]
+    () => [...visible]
       .sort((a, b) => (a.isRead === b.isRead ? (SEV_RANK[a.severity] ?? 9) - (SEV_RANK[b.severity] ?? 9)
         : a.isRead ? 1 : -1) || (b.createdAt || "").localeCompare(a.createdAt || ""))
       .slice(0, 6),
-    [alerts]
+    [visible]
   );
 
   useEffect(() => {

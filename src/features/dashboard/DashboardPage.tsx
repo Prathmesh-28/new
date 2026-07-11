@@ -23,6 +23,8 @@ import { api } from "@/lib/api";
 import { txnFromApi, txnToApiBody } from "@/lib/txnApi";
 import type { BankAccount } from "@/data/types";
 import DatePicker from "@/components/DatePicker";
+import { useLiveAlerts } from "@/hooks/useLiveAlerts";
+import { unmuted, type MuteRule } from "@/lib/alertMute";
 
 const SEV_COLOR: Record<string, string> = {
   critical: "text-red-400 border-red-700/60 bg-red-900/40",
@@ -183,7 +185,8 @@ function CashThisWeekWidget() {
 
 function SmartActionsPanel() {
   const { store } = useApp();
-  const { transactions, bankAccounts, alerts } = store;
+  const { transactions, bankAccounts } = store;
+  const alerts = unmuted(useLiveAlerts(), store.featureData?.["alr-mute-rules"] as MuteRule[] | undefined);
   const navigate = useNavigate();
 
   const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
@@ -304,7 +307,8 @@ function TreasuryBanner() {
 
 function HealthScoreWidget() {
   const { store } = useApp();
-  const { transactions, bankAccounts, alerts, activeLoans } = store;
+  const { transactions, bankAccounts, activeLoans } = store;
+  const alerts = unmuted(useLiveAlerts(), store.featureData?.["alr-mute-rules"] as MuteRule[] | undefined);
   const burn    = monthlyBurn(transactions);
   const balance = bankAccounts.reduce((s, a) => s + a.balance, 0);
   const runway  = runwayDays(bankAccounts.map(b => b.balance), burn);
@@ -698,7 +702,8 @@ const KPI_CATALOG: { key: KpiKey; label: string }[] = [
 
 function KpiWidgetBuilder() {
   const { store } = useApp();
-  const { transactions, bankAccounts, alerts } = store;
+  const { transactions, bankAccounts } = store;
+  const alerts = unmuted(useLiveAlerts(), store.featureData?.["alr-mute-rules"] as MuteRule[] | undefined);
   const [picked, setPicked] = useFeatureState<KpiKey[]>("dashboard-kpi-board", ["balance", "runway", "revenueMtd", "alerts"]);
   const [editing, setEditing] = useState(false);
 
@@ -957,7 +962,8 @@ function GoalTracker() {
 // Overnight changes + due-today + alerts digest, condensed into one card.
 function MorningBriefCard() {
   const { store } = useApp();
-  const { transactions, bankAccounts, alerts } = store;
+  const { transactions, bankAccounts } = store;
+  const alerts = unmuted(useLiveAlerts(), store.featureData?.["alr-mute-rules"] as MuteRule[] | undefined);
   const navigate = useNavigate();
   const tr = useT();   // `t` is used as the transaction param in filters below
 
@@ -1949,7 +1955,10 @@ function ReceivablesVsPayablesWidget() {
 
 export default function DashboardPage() {
   const { store, markAlertRead, addBankAccount, addTransaction, isReadOnly } = useApp();
-  const { bankAccounts, transactions, alerts, forecast, creditApplications, firm } = store;
+  const { bankAccounts, transactions, forecast, creditApplications, firm } = store;
+  // Real backend-raised alerts, mute-filtered (see useLiveAlerts.ts) - store.alerts
+  // directly never reflected anything server-side raised.
+  const alerts = unmuted(useLiveAlerts(), store.featureData?.["alr-mute-rules"] as MuteRule[] | undefined);
   const navigate = useNavigate();
   const tr = useT();   // `t` is used as the transaction param in filters below
   const [showAddAccount, setShowAddAccount] = useState(false);

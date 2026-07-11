@@ -4,6 +4,7 @@
 // overview() powers the admin dashboard (funnel / active users / top events /
 // segments), tenant-scoped for an owner or platform-wide for super_admin.
 const { pool } = require("../../db");
+const { raiseAlert } = require("../../lib/alerts");
 const crypto = require("crypto");
 
 class AnalyticsError extends Error {
@@ -311,7 +312,11 @@ async function runWinback({ idleDays, cooldownDays, dryRun = false, scopeTenantI
       try {
         if (waLive && c.phone) { await require("../../lib/whatsapp").sendWhatsApp(c.phone, msg); channel = "whatsapp"; }
         else if (mailLive && c.email) { await require("../../lib/email").sendMail({ to: c.email, subject: "We miss you at Headroom", html: `<p>${msg}</p>` }); channel = "email"; }
-        else { await pool.query("INSERT INTO alerts(tenant_id, rule_id, severity, title, message, meta) VALUES($1,NULL,'info',$2,$3,$4)", [t.tenant_id, "We miss you", msg, JSON.stringify({ kind: "winback", days_idle: t.days_idle, reason })]).catch(() => {}); channel = "alert"; }
+        // Was raw SQL with a literal NULL rule_id against a NOT NULL column, always
+        // throwing and silently swallowed by .catch(()=>{}) - this in-app fallback
+        // never actually created an alert. raiseAlert both fixes that and gets
+        // escalation dispatch for free.
+        else { await raiseAlert(t.tenant_id, { ruleId: "winback.miss_you", severity: "low", title: "We miss you", message: msg, meta: { kind: "winback", days_idle: t.days_idle, reason } }); channel = "alert"; }
       } catch (e) { try { console.warn("[winback] send failed", t.tenant_id, e.message); } catch {} channel = "failed"; }
     }
     treated++;

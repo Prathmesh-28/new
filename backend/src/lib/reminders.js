@@ -6,6 +6,7 @@
 // not post any financial entry (late fees stay a manual, reviewed action).
 const { pool } = require("../db");
 const { q } = require("./tenantDb");
+const { raiseAlert } = require("./alerts");
 
 // High-severity alerts also email the tenant's owner(s) — sendAlertEmail existed but was
 // never called from anywhere (2026-07 gap audit, B11). Best-effort: a mail failure must
@@ -50,22 +51,15 @@ async function runOverdueReminders() {
       const days = Math.max(1, Math.floor((Date.now() - new Date(inv.due_date).getTime()) / 86400000));
       const severity = days > 30 ? "high" : "medium";
       const amount = Number(inv.total_amount || 0).toLocaleString("en-IN");
+      const title = `Invoice ${inv.invoice_number} is overdue`;
+      const message = `${inv.customer_name} - ₹${amount} is ${days} day${days === 1 ? "" : "s"} overdue. Send a reminder or chase the payment.`;
       try {
-        await q(tenantId,
-          `INSERT INTO alerts (tenant_id, rule_id, severity, title, message, meta)
-           VALUES ($1, 'invoice.overdue', $2, $3, $4, $5)`,
-          [
-            tenantId,
-            severity,
-            `Invoice ${inv.invoice_number} is overdue`,
-            `${inv.customer_name} - ₹${amount} is ${days} day${days === 1 ? "" : "s"} overdue. Send a reminder or chase the payment.`,
-            JSON.stringify({ invoice_id: inv.id, days_overdue: days, amount: Number(inv.total_amount || 0) }),
-          ]
-        );
+        await raiseAlert(tenantId, {
+          ruleId: "invoice.overdue", severity, title, message,
+          meta: { invoice_id: inv.id, days_overdue: days, amount: Number(inv.total_amount || 0) },
+        });
         created++;
         require("../modules/flows/runner").emitEvent(tenantId, "invoice.overdue", { invoice: inv, days_overdue: days }).catch(() => {});
-        const title = `Invoice ${inv.invoice_number} is overdue`;
-        const message = `${inv.customer_name} - ₹${amount} is ${days} day${days === 1 ? "" : "s"} overdue. Send a reminder or chase the payment.`;
         notifyOwnersByEmail(tenantId, { title, message, severity }).catch(() => {});
       } catch (e) {
         console.error("[reminders] insert failed for", inv.id, e.message);
@@ -103,17 +97,15 @@ async function runExpiryReminders() {
       const severity = days <= 7 ? "high" : "medium";
       const isDsc = it.kind === "dsc";
       const when = days < 0 ? `expired ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} ago` : `expires in ${days} day${days === 1 ? "" : "s"}`;
+      const title = `${isDsc ? "DSC" : (it.kind || "Item")} ${it.name} ${days < 0 ? "expired" : "expiring"}`;
+      const message = `${it.name}${it.identifier ? ` (${it.identifier})` : ""} ${when}. Renew it to stay compliant.`;
       try {
-        await q(tenantId,
-          `INSERT INTO alerts (tenant_id, rule_id, severity, title, message, meta) VALUES ($1, $2, $3, $4, $5, $6)`,
-          [tenantId, isDsc ? "dsc.expiring" : "expiry.due", severity,
-            `${isDsc ? "DSC" : (it.kind || "Item")} ${it.name} ${days < 0 ? "expired" : "expiring"}`,
-            `${it.name}${it.identifier ? ` (${it.identifier})` : ""} ${when}. Renew it to stay compliant.`,
-            JSON.stringify({ expiry_id: it.id, kind: it.kind, days_to_expiry: days })]);
+        await raiseAlert(tenantId, {
+          ruleId: isDsc ? "dsc.expiring" : "expiry.due", severity, title, message,
+          meta: { expiry_id: it.id, kind: it.kind, days_to_expiry: days },
+        });
         created++;
         require("../modules/flows/runner").emitEvent(tenantId, isDsc ? "dsc.expiring" : "expiry.due", { item: it, days_to_expiry: days }).catch(() => {});
-        const title = `${isDsc ? "DSC" : (it.kind || "Item")} ${it.name} ${days < 0 ? "expired" : "expiring"}`;
-        const message = `${it.name}${it.identifier ? ` (${it.identifier})` : ""} ${when}. Renew it to stay compliant.`;
         notifyOwnersByEmail(tenantId, { title, message, severity }).catch(() => {});
       } catch (e) { console.error("[reminders] expiry alert insert failed for", it.id, e.message); }
     }

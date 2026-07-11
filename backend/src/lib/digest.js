@@ -22,7 +22,25 @@ function fmt(n) {
   return `₹${n.toLocaleString("en-IN")}`;
 }
 
+// IST wall-clock hour/day without depending on the server process's local timezone
+// (Render runs UTC) - shift by the fixed +5:30 offset, then read UTC fields off the
+// shifted instant.
+function istNow() {
+  const d = new Date(Date.now() + 5.5 * 3600 * 1000);
+  return { hour: d.getUTCHours(), day: d.getUTCDay() }; // day: 0=Sun..6=Sat, 1=Mon
+}
+
+// An audit found the Alert Digest Scheduler's enabled/frequency/hour/channel toggles
+// (Alerts -> Digest, persisted in the tenant's KV featureData) were saved and synced
+// but never actually consulted here - every owner got the email at a fixed 7am IST
+// regardless of the toggle being OFF, "weekly" selected, a different hour chosen, or
+// "WhatsApp only" picked. This cron now runs hourly (see server.js) and each owner is
+// matched against their own configured hour; sendDailyDigest is a no-op for anyone
+// who hasn't explicitly enabled it (default false, matching the UI's own default).
 async function sendDailyDigest() {
+  const { hour: currentHour, day: currentDay } = istNow();
+  const isMonday = currentDay === 1;
+
   // Get all owner emails and their tenant IDs
   const { rows: owners } = await pool.query(
     "SELECT id, email, tenant_id FROM users WHERE role = 'owner'"
@@ -37,9 +55,15 @@ async function sendDailyDigest() {
       );
 
       const kv = kvRows[0]?.value?.value ?? {};
+      const fd = kv.featureData ?? {};
+      if (fd["alr-digest-enabled"] !== true) continue; // off by default - respect it
+      const freq = fd["alr-digest-freq"] === "weekly" ? "weekly" : "daily";
+      if (freq === "weekly" && !isMonday) continue;
+      if (String(fd["alr-digest-hour"] ?? "9") !== String(currentHour)) continue;
+      const channel = ["email", "whatsapp", "both"].includes(fd["alr-digest-channel"]) ? fd["alr-digest-channel"] : "email";
+
       const bankAccounts  = kv.bankAccounts  ?? [];
       const transactions  = kv.transactions  ?? [];
-      const alerts        = kv.alerts        ?? [];
       const invoices      = kv.invoices      ?? [];
 
       if (!bankAccounts.length) continue; // Skip users with no data
@@ -47,6 +71,15 @@ async function sendDailyDigest() {
       const totalCash = bankAccounts.reduce((s, a) => s + (a.balance ?? 0), 0);
       const burn      = monthlyBurn(transactions);
       const runway    = runwayDays(bankAccounts.map(a => a.balance ?? 0), burn);
+
+      // Real unread alerts from the alerts table - kv.alerts is a client-only KV
+      // array nothing server-side ever writes to, so reading it here always found
+      // zero criticals and rendered a falsely-reassuring "no critical alerts" line
+      // even when real ones existed.
+      const { rows: unreadAlertRows } = await pool.query(
+        "SELECT title, severity FROM alerts WHERE tenant_id=$1 AND is_read=false AND is_resolved=false ORDER BY created_at DESC LIMIT 20",
+        [owner.tenant_id]
+      );
 
       // Invoices due this week
       const today = new Date();
@@ -60,8 +93,7 @@ async function sendDailyDigest() {
         inv.status !== "paid" && inv.dueDate < todayStr
       );
 
-      const unreadAlerts = alerts.filter(a => !a.isRead);
-      const criticalAlerts = unreadAlerts.filter(a => a.severity === "critical" || a.severity === "high");
+      const criticalAlerts = unreadAlertRows.filter(a => a.severity === "critical" || a.severity === "high");
 
       const runwayColor = runway < 30 ? "#ef4444" : runway < 90 ? "#eab308" : "#22c55e";
 
@@ -158,25 +190,29 @@ async function sendDailyDigest() {
         </table>
       </body></html>`;
 
-      await sendMail({ to: owner.email, subject: `Your morning cash snapshot - ${fmt(totalCash)}, ${runway} days runway`, html });
-
-      // WhatsApp digest - send if user has a bound number
-      const { rows: waRows } = await pool.query(
-        "SELECT phone FROM whatsapp_bindings WHERE tenant_id=$1 LIMIT 1",
-        [owner.tenant_id]
-      );
-      if (waRows[0]) {
-        const runwayEmoji = runway < 30 ? "🚨" : runway < 90 ? "⚠️" : "✅";
-        const alertLine   = criticalAlerts.length
-          ? `⚠️ *${criticalAlerts.length} alert${criticalAlerts.length > 1 ? "s" : ""} need attention*`
-          : `✅ No critical alerts`;
-        const overdueAmt  = overdueInvoices.reduce((s, i) => s + i.amount, 0);
-        const invoiceLine = overdueAmt > 0 ? `\n📋 Overdue invoices: *${fmt(overdueAmt)}*` : "";
-        const waMsg = `☀️ *Good morning - Headroom snapshot*\n${new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}\n\n💰 Cash: *${fmt(totalCash)}*\n🔥 Burn: *${fmt(burn)}/mo*\n${runwayEmoji} Runway: *${runway} days*\n\n${alertLine}${invoiceLine}\n\nReply *cash*, *runway*, *alerts*, or *help*`;
-        await sendWhatsApp(waRows[0].phone, waMsg).catch(e => console.error("[digest wa]", e.message));
+      if (channel === "email" || channel === "both") {
+        await sendMail({ to: owner.email, subject: `Your morning cash snapshot - ${fmt(totalCash)}, ${runway} days runway`, html });
       }
 
-      console.log(`[digest] sent to ${owner.email}`);
+      // WhatsApp digest - only when the tenant chose whatsapp/both AND has a bound number.
+      if (channel === "whatsapp" || channel === "both") {
+        const { rows: waRows } = await pool.query(
+          "SELECT phone FROM whatsapp_bindings WHERE tenant_id=$1 LIMIT 1",
+          [owner.tenant_id]
+        );
+        if (waRows[0]) {
+          const runwayEmoji = runway < 30 ? "🚨" : runway < 90 ? "⚠️" : "✅";
+          const alertLine   = criticalAlerts.length
+            ? `⚠️ *${criticalAlerts.length} alert${criticalAlerts.length > 1 ? "s" : ""} need attention*`
+            : `✅ No critical alerts`;
+          const overdueAmt  = overdueInvoices.reduce((s, i) => s + i.amount, 0);
+          const invoiceLine = overdueAmt > 0 ? `\n📋 Overdue invoices: *${fmt(overdueAmt)}*` : "";
+          const waMsg = `☀️ *Good morning - Headroom snapshot*\n${new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}\n\n💰 Cash: *${fmt(totalCash)}*\n🔥 Burn: *${fmt(burn)}/mo*\n${runwayEmoji} Runway: *${runway} days*\n\n${alertLine}${invoiceLine}\n\nReply *cash*, *runway*, *alerts*, or *help*`;
+          await sendWhatsApp(waRows[0].phone, waMsg).catch(e => console.error("[digest wa]", e.message));
+        }
+      }
+
+      console.log(`[digest] sent to ${owner.email} via ${channel}`);
     } catch (err) {
       console.error(`[digest] failed for ${owner.email}:`, err.message);
     }

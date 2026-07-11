@@ -7,6 +7,7 @@
 // flow_run. Errors stop the run (the failing node + the reason are recorded).
 
 const { pool } = require("../../db");
+const { raiseAlert } = require("../../lib/alerts");
 const { AsyncLocalStorage } = require("async_hooks");
 const flows = require("./index");
 const { FlowError } = flows;
@@ -136,10 +137,12 @@ const NODES = {
     return { invoice_number: inv.invoice_number || null, face, advance, financeable: String(inv.status) === "sent" && advance > 0, grade: elig.grade, eligible_limit: cap };
   },
   async notify(cfg, ctx, env) {
-    await pool.query(
-      "INSERT INTO alerts(tenant_id, rule_id, severity, title, message) VALUES($1,'flow',$2,$3,$4)",
-      [env.tenantId, ["low", "medium", "high"].includes(cfg.severity) ? cfg.severity : "medium", String(cfg.title || "Flow alert").slice(0, 200), String(cfg.message || "").slice(0, 1000)]
-    );
+    await raiseAlert(env.tenantId, {
+      ruleId: "flow",
+      severity: ["low", "medium", "high"].includes(cfg.severity) ? cfg.severity : "medium",
+      title: String(cfg.title || "Flow alert").slice(0, 200),
+      message: String(cfg.message || "").slice(0, 1000),
+    });
     return { notified: true };
   },
 };

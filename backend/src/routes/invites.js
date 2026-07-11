@@ -3,6 +3,7 @@ const { pool } = require("../db");
 const { authenticate, requireOwnerOrAdmin } = require("../middleware/auth");
 const { tenantSeatInfo, PLAN_LABEL } = require("../lib/plans");
 const { writeAudit } = require("../lib/audit");
+const { raiseAlert } = require("../lib/alerts");
 
 // Team membership lifecycle - fully in-platform, no email.
 //   • invite  : owner/admin → person ("join my team")            invitee accepts/rejects
@@ -228,13 +229,12 @@ router.post("/:id/resend", authenticate, requireOwnerOrAdmin, async (req, res) =
     // current workspace, not the one they're being invited into.
     const { rows: invitee } = await pool.query("SELECT tenant_id FROM users WHERE id=$1", [inv.invitee_user_id]);
     if (invitee[0]) {
-      await pool.query(
-        `INSERT INTO alerts(tenant_id, rule_id, severity, title, message, meta)
-         VALUES($1,'team.invite_reminder','low',$2,$3,$4)`,
-        [invitee[0].tenant_id, "You have a pending team invite",
-         `${req.user.display_name || req.user.email} invited you to join as ${inv.role.replace(/_/g, " ")} — accept or decline from Settings.`,
-         JSON.stringify({ invite_id: inv.id })]
-      ).catch(() => {});
+      await raiseAlert(invitee[0].tenant_id, {
+        ruleId: "team.invite_reminder", severity: "low",
+        title: "You have a pending team invite",
+        message: `${req.user.display_name || req.user.email} invited you to join as ${inv.role.replace(/_/g, " ")} — accept or decline from Settings.`,
+        meta: { invite_id: inv.id },
+      }).catch(() => {});
     }
   }
   writeAudit(req.user.id, "invite.resend", "tenant", inv.tenant_id, { invitee: inv.invitee_email });
