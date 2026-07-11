@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useT } from "@/i18n";
 import { useFeatureState } from "@/hooks/useFeatureState";
+import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import AiInsight from "@/components/ai/AiInsight";
 import EmptyState from "@/components/EmptyState";
@@ -10,6 +11,20 @@ import { toast } from "sonner";
 import { startOfMonth, endOfMonth, format, subMonths } from "date-fns";
 import type { Budget } from "@/data/types";
 import DatePicker from "@/components/DatePicker";
+
+// REAL gate: backed by books §M8 (book_approval_rules / book_approvals) - the same
+// generic maker-checker engine Invoices uses (see ApprovalWorkflow in InvoicesPage.tsx).
+// Capex items and department allocations route through it with their own entityType
+// so they never collide with each other or with invoices' "invoice" entityType.
+interface ServerApproval { id: string; entity_type: string; entity_id: string | null; amount: string; status: "PENDING" | "APPROVED" | "REJECTED"; note: string | null; created_at: string; decided_at: string | null; }
+// The server returns approvals newest-first; the FIRST match seen per entity id is
+// its current status - assigning unconditionally while iterating would leave the
+// OLDEST row as the winner instead.
+function latestApprovalByEntity(approvals: ServerApproval[]): Record<string, ServerApproval> {
+  const idx: Record<string, ServerApproval> = {};
+  for (const a of approvals) if (a.entity_id && !idx[a.entity_id]) idx[a.entity_id] = a;
+  return idx;
+}
 
 function AddBudgetModal({ existing, onSave, onClose }: {
   existing?: Budget;
@@ -48,7 +63,7 @@ function AddBudgetModal({ existing, onSave, onClose }: {
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Category *</label>
             <select value={cat} onChange={e => setCat(e.target.value)} className={inp}>
-              {["expense","payroll","tax","loan","transfer","other"].map(c => <option key={c} value={c}>{c}</option>)}
+              {CATS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
@@ -93,7 +108,7 @@ export default function BudgetsPage() {
 
   const actuals = useMemo(() => {
     const map: Record<string, { thisMonth: number; lastMonth: number }> = {};
-    transactions.filter(t => t.amount < 0).forEach(t => {
+    transactions.filter(isBudgetActual).forEach(t => {
       const cat = t.category ?? "expense";
       if (!map[cat]) map[cat] = { thisMonth: 0, lastMonth: 0 };
       const amt = Math.abs(t.amount);
@@ -347,6 +362,14 @@ function periodWindow(period: string) {
   return { start: `${period}-01`, end: `${period}-31` };
 }
 
+// "revenue" is the only budget category that tracks inflow; every other category
+// (expense/payroll/tax/loan/transfer) tracks outflow. A transaction only counts as
+// that category's actual when its sign matches the category's own flow direction -
+// otherwise a revenue-tagged budget line would be structurally stuck at ₹0.
+function isBudgetActual(t: { amount: number; category?: string }): boolean {
+  return (t.category ?? "expense") === "revenue" ? t.amount > 0 : t.amount < 0;
+}
+
 // ── #198 Rolling / Zero-Based Budget Builder ────────────────────────────────────
 type ZbbLine = { id: string; category: string; label: string; justified: number };
 type ZbbPeriod = { period: string; lines: ZbbLine[] };
@@ -364,11 +387,11 @@ function ZeroBasedBudgetBuilder() {
   const current = useMemo(() => periods.find(p => p.period === period), [periods, period]);
   const lines = current?.lines ?? [];
 
-  // Live actuals for the selected period, by category (outflows only).
+  // Live actuals for the selected period, by category.
   const actuals = useMemo(() => {
     const { start, end } = periodWindow(period);
     const map: Record<string, number> = {};
-    transactions.filter(t => t.amount < 0 && t.date >= start && t.date <= end).forEach(t => {
+    transactions.filter(t => isBudgetActual(t) && t.date >= start && t.date <= end).forEach(t => {
       const c = t.category ?? "expense";
       map[c] = (map[c] ?? 0) + Math.abs(t.amount);
     });
@@ -468,7 +491,10 @@ function ZeroBasedBudgetBuilder() {
 }
 
 // ── #199 Department Budget Allocation & Approval ────────────────────────────────
-type DeptAlloc = { id: string; name: string; allocated: number; category: string; status: "draft" | "submitted" | "approved" | "rejected"; note: string };
+// Sign-off is a REAL gate: entityType "department_budget" against books §M8. Status
+// is derived live from the server, not a local toggle - "draft" just means no
+// approval row exists yet for that department id.
+type DeptAlloc = { id: string; name: string; allocated: number; category: string };
 
 function DepartmentBudgetAllocation() {
   const { store } = useApp();
@@ -478,14 +504,25 @@ function DepartmentBudgetAllocation() {
   const [name, setName] = useState("");
   const [allocated, setAllocated] = useState("");
   const [category, setCategory] = useState<string>("expense");
+  const [approvals, setApprovals] = useState<ServerApproval[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const fc = formatCurrency;
+
+  const loadApprovals = useCallback(async () => {
+    try {
+      const rows = await api.get<ServerApproval[]>("/api/books/approvals?entityType=department_budget");
+      setApprovals(rows);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to load sign-off status"); }
+  }, []);
+  useEffect(() => { void loadApprovals(); }, [loadApprovals]);
+  const approvalByDeptId = useMemo(() => latestApprovalByEntity(approvals), [approvals]);
 
   // Live spend this month, by category - a proxy for what each department is consuming.
   const spendByCat = useMemo(() => {
     const start = startOfMonth(new Date()).toISOString().split("T")[0];
     const end = endOfMonth(new Date()).toISOString().split("T")[0];
     const map: Record<string, number> = {};
-    transactions.filter(t => t.amount < 0 && t.date >= start && t.date <= end).forEach(t => {
+    transactions.filter(t => isBudgetActual(t) && t.date >= start && t.date <= end).forEach(t => {
       const c = t.category ?? "expense";
       map[c] = (map[c] ?? 0) + Math.abs(t.amount);
     });
@@ -500,17 +537,31 @@ function DepartmentBudgetAllocation() {
   const add = () => {
     const amt = parseFloat(allocated) || 0;
     if (!name.trim() || amt <= 0) { toast.error("Enter a department and allocation"); return; }
-    setDepts(prev => [...prev, { id: crypto.randomUUID(), name: name.trim(), allocated: amt, category, status: "draft", note: "" }]);
+    setDepts(prev => [...prev, { id: crypto.randomUUID(), name: name.trim(), allocated: amt, category }]);
     setName(""); setAllocated("");
     toast.success("Department allocation drafted");
   };
-  const setStatus = (id: string, status: DeptAlloc["status"]) => {
-    setDepts(prev => prev.map(d => d.id === id ? { ...d, status } : d));
-    toast.success(`Allocation ${status}`);
+  const submit = async (d: DeptAlloc) => {
+    setBusyId(d.id);
+    try {
+      await api.post("/api/books/approvals", { entityType: "department_budget", entityId: d.id, amount: d.allocated, note: d.name });
+      toast.success(`${d.name} submitted for sign-off`);
+      void loadApprovals();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to submit for sign-off"); }
+    finally { setBusyId(null); }
+  };
+  const decide = async (a: ServerApproval, approve: boolean) => {
+    setBusyId(a.id);
+    try {
+      await api.post(`/api/books/approvals/${a.id}/decide`, { approve });
+      toast.success(`Allocation ${approve ? "approved" : "rejected"}`);
+      void loadApprovals();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to record decision"); }
+    finally { setBusyId(null); }
   };
   const remove = (id: string) => setDepts(prev => prev.filter(d => d.id !== id));
 
-  const STATUS_STYLE: Record<DeptAlloc["status"], string> = {
+  const STATUS_STYLE: Record<"draft" | "submitted" | "approved" | "rejected", string> = {
     draft: "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]",
     submitted: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
     approved: "bg-green-900/30 text-green-400 border-green-800/40",
@@ -521,7 +572,7 @@ function DepartmentBudgetAllocation() {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><Building2 size={14} className="text-[var(--color-primary)]" /> Department Budget Allocation & Approval</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Set a top-down budget pool, allocate it across departments, and route each allocation through submit → approve sign-off. Live month spend per category is shown against each line.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Set a top-down budget pool, allocate it across departments, and route each allocation through a real submit → checker sign-off log. Live month spend per category is shown against each line.</p>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Total budget pool (₹)</label>
@@ -560,21 +611,23 @@ function DepartmentBudgetAllocation() {
               {depts.map(d => {
                 const spent = spendByCat[d.category] ?? 0;
                 const over = spent > d.allocated;
+                const a = approvalByDeptId[d.id];
+                const status = !a ? "draft" as const : a.status === "PENDING" ? "submitted" as const : a.status === "APPROVED" ? "approved" as const : "rejected" as const;
                 return (
                   <tr key={d.id} className="hover:bg-white/2">
                     <td className="px-3 py-2.5 text-xs font-medium">{d.name}</td>
                     <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] capitalize">{d.category}</td>
                     <td className="px-3 py-2.5 text-xs tabular-nums">{fc(d.allocated)}</td>
                     <td className={`px-3 py-2.5 text-xs tabular-nums ${over ? "text-red-400" : "text-[var(--color-muted)]"}`}>{fc(spent)}{over ? " ⚠" : ""}</td>
-                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[d.status]}`}>{d.status}</span></td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[status]}`}>{status}</span></td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1">
-                        {d.status === "draft" && <button onClick={() => setStatus(d.id, "submitted")} className="text-[9px] text-yellow-400 border border-yellow-800/40 px-1.5 py-0.5 rounded flex items-center gap-1"><Clock size={8} />Submit</button>}
-                        {d.status === "submitted" && <>
-                          <button onClick={() => setStatus(d.id, "approved")} className="text-[9px] text-green-400 border border-green-800/40 px-1.5 py-0.5 rounded flex items-center gap-1"><CheckCircle2 size={8} />Approve</button>
-                          <button onClick={() => setStatus(d.id, "rejected")} className="text-[9px] text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded">Reject</button>
+                        {!a && <button onClick={() => submit(d)} disabled={busyId === d.id} className="text-[9px] text-yellow-400 border border-yellow-800/40 px-1.5 py-0.5 rounded flex items-center gap-1"><Clock size={8} />Submit</button>}
+                        {a?.status === "PENDING" && <>
+                          <button onClick={() => decide(a, true)} disabled={busyId === a.id} className="text-[9px] text-green-400 border border-green-800/40 px-1.5 py-0.5 rounded flex items-center gap-1"><CheckCircle2 size={8} />Approve</button>
+                          <button onClick={() => decide(a, false)} disabled={busyId === a.id} className="text-[9px] text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded">Reject</button>
                         </>}
-                        {(d.status === "approved" || d.status === "rejected") && <button onClick={() => setStatus(d.id, "draft")} className="text-[9px] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded">Reopen</button>}
+                        {a?.status === "REJECTED" && <button onClick={() => submit(d)} disabled={busyId === d.id} className="text-[9px] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded">Re-submit</button>}
                       </div>
                     </td>
                     <td className="px-3 py-2.5"><button onClick={() => remove(d.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
@@ -590,37 +643,69 @@ function DepartmentBudgetAllocation() {
 }
 
 // ── #200 Capex Budget & Approval Tracker ────────────────────────────────────────
-type CapexItem = { id: string; asset: string; planned: number; spent: number; date: string; status: "planned" | "approved" | "completed" };
+// Sign-off is a REAL gate: entityType "capex" against books §M8. "done" is a plain
+// local operational marker (no durability claim attaches to it); the approval step
+// itself is fetched live from the server, never a self-click toggle.
+type CapexItem = { id: string; asset: string; planned: number; spent: number; date: string; done: boolean };
 
 function CapexBudgetTracker() {
   const [items, setItems] = useFeatureState<CapexItem[]>("capex-items", []);
   const [asset, setAsset] = useState("");
   const [planned, setPlanned] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [approvals, setApprovals] = useState<ServerApproval[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const fc = formatCurrency;
+
+  const loadApprovals = useCallback(async () => {
+    try {
+      const rows = await api.get<ServerApproval[]>("/api/books/approvals?entityType=capex");
+      setApprovals(rows);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to load approval status"); }
+  }, []);
+  useEffect(() => { void loadApprovals(); }, [loadApprovals]);
+  const approvalByItemId = useMemo(() => latestApprovalByEntity(approvals), [approvals]);
 
   const add = () => {
     const amt = parseFloat(planned) || 0;
     if (!asset.trim() || amt <= 0) { toast.error("Enter an asset and planned spend"); return; }
-    setItems(prev => [...prev, { id: crypto.randomUUID(), asset: asset.trim(), planned: amt, spent: 0, date, status: "planned" }]);
+    setItems(prev => [...prev, { id: crypto.randomUUID(), asset: asset.trim(), planned: amt, spent: 0, date, done: false }]);
     setAsset(""); setPlanned("");
     toast.success("Capex item added to plan");
   };
   const setSpent = (id: string, value: number) => setItems(prev => prev.map(i => i.id === id ? { ...i, spent: value } : i));
-  const setStatus = (id: string, status: CapexItem["status"]) => {
-    setItems(prev => prev.map(i => i.id === id ? { ...i, status } : i));
-    toast.success(`Capex ${status}`);
-  };
+  const setDone = (id: string, done: boolean) => setItems(prev => prev.map(i => i.id === id ? { ...i, done } : i));
   const remove = (id: string) => setItems(prev => prev.filter(i => i.id !== id));
+
+  const request = async (i: CapexItem) => {
+    setBusyId(i.id);
+    try {
+      await api.post("/api/books/approvals", { entityType: "capex", entityId: i.id, amount: i.planned, note: i.asset });
+      toast.success(`${i.asset} routed for approval`);
+      void loadApprovals();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to route for approval"); }
+    finally { setBusyId(null); }
+  };
+  const decide = async (a: ServerApproval, approve: boolean) => {
+    setBusyId(a.id);
+    try {
+      await api.post(`/api/books/approvals/${a.id}/decide`, { approve });
+      toast.success(`Capex item ${approve ? "approved" : "rejected"}`);
+      void loadApprovals();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to record decision"); }
+    finally { setBusyId(null); }
+  };
 
   const totalPlanned = items.reduce((s, i) => s + i.planned, 0);
   const totalSpent = items.reduce((s, i) => s + i.spent, 0);
-  const approvedPlanned = items.filter(i => i.status !== "planned").reduce((s, i) => s + i.planned, 0);
+  const approvedPlanned = items.filter(i => approvalByItemId[i.id]?.status === "APPROVED").reduce((s, i) => s + i.planned, 0);
   const overruns = items.filter(i => i.spent > i.planned).length;
 
-  const STATUS_STYLE: Record<CapexItem["status"], string> = {
+  const STATUS_STYLE: Record<string, string> = {
     planned: "bg-[var(--color-bg)] text-[var(--color-muted)] border-[var(--color-border)]",
-    approved: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+    pending: "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
+    approved: "bg-blue-900/30 text-blue-400 border-blue-800/40",
+    rejected: "bg-red-900/30 text-red-400 border-red-800/40",
     completed: "bg-green-900/30 text-green-400 border-green-800/40",
   };
 
@@ -628,7 +713,7 @@ function CapexBudgetTracker() {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
         <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><HardHat size={14} className="text-[var(--color-primary)]" /> Capex Budget & Approval Tracker</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Plan capital purchases, route each through approval, and log actual spend against the plan to surface overruns. Capex is tracked separately from operating budgets above.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Plan capital purchases, route each through a real checker approval log, and log actual spend against the plan to surface overruns. Capex is tracked separately from operating budgets above.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <input value={asset} onChange={e => setAsset(e.target.value)} placeholder="Asset / project *" className={INP} />
           <input type="number" min="1" value={planned} onChange={e => setPlanned(e.target.value)} placeholder="Planned ₹ *" className={INP} />
@@ -659,6 +744,8 @@ function CapexBudgetTracker() {
               {items.map(i => {
                 const v = i.planned - i.spent;
                 const over = v < 0;
+                const a = approvalByItemId[i.id];
+                const status = i.done ? "completed" : a?.status === "APPROVED" ? "approved" : a?.status === "PENDING" ? "pending" : a?.status === "REJECTED" ? "rejected" : "planned";
                 return (
                   <tr key={i.id} className="hover:bg-white/2">
                     <td className="px-3 py-2.5 text-xs font-medium">{i.asset}</td>
@@ -669,12 +756,17 @@ function CapexBudgetTracker() {
                     </td>
                     <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${over ? "text-red-400" : "text-green-400"}`}>{over ? "-" : ""}{fc(Math.abs(v))}{over ? " over" : ""}</td>
                     <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.date}</td>
-                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[i.status]}`}>{i.status}</span></td>
+                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[status]}`}>{status}</span></td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1">
-                        {i.status === "planned" && <button onClick={() => setStatus(i.id, "approved")} className="text-[9px] text-yellow-400 border border-yellow-800/40 px-1.5 py-0.5 rounded flex items-center gap-1"><CheckCircle2 size={8} />Approve</button>}
-                        {i.status === "approved" && <button onClick={() => setStatus(i.id, "completed")} className="text-[9px] text-green-400 border border-green-800/40 px-1.5 py-0.5 rounded">Mark done</button>}
-                        {i.status === "completed" && <button onClick={() => setStatus(i.id, "planned")} className="text-[9px] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded">Reopen</button>}
+                        {!a && !i.done && <button onClick={() => request(i)} disabled={busyId === i.id} className="text-[9px] text-yellow-400 border border-yellow-800/40 px-1.5 py-0.5 rounded flex items-center gap-1"><Clock size={8} />Request approval</button>}
+                        {a?.status === "PENDING" && <>
+                          <button onClick={() => decide(a, true)} disabled={busyId === a.id} className="text-[9px] text-green-400 border border-green-800/40 px-1.5 py-0.5 rounded flex items-center gap-1"><CheckCircle2 size={8} />Approve</button>
+                          <button onClick={() => decide(a, false)} disabled={busyId === a.id} className="text-[9px] text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded">Reject</button>
+                        </>}
+                        {a?.status === "REJECTED" && <button onClick={() => request(i)} disabled={busyId === i.id} className="text-[9px] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded">Re-request</button>}
+                        {a?.status === "APPROVED" && !i.done && <button onClick={() => setDone(i.id, true)} className="text-[9px] text-green-400 border border-green-800/40 px-1.5 py-0.5 rounded">Mark done</button>}
+                        {i.done && <button onClick={() => setDone(i.id, false)} className="text-[9px] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded">Reopen</button>}
                       </div>
                     </td>
                     <td className="px-3 py-2.5"><button onClick={() => remove(i.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
@@ -813,7 +905,7 @@ function BudgetVarianceReport() {
   const actuals = useMemo(() => {
     const { start, end } = periodWindow(period);
     const map: Record<string, number> = {};
-    transactions.filter(t => t.amount < 0 && t.date >= start && t.date <= end).forEach(t => {
+    transactions.filter(t => isBudgetActual(t) && t.date >= start && t.date <= end).forEach(t => {
       const c = t.category ?? "expense";
       map[c] = (map[c] ?? 0) + Math.abs(t.amount);
     });
@@ -1173,7 +1265,7 @@ function BudgetUtilizationGauges() {
     const start = startOfMonth(today).toISOString().split("T")[0];
     const end = endOfMonth(today).toISOString().split("T")[0];
     const map: Record<string, number> = {};
-    transactions.filter(t => t.amount < 0 && t.date >= start && t.date <= end).forEach(t => {
+    transactions.filter(t => isBudgetActual(t) && t.date >= start && t.date <= end).forEach(t => {
       const c = t.category ?? "expense";
       map[c] = (map[c] ?? 0) + Math.abs(t.amount);
     });
@@ -1237,7 +1329,7 @@ function ForecastVsBudgetReforecast() {
     const yStart = `${today.getFullYear()}-01-01`;
     const yEnd = `${today.getFullYear()}-12-31`;
     const map: Record<string, number> = {};
-    transactions.filter(t => t.amount < 0 && t.date >= yStart && t.date <= yEnd).forEach(t => {
+    transactions.filter(t => isBudgetActual(t) && t.date >= yStart && t.date <= yEnd).forEach(t => {
       const c = t.category ?? "expense";
       map[c] = (map[c] ?? 0) + Math.abs(t.amount);
     });

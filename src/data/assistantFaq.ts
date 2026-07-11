@@ -4560,14 +4560,14 @@ export const CURATED_FAQ: FaqEntry[] = [
   {
     "category": "Planning & analytics",
     "q": "How do I create a budget and track spend against it?",
-    "a": "Go to /budgets and click 'New Budget' (or the dashed 'Add budget category' card). Give it a name, pick a category (expense, payroll, tax, loan, transfer, other), set a monthly limit and a colour. Headroom then tracks actual spend live from your transactions in that category for the current month - each card shows spent vs limit with a progress bar that turns yellow at 80%+ and red when overspent, plus a comparison to last month.",
+    "a": "Go to /budgets and click 'New Budget' (or the dashed 'Add budget category' card). Give it a name, pick a category (revenue, expense, payroll, tax, loan, transfer), set a monthly limit and a colour. Headroom then tracks actual spend live from your transactions in that category for the current month - each card shows spent vs limit with a progress bar that turns yellow at 80%+ and red when overspent, plus a comparison to last month.",
     "route": "/budgets",
     "keywords": "budget create monthly limit track spend vs limit alert overspend Budgets"
   },
   {
     "category": "Planning & analytics",
     "q": "Why does my budget show spend I didn't enter?",
-    "a": "Budgets match actual spend automatically - they sum every outflow transaction in that category for the current month from your live transaction data, so you never key in actuals. If a budget shows unexpected spend, check that your transactions are tagged with the right category. The 'Budget Alerts' summary at the top of /budgets counts how many budgets are over or near (80%+) their limit.",
+    "a": "Budgets match actuals automatically from your live transaction data, so you never key them in - an expense-category budget line sums that category's outflows for the current month, while a revenue budget line sums inflows. If a budget shows unexpected actuals, check that your transactions are tagged with the right category. The 'Budget Alerts' summary at the top of /budgets counts how many budgets are over or near (80%+) their limit.",
     "route": "/budgets",
     "keywords": "budget actual spend automatic category transactions wrong unexpected Budgets"
   },

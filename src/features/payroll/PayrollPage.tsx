@@ -205,12 +205,17 @@ export default function PayrollPage() {
       })
       .catch(() => {});
   }, []);
+  // Real deductor identity (TAN/PAN/GSTIN) for statutory certificates — same
+  // /api/company source every other feature reads the firm's registration details from.
+  const [company, setCompany] = useState<{ tan?: string | null; pan?: string | null; gstin?: string | null } | null>(null);
+  useEffect(() => { api.get<{ tan?: string | null; pan?: string | null; gstin?: string | null }>("/api/company").then(setCompany).catch(() => setCompany(null)); }, []);
   const [tab, setTab]             = useUrlTab<PayrollTab>("employees", { validValues: PAYROLL_TAB_IDS });
   const [slipEmp, setSlipEmp]     = useState<Employee | null>(null);
   const [slipMonth, setSlipMonth] = useState(now.getMonth() + 1);
   const [slipYear, setSlipYear]   = useState(now.getFullYear());
   const slipRef = useRef<HTMLDivElement>(null);
   const [slipFY, setSlipFY]       = useState<number>(() => { const y = new Date().getFullYear(); return new Date().getMonth() >= 3 ? y : y - 1; });
+  const [ecrRunId, setEcrRunId]   = useState<string | null>(null);
   const [ewaData, setEwaData]     = useState<{ day_of_month: number; employees: { id: string; name: string; gross_salary: number; earned_to_date: number; max_advance: number; advances_taken: number }[] } | null>(null);
   const [ewaLoading, setEwaLoading] = useState(false);
   const [requesting, setRequesting] = useState<Record<string, boolean>>({});
@@ -850,18 +855,19 @@ export default function PayrollPage() {
         const monthlyTDS = Math.round(annualTDS / 12);
 
         const fyLabel = `FY ${slipFY}-${String(slipFY + 1).slice(2)}`;
+        const tan = company?.tan?.trim() || "Not on file - add in Settings → Company Profile";
 
         const handleDownloadCSV = () => {
           const rows = [
-            ["Form 16 Summary", fyLabel],
+            ["Form 16 Summary (quick estimate - not filed)", fyLabel],
             [],
             ["Part A - TDS Summary"],
             ["Employer Name", store.firm?.name || "Your Company"],
             ["Employee Name", emp.name],
             ["PAN", emp.pan || "XXXXX0000X"],
-            ["TAN", "MUMB00000A"],
-            ["Total TDS Deducted (Annual)", annualTDS],
-            ["Monthly TDS", monthlyTDS],
+            ["TAN", tan],
+            ["Total TDS Deducted (Annual, estimated)", annualTDS],
+            ["Monthly TDS (estimated)", monthlyTDS],
             [],
             ["Part B - Income Details"],
             ["Annual Gross Salary", annualGross],
@@ -937,12 +943,17 @@ export default function PayrollPage() {
               </button>
             </div>
 
+            <p className="text-xs text-[var(--color-muted)] flex items-center gap-2 flex-wrap">
+              <DataFreshnessBadge kind="indicative" note="A flat-rate what-if for one employee, ignoring their declared regime, investment declarations and any mid-year salary change." />
+              Quick single-employee estimate below - for the authoritative, all-employee Part B computed from actual posted payslips, use "Part B from books (all)".
+            </p>
+
             {/* Form 16 card */}
             <div className="bg-white text-gray-900 rounded-lg border border-gray-200 p-6 max-w-2xl text-xs font-mono">
               {/* Header */}
               <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
                 <div>
-                  <p className="text-base font-bold text-gray-900 font-sans">FORM 16</p>
+                  <p className="text-base font-bold text-gray-900 font-sans">FORM 16 (ESTIMATE)</p>
                   <p className="text-gray-600 font-sans">Certificate of Tax Deducted at Source · {fyLabel}</p>
                 </div>
                 <div className="text-right">
@@ -952,16 +963,16 @@ export default function PayrollPage() {
               </div>
 
               {/* Part A */}
-              <p className="font-bold text-gray-700 mb-2 font-sans text-sm">Part A - TDS Summary</p>
+              <p className="font-bold text-gray-700 mb-2 font-sans text-sm">Part A - TDS Summary (Estimate)</p>
               <table className="w-full mb-4">
                 <tbody>
                   {[
                     ["Employer Name", store.firm?.name || "Your Company"],
                     ["Employee Name", emp.name],
                     ["PAN of Employee", emp.pan || "XXXXX0000X"],
-                    ["TAN of Employer", "MUMB00000A"],
-                    ["Total TDS Deducted (Annual)", `₹${annualTDS.toLocaleString("en-IN")}`],
-                    ["Monthly TDS", `₹${monthlyTDS.toLocaleString("en-IN")}`],
+                    ["TAN of Employer", tan],
+                    ["Total TDS Deducted (Annual, est.)", `₹${annualTDS.toLocaleString("en-IN")}`],
+                    ["Monthly TDS (est.)", `₹${monthlyTDS.toLocaleString("en-IN")}`],
                   ].map(([label, val]) => (
                     <tr key={label} className="border-b border-gray-100">
                       <td className="py-1.5 text-gray-500 w-1/2">{label}</td>
@@ -972,7 +983,7 @@ export default function PayrollPage() {
               </table>
 
               {/* Part B */}
-              <p className="font-bold text-gray-700 mb-2 font-sans text-sm">Part B - Income Details (New Regime)</p>
+              <p className="font-bold text-gray-700 mb-2 font-sans text-sm">Part B - Income Details (Estimate, New Regime flat-rate)</p>
               <table className="w-full mb-4">
                 <tbody>
                   {[
@@ -991,29 +1002,34 @@ export default function PayrollPage() {
                 </tbody>
               </table>
 
-              <p className="text-gray-400 text-[9px] mt-3 text-center">This is a system-generated Form 16 summary. File with your CA for ITR filing.</p>
+              <p className="text-gray-400 text-[9px] mt-3 text-center">This is a quick what-if estimate, not a filed Form 16 - it assumes the new regime and a flat annualised salary, and ignores investment declarations or mid-year changes. For the real certificate, use "Part B from books (all)" and file with your CA.</p>
             </div>
           </div>
         );
       })()}
 
       {tab === "ecr" && (() => {
-        const activeEmps = employees.filter(e => e.status === "active");
-        if (activeEmps.length === 0) return (
+        const availableRuns = runs.filter(r => (r.breakdown ?? []).length > 0);
+        if (availableRuns.length === 0) return (
           <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
             <Download size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-            <p className="text-sm text-[var(--color-muted)]">Add active employees to generate PF ECR file.</p>
+            <p className="text-sm text-[var(--color-muted)]">No completed payroll run yet - the PF ECR is generated from an actual month's run, not live salary figures. Run payroll for a month first (Payroll runs tab), then come back here.</p>
           </div>
         );
 
-        const ecrRows = activeEmps.map((e, i) => {
-          const gross   = parseFloat(String(e.gross_salary));
-          const pfWages = Math.min(gross, 15000);
-          const empEpf  = Math.round(pfWages * 0.12);
-          const empEps  = Math.min(Math.round(pfWages * 0.0833), 1250);
-          const empEpfDiff = Math.round(pfWages * 0.12) - empEps;
-          const uan     = `10000000000${String(i + 1).padStart(2, "0")}`;
-          return { name: e.name, gross, pfWages, empEpf, empEps, empEpfDiff, uan, totalContrib: empEpf + empEpfDiff + empEps };
+        const run = availableRuns.find(r => r.id === ecrRunId) ?? availableRuns[0];
+        const monthLabel = `${MONTH_NAMES[run.run_month - 1]} ${run.run_year}`;
+
+        // PF wages/contribution come from THIS run's actual per-employee gross (captured
+        // when payroll was run that month), never live employee-master gross_salary - so a
+        // later raise, LOP or bonus month doesn't retroactively change a past month's ECR.
+        const ecrRows = (run.breakdown ?? []).map(b => {
+          const calc = computeStatutoryNet(Number(b.gross), statCfg);
+          const pfWages = statCfg.capPf ? Math.min(calc.basic, 15000) : calc.basic;
+          const empEpf = calc.pf;                                      // EE 12%
+          const empEps = Math.min(Math.round(pfWages * 0.0833), 1250); // EPS 8.33%, capped
+          const empEpfDiff = empEpf - empEps;                          // ER EPF share (12% - EPS)
+          return { employeeId: b.employee_id, name: b.name, gross: calc.gross, pfWages, empEpf, empEps, empEpfDiff, totalContrib: empEpf + empEpfDiff + empEps };
         });
 
         const totals = ecrRows.reduce((acc, r) => ({
@@ -1028,35 +1044,42 @@ export default function PayrollPage() {
         const downloadECR = () => {
           const header = "UAN,Member Name,Gross Wages,EPF Wages,EPS Wages,ECR Wages,NCP Days,Refund of Advances,EE EPF Contribution,ER EPF Contribution,ER EPS Contribution";
           const rows = ecrRows.map(r =>
-            `${r.uan},${r.name},${Math.round(r.gross)},${Math.round(r.pfWages)},${Math.round(r.pfWages)},${Math.round(r.pfWages)},0,0,${r.empEpf},${r.empEpfDiff},${r.empEps}`
+            `,${r.name},${Math.round(r.gross)},${Math.round(r.pfWages)},${Math.round(r.pfWages)},${Math.round(r.pfWages)},0,0,${r.empEpf},${r.empEpfDiff},${r.empEps}`
           );
           const csv = [header, ...rows].join("\n");
           const blob = new Blob([csv], { type: "text/plain" });
           const url  = URL.createObjectURL(blob);
           const a    = document.createElement("a");
           a.href = url;
-          a.download = `PF_ECR_${format(new Date(), "MMM_yyyy")}.txt`;
+          a.download = `PF_ECR_${MONTH_NAMES[run.run_month - 1]}_${run.run_year}.txt`;
           a.click();
           URL.revokeObjectURL(url);
         };
 
-        const monthLabel = format(new Date(), "MMMM yyyy");
         return (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
                 <h2 className="text-sm font-semibold">PF ECR - {monthLabel}</h2>
-                <p className="text-xs text-[var(--color-muted)] mt-0.5">Electronic Challan-cum-Return for EPFO. PF wages capped at ₹15,000 as per statutory limit.</p>
+                <p className="text-xs text-[var(--color-muted)] mt-0.5">Electronic Challan-cum-Return for EPFO, from that month's actual ({run.status}) payroll run. PF wages capped at ₹15,000 as per statutory limit.</p>
               </div>
-              <button onClick={downloadECR}
-                className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
-                <Download size={12} /> Download ECR (.txt)
-              </button>
+              <div className="flex items-center gap-2">
+                {availableRuns.length > 1 && (
+                  <select value={run.id} onChange={e => setEcrRunId(e.target.value)}
+                    className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none">
+                    {availableRuns.map(r => <option key={r.id} value={r.id}>{MONTH_NAMES[r.run_month - 1]} {r.run_year}</option>)}
+                  </select>
+                )}
+                <button onClick={downloadECR}
+                  className="flex items-center gap-1.5 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
+                  <Download size={12} /> Download ECR (.txt)
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { label: "Members",          value: activeEmps.length.toString(),          color: "text-[var(--color-text)]" },
+                { label: "Members",          value: ecrRows.length.toString(),             color: "text-[var(--color-text)]" },
                 { label: "Total PF Wages",   value: formatCurrency(totals.pfWages),        color: "text-blue-400" },
                 { label: "Employee EPF",      value: formatCurrency(totals.empEpf),         color: "text-orange-400" },
                 { label: "Total Remittance",  value: formatCurrency(totals.total),          color: "text-[var(--color-primary)]" },
@@ -1079,8 +1102,8 @@ export default function PayrollPage() {
                 </thead>
                 <tbody>
                   {ecrRows.map(r => (
-                    <tr key={r.uan} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                      <td className="px-3 py-2.5 font-mono text-[var(--color-muted)]">{r.uan}</td>
+                    <tr key={r.employeeId} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
+                      <td className="px-3 py-2.5 font-mono text-orange-400/80 text-[10px]">Not on file</td>
                       <td className="px-3 py-2.5 font-medium">{r.name}</td>
                       <td className="px-3 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
                       <td className="px-3 py-2.5 tabular-nums text-blue-400">{formatCurrency(r.pfWages)}</td>
@@ -1093,7 +1116,7 @@ export default function PayrollPage() {
                 </tbody>
                 <tfoot className="border-t border-[var(--color-border)] bg-[var(--color-accent)]/30">
                   <tr>
-                    <td className="px-3 py-2.5 font-bold text-xs" colSpan={2}>Total ({activeEmps.length} members)</td>
+                    <td className="px-3 py-2.5 font-bold text-xs" colSpan={2}>Total ({ecrRows.length} members)</td>
                     <td className="px-3 py-2.5 tabular-nums font-semibold">{formatCurrency(totals.gross)}</td>
                     <td className="px-3 py-2.5 tabular-nums font-semibold text-blue-400">{formatCurrency(totals.pfWages)}</td>
                     <td className="px-3 py-2.5 tabular-nums font-semibold text-orange-400">{formatCurrency(totals.empEpf)}</td>
@@ -1106,7 +1129,7 @@ export default function PayrollPage() {
             </div>
 
             <div className="bg-blue-950/20 border border-blue-800/30 rounded-lg px-4 py-3 text-[11px] text-[var(--color-muted)]">
-              UAN numbers shown are placeholders - replace with actual UANs from the EPFO unified portal before filing. Deposit ECR on the EPFO portal by the 15th of the following month.
+              UAN is left blank - Headroom doesn't capture employee UAN yet, so it's never fabricated here. Fill in each member's real Universal Account Number from the EPFO Unified Portal before uploading this file. Deposit ECR on the EPFO portal by the 15th of the following month.
             </div>
           </div>
         );

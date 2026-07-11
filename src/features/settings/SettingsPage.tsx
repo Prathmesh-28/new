@@ -1728,6 +1728,7 @@ const COMPANY_FIELDS: [string, string, string][] = [
   ["legal_name", "Legal / registered name", "Acme Traders Private Limited"],
   ["gstin", "GSTIN", "27ABCDE1234F1Z5"],
   ["pan", "PAN", "ABCDE1234F"],
+  ["tan", "TAN (for TDS certificates)", "MUMA12345B"],
   ["industry", "Industry", "Wholesale / Retail / SaaS…"],
   ["company_size", "Team size", "1-10"],
   ["phone", "Phone", "+91 98XXXXXX21"],

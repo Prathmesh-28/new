@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
+import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { percentiles } from "@/lib/finance";
 import EmptyState from "@/components/EmptyState";
@@ -1498,30 +1499,59 @@ function TravelSpendTracker() {
 }
 
 // ── Spend Approval Queue ─────────────────────────────────────────────────────────
-type ApprovalItem = { id: string; vendor: string; amount: number; requester: string; note: string; status: "pending" | "approved" | "rejected"; created: string };
+// REAL gate: backed by books §M8 (book_approval_rules / book_approvals) via
+// entityType "spend_approval" - the same generic maker-checker engine Invoices uses
+// (see ApprovalWorkflow in InvoicesPage.tsx). A spend request has no entity of its
+// own on the server, so each queued request is simply its own approval row, with
+// vendor/requester/note folded into that row's note field.
+type ApprovalItem = { id: string; entity_id: string | null; amount: string; status: "PENDING" | "APPROVED" | "REJECTED"; note: string | null; created_at: string; decided_at: string | null };
 function SpendApprovalQueue() {
   const fc = formatCurrency;
-  const [items, setItems] = useFeatureState<ApprovalItem[]>("spd-approval-queue", []);
+  const [items, setItems] = useState<ApprovalItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [vendor, setVendor] = useState("");
   const [amount, setAmount] = useState("");
   const [requester, setRequester] = useState("");
   const [note, setNote] = useState("");
-  const [filter, setFilter] = useState<ApprovalItem["status"] | "all">("pending");
+  const [filter, setFilter] = useState<ApprovalItem["status"] | "all">("PENDING");
 
-  const add = () => {
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const rows = await api.get<ApprovalItem[]>("/api/books/approvals?entityType=spend_approval");
+      setItems(rows);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load approval queue");
+    } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const add = async () => {
     if (!vendor.trim() || (parseFloat(amount) || 0) <= 0) { toast.error("Enter vendor and amount"); return; }
-    setItems(prev => [{ id: crypto.randomUUID(), vendor: vendor.trim(), amount: parseFloat(amount) || 0, requester: requester.trim(), note: note.trim(), status: "pending", created: new Date().toISOString() }, ...prev]);
-    setVendor(""); setAmount(""); setRequester(""); setNote("");
-    toast.success("Spend request queued");
+    const parts = [vendor.trim()];
+    if (requester.trim()) parts.push(`by ${requester.trim()}`);
+    if (note.trim()) parts.push(note.trim());
+    try {
+      await api.post("/api/books/approvals", { entityType: "spend_approval", amount: parseFloat(amount) || 0, note: parts.join(" · ") });
+      setVendor(""); setAmount(""); setRequester(""); setNote("");
+      toast.success("Spend request queued");
+      void load();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to queue request"); }
   };
-  const setStatus = (id: string, status: ApprovalItem["status"]) => {
-    setItems(prev => prev.map(x => x.id === id ? { ...x, status } : x));
-    toast.success(`Request ${status}`);
+  const decide = async (id: string, approve: boolean) => {
+    setBusyId(id);
+    try {
+      await api.post(`/api/books/approvals/${id}/decide`, { approve });
+      toast.success(`Request ${approve ? "approved" : "rejected"}`);
+      void load();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to record decision"); }
+    finally { setBusyId(null); }
   };
 
-  const pendingTotal = items.filter(i => i.status === "pending").reduce((s, i) => s + i.amount, 0);
+  const pendingTotal = items.filter(i => i.status === "PENDING").reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const filtered = items.filter(i => filter === "all" || i.status === filter);
-  const FILTERS = ["pending", "approved", "rejected", "all"] as const;
+  const FILTERS = ["PENDING", "APPROVED", "REJECTED", "all"] as const;
 
   return (
     <div className={CARD}>
@@ -1539,7 +1569,9 @@ function SpendApprovalQueue() {
       </div>
       <button onClick={add} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 mb-3">+ Queue request</button>
 
-      {items.length > 0 && (
+      {loading ? (
+        <p className="text-xs text-[var(--color-muted)] py-2">Loading…</p>
+      ) : items.length > 0 ? (
         <>
           <div className="flex items-center gap-2 mb-3">
             <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-2 px-3">
@@ -1548,38 +1580,35 @@ function SpendApprovalQueue() {
             </div>
             <div className="ml-auto flex gap-1">
               {FILTERS.map(f => (
-                <button key={f} onClick={() => setFilter(f)} className={`text-[10px] px-2 py-1 rounded-full border capitalize ${filter === f ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{f}</button>
+                <button key={f} onClick={() => setFilter(f)} className={`text-[10px] px-2 py-1 rounded-full border capitalize ${filter === f ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{f.toLowerCase()}</button>
               ))}
             </div>
           </div>
           <div className="space-y-2">
             {filtered.length === 0 ? (
-              <p className="text-xs text-[var(--color-muted)] py-1">No {filter} requests.</p>
+              <p className="text-xs text-[var(--color-muted)] py-1">No {filter.toLowerCase()} requests.</p>
             ) : filtered.map(i => (
               <div key={i.id} className="flex items-center gap-3 py-2 border-b border-[var(--color-border)] last:border-0">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium truncate">{i.vendor}</p>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full border capitalize ${i.status === "approved" ? "bg-green-900/30 text-green-400 border-green-800/30" : i.status === "rejected" ? "bg-red-900/30 text-red-400 border-red-800/30" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/30"}`}>{i.status}</span>
+                    <p className="text-sm font-medium truncate">{i.note || i.entity_id || "Spend request"}</p>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full border capitalize ${i.status === "APPROVED" ? "bg-green-900/30 text-green-400 border-green-800/30" : i.status === "REJECTED" ? "bg-red-900/30 text-red-400 border-red-800/30" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/30"}`}>{i.status.toLowerCase()}</span>
                   </div>
-                  <p className="text-[10px] text-[var(--color-muted)] mt-0.5 truncate">
-                    {i.requester ? `by ${i.requester} · ` : ""}{format(new Date(i.created), "dd MMM")}{i.note ? ` · ${i.note}` : ""}
-                  </p>
+                  <p className="text-[10px] text-[var(--color-muted)] mt-0.5 truncate">{format(new Date(i.created_at), "dd MMM, HH:mm")}</p>
                 </div>
-                <span className="text-sm font-bold tabular-nums shrink-0">{fc(i.amount)}</span>
-                {i.status === "pending" && (
+                <span className="text-sm font-bold tabular-nums shrink-0">{fc(Number(i.amount))}</span>
+                {i.status === "PENDING" && (
                   <div className="flex gap-1 shrink-0">
-                    <button onClick={() => setStatus(i.id, "approved")} className="text-[10px] bg-green-900/30 text-green-400 border border-green-800/30 px-2 py-1 rounded hover:opacity-80">Approve</button>
-                    <button onClick={() => setStatus(i.id, "rejected")} className="text-[10px] bg-red-900/30 text-red-400 border border-red-800/30 px-2 py-1 rounded hover:opacity-80">Reject</button>
+                    <button onClick={() => decide(i.id, true)} disabled={busyId === i.id} className="text-[10px] bg-green-900/30 text-green-400 border border-green-800/30 px-2 py-1 rounded hover:opacity-80 disabled:opacity-50">Approve</button>
+                    <button onClick={() => decide(i.id, false)} disabled={busyId === i.id} className="text-[10px] bg-red-900/30 text-red-400 border border-red-800/30 px-2 py-1 rounded hover:opacity-80 disabled:opacity-50">Reject</button>
                   </div>
                 )}
-                <button onClick={() => setItems(prev => prev.filter(x => x.id !== i.id))} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={13} /></button>
               </div>
             ))}
           </div>
         </>
-      )}
-      <p className="text-[10px] text-[var(--color-muted)] mt-3">A simple pre-spend approval workflow: queue a request, review pending value at a glance, then approve or reject with a full status trail - durable across devices.</p>
+      ) : null}
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">A pre-spend approval workflow backed by a real server-side approval log (the same maker-checker engine Invoices uses) - queue a request, then approve or reject with a genuine audit trail that's durable across devices.</p>
     </div>
   );
 }
@@ -1862,42 +1891,39 @@ function GstItcEligibleSplit() {
 }
 
 // ── Approval Turnaround Tracker ──────────────────────────────────────────────────
-// Reads the durable approval queue (spd-approval-queue) written by SpendApprovalQueue
-// and records the time each request was decided, persisted under its own key.
+// Reads the same real approval log (entityType "spend_approval") as the queue above.
+// Turnaround comes straight from the server's own created_at/decided_at columns -
+// no manual "stamp it now" step, since the engine records decided_at itself.
 function ApprovalTurnaroundTracker() {
-  const [queue] = useFeatureState<ApprovalItem[]>("spd-approval-queue", []);
-  const [decidedAt, setDecidedAt] = useFeatureState<Record<string, string>>("spd-approval-decided", {});
+  const [queue, setQueue] = useState<ApprovalItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const decided = useMemo(() => queue.filter(i => i.status !== "pending"), [queue]);
-  const pending = useMemo(() => queue.filter(i => i.status === "pending"), [queue]);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const rows = await api.get<ApprovalItem[]>("/api/books/approvals?entityType=spend_approval");
+      setQueue(rows);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load approval log");
+    } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
 
-  // Stamp a decided-at time the first time we observe a decided request without one.
-  const stampMissing = () => {
-    const missing = decided.filter(i => !decidedAt[i.id]);
-    if (missing.length === 0) { toast.info("All decided requests already timestamped"); return; }
-    const now = new Date().toISOString();
-    setDecidedAt(prev => {
-      const next = { ...prev };
-      missing.forEach(i => { next[i.id] = now; });
-      return next;
-    });
-    toast.success(`Stamped ${missing.length} decided ${missing.length === 1 ? "request" : "requests"}`);
-  };
+  const decided = useMemo(() => queue.filter(i => i.status !== "PENDING" && i.decided_at), [queue]);
+  const pending = useMemo(() => queue.filter(i => i.status === "PENDING"), [queue]);
 
-  const turnarounds = decided
-    .filter(i => decidedAt[i.id])
-    .map(i => ({
-      id: i.id,
-      vendor: i.vendor,
-      status: i.status,
-      hours: Math.max(differenceInCalendarDays(new Date(decidedAt[i.id]), new Date(i.created)), 0),
-      created: i.created,
-    }));
+  const turnarounds = decided.map(i => ({
+    id: i.id,
+    vendor: i.note || i.entity_id || "Spend request",
+    status: i.status,
+    days: Math.max(differenceInCalendarDays(new Date(i.decided_at as string), new Date(i.created_at)), 0),
+    created: i.created_at,
+  }));
   const avgDays = turnarounds.length > 0
-    ? turnarounds.reduce((s, t) => s + t.hours, 0) / turnarounds.length
+    ? turnarounds.reduce((s, t) => s + t.days, 0) / turnarounds.length
     : 0;
   const oldestPending = pending
-    .map(i => differenceInCalendarDays(new Date(), new Date(i.created)))
+    .map(i => differenceInCalendarDays(new Date(), new Date(i.created_at)))
     .reduce((m, d) => Math.max(m, d), 0);
 
   return (
@@ -1908,8 +1934,10 @@ function ApprovalTurnaroundTracker() {
         <span className="ml-auto text-xs text-[var(--color-muted)]">SLA on the approval queue</span>
       </div>
 
-      {queue.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] py-2">No spend requests queued yet. Add requests in the Spend Approval Queue above, then stamp decisions here to track turnaround.</p>
+      {loading ? (
+        <p className="text-xs text-[var(--color-muted)] py-2">Loading…</p>
+      ) : queue.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)] py-2">No spend requests queued yet. Add requests in the Spend Approval Queue above to track turnaround.</p>
       ) : (
         <>
           <div className="grid grid-cols-3 gap-3 mb-3">
@@ -1924,29 +1952,28 @@ function ApprovalTurnaroundTracker() {
               </div>
             ))}
           </div>
-          <button onClick={stampMissing} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 mb-3">Stamp decided requests now</button>
 
           {turnarounds.length === 0 ? (
-            <p className="text-xs text-[var(--color-muted)] py-1">Once requests are approved/rejected in the queue, press the button to record when - then per-request turnaround appears here.</p>
+            <p className="text-xs text-[var(--color-muted)] py-1">Once requests are approved/rejected in the queue above, per-request turnaround appears here.</p>
           ) : (
             <div className="space-y-2">
-              {turnarounds.sort((a, b) => b.hours - a.hours).map(t => (
+              {turnarounds.sort((a, b) => b.days - a.days).map(t => (
                 <div key={t.id} className="flex items-center gap-3 py-2 border-b border-[var(--color-border)] last:border-0">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium truncate">{t.vendor}</p>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border capitalize ${t.status === "approved" ? "bg-green-900/30 text-green-400 border-green-800/30" : "bg-red-900/30 text-red-400 border-red-800/30"}`}>{t.status}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border capitalize ${t.status === "APPROVED" ? "bg-green-900/30 text-green-400 border-green-800/30" : "bg-red-900/30 text-red-400 border-red-800/30"}`}>{t.status.toLowerCase()}</span>
                     </div>
                     <p className="text-[10px] text-[var(--color-muted)]">requested {format(new Date(t.created), "dd MMM")}</p>
                   </div>
-                  <span className={`text-sm font-bold tabular-nums shrink-0 ${t.hours > 3 ? "text-red-400" : "text-[var(--color-text)]"}`}>{t.hours}d</span>
+                  <span className={`text-sm font-bold tabular-nums shrink-0 ${t.days > 3 ? "text-red-400" : "text-[var(--color-text)]"}`}>{t.days}d</span>
                 </div>
               ))}
             </div>
           )}
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)] mt-3">Measures how quickly spend requests move from queued to decided. It reads the same approval queue above; press the button to record decision times, then watch the average turnaround and flag any request sitting too long.</p>
+      <p className="text-[10px] text-[var(--color-muted)] mt-3">Measures how quickly spend requests move from queued to decided, using the real approval log's own timestamps.</p>
     </div>
   );
 }
