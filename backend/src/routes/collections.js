@@ -9,15 +9,6 @@ const crypto   = require("crypto");
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant","sales"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
 
-// Platform-default collection details the super-admin sets in the console
-// (Admin → Payments & collections). Used when a business hasn't set its own UPI.
-async function platformPayments() {
-  try {
-    const { rows } = await pool.query("SELECT value FROM platform_settings WHERE key='payments'");
-    return rows[0]?.value || {};
-  } catch { return {}; }
-}
-
 // POST /api/collections/upi-link
 router.post("/upi-link", authenticate, canWrite, async (req, res) => {
   const { invoice_id, amount } = req.body;
@@ -63,18 +54,20 @@ router.post("/upi-link", authenticate, canWrite, async (req, res) => {
     } catch { /* fallback to UPI */ }
   }
 
-  // Fallback: static UPI deep-link. Use the firm's own UPI ID first, else the
-  // platform default the super-admin set in the console. Never a placeholder - a
-  // wrong VPA would send the customer's money to the wrong place.
-  const platformPay = await platformPayments();
-  const upiId   = firm.upiId || platformPay.upiId || null;
-  const payee   = firm.name || platformPay.payeeName || "";
+  // Fallback: static UPI deep-link, using ONLY the firm's own UPI ID. This used to
+  // also fall back to a platform-wide super-admin-configured UPI ID when the firm
+  // hadn't set one - meaning a customer paying a tenant's invoice could have their
+  // money land in an account that ISN'T that tenant's, with no reconciliation
+  // mechanism anywhere to get it back to them. Hard-fail instead: never send a
+  // customer's payment anywhere but the business's own, explicitly-configured VPA.
+  const upiId   = firm.upiId || null;
+  const payee   = firm.name || "";
   const upiLink = upiId
     ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payee)}&am=${payAmt}&tn=${encodeURIComponent(inv.invoice_number)}&cu=INR`
     : null;
   const payUrl  = razorpay_url || upiLink;
   if (!payUrl) {
-    return res.status(400).json({ error: "No payment method set up yet - add your UPI ID in Settings, or ask your admin to set a default UPI ID in the console (Admin → Payments), or connect Razorpay." });
+    return res.status(400).json({ error: "No payment method set up yet - add your own UPI ID in Settings, or connect Razorpay." });
   }
   const qr = await QRCode.toDataURL(payUrl, { width: 200 }).catch(() => null);
 

@@ -53,11 +53,6 @@ const GROUPS = {
     url: ["linkUrl"], bool: ["enabled"],
     defaults: { enabled: false, text: "", linkUrl: "", linkLabel: "" },
   },
-  payments: {
-    public: true,
-    keys: ["upiId", "payeeName", "paymentNote"],
-    defaults: { upiId: "", payeeName: "", paymentNote: "" },
-  },
   features: {
     // Module on/off switches - the app can hide a whole section without a deploy.
     public: true,

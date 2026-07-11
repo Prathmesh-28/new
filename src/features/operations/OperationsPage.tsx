@@ -167,6 +167,28 @@ export default function OperationsPage() {
     }
   };
 
+  const handleDeleteOrder = async (o: Order) => {
+    if (!window.confirm(`Delete order ${o.orderNumber} (${formatCurrency(o.totalValue)}) for ${o.buyerName}? This can't be undone.`)) return;
+    try {
+      await api.delete(`/api/operations/orders/${o.id}`);
+      deleteOrder(o.id);
+      toast.success("Order deleted");
+    } catch {
+      toast.error("Couldn't delete the order on the server");
+    }
+  };
+
+  const handleDeleteInventory = async (item: InventoryItem) => {
+    if (!window.confirm(`Delete "${item.productName}" from inventory? This can't be undone.`)) return;
+    try {
+      await api.delete(`/api/operations/inventory/${item.id}`);
+      deleteInventoryItem(item.id);
+      toast.success("Product removed");
+    } catch {
+      toast.error("Couldn't delete the product on the server");
+    }
+  };
+
   const handlePoStatusChange = async (po: ProcurementOrder, status: ProcurementOrder["status"]) => {
     updateProcurement({ ...po, status });
     try {
@@ -484,7 +506,7 @@ export default function OperationsPage() {
                             handleStatusChange(o, "dispatched");
                           }} className="text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-0.5 rounded">Dispatch</button>}
                           {o.status === "dispatched"&& <button onClick={() => handleStatusChange(o, "delivered")}  className="text-xs bg-green-900/30 text-green-400 border border-green-800/30 px-2 py-0.5 rounded">Delivered</button>}
-                          {!["delivered","cancelled"].includes(o.status) && <button onClick={() => deleteOrder(o.id)} className="text-xs text-[var(--color-muted)] hover:text-red-400 ml-1">✕</button>}
+                          {!["delivered","cancelled"].includes(o.status) && <button onClick={() => handleDeleteOrder(o)} className="text-xs text-[var(--color-muted)] hover:text-red-400 ml-1">✕</button>}
                         </div>
                       </td>
                     </tr>
@@ -564,7 +586,7 @@ export default function OperationsPage() {
                                     <span className="text-xs text-green-400 flex items-center gap-1"><CheckCircle2 size={10} />OK</span>}
                         </td>
                         <td className="px-4 py-2.5">
-                          <button onClick={() => deleteInventoryItem(item.id)} className="text-xs text-[var(--color-muted)] hover:text-red-400">✕</button>
+                          <button onClick={() => handleDeleteInventory(item)} className="text-xs text-[var(--color-muted)] hover:text-red-400">✕</button>
                         </td>
                       </tr>
                     );

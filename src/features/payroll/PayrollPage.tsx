@@ -275,6 +275,13 @@ export default function PayrollPage() {
   };
 
   const disburse = async (runId: string) => {
+    const run0 = runs.find(r => r.id === runId);
+    const bankName = bankLedgers.find(b => b.id === disburseBank)?.name;
+    const amountTxt = run0 ? formatCurrency(run0.total_net) : "this run's";
+    const confirmMsg = disburseBank
+      ? `Disburse ${amountTxt} net payroll from ${bankName ?? "the selected bank"}? This posts a real payment voucher to the books - Dr Salaries Payable / Cr ${bankName ?? "bank"}.`
+      : `Mark ${amountTxt} net payroll as disbursed WITHOUT posting anything to the books (no bank account selected)?`;
+    if (!window.confirm(confirmMsg)) return;
     try {
       const run = await api.post<PayrollRun>(`/api/payroll/runs/${runId}/disburse`, disburseBank ? { bank_ledger_id: disburseBank } : {});
       if (run.gl?.posted) toast.success(`Payroll disbursed · payment voucher posted to books${run.gl.voucherNumber ? ` (#${run.gl.voucherNumber})` : ""}`);

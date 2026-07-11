@@ -2294,7 +2294,10 @@ function RfqComparison() {
     toast.success(`Quote from ${q.vendor} added`);
   };
   const remove = (id: string) => setQuotes(prev => prev.filter(q => q.id !== id));
-  const clearAll = () => { setQuotes([]); toast.success("RFQ cleared"); };
+  const clearAll = () => {
+    if (quotes.length > 0 && !window.confirm(`Clear all ${quotes.length} quote(s) from this RFQ? This can't be undone.`)) return;
+    setQuotes([]); toast.success("RFQ cleared");
+  };
 
   const ranked = useMemo(() => {
     if (quotes.length === 0) return [];
