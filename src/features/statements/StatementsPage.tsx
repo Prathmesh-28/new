@@ -314,7 +314,7 @@ export default function StatementsPage() {
             <Row label="Employee benefits (payroll)" value={-pl.payroll} pct={pl.revenue > 0 ? Math.round(pl.payroll / pl.revenue * 100) : 0} />
             <Row label="Other operating expenses" value={-pl.otherOpex} pct={pl.revenue > 0 ? Math.round(pl.otherOpex / pl.revenue * 100) : 0} />
             <Row label="EBITDA" value={pl.ebitda} level={2} pct={pl.ebitdaMarginPct} />
-            <Row label="Depreciation & amortisation" value={-pl.depreciation} note={store.fixedAssets?.length ? undefined : "add assets in the Fixed Assets tab"} />
+            <Row label="Depreciation & amortisation" value={-pl.depreciation} note={store.fixedAssets?.length ? undefined : "register assets in Books → Fixed Assets"} />
             <Row label="EBIT (operating profit)" value={pl.ebit} level={2} />
             <Row label="Finance costs (interest)" value={-pl.interest} note="from active loans" />
             <Row label="Profit Before Tax" value={pl.pbt} level={2} />
@@ -337,8 +337,8 @@ export default function StatementsPage() {
               <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
                 Derived from revenue, expense and payroll transactions. COGS uses goods received from suppliers.
                 {store.fixedAssets?.length
-                  ? " Depreciation is calculated from your fixed-asset register; income tax is estimated at 25% of PBT."
-                  : " Depreciation is ₹0 until you add assets in the Fixed Assets tab; income tax is estimated at 25% of PBT."}
+                  ? " Depreciation is estimated from the assets registered in Books → Fixed Assets (the same register that posts your real depreciation journal); income tax is estimated at 25% of PBT."
+                  : " Depreciation is ₹0 until you register assets in Books → Fixed Assets; income tax is estimated at 25% of PBT."}
               </p>
             </div>
           </div>
@@ -357,7 +357,7 @@ export default function StatementsPage() {
             <Row label="Inventory" value={bs.inventory} />
             <Row label="Total Current Assets" value={bs.currentAssets} level={2} />
             <Row label="Non-Current Assets" level={0} />
-            <Row label="Fixed assets (net)" value={bs.fixedAssetsNet} note={store.fixedAssets?.length ? undefined : "estimated - add a register"} />
+            <Row label="Fixed assets (net)" value={bs.fixedAssetsNet} note={store.fixedAssets?.length ? undefined : "estimated - register assets in Books → Fixed Assets"} />
             <Row label="Total Non-Current Assets" value={bs.nonCurrentAssets} level={2} />
             <Row label="Total Assets" value={bs.totalAssets} level={3} accent="blue" />
           </div>
@@ -1379,7 +1379,7 @@ function DepreciationSchedule({ today }: { today: Date }) {
       <div className={`${CARD} p-8 text-center`}>
         <CalendarClock size={28} className="mx-auto text-[var(--color-muted)] mb-2" />
         <p className="text-sm font-medium">No fixed assets recorded</p>
-        <p className="text-xs text-[var(--color-muted)] mt-1">Add assets in the Fixed Assets tab to generate the Schedule II depreciation block.</p>
+        <p className="text-xs text-[var(--color-muted)] mt-1">Register assets in Books → Fixed Assets to generate the Schedule II depreciation block.</p>
       </div>
     );
   }
@@ -1389,7 +1389,7 @@ function DepreciationSchedule({ today }: { today: Date }) {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className={`${CARD} p-5 flex-1`}>
           <h2 className="text-sm font-semibold mb-1 flex items-center gap-2"><CalendarClock size={14} className="text-[var(--color-primary)]" /> Depreciation Schedule (Companies Act Schedule II)</h2>
-          <p className="text-xs text-[var(--color-muted)]">Useful-life-based depreciation per asset for {fy.label}, from your fixed-asset register. SLM and WDV are both handled; book value telescopes exactly across periods.</p>
+          <p className="text-xs text-[var(--color-muted)]">Useful-life-based depreciation per asset for {fy.label}, from the Books → Fixed Assets register. SLM and WDV are both handled; book value telescopes exactly across periods.</p>
         </div>
         <button onClick={doExport}
           className="flex items-center gap-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] px-3 py-2 rounded-lg hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">

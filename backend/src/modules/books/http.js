@@ -88,6 +88,21 @@ const POST_ROLES = ["super_admin", "owner", "finance_manager", "accountant"];
 const canPost = (req, res, next) => (POST_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" }));
 // super_admin may target any tenant via ?tenant_id; everyone else is scoped to their own.
 const tenantOf = (req) => (req.user.role === "super_admin" && req.query.tenant_id ? String(req.query.tenant_id) : req.user.tenant_id);
+// Read-only client-view scoping, mirroring routes/kv.js::resolveTenantId: a CA
+// (accountant role) may READ a linked client's data so the client's statutory
+// statements render from the client's own books, not the advisor's. Only wire this
+// into read routes - writes stay on tenantOf.
+async function tenantOfClientRead(req) {
+  const requested = req.query.tenant_id ? String(req.query.tenant_id) : null;
+  if (!requested || requested === req.user.tenant_id) return req.user.tenant_id;
+  if (req.user.role === "super_admin") return requested;
+  if (req.user.role !== "accountant") return null;
+  const { rows } = await pool.query(
+    "SELECT 1 FROM advisor_client_links WHERE advisor_id=$1 AND client_tenant_id=$2",
+    [req.user.id, requested]
+  );
+  return rows[0] ? requested : null;
+}
 const fyOf = (req) => (req.query.fy ? String(req.query.fy) : financialYearFor(new Date()));
 const fail = (res, err) => {
   if (err instanceof PostError) return res.status(err.http).json({ error: err.message, code: err.code });
@@ -922,7 +937,13 @@ router.post("/import/opening-balances", canPost, async (req, res) => { try { res
 // ── Year-end closing (posts a closing voucher + locks the FY) ────────────────
 router.post("/period/close", canPost, async (req, res) => { try { res.status(201).json(await closing.yearEndClose(tenantOf(req), req.user.id, (req.body || {}).fy || fyOf(req))); } catch (e) { fail(res, e); } });
 router.post("/assets", canPost, async (req, res) => { try { res.status(201).json(await assets.createAsset(tenantOf(req), req.body || {})); } catch (e) { fail(res, e); } });
-router.get("/assets", async (req, res) => { try { const { rows } = await pool.query("SELECT * FROM book_fixed_assets WHERE tenant_id=$1 ORDER BY acquired_on DESC", [tenantOf(req)]); res.json(rows); } catch (e) { fail(res, e); } });
+router.get("/assets", async (req, res) => {
+  try {
+    const t = await tenantOfClientRead(req);
+    if (!t) return res.status(403).json({ error: "Forbidden" });
+    res.json(await assets.listAssets(t));
+  } catch (e) { fail(res, e); }
+});
 router.post("/assets/depreciation/run", canPost, async (req, res) => { try { res.json(await assets.runDepreciation(tenantOf(req), req.user.id, (req.body || {}).asOf || new Date().toISOString().slice(0, 10))); } catch (e) { fail(res, e); } });
 router.get("/assets/register", async (req, res) => { try { res.json(await assets.assetRegister(tenantOf(req), { status: req.query.status })); } catch (e) { fail(res, e); } });
 router.post("/assets/:id/dispose", canPost, async (req, res) => { try { const b = req.body || {}; res.status(201).json(await assets.disposeAsset(tenantOf(req), req.user.id, { assetId: req.params.id, disposalValue: b.disposalValue, date: b.date, bankLedgerId: b.bankLedgerId })); } catch (e) { fail(res, e); } });

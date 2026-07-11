@@ -401,7 +401,9 @@ export interface AppStore {
 }
 
 // ── KV namespace map ──────────────────────────────────────────────────────────
-export const FIELD_NAMESPACE: Record<keyof AppStore, string> = {
+// fixedAssets is deliberately absent: it's a read-only mirror of the real Books
+// asset register (AppContext.refreshBooksAssets), never persisted back to KV.
+export const FIELD_NAMESPACE: Record<Exclude<keyof AppStore, "fixedAssets">, string> = {
   firm:                "app",
   roles:               "app",
   bankAccounts:        "app",
@@ -409,7 +411,6 @@ export const FIELD_NAMESPACE: Record<keyof AppStore, string> = {
   alerts:              "app",
   connectors:          "app",
   invoices:            "app",
-  fixedAssets:         "app",
   forecast:            "forecast",
   scenarios:           "forecast",
   obligations:         "forecast",

@@ -1,6 +1,65 @@
 import type { FixedAsset } from "@/data/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Books → statements bridge. The statutory statements no longer keep their own
+// asset list; they mirror backend/src/modules/books/assets.js's real,
+// GL-backed register (GET /api/books/assets) through this single converter, so
+// there is exactly one asset register in the product. Loss-less for both
+// methods: SLM's usefulLifeYears is back-solved from the real annual rate so
+// bookValue()'s straight-line branch reproduces the same monthly charge the
+// Books depreciation run posts; WDV carries the real rate through wdvRate
+// directly (bookValue() prefers wdvRate over a derived one).
+// ─────────────────────────────────────────────────────────────────────────────
+export interface BooksAssetRow {
+  id: string;
+  name: string;
+  cost: string | number;
+  salvage?: string | number | null;
+  acquired_on: string;
+  method: string; // "SLM" | "WDV"
+  rate: string | number;
+  asset_group?: string | null;
+  disposed_on?: string | null;
+}
+
+export function fromBooksAsset(a: BooksAssetRow): FixedAsset {
+  const cost = Number(a.cost) || 0;
+  const salvage = Number(a.salvage) || 0;
+  const rate = Number(a.rate) || 0;
+  const isWdv = String(a.method).toUpperCase() === "WDV";
+  const disposalDate = a.disposed_on ? String(a.disposed_on).slice(0, 10) : undefined;
+  // rate 0 = a deliberately non-depreciating asset (e.g. freehold land): Books'
+  // depreciation run always posts zero for it, so mirror that exactly by zeroing
+  // the depreciable base (salvage = cost) rather than inventing a useful life.
+  if (rate <= 0) {
+    return {
+      id: a.id,
+      name: a.name,
+      category: a.asset_group || undefined,
+      cost,
+      purchaseDate: String(a.acquired_on).slice(0, 10),
+      usefulLifeYears: 1,
+      method: "straight_line",
+      salvageValue: cost,
+      disposalDate,
+    };
+  }
+  const life = cost > 0 ? (cost - salvage) * 100 / (cost * rate) : 5;
+  return {
+    id: a.id,
+    name: a.name,
+    category: a.asset_group || undefined,
+    cost,
+    purchaseDate: String(a.acquired_on).slice(0, 10),
+    usefulLifeYears: Math.max(1, Math.round(life * 10) / 10),
+    method: isWdv ? "wdv" : "straight_line",
+    salvageValue: salvage || undefined,
+    wdvRate: isWdv ? rate : undefined,
+    disposalDate,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Depreciation engine - supports Straight-Line (SLM) and Written-Down-Value (WDV,
 // the reducing-balance method India's Companies Act Schedule II uses).
 //

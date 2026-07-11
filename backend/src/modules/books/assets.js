@@ -5,6 +5,29 @@ const { money, toDb, gt } = require("./money");
 const { postVoucher, PostError } = require("./posting-engine");
 const { ledgerIdByName } = require("./seed");
 
+// acquired_on/disposed_on/last_dep_on are SQL DATE columns; node-postgres's default
+// parser builds the JS Date using LOCAL-timezone components, so round-tripping through
+// toISOString() (what JSON.stringify does to a bare Date) rolls the calendar date back a
+// day on any positive-offset server timezone. Read the local getters back out instead.
+function isoDate(d) {
+  if (d == null) return d;
+  if (d instanceof Date) {
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  return String(d).slice(0, 10);
+}
+
+async function listAssets(tenantId) {
+  const { rows } = await pool.query("SELECT * FROM book_fixed_assets WHERE tenant_id=$1 ORDER BY acquired_on DESC", [tenantId]);
+  return rows.map((r) => ({
+    ...r,
+    acquired_on: isoDate(r.acquired_on),
+    disposed_on: isoDate(r.disposed_on),
+    last_dep_on: isoDate(r.last_dep_on),
+  }));
+}
+
 // One month of depreciation (annual rate / 12). SLM on cost, WDV on written-down value.
 function depreciationMonthly(method, cost, accumulated, rate) {
   const r = money(rate).div(100).div(12);
@@ -158,9 +181,9 @@ async function assetRegister(tenantId, opts = {}) {
     const wdv = cost.minus(acc);
     const row = {
       id: a.id, name: a.name, assetGroup: key, method: a.method, rate: toDb(a.rate),
-      acquiredOn: a.acquired_on, cost: toDb(cost), accumulatedDep: toDb(acc), wdv: toDb(wdv),
+      acquiredOn: isoDate(a.acquired_on), cost: toDb(cost), accumulatedDep: toDb(acc), wdv: toDb(wdv),
       status: a.disposed_on ? "disposed" : "active",
-      disposedOn: a.disposed_on || null, disposalValue: a.disposal_value != null ? toDb(a.disposal_value) : null,
+      disposedOn: isoDate(a.disposed_on), disposalValue: a.disposal_value != null ? toDb(a.disposal_value) : null,
     };
     if (!groupsMap.has(key)) groupsMap.set(key, { group: key, assets: [], cost: money(0), accumulatedDep: money(0), wdv: money(0) });
     const g = groupsMap.get(key);
@@ -293,4 +316,4 @@ async function itActDepreciation(tenantId, fyStartYear, opts = {}) {
   };
 }
 
-module.exports = { depreciationMonthly, createAsset, runDepreciation, disposeAsset, assetRegister, setAssetGroup, setAssetItBlock, itActDepreciation };
+module.exports = { depreciationMonthly, createAsset, runDepreciation, disposeAsset, assetRegister, setAssetGroup, setAssetItBlock, itActDepreciation, listAssets };

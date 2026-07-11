@@ -7,6 +7,7 @@ import { isReadOnlyRole } from "@/data/roles";
 import { defaultConfig } from "@/data/defaultConfig";
 import { api, clientId, setApiTenant, getActiveFirm } from "@/lib/api";
 import { API_BASE } from "@/lib/apiBase";
+import { fromBooksAsset, type BooksAssetRow } from "@/lib/depreciation";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
 
@@ -16,6 +17,14 @@ const POLL_MS  = 5000;
 
 const RO_MSG    = "You're viewing a client's data - exit client view to make changes.";
 const VIEWER_MSG = "Your role has read-only access - ask a workspace owner for edit rights.";
+
+// fixedAssets used to be a user-editable KV list; it is now a read-only mirror of the
+// real Books > Assets register (see refreshBooksAssets below), so any leftover copy an
+// old client version wrote into the KV blob must never override the live fetch.
+function stripLegacyFixedAssets(o: Record<string, unknown>): Record<string, unknown> {
+  if ("fixedAssets" in o) delete o.fixedAssets;
+  return o;
+}
 
 type SetStore = (fn: (s: AppStore) => AppStore) => void;
 
@@ -87,10 +96,6 @@ interface AppCtx {
   addInvoice:              (x: AppStore["invoices"][0])            => void;
   updateInvoice:           (x: AppStore["invoices"][0])            => void;
   deleteInvoice:           (id: string)                            => void;
-  // Fixed assets
-  addFixedAsset:           (x: AppStore["fixedAssets"][0])         => void;
-  updateFixedAsset:        (x: AppStore["fixedAssets"][0])         => void;
-  deleteFixedAsset:        (id: string)                            => void;
   // Budgets
   addBudget:               (x: AppStore["budgets"][0])            => void;
   updateBudget:            (x: AppStore["budgets"][0])            => void;
@@ -168,7 +173,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!tenantId) {
       try {
         const saved = JSON.parse(localStorage.getItem(LS_KEY) ?? "{}");
-        _setStore(prev => ({ ...prev, ...saved }));
+        _setStore(prev => ({ ...prev, ...stripLegacyFixedAssets(saved) }));
       } catch { /* ignore */ }
     }
   }, []);
@@ -237,6 +242,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, [persist]);
 
+  // The statutory statements' asset register is a read-only mirror of the real,
+  // GL-backed Books register - fetched straight from the source of truth instead of
+  // a separately-maintained KV copy that could silently disagree with it.
+  const refreshBooksAssets = useCallback(async (cid: string | null) => {
+    const namespaces = cid ? ["app", "forecast"] : (ROLE_NAMESPACES[currentRole] ?? []);
+    if (!namespaces.includes("app")) return;
+    try {
+      // Client view needs an explicit tenant_id: the X-Tenant-Id header only works for
+      // super_admin, while a CA (accountant) is authorized per-route via
+      // advisor_client_links - same convention as kvUrl above.
+      const url = cid ? `/api/books/assets?tenant_id=${encodeURIComponent(cid)}` : "/api/books/assets";
+      const rows = await api.get<BooksAssetRow[]>(url);
+      _setStore(prev => ({ ...prev, fixedAssets: (Array.isArray(rows) ? rows : []).map(fromBooksAsset) }));
+    } catch {
+      // Books module unreachable (offline / not seeded) - keep the last known snapshot.
+    }
+  }, [currentRole]);
+
   // Load data whenever user, role, or selected client changes
   useEffect(() => {
     if (!user) { setLoading(false); return; }
@@ -244,6 +267,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const clientId   = selectedClientTenantId;
     // CA in client view: only needs app + forecast namespaces for the client
     const namespaces = clientId ? ["app", "forecast"] : (ROLE_NAMESPACES[currentRole] ?? []);
+    void refreshBooksAssets(clientId);
     Promise.allSettled(namespaces.map(ns => api.get<{ value?: Record<string, unknown> }>(kvUrl(ns, clientId))))
       .then(results => {
         const merged: Record<string, unknown> = {};
@@ -254,6 +278,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (payload && typeof payload === "object") Object.assign(merged, payload);
           }
         });
+        stripLegacyFixedAssets(merged);
         if (Object.keys(merged).length) {
           _setStore(prev => ({ ...prev, ...merged }));
           // Only persist own data to localStorage
@@ -273,6 +298,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     pollRef.current = setInterval(async () => {
       const clientId   = clientIdRef.current;
       const namespaces = clientId ? ["app", "forecast"] : (ROLE_NAMESPACES[currentRole] ?? []);
+      void refreshBooksAssets(clientId);
       const results = await Promise.allSettled(
         namespaces.map(ns => api.get<{ value?: Record<string, unknown> }>(kvUrl(ns, clientId)))
       );
@@ -283,10 +309,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (payload && typeof payload === "object") Object.assign(merged, payload);
         }
       });
+      stripLegacyFixedAssets(merged);
       if (Object.keys(merged).length) _setStore(prev => ({ ...prev, ...merged }));
     }, POLL_MS);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [user, currentRole]);
+  }, [user, currentRole, refreshBooksAssets]);
 
   // Live sync via Server-Sent Events - pushes cross-device changes instantly
   // (sub-second) instead of waiting for the 5s poll. Best-effort enhancement: if
@@ -304,7 +331,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const r = await api.get<{ value?: Record<string, unknown> }>(kvUrl(ns, tenantId));
         const payload = r?.value;
-        if (payload && typeof payload === "object") _setStore(prev => ({ ...prev, ...payload }));
+        if (payload && typeof payload === "object") _setStore(prev => ({ ...prev, ...stripLegacyFixedAssets({ ...payload }) }));
       } catch { /* poll will reconcile */ }
     };
 
@@ -454,9 +481,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addInvoice:              add("invoices"),
     updateInvoice:           update("invoices"),
     deleteInvoice:           del("invoices"),
-    addFixedAsset:           add("fixedAssets"),
-    updateFixedAsset:        update("fixedAssets"),
-    deleteFixedAsset:        del("fixedAssets"),
     addBudget:               add("budgets"),
     updateBudget:            update("budgets"),
     deleteBudget:            del("budgets"),
