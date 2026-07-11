@@ -3,6 +3,7 @@ import { X, Copy, AlertCircle, Check, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
+import { api } from "@/lib/api";
 import type { Transaction } from "@/data/types";
 
 /* Ledger hygiene / reconciliation. Without a live bank feed, the highest-value
@@ -34,8 +35,29 @@ export default function ReconcileModal({ onClose }: { onClose: () => void }) {
     [txns]
   );
 
-  const delDup = (t: Transaction) => { deleteTransaction(t.id); toast.success("Duplicate removed"); };
-  const setParty = (t: Transaction, name: string) => updateTransaction({ ...t, counterparty: name });
+  // Delete/update on the SERVER first - TransactionsPage's own mount effect fully
+  // replaces store.transactions from GET /api/transactions, so a KV-only edit here
+  // used to be silently reverted the next time that page (re)loaded.
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const delDup = async (t: Transaction) => {
+    setBusyId(t.id);
+    try {
+      await api.delete(`/api/transactions/${t.id}`);
+      deleteTransaction(t.id);
+      toast.success("Duplicate removed");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete - it will reappear on refresh");
+    } finally { setBusyId(null); }
+  };
+  const setParty = async (t: Transaction, name: string) => {
+    setBusyId(t.id);
+    try {
+      await api.patch(`/api/transactions/${t.id}`, { merchant_name: name });
+      updateTransaction({ ...t, counterparty: name });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save - it will revert on refresh");
+    } finally { setBusyId(null); }
+  };
 
   const issues = dupGroups.length + missing.length;
 
@@ -65,7 +87,7 @@ export default function ReconcileModal({ onClose }: { onClose: () => void }) {
                           <p className="text-xs text-[var(--color-muted)] tabular-nums">{t.date} · <span className={t.amount < 0 ? "text-red-400" : "text-green-400"}>{formatCurrency(t.amount)}</span> · {t.category}</p>
                         </div>
                         {editable && (
-                          <button onClick={() => delDup(t)} className="flex items-center gap-1 text-xs text-red-400 hover:bg-red-500/10 px-2 py-1 rounded shrink-0"><Trash2 size={12} /> Delete</button>
+                          <button onClick={() => delDup(t)} disabled={busyId === t.id} className="flex items-center gap-1 text-xs text-red-400 hover:bg-red-500/10 px-2 py-1 rounded shrink-0 disabled:opacity-50"><Trash2 size={12} /> {busyId === t.id ? "Deleting…" : "Delete"}</button>
                         )}
                       </div>
                     ))}

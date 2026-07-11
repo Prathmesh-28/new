@@ -1825,6 +1825,7 @@ function BulkTaggingTool() {
   const [fromCat, setFromCat] = useState<string>("all");
   const [toCat, setToCat] = useState<Transaction["category"]>("expense");
   const [sel, setSel] = useState<Set<string>>(new Set());
+  const [applying, setApplying] = useState(false);
 
   const txns = useMemo(() => store.transactions ?? [], [store.transactions]);
   const fc = formatCurrency;
@@ -1840,11 +1841,24 @@ function BulkTaggingTool() {
   const toggleAll = () => setSel(allSel ? new Set() : new Set(filtered.map(t => t.id)));
   const toggle = (id: string) => setSel(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-  const apply = () => {
-    let count = 0;
-    txns.forEach(t => { if (sel.has(t.id) && t.category !== toCat) { updateTransaction({ ...t, category: toCat }); count++; } });
-    toast.success(`Re-categorised ${count} transaction${count !== 1 ? "s" : ""} → ${toCat}`);
-    setSel(new Set());
+  // Persist to the server first - this page's own mount effect fully replaces
+  // store.transactions from GET /api/transactions, so a KV-only bulk edit here
+  // used to be silently reverted the next time the page (re)loaded.
+  const apply = async () => {
+    const targets = txns.filter(t => sel.has(t.id) && t.category !== toCat);
+    if (targets.length === 0) return;
+    setApplying(true);
+    try {
+      const results = await Promise.allSettled(
+        targets.map(t => api.patch(`/api/transactions/${t.id}`, { category: catToApi(toCat, t.apiCategory) }))
+      );
+      let count = 0;
+      results.forEach((r, i) => { if (r.status === "fulfilled") { updateTransaction({ ...targets[i], category: toCat }); count++; } });
+      const failed = targets.length - count;
+      if (count) toast.success(`Re-categorised ${count} transaction${count !== 1 ? "s" : ""} → ${toCat}`);
+      if (failed) toast.error(`${failed} transaction${failed !== 1 ? "s" : ""} couldn't be saved to the server`);
+      setSel(new Set());
+    } finally { setApplying(false); }
   };
 
   return (
@@ -1863,7 +1877,7 @@ function BulkTaggingTool() {
         </div>
         <div className="flex items-center justify-between mt-3">
           <span className="text-xs text-[var(--color-muted)]">{filtered.length} match filter · {sel.size} selected</span>
-          <button onClick={apply} disabled={sel.size === 0} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40">Apply → {toCat} ({sel.size})</button>
+          <button onClick={apply} disabled={sel.size === 0 || applying} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-40">{applying ? "Applying…" : `Apply → ${toCat} (${sel.size})`}</button>
         </div>
       </div>
 
@@ -1920,13 +1934,34 @@ function TransferDetection() {
 
   const acctName = (id: string) => store.bankAccounts.find(a => a.id === id)?.name ?? "-";
   const netAmount = pairs.reduce((s, p) => s + Math.abs(p.debit.amount), 0);
+  const [tagging, setTagging] = useState(false);
 
-  const markTransfer = (p: { debit: Transaction; credit: Transaction }) => {
-    if (p.debit.category !== "transfer") updateTransaction({ ...p.debit, category: "transfer" });
-    if (p.credit.category !== "transfer") updateTransaction({ ...p.credit, category: "transfer" });
-    toast.success("Both legs tagged as transfer (excluded from revenue/spend)");
+  // Persist to the server first - this page's own mount effect fully replaces
+  // store.transactions from GET /api/transactions, so a KV-only tag here used to
+  // be silently reverted the next time the page (re)loaded. Doesn't manage the
+  // shared `tagging` flag itself so markAll can wrap a whole batch in one.
+  const tagLegs = async (p: { debit: Transaction; credit: Transaction }) => {
+    const legs = [p.debit, p.credit].filter(t => t.category !== "transfer");
+    if (legs.length === 0) return true;
+    const results = await Promise.allSettled(legs.map(t => api.patch(`/api/transactions/${t.id}`, { category: catToApi("transfer", t.apiCategory) })));
+    let ok = 0;
+    results.forEach((r, i) => { if (r.status === "fulfilled") { updateTransaction({ ...legs[i], category: "transfer" }); ok++; } });
+    return ok === legs.length;
   };
-  const markAll = () => { pairs.forEach(markTransfer); toast.success(`Tagged ${pairs.length} transfer pair${pairs.length !== 1 ? "s" : ""}`); };
+  const markTransfer = async (p: { debit: Transaction; credit: Transaction }) => {
+    setTagging(true);
+    try { if (await tagLegs(p)) toast.success("Both legs tagged as transfer"); else toast.error("Couldn't save one or both legs to the server"); }
+    finally { setTagging(false); }
+  };
+  const markAll = async () => {
+    setTagging(true);
+    try {
+      let ok = 0;
+      for (const p of pairs) { if (await tagLegs(p)) ok++; }
+      if (ok < pairs.length) toast.error(`${pairs.length - ok} pair(s) couldn't be fully saved to the server`);
+      if (ok > 0) toast.success(`Tagged ${ok} transfer pair${ok !== 1 ? "s" : ""}`);
+    } finally { setTagging(false); }
+  };
 
   return (
     <div className="space-y-4">
@@ -1946,7 +1981,7 @@ function TransferDetection() {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2"><ArrowLeftRight size={14} className="text-[var(--color-primary)]" /><span className="text-sm font-semibold">Detected Self-Transfers</span></div>
-          {pairs.length > 0 && <button onClick={markAll} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90">Tag all as transfer</button>}
+          {pairs.length > 0 && <button onClick={markAll} disabled={tagging} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-50">{tagging ? "Tagging…" : "Tag all as transfer"}</button>}
         </div>
         {pairs.length === 0 ? (
           <p className="p-8 text-sm text-[var(--color-muted)] text-center">No offsetting debit/credit pairs found across your accounts. Self-transfers show up as a matched payment-out and receipt-in within 2 days.</p>
@@ -1964,7 +1999,7 @@ function TransferDetection() {
                       <td className="px-4 py-2.5 tabular-nums font-semibold">{fc(Math.abs(p.debit.amount))}</td>
                       <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] tabular-nums">{p.debit.date} → {p.credit.date}</td>
                       <td className="px-4 py-2.5">{done ? <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-950/30 text-green-400">Tagged</span> : <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-orange-950/30 text-orange-400">Counted twice</span>}</td>
-                      <td className="px-4 py-2.5">{!done && <button onClick={() => markTransfer(p)} className="text-[9px] border border-[var(--color-border)] text-[var(--color-muted)] px-2 py-0.5 rounded hover:text-[var(--color-text)]">Tag</button>}</td>
+                      <td className="px-4 py-2.5">{!done && <button onClick={() => markTransfer(p)} disabled={tagging} className="text-[9px] border border-[var(--color-border)] text-[var(--color-muted)] px-2 py-0.5 rounded hover:text-[var(--color-text)] disabled:opacity-50">Tag</button>}</td>
                     </tr>
                   );
                 })}
@@ -1973,7 +2008,7 @@ function TransferDetection() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[var(--color-muted)]">Tagging both legs as "transfer" nets them out of revenue and spend totals so moving money between your own accounts isn't double-counted.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Tagging both legs as "transfer" gives them the correct category label for your records. Note: Dashboard/Forecast revenue and spend totals currently filter by amount sign only, not category - tagging a pair here does not yet remove it from those totals.</p>
     </div>
   );
 }
