@@ -4,6 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { useT } from "@/i18n";
 import { formatCurrency, monthlyBurn, runwayDays, generateId } from "@/lib/utils";
 import { runForecast } from "@/lib/forecastEngine";
+import { useForecastInputs, mergeForecastInputs } from "@/lib/liveForecast";
 import { updateWidgetData } from "@/lib/widgetBridge";
 import { AlertTriangle, TrendingDown, Landmark, Bell, ArrowUpRight, ArrowDownRight, Plus, Building2, Upload, CheckCircle2, Circle, X, ChevronRight, Calendar, BarChart3, Sparkles, PiggyBank, ShieldCheck, Package, Receipt, HeartPulse, RefreshCcw, TrendingUp, Zap, Target, LayoutGrid, Flag, Sunrise, Wallet, Trash2, FileWarning, Clock, Activity, PieChart as PieIcon, Scale } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from "recharts";
@@ -1955,7 +1956,7 @@ function ReceivablesVsPayablesWidget() {
 
 export default function DashboardPage() {
   const { store, markAlertRead, addBankAccount, addTransaction, isReadOnly } = useApp();
-  const { bankAccounts, transactions, forecast, creditApplications, firm } = store;
+  const { bankAccounts, transactions, forecast: storedForecast, creditApplications, firm } = store;
   // Real backend-raised alerts, mute-filtered (see useLiveAlerts.ts) - store.alerts
   // directly never reflected anything server-side raised.
   const alerts = unmuted(useLiveAlerts(), store.featureData?.["alr-mute-rules"] as MuteRule[] | undefined);
@@ -1970,21 +1971,49 @@ export default function DashboardPage() {
     () => localStorage.getItem("hr_onboarding_dismissed") === "true"
   );
 
-  const totalBalance = bankAccounts.reduce((a, b) => a + b.balance, 0);
+  // Overlay REAL backend drivers (Books cash, open invoices, loan schedule) - the
+  // SAME overlay ForecastPage uses - for the AGGREGATE financial-truth numbers
+  // only (totalBalance/runway/breach-risk/chart). `bankAccounts` above stays the
+  // raw per-account KV list for account management (add/list/pick-an-account-to-
+  // post-a-transaction-against) - mergeForecastInputs collapses that list into one
+  // synthetic "Books cash" row when Books data exists, which is right for a
+  // balance TOTAL but wrong for "here are your accounts" or "which account does
+  // this transaction belong to". An audit found the dashboard's balance/runway/
+  // breach-banner and the Forecast page's could legitimately disagree because this
+  // page computed everything from the raw KV bankAccounts while Forecast read the
+  // tenant's actual Books cash; one page could show a red "72% breach risk" banner
+  // directly above numbers implying something entirely different. Silent no-op
+  // until /api/forecast/inputs resolves, exactly like ForecastPage.
+  const liveInputs = useForecastInputs();
+  const liveStore = useMemo(() => mergeForecastInputs(store, liveInputs), [store, liveInputs]);
+  const liveBankAccounts = liveStore.bankAccounts;
+
+  const totalBalance = liveBankAccounts.reduce((a, b) => a + b.balance, 0);
   const burn         = monthlyBurn(transactions);
-  const runway       = runwayDays(bankAccounts.map(b => b.balance), burn);
+  const runway       = runwayDays(liveBankAccounts.map(b => b.balance), burn);
   const unread       = alerts.filter(a => !a.isRead).length;
 
   const isEmpty = bankAccounts.length === 0 && transactions.length === 0;
 
-  // Probabilistic early-warning from the Monte-Carlo engine (memoised on the store).
-  const fcRisk = useMemo(() => (transactions.length ? runForecast(store).risk : null), [store, transactions.length]);
+  // Probabilistic early-warning from the Monte-Carlo engine, computed on the SAME
+  // live-overlaid store as the chart below (was the raw store - a second source
+  // of truth on the same screen).
+  const fcRisk = useMemo(() => (transactions.length ? runForecast(liveStore).risk : null), [liveStore, transactions.length]);
   const showBreachWarning = !!fcRisk && fcRisk.probBreachByDay[Math.min(44, fcRisk.probBreachByDay.length - 1)] >= 0.5;
+
+  // Fresh forecast points for the chart - never the stale store.forecast blob,
+  // which only updated when the user last clicked "Generate" on /forecast and
+  // could sit weeks out of date (even starting in the past) right under a live
+  // breach banner claiming something different.
+  const freshForecast = useMemo(
+    () => (transactions.length ? runForecast(liveStore).points : []),
+    [liveStore, transactions.length]
+  );
 
   // Keep the home-screen widget's snapshot fresh (native only; no-op on web).
   useEffect(() => {
-    const low = store.forecast?.length ? store.forecast.reduce((m, p) => Math.min(m, p.p50), store.forecast[0].p50) : totalBalance;
-    const lowPt = store.forecast?.length ? store.forecast.reduce((a, p) => (p.p50 < a.p50 ? p : a), store.forecast[0]) : null;
+    const low = freshForecast.length ? freshForecast.reduce((m, p) => Math.min(m, p.p50), freshForecast[0].p50) : totalBalance;
+    const lowPt = freshForecast.length ? freshForecast.reduce((a, p) => (p.p50 < a.p50 ? p : a), freshForecast[0]) : null;
     updateWidgetData({
       balance: totalBalance,
       runwayDays: fcRisk?.runwayDist.p50 ?? runway,
@@ -1992,13 +2021,13 @@ export default function DashboardPage() {
       lowPointDate: lowPt?.date ?? null,
       updatedAt: new Date().toISOString(),
     });
-  }, [totalBalance, runway, fcRisk, store.forecast]);
+  }, [totalBalance, runway, fcRisk, freshForecast]);
 
   // Onboarding steps (computed from store)
   const onboardingSteps = [
     { label: "Add a bank account",          done: bankAccounts.length > 0,         action: () => setShowAddAccount(true) },
     { label: "Import 3+ transactions",      done: transactions.length >= 3,         action: () => setShowImport(true) },
-    { label: "Generate your first forecast",done: forecast.length > 0,             action: () => navigate("/forecast") },
+    { label: "Generate your first forecast",done: storedForecast.length > 0,       action: () => navigate("/forecast") },
     { label: "Run credit pre-qualification",done: creditApplications.length > 0,   action: () => navigate("/credit") },
   ];
   const completedCount = onboardingSteps.filter(s => s.done).length;
@@ -2343,12 +2372,14 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Chart */}
-          {forecast.length > 0 ? (
-            <CashForecastChart forecast={forecast} />
+          {/* Chart - always freshly computed (freshForecast), never the stale
+              store.forecast blob that only updated on the user's last manual
+              "Generate" click and could sit weeks out of date. */}
+          {freshForecast.length > 0 ? (
+            <CashForecastChart forecast={freshForecast} />
           ) : (
             <div className="bg-[var(--color-surface)] border border-dashed border-[var(--color-border)] rounded-lg p-8 text-center text-sm text-[var(--color-muted)]">
-              Go to <strong className="text-[var(--color-text)]">Forecast</strong> to generate your 90-day cash projection.
+              Add some transaction history to see your 90-day cash projection.
             </div>
           )}
 
