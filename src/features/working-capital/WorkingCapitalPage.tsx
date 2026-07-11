@@ -1370,7 +1370,7 @@ function ReceivablesAcceleration({ snap, aging }: { snap: FinancialSnapshot; agi
             <table className="w-full text-sm min-w-[520px]">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
-                  {["Bucket", "Outstanding", "Recovery %", "Probable Collect", "Action"].map(h => (
+                  {["Bucket", "Outstanding", "Recovery % (generic assumption)", "Probable Collect", "Action"].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
                   ))}
                 </tr>
@@ -1390,7 +1390,7 @@ function ReceivablesAcceleration({ snap, aging }: { snap: FinancialSnapshot; agi
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Recovery rates fall with age (95% current → 30% at 90+ days). Net cash pulled = probable collections − discount cost. Days shortened = net cash ÷ daily operating spend.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Recovery % is a generic industry assumption (95% current → 30% at 90+ days), NOT measured from your own collection history - a planning estimate, not a prediction. Net cash pulled = probable collections − discount cost. Days shortened = net cash ÷ daily operating spend.</p>
     </div>
   );
 }

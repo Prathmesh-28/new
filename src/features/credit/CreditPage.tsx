@@ -278,13 +278,13 @@ export default function CreditPage() {
                     </div>
                     <button onClick={() => setShowKfs(o.id)}
                       className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 rounded-lg text-sm hover:opacity-90">
-                      Accept - View KFS
+                      View illustrative terms
                     </button>
                   </div>
                 ))}
               </div>
-              <p className="text-[11px] text-[var(--color-muted)] mt-2 flex items-center gap-1">
-                <Info size={10} /> APR shown per RBI Digital Lending Guidelines 2022. 3-day cooling-off period applies.
+              <p className="text-[11px] text-amber-400 mt-2 flex items-center gap-1.5 font-medium">
+                <Info size={10} /> Illustrative comparison only, based on your underwriting score - no lender is wired behind these yet, so nothing here can be accepted as a real loan. For actual financing, use Get Financing or the Capital page.
               </p>
             </div>
           ) : (
@@ -699,11 +699,11 @@ export default function CreditPage() {
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp size={13} className="text-[var(--color-primary)]" />
-                <h3 className="text-sm font-semibold">Auto re-check in 30 days</h3>
+                <h3 className="text-sm font-semibold">Your eligibility is checked automatically</h3>
               </div>
               <p className="text-xs text-[var(--color-muted)]">
-                Headroom re-scores your business every 30 days. Fix any item above and your score updates automatically.
-                15% of declined applicants reach approval within 90 days.
+                Headroom re-checks eligibility nightly against your real cash/GST/receivables data - fix any item above and a
+                fresh, real offer can appear here without re-applying.
               </p>
             </div>
           </div>
@@ -717,30 +717,31 @@ export default function CreditPage() {
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-md">
-              <h2 className="text-base font-bold mb-1">Key Facts Statement (KFS)</h2>
-              <p className="text-xs text-[var(--color-muted)] mb-4">RBI Digital Lending Guidelines 2022 - mandatory disclosure</p>
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-base font-bold">Illustrative Loan Terms</h2>
+                <span className="text-[10px] font-bold uppercase tracking-wide bg-amber-950/40 text-amber-400 border border-amber-800/40 px-1.5 py-0.5 rounded">Not a real offer</span>
+              </div>
+              <p className="text-xs text-amber-400 mb-4 font-medium">
+                No lender is wired behind this - these are indicative terms computed from your underwriting score, in the RBI KFS layout for easy comparison, but this is NOT the RBI-mandated Key Facts Statement for a real, bindable loan.
+              </p>
               <div className="space-y-2 text-sm bg-[var(--color-bg)] rounded-lg p-4 border border-[var(--color-border)] mb-4">
                 {[
-                  ["Lender",               o.lender],
+                  ["Comparison lender",    o.lender],
                   ["Loan amount",          formatCurrency(o.amount)],
                   ["APR",                  `${o.rate}%`],
                   ["Term",                 `${o.termMonths} months`],
                   ["Monthly EMI",          formatCurrency(o.monthlyEmi)],
                   ["Total interest",       formatCurrency(o.interest)],
                   ["Total repayment",      formatCurrency(o.total)],
-                  ["Processing fee",       "₹999 (deducted at disbursement)"],
-                  ["Prepayment",           "No penalty after 6 EMIs"],
-                  ["Cooling-off period",   "3 calendar days"],
-                  ["Grievance contact",    "grievance@headroom.app"],
                 ].map(([k, v]) => (
                   <div key={k} className="flex justify-between text-xs"><span className="text-[var(--color-muted)]">{k}</span><span className="font-medium text-right">{v}</span></div>
                 ))}
               </div>
               <div className="flex gap-2">
                 <button onClick={() => handleAccept(o)} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90">
-                  I acknowledge - Accept Loan
+                  Go to real financing options
                 </button>
-                <button onClick={() => setShowKfs(null)} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
+                <button onClick={() => setShowKfs(null)} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Close</button>
               </div>
             </div>
           </div>

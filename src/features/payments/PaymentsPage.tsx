@@ -2816,52 +2816,59 @@ function DunningLadder() {
   );
 }
 
-// ── Virtual-account allocator ─────────────────────────────────────────────────────────
-type VaRow = { id: string; customer: string; vpaHandle: string; ifsc: string; accountNo: string };
+// ── Customer allocation-code planner ──────────────────────────────────────────────────
+// NOT a real virtual account / bank account. Headroom has no bank/PSP integration
+// that provisions one (a real virtual-account number + IFSC requires an actual VA
+// API - e.g. RazorpayX/Setu virtual accounts - which isn't wired up anywhere in
+// this codebase). This used to fabricate a fake account number AND a fake-but-
+// real-looking Yes Bank IFSC ("YESB0CMSNOC") with a one-click "Copy" action whose
+// entire purpose was to hand those fabricated bank details to a real customer to
+// pay into - money sent there would not reach any account you control. Reworked
+// into an honest allocation-code planner: an internal code per customer/cost-
+// centre to use in YOUR OWN reconciliation, not something to give out as payee
+// bank details.
+type VaRow = { id: string; customer: string; allocationCode: string };
 function VirtualAccountAllocator() {
   const { store } = useApp();
   const [rows, setRows] = useFeatureState<VaRow[]>("pay-vaccounts", []);
   const [customer, setCustomer] = useState("");
   const base = (store.firm?.name ?? "BIZ").replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 6) || "BIZ";
-  const handle = base.toLowerCase();
 
   const add = () => {
     if (!customer.trim()) { toast.error("Enter a customer / cost-centre name"); return; }
     const slug = customer.trim().replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 8) || "CUST";
     const seq = (rows.length + 1).toString().padStart(4, "0");
-    const accountNo = `${base}${slug}${seq}`;
-    const vpaHandle = `${handle}.${customer.trim().replace(/[^a-zA-Z0-9]/g, "").toLowerCase().slice(0, 8) || "cust"}@yesbank`;
-    if (rows.some(r => r.accountNo === accountNo)) { toast.error("That virtual account already exists"); return; }
-    setRows([{ id: crypto.randomUUID(), customer: customer.trim(), vpaHandle, ifsc: "YESB0CMSNOC", accountNo }, ...rows]);
+    const allocationCode = `${base}-${slug}-${seq}`;
+    if (rows.some(r => r.allocationCode === allocationCode)) { toast.error("That code already exists"); return; }
+    setRows([{ id: crypto.randomUUID(), customer: customer.trim(), allocationCode }, ...rows]);
     setCustomer("");
-    toast.success("Virtual account allocated");
+    toast.success("Allocation code created - for your own internal tracking only, not a bank account to share");
   };
 
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-5 space-y-3`}>
-        <h2 className="text-sm font-semibold flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Virtual-Account Allocator</h2>
-        <p className="text-xs text-[var(--color-muted)]">Mint a unique virtual account number and VPA per customer so every inbound NEFT/IMPS/UPI auto-tags to the right ledger - no more guessing who paid. Share each customer their own deterministic credentials.</p>
+        <h2 className="text-sm font-semibold flex items-center gap-2"><Boxes size={14} className="text-[var(--color-primary)]" /> Customer Allocation-Code Planner</h2>
+        <p className="text-xs text-[var(--color-muted)]">Generate an internal code per customer/cost-centre for your own bookkeeping. <strong>This is not a real bank virtual account, IFSC, or UPI handle</strong> - Headroom has no bank/PG integration wired up to issue one. Do not give this code to a customer as payment/account details; a real virtual-account product requires an actual bank/PG API integration.</p>
         <div className="flex gap-2 items-end max-w-lg">
           <div className="flex-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer / cost-centre</label>
             <input value={customer} onChange={e => setCustomer(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="Acme Retail - Pune" className={INP} />
           </div>
           <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-4 py-2 text-sm font-medium">
-            <Plus size={13} /> Allocate
+            <Plus size={13} /> Generate code
           </button>
         </div>
-        <p className="text-[10px] text-[var(--color-muted)]">Numbers are derived deterministically from your firm name + customer so they're stable and collision-checked. In production these map to a real CMS virtual-account range from your bank/PG.</p>
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted)] px-1">No virtual accounts yet. Allocate one per customer for hands-free reconciliation.</p>
+        <p className="text-xs text-[var(--color-muted)] px-1">No allocation codes yet. Generate one per customer for your own internal reconciliation notes.</p>
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[680px]">
+            <table className="w-full text-sm min-w-[480px]">
               <thead className="border-b border-[var(--color-border)]">
-                <tr>{["Customer", "Virtual A/C", "IFSC", "Collect VPA", ""].map(h =>
+                <tr>{["Customer", "Allocation code (internal only)", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
                 </tr>
               </thead>
@@ -2869,11 +2876,8 @@ function VirtualAccountAllocator() {
                 {rows.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
                     <td className="px-4 py-2.5 font-medium">{r.customer}</td>
-                    <td className="px-4 py-2.5 font-mono text-[11px]">{r.accountNo}</td>
-                    <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--color-muted)]">{r.ifsc}</td>
-                    <td className="px-4 py-2.5 font-mono text-[11px]">{r.vpaHandle}</td>
+                    <td className="px-4 py-2.5 font-mono text-[11px]">{r.allocationCode}</td>
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                      <button onClick={() => copy(`A/C ${r.accountNo} · IFSC ${r.ifsc} · UPI ${r.vpaHandle}`, "Account details copied")} className="text-[10px] text-[var(--color-primary)] hover:underline mr-3">Copy</button>
                       <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
                     </td>
                   </tr>

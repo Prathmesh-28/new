@@ -618,30 +618,39 @@ function SweepPlanner() {
   );
 }
 
-// ── 5. Virtual-account tracker (collections mapped to customers) ─────────────────
-type VirtualAccount = { id: string; customer: string; vaNumber: string; expected: number; received: number };
+// ── 5. Payment-reference tracker (collections mapped to customers) ───────────────
+// NOT a real bank virtual account - Headroom has no bank/PSP integration that
+// provisions one (that requires a real VA API, e.g. RazorpayX/Setu virtual
+// accounts, which isn't wired up anywhere in this codebase). This used to
+// fabricate a fake-looking 10-digit "VA" number client-side and say "Virtual
+// account issued" - if a business owner handed that number to a customer to
+// pay into, the money would have nowhere real to land. Reworked into an
+// honest reference-code tracker: a code to ask the customer to quote in their
+// transfer narration, matched against your OWN real bank account, with "mark
+// received" explicitly framed as a manual note (not a real-time bank match).
+type PaymentRef = { id: string; customer: string; refCode: string; expected: number; received: number };
 function VirtualAccountTracker() {
-  const [vas, setVas] = useFeatureState<VirtualAccount[]>("bank-virtual-accounts", []);
+  const [refs, setRefs] = useFeatureState<PaymentRef[]>("bank-virtual-accounts", []);
   const [customer, setCustomer] = useState("");
   const [expected, setExpected] = useState("");
 
-  const genVa = (seed: string) => "VA" + Math.abs([...seed].reduce((a, c) => a * 31 + c.charCodeAt(0), 7)).toString().padStart(10, "0").slice(0, 10);
+  const genRef = (seed: string) => "REF" + Math.abs([...seed].reduce((a, c) => a * 31 + c.charCodeAt(0), 7)).toString().padStart(8, "0").slice(0, 8);
 
   const add = () => {
     const exp = parseFloat(expected) || 0;
     if (!customer.trim()) { toast.error("Enter a customer name"); return; }
-    setVas([...vas, { id: crypto.randomUUID(), customer: customer.trim(), vaNumber: genVa(customer + crypto.randomUUID()), expected: exp, received: 0 }]);
+    setRefs([...refs, { id: crypto.randomUUID(), customer: customer.trim(), refCode: genRef(customer + crypto.randomUUID()), expected: exp, received: 0 }]);
     setCustomer(""); setExpected("");
-    toast.success("Virtual account issued");
+    toast.success("Reference code created - this is NOT a bank account number, only something for the customer to quote in their transfer");
   };
-  const totalExpected = vas.reduce((s, v) => s + v.expected, 0);
-  const totalReceived = vas.reduce((s, v) => s + v.received, 0);
+  const totalExpected = refs.reduce((s, v) => s + v.expected, 0);
+  const totalReceived = refs.reduce((s, v) => s + v.received, 0);
 
   return (
     <div className="space-y-4">
       <div className={`${CARD} p-4 space-y-3`}>
-        <h3 className="text-sm font-semibold flex items-center gap-2"><Hash size={14} className="text-[var(--color-primary)]" /> Virtual-Account Tracker</h3>
-        <p className="text-xs text-[var(--color-muted)]">Issue a dedicated virtual account number per customer so every inflow auto-identifies who paid - no more guessing from cryptic NEFT/UPI narrations.</p>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Hash size={14} className="text-[var(--color-primary)]" /> Payment Reference Tracker</h3>
+        <p className="text-xs text-[var(--color-muted)]">Generate a reference code per customer to ask them to quote in their NEFT/UPI transfer note - so an inflow into <strong>your own real bank account</strong> is easier to identify. This does NOT create a new bank account or virtual account; never share this code as if it were one to pay into.</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div className="col-span-2 md:col-span-1">
             <label className="text-xs text-[var(--color-muted)] block mb-1">Customer</label>
@@ -651,15 +660,15 @@ function VirtualAccountTracker() {
             <label className="text-xs text-[var(--color-muted)] block mb-1">Expected inflow (₹)</label>
             <input type="number" value={expected} onChange={e => setExpected(e.target.value)} placeholder="200000" className={INP} />
           </div>
-          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Issue VA</button>
+          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium"><Plus size={13} /> Generate reference</button>
         </div>
       </div>
 
-      {vas.length > 0 && (
+      {refs.length > 0 && (
         <>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Virtual accounts", value: `${vas.length}`, color: "text-blue-400" },
+              { label: "References", value: `${refs.length}`, color: "text-blue-400" },
               { label: "Expected", value: formatAmount(totalExpected), color: "text-[var(--color-text)]" },
               { label: "Received", value: formatAmount(totalReceived), color: "text-green-400" },
             ].map(k => (
@@ -672,19 +681,20 @@ function VirtualAccountTracker() {
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="border-b border-[var(--color-border)]"><tr>{["Customer", "Virtual A/C", "Expected", "Received", "Mark inflow", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
+                <thead className="border-b border-[var(--color-border)]"><tr>{["Customer", "Reference code", "Expected", "Received", "Confirm", ""].map(h => <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
-                  {vas.map(v => (
+                  {refs.map(v => (
                     <tr key={v.id} className="hover:bg-white/2">
                       <td className="px-4 py-2.5 font-medium">{v.customer}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{v.vaNumber}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)]">{v.refCode}</td>
                       <td className="px-4 py-2.5 tabular-nums">{formatCurrency(v.expected)}</td>
                       <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(v.received)}</td>
                       <td className="px-4 py-2.5">
-                        <button onClick={() => setVas(vas.map(x => x.id === v.id ? { ...x, received: x.expected } : x))}
-                          className="text-[10px] text-[var(--color-primary)] hover:underline">Mark received</button>
+                        <button onClick={() => setRefs(refs.map(x => x.id === v.id ? { ...x, received: x.expected } : x))}
+                          title="Manual note only - confirm you actually saw this inflow in your real bank statement"
+                          className="text-[10px] text-[var(--color-primary)] hover:underline">I saw it land</button>
                       </td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setVas(vas.filter(x => x.id !== v.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRefs(refs.filter(x => x.id !== v.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                     </tr>
                   ))}
                 </tbody>
