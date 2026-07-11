@@ -10,6 +10,7 @@ import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, Calendar, X, Cl
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import DatePicker from "@/components/DatePicker";
+import { useApAging, AP_BUCKET_META, AP_BUCKET_KEYS } from "@/lib/apAging";
 
 /* ─────────────────────────────────────────────────────────────────────────
    Vendor master record - REAL persistence via /api/vendors (GET/POST/PATCH/DELETE).
@@ -99,39 +100,6 @@ function useVendorMaster() {
    guess. Every consumer calls this hook independently (same pattern as
    useVendorMaster above) rather than threading props through every tab.
    ───────────────────────────────────────────────────────────────────────── */
-// Matches billwise.openBills()'s actual shape exactly (backend/src/modules/books/billwise.js) —
-// note the field is "number" (the ledger's own auto-incrementing voucher number), NOT the
-// vendor's own bill/invoice reference text (that's book_vouchers.reference, not returned here).
-export interface ApAgingBill {
-  voucherId: string; voucherType: "SALES" | "PURCHASE"; number: number; date: string; dueDate: string;
-  gross: number; allocated: number; outstanding: number; daysOverdue: number;
-}
-export interface ApAgingVendorRow {
-  vendorId: string; vendorLedgerId: string; vendorName: string;
-  isMsme: boolean; msmeCategory: string | null; paymentTermsDays: number | null; total: number;
-  buckets: { current: number; d30: number; d60: number; d60plus: number };
-  bills: ApAgingBill[];
-}
-export interface ApAgingResponse {
-  vendors: ApAgingVendorRow[];
-  totals: { current: number; d30: number; d60: number; d60plus: number };
-  grandTotal: number;
-}
-const EMPTY_AGING: ApAgingResponse = { vendors: [], totals: { current: 0, d30: 0, d60: 0, d60plus: 0 }, grandTotal: 0 };
-
-function useApAging() {
-  const [aging, setAging] = useState<ApAgingResponse>(EMPTY_AGING);
-  const [loading, setLoading] = useState(true);
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try { setAging(await api.get<ApAgingResponse>("/api/vendor-bills/aging")); }
-    catch (e) { console.warn("[vendor-bills] aging load failed", e); }
-    finally { setLoading(false); }
-  }, []);
-  useEffect(() => { void refresh(); }, [refresh]);
-  return { aging, loading, refresh };
-}
-
 // Bank ledgers, for the "pay from" selector on a bill settlement.
 function useBankLedgers() {
   const [ledgers, setLedgers] = useState<{ id: string; name: string }[]>([]);
@@ -142,13 +110,6 @@ function useBankLedgers() {
   }, []);
   return ledgers;
 }
-
-const AP_BUCKET_META: Record<keyof ApAgingResponse["totals"], { label: string; color: string; chipCls: string }> = {
-  current:  { label: "Current (not yet due)", color: "text-green-400",  chipCls: "bg-green-950/30 text-green-400 border-green-800/30" },
-  d30:      { label: "1-30 days overdue",     color: "text-yellow-400", chipCls: "bg-yellow-950/30 text-yellow-400 border-yellow-800/30" },
-  d60:      { label: "31-60 days overdue",    color: "text-orange-400", chipCls: "bg-orange-950/30 text-orange-400 border-orange-800/30" },
-  d60plus:  { label: "60+ days overdue",      color: "text-red-400",    chipCls: "bg-red-950/30 text-red-400 border-red-800/30" },
-};
 
 // Lightweight format checks for the profile form (mirrors the KYC vault validators).
 const VM_PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
@@ -4438,7 +4399,6 @@ function WorkingCapitalSimulator() {
    /api/vendor-bills, which posts a genuine PURCHASE voucher (GST input,
    optional TDS, bill-wise settlement) - not a local tracker.
    ───────────────────────────────────────────────────────────────────────── */
-const AP_BUCKET_KEYS: (keyof ApAgingResponse["totals"])[] = ["current", "d30", "d60", "d60plus"];
 
 function ApAgingBoard({ onSelectVendor }: { onSelectVendor: (vendorId: string) => void }) {
   const { aging, loading, refresh } = useApAging();

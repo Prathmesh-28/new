@@ -25,6 +25,7 @@ import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
 import { useUrlTab } from "@/hooks/useUrlTab";
 import DatePicker from "@/components/DatePicker";
+import { useApAging, AP_BUCKET_META, AP_BUCKET_KEYS, type ApAgingBill } from "@/lib/apAging";
 
 // C14 continuation (2026-07 gap audit) — keep in sync with the TabStrip `tabs=` array below.
 const OPS_TAB_IDS = ["overview", "orders", "inventory", "procurement", "intelligence", "prices", "bom", "leadtime", "reorder", "payables", "stockledger", "batchtrack", "jobwork", "production", "warehouse", "stocktake", "dispatch", "abc", "eoq", "turnover", "skumargin", "landed", "grn", "scrap", "returns", "valuation", "safetystock", "carrying", "aging", "stockout", "cyclecount", "minmax", "whutil", "oversell"] as const;
@@ -128,18 +129,31 @@ export default function OperationsPage() {
   const lowStockItems    = inventory.filter(i => i.quantity <= i.reorderLevel);
   const totalInventoryVal= inventory.reduce((s, i) => s + i.quantity * i.unitCost, 0);
 
-  const handleAddOrder = () => {
+  const handleAddOrder = async () => {
     if (!buyerName || !itemName || !itemPrice) { toast.error("Fill buyer name, item name, and price"); return; }
-    const total = Number(itemQty) * Number(itemPrice);
-    addOrder({
-      id: generateId(), orderNumber: `ORD-${Date.now().toString(36).toUpperCase()}`,
-      source, buyerName, buyerPhone, status: "pending", totalValue: total, notes: "",
-      items: [{ id: generateId(), productName: itemName, sku: "", quantity: Number(itemQty), unitPrice: Number(itemPrice) }],
-      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    });
-    toast.success("Order added");
-    setBuyerName(""); setBuyerPhone(""); setItemName(""); setItemQty("1"); setItemPrice("");
-    setShowOrderForm(false);
+    const items = [{ id: generateId(), productName: itemName, sku: "", quantity: Number(itemQty), unitPrice: Number(itemPrice) }];
+    try {
+      // Create on the server first so its real id is what handleStatusChange later
+      // PATCHes against - an order that only ever existed in local KV would 404 the
+      // moment someone tried to confirm/dispatch it.
+      const row = await api.post<{
+        id: string; order_number: string; source: OrderSource; buyer_name: string; buyer_phone: string | null;
+        status: Order["status"]; total_value: string | number; notes: string | null; created_at: string; updated_at: string;
+      }>("/api/operations/orders", {
+        buyer_name: buyerName, buyer_phone: buyerPhone || undefined, source,
+        items: [{ product_name: itemName, quantity: Number(itemQty), unit_price: Number(itemPrice) }],
+      });
+      addOrder({
+        id: row.id, orderNumber: row.order_number, source: row.source, buyerName: row.buyer_name, buyerPhone: row.buyer_phone || "",
+        status: row.status, totalValue: Number(row.total_value), notes: row.notes || "", items,
+        createdAt: row.created_at, updatedAt: row.updated_at,
+      });
+      toast.success("Order added");
+      setBuyerName(""); setBuyerPhone(""); setItemName(""); setItemQty("1"); setItemPrice("");
+      setShowOrderForm(false);
+    } catch {
+      toast.error("Couldn't create the order on the server");
+    }
   };
 
   const handleStatusChange = async (o: Order, status: Order["status"]) => {
@@ -153,21 +167,60 @@ export default function OperationsPage() {
     }
   };
 
-  const handleAddInventory = () => {
-    if (!invName) { toast.error("Product name required"); return; }
-    addInventoryItem({ id: generateId(), productName: invName, sku: invSku, category: invCat, quantity: Number(invQty), unit: "units", unitCost: Number(invCost), reorderLevel: Number(invReorder), updatedAt: new Date().toISOString() });
-    toast.success("Product added to inventory");
-    setInvName(""); setInvSku(""); setInvQty("0"); setInvCost(""); setInvReorder("10"); setInvCat("general");
-    setShowInvForm(false);
+  const handlePoStatusChange = async (po: ProcurementOrder, status: ProcurementOrder["status"]) => {
+    updateProcurement({ ...po, status });
+    try {
+      await api.patch(`/api/operations/procurement/${po.id}/status`, { status });
+      if (status !== "received") toast.success(`PO ${status}`);
+    } catch {
+      toast.error("Couldn't update the PO status on the server");
+    }
   };
 
-  const handleCreatePo = () => {
+  const handleAddInventory = async () => {
+    if (!invName) { toast.error("Product name required"); return; }
+    try {
+      const row = await api.post<{
+        id: string; product_name: string; sku: string | null; category: string; quantity: number;
+        unit: string; unit_cost: string | number; reorder_level: number; updated_at: string;
+      }>("/api/operations/inventory", {
+        product_name: invName, sku: invSku || undefined, category: invCat,
+        quantity: Number(invQty), unit_cost: Number(invCost), reorder_level: Number(invReorder),
+      });
+      addInventoryItem({
+        id: row.id, productName: row.product_name, sku: row.sku || "", category: row.category,
+        quantity: row.quantity, unit: row.unit, unitCost: Number(row.unit_cost), reorderLevel: row.reorder_level,
+        updatedAt: row.updated_at,
+      });
+      toast.success("Product added to inventory");
+      setInvName(""); setInvSku(""); setInvQty("0"); setInvCost(""); setInvReorder("10"); setInvCat("general");
+      setShowInvForm(false);
+    } catch {
+      toast.error("Couldn't save the product on the server");
+    }
+  };
+
+  const handleCreatePo = async () => {
     if (!supplierName || !poItemName || !poItemCost) { toast.error("Fill supplier name and at least one item"); return; }
-    const total = Number(poItemQty) * Number(poItemCost);
-    addProcurement({ id: generateId(), supplierName, status: "draft", totalValue: total, expectedDate, items: [{ productName: poItemName, sku: "", quantity: Number(poItemQty), unitCost: Number(poItemCost) }], createdAt: new Date().toISOString() });
-    toast.success("Purchase order created");
-    setSupplierName(""); setPoItemName(""); setPoItemQty("1"); setPoItemCost(""); setExpectedDate("");
-    setShowPoForm(false);
+    const items = [{ productName: poItemName, sku: "", quantity: Number(poItemQty), unitCost: Number(poItemCost) }];
+    try {
+      const row = await api.post<{
+        id: string; supplier_name: string; status: ProcurementOrder["status"]; total_value: string | number;
+        expected_date: string | null; created_at: string;
+      }>("/api/operations/procurement", {
+        supplier_name: supplierName, expected_date: expectedDate || undefined,
+        items: [{ product_name: poItemName, quantity: Number(poItemQty), unit_cost: Number(poItemCost) }],
+      });
+      addProcurement({
+        id: row.id, supplierName: row.supplier_name, status: row.status, totalValue: Number(row.total_value),
+        expectedDate: row.expected_date || "", items, createdAt: row.created_at,
+      });
+      toast.success("Purchase order created");
+      setSupplierName(""); setPoItemName(""); setPoItemQty("1"); setPoItemCost(""); setExpectedDate("");
+      setShowPoForm(false);
+    } catch {
+      toast.error("Couldn't create the purchase order on the server");
+    }
   };
 
   return (
@@ -740,16 +793,11 @@ export default function OperationsPage() {
                   <p className="text-xl font-bold text-[var(--color-primary)] mb-2">{formatCurrency(po.totalValue)}</p>
                   {po.expectedDate && <p className="text-xs text-[var(--color-muted)] mb-2">Expected: {po.expectedDate}</p>}
                   <div className="flex gap-2">
-                    {po.status === "draft"    && <button onClick={() => updateProcurement({ ...po, status: "approved" })} className="text-xs bg-blue-900/30 text-blue-400 border border-blue-800/30 px-2 py-1 rounded">Approve</button>}
-                    {po.status === "approved" && <button onClick={() => updateProcurement({ ...po, status: "ordered" })}  className="text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-1 rounded">Mark Ordered</button>}
+                    {po.status === "draft"    && <button onClick={() => handlePoStatusChange(po, "approved")} className="text-xs bg-blue-900/30 text-blue-400 border border-blue-800/30 px-2 py-1 rounded">Approve</button>}
+                    {po.status === "approved" && <button onClick={() => handlePoStatusChange(po, "ordered")}  className="text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-2 py-1 rounded">Mark Ordered</button>}
                     {po.status === "ordered"  && <button onClick={async () => {
-                      updateProcurement({ ...po, status: "received" });
-                      try {
-                        await api.patch(`/api/operations/procurement/${po.id}/status`, { status: "received" });
-                        toast.success("Marked received - expense recorded & inventory updated");
-                      } catch {
-                        toast.error("Couldn't mark received on the server");
-                      }
+                      await handlePoStatusChange(po, "received");
+                      toast.success("Marked received - expense recorded & inventory updated");
                     }} className="text-xs bg-green-900/30 text-green-400 border border-green-800/30 px-2 py-1 rounded">Mark Received</button>}
                   </div>
                 </div>
@@ -1414,45 +1462,65 @@ function ReorderAlertTab() {
   const suggestedQty = (i: ReorderItem) =>
     Math.max(1, i.reorderQty || 0, Math.ceil(i.reorderPoint - i.currentStock));
 
-  // Append a draft ProcurementOrder to store.procurement for a single SKU.
-  const createPoFor = (i: ReorderItem) => {
+  // Create a draft PO on the server for a single SKU, then mirror the real row
+  // (with its real id) into KV - a client-only id would 404 the moment this PO
+  // is later approved/received in the Procurement tab.
+  const createPoFor = async (i: ReorderItem) => {
     const qty = suggestedQty(i);
-    addProcurement({
-      id: generateId(),
-      supplierName: i.supplier || "To be assigned",
-      status: "draft",
-      totalValue: qty * (i.unitCost || 0),
-      expectedDate: "",
-      items: [{ productName: i.name, sku: "", quantity: qty, unitCost: i.unitCost || 0 }],
-      createdAt: new Date().toISOString(),
-    });
+    const supplierName = i.supplier || "To be assigned";
+    const lineItems = [{ productName: i.name, sku: "", quantity: qty, unitCost: i.unitCost || 0 }];
+    try {
+      const row = await api.post<{
+        id: string; supplier_name: string; status: "draft" | "approved" | "ordered" | "received" | "cancelled";
+        total_value: string | number; expected_date: string | null; created_at: string;
+      }>("/api/operations/procurement", {
+        supplier_name: supplierName,
+        items: [{ product_name: i.name, quantity: qty, unit_cost: i.unitCost || 0 }],
+      });
+      addProcurement({
+        id: row.id, supplierName: row.supplier_name, status: row.status, totalValue: Number(row.total_value),
+        expectedDate: row.expected_date || "", items: lineItems, createdAt: row.created_at,
+      });
+      return true;
+    } catch {
+      toast.error(`Couldn't create a PO for ${i.name} on the server`);
+      return false;
+    }
   };
 
   // Bulk: one PO per below-ROP SKU, grouped by supplier so a supplier with
   // multiple short items gets a single multi-line PO.
-  const createAllPos = () => {
+  const createAllPos = async () => {
     if (needsReorder.length === 0) { toast.error("Nothing below reorder point"); return; }
     const bySupplier = new Map<string, ReorderItem[]>();
     needsReorder.forEach(i => {
       const key = (i.supplier || "To be assigned").trim();
       bySupplier.set(key, [...(bySupplier.get(key) ?? []), i]);
     });
-    bySupplier.forEach((group, supplier) => {
+    let created = 0;
+    for (const [supplier, group] of bySupplier) {
       const lines = group.map(i => {
         const qty = suggestedQty(i);
         return { productName: i.name, sku: "", quantity: qty, unitCost: i.unitCost || 0 };
       });
-      addProcurement({
-        id: generateId(),
-        supplierName: supplier,
-        status: "draft",
-        totalValue: lines.reduce((s, l) => s + l.quantity * l.unitCost, 0),
-        expectedDate: "",
-        items: lines,
-        createdAt: new Date().toISOString(),
-      });
-    });
-    toast.success(`Created ${bySupplier.size} draft PO${bySupplier.size > 1 ? "s" : ""} for ${needsReorder.length} item${needsReorder.length > 1 ? "s" : ""} - review in Procurement`);
+      try {
+        const row = await api.post<{
+          id: string; supplier_name: string; status: "draft" | "approved" | "ordered" | "received" | "cancelled";
+          total_value: string | number; expected_date: string | null; created_at: string;
+        }>("/api/operations/procurement", {
+          supplier_name: supplier,
+          items: lines.map(l => ({ product_name: l.productName, quantity: l.quantity, unit_cost: l.unitCost })),
+        });
+        addProcurement({
+          id: row.id, supplierName: row.supplier_name, status: row.status, totalValue: Number(row.total_value),
+          expectedDate: row.expected_date || "", items: lines, createdAt: row.created_at,
+        });
+        created++;
+      } catch {
+        toast.error(`Couldn't create a PO for ${supplier} on the server`);
+      }
+    }
+    if (created > 0) toast.success(`Created ${created} draft PO${created > 1 ? "s" : ""} for ${needsReorder.length} item${needsReorder.length > 1 ? "s" : ""} - review in Procurement`);
   };
 
   return (
@@ -1554,7 +1622,7 @@ function ReorderAlertTab() {
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-2">
                           {below && (
-                            <button onClick={() => { createPoFor(item); toast.success(`Draft PO created for ${item.name} - review in Procurement`); }}
+                            <button onClick={async () => { if (await createPoFor(item)) toast.success(`Draft PO created for ${item.name} - review in Procurement`); }}
                               title={`Create a draft PO for ${suggestedQty(item)} units`}
                               className="text-xs text-[var(--color-primary)] hover:underline whitespace-nowrap">Create PO →</button>
                           )}
@@ -1575,45 +1643,30 @@ function ReorderAlertTab() {
 }
 
 function AgedPayablesTab() {
-  type Bill = { id: string; vendor: string; billNo: string; amount: number; billDate: string; dueDate: string; isMsme: boolean; status: "unpaid" | "paid" };
-  const [bills, setBills] = useFeatureState<Bill[]>("aged-payables", []);
-  const [showForm, setShowForm] = useState(false);
-  const [fVendor, setFVendor] = useState("");
-  const [fBillNo, setFBillNo] = useState("");
-  const [fAmount, setFAmount] = useState("");
-  const [fBillDate, setFBillDate] = useState("");
-  const [fDueDate, setFDueDate] = useState("");
-  const [fMsme, setFMsme] = useState(false);
+  // Reads the SAME real AP-aging source as Vendors -> AP Aging (GET /api/vendor-bills/aging,
+  // aged from actual open PURCHASE vouchers' due dates) instead of a separate hand-entered
+  // KV bill list - the two tabs used to show different totals/buckets/MSME-at-risk figures
+  // for the same company because each kept its own parallel truth. Bills are recorded and
+  // paid from Vendors -> Bills (a real PURCHASE/payment voucher, GST + TDS included); this
+  // tab is a read-only aging view.
+  const { aging, loading, refresh } = useApAging();
+  const fc = formatCurrency;
 
-  const today = new Date();
-  const addBill = () => {
-    if (!fVendor || !fAmount || !fDueDate) return;
-    setBills(prev => [...prev, { id: generateId(), vendor: fVendor, billNo: fBillNo, amount: parseFloat(fAmount) || 0, billDate: fBillDate, dueDate: fDueDate, isMsme: fMsme, status: "unpaid" }]);
-    setFVendor(""); setFBillNo(""); setFAmount(""); setFBillDate(""); setFDueDate(""); setFMsme(false); setShowForm(false);
-  };
-  const toggle = (id: string) => setBills(prev => prev.map(b => b.id === id ? { ...b, status: b.status === "paid" ? "unpaid" : "paid" } : b));
+  type FlatBill = ApAgingBill & { vendorName: string; isMsme: boolean };
+  const flatBills: FlatBill[] = useMemo(() =>
+    aging.vendors.flatMap(v => v.bills.map(b => ({ ...b, vendorName: v.vendorName, isMsme: v.isMsme }))),
+  [aging.vendors]);
 
-  const daysOverdue = (b: Bill) => b.dueDate ? differenceInDays(today, parseISO(b.dueDate)) : 0;
-  const unpaid = bills.filter(b => b.status === "unpaid");
-  const buckets = [
-    { key: "Current", test: (d: number) => d <= 0 },
-    { key: "1-30",    test: (d: number) => d >= 1 && d <= 30 },
-    { key: "31-60",   test: (d: number) => d >= 31 && d <= 60 },
-    { key: "61-90",   test: (d: number) => d >= 61 && d <= 90 },
-    { key: "90+",     test: (d: number) => d > 90 },
-  ].map(bk => {
-    const list = unpaid.filter(b => bk.test(daysOverdue(b)));
-    return { key: bk.key, count: list.length, amount: list.reduce((s, b) => s + b.amount, 0) };
-  });
-
-  const totalPayable = unpaid.reduce((s, b) => s + b.amount, 0);
-  const overduePayable = unpaid.filter(b => daysOverdue(b) > 0).reduce((s, b) => s + b.amount, 0);
-  const dueThisWeek = unpaid.filter(b => { const d = daysOverdue(b); return d <= 0 && d >= -7; }).reduce((s, b) => s + b.amount, 0);
-  const msmeAtRisk = unpaid.filter(b => b.isMsme && daysOverdue(b) > 45).reduce((s, b) => s + b.amount, 0);
+  const totalPayable = aging.grandTotal;
+  const overduePayable = aging.totals.d30 + aging.totals.d60 + aging.totals.d60plus;
+  const dueThisWeek = flatBills
+    .filter(b => b.daysOverdue === 0 && differenceInDays(parseISO(b.dueDate), new Date()) >= 0 && differenceInDays(parseISO(b.dueDate), new Date()) <= 7)
+    .reduce((s, b) => s + b.outstanding, 0);
+  const msmeAtRisk = flatBills.filter(b => b.isMsme && b.daysOverdue > 45).reduce((s, b) => s + b.outstanding, 0);
 
   const exportCsv = () => {
-    const header = ["Vendor", "Bill No", "Amount", "Bill Date", "Due Date", "Days Overdue", "MSME", "Status"];
-    const lines = bills.map(b => [b.vendor, b.billNo, b.amount, b.billDate, b.dueDate, daysOverdue(b), b.isMsme ? "Yes" : "No", b.status].join(","));
+    const header = ["Vendor", "Voucher No", "Amount Outstanding", "Due Date", "Days Overdue", "MSME"];
+    const lines = flatBills.map(b => [b.vendorName, b.number, b.outstanding, b.dueDate, b.daysOverdue, b.isMsme ? "Yes" : "No"].join(","));
     const csv = [header.join(","), ...lines].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
@@ -1621,8 +1674,13 @@ function AgedPayablesTab() {
     URL.revokeObjectURL(a.href);
   };
 
-  const fc = formatCurrency;
-  const inp = "bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)] w-full";
+  if (loading && aging.vendors.length === 0) {
+    return (
+      <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
+        <p className="text-sm text-[var(--color-muted)]">Loading real payables from the books…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -1642,14 +1700,23 @@ function AgedPayablesTab() {
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
         <p className="text-sm font-semibold mb-3">Payables Aging</p>
-        <div className="grid grid-cols-5 gap-2">
-          {buckets.map(b => (
-            <div key={b.key} className="bg-[var(--color-bg)] rounded-lg p-3 text-center border border-[var(--color-border)]">
-              <p className="text-[10px] text-[var(--color-muted)]">{b.key}</p>
-              <p className={`text-sm font-bold tabular-nums ${b.key === "90+" && b.amount > 0 ? "text-red-400" : "text-[var(--color-text)]"}`}>{fc(b.amount)}</p>
-              <p className="text-[10px] text-[var(--color-muted)]">{b.count} bill(s)</p>
-            </div>
-          ))}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {AP_BUCKET_KEYS.map(bk => {
+            const meta = AP_BUCKET_META[bk];
+            const count = flatBills.filter(b =>
+              bk === "current" ? b.daysOverdue <= 0 :
+              bk === "d30" ? b.daysOverdue > 0 && b.daysOverdue <= 30 :
+              bk === "d60" ? b.daysOverdue > 30 && b.daysOverdue <= 60 :
+              b.daysOverdue > 60
+            ).length;
+            return (
+              <div key={bk} className="bg-[var(--color-bg)] rounded-lg p-3 text-center border border-[var(--color-border)]">
+                <p className="text-[10px] text-[var(--color-muted)]">{meta.label}</p>
+                <p className={`text-sm font-bold tabular-nums ${meta.color}`}>{fc(aging.totals[bk])}</p>
+                <p className="text-[10px] text-[var(--color-muted)]">{count} bill(s)</p>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -1657,67 +1724,44 @@ function AgedPayablesTab() {
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2">
             <AlertTriangle size={13} className="text-[var(--color-primary)]" />
-            <span className="text-sm font-semibold">Vendor Bills</span>
+            <span className="text-sm font-semibold">Open Vendor Bills</span>
           </div>
           <div className="flex gap-2">
-            {bills.length > 0 && (
+            {flatBills.length > 0 && (
               <button onClick={exportCsv} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
                 <Download size={11} /> CSV
               </button>
             )}
-            <button onClick={() => setShowForm(f => !f)} className="flex items-center gap-1 text-xs bg-[var(--color-accent)] border border-[var(--color-border)] px-3 py-1.5 rounded-lg font-medium hover:border-[var(--color-primary)]/40">
-              <Plus size={11} /> Add bill
-            </button>
+            <button onClick={() => refresh()} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-primary)]">Refresh</button>
+            <Link to="/vendors" className="flex items-center gap-1 text-xs bg-[var(--color-primary)] text-[var(--color-bg)] px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
+              <Plus size={11} /> Record / pay a bill
+            </Link>
           </div>
         </div>
 
-        {showForm && (
-          <div className="p-4 border-b border-[var(--color-border)] bg-[var(--color-accent)]">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              <input value={fVendor} onChange={e => setFVendor(e.target.value)} placeholder="Vendor *" className={inp} />
-              <input value={fBillNo} onChange={e => setFBillNo(e.target.value)} placeholder="Bill no." className={inp} />
-              <input type="number" value={fAmount} onChange={e => setFAmount(e.target.value)} placeholder="Amount (₹) *" className={inp} />
-              <div><label className="text-[10px] text-[var(--color-muted)] block">Bill date</label><DatePicker value={fBillDate} onChange={setFBillDate} /></div>
-              <div><label className="text-[10px] text-[var(--color-muted)] block">Due date *</label><DatePicker value={fDueDate} onChange={setFDueDate} /></div>
-              <label className="flex items-center gap-2 text-xs cursor-pointer mt-4"><input type="checkbox" checked={fMsme} onChange={e => setFMsme(e.target.checked)} className="accent-[var(--color-primary)]" /> MSME vendor</label>
-            </div>
-            <div className="flex gap-2 mt-2">
-              <button onClick={addBill} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg hover:opacity-90">Save</button>
-              <button onClick={() => setShowForm(false)} className="text-xs text-[var(--color-muted)] px-3 py-2 rounded-lg border border-[var(--color-border)]">Cancel</button>
-            </div>
-          </div>
-        )}
-
-        {bills.length === 0 ? (
-          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No vendor bills tracked. Add bills to monitor payables aging and MSME 45-day exposure.</p>
+        {flatBills.length === 0 ? (
+          <p className="p-8 text-sm text-[var(--color-muted)] text-center">No open vendor bills. Record one in Vendors → Bills to start tracking real payables aging.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[680px]">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
-                  {["Vendor", "Bill No", "Amount", "Due Date", "Days", "MSME", "Status", ""].map(h => (
+                  {["Vendor", "Voucher No", "Amount", "Due Date", "Days", "MSME"].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {[...bills].sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || "")).map(b => {
-                  const d = daysOverdue(b);
-                  const overdue = b.status === "unpaid" && d > 0;
+                {[...flatBills].sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || "")).map(b => {
+                  const overdue = b.daysOverdue > 0;
                   return (
-                    <tr key={b.id} className={`border-b border-[var(--color-border)] last:border-0 ${overdue ? "bg-red-950/10" : "hover:bg-[var(--color-accent)]"}`}>
-                      <td className="px-4 py-2.5 font-medium">{b.vendor}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{b.billNo || "-"}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{fc(b.amount)}</td>
+                    <tr key={b.voucherId} className={`border-b border-[var(--color-border)] last:border-0 ${overdue ? "bg-red-950/10" : "hover:bg-[var(--color-accent)]"}`}>
+                      <td className="px-4 py-2.5 font-medium">{b.vendorName}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{b.number}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{fc(b.outstanding)}</td>
                       <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{b.dueDate || "-"}</td>
-                      <td className={`px-4 py-2.5 tabular-nums ${overdue ? "text-red-400" : "text-[var(--color-muted)]"}`}>{b.status === "unpaid" && d > 0 ? `${d}d` : "-"}</td>
+                      <td className={`px-4 py-2.5 tabular-nums ${overdue ? "text-red-400" : "text-[var(--color-muted)]"}`}>{overdue ? `${b.daysOverdue}d` : "-"}</td>
                       <td className="px-4 py-2.5">{b.isMsme ? <span className="text-[10px] bg-blue-950/30 text-blue-400 px-1.5 py-0.5 rounded-full">MSME</span> : "-"}</td>
-                      <td className="px-4 py-2.5">
-                        <button onClick={() => toggle(b.id)} className={`text-xs font-semibold px-2 py-0.5 rounded-full ${b.status === "paid" ? "bg-green-950/30 text-green-400" : "bg-yellow-950/30 text-yellow-400"}`}>{b.status === "paid" ? "Paid" : "Unpaid"}</button>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <button onClick={() => setBills(prev => prev.filter(x => x.id !== b.id))} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
-                      </td>
                     </tr>
                   );
                 })}

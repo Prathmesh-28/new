@@ -204,8 +204,11 @@ async function apAgingSummary(tenantId) {
     const bills = await billwise.openBills(tenantId, ledgerId);
     if (!bills.length) continue;
     const buckets = Object.fromEntries(BUCKETS.map((b) => [b, 0]));
-    for (const b of bills) { const bk = bucketOf(b.daysOverdue); buckets[bk] += b.outstanding; totals[bk] += b.outstanding; }
-    const total = bills.reduce((s, b) => s + b.outstanding, 0);
+    // bill.outstanding is a string (billwise.openBills formats via toRupees/.toFixed(2)) —
+    // += on a string concatenates instead of summing the moment a bucket/vendor has more
+    // than one open bill (e.g. "0" + "5900.00" + "1000.00" -> "05900.001000.00").
+    for (const b of bills) { const bk = bucketOf(b.daysOverdue); buckets[bk] += Number(b.outstanding); totals[bk] += Number(b.outstanding); }
+    const total = bills.reduce((s, b) => s + Number(b.outstanding), 0);
     out.push({
       vendorId: v.id, vendorLedgerId: ledgerId, vendorName: v.name,
       isMsme: !!v.is_msme, msmeCategory: v.msme_category || null, paymentTermsDays: v.payment_terms_days || null,
