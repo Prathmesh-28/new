@@ -691,7 +691,12 @@ export default function GstPage() {
           const tax = Math.round(parseFloat(rcmAmount) * rcmRate / 100);
           setRcmEntries(e => [...e, { id: crypto.randomUUID(), desc: rcmDesc, supplier: rcmSupplier, amount: parseFloat(rcmAmount), rate: rcmRate, date: rcmDate }]);
           setRcmDesc(""); setRcmSupplier(""); setRcmAmount("");
-          toast.success(`RCM entry added - ₹${tax.toLocaleString("en-IN")} tax liability`);
+          // Honest: this is a personal tracking register only - nothing is posted to
+          // the GL/GSTR-3B here (an audit found the old toast claimed a "tax
+          // liability" was created, but this write only ever touched a local KV
+          // list). The real posting path (Dr Purchase+Input GST / Cr Vendor+Output
+          // GST) is GST → GST Filing (Live) → Post RCM bill, against a real vendor.
+          toast.info(`Logged - ₹${tax.toLocaleString("en-IN")} estimated RCM tax. Not booked to your GL yet: post it for real under GST → GST Filing (Live) → Post RCM bill.`, { duration: 7000 });
         };
 
         const totalRcmTax = rcmEntries.reduce((s, e) => s + Math.round(e.amount * e.rate / 100), 0);
@@ -710,7 +715,7 @@ export default function GstPage() {
         return (
           <div className="space-y-4">
             <div className="bg-orange-950/20 border border-orange-800/30 rounded-lg px-4 py-3 text-xs text-[var(--color-muted)]">
-              <strong className="text-orange-300">Reverse Charge Mechanism (RCM)</strong> - You (the recipient) pay GST on behalf of the unregistered/exempt supplier directly to the government. RCM tax paid is eligible for ITC in the same month (for business use).
+              <strong className="text-orange-300">Reverse Charge Mechanism (RCM)</strong> - You (the recipient) pay GST on behalf of the unregistered/exempt supplier directly to the government. RCM tax paid is eligible for ITC in the same month (for business use). This register is for tracking/estimating only - it does not post to your books. To actually book an RCM bill (real GL + GSTR-3B impact), use GST → GST Filing (Live) → Post RCM bill.
             </div>
 
             {/* Common RCM services quick-fill */}
@@ -1413,16 +1418,30 @@ function GstRefundTracker() {
   );
 }
 
+// Shared by Composition/QRMP/e-Invoice-readiness eligibility checks below. An
+// audit found each of these independently annualised revenue via
+// `months = txns.length / 30` - treating every 30 TRANSACTIONS as "one month"
+// regardless of when they actually happened. A busy month with 300 transactions
+// divided turnover by 10 instead of ~1, so a firm well over the ₹1.5cr/₹5cr
+// eligibility limit could be told it qualifies (and vice versa for a quiet
+// month). Months elapsed now comes from the actual calendar span of the
+// transaction history, never the row count.
+function annualizeRevenue(transactions: { category: string; amount: number; date: string }[]): number {
+  const rev = transactions.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount), 0);
+  const dates = transactions.map(t => t.date).filter(Boolean).sort();
+  const months = dates.length
+    ? Math.max(1, (new Date(dates[dates.length - 1]).getTime() - new Date(dates[0]).getTime()) / (30.44 * 86400000))
+    : 1;
+  return (rev * 12) / months;
+}
+
 function CompositionChecker() {
   const { store } = useApp();
   const [scheme, setScheme] = useState<"regular" | "composition">("regular");
   const [customTurnover, setCustomTurnover] = useState("");
 
   const annualSales = useMemo(() => {
-    const txns = store.transactions ?? [];
-    const rev = txns.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount), 0);
-    const months = Math.max(txns.length / 30, 1);
-    return rev * 12 / months;
+    return annualizeRevenue(store.transactions ?? []);
   }, [store.transactions]);
 
   const turnover = parseFloat(customTurnover) || annualSales;
@@ -1515,12 +1534,7 @@ function QrmpChecker() {
   const { store } = useApp();
   const [customTurnover, setCustomTurnover] = useState("");
 
-  const annualTurnover = useMemo(() => {
-    const txns = store.transactions ?? [];
-    const rev = txns.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount), 0);
-    const months = Math.max(txns.length / 30, 1);
-    return rev * 12 / months;
-  }, [store.transactions]);
+  const annualTurnover = useMemo(() => annualizeRevenue(store.transactions ?? []), [store.transactions]);
 
   const turnover = parseFloat(customTurnover) || annualTurnover;
   const qrmpEligible = turnover <= 50000000; // ₹5 crore
@@ -1721,12 +1735,7 @@ function EInvoiceReadiness() {
   const { store } = useApp();
   const [customTurnover, setCustomTurnover] = useState("");
 
-  const annualRevenue = useMemo(() => {
-    const txns = store.transactions ?? [];
-    const rev = txns.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount), 0);
-    const months = Math.max(txns.length / 30, 1);
-    return rev * 12 / months;
-  }, [store.transactions]);
+  const annualRevenue = useMemo(() => annualizeRevenue(store.transactions ?? []), [store.transactions]);
 
   const turnover = parseFloat(customTurnover) || annualRevenue;
   const threshold = 50000000; // ₹5 Cr - current mandatory threshold
@@ -1893,39 +1902,48 @@ function GstNoticeTemplates() {
 }
 
 // ── #1 GSTR-3B Auto-Prep ──────────────────────────────────────────────────────
+// Was a flat-rate client-side estimate (revenue×rate/(1+rate), expenses as blanket
+// ITC-eligible) that disagreed with the two REAL engines on this same page (the
+// Calculator tab and "GST Filing (Live)") - an audit found a user could see three
+// different GSTR-3B numbers for the same month without knowing which was real, and
+// download this one as a CSV that looks like a filing draft. Now calls the exact
+// same ledger-truth endpoint the Calculator tab uses (GET /api/gst/liability -
+// real posted book_tax_entries, never a proxy).
+interface GstLiability {
+  month: number; year: number;
+  output_tax: number; input_tax_credit: number; net_liability: number;
+  breakdown: { taxable_turnover: number; output_cgst: number; output_sgst: number; output_igst: number; itc_cgst: number; itc_sgst: number; itc_igst: number; net_liability: number };
+  source: string;
+}
 function Gstr3bAutoPrep() {
-  const { store } = useApp();
-  const firm = store.firm;
-  const rate = (firm.gstRate ?? 18) / 100;
   const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
+  const [data, setData] = useState<GstLiability | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const fc = formatCurrency;
 
-  const data = useMemo(() => {
-    const txns = (store.transactions ?? []).filter(t => t.date.slice(0, 7) === period);
-    // Outward: revenue inflows are GST-inclusive sale receipts → back out taxable value.
-    const outwardGross = txns.filter(t => t.category === "revenue").reduce((s, t) => s + Math.abs(t.amount), 0);
-    const outwardTaxable = Math.round(outwardGross / (1 + rate));
-    const outputTax = outwardGross - outwardTaxable;
-    // Inward: expense outflows eligible for ITC (exclude payroll/tax/loan/transfer).
-    const inwardGross = txns.filter(t => t.category === "expense").reduce((s, t) => s + Math.abs(t.amount), 0);
-    const inwardTaxable = Math.round(inwardGross / (1 + rate));
-    const itc = inwardGross - inwardTaxable;
-    const half = (n: number) => Math.floor(n / 2);
-    const sgstOf = (n: number) => n - half(n);
-    const net = Math.max(0, outputTax - itc);
-    const itcCarry = Math.max(0, itc - outputTax);
-    return { outwardGross, outwardTaxable, outputTax, inwardGross, inwardTaxable, itc, half, sgstOf, net, itcCarry };
-  }, [store.transactions, period, rate]);
+  useEffect(() => {
+    const [y, m] = period.split("-").map(Number);
+    setLoading(true); setLoadError(null);
+    api.get<GstLiability>(`/api/gst/liability?month=${m}&year=${y}`)
+      .then(setData)
+      .catch(e => { setData(null); setLoadError(e instanceof Error ? e.message : "Couldn't load"); })
+      .finally(() => setLoading(false));
+  }, [period]);
+
+  const itcCarry = data ? Math.max(0, data.input_tax_credit - data.output_tax) : 0;
 
   const downloadCsv = () => {
+    if (!data) return;
+    const b = data.breakdown;
     const rows = [
-      ["GSTR-3B Draft", period],
+      ["GSTR-3B (ledger-truth)", period],
       [],
       ["Table", "Particulars", "Taxable Value", "CGST", "SGST", "IGST", "Total Tax"],
-      ["3.1(a)", "Outward taxable supplies", data.outwardTaxable, data.half(data.outputTax), data.sgstOf(data.outputTax), 0, data.outputTax],
-      ["4(A)(5)", "ITC - all other ITC", data.inwardTaxable, data.half(data.itc), data.sgstOf(data.itc), 0, data.itc],
-      ["5.1", "Net tax payable (in cash)", "", data.half(data.net), data.sgstOf(data.net), 0, data.net],
-      ["", "ITC carried forward", "", "", "", "", data.itcCarry],
+      ["3.1(a)", "Outward taxable supplies", b.taxable_turnover, b.output_cgst, b.output_sgst, b.output_igst, data.output_tax],
+      ["4(A)(5)", "ITC - all other ITC", "", b.itc_cgst, b.itc_sgst, b.itc_igst, data.input_tax_credit],
+      ["5.1", "Net tax payable (in cash)", "", "", "", "", data.net_liability],
+      ["", "ITC carried forward", "", "", "", "", itcCarry],
     ];
     const csv = rows.map(r => r.join(",")).join("\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -1938,43 +1956,55 @@ function Gstr3bAutoPrep() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 className="text-sm font-semibold">GSTR-3B Auto-Prep</h2>
-            <p className="text-xs text-[var(--color-muted)] mt-0.5">Auto-builds Table 3.1 (outward), Table 4 (ITC) and Table 5.1 (net cash) from your booked sales &amp; purchase transactions at {firm.gstRate ?? 18}%.</p>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">Table 3.1 (outward), Table 4 (ITC) and Table 5.1 (net cash) from your REAL posted GL tax entries - the same ledger-truth figures as the Calculator and GST Filing (Live) tabs on this page.</p>
           </div>
           <div className="flex items-center gap-2">
             <input type="month" value={period} onChange={e => setPeriod(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" />
-            <button onClick={downloadCsv} className="flex items-center gap-1.5 text-xs text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-2 rounded-lg hover:bg-[var(--color-primary)]/10"><Download size={11} /> CSV</button>
+            <button onClick={downloadCsv} disabled={!data} className="flex items-center gap-1.5 text-xs text-[var(--color-primary)] border border-[var(--color-primary)]/30 px-3 py-2 rounded-lg hover:bg-[var(--color-primary)]/10 disabled:opacity-40"><Download size={11} /> CSV</button>
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { label: "Output tax (3.1a)", value: fc(data.outputTax), color: "text-red-400" },
-            { label: "ITC (Table 4)", value: fc(data.itc), color: "text-green-400" },
-            { label: "Net payable in cash (5.1)", value: fc(data.net), color: "text-[var(--color-primary)]" },
-            { label: "ITC carry-forward", value: fc(data.itcCarry), color: "text-blue-400" },
-          ].map(k => (
-            <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
-              <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
-              <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
-            </div>
-          ))}
-        </div>
+        {loadError && (
+          <div className="text-xs bg-red-950/30 border border-red-800/40 text-red-400 rounded-lg px-3 py-2 flex items-center justify-between gap-3">
+            <span>Couldn't load ledger figures for {period} ({loadError}).</span>
+            <button onClick={() => setPeriod(p => p)} className="shrink-0 border border-red-700/40 rounded-lg px-2 py-1 hover:bg-red-900/20">Retry</button>
+          </div>
+        )}
+        {loading && !data ? (
+          <p className="text-xs text-[var(--color-muted)]">Loading…</p>
+        ) : data && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Output tax (3.1a)", value: fc(data.output_tax), color: "text-red-400" },
+              { label: "ITC (Table 4)", value: fc(data.input_tax_credit), color: "text-green-400" },
+              { label: "Net payable in cash (5.1)", value: fc(data.net_liability), color: "text-[var(--color-primary)]" },
+              { label: "ITC carry-forward", value: fc(itcCarry), color: "text-blue-400" },
+            ].map(k => (
+              <div key={k.label} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
+                <p className="text-[10px] text-[var(--color-muted)] mb-1">{k.label}</p>
+                <p className={`text-lg font-bold tabular-nums ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-[var(--color-bg)] border-b border-[var(--color-border)]">
-            <tr>{["Table", "Particulars", "Taxable Value", "CGST", "SGST", "Total Tax"].map((h, i) => (
-              <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i < 2 ? "text-left" : "text-right"}`}>{h}</th>
-            ))}</tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--color-border)] text-xs">
-            <tr><td className="px-4 py-2.5 font-mono">3.1(a)</td><td className="px-4 py-2.5">Outward taxable supplies</td><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.outwardTaxable)}</td><td className="px-4 py-2.5 text-right tabular-nums text-red-400">{fc(data.half(data.outputTax))}</td><td className="px-4 py-2.5 text-right tabular-nums text-red-400">{fc(data.sgstOf(data.outputTax))}</td><td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fc(data.outputTax)}</td></tr>
-            <tr><td className="px-4 py-2.5 font-mono">4(A)(5)</td><td className="px-4 py-2.5">All other ITC</td><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.inwardTaxable)}</td><td className="px-4 py-2.5 text-right tabular-nums text-green-400">{fc(data.half(data.itc))}</td><td className="px-4 py-2.5 text-right tabular-nums text-green-400">{fc(data.sgstOf(data.itc))}</td><td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fc(data.itc)}</td></tr>
-            <tr className="bg-[var(--color-accent)]/40"><td className="px-4 py-2.5 font-mono">5.1</td><td className="px-4 py-2.5 font-semibold">Tax payable in cash</td><td className="px-4 py-2.5" /><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.half(data.net))}</td><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.sgstOf(data.net))}</td><td className="px-4 py-2.5 text-right tabular-nums font-bold text-[var(--color-primary)]">{fc(data.net)}</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p className="text-[10px] text-[var(--color-muted)]">v1 estimate: treats revenue receipts as GST-inclusive and expenses as ITC-eligible at the firm rate. Exclude blocked credits (Sec 17(5)) and reconcile against GSTR-2B before filing. Inter-state (IGST) split needs place-of-supply data.</p>
+      {data && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-[var(--color-bg)] border-b border-[var(--color-border)]">
+              <tr>{["Table", "Particulars", "Taxable Value", "CGST", "SGST", "IGST", "Total Tax"].map((h, i) => (
+                <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide ${i < 2 ? "text-left" : "text-right"}`}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-border)] text-xs">
+              <tr><td className="px-4 py-2.5 font-mono">3.1(a)</td><td className="px-4 py-2.5">Outward taxable supplies</td><td className="px-4 py-2.5 text-right tabular-nums">{fc(data.breakdown.taxable_turnover)}</td><td className="px-4 py-2.5 text-right tabular-nums text-red-400">{fc(data.breakdown.output_cgst)}</td><td className="px-4 py-2.5 text-right tabular-nums text-red-400">{fc(data.breakdown.output_sgst)}</td><td className="px-4 py-2.5 text-right tabular-nums text-red-400">{fc(data.breakdown.output_igst)}</td><td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fc(data.output_tax)}</td></tr>
+              <tr><td className="px-4 py-2.5 font-mono">4(A)(5)</td><td className="px-4 py-2.5">All other ITC</td><td className="px-4 py-2.5 text-right tabular-nums">–</td><td className="px-4 py-2.5 text-right tabular-nums text-green-400">{fc(data.breakdown.itc_cgst)}</td><td className="px-4 py-2.5 text-right tabular-nums text-green-400">{fc(data.breakdown.itc_sgst)}</td><td className="px-4 py-2.5 text-right tabular-nums text-green-400">{fc(data.breakdown.itc_igst)}</td><td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fc(data.input_tax_credit)}</td></tr>
+              <tr className="bg-[var(--color-accent)]/40"><td className="px-4 py-2.5 font-mono">5.1</td><td className="px-4 py-2.5 font-semibold">Tax payable in cash</td><td colSpan={4} className="px-4 py-2.5" /><td className="px-4 py-2.5 text-right tabular-nums font-bold text-[var(--color-primary)]">{fc(data.net_liability)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--color-muted)]">Ledger-truth: computed from book_tax_entries posted to your real GL for {period}, not an estimate. If a figure looks off, check that all sales/purchase vouchers for the period are posted (not draft/cancelled).</p>
     </div>
   );
 }
@@ -3104,27 +3134,35 @@ function RegistrationThresholdAdvisor() {
 
 // ── GSTR-1 vs GSTR-3B RECONCILIATION ──
 function Gstr1Vs3bReconciler() {
-  const { store } = useApp();
-  const firm = store.firm;
-  const rate = firm.gstRate ?? 18;
+  // Was: ALL-TIME invoice totals at a flat firm rate compared against ONE filed
+  // period's 3B - guaranteed to "mismatch" for any tenant with more than one
+  // period of history. Now period-scoped, sourced from the same real ledger
+  // GET /api/gst/liability uses elsewhere on this page (taxable_turnover comes
+  // from the real GSTR-1 engine, output_tax from posted book_tax_entries).
+  const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
+  const [g1, setG1] = useState<{ taxable: number; tax: number } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [g3bTaxable, setG3bTaxable] = useState("");
   const [g3bTax, setG3bTax]         = useState("");
 
-  // GSTR-1 figures derived from invoice register (taxable + tax at firm rate).
-  const g1 = useMemo(() => {
-    const taxable = store.invoices.reduce((s, inv) => s + (inv.amount || 0), 0);
-    const tax = Math.round(taxable * rate) / 100;
-    return { taxable, tax };
-  }, [store.invoices, rate]);
+  useEffect(() => {
+    const [y, m] = period.split("-").map(Number);
+    setLoadError(null);
+    api.get<{ output_tax: number; breakdown: { taxable_turnover: number } }>(`/api/gst/liability?month=${m}&year=${y}`)
+      .then(d => setG1({ taxable: d.breakdown.taxable_turnover, tax: d.output_tax }))
+      .catch(e => { setG1(null); setLoadError(e instanceof Error ? e.message : "Couldn't load"); });
+  }, [period]);
 
   const rec = useMemo(() => {
     const t3b = parseFloat(g3bTaxable) || 0;
     const tax3b = parseFloat(g3bTax) || 0;
+    const taxable = g1?.taxable ?? 0;
+    const tax = g1?.tax ?? 0;
     return {
-      taxableDelta: g1.taxable - t3b,
-      taxDelta: g1.tax - tax3b,
-      taxableMatch: Math.abs(g1.taxable - t3b) < 1,
-      taxMatch: Math.abs(g1.tax - tax3b) < 1,
+      taxableDelta: taxable - t3b,
+      taxDelta: tax - tax3b,
+      taxableMatch: Math.abs(taxable - t3b) < 1,
+      taxMatch: Math.abs(tax - tax3b) < 1,
     };
   }, [g1, g3bTaxable, g3bTax]);
 
@@ -3133,16 +3171,20 @@ function Gstr1Vs3bReconciler() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className={GST_CARD}>
-        <div className="flex items-center gap-2 mb-1"><Scale size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">GSTR-1 vs GSTR-3B Reconciliation</h2></div>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Liability declared in GSTR-3B (Table 3.1) must match outward supplies reported in GSTR-1. Mismatches are the top trigger for ASMT-10 scrutiny. GSTR-1 is computed from your invoice register; enter your filed 3B figures.</p>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+          <div className="flex items-center gap-2"><Scale size={16} className="text-[var(--color-primary)]" /><h2 className="text-sm font-semibold">GSTR-1 vs GSTR-3B Reconciliation</h2></div>
+          <input type="month" value={period} onChange={e => setPeriod(e.target.value)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-xs outline-none" />
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Liability declared in GSTR-3B (Table 3.1) for {period} must match outward supplies reported in GSTR-1 for the SAME period. Mismatches are the top trigger for ASMT-10 scrutiny. GSTR-1 is computed from your real ledger for this period; enter what you actually filed in 3B to compare.</p>
+        {loadError && <p className="text-xs text-red-400 mb-3">Couldn't load ledger figures for {period} ({loadError}).</p>}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">GSTR-3B taxable value (₹)</label>
-            <input type="number" min={0} value={g3bTaxable} onChange={e => setG3bTaxable(e.target.value)} placeholder={String(Math.round(g1.taxable))} className={GST_INPUT} />
+            <input type="number" min={0} value={g3bTaxable} onChange={e => setG3bTaxable(e.target.value)} placeholder={String(Math.round(g1?.taxable ?? 0))} className={GST_INPUT} />
           </div>
           <div>
             <label className="block text-xs text-[var(--color-muted)] mb-1">GSTR-3B output tax (₹)</label>
-            <input type="number" min={0} value={g3bTax} onChange={e => setG3bTax(e.target.value)} placeholder={String(Math.round(g1.tax))} className={GST_INPUT} />
+            <input type="number" min={0} value={g3bTax} onChange={e => setG3bTax(e.target.value)} placeholder={String(Math.round(g1?.tax ?? 0))} className={GST_INPUT} />
           </div>
         </div>
       </div>
@@ -3152,8 +3194,8 @@ function Gstr1Vs3bReconciler() {
           <thead className="bg-[var(--color-bg)] text-[var(--color-muted)]"><tr>{["Particulars", "GSTR-1 (books)", "GSTR-3B (filed)", "Difference"].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-[var(--color-border)]">
             {[
-              { label: "Taxable outward supplies", a: g1.taxable, b: parseFloat(g3bTaxable) || 0, delta: rec.taxableDelta, match: rec.taxableMatch },
-              { label: `Output tax @ ${rate}%`, a: g1.tax, b: parseFloat(g3bTax) || 0, delta: rec.taxDelta, match: rec.taxMatch },
+              { label: "Taxable outward supplies", a: g1?.taxable ?? 0, b: parseFloat(g3bTaxable) || 0, delta: rec.taxableDelta, match: rec.taxableMatch },
+              { label: "Output tax", a: g1?.tax ?? 0, b: parseFloat(g3bTax) || 0, delta: rec.taxDelta, match: rec.taxMatch },
             ].map(r => (
               <tr key={r.label}>
                 <td className="px-4 py-3 font-medium">{r.label}</td>

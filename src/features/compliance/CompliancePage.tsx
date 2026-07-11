@@ -2357,13 +2357,26 @@ function SecretarialStandardsChecklist() {
 // ── #147 GST TURNOVER vs BOOKS RECONCILIATION (GSTR-9C prep) ─────────────────────
 function GstTurnoverRecon() {
   const { store } = useApp();
-  // Books turnover = positive (income) transactions for the firm.
-  const booksTurnover = useMemo(() => store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0), [store.transactions]);
+  // FY-scoped, not all-time: an audit found booksTurnover summing EVERY positive
+  // transaction ever recorded against ONE FY's filed GST turnover - any tenant
+  // with more than a year of history got a scary "material difference - GSTR-9C"
+  // verdict no matter how clean their books actually were.
+  const now = new Date();
+  const defaultFyStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const [fyStart, setFyStart] = useState(defaultFyStart);
+  const fyFrom = `${fyStart}-04-01`;
+  const fyTo = `${fyStart + 1}-03-31`;
+  const booksTurnover = useMemo(
+    () => store.transactions.filter(t => t.amount > 0 && t.date >= fyFrom && t.date <= fyTo).reduce((s, t) => s + t.amount, 0),
+    [store.transactions, fyFrom, fyTo]
+  );
 
-  const [gstrTurnover, setGstrTurnover] = useFeatureState<string>("comp-gst-recon-gstr", "");
-  const [unbilled, setUnbilled] = useFeatureState<string>("comp-gst-recon-unbilled", "");
-  const [exempt, setExempt] = useFeatureState<string>("comp-gst-recon-exempt", "");
-  const [nonGst, setNonGst] = useFeatureState<string>("comp-gst-recon-nongst", "");
+  // Keyed by FY so switching the year picker doesn't show a stale figure typed
+  // in for a different year.
+  const [gstrTurnover, setGstrTurnover] = useFeatureState<string>(`comp-gst-recon-gstr-${fyStart}`, "");
+  const [unbilled, setUnbilled] = useFeatureState<string>(`comp-gst-recon-unbilled-${fyStart}`, "");
+  const [exempt, setExempt] = useFeatureState<string>(`comp-gst-recon-exempt-${fyStart}`, "");
+  const [nonGst, setNonGst] = useFeatureState<string>(`comp-gst-recon-nongst-${fyStart}`, "");
 
   const n = (v: string) => parseFloat(v) || 0;
   const gstr = n(gstrTurnover);
@@ -2383,7 +2396,7 @@ function GstTurnoverRecon() {
   };
 
   const rows = [
-    { label: "Turnover as per books (income)", value: booksTurnover, sub: "From your transactions" },
+    { label: "Turnover as per books (income)", value: booksTurnover, sub: `FY ${fyStart}-${String(fyStart + 1).slice(2)} transactions only` },
     { label: "Less: exempt / nil-rated supplies", value: -n(exempt), sub: "Not reported as taxable" },
     { label: "Less: non-GST income (e.g. interest)", value: -n(nonGst), sub: "Outside GST scope" },
     { label: "Add: unbilled revenue in books", value: n(unbilled), sub: "Recognised but not yet invoiced" },
@@ -2394,8 +2407,15 @@ function GstTurnoverRecon() {
   return (
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-5">
-        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><Scale size={14} className="text-[var(--color-primary)]" /> GST vs Books Turnover Reconciliation</h3>
-        <p className="text-xs text-[var(--color-muted)] mb-4">Reconciles turnover declared in GST returns against your books - the core of GSTR-9C (mandatory above ₹5 cr) and a common GST-audit query. Books turnover is pulled from your transactions; enter GST and adjustment figures below.</p>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Scale size={14} className="text-[var(--color-primary)]" /> GST vs Books Turnover Reconciliation</h3>
+          <select value={fyStart} onChange={e => setFyStart(Number(e.target.value))} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-xs outline-none">
+            {Array.from({ length: 6 }, (_, i) => defaultFyStart - i).map(y => (
+              <option key={y} value={y}>FY {y}-{String(y + 1).slice(2)}</option>
+            ))}
+          </select>
+        </div>
+        <p className="text-xs text-[var(--color-muted)] mb-4">Reconciles turnover declared in GST returns against your books for ONE financial year - the core of GSTR-9C (mandatory above ₹5 cr) and a common GST-audit query. Books turnover is pulled from your transactions dated within the selected FY; enter that year's GST and adjustment figures below.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Turnover as per GSTR-1 / 3B (₹)</label>
