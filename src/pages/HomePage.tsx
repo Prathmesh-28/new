@@ -356,7 +356,8 @@ export default function HomePage() {
     ...(stats.avgDaysToFirstInsight != null ? [{ n: `${stats.avgDaysToFirstInsight} days`, d: "Avg time to first insight" }] : []),
   ];
   const [scrolled, setScrolled] = useState(false);
-  const [inr] = useState(() => !detectUS()); // India-first: ₹ by default, $ only for US visitors
+  const [ctaEmail, setCtaEmail] = useState(""); // bottom-CTA email, carried into /signup
+  const [inr] = useState(() => !detectUS()); // India-first: ₹ by default, $ only for US visitors (cosmetic illustrations only - pricing is always the real INR)
 
   // Pricing CTA: a logged-in visitor goes straight to Stripe Checkout for a paid
   // plan; everyone else lands on signup. Free always → signup.
@@ -459,11 +460,15 @@ export default function HomePage() {
       `}</style>
 
       {/* ═══ NAV ══════════════════════════════════════════════════════════════ */}
-      <nav style={{ background: scrolled ? `${C.deepest}f0` : C.deepest, backdropFilter: scrolled ? "blur(16px)" : "none", padding: "0 48px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, transition: "all 0.3s", borderBottom: scrolled ? `1px solid rgba(169,217,188,0.1)` : "none" }}>
+      {/* padding written as "0px 48px" so the mobile override selector [style*="px 48px"]
+          matches and trims the gutters on phones. */}
+      <nav style={{ background: scrolled ? `${C.deepest}f0` : C.deepest, backdropFilter: scrolled ? "blur(16px)" : "none", padding: "0px 48px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, transition: "all 0.3s", borderBottom: scrolled ? `1px solid rgba(169,217,188,0.1)` : "none" }}>
         <div onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{ color: C.creamW, cursor: "pointer", display: "flex", alignItems: "center" }} aria-label="Headroom home">
           <Logo variant="horizontal" size={22} />
         </div>
-        <ul style={{ display: "flex", gap: 28, listStyle: "none", margin: 0, padding: 0 }} className="hidden lg:flex">
+        {/* No inline `display` here - it would beat the responsive Tailwind classes and
+            keep all 5 links crowding the CTA off-screen on phones. */}
+        <ul style={{ gap: 28, listStyle: "none", margin: 0, padding: 0 }} className="hidden lg:flex">
           {[["Features","#features"],["Credit","#credit"],["Capital","#capital"],["Advisors","#advisors"],["Pricing","#pricing"]].map(([l,h]) => (
             <li key={l}><a href={h} style={{ fontFamily: sans, fontSize: 13, color: "rgba(169,217,188,0.7)", textDecoration: "none" }}
               onMouseOver={e => (e.currentTarget.style.color = C.pale)} onMouseOut={e => (e.currentTarget.style.color = "rgba(169,217,188,0.7)")}>{l}</a></li>
@@ -900,7 +905,9 @@ export default function HomePage() {
               <span style={{ fontFamily: sans, fontSize: 12, color: C.gold }}>✦ Free for {trialDays} days · no card{billing ? ` · 🔥 founding price locked for the first ${billing.foundingMemberCap} SMBs` : ""}</span>
             </div>
             <div style={{ fontFamily: sans, fontSize: 11, color: C.txtMut, marginBottom: 52 }}>
-              Showing prices in {inr ? "₹ INR (India)" : "$ USD"} · detected from your location
+              {/* Pricing is ALWAYS the real INR the product actually charges (Razorpay) -
+                  hand-typed $ figures used to drift from what checkout billed. */}
+              Prices in ₹ INR · billed via Razorpay
             </div>
           </div>
         </Reveal>
@@ -909,8 +916,8 @@ export default function HomePage() {
           {[
             {
               id:"free" as const,
-              name:"Free", price:inr ? "₹0" : "$0", period:"forever", featured: false,
-              note:inr ? "Free for SMBs under ₹25L turnover · no card ever" : "For early-stage businesses · no card ever",
+              name:"Free", price:"₹0", period:"forever", featured: false,
+              note:"For early-stage businesses · no card ever",
               desc:"See your cash truth - free for life.",
               features:["30-day cash forecast","Confidence bands","Plain-language alerts","WhatsApp morning brief","1 connected account"],
               disabled:["90-day forecast","Scenario planner","Credit rescue","Advisor access"],
@@ -920,13 +927,13 @@ export default function HomePage() {
               id:"growth" as const,
               name:"Growth",
               // Real price, read from the same constants Razorpay checkout charges
-              // (backend routes/billing.js PLAN_PRICING) - never a second hardcoded number.
-              price: inr ? (billing ? `₹${billing.plans.growth.annualMonthlyEquivalentInr.toLocaleString("en-IN")}` : "…") : "$39",
+              // (backend routes/billing.js PLAN_PRICING) - never a second hardcoded
+              // number. Always INR: the hand-typed $ variants used to promise prices
+              // the product cannot actually charge.
+              price: billing ? `₹${billing.plans.growth.annualMonthlyEquivalentInr.toLocaleString("en-IN")}` : "…",
               period:"/mo", featured: true,
-              note: inr
-                ? (billing ? `billed yearly · ₹${billing.plans.growth.monthlyInr.toLocaleString("en-IN")} monthly · 🔥 founding price locked for life` : "billed yearly")
-                : "billed yearly · $59 monthly · 🔥 founding price locked for life",
-              desc:inr ? "For growing SMBs that need full visibility and credit. Cheaper than a half-day of an accountant." : "For growing businesses that need full visibility and credit access.",
+              note: billing ? `billed yearly · ₹${billing.plans.growth.monthlyInr.toLocaleString("en-IN")} monthly · 🔥 founding price locked for life` : "billed yearly",
+              desc:"For growing SMBs that need full visibility and credit. Cheaper than a half-day of an accountant.",
               features:["Everything in Free","90-day P10/P50/P90 forecast","Unlimited bank accounts","Scenario planner","AI cash insights","WhatsApp commands + alerts","Embedded credit rescue","Silent underwriting"],
               disabled:[],
               cta:"Get my forecast",
@@ -934,11 +941,9 @@ export default function HomePage() {
             {
               id:"pro" as const,
               name:"Pro",
-              price: inr ? (billing ? `₹${billing.plans.pro.annualMonthlyEquivalentInr.toLocaleString("en-IN")}` : "…") : "$99",
+              price: billing ? `₹${billing.plans.pro.annualMonthlyEquivalentInr.toLocaleString("en-IN")}` : "…",
               period:"/mo", featured: false,
-              note: inr
-                ? (billing ? `billed yearly · ₹${billing.plans.pro.monthlyInr.toLocaleString("en-IN")} monthly` : "billed yearly")
-                : "billed yearly · $129 monthly",
+              note: billing ? `billed yearly · ₹${billing.plans.pro.monthlyInr.toLocaleString("en-IN")} monthly` : "billed yearly",
               desc:"For businesses raising capital or managing investors.",
               features:["Everything in Growth","Investor dashboard","Multi-entity support","Capital raise tools","API access","Priority support","Advisor access"],
               disabled:[],
@@ -980,7 +985,8 @@ export default function HomePage() {
           <div style={{ maxWidth: 940, margin: "20px auto 0", background: C.deepest, border: "1px solid rgba(169,217,188,0.12)", borderRadius: 14, padding: "24px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 20, textAlign: "left" }}>
             <div>
               <div style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: C.bright, marginBottom: 6 }}>Capital raise add-on</div>
-              <div style={{ fontFamily: serif, fontSize: 22, color: C.creamW, marginBottom: 4 }}>{inr ? "₹4,999" : "$299"} <span style={{ fontFamily: sans, fontSize: 13, color: "rgba(169,217,188,0.4)" }}>/ mo while your raise is live</span></div>
+              {/* No invented price - this add-on isn't a chargeable SKU in billing yet. */}
+              <div style={{ fontFamily: serif, fontSize: 22, color: C.creamW, marginBottom: 4 }}>Custom pricing <span style={{ fontFamily: sans, fontSize: 13, color: "rgba(169,217,188,0.4)" }}>· while your raise is live</span></div>
               <p style={{ fontFamily: sans, fontSize: 13, color: "rgba(169,217,188,0.45)", maxWidth: 460 }}>Add a community capital raise (Track A, B, or C) to any Pro plan. Includes investor portal, compliance layer, and campaign page.</p>
             </div>
             <button onClick={() => navigate("/signup")} style={{ background: "transparent", border: `1px solid rgba(169,217,188,0.2)`, color: C.pale, fontFamily: sans, fontSize: 13, fontWeight: 600, padding: "12px 24px", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -990,20 +996,23 @@ export default function HomePage() {
         </Reveal>
       </section>
 
-      {/* ═══ FAQ ══════════════════════════════════════════════════════════════ */}
-      <Reveal>
-        <section data-h3d-deco="shapes-light" style={{ background: C.cream, padding: "72px 48px" }}>
-          <div style={{ maxWidth: 680, margin: "0 auto" }}>
-            <Label text="FAQ" />
-            <h2 style={{ fontFamily: serif, fontSize: 34, color: C.txt, letterSpacing: -1, marginBottom: 40 }}>Common questions</h2>
-            <div style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 14, padding: "0 24px" }}>
-              {/* Real editorial content, super-admin editable anytime (platform_settings
-                  "faqs" group) - never a hardcoded array that can drift out of date. */}
-              {platform.faqs.items.map(f => <FaqItem key={f.q} q={f.q} a={f.a} />)}
+      {/* ═══ FAQ ══════════════════════════════════════════════════════════════
+          Real editorial content, super-admin editable anytime (platform_settings
+          "faqs" group). The whole section is skipped until items load - a heading
+          over an empty bordered box (cold backend / failed fetch) looks broken. */}
+      {platform.faqs.items.length > 0 && (
+        <Reveal>
+          <section data-h3d-deco="shapes-light" style={{ background: C.cream, padding: "72px 48px" }}>
+            <div style={{ maxWidth: 680, margin: "0 auto" }}>
+              <Label text="FAQ" />
+              <h2 style={{ fontFamily: serif, fontSize: 34, color: C.txt, letterSpacing: -1, marginBottom: 40 }}>Common questions</h2>
+              <div style={{ background: "#fff", border: "1px solid rgba(74,94,26,0.12)", borderRadius: 14, padding: "0 24px" }}>
+                {platform.faqs.items.map(f => <FaqItem key={f.q} q={f.q} a={f.a} />)}
+              </div>
             </div>
-          </div>
-        </section>
-      </Reveal>
+          </section>
+        </Reveal>
+      )}
 
       {/* ═══ CTA ══════════════════════════════════════════════════════════════ */}
       <section data-h3d-deco="wire" style={{ background: C.deepest, padding: "96px 48px", textAlign: "center", position: "relative", overflow: "hidden" }}>
@@ -1012,8 +1021,12 @@ export default function HomePage() {
           <h2 style={{ fontFamily: serif, fontSize: 44, color: C.creamW, letterSpacing: -1.5, marginBottom: 16 }}>Get your first Headroom forecast.</h2>
           <p style={{ fontFamily: sans, fontSize: 16, color: "rgba(169,217,188,0.55)", marginBottom: 40 }}>Free for {trialDays} days. No credit card. Connect your bank in under 3 minutes.</p>
           <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
-            <input type="email" placeholder="your@email.com" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(169,217,188,0.2)", borderRadius: 8, padding: "13px 18px", fontFamily: sans, fontSize: 14, color: C.creamW, width: 280, outline: "none" }} />
-            <button onClick={() => navigate("/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "13px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>Start free trial →</button>
+            {/* Controlled + carried into signup - this input used to be dead decoration
+                that silently discarded whatever the visitor typed. */}
+            <input type="email" placeholder="your@email.com" value={ctaEmail} onChange={e => setCtaEmail(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") navigate(ctaEmail ? `/signup?email=${encodeURIComponent(ctaEmail)}` : "/signup"); }}
+              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(169,217,188,0.2)", borderRadius: 8, padding: "13px 18px", fontFamily: sans, fontSize: 14, color: C.creamW, width: 280, outline: "none" }} />
+            <button onClick={() => navigate(ctaEmail ? `/signup?email=${encodeURIComponent(ctaEmail)}` : "/signup")} style={{ background: C.gold, color: C.deepest, fontFamily: sans, fontSize: 14, fontWeight: 700, padding: "13px 28px", borderRadius: 8, border: "none", cursor: "pointer" }}>Start free trial →</button>
           </div>
           <p style={{ fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.25)", marginTop: 20 }}>
             {stats.smbCount ? <>Trusted by {stats.smbCount.toLocaleString("en-IN")}+ SMBs &nbsp;·&nbsp; </> : null}Free for {trialDays} days &nbsp;·&nbsp; No credit card required
@@ -1033,15 +1046,21 @@ export default function HomePage() {
               <SocialLinks size={18} color="rgba(169,217,188,0.5)" hoverColor={C.pale} />
             </div>
           </div>
-          {[
-            { h:"Platform",    links:["Features","Forecasting","Credit rescue","Community capital","Scenario planner"] },
-            { h:"For advisors",links:["Chartered Accountants","Fractional CFOs","Business Bankers","Startup Advisors","Branded reports"] },
-            { h:"Company",     links:["Pricing","About","Blog","Careers","Contact"] },
-          ].map(({ h, links }) => (
+          {/* Every footer link goes to a REAL destination (an on-page section, signup
+              flavor, or contact email) - the old version silently dumped all 15 links,
+              "Blog"/"Careers"/"Contact" included, into /signup. Links with no real
+              destination were removed, not faked. */}
+          {([
+            { h:"Platform",    links:[["Features","#features"],["Forecasting","#walkthrough"],["Credit rescue","#credit"],["Community capital","#capital"],["Pricing","#pricing"]] },
+            { h:"For advisors",links:[["Advisor overview","#advisors"],["Advisor signup","/signup-advisor"]] },
+            { h:"Company",     links:[["Pricing","#pricing"],["Sign in","/login"],["Contact", `mailto:${platform.brand?.supportEmail || "support@headroom.app"}`]] },
+          ] as { h: string; links: [string, string][] }[]).map(({ h, links }) => (
             <div key={h}>
               <h5 style={{ fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "rgba(169,217,188,0.4)", marginBottom: 16 }}>{h}</h5>
-              {links.map(l => (
-                <a key={l} href="#" onClick={e => { e.preventDefault(); navigate("/signup"); }} style={{ display: "block", fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.5)", textDecoration: "none", marginBottom: 10 }}
+              {links.map(([l, dest]) => (
+                <a key={l} href={dest.startsWith("/") ? undefined : dest}
+                  onClick={dest.startsWith("/") ? (e => { e.preventDefault(); navigate(dest); }) : undefined}
+                  style={{ display: "block", fontFamily: sans, fontSize: 12, color: "rgba(169,217,188,0.5)", textDecoration: "none", marginBottom: 10, cursor: "pointer" }}
                   onMouseOver={e => (e.currentTarget.style.color = C.pale)} onMouseOut={e => (e.currentTarget.style.color = "rgba(169,217,188,0.5)")}>{l}</a>
               ))}
             </div>
@@ -1051,9 +1070,13 @@ export default function HomePage() {
           <span style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.25)" }}>© {new Date().getFullYear()} Headroom Technologies Pvt. Ltd.</span>
           <div style={{ display: "flex", gap: 24 }}>
             {/* Privacy always has a real, hosted destination now (D1) — the admin-configurable
-                privacyUrl can still override it with an external policy if one is set. */}
-            {([["Privacy", platform.links?.privacyUrl || "/privacy-policy"], ["Terms", platform.links?.termsUrl], ["Security", platform.links?.securityUrl]] as [string, string | undefined][]).map(([l, url]) => (
-              <a key={l} href={url || "#"} {...(url && url.startsWith("http") ? { target: "_blank", rel: "noopener noreferrer" } : {})} style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.25)", textDecoration: "none" }}>{l}</a>
+                privacyUrl can still override it with an external policy if one is set.
+                Terms/Security render ONLY when configured - an unconfigured "#" link that
+                scrolls to the top is a trust-page promise that goes nowhere. */}
+            {([["Privacy", platform.links?.privacyUrl || "/privacy-policy"], ["Terms", platform.links?.termsUrl], ["Security", platform.links?.securityUrl]] as [string, string | undefined][])
+              .filter(([, url]) => !!url)
+              .map(([l, url]) => (
+              <a key={l} href={url} {...(url && url.startsWith("http") ? { target: "_blank", rel: "noopener noreferrer" } : {})} style={{ fontFamily: sans, fontSize: 11, color: "rgba(169,217,188,0.25)", textDecoration: "none" }}>{l}</a>
             ))}
           </div>
         </div>

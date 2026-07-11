@@ -13,7 +13,7 @@ import { useI18n } from "@/i18n";
 
 export default function LoginPage() {
   useSeo({ title: "Log in - Headroom", description: "Log in to Headroom - your all-in-one GST billing, accounting and cash-flow workspace for Indian SMBs." });
-  const { login } = useAuth();
+  const { login, serverReady } = useAuth();
   const { t } = useI18n();
   const navigate    = useNavigate();
   const [params]    = useSearchParams();
@@ -124,6 +124,15 @@ export default function LoginPage() {
             <h1 className="text-2xl font-bold mb-1">{t("auth.login.title")}</h1>
             <p className="text-sm text-[var(--color-muted)]">{t("auth.login.subtitle")}</p>
           </div>
+
+          {/* Cold-start honesty (same badge as signup): the backend can take up to a
+              minute to wake on Render - without this, "Signing in…" spins with zero
+              explanation and users assume it's broken. */}
+          {!serverReady && (
+            <div className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border mb-6 bg-yellow-950/30 border-yellow-800/30 text-yellow-500">
+              <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse shrink-0" /> Server waking up… sign-in may take up to a minute
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div>

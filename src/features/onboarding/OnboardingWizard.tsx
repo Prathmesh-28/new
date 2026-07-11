@@ -22,10 +22,24 @@ const GOALS = [
 ];
 const SOURCES = ["Google search", "Referral / word of mouth", "Social media", "My CA / accountant", "Ad", "Other"];
 
+// Module-scope on purpose: defined inside the component these get a NEW function
+// identity every render, so React unmounts/remounts their subtree per keystroke -
+// the City/State/GSTIN inputs dropped focus after every character typed.
+type FormState = Record<string, string | boolean>;
+const Pill = ({ k, val, f, set, children }: { k: string; val: string; f: FormState; set: (k: string, v: string | boolean) => void; children: React.ReactNode }) => (
+  <button type="button" onClick={() => set(k, val)}
+    className={`px-3 py-2 rounded-lg border text-sm text-left transition-colors ${f[k] === val ? "border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-text)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-primary)]/40"}`}>
+    {children}
+  </button>
+);
+const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <div><p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-2">{title}</p>{children}</div>
+);
+
 export default function OnboardingWizard() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
-  const [f, setF] = useState<Record<string, string | boolean>>({ gst_registered: false });
+  const [f, setF] = useState<FormState>({ gst_registered: false });
   const set = (k: string, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
 
   const finish = async (skip = false) => {
@@ -36,19 +50,19 @@ export default function OnboardingWizard() {
     } catch { /* don't block entry on a profile-save hiccup */ }
     finally {
       setBusy(false);
-      navigate("/dashboard", { replace: true });
+      // A visitor who clicked a paid plan on the pricing page lands on Plan & Billing
+      // to finish what they started (SignupPage stashed the intent); everyone else
+      // goes to the dashboard.
+      const plan = sessionStorage.getItem("hr_signup_plan");
+      if (plan) {
+        sessionStorage.removeItem("hr_signup_plan");
+        toast.info(`Almost there - activate your ${plan === "pro" ? "Pro" : "Growth"} plan below (your free trial is already running).`);
+        navigate("/settings", { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
+      }
     }
   };
-
-  const Pill = ({ k, val, children }: { k: string; val: string; children: React.ReactNode }) => (
-    <button type="button" onClick={() => set(k, val)}
-      className={`px-3 py-2 rounded-lg border text-sm text-left transition-colors ${f[k] === val ? "border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-text)]" : "border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-primary)]/40"}`}>
-      {children}
-    </button>
-  );
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <div><p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-2">{title}</p>{children}</div>
-  );
 
   return (
     <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] flex justify-center px-4 py-10">
@@ -59,20 +73,20 @@ export default function OnboardingWizard() {
 
         <div className="space-y-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-6">
           <Section title="What's your goal first?">
-            <div className="grid gap-2">{GOALS.map((g) => <Pill key={g.id} k="primary_goal" val={g.id}>{g.label}</Pill>)}</div>
+            <div className="grid gap-2">{GOALS.map((g) => <Pill key={g.id} k="primary_goal" val={g.id} f={f} set={set}>{g.label}</Pill>)}</div>
           </Section>
           <Section title="Industry">
-            <div className="flex flex-wrap gap-2">{INDUSTRIES.map((x) => <Pill key={x} k="industry" val={x}>{x}</Pill>)}</div>
+            <div className="flex flex-wrap gap-2">{INDUSTRIES.map((x) => <Pill key={x} k="industry" val={x} f={f} set={set}>{x}</Pill>)}</div>
           </Section>
           <div className="grid sm:grid-cols-2 gap-5">
-            <Section title="Business type"><div className="flex flex-wrap gap-2">{BIZ_TYPES.map((x) => <Pill key={x} k="business_type" val={x}>{x}</Pill>)}</div></Section>
-            <Section title="Team size"><div className="flex flex-wrap gap-2">{TEAM.map((x) => <Pill key={x} k="team_size" val={x}>{x}</Pill>)}</div></Section>
+            <Section title="Business type"><div className="flex flex-wrap gap-2">{BIZ_TYPES.map((x) => <Pill key={x} k="business_type" val={x} f={f} set={set}>{x}</Pill>)}</div></Section>
+            <Section title="Team size"><div className="flex flex-wrap gap-2">{TEAM.map((x) => <Pill key={x} k="team_size" val={x} f={f} set={set}>{x}</Pill>)}</div></Section>
           </div>
-          <Section title="Annual turnover"><div className="flex flex-wrap gap-2">{TURNOVER.map((x) => <Pill key={x} k="turnover_band" val={x}>{x}</Pill>)}</div></Section>
+          <Section title="Annual turnover"><div className="flex flex-wrap gap-2">{TURNOVER.map((x) => <Pill key={x} k="turnover_band" val={x} f={f} set={set}>{x}</Pill>)}</div></Section>
           <Section title="GST registered?">
             <div className="flex gap-2">
-              <Pill k="gst_registered" val={true as unknown as string}>Yes</Pill>
-              <Pill k="gst_registered" val={false as unknown as string}>No / not yet</Pill>
+              <Pill k="gst_registered" val={true as unknown as string} f={f} set={set}>Yes</Pill>
+              <Pill k="gst_registered" val={false as unknown as string} f={f} set={set}>No / not yet</Pill>
             </div>
             {f.gst_registered === true && (
               <input value={(f.gstin as string) || ""} onChange={(e) => set("gstin", e.target.value)} placeholder="GSTIN (optional)"
@@ -83,7 +97,7 @@ export default function OnboardingWizard() {
             <Section title="City"><input value={(f.city as string) || ""} onChange={(e) => set("city", e.target.value)} placeholder="e.g. Pune" className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" /></Section>
             <Section title="State"><input value={(f.state as string) || ""} onChange={(e) => set("state", e.target.value)} placeholder="e.g. Maharashtra" className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none" /></Section>
           </div>
-          <Section title="How did you hear about us?"><div className="flex flex-wrap gap-2">{SOURCES.map((x) => <Pill key={x} k="acquisition_source" val={x}>{x}</Pill>)}</div></Section>
+          <Section title="How did you hear about us?"><div className="flex flex-wrap gap-2">{SOURCES.map((x) => <Pill key={x} k="acquisition_source" val={x} f={f} set={set}>{x}</Pill>)}</div></Section>
         </div>
 
         <div className="flex items-center justify-between mt-5">

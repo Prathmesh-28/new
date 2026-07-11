@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSeo } from "@/lib/seo";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth, BASE } from "@/context/AuthContext";
 import { ArrowLeft, Wifi, WifiOff, Lock, ShieldCheck, KeyRound } from "lucide-react";
 import type { AuthUser } from "@/data/types";
@@ -30,7 +30,11 @@ const ROLE_OPTIONS = [
 export default function SignupPage() {
   useSeo({ title: "Start free - Headroom | GST Billing & Accounting for SMBs", description: "Create your free Headroom account - GST billing, accounting, invoicing, collections, payroll and cash-flow forecasts for Indian SMBs. No credit card." });
   const { serverReady } = useAuth();
-  const [email,       setEmail]       = useState("");
+  // Carry-through from the homepage: the bottom-CTA email and the pricing card the
+  // visitor clicked (?plan=growth|pro). Both used to be silently dropped here - the
+  // typed email vanished and every paid-plan click produced the identical free signup.
+  const [params] = useSearchParams();
+  const [email,       setEmail]       = useState(() => params.get("email") || "");
   const [password,    setPassword]    = useState("");
   const [confirm,     setConfirm]     = useState("");
   const [company,     setCompany]     = useState("");
@@ -50,6 +54,13 @@ export default function SignupPage() {
       .then(d => { if (d?.trialDays) setTrialDays(d.trialDays); })
       .catch(() => { /* keep the 14-day default */ });
   }, []);
+
+  // Paid-plan intent from the pricing page survives signup + verification: stash it
+  // now, OnboardingWizard routes to Settings -> Plan & Billing when it's set.
+  useEffect(() => {
+    const plan = params.get("plan");
+    if (plan === "growth" || plan === "pro") sessionStorage.setItem("hr_signup_plan", plan);
+  }, [params]);
 
   const enterApp = (user: AuthUser, access: string, refresh: string) => {
     localStorage.setItem("hr_access", access);

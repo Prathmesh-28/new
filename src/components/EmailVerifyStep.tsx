@@ -13,6 +13,7 @@ export default function EmailVerifyStep({ email, onVerified }: { email: string; 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [resent, setResent] = useState(false);
+  const [resending, setResending] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,13 +32,20 @@ export default function EmailVerifyStep({ email, onVerified }: { email: string; 
     } finally { setBusy(false); }
   };
 
+  // Busy-guarded + network failures surfaced: an unguarded resend used to fail
+  // silently on a flaky connection, and rapid clicks could mint multiple codes.
   const resend = async () => {
-    setResent(false);
-    const res = await fetch(`${BASE}/auth/resend-signup-otp`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }),
-    });
-    if (res.ok) setResent(true);
-    else setError((await res.json().catch(() => ({}))).error ?? "Couldn't resend — try again shortly");
+    if (resending) return;
+    setResent(false); setResending(true);
+    try {
+      const res = await fetch(`${BASE}/auth/resend-signup-otp`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }),
+      });
+      if (res.ok) { setError(""); setResent(true); }
+      else setError((await res.json().catch(() => ({}))).error ?? "Couldn't resend — try again shortly");
+    } catch {
+      setError("Cannot connect to server — check your connection and try again.");
+    } finally { setResending(false); }
   };
 
   return (
@@ -60,8 +68,8 @@ export default function EmailVerifyStep({ email, onVerified }: { email: string; 
         className="w-full bg-[var(--color-primary)] text-[var(--color-bg)] font-bold rounded-lg py-3 text-sm hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-40">
         {busy ? "Verifying…" : "Verify & continue →"}
       </button>
-      <button type="button" onClick={resend} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:underline">
-        Didn't get it? Resend code
+      <button type="button" onClick={resend} disabled={resending} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:underline disabled:opacity-50">
+        {resending ? "Resending…" : "Didn't get it? Resend code"}
       </button>
     </form>
   );
