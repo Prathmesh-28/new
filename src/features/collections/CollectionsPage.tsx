@@ -21,6 +21,7 @@ import AiDraft from "@/components/ai/AiDraft";
 import { useT } from "@/i18n";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import DatePicker from "@/components/DatePicker";
+import RecordPaymentModal from "@/components/RecordPaymentModal";
 
 type Aging = "current" | "1-30" | "31-60" | "61-90" | "90+";
 
@@ -3684,91 +3685,86 @@ function AgeingBySalesperson() {
 }
 
 // ── #16 PARTIAL PAYMENT TRACKING ────────────────────────────────────────────
-// Log instalments received against an open invoice; outstanding auto-recalculates
-// and the invoice clears in-view once fully settled. Kept device-local so it
-// never overwrites the canonical invoice record on the server.
-type PartPayRow = { id: string; invoiceId: string; amount: number; date: string; note: string };
-
+// Was: a device-local KV list, deliberately never touching the canonical
+// invoice - meaning a payment "recorded" here changed nothing anywhere else
+// (Invoices, Receivables, AR aging all kept chasing the full amount). An audit
+// flagged this as one of three disjoint part-payment trackers across the app.
+// Now fetches real balances and records receipts through the same endpoint (and
+// shared modal) as Invoices/Receivables - a payment recorded here updates the
+// actual balance everywhere and posts to the GL.
+interface CollBackendInvoiceRow { id: string; invoice_number: string; customer_name: string; total_amount: number; paid_amount?: number; credited_amount?: number; status: string; }
 function PartialPaymentTracker() {
   const { store } = useApp();
-  const [payments, setPayments] = useFeatureState<PartPayRow[]>("col-partial-payments", []);
-  const open = useMemo(() => (store.invoices ?? []).filter(i => i.status !== "paid"), [store.invoices]);
-  const [selId, setSelId] = useState("");
-  const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [note, setNote] = useState("");
+  const [backendInvoices, setBackendInvoices] = useState<CollBackendInvoiceRow[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [payingId, setPayingId] = useState<string | null>(null);
 
-  const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
-  const paidFor = (invId: string) => payments.filter(p => p.invoiceId === invId).reduce((s, p) => s + p.amount, 0);
+  const load = useCallback(() => {
+    setLoading(true);
+    api.get<CollBackendInvoiceRow[]>("/api/invoices")
+      .then(rows => setBackendInvoices(Array.isArray(rows) ? rows : []))
+      .catch(() => setBackendInvoices(null))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { load(); }, [load]);
 
-  const ref = (i: { invoiceNumber?: string; id: string }) => i.invoiceNumber || i.id.slice(0, 6);
+  const rows = useMemo(() => {
+    if (backendInvoices) {
+      return backendInvoices
+        .filter(i => i.status !== "paid" && i.status !== "cancelled")
+        .map(i => {
+          const total = Number(i.total_amount) || 0;
+          const paid = Number(i.paid_amount) || 0;
+          const credited = Number(i.credited_amount) || 0;
+          const outstanding = Math.max(0, Math.round((total - paid - credited) * 100) / 100);
+          const pct = total > 0 ? Math.min(100, Math.round(((paid + credited) / total) * 100)) : 0;
+          return { id: i.id, invoiceNumber: i.invoice_number, customer: i.customer_name, total, paid, credited, outstanding, pct };
+        })
+        .sort((a, b) => b.paid - a.paid);
+    }
+    return (store.invoices ?? [])
+      .filter(i => i.status !== "paid")
+      .map(i => ({ id: i.id, invoiceNumber: i.invoiceNumber ?? i.id, customer: i.customer, total: i.amount, paid: 0, credited: 0, outstanding: i.amount, pct: 0 }));
+  }, [backendInvoices, store.invoices]);
 
-  const add = () => {
-    const amt = parseFloat(amount) || 0;
-    const inv = open.find(i => i.id === selId);
-    if (!inv) { toast.error("Pick an invoice"); return; }
-    if (amt <= 0) { toast.error("Enter a payment amount"); return; }
-    const remaining = inv.amount - paidFor(selId);
-    if (amt > remaining + 0.5) { toast.error(`Only ${formatCurrency(remaining)} is outstanding on this invoice`); return; }
-    setPayments([{ id: crypto.randomUUID(), invoiceId: selId, amount: amt, date, note: note.trim() }, ...payments]);
-    setAmount(""); setNote("");
-    toast.success("Part-payment recorded");
-  };
-  const remove = (id: string) => setPayments(payments.filter(p => p.id !== id));
-
-  const rows = useMemo(() => open.map(i => {
-    const paid = paidFor(i.id);
-    return { ...i, paid, outstanding: Math.max(0, i.amount - paid), pct: i.amount > 0 ? Math.min(100, Math.round((paid / i.amount) * 100)) : 0 };
-  }).filter(r => r.paid > 0).sort((a, b) => b.paid - a.paid), [open, payments]);
-
-  const totalCollected = payments.reduce((s, p) => s + p.amount, 0);
+  const partPaidRows = rows.filter(r => r.paid + r.credited > 0);
+  const openRows = rows.filter(r => r.outstanding > 0.009);
+  const totalCollected = rows.reduce((s, r) => s + r.paid + r.credited, 0);
   const stillOpen = rows.reduce((s, r) => s + r.outstanding, 0);
+  const payingRow = rows.find(r => r.id === payingId);
+  const ref = (r: { invoiceNumber: string }) => r.invoiceNumber;
 
   return (
     <div className="space-y-4">
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-4">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-1">
         <div className="flex items-center gap-2">
           <Split size={14} className="text-[var(--color-primary)]" />
           <span className="text-sm font-semibold">Record a part-payment</span>
         </div>
-        {open.length === 0 ? (
-          <EmptyState icon={Split} title="No open invoices" description="Part-payments apply against unpaid invoices. Create an invoice to start tracking instalments." />
+        <p className="text-xs text-[var(--color-muted)]">Real receipts against your open invoices - posted to the GL, reflected in Invoices/Receivables/AR aging immediately.</p>
+        {!backendInvoices && !loading && <p className="text-[10px] text-amber-400 mt-1">Couldn't load live balances from the server - showing local data, which may not reflect real payments.</p>}
+        {openRows.length === 0 ? (
+          <EmptyState icon={Split} title="No open invoices" description="Part-payments apply against unpaid invoices with a balance due." />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div className="md:col-span-2">
-              <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice</label>
-              <select value={selId} onChange={e => setSelId(e.target.value)} className={inp}>
-                <option value="">Select…</option>
-                {open.map(i => {
-                  const rem = i.amount - paidFor(i.id);
-                  return <option key={i.id} value={i.id}>{i.customer} · {ref(i)} · {formatCurrency(rem)} left</option>;
-                })}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-[var(--color-muted)] block mb-1">Amount (₹)</label>
-              <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className={inp} />
-            </div>
-            <div>
-              <label className="text-xs text-[var(--color-muted)] block mb-1">Date</label>
-              <DatePicker value={date} onChange={setDate} />
-            </div>
-            <div className="md:col-span-3">
-              <label className="text-xs text-[var(--color-muted)] block mb-1">Note</label>
-              <input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. UPI ref, cheque no." className={inp} />
-            </div>
-            <div className="flex items-end">
-              <button onClick={add} className="w-full flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 rounded-lg text-sm hover:opacity-90"><Plus size={13} /> Record</button>
-            </div>
+          <div className="divide-y divide-[var(--color-border)]/60 -mx-4 mt-2">
+            {openRows.map(r => (
+              <div key={r.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{r.customer} · {ref(r)}</p>
+                  <p className="text-[11px] text-[var(--color-muted)]">{formatCurrency(r.outstanding)} left of {formatCurrency(r.total)}</p>
+                </div>
+                <button onClick={() => setPayingId(r.id)} className="shrink-0 flex items-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-1.5 px-3 rounded-lg text-xs hover:opacity-90"><Plus size={12} /> Record</button>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {rows.length > 0 && (
+      {partPaidRows.length > 0 && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {[
-              { label: "Invoices part-paid", value: rows.length.toString(), color: "text-[var(--color-primary)]" },
+              { label: "Invoices part-paid", value: partPaidRows.length.toString(), color: "text-[var(--color-primary)]" },
               { label: "Collected via instalments", value: formatCurrency(totalCollected), color: "text-green-400" },
               { label: "Still outstanding on them", value: formatCurrency(stillOpen), color: stillOpen > 0 ? "text-orange-400" : "text-green-400" },
             ].map(c => (
@@ -3780,41 +3776,34 @@ function PartialPaymentTracker() {
           </div>
 
           <div className="space-y-3">
-            {rows.map(r => {
-              const invPayments = payments.filter(p => p.invoiceId === r.id).sort((a, b) => b.date.localeCompare(a.date));
-              return (
-                <div key={r.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-                  <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
-                    <div>
-                      <p className="text-sm font-semibold">{r.customer} <span className="text-[var(--color-muted)] text-xs font-normal">· {ref(r)}</span></p>
-                      <p className="text-[11px] text-[var(--color-muted)]">Invoice {formatCurrency(r.amount)} · paid {formatCurrency(r.paid)}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-bold tabular-nums ${r.outstanding > 0 ? "text-orange-400" : "text-green-400"}`}>{r.outstanding > 0 ? `${formatCurrency(r.outstanding)} left` : "Fully paid"}</p>
-                      <p className="text-[11px] text-[var(--color-muted)] tabular-nums">{r.pct}% settled</p>
-                    </div>
+            {partPaidRows.map(r => (
+              <div key={r.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+                  <div>
+                    <p className="text-sm font-semibold">{r.customer} <span className="text-[var(--color-muted)] text-xs font-normal">· {ref(r)}</span></p>
+                    <p className="text-[11px] text-[var(--color-muted)]">Invoice {formatCurrency(r.total)} · paid {formatCurrency(r.paid + r.credited)}</p>
                   </div>
-                  <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden mb-3">
-                    <div className={`h-full rounded-full ${r.outstanding > 0 ? "bg-[var(--color-primary)]" : "bg-green-500"}`} style={{ width: `${r.pct}%` }} />
-                  </div>
-                  <div className="divide-y divide-[var(--color-border)]/60">
-                    {invPayments.map(p => (
-                      <div key={p.id} className="flex items-center justify-between py-1.5 gap-2">
-                        <span className="text-xs text-[var(--color-muted)]">{format(parseISO(p.date), "d MMM yyyy")}{p.note && ` · ${p.note}`}</span>
-                        <span className="flex items-center gap-2">
-                          <span className="text-xs font-semibold tabular-nums text-green-400">{formatCurrency(p.amount)}</span>
-                          <button onClick={() => remove(p.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
-                        </span>
-                      </div>
-                    ))}
+                  <div className="text-right">
+                    <p className={`text-sm font-bold tabular-nums ${r.outstanding > 0 ? "text-orange-400" : "text-green-400"}`}>{r.outstanding > 0 ? `${formatCurrency(r.outstanding)} left` : "Fully paid"}</p>
+                    <p className="text-[11px] text-[var(--color-muted)] tabular-nums">{r.pct}% settled</p>
                   </div>
                 </div>
-              );
-            })}
+                <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${r.outstanding > 0 ? "bg-[var(--color-primary)]" : "bg-green-500"}`} style={{ width: `${r.pct}%` }} />
+                </div>
+              </div>
+            ))}
           </div>
         </>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Instalments are tracked here on this device against your live invoices - the outstanding figure recalculates as you log payments. Mark the invoice paid in Invoices once it fully clears.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Real receipts, posted to the GL - the outstanding figure recalculates from the actual invoice balance, not a local log.</p>
+      {payingRow && (
+        <RecordPaymentModal
+          invoice={{ id: payingRow.id, invoiceNumber: payingRow.invoiceNumber, customerName: payingRow.customer, totalAmount: payingRow.total, paidAmount: payingRow.paid, creditedAmount: payingRow.credited }}
+          onClose={() => setPayingId(null)}
+          onDone={load}
+        />
+      )}
     </div>
   );
 }

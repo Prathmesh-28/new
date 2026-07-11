@@ -12,6 +12,7 @@ import AiInsight from "@/components/ai/AiInsight";
 import { useT } from "@/i18n";
 import type { Invoice } from "@/data/types";
 import DatePicker from "@/components/DatePicker";
+import RecordPaymentModal from "@/components/RecordPaymentModal";
 
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
@@ -2612,62 +2613,69 @@ function OverdueInterestAccrual() {
 }
 
 /* ── Partial Payment Tracker ─────────────────────────────────── */
+// Was: a local KV list of "part-payments" that never touched the real invoice
+// balance - recording one here did nothing to what Invoices/Collections/AR aging
+// showed for the same invoice, so up to four screens could show four different
+// "paid so far" figures. Now fetches real invoice balances and records receipts
+// through the SAME endpoint (and shared modal) as the Invoices page - a payment
+// recorded here updates the actual balance everywhere.
+interface BackendInvoiceRow { id: string; invoice_number: string; customer_name: string; total_amount: number; paid_amount?: number; credited_amount?: number; status: string; due_date?: string; }
 function PartialPaymentTracker() {
   const { store } = useApp();
-  const invoices = store.invoices ?? [];
-  const open = useMemo(() => invoices.filter(i => i.status !== "paid").sort((a, b) => parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime()), [invoices]);
-  // invoiceId -> array of recorded part-payments
-  const [pays, setPays] = useFeatureState<Record<string, { id: string; amount: number; date: string }[]>>("rec-partial-payments", {});
-  const [sel, setSel] = useState("");
-  const [amt, setAmt] = useState("");
+  const [backendInvoices, setBackendInvoices] = useState<BackendInvoiceRow[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [payingId, setPayingId] = useState<string | null>(null);
 
-  const rows = useMemo(() => open.map(i => {
-    const list = pays[i.id] ?? [];
-    const paid = list.reduce((s, p) => s + p.amount, 0);
-    const outstanding = Math.max(0, i.amount - paid);
-    const pct = i.amount > 0 ? Math.min(100, Math.round((paid / i.amount) * 100)) : 0;
-    return { inv: i, list, paid, outstanding, pct };
-  }), [open, pays]);
+  const load = useCallback(() => {
+    setLoading(true);
+    api.get<BackendInvoiceRow[]>("/api/invoices")
+      .then(rows => setBackendInvoices(Array.isArray(rows) ? rows : []))
+      .catch(() => setBackendInvoices(null))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const rows = useMemo(() => {
+    if (backendInvoices) {
+      return backendInvoices
+        .filter(i => i.status !== "paid" && i.status !== "cancelled")
+        .map(i => {
+          const total = Number(i.total_amount) || 0;
+          const paid = Number(i.paid_amount) || 0;
+          const credited = Number(i.credited_amount) || 0;
+          const outstanding = Math.max(0, Math.round((total - paid - credited) * 100) / 100);
+          const pct = total > 0 ? Math.min(100, Math.round(((paid + credited) / total) * 100)) : 0;
+          return { id: i.id, invoiceNumber: i.invoice_number, customer: i.customer_name, total, paid, credited, outstanding, pct, dueDate: i.due_date || "" };
+        })
+        .filter(r => r.outstanding > 0.009)
+        .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    }
+    // Offline fallback: the KV mirror carries no real paid/credited figures, so
+    // "outstanding" here is just the face amount - honestly worse than nothing,
+    // but at least never claims a payment happened when the server is unreachable.
+    return (store.invoices ?? [])
+      .filter(i => i.status !== "paid")
+      .map(i => ({ id: i.id, invoiceNumber: i.invoiceNumber ?? i.id, customer: i.customer, total: i.amount, paid: 0, credited: 0, outstanding: i.amount, pct: 0, dueDate: i.dueDate || "" }))
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  }, [backendInvoices, store.invoices]);
 
   const totalOutstanding = rows.reduce((s, r) => s + r.outstanding, 0);
-  const totalCollected = rows.reduce((s, r) => s + r.paid, 0);
-
-  const record = () => {
-    const v = parseFloat(amt);
-    if (!sel || isNaN(v) || v <= 0) { toast.error("Pick an invoice and enter an amount"); return; }
-    setPays(prev => ({ ...prev, [sel]: [...(prev[sel] ?? []), { id: generateId(), amount: v, date: new Date().toISOString().split("T")[0] }] }));
-    setAmt("");
-    toast.success(`Recorded ${formatCurrency(v)} part-payment`);
-  };
-  const removePay = (invId: string, payId: string) => {
-    setPays(prev => ({ ...prev, [invId]: (prev[invId] ?? []).filter(p => p.id !== payId) }));
-  };
+  const totalCollected = rows.reduce((s, r) => s + r.paid + r.credited, 0);
+  const payingRow = rows.find(r => r.id === payingId);
 
   return (
     <div className="space-y-4">
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-1">
         <div className="flex items-center gap-2">
           <Wallet size={14} className="text-[var(--color-primary)]" />
           <h3 className="text-sm font-semibold">Partial Payment Tracker</h3>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[180px]">
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Invoice</label>
-            <select value={sel} onChange={e => setSel(e.target.value)} className={INP}>
-              <option value="">Select an open invoice</option>
-              {open.map(i => <option key={i.id} value={i.id}>{i.customer} · {i.invoiceNumber ?? i.id} · {formatCurrency(i.amount)}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-[var(--color-muted)] block mb-1">Amount received</label>
-            <input value={amt} onChange={e => setAmt(e.target.value)} className={`${INP} w-32`} inputMode="decimal" placeholder="10000" />
-          </div>
-          <button onClick={record} className="px-4 py-2 text-xs rounded bg-[var(--color-primary)] text-[var(--color-bg)] font-medium">Record</button>
-        </div>
+        <p className="text-xs text-[var(--color-muted)]">Real receipts against your open invoices - recording one here updates the actual balance everywhere (Invoices, Collections, AR aging), and books it to the GL.</p>
+        {!backendInvoices && !loading && <p className="text-[10px] text-amber-400 mt-1">Couldn't load live balances from the server - showing local data, which may not reflect real payments.</p>}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
-          <p className="text-xs text-[var(--color-muted)] mb-1">Collected via part-payments</p>
+          <p className="text-xs text-[var(--color-muted)] mb-1">Collected so far</p>
           <p className="text-lg font-bold tabular-nums text-green-400">{formatCurrency(Math.round(totalCollected))}</p>
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
@@ -2678,39 +2686,37 @@ function PartialPaymentTracker() {
       {rows.length === 0 ? (
         <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center">
           <Wallet size={32} className="mx-auto mb-3 text-[var(--color-muted)] opacity-40" />
-          <p className="text-sm text-[var(--color-muted)]">No open invoices. Add invoices on the Overview tab to record installments here.</p>
+          <p className="text-sm text-[var(--color-muted)]">No open invoices with a balance due.</p>
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
           <div className="divide-y divide-[var(--color-border)] max-h-96 overflow-y-auto">
             {rows.map(r => (
-              <div key={r.inv.id} className="px-4 py-3">
+              <div key={r.id} className="px-4 py-3">
                 <div className="flex items-center gap-3 mb-1.5">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{r.inv.customer} · {r.inv.invoiceNumber ?? r.inv.id}</p>
-                    <p className="text-[10px] text-[var(--color-muted)]">{formatCurrency(r.paid)} of {formatCurrency(r.inv.amount)} · {formatCurrency(r.outstanding)} left</p>
+                    <p className="text-xs font-medium truncate">{r.customer} · {r.invoiceNumber}</p>
+                    <p className="text-[10px] text-[var(--color-muted)]">{formatCurrency(r.paid + r.credited)} of {formatCurrency(r.total)} · {formatCurrency(r.outstanding)} left</p>
                   </div>
-                  <span className={`text-sm font-bold tabular-nums shrink-0 ${r.pct >= 100 ? "text-green-400" : "text-[var(--color-primary)]"}`}>{r.pct}%</span>
+                  <span className={`text-xs font-bold tabular-nums shrink-0 ${r.pct >= 100 ? "text-green-400" : "text-[var(--color-primary)]"}`}>{r.pct}%</span>
+                  <button onClick={() => setPayingId(r.id)} className="shrink-0 text-[10px] px-2.5 py-1.5 rounded bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold">Record payment</button>
                 </div>
                 <div className="h-2 bg-[var(--color-bg)] rounded overflow-hidden">
                   <div className="h-full rounded transition-all" style={{ width: `${r.pct}%`, background: r.pct >= 100 ? "#22c55e" : "#1A6B55" }} />
                 </div>
-                {r.list.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {r.list.map(p => (
-                      <span key={p.id} className="inline-flex items-center gap-1 text-[10px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-1.5 py-0.5">
-                        {format(parseISO(p.date), "d MMM")} · {formatCurrency(p.amount)}
-                        <button onClick={() => removePay(r.inv.id, p.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={10} /></button>
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
             ))}
           </div>
         </div>
       )}
-      <p className="text-[10px] text-[var(--color-muted)]">Log installments against each open invoice to see what is truly outstanding. Records persist locally; once an invoice is fully covered, mark it paid on the Overview tab.</p>
+      <p className="text-[10px] text-[var(--color-muted)]">Real receipts, posted to the GL and reflected in AR aging and Collections immediately.</p>
+      {payingRow && (
+        <RecordPaymentModal
+          invoice={{ id: payingRow.id, invoiceNumber: payingRow.invoiceNumber, customerName: payingRow.customer, totalAmount: payingRow.total, paidAmount: payingRow.paid, creditedAmount: payingRow.credited }}
+          onClose={() => setPayingId(null)}
+          onDone={load}
+        />
+      )}
     </div>
   );
 }
