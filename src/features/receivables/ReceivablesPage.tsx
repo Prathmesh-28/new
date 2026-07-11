@@ -14,6 +14,7 @@ import type { Invoice } from "@/data/types";
 import DatePicker from "@/components/DatePicker";
 import RecordPaymentModal from "@/components/RecordPaymentModal";
 import { useCustomerCredit, setCustomerCreditLimit } from "@/lib/customerCredit";
+import { AR_DISPUTES_KEY, AR_DISPUTE_REASONS, type ArDispute } from "@/lib/arDisputes";
 
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
@@ -1986,35 +1987,36 @@ function PromiseToPay() {
 // ════════════════════════════════════════════════════════════════════════════
 // #68 - DISPUTE / DEDUCTION TRACKER (quarantine contested amounts, keep chasing rest)
 // ════════════════════════════════════════════════════════════════════════════
-const DISPUTE_REASONS = ["Pricing", "Quality / damage", "Short delivery", "Freight", "Duplicate", "Other"] as const;
-interface Dispute { invoiceId: string; amount: string; reason: string; status: "open" | "resolved"; loggedAt: string; }
-
 function DisputeTracker() {
   const { store } = useApp();
   const invoices = store.invoices ?? [];
   const open = useMemo(() => invoices.filter(i => i.status !== "paid"), [invoices]);
-  const [disputes, setDisputes] = useFeatureState<Record<string, Dispute>>("rec-disputes", {});
+  const [disputes, setDisputes] = useFeatureState<ArDispute[]>(AR_DISPUTES_KEY, []);
   const [invoiceId, setInvoiceId] = useState("");
   const [amount, setAmount] = useState("");
-  const [reason, setReason] = useState<string>(DISPUTE_REASONS[0]);
+  const [reason, setReason] = useState<string>(AR_DISPUTE_REASONS[0]);
 
   const add = () => {
     if (!invoiceId) { toast.error("Pick an invoice"); return; }
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) { toast.error("Enter a disputed amount"); return; }
-    setDisputes(prev => ({ ...prev, [invoiceId]: { invoiceId, amount, reason, status: "open", loggedAt: new Date().toISOString() } }));
+    const inv = invoices.find(i => i.id === invoiceId);
+    setDisputes(prev => [
+      ...prev.filter(d => d.invoiceId !== invoiceId),
+      { id: crypto.randomUUID(), invoiceId, invoiceNumber: inv?.invoiceNumber, customer: inv?.customer ?? "", amount: amt, reason, status: "open", raisedAt: new Date().toISOString() },
+    ]);
     toast.success("Dispute logged - undisputed balance keeps chasing");
     setInvoiceId(""); setAmount("");
   };
-  const toggle = (id: string) => setDisputes(prev => ({ ...prev, [id]: { ...prev[id], status: prev[id].status === "open" ? "resolved" : "open" } }));
-  const remove = (id: string) => setDisputes(prev => { const n = { ...prev }; delete n[id]; return n; });
+  const toggle = (id: string) => setDisputes(prev => prev.map(d => d.id === id ? { ...d, status: d.status === "open" ? "resolved" : "open" } : d));
+  const remove = (id: string) => setDisputes(prev => prev.filter(d => d.id !== id));
 
-  const rows = useMemo(() => Object.values(disputes).map(d => {
+  const rows = useMemo(() => disputes.map(d => {
     const inv = invoices.find(i => i.id === d.invoiceId);
-    const disputed = Math.min(parseFloat(d.amount) || 0, inv?.amount ?? 0);
+    const disputed = Math.min(d.amount, inv?.amount ?? d.amount);
     const chaseable = (inv?.amount ?? 0) - disputed;
     return { ...d, inv, disputed, chaseable };
-  }).filter(r => r.inv).sort((a, b) => Number(a.status === "resolved") - Number(b.status === "resolved")), [disputes, invoices]);
+  }).sort((a, b) => Number(a.status === "resolved") - Number(b.status === "resolved")), [disputes, invoices]);
 
   const openDisputed = rows.filter(r => r.status === "open").reduce((s, r) => s + r.disputed, 0);
   const quarantined = rows.filter(r => r.status === "open").length;
@@ -2047,7 +2049,7 @@ function DisputeTracker() {
           </select>
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Disputed amount" className={INP} />
           <select value={reason} onChange={e => setReason(e.target.value)} className={INP}>
-            {DISPUTE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+            {AR_DISPUTE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
           <button onClick={add} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold text-sm rounded-lg px-3 py-2 hover:opacity-90 md:col-start-4">Log dispute</button>
         </div>
@@ -2063,17 +2065,17 @@ function DisputeTracker() {
           <div className="px-4 py-3 border-b border-[var(--color-border)]"><h3 className="text-sm font-semibold">Disputes &amp; deductions</h3></div>
           <div className="divide-y divide-[var(--color-border)]">
             {rows.map(r => (
-              <div key={r.invoiceId} className={`px-4 py-3 flex items-center gap-3 ${r.status === "resolved" ? "opacity-50" : ""}`}>
+              <div key={r.id} className={`px-4 py-3 flex items-center gap-3 ${r.status === "resolved" ? "opacity-50" : ""}`}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <p className="text-sm font-semibold truncate">{r.inv?.customer}</p>
+                    <p className="text-sm font-semibold truncate">{r.inv?.customer ?? r.customer}</p>
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 bg-[var(--color-accent)] text-[var(--color-muted)]">{r.reason}</span>
                     {r.status === "resolved" && <span className="text-[10px] font-bold text-green-400 shrink-0">Resolved</span>}
                   </div>
-                  <p className="text-[10px] text-[var(--color-muted)]">{r.inv?.invoiceNumber ?? r.inv?.id} · disputed {formatCurrency(Math.round(r.disputed))} · {formatCurrency(Math.round(r.chaseable))} still chaseable</p>
+                  <p className="text-[10px] text-[var(--color-muted)]">{r.inv?.invoiceNumber ?? r.invoiceNumber ?? r.invoiceId} · disputed {formatCurrency(Math.round(r.disputed))} · {formatCurrency(Math.round(r.chaseable))} still chaseable</p>
                 </div>
-                <button onClick={() => toggle(r.invoiceId)} className="shrink-0 text-[10px] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-green-400 hover:border-green-700/40 px-2 py-1.5 rounded-md transition-colors">{r.status === "open" ? "Mark resolved" : "Reopen"}</button>
-                <button onClick={() => remove(r.invoiceId)} title="Remove" className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-red-400 transition-colors shrink-0"><X size={13} /></button>
+                <button onClick={() => toggle(r.id)} className="shrink-0 text-[10px] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-green-400 hover:border-green-700/40 px-2 py-1.5 rounded-md transition-colors">{r.status === "open" ? "Mark resolved" : "Reopen"}</button>
+                <button onClick={() => remove(r.id)} title="Remove" className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-red-400 transition-colors shrink-0"><X size={13} /></button>
               </div>
             ))}
           </div>

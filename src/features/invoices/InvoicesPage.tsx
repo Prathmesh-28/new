@@ -12,6 +12,7 @@ import DatePicker from "@/components/DatePicker";
 import CurrencyInput from "@/components/CurrencyInput";
 import RecordPaymentModal from "@/components/RecordPaymentModal";
 import { useCustomerCredit, setCustomerCreditLimit } from "@/lib/customerCredit";
+import { AR_DISPUTES_KEY, AR_DISPUTE_REASONS, type ArDispute } from "@/lib/arDisputes";
 import {
   Plus, FileText, Send, Download, QrCode, X, Check, Clock, AlertCircle, MessageCircle, Bell, Zap,
   FileSignature, FilePlus2, Repeat, Link2, FileMinus2, ShieldAlert, Globe, GitPullRequestArrow,
@@ -2073,13 +2074,14 @@ function TdsRoundOffHelper() {
 }
 
 // #54 ── Invoice Dispute Tracker ─────────────────────────────────────────────
-interface Dispute { id: string; invoiceNumber: string; customer: string; amount: number; reason: string; raisedOn: string; status: "open" | "in-review" | "resolved" | "written-off"; resolution: string; }
-const DISPUTE_REASONS = ["Price mismatch", "Quantity/short supply", "Quality/deficiency", "Duplicate billing", "Tax/GST error", "Goods not received", "Other"];
+// Shared with Receivables' and Collections' own dispute trackers
+// (src/lib/arDisputes.ts) - they used to be three separate KV lists, so the same
+// invoice could show as disputed here but clean on Receivables.
 function DisputeTracker({ invoices }: { invoices: Invoice[] }) {
-  const [disputes, setDisputes] = useFeatureState<Dispute[]>("invoice-disputes", []);
+  const [disputes, setDisputes] = useFeatureState<ArDispute[]>(AR_DISPUTES_KEY, []);
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [customer, setCustomer] = useState("");
-  const [reason, setReason] = useState(DISPUTE_REASONS[0]);
+  const [reason, setReason] = useState<string>(AR_DISPUTE_REASONS[0]);
 
   const onPickInv = (num: string) => {
     setInvoiceNumber(num);
@@ -2090,18 +2092,22 @@ function DisputeTracker({ invoices }: { invoices: Invoice[] }) {
   const raise = () => {
     if (!invoiceNumber) { toast.error("Pick the disputed invoice"); return; }
     const inv = invoices.find(i => i.invoice_number === invoiceNumber);
-    setDisputes(p => [{ id: uid(), invoiceNumber, customer: customer || inv?.customer_name || "", amount: inv ? Number(inv.total_amount) || 0 : 0, reason, raisedOn: new Date().toISOString().split("T")[0], status: "open", resolution: "" }, ...p]);
+    if (!inv) { toast.error("Invoice not found"); return; }
+    setDisputes(p => [
+      { id: uid(), invoiceId: inv.id, invoiceNumber, customer: customer || inv.customer_name, amount: Number(inv.total_amount) || 0, reason, raisedAt: new Date().toISOString(), status: "open", resolution: "" },
+      ...p.filter(d => d.invoiceId !== inv.id),
+    ]);
     setInvoiceNumber(""); setCustomer("");
     toast.success("Dispute logged");
   };
-  const setStatus = (id: string, status: Dispute["status"]) => {
+  const setStatus = (id: string, status: ArDispute["status"]) => {
     setDisputes(p => p.map(d => d.id === id ? { ...d, status } : d));
     toast.success(`Dispute ${status}`);
   };
 
   const open = disputes.filter(d => d.status === "open" || d.status === "in-review");
   const disputedValue = open.reduce((s, d) => s + d.amount, 0);
-  const STAT_CLS: Record<Dispute["status"], string> = {
+  const STAT_CLS: Record<ArDispute["status"], string> = {
     open: "bg-red-900/30 text-red-400 border-red-800/40",
     "in-review": "bg-yellow-900/30 text-yellow-400 border-yellow-800/40",
     resolved: "bg-green-900/30 text-green-400 border-green-800/40",
@@ -2122,7 +2128,7 @@ function DisputeTracker({ invoices }: { invoices: Invoice[] }) {
             {invoices.map(i => <option key={i.id} value={i.invoice_number}>{i.invoice_number} · {i.customer_name}</option>)}
           </select>
           <input value={customer} onChange={e => setCustomer(e.target.value)} className={INP} placeholder="Customer" />
-          <select value={reason} onChange={e => setReason(e.target.value)} className={INP}>{DISPUTE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}</select>
+          <select value={reason} onChange={e => setReason(e.target.value)} className={INP}>{AR_DISPUTE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}</select>
         </div>
         <button onClick={raise} className="bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2 px-4 rounded-lg text-sm hover:opacity-90">Log dispute</button>
       </div>
@@ -2137,7 +2143,7 @@ function DisputeTracker({ invoices }: { invoices: Invoice[] }) {
                   <td className="px-4 py-2.5">{d.customer}</td>
                   <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(d.amount)}</td>
                   <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{d.reason}</td>
-                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{d.raisedOn}</td>
+                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{d.raisedAt.slice(0, 10)}</td>
                   <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${STAT_CLS[d.status]}`}>{d.status}</span></td>
                   <td className="px-4 py-2.5 whitespace-nowrap">
                     {d.status === "open" && <button onClick={() => setStatus(d.id, "in-review")} className="text-xs text-yellow-400 hover:underline">Review</button>}

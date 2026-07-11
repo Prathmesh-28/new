@@ -23,6 +23,7 @@ import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import DatePicker from "@/components/DatePicker";
 import RecordPaymentModal from "@/components/RecordPaymentModal";
 import { useCustomerCredit, setCustomerCreditLimit } from "@/lib/customerCredit";
+import { AR_DISPUTES_KEY, AR_DISPUTE_REASONS, type ArDispute } from "@/lib/arDisputes";
 
 type Aging = "current" | "1-30" | "31-60" | "61-90" | "90+";
 
@@ -2725,19 +2726,19 @@ function CollectionsKpiBoard() {
 
 // ── DISPUTE & DEDUCTION LOGGER ──────────────────────────────────────────────
 // Durable log of contested / short-paid invoices with reason codes so the
-// undisputed balance can keep being chased while the dispute is resolved.
-type DisputeRow = { id: string; invoiceId: string; customer: string; ref: string; disputed: number; reason: string; status: "open" | "resolved"; createdAt: string };
-const DISPUTE_REASONS = ["Pricing", "Damaged goods", "Short delivery", "Freight", "Quality", "Duplicate billing", "Other"] as const;
-
+// undisputed balance can keep being chased while the dispute is resolved. Shared
+// with Receivables' and Invoices' own dispute trackers (src/lib/arDisputes.ts) -
+// they used to be three separate KV lists, so the same invoice could show as
+// disputed here but clean on Receivables.
 function DisputeLogger() {
   const { store } = useApp();
-  const [rows, setRows] = useFeatureState<DisputeRow[]>("col-disputes", []);
+  const [rows, setRows] = useFeatureState<ArDispute[]>(AR_DISPUTES_KEY, []);
   const open = useMemo(() => (store.invoices ?? []).filter(i => i.status !== "paid")
     .map(i => ({ id: i.id, customer: i.customer, ref: i.invoiceNumber || i.id.slice(0, 6), amount: i.amount })), [store.invoices]);
 
   const [invoiceId, setInvoiceId] = useState("");
   const [amount, setAmount] = useState("");
-  const [reason, setReason] = useState<string>(DISPUTE_REASONS[0]);
+  const [reason, setReason] = useState<string>(AR_DISPUTE_REASONS[0]);
 
   const sel = open.find(o => o.id === invoiceId);
 
@@ -2745,8 +2746,8 @@ function DisputeLogger() {
     if (!sel) { toast.error("Pick an invoice"); return; }
     const amt = Math.min(Number(amount) || sel.amount, sel.amount);
     if (amt <= 0) { toast.error("Enter a disputed amount"); return; }
-    const row: DisputeRow = { id: crypto.randomUUID(), invoiceId: sel.id, customer: sel.customer, ref: sel.ref, disputed: amt, reason, status: "open", createdAt: new Date().toISOString() };
-    setRows(prev => [row, ...prev]);
+    const row: ArDispute = { id: crypto.randomUUID(), invoiceId: sel.id, invoiceNumber: sel.ref, customer: sel.customer, amount: amt, reason, status: "open", raisedAt: new Date().toISOString() };
+    setRows(prev => [row, ...prev.filter(r => r.invoiceId !== sel.id)]);
     setInvoiceId(""); setAmount("");
     toast.success("Dispute logged");
   };
@@ -2754,12 +2755,12 @@ function DisputeLogger() {
   const remove = (id: string) => setRows(prev => prev.filter(r => r.id !== id));
 
   const openDisputes = rows.filter(r => r.status === "open");
-  const disputedValue = openDisputes.reduce((s, r) => s + r.disputed, 0);
+  const disputedValue = openDisputes.reduce((s, r) => s + r.amount, 0);
   // Quarantine view: per disputed invoice, how much remains clean (still chaseable).
   const cleanByInvoice = openDisputes.map(r => {
     const inv = open.find(o => o.id === r.invoiceId);
-    const total = inv?.amount ?? r.disputed;
-    return { ...r, clean: Math.max(0, total - r.disputed) };
+    const total = inv?.amount ?? r.amount;
+    return { ...r, clean: Math.max(0, total - r.amount) };
   });
   const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
 
@@ -2798,7 +2799,7 @@ function DisputeLogger() {
           <div>
             <label className="text-xs text-[var(--color-muted)] block mb-1">Reason</label>
             <select value={reason} onChange={e => setReason(e.target.value)} className={inp}>
-              {DISPUTE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+              {AR_DISPUTE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
         </div>
@@ -2826,10 +2827,10 @@ function DisputeLogger() {
               {rows.map(r => (
                 <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
                   <td className="px-4 py-3 font-semibold">{r.customer}</td>
-                  <td className="px-4 py-3 text-[var(--color-muted)]">{r.ref}</td>
-                  <td className="px-4 py-3 tabular-nums text-red-400">{formatCurrency(r.disputed)}</td>
+                  <td className="px-4 py-3 text-[var(--color-muted)]">{r.invoiceNumber ?? r.invoiceId}</td>
+                  <td className="px-4 py-3 tabular-nums text-red-400">{formatCurrency(r.amount)}</td>
                   <td className="px-4 py-3 text-[var(--color-muted)]">{r.reason}</td>
-                  <td className="px-4 py-3 text-[var(--color-muted)] text-xs">{format(parseISO(r.createdAt), "d MMM yyyy")}</td>
+                  <td className="px-4 py-3 text-[var(--color-muted)] text-xs">{format(parseISO(r.raisedAt), "d MMM yyyy")}</td>
                   <td className="px-4 py-3">
                     <button onClick={() => toggle(r.id)} className={`text-xs font-bold px-2 py-0.5 rounded-full ${r.status === "open" ? "bg-orange-950/30 text-orange-400" : "bg-green-950/30 text-green-400"}`}>
                       {r.status === "open" ? "Open" : "Resolved"}
