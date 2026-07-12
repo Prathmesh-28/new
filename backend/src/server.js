@@ -1,3 +1,11 @@
+// Pin the process timezone BEFORE any Date is constructed. Production (Render)
+// already runs UTC; without this pin, a dev/test/self-hosted server in any other
+// timezone parses SQL DATE columns into local-midnight Date objects that
+// serialize to the WRONG calendar day (node-postgres builds them from local
+// components, JSON.stringify emits UTC), and every getHours()/getDay()-based
+// schedule matcher drifts from prod behavior. One line makes every environment
+// behave identically to production.
+process.env.TZ = process.env.TZ || "UTC";
 require("dotenv").config();
 // Prefer IPv4 for all outbound DNS. Node 18+ defaults to IPv6-first ("verbatim"),
 // and many container hosts (Render free tier) lack working IPv6 egress - which

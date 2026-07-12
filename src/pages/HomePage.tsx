@@ -212,7 +212,7 @@ function IconTile({ icon: Icon, size = 44, dark = false }: { icon: LucideIcon; s
 const WALK = [
   { t: "Cash & runway", d: "Every bank, wallet and card in one live balance — with a runway clock counting down in real days, not last month's spreadsheet." },
   { t: "90-day forecast", d: "A daily P10 / P50 / P90 cash position. Recurring and variable spend are modelled separately, so the tight weeks surface early." },
-  { t: "Alerts & insights", d: "Plain-language warnings fire up to 45 days before pressure hits — specific, actionable, and never a wall of noise." },
+  { t: "Alerts & insights", d: "Plain-language warnings fire the moment projected pressure appears anywhere in your 90-day forecast — specific, actionable, and never a wall of noise." },
   { t: "Credit & capital", d: "When a forecast shows real pressure, rescue options appear in context — pre-qualified silently from your own data." },
 ];
 
@@ -583,7 +583,7 @@ export default function HomePage() {
             { n:"02", t:"Normalisation",            d:"Transactions categorised and merchant-normalised automatically on every sync." },
             { n:"03", t:"90-day forecast engine",   d:"Daily P10/P50/P90 cash position. Recurring and variable spend modelled separately." },
             { n:"04", t:"Confidence bands",         d:"Every forecast shows best, expected, and worst case - never a single deceptive line." },
-            { n:"05", t:"Alert & insight engine",   d:"Alerts fire 45 days before pressure hits. Specific, actionable, and early." },
+            { n:"05", t:"Alert & insight engine",   d:"Alerts fire as soon as pressure shows in the 90-day forecast. Specific, actionable, and early." },
             { n:"06", t:"Operator-first dashboard", d:"One screen shows balance, runway, alerts, and forecast. No setup needed." },
             { n:"07", t:"Scenario planner",         d:"Model a hire, slow month, or contract win and see the cash impact instantly." },
             { n:"08", t:"Embedded credit rescue",   d:"Credit options appear in-context when a forecast shows real pressure." },
@@ -609,7 +609,7 @@ export default function HomePage() {
             {[
               { step:"Detect",   icon:Radar,      desc:"Live signals from bank + books" },
               { step:"Forecast", icon:LineChart,  desc:"90-day P10/P50/P90 model runs" },
-              { step:"Alert",    icon:Bell,       desc:"Plain-language warning, 45 days early" },
+              { step:"Alert",    icon:Bell,       desc:"Plain-language warning, weeks ahead" },
               { step:"Act",      icon:Zap,        desc:"Credit or capital options, in context" },
             ].map(({ step, icon: Icon, desc }, i) => (
               <div key={step} style={{ textAlign: "center", padding: "0 24px", borderRight: i < 3 ? "1px solid rgba(169,217,188,0.08)" : "none", position: "relative", zIndex: 1 }}>
