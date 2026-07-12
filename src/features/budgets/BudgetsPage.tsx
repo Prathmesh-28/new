@@ -1482,7 +1482,7 @@ function CostCuttingSimulator() {
     const start = startOfMonth(subMonths(new Date(), 2)).toISOString().split("T")[0];
     const end = endOfMonth(new Date()).toISOString().split("T")[0];
     const map: Record<string, number> = {};
-    transactions.filter(t => t.amount < 0 && t.date >= start && t.date <= end).forEach(t => {
+    transactions.filter(t => t.amount < 0 && t.date >= start && t.date <= end && t.category !== "transfer").forEach(t => {
       const c = t.category ?? "expense";
       map[c] = (map[c] ?? 0) + Math.abs(t.amount);
     });
@@ -1730,7 +1730,7 @@ function ContingencyReservePlanner() {
       const start = startOfMonth(ref).toISOString().split("T")[0];
       const end = endOfMonth(ref).toISOString().split("T")[0];
       const total = transactions
-        .filter(t => t.amount < 0 && t.date >= start && t.date <= end)
+        .filter(t => t.amount < 0 && t.date >= start && t.date <= end && t.category !== "transfer")
         .reduce((s, t) => s + Math.abs(t.amount), 0);
       monthly.push(total);
     }

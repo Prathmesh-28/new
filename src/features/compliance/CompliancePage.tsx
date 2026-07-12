@@ -868,7 +868,7 @@ function RocAutoPrep() {
   const [agm, setAgm] = useState(`${fyEndYear}-09-30`);
   const [entity, setEntity] = useState<"private" | "public" | "opc" | "small">("private");
 
-  const revenue = useMemo(() => store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0), [store.transactions]);
+  const revenue = useMemo(() => store.transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0), [store.transactions]);
 
   const agmDate = new Date(agm);
   const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
@@ -1792,7 +1792,7 @@ function CsrSpendTracker() {
   const { store } = useApp();
   const snap = useMemo(() => computeFinancialSnapshot(store), [store]);
   const [netWorth, setNetWorth] = useState("");
-  const [turnover, setTurnover] = useState(() => String(Math.round(store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0))));
+  const [turnover, setTurnover] = useState(() => String(Math.round(store.transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0))));
   const [netProfit, setNetProfit] = useState(() => String(Math.round(snap.estAnnualProfit ?? 0)));
   const [spent, setSpent] = useState("");
   const nw = parseFloat(netWorth) || 0;
@@ -2367,7 +2367,7 @@ function GstTurnoverRecon() {
   const fyFrom = `${fyStart}-04-01`;
   const fyTo = `${fyStart + 1}-03-31`;
   const booksTurnover = useMemo(
-    () => store.transactions.filter(t => t.amount > 0 && t.date >= fyFrom && t.date <= fyTo).reduce((s, t) => s + t.amount, 0),
+    () => store.transactions.filter(t => t.amount > 0 && t.date >= fyFrom && t.date <= fyTo && t.category !== "transfer").reduce((s, t) => s + t.amount, 0),
     [store.transactions, fyFrom, fyTo]
   );
 

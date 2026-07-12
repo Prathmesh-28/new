@@ -93,8 +93,8 @@ export default function AnalyticsPage() {
 
   const monthlyData = useMemo(() => months.map(m => {
     const mTxns   = transactions.filter(t => t.date >= m.start && t.date <= m.end);
-    const revenue = mTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const expense = Math.abs(mTxns.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
+    const revenue = mTxns.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+    const expense = Math.abs(mTxns.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0));
     const net     = revenue - expense;
     const margin  = revenue > 0 ? Math.round((net / revenue) * 100) : 0;
     return { month: m.label, revenue, expense, net, margin };
@@ -110,7 +110,7 @@ export default function AnalyticsPage() {
 
   const categoryTotals = useMemo(() => {
     const acc: Record<string, number> = {};
-    transactions.filter(t => t.amount < 0).forEach(t => {
+    transactions.filter(t => t.amount < 0 && t.category !== "transfer").forEach(t => {
       acc[t.category] = (acc[t.category] || 0) + Math.abs(t.amount);
     });
     return Object.entries(acc).sort((a, b) => b[1] - a[1]);
@@ -122,7 +122,7 @@ export default function AnalyticsPage() {
 
   const topCustomers = useMemo(() => {
     const acc: Record<string, number> = {};
-    transactions.filter(t => t.amount > 0 && t.counterparty).forEach(t => {
+    transactions.filter(t => t.amount > 0 && t.category !== "transfer" && t.counterparty).forEach(t => {
       acc[t.counterparty] = (acc[t.counterparty] || 0) + t.amount;
     });
     return Object.entries(acc).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, amount]) => ({ name, amount, pct: Math.round((amount / Math.max(1, totalRevenue)) * 100) }));
@@ -130,7 +130,7 @@ export default function AnalyticsPage() {
 
   const topVendors = useMemo(() => {
     const acc: Record<string, number> = {};
-    transactions.filter(t => t.amount < 0 && t.counterparty).forEach(t => {
+    transactions.filter(t => t.amount < 0 && t.category !== "transfer" && t.counterparty).forEach(t => {
       acc[t.counterparty] = (acc[t.counterparty] || 0) + Math.abs(t.amount);
     });
     return Object.entries(acc).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, amount]) => ({ name, amount, pct: Math.round((amount / Math.max(1, totalExpense)) * 100) }));
@@ -152,12 +152,12 @@ export default function AnalyticsPage() {
   const annualRunRate = (totalRevenue / rangeN) * 12;
   const ebitdaMgnPct  = totalRevenue > 0 ? Math.round((ebitda / totalRevenue) * 100) : 0;
   const grossMgnPct   = totalRevenue > 0 ? Math.round((grossProfit / totalRevenue) * 100) : 0;
-  const recRevenue    = transactions.filter(t => t.amount > 0 && t.isRecurring).reduce((s, t) => s + t.amount, 0);
+  const recRevenue    = transactions.filter(t => t.amount > 0 && t.category !== "transfer" && t.isRecurring).reduce((s, t) => s + t.amount, 0);
   const recPct        = totalRevenue > 0 ? Math.round((recRevenue / totalRevenue) * 100) : 0;
-  const uniqueCustCount = new Set(transactions.filter(t => t.amount > 0 && t.counterparty).map(t => t.counterparty)).size;
+  const uniqueCustCount = new Set(transactions.filter(t => t.amount > 0 && t.category !== "transfer" && t.counterparty).map(t => t.counterparty)).size;
 
   const revenueByMonth = useMemo(() => months.map(m => {
-    const mTxns = transactions.filter(t => t.date >= m.start && t.date <= m.end && t.amount > 0);
+    const mTxns = transactions.filter(t => t.date >= m.start && t.date <= m.end && t.amount > 0 && t.category !== "transfer");
     const rev   = mTxns.reduce((s, t) => s + t.amount, 0);
     return { month: m.label, revenue: rev };
   }), [transactions, months]);
@@ -165,7 +165,7 @@ export default function AnalyticsPage() {
   const expByCategory = useMemo(() => {
     const cutoff = subMonths(now, 1).toISOString().split("T")[0];
     const acc: Record<string, number> = {};
-    transactions.filter(t => t.amount < 0 && t.date >= cutoff).forEach(t => {
+    transactions.filter(t => t.amount < 0 && t.category !== "transfer" && t.date >= cutoff).forEach(t => {
       acc[t.category] = (acc[t.category] || 0) + Math.abs(t.amount);
     });
     return Object.entries(acc).sort((a, b) => b[1] - a[1]).map(([cat, val]) => ({ name: CATEGORY_LABEL[cat] ?? cat, value: val, fill: CATEGORY_COLORS[cat] ?? "#6b7280" }));
@@ -980,7 +980,7 @@ export default function AnalyticsPage() {
 
         // Revenue by customer (counterparty on positive txns)
         const custRev: Record<string, number> = {};
-        transactions.filter(t => t.amount > 0 && t.counterparty).forEach(t => {
+        transactions.filter(t => t.amount > 0 && t.category !== "transfer" && t.counterparty).forEach(t => {
           custRev[t.counterparty] = (custRev[t.counterparty] ?? 0) + t.amount;
         });
         const custRows = Object.entries(custRev)
@@ -994,7 +994,7 @@ export default function AnalyticsPage() {
 
         // Expense by vendor
         const vendExp: Record<string, number> = {};
-        transactions.filter(t => t.amount < 0 && t.counterparty).forEach(t => {
+        transactions.filter(t => t.amount < 0 && t.category !== "transfer" && t.counterparty).forEach(t => {
           vendExp[t.counterparty] = (vendExp[t.counterparty] ?? 0) + Math.abs(t.amount);
         });
         const totalExp = Object.values(vendExp).reduce((s, v) => s + v, 0);
@@ -2327,7 +2327,7 @@ function UnitEconomicsTab() {
 
   const m = useMemo(() => {
     const rev = transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
-    const exp = Math.abs(transactions.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
+    const exp = Math.abs(transactions.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0));
     // New customers = unique counterparties whose first revenue is in the dataset window.
     const firstSeen: Record<string, string> = {};
     transactions.filter(t => t.amount > 0 && t.counterparty && t.category !== "transfer").forEach(t => {
@@ -2483,7 +2483,7 @@ function ExpenseVarianceTab() {
       const d = subMonths(now, 11 - i);
       const start = startOfMonth(d).toISOString().split("T")[0];
       const end = endOfMonth(d).toISOString().split("T")[0];
-      const expense = Math.abs(transactions.filter(t => t.amount < 0 && t.date >= start && t.date <= end).reduce((s, t) => s + t.amount, 0));
+      const expense = Math.abs(transactions.filter(t => t.amount < 0 && t.category !== "transfer" && t.date >= start && t.date <= end).reduce((s, t) => s + t.amount, 0));
       return { month: format(d, "MMM yy"), expense: Math.round(expense) };
     });
     return months;
@@ -2505,7 +2505,7 @@ function ExpenseVarianceTab() {
       const start = startOfMonth(d).toISOString().split("T")[0];
       const end = endOfMonth(d).toISOString().split("T")[0];
       const acc: Record<string, number> = {};
-      transactions.filter(t => t.amount < 0 && t.date >= start && t.date <= end).forEach(t => { acc[t.category] = (acc[t.category] || 0) + Math.abs(t.amount); });
+      transactions.filter(t => t.amount < 0 && t.category !== "transfer" && t.date >= start && t.date <= end).forEach(t => { acc[t.category] = (acc[t.category] || 0) + Math.abs(t.amount); });
       return acc;
     };
     const a = sumCat(dCurr), b = sumCat(dPrev);
@@ -2894,8 +2894,8 @@ function MarginTrendsTab() {
   const data = useMemo(() => {
     return trailingMonths(12, now).map(m => {
       const mTxns = transactions.filter(t => t.date >= m.start && t.date <= m.end && t.category !== "transfer");
-      const revenue = mTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-      const expense = Math.abs(mTxns.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
+      const revenue = mTxns.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+      const expense = Math.abs(mTxns.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0));
       const cogs = revenue * (cogsPct / 100);
       const grossPct = revenue > 0 ? Math.round(((revenue - cogs) / revenue) * 100) : 0;
       const netPct = revenue > 0 ? Math.round(((revenue - expense) / revenue) * 100) : 0;
@@ -3132,8 +3132,8 @@ function BreakEvenTab() {
   const m = useMemo(() => {
     const winStart = startOfMonth(subMonths(now, 5)).toISOString().split("T")[0];
     const win = transactions.filter(t => t.date >= winStart && t.category !== "transfer");
-    const revenue = win.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const totalCost = Math.abs(win.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
+    const revenue = win.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+    const totalCost = Math.abs(win.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0));
     const months = 6;
     const monthlyRev = revenue / months;
     const monthlyCost = totalCost / months;
@@ -3150,7 +3150,7 @@ function BreakEvenTab() {
 
   const chartData = trailingMonths(6, now).map(mo => {
     const mTxns = transactions.filter(t => t.date >= mo.start && t.date <= mo.end && t.category !== "transfer");
-    const revenue = mTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const revenue = mTxns.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
     return { month: mo.label, revenue: Math.round(revenue), breakEven: m.breakEven !== null ? Math.round(m.breakEven) : 0 };
   });
 
@@ -3426,8 +3426,8 @@ function PerEmployeeTab() {
     const winStart = startOfMonth(subMonths(now, 11)).toISOString().split("T")[0];
     const win = transactions.filter(t => t.date >= winStart && t.category !== "transfer");
     const months = 12;
-    const revenue = win.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const expense = Math.abs(win.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
+    const revenue = win.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+    const expense = Math.abs(win.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0));
     const payroll = Math.abs(win.filter(t => t.amount < 0 && t.category === "payroll").reduce((s, t) => s + t.amount, 0));
     const profit = revenue - expense;
     const scale = 12 / months;

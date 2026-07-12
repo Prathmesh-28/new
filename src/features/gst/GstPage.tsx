@@ -975,7 +975,7 @@ export default function GstPage() {
       )}
 
       {tab === "itc" && (() => {
-        const purchaseTxns = store.transactions.filter(t => t.amount < 0);
+        const purchaseTxns = store.transactions.filter(t => t.amount < 0 && t.category !== "transfer");
 
         // Group by month
         const monthMap: Record<string, { month: string; purchase: number; estimatedItc: number; claimed: number }> = {};

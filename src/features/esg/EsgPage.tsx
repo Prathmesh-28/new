@@ -204,7 +204,7 @@ function CarbonFootprintEstimator() {
   const { store } = useApp();
   // Total expense spend from live books (used as a hint / quick-fill).
   const annualExpense = useMemo(
-    () => store.transactions.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0),
+    () => store.transactions.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0),
     [store.transactions],
   );
 
@@ -329,7 +329,7 @@ function ScopeCalculator() {
   ];
 
   // Export the inventory + intensity as a CSV download, plus a printable summary.
-  const annualRevenue = (store.transactions ?? []).filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const annualRevenue = (store.transactions ?? []).filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
   const intensity = annualRevenue > 0 ? (total / 1000) / (annualRevenue / 1_00_00_000) : 0;
   const stateLabel = (STATE_GRID_FACTORS.find(s => s.code === stateCode) ?? STATE_GRID_FACTORS[0]).label;
 
@@ -710,7 +710,7 @@ const GREEN_TYPES = ["Renewable energy", "Energy efficiency", "Waste / recycling
 function GreenSpendTracker() {
   const { store } = useApp();
   const annualSpend = useMemo(
-    () => store.transactions.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0),
+    () => store.transactions.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0),
     [store.transactions],
   );
   const [items, setItems] = useFeatureState<GreenItem[]>("esg-green-spend", []);
@@ -802,7 +802,7 @@ function GreenSpendTracker() {
 function EmissionIntensity() {
   const { store } = useApp();
   const annualRevenue = useMemo(
-    () => store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0),
+    () => store.transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0),
     [store.transactions],
   );
   const [emissionsT, setEmissionsT] = useState("");
@@ -1125,7 +1125,7 @@ function Overview({ onJump }: { onJump: (t: Tab) => void }) {
   const { store } = useApp();
   const { revenue, expense } = useMemo(() => {
     let revenue = 0, expense = 0;
-    for (const t of store.transactions) { if (t.amount > 0) revenue += t.amount; else expense += Math.abs(t.amount); }
+    for (const t of store.transactions) { if (t.category === "transfer") continue; if (t.amount > 0) revenue += t.amount; else expense += Math.abs(t.amount); }
     return { revenue, expense };
   }, [store.transactions]);
 
@@ -2464,7 +2464,7 @@ function CsrImpactTracker() {
   const { store } = useApp();
   const annualProfit = useMemo(() => {
     let rev = 0, exp = 0;
-    for (const t of store.transactions) { if (t.amount > 0) rev += t.amount; else exp += Math.abs(t.amount); }
+    for (const t of store.transactions) { if (t.category === "transfer") continue; if (t.amount > 0) rev += t.amount; else exp += Math.abs(t.amount); }
     return rev - exp;
   }, [store.transactions]);
   const csrGuide = annualProfit > 0 ? annualProfit * 0.02 : 0; // 2% indicative (Sec 135 applies above thresholds)

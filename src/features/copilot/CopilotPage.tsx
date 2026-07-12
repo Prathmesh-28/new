@@ -589,7 +589,7 @@ function AttentionFeed({ signals, navigate }: { signals: Signals; navigate: Nav 
     if (signals.overdueReceivable > 0) out.push({ id: "overdue", severity: signals.overdueInvoiceCount > 3 ? "high" : "med", text: `${signals.overdueInvoiceCount} invoice(s) overdue totalling ${formatCurrency(Math.round(signals.overdueReceivable))}.`, path: "/collections" });
     if (signals.dueTodayCount > 0) out.push({ id: "duetoday", severity: "med", text: `${signals.dueTodayCount} item(s) due today (${formatCurrency(Math.round(signals.dueToday))}).`, path: "/receivables" });
     // Spike detection: any single expense > 3x the median expense this month.
-    const exp = store.transactions.filter(t => t.amount < 0).map(t => Math.abs(t.amount)).sort((a, b) => a - b);
+    const exp = store.transactions.filter(t => t.amount < 0 && t.category !== "transfer").map(t => Math.abs(t.amount)).sort((a, b) => a - b);
     if (exp.length >= 4) {
       const median = exp[Math.floor(exp.length / 2)];
       const max = exp[exp.length - 1];

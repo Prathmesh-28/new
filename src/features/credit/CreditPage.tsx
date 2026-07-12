@@ -303,8 +303,8 @@ export default function CreditPage() {
             const thisM = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
             const lastMDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
             const lastM = `${lastMDate.getFullYear()}-${String(lastMDate.getMonth()+1).padStart(2,"0")}`;
-            const thisRev = transactions.filter(t => t.date.startsWith(thisM) && t.amount > 0).reduce((s,t) => s+t.amount, 0);
-            const lastRev = transactions.filter(t => t.date.startsWith(lastM) && t.amount > 0).reduce((s,t) => s+t.amount, 0);
+            const thisRev = transactions.filter(t => t.date.startsWith(thisM) && t.amount > 0 && t.category !== "transfer").reduce((s,t) => s+t.amount, 0);
+            const lastRev = transactions.filter(t => t.date.startsWith(lastM) && t.amount > 0 && t.category !== "transfer").reduce((s,t) => s+t.amount, 0);
             const trending = thisRev > lastRev * 1.05;
             const emiLoad  = activeLoans.length > 0 ? activeLoans.reduce((s,l) => s + l.monthlyEmi, 0) : 0;
             const capacity = burn > 0 ? Math.max(0, Math.round(((burn * 0.3) - emiLoad) / 1000)) : 0;
@@ -569,7 +569,7 @@ export default function CreditPage() {
         for (let i = 5; i >= 0; i--) {
           const d = new Date(); d.setMonth(d.getMonth() - i);
           const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-          const rev = transactions.filter(t => t.amount > 0 && t.date.startsWith(key)).reduce((s,t) => s+t.amount, 0);
+          const rev = transactions.filter(t => t.amount > 0 && t.date.startsWith(key) && t.category !== "transfer").reduce((s,t) => s+t.amount, 0);
           if (rev > 0) monthlyRevs.push(rev);
         }
         const meanRev = monthlyRevs.length ? monthlyRevs.reduce((a,b) => a+b, 0) / monthlyRevs.length : 0;
@@ -593,7 +593,7 @@ export default function CreditPage() {
         }).length;
 
         // Top customer concentration
-        const cpRevs = transactions.filter(t => t.amount > 0 && t.counterparty)
+        const cpRevs = transactions.filter(t => t.amount > 0 && t.counterparty && t.category !== "transfer")
           .reduce<Record<string,number>>((acc,t) => { acc[t.counterparty] = (acc[t.counterparty]??0)+t.amount; return acc; }, {});
         const topCpRevs = Object.values(cpRevs).sort((a,b) => b-a);
         const topConc   = meanRev > 0 && topCpRevs[0] ? topCpRevs[0] / (meanRev * 6) : 0;
@@ -785,7 +785,7 @@ function WCSizingTab() {
   const [apDays,  setApDays]  = useState(30);
   const [invDays, setInvDays] = useState(60);
   const [annualRevStr, setAnnualRevStr] = useState(() => {
-    const rev12 = store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const rev12 = store.transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
     return rev12 > 0 ? String(Math.round(rev12)) : "";
   });
   const annualRev = parseFloat(annualRevStr) || 0;
@@ -1892,7 +1892,7 @@ function AaUnderwritingPull() {
   // Seed monthly inflow/balance from live transactions where available.
   const seed = useMemo(() => {
     const txns = store.transactions ?? [];
-    const credits = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const credits = txns.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
     const months = Math.max(1, Math.round(txns.length / 30));
     const avgInflow = credits > 0 ? Math.round(credits / months) : 0;
     const bal = (store.bankAccounts ?? []).reduce((s, a) => s + a.balance, 0);
@@ -2529,8 +2529,8 @@ function FoirCalculator() {
   const seed = useMemo(() => {
     const txns = store.transactions ?? [];
     const months = Math.max(1, Math.round(txns.length / 30));
-    const rev = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const exp = txns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const rev = txns.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+    const exp = txns.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
     const profit = Math.max(0, Math.round((rev - exp) / months));
     const emi = (store.activeLoans ?? []).reduce((s, l) => s + l.monthlyEmi, 0);
     return { profit, emi: Math.round(emi) };
@@ -2869,8 +2869,8 @@ function DscrCalculator() {
   const seedNoi = useMemo(() => {
     const txns = store.transactions ?? [];
     if (txns.length === 0) return 0;
-    const rev = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const exp = txns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const rev = txns.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+    const exp = txns.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
     const dates = txns.map(t => t.date).filter(Boolean).sort();
     const spanDays = dates.length >= 2 ? Math.max(1, (new Date(dates[dates.length - 1]).getTime() - new Date(dates[0]).getTime()) / 86400000) : 30;
     return Math.max(0, Math.round((rev - exp) * (365 / spanDays)));

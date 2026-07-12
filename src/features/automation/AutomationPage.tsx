@@ -601,7 +601,7 @@ function ApprovalChains() {
 
   // Which pending payouts (expense transactions) would route through each chain.
   const pendingPayouts = useMemo(
-    () => store.transactions.filter(t => t.amount < 0).map(t => ({ id: t.id, amount: Math.abs(t.amount), label: t.counterparty || t.description })),
+    () => store.transactions.filter(t => t.amount < 0 && t.category !== "transfer").map(t => ({ id: t.id, amount: Math.abs(t.amount), label: t.counterparty || t.description })),
     [store.transactions],
   );
 
@@ -2433,7 +2433,7 @@ function KpiWatch() {
       "overdue-ar": store.invoices.filter(i => i.status !== "paid" && differenceInCalendarDays(today, parseISO(i.dueDate)) > 0).reduce((s, i) => s + i.amount, 0),
       "open-ar": store.invoices.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0),
       "obligations-due-30": store.obligations.filter(o => { const d = differenceInCalendarDays(parseISO(o.dueDate), today); return d >= 0 && d <= 30; }).reduce((s, o) => s + o.amount, 0),
-      "month-outflow": store.transactions.filter(t => t.amount < 0 && parseISO(t.date).getMonth() === today.getMonth() && parseISO(t.date).getFullYear() === today.getFullYear()).reduce((s, t) => s + Math.abs(t.amount), 0),
+      "month-outflow": store.transactions.filter(t => t.amount < 0 && t.category !== "transfer" && parseISO(t.date).getMonth() === today.getMonth() && parseISO(t.date).getFullYear() === today.getFullYear()).reduce((s, t) => s + Math.abs(t.amount), 0),
     };
     return m;
   }, [store.bankAccounts, store.invoices, store.obligations, store.transactions]);
@@ -3109,7 +3109,7 @@ function DuplicatePaymentCheck() {
   const [windowInput, setWindowInput] = useState(String(5));
 
   const groups = useMemo(() => {
-    const outs = store.transactions.filter(t => t.amount < 0);
+    const outs = store.transactions.filter(t => t.amount < 0 && t.category !== "transfer");
     const found: { key: string; counterparty: string; amount: number; dates: string[] }[] = [];
     const seen = new Set<string>();
     outs.forEach(a => {
@@ -3292,7 +3292,7 @@ function ExpensePolicyEngine() {
 
   // Outflows breaching their category policy, on-demand.
   const breaches = useMemo(() => {
-    const outs = store.transactions.filter(t => t.amount < 0);
+    const outs = store.transactions.filter(t => t.amount < 0 && t.category !== "transfer");
     return policies.flatMap(p =>
       outs.filter(t => t.category === p.category && Math.abs(t.amount) > p.cap)
         .map(t => ({ key: `${p.id}-${t.id}`, t, policy: p })),
@@ -3385,7 +3385,7 @@ function FraudPatternScan() {
   ] as const;
 
   const findings = useMemo(() => {
-    const outs = store.transactions.filter(t => t.amount < 0);
+    const outs = store.transactions.filter(t => t.amount < 0 && t.category !== "transfer");
     const out: { patternId: string; label: string; sub: string }[] = [];
     if (enabled.round) {
       outs.filter(t => Math.abs(t.amount) >= 50000 && Math.abs(t.amount) % 50000 === 0)

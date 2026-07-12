@@ -82,7 +82,7 @@ function useTwinMetrics(): TwinMetrics {
     // Group transactions by calendar month.
     const byMonth = new Map<string, { revenue: number; expense: number }>();
     for (const t of txns) {
-      if (!t.date) continue;
+      if (!t.date || t.category === "transfer") continue;
       const key = t.date.slice(0, 7); // YYYY-MM
       const slot = byMonth.get(key) ?? { revenue: 0, expense: 0 };
       if (t.amount >= 0) slot.revenue += t.amount;
@@ -105,8 +105,8 @@ function useTwinMetrics(): TwinMetrics {
       });
     }
 
-    const totalRevenue = txns.reduce((s, t) => s + (t.amount > 0 ? t.amount : 0), 0);
-    const totalExpense = txns.reduce((s, t) => s + (t.amount < 0 ? Math.abs(t.amount) : 0), 0);
+    const totalRevenue = txns.reduce((s, t) => s + (t.amount > 0 && t.category !== "transfer" ? t.amount : 0), 0);
+    const totalExpense = txns.reduce((s, t) => s + (t.amount < 0 && t.category !== "transfer" ? Math.abs(t.amount) : 0), 0);
 
     // Use months that actually carry activity for the per-month average.
     const activeMonths = revSeries.filter(m => m.revenue > 0 || m.expense > 0);

@@ -597,8 +597,8 @@ function MultiEntityConsolidation() {
 
   const addCurrentFirm = () => {
     const txns = store.transactions ?? [];
-    const r = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const e = txns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const r = txns.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+    const e = txns.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
     const c = (store.bankAccounts ?? []).reduce((s, b) => s + (b.balance || 0), 0);
     setEntities(prev => [...prev, { id: `ent-${Date.now()}`, name: store.firm?.name ?? "This entity", ownership: 100, revenue: Math.round(r), expense: Math.round(e), cash: Math.round(c) }]);
     toast.success("Added current entity from live data");

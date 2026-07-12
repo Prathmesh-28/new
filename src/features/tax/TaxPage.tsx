@@ -103,8 +103,8 @@ export default function TaxPage() {
 
   // Compute YTD financials
   const ytdStart  = startOfYear(today).toISOString().split("T")[0];
-  const ytdRevenue = transactions.filter(t => t.amount > 0  && t.date >= ytdStart).reduce((s, t) => s + t.amount, 0);
-  const ytdExpenses = transactions.filter(t => t.amount < 0 && t.date >= ytdStart).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const ytdRevenue = transactions.filter(t => t.amount > 0 && t.category !== "transfer" && t.date >= ytdStart).reduce((s, t) => s + t.amount, 0);
+  const ytdExpenses = transactions.filter(t => t.amount < 0 && t.category !== "transfer" && t.date >= ytdStart).reduce((s, t) => s + Math.abs(t.amount), 0);
   const ytdProfit  = ytdRevenue - ytdExpenses;
 
   // Advance tax estimate (25% effective rate on net profit)
@@ -130,7 +130,7 @@ export default function TaxPage() {
   const gstRate = firm?.gstRate ?? 18;
   const lastM   = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const lastMStr = `${lastM.getFullYear()}-${String(lastM.getMonth() + 1).padStart(2, "0")}`;
-  const lastMRevenue = transactions.filter(t => t.amount > 0 && t.date.startsWith(lastMStr)).reduce((s, t) => s + t.amount, 0);
+  const lastMRevenue = transactions.filter(t => t.amount > 0 && t.category !== "transfer" && t.date.startsWith(lastMStr)).reduce((s, t) => s + t.amount, 0);
   const gstFlatEstimate = firm?.gstRegistered && lastMRevenue > 0 ? Math.round(lastMRevenue * (gstRate / 100)) : 0;
   const [gstReal, setGstReal] = useState<number | null>(null);
   useEffect(() => {
@@ -600,7 +600,7 @@ export default function TaxPage() {
       </>}
 
       {taxTab === "audit" && (() => {
-        const annualRevenue  = store.transactions.filter(t => t.amount > 0).reduce((s,t) => s + t.amount, 0);
+        const annualRevenue  = store.transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s,t) => s + t.amount, 0);
 
         const THRESHOLD_BUSINESS      = 1_00_00_000;  // ₹1 crore
         const THRESHOLD_BUSINESS_DIG  = 10_00_00_000; // ₹10 crore (95%+ digital)

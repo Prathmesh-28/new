@@ -70,8 +70,10 @@ type Txn = {
   category: string; counterparty: string; isRecurring?: boolean;
 };
 
+// User-tagged self-transfers are verified own-money movements - scanning them
+// would flag every sweep as a round-trip / new-payee / large-payment anomaly.
 function outflows(txns: Txn[]): Txn[] {
-  return txns.filter(t => t.amount < 0);
+  return txns.filter(t => t.amount < 0 && t.category !== "transfer");
 }
 function daysBetween(a: string, b: string): number {
   try { return Math.abs(differenceInCalendarDays(parseISO(a), parseISO(b))); } catch { return Infinity; }
@@ -385,8 +387,8 @@ function RoundTripDetector({ txns }: { txns: Txn[] }) {
 
   const pairs = useMemo(() => {
     const result: { payee: string; out: Txn; back: Txn; returnedPct: number }[] = [];
-    const outs = txns.filter(t => t.amount < 0);
-    const ins = txns.filter(t => t.amount > 0);
+    const outs = txns.filter(t => t.amount < 0 && t.category !== "transfer");
+    const ins = txns.filter(t => t.amount > 0 && t.category !== "transfer");
     outs.forEach(o => {
       const key = o.counterparty.trim().toLowerCase();
       const match = ins.find(i =>
@@ -452,7 +454,7 @@ function NewPayeeWatch({ txns }: { txns: Txn[] }) {
 
   const payees = useMemo(() => {
     const firstSeen = new Map<string, { date: string; firstTxn: Txn; total: number; count: number }>();
-    [...txns].filter(t => t.amount < 0).sort((a, b) => a.date.localeCompare(b.date)).forEach(t => {
+    [...txns].filter(t => t.amount < 0 && t.category !== "transfer").sort((a, b) => a.date.localeCompare(b.date)).forEach(t => {
       const key = t.counterparty.trim().toLowerCase() || "(blank)";
       const cur = firstSeen.get(key);
       if (!cur) firstSeen.set(key, { date: t.date, firstTxn: t, total: Math.abs(t.amount), count: 1 });
@@ -614,7 +616,7 @@ function MonitoringRules({ txns }: { txns: Txn[] }) {
   const hits = useMemo(() => {
     const active = rules.filter(r => r.enabled);
     return txns
-      .filter(t => t.amount < 0)
+      .filter(t => t.amount < 0 && t.category !== "transfer")
       .map(t => ({ t, matched: active.filter(r => matches(r, t)) }))
       .filter(x => x.matched.length > 0)
       .sort((a, b) => b.t.date.localeCompare(a.t.date));
@@ -2404,7 +2406,7 @@ function NewAccountOverLimit({ txns }: { txns: Txn[] }) {
 
   const flagged = useMemo(() => {
     const firstSeen = new Map<string, string>();
-    [...txns].filter(t => t.amount < 0).sort((a, b) => a.date.localeCompare(b.date)).forEach(t => {
+    [...txns].filter(t => t.amount < 0 && t.category !== "transfer").sort((a, b) => a.date.localeCompare(b.date)).forEach(t => {
       const key = t.counterparty.trim().toLowerCase() || "(blank)";
       if (!firstSeen.has(key)) firstSeen.set(key, t.date);
     });

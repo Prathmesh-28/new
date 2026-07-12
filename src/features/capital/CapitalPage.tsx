@@ -377,7 +377,7 @@ function RunwayExtensionPlanner() {
   const last90 = (() => {
     const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
     const txns = store.transactions.filter(t => new Date(t.date) >= cutoff);
-    const out = txns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const out = txns.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
     return Math.round(out / 3); // avg monthly outflow
   })();
   const cashOnHand = store.transactions.reduce((s, t) => s + t.amount, 0);

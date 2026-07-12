@@ -109,7 +109,7 @@ export default function BenchmarksPage() {
   const lastM = `${lastMDate.getFullYear()}-${String(lastMDate.getMonth()+1).padStart(2,"0")}`;
   const thisRev = transactions.filter(t => t.date.startsWith(thisM) && t.amount > 0 && t.category === "revenue").reduce((s, t) => s + t.amount, 0);
   const lastRev = transactions.filter(t => t.date.startsWith(lastM) && t.amount > 0 && t.category === "revenue").reduce((s, t) => s + t.amount, 0);
-  const thisCost = Math.abs(transactions.filter(t => t.date.startsWith(thisM) && t.amount < 0 && t.category !== "payroll").reduce((s, t) => s + t.amount, 0));
+  const thisCost = Math.abs(transactions.filter(t => t.date.startsWith(thisM) && t.amount < 0 && t.category !== "payroll" && t.category !== "transfer").reduce((s, t) => s + t.amount, 0));
   const payroll  = Math.abs(transactions.filter(t => t.date.startsWith(thisM) && t.category === "payroll").reduce((s, t) => s + t.amount, 0));
 
   const grossMargin = thisRev > 0 ? Math.round(((thisRev - thisCost) / thisRev) * 100) : null;
@@ -130,7 +130,7 @@ export default function BenchmarksPage() {
       const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       const mt = transactions.filter(t => t.date.startsWith(k));
       const rev = mt.filter(t => t.amount > 0 && t.category === "revenue").reduce((s, t) => s + t.amount, 0);
-      const cost = Math.abs(mt.filter(t => t.amount < 0 && t.category !== "payroll").reduce((s, t) => s + t.amount, 0));
+      const cost = Math.abs(mt.filter(t => t.amount < 0 && t.category !== "payroll" && t.category !== "transfer").reduce((s, t) => s + t.amount, 0));
       const pay = Math.abs(mt.filter(t => t.category === "payroll").reduce((s, t) => s + t.amount, 0));
       if (rev > 0) {
         gm.push(((rev - cost) / rev) * 100);
@@ -476,7 +476,7 @@ function useMonthlyRevenue() {
     const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const mt = txns.filter(t => t.date.startsWith(k));
     const revenue = mt.filter(t => t.amount > 0 && t.category === "revenue").reduce((s, t) => s + t.amount, 0);
-    const cost = Math.abs(mt.filter(t => t.amount < 0 && t.category !== "payroll").reduce((s, t) => s + t.amount, 0));
+    const cost = Math.abs(mt.filter(t => t.amount < 0 && t.category !== "payroll" && t.category !== "transfer").reduce((s, t) => s + t.amount, 0));
     const payroll = Math.abs(mt.filter(t => t.category === "payroll").reduce((s, t) => s + t.amount, 0));
     series.push({ month: k.slice(2), revenue, cost, payroll });
   }
@@ -827,7 +827,7 @@ function WorkingCapitalBenchmark({ sector }: { sector: string }) {
 
   // Rough cash impact of closing the CCC gap: gap-days × daily spend run rate.
   const txns = store.transactions ?? [];
-  const annualSpend = Math.abs(txns.filter(t => t.amount < 0 && t.category !== "loan").reduce((s, t) => s + t.amount, 0));
+  const annualSpend = Math.abs(txns.filter(t => t.amount < 0 && t.category !== "loan" && t.category !== "transfer").reduce((s, t) => s + t.amount, 0));
   const months = Math.max(new Set(txns.map(t => t.date.slice(0, 7))).size, 1);
   const dailyRunRate = (annualSpend / months) / 30;
   const cashLockedVsNorm = Math.round(gap * dailyRunRate);

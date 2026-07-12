@@ -363,10 +363,10 @@ function monthBounds(back: number) {
 }
 
 // Net flow / inflow / outflow for a transaction list in a date window.
-function flowsIn(txns: { date: string; amount: number }[], start: string, end: string) {
+function flowsIn(txns: { date: string; amount: number; category?: string }[], start: string, end: string) {
   const win = txns.filter(t => t.date >= start && t.date <= end);
-  const inflow = win.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const outflow = Math.abs(win.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
+  const inflow = win.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+  const outflow = Math.abs(win.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0));
   return { inflow, outflow, net: inflow - outflow };
 }
 
@@ -510,7 +510,7 @@ function BoardDeckGenerator() {
     const openRisks = alerts.filter(a => !a.isRead);
 
     const topCustomers = Object.entries(
-      transactions.filter(t => t.amount > 0 && t.date >= cur.start && t.date <= cur.end && t.counterparty)
+      transactions.filter(t => t.amount > 0 && t.category !== "transfer" && t.date >= cur.start && t.date <= cur.end && t.counterparty)
         .reduce((acc, t) => { acc[t.counterparty] = (acc[t.counterparty] || 0) + t.amount; return acc; }, {} as Record<string, number>)
     ).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
@@ -651,7 +651,7 @@ function RiskWatchlistBrief() {
 
     // 3. Revenue concentration
     const byCustomer = Object.entries(
-      transactions.filter(t => t.amount > 0 && t.date >= cur.start && t.date <= cur.end && t.counterparty)
+      transactions.filter(t => t.amount > 0 && t.category !== "transfer" && t.date >= cur.start && t.date <= cur.end && t.counterparty)
         .reduce((acc, t) => { acc[t.counterparty] = (acc[t.counterparty] || 0) + t.amount; return acc; }, {} as Record<string, number>)
     ).sort((a, b) => b[1] - a[1]);
     if (byCustomer.length && c.inflow > 0) {
@@ -827,6 +827,7 @@ function CashFlowSnapshot() {
     const sourcesMap: Record<string, number> = {};
     const usesMap: Record<string, number> = {};
     win.forEach(t => {
+      if (t.category === "transfer") return;
       if (t.amount > 0) sourcesMap[t.category] = (sourcesMap[t.category] || 0) + t.amount;
       else usesMap[t.category] = (usesMap[t.category] || 0) + Math.abs(t.amount);
     });
@@ -910,7 +911,7 @@ function MarginSnapshot() {
   const calc = (start: string, end: string) => {
     const win = transactions.filter(t => t.date >= start && t.date <= end);
     const sum = (cat: Transaction["category"]) => Math.abs(win.filter(t => t.category === cat).reduce((s, t) => s + t.amount, 0));
-    const revenue = win.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const revenue = win.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
     const directCost = sum("expense") + sum("payroll");
     const overheads = sum("tax") + sum("loan");
     const grossProfit = revenue - directCost;
@@ -1460,7 +1461,7 @@ function ExpenseControlScorecard() {
 
   const rows = useMemo(() => {
     const cur = monthBounds(0);
-    const curWin = transactions.filter(t => t.date >= cur.start && t.date <= cur.end && t.amount < 0);
+    const curWin = transactions.filter(t => t.date >= cur.start && t.date <= cur.end && t.amount < 0 && t.category !== "transfer");
 
     // Trailing 3-month average baseline (months 1..3 back).
     const baseMonths = [1, 2, 3].map(b => monthBounds(b));
@@ -1901,7 +1902,7 @@ function TopAccountsBrief() {
     const win = transactions.filter(t => t.date >= cur.start && t.date <= cur.end && t.counterparty);
     const rank = (positive: boolean) => {
       const map: Record<string, number> = {};
-      win.filter(t => positive ? t.amount > 0 : t.amount < 0).forEach(t => { map[t.counterparty] = (map[t.counterparty] || 0) + Math.abs(t.amount); });
+      win.filter(t => t.category !== "transfer" && (positive ? t.amount > 0 : t.amount < 0)).forEach(t => { map[t.counterparty] = (map[t.counterparty] || 0) + Math.abs(t.amount); });
       const rows = Object.entries(map).sort((a, b) => b[1] - a[1]);
       const total = rows.reduce((s, [, v]) => s + v, 0);
       return { rows: rows.slice(0, 5), total };

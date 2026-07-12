@@ -169,7 +169,7 @@ function Overview({ onPick }: { onPick: (t: Tab) => void }) {
 
   const totalSum = policies.reduce((s, p) => s + p.sumInsured, 0);
   const totalPremium = policies.reduce((s, p) => s + p.premium, 0);
-  const annualRevenue = store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const annualRevenue = store.transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
   const premiumPctRevenue = annualRevenue > 0 ? (totalPremium / annualRevenue) * 100 : 0;
   const renewingSoon = policies.filter(p => {
     const d = daysToRenewal(p, today);
@@ -360,7 +360,7 @@ function CoverageGapAnalyzer() {
   const [policies] = useFeatureState<Policy[]>("ins-policies", []);
   const held = new Set(policies.map(p => p.type));
 
-  const annualRevenue = store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const annualRevenue = store.transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
   const hasPayroll = store.transactions.some(t => t.category === "payroll");
   const receivables = (store.invoices ?? []).filter(i => i.status !== "paid").reduce((s, i) => s + (i.amount ?? 0), 0);
 
@@ -435,7 +435,7 @@ function CoverageGapAnalyzer() {
 // ─────────────────────────────────────────────────────────────────────────────
 function SumInsuredCalculator() {
   const { store } = useApp();
-  const autoRevenue = Math.round(store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0));
+  const autoRevenue = Math.round(store.transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0));
 
   const [building, setBuilding] = useState("");
   const [plant, setPlant] = useState("");
@@ -1144,7 +1144,7 @@ function RiskScorecard() {
 
   const hasPayroll = store.transactions.some(t => t.category === "payroll");
   const receivables = (store.invoices ?? []).filter(i => i.status !== "paid").reduce((s, i) => s + (i.amount ?? 0), 0);
-  const annualRevenue = store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const annualRevenue = store.transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
 
   const lapsed = policies.filter(p => { const d = daysToRenewal(p, today); return d !== null && d < 0; }).length;
   const renewingSoon = policies.filter(p => { const d = daysToRenewal(p, today); return d !== null && d >= 0 && d <= 30; }).length;
@@ -1556,7 +1556,7 @@ function DeductibleOptimizer() {
 // ─────────────────────────────────────────────────────────────────────────────
 function BusinessInterruptionEstimator() {
   const { store } = useApp();
-  const autoRevenue = Math.round(store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0));
+  const autoRevenue = Math.round(store.transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0));
 
   const [turnover, setTurnover] = useState("");
   const [grossProfitPct, setGrossProfitPct] = useState("35");
@@ -3052,7 +3052,7 @@ function SumInsuredInflationIndexer() {
 function InsuranceSpendBudget() {
   const { store } = useApp();
   const [policies] = useFeatureState<Policy[]>("ins-policies", []);
-  const autoRevenue = Math.round(store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0));
+  const autoRevenue = Math.round(store.transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0));
   const registerPremium = Math.round(policies.reduce((s, p) => s + p.premium, 0));
 
   const [revenue, setRevenue] = useState("");
@@ -3488,7 +3488,7 @@ function EmployeeCoverageGap() {
 // ─────────────────────────────────────────────────────────────────────────────
 function LiabilityLimitAdequacy() {
   const { store } = useApp();
-  const autoRevenue = Math.round(store.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0));
+  const autoRevenue = Math.round(store.transactions.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0));
 
   const [turnover, setTurnover] = useState("");
   const [footfall, setFootfall] = useState("medium");

@@ -469,8 +469,8 @@ function DailyCashPosition() {
   const [pDate, setPDate] = useState(() => format(today, "yyyy-MM-dd"));
 
   const todayStr = format(today, "yyyy-MM-dd");
-  const inflowToday = store.transactions.filter(t => t.amount > 0 && t.date === todayStr).reduce((s, t) => s + t.amount, 0);
-  const outflowToday = store.transactions.filter(t => t.amount < 0 && t.date === todayStr).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const inflowToday = store.transactions.filter(t => t.amount > 0 && t.category !== "transfer" && t.date === todayStr).reduce((s, t) => s + t.amount, 0);
+  const outflowToday = store.transactions.filter(t => t.amount < 0 && t.category !== "transfer" && t.date === todayStr).reduce((s, t) => s + Math.abs(t.amount), 0);
 
   const pendingHolds = pending.reduce((s, p) => s + p.amount, 0);
   const availableNow = openingBalance - pendingHolds;
@@ -2270,7 +2270,7 @@ function DuplicatePaymentDetector() {
   const [windowDays, setWindowDays] = useState(7);
 
   const groups = useMemo(() => {
-    const debits = store.transactions.filter(t => t.amount < 0);
+    const debits = store.transactions.filter(t => t.amount < 0 && t.category !== "transfer");
     const byKey = new Map<string, typeof debits>();
     for (const t of debits) {
       const key = `${Math.round(Math.abs(t.amount))}|${(t.counterparty || "").trim().toLowerCase()}`;
@@ -2630,8 +2630,8 @@ function CashRunwayMeter() {
       const d = parseISO(t.date);
       return !isNaN(d.getTime()) && d >= cutoff && d <= now;
     });
-    const inflow = recent.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const outflow = recent.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const inflow = recent.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+    const outflow = recent.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
     const netBurn = (outflow - inflow) / months; // positive = burning cash
     const grossBurn = outflow / months;
     return { inflow, outflow, netBurn, grossBurn, count: recent.length };

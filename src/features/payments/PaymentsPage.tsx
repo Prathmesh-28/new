@@ -157,7 +157,7 @@ function Overview({ onJump }: { onJump: (t: Tab) => void }) {
 
   // Inbound payments this month, proxied from revenue transactions.
   const thisM = format(new Date(), "yyyy-MM");
-  const inbound = store.transactions.filter(t => t.amount > 0 && t.date.startsWith(thisM));
+  const inbound = store.transactions.filter(t => t.amount > 0 && t.category !== "transfer" && t.date.startsWith(thisM));
   const collected = inbound.reduce((s, t) => s + t.amount, 0);
   const activeMandates = mandates.filter(m => m.status === "active");
   const monthlyMandateValue = activeMandates
@@ -1362,7 +1362,7 @@ function MethodMix() {
       });
     } else {
       // Heuristic inference: bucket inbound revenue by amount band as a stand-in for instrument.
-      store.transactions.filter(t => t.amount > 0).forEach(t => {
+      store.transactions.filter(t => t.amount > 0 && t.category !== "transfer").forEach(t => {
         const band = t.amount <= 2000 ? "UPI (≤₹2k)" : t.amount <= 50000 ? "Cards / UPI" : "Bank transfer / NEFT";
         const m = map.get(band) ?? { count: 0, value: 0 };
         m.count++; m.value += t.amount; map.set(band, m);

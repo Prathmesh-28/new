@@ -518,8 +518,8 @@ function SummaryReader() {
 
   const summary = useMemo(() => {
     const txns = store.transactions ?? [];
-    const inflow = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const outflow = txns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const inflow = txns.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+    const outflow = txns.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
     const net = inflow - outflow;
     return {
       inflow, outflow, net, count: txns.length,
@@ -725,8 +725,8 @@ function AudioStatementBuilder() {
   const [lines, setLines] = useFeatureState<ScriptLine[]>("voice-audio-statement", []);
   const [draft, setDraft] = useState("");
 
-  const inflow = (store.transactions ?? []).filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const outflow = (store.transactions ?? []).filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const inflow = (store.transactions ?? []).filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+  const outflow = (store.transactions ?? []).filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
 
   const suggestions = [
     `This statement covers ${(store.transactions ?? []).length} transactions.`,
@@ -1241,10 +1241,10 @@ function ReadMyDayDigest() {
   const digest = useMemo(() => {
     const txns = store.transactions ?? [];
     const todays = txns.filter(t => (t.date ?? "").slice(0, 10) === todayKey);
-    const inflow = todays.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const outflow = todays.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
-    const allIn = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const allOut = txns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const inflow = todays.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+    const outflow = todays.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
+    const allIn = txns.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0);
+    const allOut = txns.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0);
     const balance = allIn - allOut;
     const script = todays.length
       ? `Good ${today.getHours() < 12 ? "morning" : today.getHours() < 17 ? "afternoon" : "evening"}. Today you recorded ${todays.length} transaction${todays.length > 1 ? "s" : ""}. Money in: ${lakhCrore(inflow)} rupees. Money out: ${lakhCrore(outflow)} rupees. Your overall balance stands at ${lakhCrore(balance)} rupees.`
@@ -1897,8 +1897,8 @@ type BalanceAnswer = { kind: "balance" | "in" | "out" | "count" | "party" | "unk
 function answerQuestion(q: string, store: ReturnType<typeof useApp>["store"]): BalanceAnswer {
   const t = q.trim().toLowerCase();
   const txns = store.transactions ?? [];
-  const inflow = txns.filter(x => x.amount > 0).reduce((s, x) => s + x.amount, 0);
-  const outflow = txns.filter(x => x.amount < 0).reduce((s, x) => s + Math.abs(x.amount), 0);
+  const inflow = txns.filter(x => x.amount > 0 && x.category !== "transfer").reduce((s, x) => s + x.amount, 0);
+  const outflow = txns.filter(x => x.amount < 0 && x.category !== "transfer").reduce((s, x) => s + Math.abs(x.amount), 0);
   if (!t) return { kind: "unknown", text: "Ask me about your balance, money in, money out, or how many transactions you have." };
   // party lookup: "how much from/for <name>"
   const partyMatch = t.match(/\b(?:from|for|with|owe[ds]?|to)\s+([a-z][a-z\s.&'-]{1,40})/);

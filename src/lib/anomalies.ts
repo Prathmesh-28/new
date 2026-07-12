@@ -49,7 +49,9 @@ export function detectAnomalies(
   const recentDays = opts.recentDays ?? 90;
   const dupWindowDays = opts.dupWindowDays ?? 7;
   // Material floor scales to the business: 1% of the median expense, min ₹2,000.
-  const expenses = transactions.filter(t => t.amount < 0);
+  // Self-transfers between the business's own accounts aren't spend - without the
+  // exclusion a routine sweep reads as a duplicate/spike/new-payee anomaly.
+  const expenses = transactions.filter(t => t.amount < 0 && t.category !== "transfer");
   const absAll = expenses.map(t => Math.abs(t.amount));
   const minMaterial = opts.minMaterial ?? Math.max(2000, Math.round(median(absAll) * 0.5));
 

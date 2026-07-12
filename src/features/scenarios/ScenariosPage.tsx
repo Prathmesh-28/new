@@ -576,8 +576,8 @@ function HeadcountScenario() {
   const { cashOnHand, monthlyRevenue, monthlyCost } = useMemo(() => {
     const txns = store.transactions ?? [];
     const months = Math.max(txns.length / 30, 1);
-    const rev  = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0) / months;
-    const cost = txns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0) / months;
+    const rev  = txns.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0) / months;
+    const cost = txns.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0) / months;
     const cash = txns.reduce((s, t) => s + t.amount, 0);
     return { cashOnHand: Math.max(0, Math.round(cash)), monthlyRevenue: Math.round(rev), monthlyCost: Math.round(cost) };
   }, [store.transactions]);
@@ -860,8 +860,8 @@ function useLiveMonthly() {
   return useMemo(() => {
     const txns = store.transactions ?? [];
     const months = Math.max(txns.length / 30, 1);
-    const rev  = txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0) / months;
-    const cost = txns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0) / months;
+    const rev  = txns.filter(t => t.amount > 0 && t.category !== "transfer").reduce((s, t) => s + t.amount, 0) / months;
+    const cost = txns.filter(t => t.amount < 0 && t.category !== "transfer").reduce((s, t) => s + Math.abs(t.amount), 0) / months;
     const cash = txns.reduce((s, t) => s + t.amount, 0);
     return { cashOnHand: Math.max(0, Math.round(cash)), monthlyRevenue: Math.round(rev), monthlyCost: Math.round(cost) };
   }, [store.transactions]);

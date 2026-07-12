@@ -47,7 +47,7 @@ export default function SpendPage() {
   const tr = useT();
 
   const expenses = useMemo(() =>
-    store.transactions.filter(t => t.amount < 0),
+    store.transactions.filter(t => t.amount < 0 && t.category !== "transfer"),
   [store.transactions]);
 
   // ── Current & previous month spend by category ────────────────────────────
@@ -450,7 +450,7 @@ const SPEND_CAT_LABEL: Record<string, string> = {
 function SpendCategorisation() {
   const { store } = useApp();
   const fc = formatCurrency;
-  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0), [store.transactions]);
+  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0 && t.category !== "transfer"), [store.transactions]);
 
   const { byCat, byVendor, total } = useMemo(() => {
     const cat: Record<string, number> = {};
@@ -759,7 +759,7 @@ function BudgetVsActualByCostCenter() {
     const key = format(new Date(), "yyyy-MM");
     const map: Record<string, number> = {};
     store.transactions
-      .filter(t => t.amount < 0 && t.date.startsWith(key))
+      .filter(t => t.amount < 0 && t.category !== "transfer" && t.date.startsWith(key))
       .forEach(t => { map[t.category] = (map[t.category] ?? 0) + Math.abs(t.amount); });
     return map;
   }, [store.transactions]);
@@ -833,7 +833,7 @@ function BudgetVsActualByCostCenter() {
 function DuplicateAnomalyDetector() {
   const { store } = useApp();
   const fc = formatCurrency;
-  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0), [store.transactions]);
+  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0 && t.category !== "transfer"), [store.transactions]);
 
   // Duplicate suspects: same payee + same rounded amount within 5 days.
   type Dup = { key: string; counterparty: string; amount: number; dates: string[] };
@@ -959,7 +959,7 @@ type DetectedRecurring = { vendor: string; category: string; months: number; avg
 function detectRecurringSpend(transactions: { amount: number; date: string; counterparty: string; category: string }[], today: Date): DetectedRecurring[] {
   const ks = monthKeys(6, today);
   const byVendor: Record<string, { months: Set<string>; total: number; category: string; last: string }> = {};
-  transactions.filter(t => t.amount < 0).forEach(t => {
+  transactions.filter(t => t.amount < 0 && t.category !== "transfer").forEach(t => {
     const mk = t.date.slice(0, 7);
     if (!ks.includes(mk)) return;
     const v = byVendor[t.counterparty] ?? { months: new Set<string>(), total: 0, category: t.category, last: t.date };
@@ -982,7 +982,7 @@ function CategoryTrend12mo() {
   const { store } = useApp();
   const fc = formatCurrency;
   const today = new Date();
-  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0), [store.transactions]);
+  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0 && t.category !== "transfer"), [store.transactions]);
 
   const { keys, series, totalsByCat, grand } = useMemo(() => {
     const ks = monthKeys(12, today);
@@ -1123,7 +1123,7 @@ function BudgetGauge() {
     const now = new Date();
     const key = format(now, "yyyy-MM");
     const spent = store.transactions
-      .filter(t => t.amount < 0 && t.date.startsWith(key))
+      .filter(t => t.amount < 0 && t.category !== "transfer" && t.date.startsWith(key))
       .reduce((s, t) => s + Math.abs(t.amount), 0);
     const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     return { spentMTD: spent, dayOfMonth: now.getDate(), daysInMonth: dim };
@@ -1184,7 +1184,7 @@ function SpendForecast() {
   const { store } = useApp();
   const fc = formatCurrency;
   const today = new Date();
-  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0), [store.transactions]);
+  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0 && t.category !== "transfer"), [store.transactions]);
 
   const { history, forecast, avg, slope } = useMemo(() => {
     const ks = monthKeys(6, today);
@@ -1260,7 +1260,7 @@ function SavingsOpportunityFinder() {
   const { store } = useApp();
   const fc = formatCurrency;
   const today = new Date();
-  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0), [store.transactions]);
+  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0 && t.category !== "transfer"), [store.transactions]);
 
   type Opp = { id: string; title: string; detail: string; saving: number };
   const opps = useMemo<Opp[]>(() => {
@@ -1360,7 +1360,7 @@ function ExpensePolicyChecker() {
   const [cat, setCat] = useState<string>("expense");
   const [cap, setCap] = useState("");
 
-  const recent = useMemo(() => store.transactions.filter(t => t.amount < 0 && t.date.startsWith(format(today, "yyyy-MM"))), [store.transactions, today]);
+  const recent = useMemo(() => store.transactions.filter(t => t.amount < 0 && t.category !== "transfer" && t.date.startsWith(format(today, "yyyy-MM"))), [store.transactions, today]);
 
   const add = () => {
     if ((parseFloat(cap) || 0) <= 0) { toast.error("Enter a per-transaction cap"); return; }
@@ -1436,7 +1436,7 @@ function TravelSpendTracker() {
   const { store } = useApp();
   const fc = formatCurrency;
   const today = new Date();
-  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0), [store.transactions]);
+  const expenses = useMemo(() => store.transactions.filter(t => t.amount < 0 && t.category !== "transfer"), [store.transactions]);
 
   const { monthly, total, byVendor, count } = useMemo(() => {
     const ks = monthKeys(6, today);
@@ -1626,7 +1626,7 @@ function SpendVarianceVsLastMonth() {
     const cur: Record<string, number> = {};
     const prv: Record<string, number> = {};
     let ct = 0, pt = 0;
-    store.transactions.filter(t => t.amount < 0).forEach(t => {
+    store.transactions.filter(t => t.amount < 0 && t.category !== "transfer").forEach(t => {
       const mk = t.date.slice(0, 7);
       const a = Math.abs(t.amount);
       if (mk === curKey) { cur[t.category] = (cur[t.category] ?? 0) + a; ct += a; }
@@ -1707,7 +1707,7 @@ function DiscretionaryVsCommitted() {
     const key = format(today, "yyyy-MM");
     let com = 0, dis = 0;
     store.transactions
-      .filter(t => t.amount < 0 && t.date.startsWith(key))
+      .filter(t => t.amount < 0 && t.category !== "transfer" && t.date.startsWith(key))
       .forEach(t => {
         const a = Math.abs(t.amount);
         if ((COMMITTED_CATS as readonly string[]).includes(t.category)) com += a;
@@ -1770,7 +1770,7 @@ function TopGrowingCategories() {
     const priorKeys = ks.slice(0, 3);
     const recent: Record<string, number> = {};
     const prior: Record<string, number> = {};
-    store.transactions.filter(t => t.amount < 0).forEach(t => {
+    store.transactions.filter(t => t.amount < 0 && t.category !== "transfer").forEach(t => {
       const mk = t.date.slice(0, 7);
       const a = Math.abs(t.amount);
       if (recentKeys.includes(mk)) recent[t.category] = (recent[t.category] ?? 0) + a;
@@ -1835,7 +1835,7 @@ function GstItcEligibleSplit() {
     const key = format(today, "yyyy-MM");
     let el = 0, inel = 0;
     store.transactions
-      .filter(t => t.amount < 0 && t.date.startsWith(key))
+      .filter(t => t.amount < 0 && t.category !== "transfer" && t.date.startsWith(key))
       .forEach(t => {
         const a = Math.abs(t.amount);
         if ((ITC_ELIGIBLE_CATS as readonly string[]).includes(t.category)) el += a;
