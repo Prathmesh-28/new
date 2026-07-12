@@ -127,7 +127,7 @@ router.post("/", authenticate, canWrite, async (req, res) => {
 
 // PATCH /api/transactions/:id - update category, merchant etc.
 router.patch("/:id", authenticate, canWrite, async (req, res) => {
-  const { category, merchant_name, is_recurring, recurrence_cadence } = req.body;
+  const { category, merchant_name, description_raw, is_recurring, recurrence_cadence } = req.body;
 
   const { rows: existing } = await pool.query(
     "SELECT * FROM transactions WHERE id=$1 AND tenant_id=$2",
@@ -140,6 +140,7 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
   let i = 1;
   if (category          !== undefined && CATEGORIES.includes(category)) { updates.push(`category=$${i++}`);          vals.push(category); }
   if (merchant_name     !== undefined) { updates.push(`merchant_name=$${i++}`);     vals.push(merchant_name); }
+  if (description_raw   !== undefined) { updates.push(`description_raw=$${i++}`);   vals.push(description_raw); }
   if (is_recurring      !== undefined) { updates.push(`is_recurring=$${i++}`);      vals.push(is_recurring); }
   if (recurrence_cadence !== undefined) { updates.push(`recurrence_cadence=$${i++}`); vals.push(recurrence_cadence); }
 

@@ -14,6 +14,8 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import DatePicker from "@/components/DatePicker";
+import { api } from "@/lib/api";
+import { txnToApiBody, txnFromApi } from "@/lib/txnApi";
 
 // shared styles (reused from TaxPage/DebtPage convention)
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -320,7 +322,17 @@ function OfflineQueue({ online }: { online: boolean }) {
   // the cash book; a collection additionally settles the customer's oldest open
   // invoice so their outstanding balance actually drops. Throws on failure so the
   // caller can keep the item pending + retryable.
-  const flushOne = (q: QueueItem, settledIds?: Set<string>): { ledgerRef: string } => {
+  // Posts to the REAL server first (POST /api/transactions via the shared txnApi
+  // mapping) and mirrors the returned row into KV - a KV-only addTransaction is
+  // silently wiped the next time TransactionsPage rehydrates store.transactions
+  // from the server, which would make a field rep's synced cash simply vanish.
+  const postTxn = async (draft: Parameters<typeof addTransaction>[0]) => {
+    const created = await api.post<Record<string, unknown>>("/api/transactions", txnToApiBody(draft));
+    const row = Array.isArray(created) ? created[0] : created;
+    addTransaction(row ? txnFromApi(row) : draft);
+  };
+
+  const flushOne = async (q: QueueItem, settledIds?: Set<string>): Promise<{ ledgerRef: string }> => {
     const when = (q.at || new Date().toISOString()).slice(0, 10);
 
     if (q.kind === "collection") {
@@ -329,13 +341,16 @@ function OfflineQueue({ online }: { online: boolean }) {
       // 1) Cash book: a collection settles an existing receivable, so it is NOT new
       //    revenue - booking it as revenue would double-count the original sale.
       //    Post it as a transfer (cash movement) instead.
-      addTransaction({
+      await postTxn({
         id: generateId(), date: when, amount: Math.abs(q.amount),
         description: `Field collection${q.mode ? ` (${q.mode.toUpperCase()})` : ""} - ${customer}`,
         category: "transfer", counterparty: customer, isRecurring: false,
         bankAccountId, notes: q.meta,
       });
-      // 2) Outstanding: apply against the customer's oldest unpaid invoice.
+      // 2) Outstanding: apply against the customer's oldest unpaid invoice, through
+      //    the REAL receipts endpoint so paid_amount/GL move - a KV-only status flip
+      //    reverts the moment InvoicesPage refetches from the server. Falls back to
+      //    the KV mirror only if the invoice has no server row.
       //    Skip any invoice already settled earlier in this same sync run - the store
       //    snapshot doesn't update mid-loop, so without this the same invoice could
       //    be settled by two collections.
@@ -343,12 +358,17 @@ function OfflineQueue({ online }: { online: boolean }) {
         .filter(i => i.customer.trim().toLowerCase() === customer.trim().toLowerCase() && i.status !== "paid" && !settledIds?.has(i.id))
         .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
       const target = open[0];
-      if (target && q.amount >= target.amount) {
-        updateInvoice({ ...target, status: "paid" });
-        settledIds?.add(target.id);
-        return { ledgerRef: `Cash book + ${target.invoiceNumber ?? "invoice"} settled` };
-      }
       if (target) {
+        const applied = Math.min(q.amount, target.amount);
+        try {
+          await api.post(`/api/invoices/${target.id}/payments`, { amount: applied, mode: q.mode || "cash", received_at: when });
+        } catch {
+          if (q.amount >= target.amount) updateInvoice({ ...target, status: "paid" });
+        }
+        if (q.amount >= target.amount) {
+          settledIds?.add(target.id);
+          return { ledgerRef: `Cash book + ${target.invoiceNumber ?? "invoice"} settled` };
+        }
         return { ledgerRef: `Cash book · part-payment on ${target.invoiceNumber ?? "invoice"}` };
       }
       return { ledgerRef: "Cash book (no open invoice to settle)" };
@@ -357,7 +377,7 @@ function OfflineQueue({ online }: { online: boolean }) {
     if (q.kind === "sale" || q.kind === "daysheet") {
       if (q.amount <= 0) throw new Error("sale has no amount");
       const customer = resolveCustomer(q.customer) ?? "Counter sale";
-      addTransaction({
+      await postTxn({
         id: generateId(), date: when, amount: Math.abs(q.amount),
         description: q.label, category: "revenue", counterparty: customer,
         isRecurring: false, bankAccountId, notes: q.meta,
@@ -380,7 +400,7 @@ function OfflineQueue({ online }: { online: boolean }) {
     const settledIds = new Set<string>();
     for (const q of pending) {
       try {
-        const { ledgerRef } = flushOne(q, settledIds);
+        const { ledgerRef } = await flushOne(q, settledIds);
         results[q.id] = { synced: true, syncedAt: new Date().toISOString(), ledgerRef, syncError: undefined };
         ok++;
       } catch (e) {
@@ -395,12 +415,12 @@ function OfflineQueue({ online }: { online: boolean }) {
     else toast.error(`Could not sync ${failed} entr${failed === 1 ? "y" : "ies"} - kept pending to retry`);
   };
 
-  const retryOne = (id: string) => {
+  const retryOne = async (id: string) => {
     const item = queue.find(q => q.id === id);
     if (!item) return;
     if (!online) { toast.error("Still offline - retry once the network returns"); return; }
     try {
-      const { ledgerRef } = flushOne(item);
+      const { ledgerRef } = await flushOne(item);
       setQueue(prev => prev.map(q => q.id === id ? { ...q, synced: true, syncedAt: new Date().toISOString(), ledgerRef, syncError: undefined } : q));
       toast.success("Synced to ledger");
     } catch (e) {

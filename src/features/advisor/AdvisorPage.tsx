@@ -296,14 +296,9 @@ function ReportModal({ tenantId, label, firm, onClose }: {
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => { toast.success("PDF will be emailed to you shortly"); onClose(); }}
+                  onClick={() => window.print()}
                   className="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2.5 rounded-lg text-sm hover:opacity-90">
-                  <Download size={13} /> Download PDF
-                </button>
-                <button
-                  onClick={() => { toast.success(`Report emailed to ${label}`); onClose(); }}
-                  className="flex items-center justify-center gap-1.5 border border-[var(--color-border)] text-sm px-4 py-2.5 rounded-lg hover:border-[var(--color-primary)]/40">
-                  <Send size={13} /> Email Client
+                  <Download size={13} /> Print / Save as PDF
                 </button>
               </div>
             </div>
@@ -647,8 +642,8 @@ function PracticeTab({ clients }: { clients: ClientSummary[] }) {
                         <div key={j} className="flex items-center gap-1.5 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] px-2.5 py-1.5 rounded-lg">
                           <Paperclip size={9} className="text-[var(--color-muted)]" />
                           {doc}
-                          <button onClick={() => toast.success(`Upload link sent to ${req.client}`)}
-                            className="ml-1 text-[var(--color-primary)] hover:underline text-[10px]">Send link</button>
+                          <button onClick={() => { navigator.clipboard?.writeText(`Hi ${req.client}, please share your "${doc}" for this filing period - you can upload it from your Headroom documents vault, or reply to this message with the file. Thanks!`); toast.success("Request message copied - send it to the client yourself (nothing is sent from here)"); }}
+                            className="ml-1 text-[var(--color-primary)] hover:underline text-[10px]">Copy request</button>
                         </div>
                       ))}
                     </div>
@@ -852,7 +847,7 @@ function BillingTab({ clients }: { clients: ClientSummary[] }) {
 
   const updateStatus = (id: string, status: CaBill["status"]) => {
     saveBills(bills.map(b => b.id === id ? { ...b, status } : b));
-    toast.success(status === "sent" ? "Invoice sent to client" : "Marked as paid");
+    toast.success(status === "sent" ? "Marked as sent - share the invoice with the client yourself (nothing is emailed from here)" : "Marked as paid");
   };
 
   const outstanding   = bills.filter(b => b.status !== "paid").reduce((s, b) => s + b.amount, 0);
@@ -949,7 +944,7 @@ function BillingTab({ clients }: { clients: ClientSummary[] }) {
                       {b.status === "draft" && (
                         <button onClick={() => updateStatus(b.id, "sent")}
                           className="text-[10px] text-blue-400 hover:underline flex items-center gap-1">
-                          <Send size={9} /> Send
+                          <Send size={9} /> Mark sent
                         </button>
                       )}
                       {b.status === "sent" && (
@@ -1819,9 +1814,9 @@ function EngagementTab({ clients, firm }: { clients: ClientSummary[]; firm: CaFi
               className="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold py-2.5 rounded-lg text-sm hover:opacity-90">
               <Copy size={13} /> Copy Letter
             </button>
-            <button onClick={() => { if (!clientLabel) { toast.error("Select a client first"); return; } toast.success(`Engagement letter sent to ${clientLabel}`); }}
+            <button onClick={() => window.print()}
               className="flex items-center justify-center gap-1.5 border border-[var(--color-border)] text-sm px-4 py-2.5 rounded-lg hover:border-[var(--color-primary)]/40">
-              <Send size={13} /> Send
+              <Download size={13} /> Print / Save as PDF
             </button>
           </div>
         </div>

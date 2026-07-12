@@ -931,21 +931,24 @@ function TransactionDedupe({ editable }: { editable: boolean }) {
   }, [store.transactions]);
 
   const removable = groups.reduce((a, g) => a + (g.length - 1), 0);
+  const [deduping, setDeduping] = useState(false);
 
-  const dedupe = () => {
+  // Delete on the SERVER first - a KV-only removal is silently restored the next
+  // time TransactionsPage rehydrates store.transactions from the backend.
+  const dedupe = async () => {
+    if (deduping) return;
     if (removable === 0) { toast.error("No duplicates found"); return; }
     if (!window.confirm(`Remove ${removable} duplicate transaction(s)? The first of each group is kept.`)) return;
-    setStore(s => {
-      const seen = new Set<string>();
-      const kept = (s.transactions ?? []).filter(t => {
-        const k = `${t.date}|${t.amount}|${(t.counterparty || "").toLowerCase()}|${(t.description || "").toLowerCase()}`;
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      });
-      return { ...s, transactions: kept };
-    });
-    toast.success(`Removed ${removable} duplicate transaction(s)`);
+    const ids = groups.flatMap(g => g.slice(1).map(t => t.id));
+    setDeduping(true);
+    try {
+      const results = await Promise.allSettled(ids.map(id => api.delete(`/api/transactions/${id}`)));
+      const deleted = new Set(ids.filter((_, i) => results[i].status === "fulfilled"));
+      const failed = ids.length - deleted.size;
+      setStore(s => ({ ...s, transactions: (s.transactions ?? []).filter(t => !deleted.has(t.id)) }));
+      if (deleted.size) toast.success(`Removed ${deleted.size} duplicate transaction(s)`);
+      if (failed) toast.error(`${failed} couldn't be removed on the server - they will reappear on refresh`);
+    } finally { setDeduping(false); }
   };
 
   return (
@@ -1009,26 +1012,38 @@ function BulkFindReplace({ editable }: { editable: boolean }) {
     });
   }, [store.transactions, field, find, whole]);
 
-  const apply = () => {
+  const [applying, setApplying] = useState(false);
+
+  // Persist each rename on the SERVER (PATCH merchant_name/description_raw) -
+  // a KV-only rewrite is silently reverted the next time TransactionsPage
+  // rehydrates store.transactions from the backend.
+  const apply = async () => {
+    if (applying) return;
     if (!find.trim()) { toast.error("Enter text to find"); return; }
     if (matches.length === 0) { toast.error("No matching rows"); return; }
     if (!window.confirm(`Replace "${find}" in ${matches.length} transaction(s)' ${field}?`)) return;
     const q = find.trim();
     const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-    setStore(s => ({
-      ...s,
-      transactions: (s.transactions ?? []).map(t => {
-        const v = t[field] || "";
-        if (whole) {
-          if (v.toLowerCase() !== q.toLowerCase()) return t;
-          return { ...t, [field]: repl };
-        }
-        if (!v.toLowerCase().includes(q.toLowerCase())) return t;
-        return { ...t, [field]: v.replace(re, repl) };
-      }),
-    }));
-    toast.success(`Updated ${matches.length} transaction(s)`);
-    setFind(""); setRepl("");
+    const newValue = (t: Transaction) => {
+      const v = t[field] || "";
+      return whole ? repl : v.replace(re, repl);
+    };
+    const apiField = field === "counterparty" ? "merchant_name" : "description_raw";
+    setApplying(true);
+    try {
+      const results = await Promise.allSettled(
+        matches.map(t => api.patch(`/api/transactions/${t.id}`, { [apiField]: newValue(t) }))
+      );
+      const okIds = new Set(matches.filter((_, i) => results[i].status === "fulfilled").map(t => t.id));
+      const failed = matches.length - okIds.size;
+      setStore(s => ({
+        ...s,
+        transactions: (s.transactions ?? []).map(t => okIds.has(t.id) ? { ...t, [field]: newValue(t) } : t),
+      }));
+      if (okIds.size) toast.success(`Updated ${okIds.size} transaction(s)`);
+      if (failed) toast.error(`${failed} couldn't be saved on the server - they will revert on refresh`);
+      setFind(""); setRepl("");
+    } finally { setApplying(false); }
   };
 
   return (
@@ -1251,12 +1266,23 @@ function ArchivePurge({ editable }: { editable: boolean }) {
     toast.success(`Archived ${older.length} transaction(s) to CSV`);
   };
 
-  const purge = () => {
+  const [purging, setPurging] = useState(false);
+
+  // Delete on the SERVER - a KV-only purge is silently restored the next time
+  // TransactionsPage rehydrates store.transactions from the backend.
+  const purge = async () => {
+    if (purging) return;
     if (older.length === 0) { toast.error("Nothing older than the cut-off"); return; }
     if (!window.confirm(`Permanently remove ${older.length} transaction(s) dated before ${cutoff}? Download the archive first - this cannot be undone.`)) return;
-    const t = new Date(cutoff).getTime();
-    setStore(s => ({ ...s, transactions: (s.transactions ?? []).filter(x => new Date(x.date).getTime() >= t) }));
-    toast.success(`Purged ${older.length} old transaction(s)`);
+    setPurging(true);
+    try {
+      const results = await Promise.allSettled(older.map(t => api.delete(`/api/transactions/${t.id}`)));
+      const deleted = new Set(older.filter((_, i) => results[i].status === "fulfilled").map(t => t.id));
+      const failed = older.length - deleted.size;
+      setStore(s => ({ ...s, transactions: (s.transactions ?? []).filter(x => !deleted.has(x.id)) }));
+      if (deleted.size) toast.success(`Purged ${deleted.size} old transaction(s)`);
+      if (failed) toast.error(`${failed} couldn't be removed on the server - they will reappear on refresh`);
+    } finally { setPurging(false); }
   };
 
   return (

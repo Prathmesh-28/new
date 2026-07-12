@@ -668,7 +668,7 @@ function SyndicatesTab({ user }: { user: { email: string } }) {
 
   const join = (id: string, name: string) => {
     setJoined(s => new Set([...s, id]));
-    toast.success(`Joined syndicate "${name}". Lead investor will contact you for KYC.`);
+    toast.info(`Marked interest in "${name}" (preview only - these are sample syndicates, no lead investor is notified and no real deal exists behind them).`, { duration: 8000 });
   };
 
   const createSyndicate = () => {
@@ -681,7 +681,7 @@ function SyndicatesTab({ user }: { user: { email: string } }) {
     };
     setSyndicates(prev => [s, ...prev]);
     setNewName(""); setShowCreate(false);
-    toast.success("Syndicate created! Other investors can now join your deal.");
+    toast.info("Syndicate drafted (preview only - it is not published anywhere and other investors cannot see or join it yet).", { duration: 8000 });
   };
 
   const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -690,10 +690,12 @@ function SyndicatesTab({ user }: { user: { email: string } }) {
     <div className="space-y-4">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold">Syndicates - the AngelList play for Indian SMBs</p>
+          <p className="text-sm font-semibold flex items-center gap-2">Syndicates - the AngelList play for Indian SMBs <span className="text-[10px] font-bold uppercase tracking-wide bg-amber-950/40 text-amber-400 border border-amber-800/40 px-1.5 py-0.5 rounded">Preview - sample data</span></p>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">
-            A lead investor creates a syndicate on a verified raise. Smaller checks ride along on one term sheet.
-            Headroom handles the cap table entry. ₹25L-₹2Cr deals, accessible to angel-sized investors.
+            The concept: a lead investor creates a syndicate on a verified raise, smaller checks ride along on one
+            term sheet, Headroom handles the cap table entry. The syndicates below are illustrative samples - live
+            syndication isn't launched yet, so nothing here is a real deal or reaches other investors. Real, committed
+            investing happens on the Deal Flow tab against actual published raises.
           </p>
         </div>
         <button onClick={() => setShowCreate(v => !v)}

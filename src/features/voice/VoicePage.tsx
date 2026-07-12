@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import DatePicker from "@/components/DatePicker";
+import { api } from "@/lib/api";
+import { txnToApiBody, txnFromApi } from "@/lib/txnApi";
 
 // ── shared styles (reused from TaxPage/DebtPage convention) ──────────────────────
 const INP = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
@@ -343,8 +345,8 @@ function VoiceCapture() {
 
   useEffect(() => () => { recRef.current?.stop(); }, []);
 
-  const post = () => {
-    if (!draft) return;
+  const post = async () => {
+    if (!draft || posting) return;
     if (isReadOnly) { toast.error("Read-only view - switch to your own books to post entries"); return; }
     if (amountValue <= 0) { toast.error("Enter an amount greater than zero before posting"); return; }
     setPosting(true);
@@ -352,9 +354,10 @@ function VoiceCapture() {
       // Prefer an existing known party (so the new entry reconciles against the
       // same counterparty already on file); else use what the owner typed.
       const counterparty = matchedParty ?? party.trim();
-      // Same shape AddTransactionModal hands to store.addTransaction on the Dashboard.
       const defaultAccount = (store.bankAccounts ?? [])[0]?.id ?? "";
-      addTransaction({
+      // Server first (same path the Dashboard quick-add uses) - a KV-only entry is
+      // silently wiped the next time TransactionsPage rehydrates from the backend.
+      const created = await api.post<Record<string, unknown>>("/api/transactions", txnToApiBody({
         id: generateId(),
         date,
         amount: direction === "in" ? amountValue : -amountValue,
@@ -363,7 +366,9 @@ function VoiceCapture() {
         counterparty,
         isRecurring: false,
         bankAccountId: defaultAccount,
-      });
+      }));
+      const row = Array.isArray(created) ? created[0] : created;
+      if (row) addTransaction(txnFromApi(row));
       toast.success(`Posted ${formatCurrency(amountValue)} ${direction === "in" ? "in" : "out"}${counterparty ? ` · ${counterparty}` : ""} to the ledger`);
       setText("");
       lastSeed.current = "";

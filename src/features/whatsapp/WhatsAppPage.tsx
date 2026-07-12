@@ -4,10 +4,11 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useApp } from "@/context/AppContext";
 import { useFeatureState } from "@/hooks/useFeatureState";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, generateId } from "@/lib/utils";
 import { DEFAULT_WA_PREFS, type WhatsAppPreferences } from "@/data/types";
 import { useT } from "@/i18n";
 import DatePicker from "@/components/DatePicker";
+import { txnToApiBody, txnFromApi } from "@/lib/txnApi";
 
 // Build a wa.me deep link that pre-fills a message (no backend call). If a
 // recipient phone is supplied, it opens that chat; otherwise WhatsApp asks who.
@@ -699,13 +700,19 @@ interface CapturedSale {
 }
 
 function WaSalesCapture() {
+  const { addTransaction } = useApp();
   const [sales, setSales] = useFeatureState<CapturedSale[]>("wa-sales-capture", []);
   const [customer, setCustomer] = useState("");
   const [item, setItem] = useState("");
   const [amount, setAmount] = useState("");
+  const [saving, setSaving] = useState(false);
   const fc = formatCurrency;
 
-  const add = () => {
+  // A captured sale is real revenue - it must reach the actual cash book
+  // (POST /api/transactions), not just this page's own recap list, or the
+  // owner's dashboard/forecast never sees the money they just texted in.
+  const add = async () => {
+    if (saving) return;
     const amt = parseFloat(amount);
     if (!item.trim() || !amt || amt <= 0) { toast.error("Enter an item and a positive amount"); return; }
     const row: CapturedSale = {
@@ -715,9 +722,21 @@ function WaSalesCapture() {
       item: item.trim(),
       amount: Math.round(amt),
     };
-    setSales(prev => [row, ...prev]);
-    setCustomer(""); setItem(""); setAmount("");
-    toast.success("Sale booked");
+    setSaving(true);
+    try {
+      const created = await api.post<Record<string, unknown>>("/api/transactions", txnToApiBody({
+        id: generateId(), date: row.date, amount: row.amount,
+        description: `WhatsApp sale - ${row.item}`, category: "revenue",
+        counterparty: row.customer, isRecurring: false, bankAccountId: "",
+      }));
+      const serverRow = Array.isArray(created) ? created[0] : created;
+      if (serverRow) addTransaction(txnFromApi(serverRow));
+      setSales(prev => [row, ...prev]);
+      setCustomer(""); setItem(""); setAmount("");
+      toast.success("Sale booked to your cash book");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't book the sale - try again");
+    } finally { setSaving(false); }
   };
 
   const remove = (id: string) => setSales(prev => prev.filter(s => s.id !== id));
@@ -748,7 +767,7 @@ function WaSalesCapture() {
             <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="4500" className={WA_INP} />
           </div>
           <div className="flex items-end">
-            <button onClick={add} className="w-full bg-green-700 hover:bg-green-600 text-white font-semibold py-2 rounded-lg text-sm transition-colors">Book sale</button>
+            <button onClick={add} disabled={saving} className="w-full bg-green-700 hover:bg-green-600 text-white font-semibold py-2 rounded-lg text-sm transition-colors disabled:opacity-50">{saving ? "Booking…" : "Book sale"}</button>
           </div>
         </div>
       </div>

@@ -386,7 +386,7 @@ function InvoiceConfirmation() {
   const open = store.invoices.filter(i => i.status !== "paid");
   const set = (id: string, s: ConfirmState) => {
     setStatuses({ ...statuses, [id]: s });
-    toast.success(s === "confirmed" ? "Marked confirmed by counterparty" : s === "disputed" ? "Flagged as disputed" : "Confirmation request sent");
+    toast.success(s === "confirmed" ? "Marked confirmed by counterparty" : s === "disputed" ? "Flagged as disputed" : "Marked as sent - remember to actually send the confirmation request to the counterparty (nothing is emailed from here)");
   };
 
   const counts = open.reduce((acc, i) => {
