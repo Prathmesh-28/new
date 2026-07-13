@@ -19,7 +19,7 @@ import {
   Palette, Truck, Percent, Trash2, ArrowRight, Copy,
   Layers, UploadCloud, FileSearch, Calculator, MessageSquareWarning, ScrollText, Milestone, PiggyBank,
   FileJson, BookUser, Wallet, TrendingUp, Receipt,
-  Table2, CalendarClock, CopyCheck, BadgePercent,
+  Table2, CalendarClock, CopyCheck, BadgePercent, Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -387,6 +387,7 @@ export default function InvoicesPage() {
   const [showNew, setShowNew]   = useState(false);
   const [composeInitial, setComposeInitial] = useState<{ customer?: string; amount?: string; desc?: string; dealId?: string } | undefined>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [recordQuery, setRecordQuery] = useState(() => searchParams.get("q") ?? "");
   const [qrInvoice, setQrInvoice] = useState<Invoice | null>(null);
   const [payInvoice, setPayInvoice] = useState<Invoice | null>(null);
 
@@ -408,6 +409,10 @@ export default function InvoicesPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Keep global-launcher record links useful after navigation and browser history
+  // changes. The query deliberately remains in the URL so the filtered invoice
+  // view can be shared or refreshed.
+  useEffect(() => { setRecordQuery(searchParams.get("q") ?? ""); }, [searchParams]);
   const [tab, setTab]           = useState<
     "all" | "pending" | "paid" | "collection"
     | "quote" | "proforma" | "recurring" | "paylink" | "creditnote" | "creditlimit"
@@ -416,6 +421,13 @@ export default function InvoicesPage() {
     | "einvoicejson" | "statement" | "partial" | "profit" | "tcs"
     | "gstr1" | "duedate" | "duplicate" | "discount"
   >("all");
+  // The launcher may open an invoice tool directly. Keep this deliberately
+  // defensive: old bookmarks or hand-edited links must not select a blank state.
+  useEffect(() => {
+    const requested = searchParams.get("tab");
+    const valid = ["all", "pending", "paid", "collection", ...TOOL_TABS.map(([id]) => id)];
+    if (requested && valid.includes(requested)) setTab(requested as typeof tab);
+  }, [searchParams]);
 
   // Which billing-tool GROUP is currently revealed. Defaults to the first
   // group; we keep it in sync below so the active tool's group stays open.
@@ -510,12 +522,15 @@ export default function InvoicesPage() {
 
   const overdueCount = invoices.filter(i => i.aging && i.aging !== "current" && i.status !== "paid" && i.status !== "cancelled").length;
 
-  const filtered = invoices.filter(inv =>
-    tab === "all" ? true :
-    tab === "pending" ? inv.status !== "paid" && inv.status !== "cancelled" :
-    tab === "paid" ? inv.status === "paid" :
-    true
-  );
+  const filtered = invoices.filter(inv => {
+    const matchesTab = tab === "all" ? true :
+      tab === "pending" ? inv.status !== "paid" && inv.status !== "cancelled" :
+      tab === "paid" ? inv.status === "paid" : true;
+    const q = recordQuery.trim().toLowerCase();
+    const matchesQuery = !q || [inv.customer_name, inv.invoice_number, inv.customer_email]
+      .filter(Boolean).some(value => String(value).toLowerCase().includes(q));
+    return matchesTab && matchesQuery;
+  });
 
   // Open buckets sum the OUTSTANDING balance (partial receipts + credit notes netted), so
   // the header KPIs agree with the per-row "due" figures. Paid sums what was actually
@@ -563,6 +578,16 @@ export default function InvoicesPage() {
           </button>
         ))}
       </div>
+
+      {(tab === "all" || tab === "pending" || tab === "paid") && (
+        <div className="relative max-w-md">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+          <input value={recordQuery} onChange={e => setRecordQuery(e.target.value)}
+            placeholder="Find invoice, customer, or email…"
+            aria-label="Find invoices"
+            className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg py-2 pl-9 pr-3 text-sm outline-none focus:border-[var(--color-primary)]" />
+        </div>
+      )}
 
       {/* Billing tools - grouped to keep the bar calm. Pick a category, then
           its tools appear below. The active tool's group stays selected. */}

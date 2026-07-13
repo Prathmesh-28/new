@@ -11,6 +11,7 @@ import { capturePhoto } from "@/lib/nativeFeatures";
 import { api } from "@/lib/api";
 import { catFromApi, catToApi, txnFromApi, txnToApiBody } from "@/lib/txnApi";
 import { useT } from "@/i18n";
+import { useSearchParams } from "react-router-dom";
 import ReconcileModal from "./ReconcileModal";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import DatePicker from "@/components/DatePicker";
@@ -34,6 +35,8 @@ const CAT_DOT: Record<string, string> = {
 
 type SortField = "date" | "description" | "amount";
 type SortDir   = "asc" | "desc";
+const TRANSACTION_VIEW_IDS = ["transactions", "import", "pdc", "bounce", "upi", "recon", "recurring", "cat-rules", "recon-workbench", "split-txn", "bulk-tag", "transfer-detect", "cost-center", "cash-accrual", "journal-entry", "trial-balance", "day-book", "ledger-account", "opening-balance", "write-off", "period-lock", "chart-of-accounts", "gst-ledger", "tds-ledger", "cash-bank-split", "counterparty-360", "budget-actual", "cash-application"] as const;
+type TransactionView = (typeof TRANSACTION_VIEW_IDS)[number];
 
 // ── BACKEND WIRING (routes/transactions.js) ─────────────────────────────────
 // The server stores transactions in Postgres with snake_case columns and a
@@ -91,6 +94,7 @@ export default function TransactionsPage() {
   const tr = useT();
   const { store, setStore, updateTransaction, addTransaction, deleteTransaction, canExport, canEdit } = useApp();
   const { transactions, bankAccounts } = store;
+  const [searchParams] = useSearchParams();
 
   // ── Backend hydration ──────────────────────────────────────────────────────
   // On mount (and on refresh) pull the real ledger from routes/transactions.js
@@ -130,7 +134,13 @@ export default function TransactionsPage() {
 
   useEffect(() => { void loadFromServer(); }, [loadFromServer]);
 
-  const [view, setView] = useState<"transactions" | "import" | "pdc" | "bounce" | "upi" | "recon" | "recurring" | "cat-rules" | "recon-workbench" | "split-txn" | "bulk-tag" | "transfer-detect" | "cost-center" | "cash-accrual" | "journal-entry" | "trial-balance" | "day-book" | "ledger-account" | "opening-balance" | "write-off" | "period-lock" | "chart-of-accounts" | "gst-ledger" | "tds-ledger" | "cash-bank-split" | "counterparty-360" | "budget-actual" | "cash-application">("transactions");
+  const [view, setView] = useState<TransactionView>("transactions");
+  // Tool-catalog links select an exact Transactions workspace. Invalid/stale
+  // links stay safely on the ledger instead of rendering an empty page.
+  useEffect(() => {
+    const requested = searchParams.get("tab");
+    if (requested && (TRANSACTION_VIEW_IDS as readonly string[]).includes(requested)) setView(requested as TransactionView);
+  }, [searchParams]);
   const [scanning, setScanning] = useState(false);
   const [showReconcile, setShowReconcile] = useState(false);
   // Snap a receipt/bill → Claude vision extracts vendor/amount/date/category →
@@ -174,7 +184,11 @@ export default function TransactionsPage() {
     } finally { setScanning(false); }
   }, [addTransaction, bankAccounts]);
 
-  const [search,      setSearch]      = useState("");
+  // The global launcher deep-links matching records here with `?q=`. Keep the
+  // query visible and editable so users arrive at the exact narrowed ledger view,
+  // rather than a generic page with no explanation of why they were sent here.
+  const [search,      setSearch]      = useState(() => searchParams.get("q") ?? "");
+  useEffect(() => { setSearch(searchParams.get("q") ?? ""); }, [searchParams]);
   const [filterCat,   setFilterCat]   = useState<string>("all");
   const [filterAcct,  setFilterAcct]  = useState<string>("all");
   const [filterFrom,  setFilterFrom]  = useState("");

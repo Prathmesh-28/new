@@ -4,6 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { useT } from "@/i18n";
 import { formatCurrency } from "@/lib/utils";
 import { TAB_CATALOG } from "@/data/roles";
+import { TOOL_CATALOG } from "@/data/toolCatalog";
 import {
   Search, LayoutDashboard, ArrowRightLeft, TrendingUp, CreditCard, Briefcase,
   Package, Bell, Settings, Users, X, BarChart3, Sparkles, Building2, Store,
@@ -90,7 +91,7 @@ type Result = {
   id: string;
   label: string;
   sub?: string;
-  type: "fav" | "recent" | "nav" | "transaction" | "alert" | "invoice" | "customer" | "vendor";
+  type: "fav" | "recent" | "nav" | "tool" | "transaction" | "alert" | "invoice" | "customer" | "vendor";
   path?: string;
   action: () => void;
 };
@@ -135,13 +136,20 @@ export function CommandPalette({ open, onClose }: Props) {
     }
 
     const out: Result[] = [];
+    TOOL_CATALOG.filter(tool => {
+      const haystack = [tool.label, tool.group, ...(tool.keywords ?? [])].join(" ").toLowerCase();
+      return haystack.includes(q);
+    }).forEach(tool => out.push({
+      id: `tool:${tool.path}`, label: tool.label, sub: `${tool.group} tool`, type: "tool", path: tool.path,
+      action: () => go(tool.path),
+    }));
     PAGE_INDEX.filter(n => n.label.toLowerCase().includes(q) || n.desc?.toLowerCase().includes(q) || n.path.includes(q)).forEach(n =>
       out.push({ id: n.path, label: n.label, sub: n.desc, type: "nav", path: n.path, action: () => go(n.path) })
     );
     store.transactions.filter(t =>
       t.description.toLowerCase().includes(q) || t.counterparty.toLowerCase().includes(q)
     ).slice(0, 6).forEach(t =>
-      out.push({ id: t.id, label: t.description, sub: `${t.date} · ${formatCurrency(t.amount)} · ${t.category}`, type: "transaction", action: () => { navigate("/transactions"); onClose(); } })
+      out.push({ id: t.id, label: t.description, sub: `${t.date} · ${formatCurrency(t.amount)} · ${t.category}`, type: "transaction", action: () => { go(`/transactions?q=${encodeURIComponent(t.description || t.counterparty)}`); } })
     );
     store.alerts.filter(a => a.title.toLowerCase().includes(q) || a.message.toLowerCase().includes(q)).slice(0, 4).forEach(a =>
       out.push({ id: a.id, label: a.title, sub: a.message.slice(0, 60), type: "alert", action: () => { navigate("/alerts"); onClose(); } })
@@ -153,13 +161,13 @@ export function CommandPalette({ open, onClose }: Props) {
     store.invoices.filter(inv =>
       inv.customer.toLowerCase().includes(q) || inv.description.toLowerCase().includes(q) || (inv.invoiceNumber ?? "").toLowerCase().includes(q)
     ).slice(0, 6).forEach(inv =>
-      out.push({ id: `inv${inv.id}`, label: inv.invoiceNumber ? `${inv.invoiceNumber} · ${inv.customer}` : inv.customer, sub: `${formatCurrency(inv.amount)} · ${inv.status} · due ${inv.dueDate}`, type: "invoice", action: () => { navigate("/invoices"); onClose(); } })
+      out.push({ id: `inv${inv.id}`, label: inv.invoiceNumber ? `${inv.invoiceNumber} · ${inv.customer}` : inv.customer, sub: `${formatCurrency(inv.amount)} · ${inv.status} · due ${inv.dueDate}`, type: "invoice", action: () => { go(`/invoices?q=${encodeURIComponent(inv.invoiceNumber || inv.customer)}`); } })
     );
     const customerNames = [...new Set(store.invoices.map(i => i.customer).filter(Boolean))];
     customerNames.filter(c => c.toLowerCase().includes(q)).slice(0, 5).forEach(c => {
       const theirs = store.invoices.filter(i => i.customer === c);
       const outstanding = theirs.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
-      out.push({ id: `cust${c}`, label: c, sub: `${theirs.length} invoice${theirs.length === 1 ? "" : "s"} · ${formatCurrency(outstanding)} outstanding`, type: "customer", action: () => { navigate("/receivables"); onClose(); } });
+      out.push({ id: `cust${c}`, label: c, sub: `${theirs.length} invoice${theirs.length === 1 ? "" : "s"} · ${formatCurrency(outstanding)} outstanding`, type: "customer", action: () => { go(`/invoices?q=${encodeURIComponent(c)}`); } });
     });
     const vendorNames = [...new Set((store.procurement ?? []).map(p => p.supplierName).filter(Boolean))];
     vendorNames.filter(v => v.toLowerCase().includes(q)).slice(0, 5).forEach(v => {
@@ -185,7 +193,7 @@ export function CommandPalette({ open, onClose }: Props) {
 
   if (!open) return null;
 
-  const typeLabel: Record<string, string> = { fav: tr("cmdk.favorites"), recent: tr("cmdk.recent"), nav: tr("cmdk.pages"), transaction: tr("Transactions"), alert: tr("Alerts"), invoice: tr("Invoices"), customer: tr("Customers"), vendor: tr("Vendors") };
+  const typeLabel: Record<string, string> = { fav: tr("cmdk.favorites"), recent: tr("cmdk.recent"), nav: tr("cmdk.pages"), tool: "Tools", transaction: tr("Transactions"), alert: tr("Alerts"), invoice: tr("Invoices"), customer: tr("Customers"), vendor: tr("Vendors") };
   let lastType = "";
 
   return (
@@ -220,8 +228,12 @@ export function CommandPalette({ open, onClose }: Props) {
           {results.map((r, i) => {
             const showHeader = r.type !== lastType;
             lastType = r.type;
-            const isPage = r.type === "fav" || r.type === "recent" || r.type === "nav";
-            const NavIcon = isPage && r.path ? (pageByPath(r.path)?.icon ?? (r.type === "recent" ? Clock : Search)) : null;
+            const isNavigable = r.type === "fav" || r.type === "recent" || r.type === "nav" || r.type === "tool";
+            // A tool is a direct workflow destination, but not a page favourite:
+            // page favourites restore through PAGE_INDEX, while a tool path has
+            // query parameters and would otherwise produce a broken empty pin.
+            const canPin = r.type === "fav" || r.type === "recent" || r.type === "nav";
+            const NavIcon = isNavigable && r.path ? (pageByPath(r.path)?.icon ?? (r.type === "recent" ? Clock : Search)) : null;
             const isFav = r.path ? favs.includes(r.path) : false;
             return (
               <li key={r.id}>
@@ -238,7 +250,7 @@ export function CommandPalette({ open, onClose }: Props) {
                       {r.sub && <p className="text-[11px] text-[var(--color-muted)] truncate">{r.sub}</p>}
                     </div>
                   </button>
-                  {isPage && r.path && (
+                  {canPin && r.path && (
                     <button onClick={() => toggleFav(r.path!)} title={isFav ? "Unpin" : "Pin to favorites"} className={`shrink-0 ${isFav ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]/40 hover:text-[var(--color-muted)] opacity-0 group-hover:opacity-100"}`}>
                       <Star size={13} fill={isFav ? "currentColor" : "none"} />
                     </button>

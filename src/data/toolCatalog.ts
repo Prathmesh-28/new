@@ -1,0 +1,63 @@
+// Searchable, human-facing entry points for high-intent workflows that live inside
+// larger pages. This keeps the command palette useful at product scale without
+// forcing users to understand which mega-page owns a task. Each path is a stable,
+// shareable destination; tabbed pages validate the tab id before rendering.
+export type ToolCatalogEntry = {
+  label: string;
+  path: string;
+  group: string;
+  keywords?: string[];
+};
+
+export const TOOL_CATALOG: ToolCatalogEntry[] = [
+  { label: "GST Return preparation", path: "/gst?tab=returns", group: "GST", keywords: ["gstr", "file", "return"] },
+  { label: "GSTIN verification", path: "/gst?tab=verify", group: "GST", keywords: ["gstin", "validate", "vendor"] },
+  { label: "GSTR-2B reconciliation", path: "/gst?tab=match", group: "GST", keywords: ["itc", "reconcile", "2b"] },
+  { label: "E-way bill checker", path: "/gst?tab=eway", group: "GST", keywords: ["transport", "shipment"] },
+  { label: "HSN / SAC lookup", path: "/gst?tab=hsn", group: "GST", keywords: ["code", "rate", "classification"] },
+  { label: "Reverse charge (RCM)", path: "/gst?tab=rcm", group: "GST", keywords: ["reverse charge", "supplier"] },
+  { label: "Input tax credit", path: "/gst?tab=itc", group: "GST", keywords: ["itc", "credit"] },
+  { label: "GST notices", path: "/gst?tab=notice", group: "GST", keywords: ["notice", "reply", "demand"] },
+  { label: "GST health score", path: "/gst?tab=health-score", group: "GST", keywords: ["compliance", "filing"] },
+  { label: "Employees", path: "/payroll", group: "Payroll", keywords: ["staff", "salary", "employee"] },
+  { label: "Run payroll", path: "/payroll?tab=runs", group: "Payroll", keywords: ["salary", "payrun", "process"] },
+  { label: "Payslips", path: "/payroll?tab=slips", group: "Payroll", keywords: ["payslip", "salary slip"] },
+  { label: "Form 16", path: "/payroll?tab=form16", group: "Payroll", keywords: ["tds", "tax certificate"] },
+  { label: "PF challan", path: "/payroll?tab=pf-challan", group: "Payroll", keywords: ["epf", "provident fund"] },
+  { label: "Attendance", path: "/payroll?tab=attendance", group: "Payroll", keywords: ["leave", "timesheet"] },
+  { label: "Full and final settlement", path: "/payroll?tab=fnf", group: "Payroll", keywords: ["exit", "resignation", "settlement"] },
+  { label: "Employee advances", path: "/payroll?tab=advance", group: "Payroll", keywords: ["loan", "advance"] },
+  { label: "Sales pipeline", path: "/sales?tab=pipeline", group: "Sales", keywords: ["deals", "crm", "leads"] },
+  { label: "Create quotation", path: "/sales?tab=quote", group: "Sales", keywords: ["quote", "proposal", "estimate"] },
+  { label: "Customer 360", path: "/sales?tab=customer360", group: "Sales", keywords: ["customer", "account", "relationship"] },
+  { label: "Sales forecast", path: "/sales?tab=forecast", group: "Sales", keywords: ["revenue", "pipeline forecast"] },
+  { label: "Renewal tracker", path: "/sales?tab=renewals", group: "Sales", keywords: ["renewal", "retention", "churn"] },
+  { label: "Accounts receivable ageing", path: "/invoices?tab=ageing", group: "Collections", keywords: ["overdue", "aging", "receivable"] },
+  { label: "Recurring invoices", path: "/invoices?tab=recurring", group: "Collections", keywords: ["subscription", "repeat billing"] },
+  { label: "Payment links", path: "/invoices?tab=paylink", group: "Collections", keywords: ["upi", "collect", "pay"] },
+  { label: "Credit notes", path: "/invoices?tab=creditnote", group: "Collections", keywords: ["refund", "adjustment"] },
+  { label: "Invoice approvals", path: "/invoices?tab=approval", group: "Collections", keywords: ["maker checker", "approval"] },
+  { label: "Invoice dispute tracker", path: "/invoices?tab=dispute", group: "Collections", keywords: ["dispute", "complaint"] },
+  { label: "Bank reconciliation", path: "/transactions?tab=recon", group: "Accounting", keywords: ["bank", "match", "statement"] },
+  { label: "Statement import", path: "/transactions?tab=import", group: "Accounting", keywords: ["csv", "upload", "bank statement"] },
+  { label: "Bulk categorisation", path: "/transactions?tab=bulk-tag", group: "Accounting", keywords: ["bulk", "tag", "category"] },
+  { label: "Journal entry", path: "/transactions?tab=journal-entry", group: "Accounting", keywords: ["journal", "debit", "credit"] },
+  { label: "Trial balance", path: "/transactions?tab=trial-balance", group: "Accounting", keywords: ["books", "ledger"] },
+  { label: "Period lock", path: "/transactions?tab=period-lock", group: "Accounting", keywords: ["close", "month end", "lock books"] },
+  { label: "Chart of accounts", path: "/transactions?tab=chart-of-accounts", group: "Accounting", keywords: ["ledger", "accounts"] },
+  { label: "Cash application", path: "/transactions?tab=cash-application", group: "Accounting", keywords: ["receipt", "match invoice"] },
+  { label: "Cash-flow forecast", path: "/forecast", group: "Planning", keywords: ["cash", "runway", "projection"] },
+  { label: "Budget versus actual", path: "/budgets", group: "Planning", keywords: ["budget", "variance", "spend"] },
+  { label: "Scenario planning", path: "/scenarios", group: "Planning", keywords: ["what if", "best case", "worst case"] },
+  { label: "Working-capital analysis", path: "/working-capital", group: "Planning", keywords: ["dso", "dpo", "cash conversion"] },
+  { label: "Credit readiness", path: "/credit", group: "Capital", keywords: ["loan", "lender", "borrowing"] },
+  { label: "Fundraise planning", path: "/capital", group: "Capital", keywords: ["raise", "investor", "runway"] },
+  { label: "Debt manager", path: "/debt", group: "Capital", keywords: ["emi", "loan", "refinance"] },
+  { label: "Financial valuation", path: "/valuation", group: "Capital", keywords: ["dcf", "valuation", "multiple"] },
+  { label: "Document vault", path: "/documents", group: "Operations", keywords: ["files", "upload", "expiry"] },
+  { label: "Vendor directory", path: "/vendors", group: "Operations", keywords: ["supplier", "payee", "vendor"] },
+  { label: "Spend intelligence", path: "/spend", group: "Operations", keywords: ["expense", "duplicate", "subscription"] },
+  { label: "Automation workflows", path: "/automation", group: "Automation", keywords: ["workflow", "rule", "automate"] },
+  { label: "AI CFO brief", path: "/cfo-brief", group: "Automation", keywords: ["ai", "brief", "board update"] },
+  { label: "Security controls", path: "/security", group: "Administration", keywords: ["access", "mfa", "audit"] },
+];
