@@ -24,6 +24,7 @@ export default function LoginPage() {
   const [tsToken, setTsToken]   = useState("");
   const [mfaRequired, setMfaRequired] = useState(false);
   const [mfaCode, setMfaCode]   = useState("");
+  const [rememberDevice, setRememberDevice] = useState(true);
   const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
 
   const goHome = (u: { first_login: boolean; role: string }) => {
@@ -41,7 +42,7 @@ export default function LoginPage() {
     if (mfaRequired && !/^\d{6}$/.test(mfaCode.trim()) && mfaCode.trim().length < 6) { setError(t("auth.enterMfa")); return; }
     setError(""); setLoading(true);
     try {
-      const u = await login(email, password, tsToken, mfaRequired ? mfaCode.trim() : undefined);
+      const u = await login(email, password, tsToken, mfaRequired ? mfaCode.trim() : undefined, rememberDevice);
       goHome(u);
     } catch (err) {
       const e2 = err as { mfaRequired?: boolean; verifyRequired?: boolean; verifyEmail?: string };
@@ -168,6 +169,11 @@ export default function LoginPage() {
                   className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-muted)]/50 text-center tracking-[0.3em]"
                 />
                 <p className="text-[11px] text-[var(--color-muted)] mt-1.5">{t("auth.mfaHint")}</p>
+                <label className="flex items-center gap-2 text-[11px] text-[var(--color-muted)] mt-2 cursor-pointer">
+                  <input type="checkbox" className="accent-[var(--color-primary)]"
+                    checked={rememberDevice} onChange={e => setRememberDevice(e.target.checked)} />
+                  Don't ask for a code on this device for 30 days (your password is still required every time)
+                </label>
               </div>
             )}
 

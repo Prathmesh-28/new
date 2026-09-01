@@ -8,7 +8,7 @@
 //   POST   /api/trash/:id/restore      → put it back (original id, children included)
 //   DELETE /api/trash/:id              → permanent, on purpose
 const router = require("express").Router();
-const { authenticate } = require("../middleware/auth");
+const { authenticate, requireFreshAuth } = require("../middleware/auth");
 const { auditReq } = require("../lib/audit");
 const trash = require("../lib/trash");
 
@@ -40,7 +40,9 @@ router.post("/:id/restore", authenticate, gate(WRITE_ROLES), async (req, res, ne
   }
 });
 
-router.delete("/:id", authenticate, gate(PURGE_ROLES), async (req, res, next) => {
+// Permanent deletion is the ONE action in this module with no undo — it additionally
+// demands a fresh password (step-up), so a walked-away-from laptop can't empty the bin.
+router.delete("/:id", authenticate, gate(PURGE_ROLES), requireFreshAuth, async (req, res, next) => {
   try {
     res.json(await trash.purge(req.user.tenant_id, req.params.id));
   } catch (e) {

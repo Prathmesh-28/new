@@ -65,7 +65,21 @@ export default function TrashPage() {
       confirmText: targets.length > 1 ? "DELETE" : undefined,
     })) return;
     let ok = 0;
-    for (const t of targets) { try { await api.delete(`/api/trash/${t.id}`); ok++; } catch { /* counted */ } }
+    for (const t of targets) {
+      try { await api.delete(`/api/trash/${t.id}`); ok++; }
+      catch (e) {
+        // Permanent deletion demands a fresh password (step-up, Wave 18). Ask once and
+        // retry the whole batch; a wrong password just stops here.
+        if (e instanceof Error && /confirm your password/i.test(e.message)) {
+          const pw = window.prompt("Permanent deletion needs your password:");
+          if (!pw) { toast.info("Nothing was permanently deleted."); return; }
+          try {
+            await api.post("/auth/reauth", { password: pw });
+            await api.delete(`/api/trash/${t.id}`); ok++;
+          } catch (e2) { toast.error(e2 instanceof Error ? e2.message : "Couldn't confirm your password"); return; }
+        }
+      }
+    }
     toast.success(`${ok} permanently deleted`);
     clear?.(); load();
   };

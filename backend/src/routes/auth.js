@@ -3,6 +3,10 @@ const bcrypt  = require("bcryptjs");
 const crypto  = require("crypto");
 const { pool } = require("../db");
 const { signAccess, signRefresh, verifyRefresh } = require("../lib/jwt");
+const jwt = require("jsonwebtoken");
+// Device-trust tokens get their own derived secret, so neither access nor refresh tokens
+// can ever be replayed as one.
+const MFA_TRUST_SECRET = crypto.createHash("sha256").update("hr-mfa-trust:" + (process.env.JWT_SECRET || "dev-secret-change-in-prod")).digest("hex");
 const { authenticate } = require("../middleware/auth");
 const { sendOtp, sendWelcome, sendPasswordResetSuccess, sendMail } = require("../lib/email");
 const { writeAudit } = require("../lib/audit");
@@ -167,30 +171,48 @@ router.post("/login", validateBody({
     const totp = require("../lib/totp");
     if (!user.mfa_secret_enc) return res.status(400).json({ error: "MFA setup is incomplete — reset your password to recover access." });
     const code = String((req.body && req.body.mfa_code) || "").trim();
-    if (!code) return res.status(401).json({ error: "Enter your authenticator code.", mfa_required: true });
-    // TOTP first, with anti-replay: never accept a step counter already used.
-    const matched = totp.verifyTotpCounter(totp.decSecret(user.mfa_secret_enc), code, { after: Number(user.mfa_last_totp_counter || 0) });
-    let mfaOk = matched > 0;
-    if (!mfaOk && Array.isArray(user.mfa_backup_codes) && user.mfa_backup_codes.length) {
-      const h = Buffer.from(totp.hashBackup(code));
-      let isMember = false;
-      for (const stored of user.mfa_backup_codes) { const sb = Buffer.from(String(stored)); if (sb.length === h.length && crypto.timingSafeEqual(sb, h)) isMember = true; }
-      if (isMember) { // atomic single-use: only succeeds if the code is still present (race-safe)
-        const del = await pool.query("UPDATE users SET mfa_backup_codes = array_remove(mfa_backup_codes, $1) WHERE id=$2 AND $1 = ANY(mfa_backup_codes)", [totp.hashBackup(code), user.id]);
-        if (del.rowCount === 1) mfaOk = true;
-      }
+    // Remember-device (Wave 18): a signed trust token from a previous successful code
+    // skips the OTP prompt on THIS device for 30 days. The password is still required
+    // every login — trust replaces the second factor's prompt, never the first factor.
+    // mfa_trust_version lets "sign out everywhere"-grade recovery invalidate all trusted
+    // devices at once by bumping the counter.
+    let trusted = false;
+    const trustToken = String((req.body && req.body.mfa_trust) || "").trim();
+    if (!code && trustToken) {
+      try {
+        const p = jwt.verify(trustToken, MFA_TRUST_SECRET);
+        trusted = p.typ === "mfa_trust" && p.sub === user.id && Number(p.v) === Number(user.mfa_trust_version || 1);
+      } catch { trusted = false; }
     }
-    if (!mfaOk) {
-      const attempts = (user.failed_attempts || 0) + 1;
-      if (attempts >= 5) {
-        const lockUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-        await pool.query("UPDATE users SET failed_attempts=$1, locked_until=$2 WHERE id=$3", [attempts, lockUntil, user.id]);
-        return res.status(423).json({ error: "Too many failed codes. Account locked for 15 minutes." });
+    if (!code && !trusted) return res.status(401).json({ error: "Enter your authenticator code.", mfa_required: true });
+    if (!code && trusted) { /* second factor satisfied by device trust; fall through */ }
+    else {
+      // TOTP first, with anti-replay: never accept a step counter already used.
+      const matched = totp.verifyTotpCounter(totp.decSecret(user.mfa_secret_enc), code, { after: Number(user.mfa_last_totp_counter || 0) });
+      let mfaOk = matched > 0;
+      if (!mfaOk && Array.isArray(user.mfa_backup_codes) && user.mfa_backup_codes.length) {
+        const h = Buffer.from(totp.hashBackup(code));
+        let isMember = false;
+        for (const stored of user.mfa_backup_codes) { const sb = Buffer.from(String(stored)); if (sb.length === h.length && crypto.timingSafeEqual(sb, h)) isMember = true; }
+        if (isMember) { // atomic single-use: only succeeds if the code is still present (race-safe)
+          const del = await pool.query("UPDATE users SET mfa_backup_codes = array_remove(mfa_backup_codes, $1) WHERE id=$2 AND $1 = ANY(mfa_backup_codes)", [totp.hashBackup(code), user.id]);
+          if (del.rowCount === 1) mfaOk = true;
+        }
       }
-      await pool.query("UPDATE users SET failed_attempts=$1 WHERE id=$2", [attempts, user.id]);
-      return res.status(401).json({ error: "Invalid authenticator code.", mfa_required: true });
+      if (!mfaOk) {
+        const attempts = (user.failed_attempts || 0) + 1;
+        if (attempts >= 5) {
+          const lockUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+          await pool.query("UPDATE users SET failed_attempts=$1, locked_until=$2 WHERE id=$3", [attempts, lockUntil, user.id]);
+          return res.status(423).json({ error: "Too many failed codes. Account locked for 15 minutes." });
+        }
+        await pool.query("UPDATE users SET failed_attempts=$1 WHERE id=$2", [attempts, user.id]);
+        return res.status(401).json({ error: "Invalid authenticator code.", mfa_required: true });
+      }
+      // Anti-replay: matched is only in scope on the code path — a trusted device never
+      // consumed a TOTP step, so there is nothing to burn.
+      if (matched > 0) await pool.query("UPDATE users SET mfa_last_totp_counter=$1 WHERE id=$2", [matched, user.id]);
     }
-    if (matched > 0) await pool.query("UPDATE users SET mfa_last_totp_counter=$1 WHERE id=$2", [matched, user.id]);
   }
 
   // Password (and MFA) are correct but the signup email was never verified. Only enforce
@@ -253,9 +275,17 @@ router.post("/login", validateBody({
     }).catch(() => { /* a missed alert must never block a valid sign-in */ });
   }
 
+  // Hand back a device-trust token only when 2FA was actually passed this login and the
+  // user asked to be remembered on this device.
+  let mfaTrust;
+  if (user.mfa_enabled && req.body?.remember_device && String(req.body?.mfa_code || "").trim()) {
+    mfaTrust = jwt.sign({ sub: user.id, typ: "mfa_trust", v: Number(user.mfa_trust_version || 1) }, MFA_TRUST_SECRET, { expiresIn: "30d" });
+  }
+
   res.json({
     access:  signAccess(payload),
     refresh: refreshToken,
+    mfa_trust: mfaTrust,
     user:    { id: user.id, email: user.email, role: user.role, tenant_id: user.tenant_id, first_login: firstLogin, plan: user.subscription_plan || "free", locale: user.locale || null },
   });
  } catch (e) {
@@ -322,6 +352,22 @@ router.post("/logout", async (req, res) => {
     }
   } catch { /* an unreadable token is already useless */ }
   res.json({ ok: true });
+});
+
+// ── Step-up auth (Wave 18) ───────────────────────────────────────────────────
+// Re-enter the password, get 10 minutes of "elevated" on THIS session. The handful of
+// actions with no undo (permanent purge, sign-out-everywhere) demand it via
+// requireFreshAuth — so a walked-away-from laptop can't perform them.
+router.post("/reauth", authenticate, async (req, res, next) => {
+  try {
+    const { rows: [u] } = await pool.query("SELECT password FROM users WHERE id=$1", [req.user.id]);
+    if (!u || !(await bcrypt.compare(String(req.body?.password || ""), u.password)))
+      return res.status(403).json({ error: "That password didn't match", errors: { password: "Wrong password" } });
+    if (!req.sessionId) return res.status(400).json({ error: "This session predates step-up auth — sign in again once and it will work." });
+    await pool.query("UPDATE user_sessions SET elevated_until = now() + interval '10 minutes' WHERE id=$1", [req.sessionId]);
+    writeAudit(req.user.id, "reauth", "user", req.user.id, null, req.user.tenant_id);
+    res.json({ ok: true, elevated_for_seconds: 600 });
+  } catch (e) { next(e); }
 });
 
 // ── Change the sign-in email (Wave 14) ──────────────────────────────────────
@@ -394,7 +440,7 @@ router.delete("/sessions/:id", authenticate, async (req, res, next) => {
 // POST /auth/sessions/revoke-all — sign out everywhere. Keeps the current device unless
 // asked otherwise, because signing yourself out while trying to secure the account is a
 // surprise, not a feature.
-router.post("/sessions/revoke-all", authenticate, async (req, res, next) => {
+router.post("/sessions/revoke-all", authenticate, require("../middleware/auth").requireFreshAuth, async (req, res, next) => {
   try {
     const keepCurrent = req.body?.keepCurrent !== false;
     const n = await require("../lib/sessions").revokeAll(req.user.id, {

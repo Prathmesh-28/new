@@ -1,5 +1,9 @@
 const { verifyAccess } = require("../lib/jwt");
 const { pool } = require("../db");
+// Per-process caches for the IP allowlist check: policy per tenant (60s) and a violation
+// throttle, so monitor mode can't flood the logs.
+const ipAllowlistCache = new Map();
+const ipViolationSeen = new Map();
 
 async function authenticate(req, res, next) {
   const header = req.headers.authorization || "";
@@ -26,6 +30,38 @@ async function authenticate(req, res, next) {
     }
     req.sessionId = payload.sid || null;
     req.user = rows[0];
+
+    // ── IP allowlist (Wave 18) ────────────────────────────────────────────────
+    // Owner-set, per firm. Ships in MONITOR mode: violations are logged and alerted but
+    // not blocked, because a fat-fingered entry in enforce mode locks the whole firm out.
+    // Enforcement is an explicit second step in Settings. Matching is exact IP or prefix
+    // ("103.25." matches 103.25.x.x) — documented, deliberately simpler than CIDR.
+    try {
+      const tenantId = req.user.tenant_id;
+      const cached = ipAllowlistCache.get(tenantId);
+      let policy = cached && cached.at > Date.now() - 60_000 ? cached.policy : null;
+      if (!policy) {
+        const { rows: p } = await pool.query(
+          "SELECT ip_allowlist, ip_allowlist_mode FROM tenant_profile WHERE tenant_id=$1", [tenantId]);
+        policy = { list: p[0]?.ip_allowlist || [], mode: p[0]?.ip_allowlist_mode || "monitor" };
+        ipAllowlistCache.set(tenantId, { at: Date.now(), policy });
+      }
+      if (policy.list.length) {
+        const ip = String(req.ip || "").replace(/^::ffff:/, "");
+        const ok = policy.list.some((e) => ip === e || (e.endsWith(".") && ip.startsWith(e)) || (e.endsWith("*") && ip.startsWith(e.slice(0, -1))));
+        if (!ok) {
+          if (policy.mode === "enforce") {
+            return res.status(403).json({ error: "This firm only allows sign-ins from approved network addresses.", code: "IP_NOT_ALLOWED" });
+          }
+          // monitor: visible, throttled to one log per user+ip per 10 minutes.
+          const k = `${req.user.id}:${ip}`;
+          if (!ipViolationSeen.has(k) || ipViolationSeen.get(k) < Date.now() - 600_000) {
+            ipViolationSeen.set(k, Date.now());
+            console.warn(`[ip-allowlist] ${req.user.email} from ${ip} is outside ${tenantId}'s allowlist (monitor mode)`);
+          }
+        }
+      }
+    } catch { /* the allowlist must never take down auth itself */ }
 
     // ── Super-admin impersonation ("ombudsman" god-mode) ───────────────────────
     // When the platform owner opens a tenant from the admin console, the client
@@ -117,4 +153,20 @@ async function audit(action, entity, entityId) {
   };
 }
 
-module.exports = { authenticate, requireAdmin, requireOwnerOrAdmin, audit };
+
+// ── Step-up gate (Wave 18) ─────────────────────────────────────────────────────
+// For the handful of actions with no undo. The session must have re-entered the password
+// (POST /auth/reauth) within the last 10 minutes; the client treats REAUTH_REQUIRED as
+// "show the password prompt, then retry".
+function requireFreshAuth(req, res, next) {
+  // Pre-session tokens can't be elevated; the honest answer is to sign in again once.
+  if (!req.sessionId) return res.status(403).json({ error: "Confirm your password to do this.", code: "REAUTH_REQUIRED" });
+  pool.query("SELECT elevated_until FROM user_sessions WHERE id=$1", [req.sessionId])
+    .then(({ rows }) => {
+      if (rows[0]?.elevated_until && new Date(rows[0].elevated_until) > new Date()) return next();
+      res.status(403).json({ error: "Confirm your password to do this.", code: "REAUTH_REQUIRED" });
+    })
+    .catch(next);
+}
+
+module.exports = { authenticate, requireAdmin, requireOwnerOrAdmin, audit, requireFreshAuth };

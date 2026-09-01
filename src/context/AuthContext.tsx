@@ -27,7 +27,7 @@ interface AuthCtx {
   user: AuthUser | null;
   loading: boolean;
   serverReady: boolean;
-  login: (email: string, password: string, turnstileToken?: string, mfaCode?: string) => Promise<AuthUser>;
+  login: (email: string, password: string, turnstileToken?: string, mfaCode?: string, rememberDevice?: boolean) => Promise<AuthUser>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   switchFirm: (tenantId: string) => Promise<void>;
@@ -104,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, [fetchMe, tryRefresh, applyUser]);
 
-  const login = useCallback(async (email: string, password: string, turnstileToken?: string, mfaCode?: string): Promise<AuthUser> => {
+  const login = useCallback(async (email: string, password: string, turnstileToken?: string, mfaCode?: string, rememberDevice?: boolean): Promise<AuthUser> => {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (turnstileToken) headers["cf-turnstile-response"] = turnstileToken;  // Cloudflare Turnstile (no-op until configured)
     const res = await fetchWithTimeout(
@@ -112,7 +112,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {
         method: "POST",
         headers,
-        body: JSON.stringify({ email, password, ...(mfaCode ? { mfa_code: mfaCode } : {}) }),
+        // A device previously remembered after a successful code sends its trust token, so
+        // the OTP prompt is skipped on THIS device (the password is still checked first).
+        body: JSON.stringify({
+          email, password,
+          ...(mfaCode ? { mfa_code: mfaCode, remember_device: !!rememberDevice } : {}),
+          ...(!mfaCode && localStorage.getItem("hr_mfa_trust") ? { mfa_trust: localStorage.getItem("hr_mfa_trust") } : {}),
+        }),
       },
       65_000  // 65 s - enough for Render cold start
     );
@@ -123,7 +129,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (err.verify_required) { e.verifyRequired = true; e.verifyEmail = err.email; }  // B2: signup email never verified
       throw e;
     }
-    const { access, refresh, user: u } = await res.json();
+    const { access, refresh, user: u, mfa_trust } = await res.json();
+    if (mfa_trust) { try { localStorage.setItem("hr_mfa_trust", mfa_trust); } catch { /* private mode */ } }
     await secureSet("hr_access", access);
     await secureSet("hr_refresh", refresh);
     setReady(true);

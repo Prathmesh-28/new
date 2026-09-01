@@ -73,4 +73,124 @@ router.post("/send-now/:reportKey", authenticate, async (req, res, next) => {
   }
 });
 
+
+// ── GET /api/reports/compare — this month against last, with the WHY (Wave 17) ─
+// Every report in the product showed one period in isolation; "are we up or down, and
+// because of whom?" required two exports and a spreadsheet. Revenue is by invoice_date
+// (the document date Wave 4 added), cash by transaction_date, drafts excluded — a draft
+// is not revenue.
+router.get("/compare", authenticate, async (req, res, next) => {
+  try {
+    const t = req.user.tenant_id;
+    const { pool } = require("../db");
+    const { rows: [r] } = await pool.query(`
+      WITH cur AS (SELECT date_trunc('month', CURRENT_DATE)::date AS s),
+      inv AS (
+        SELECT date_trunc('month', invoice_date::timestamp)::date AS m,
+               SUM(total_amount) AS revenue, COUNT(*) AS n
+          FROM invoices
+         WHERE tenant_id=$1 AND status NOT IN ('draft','cancelled') AND voided_at IS NULL
+           AND invoice_date >= (SELECT s FROM cur) - interval '1 month'
+         GROUP BY 1),
+      cash AS (
+        SELECT date_trunc('month', transaction_date::timestamp)::date AS m,
+               COALESCE(SUM(amount) FILTER (WHERE amount > 0),0) AS inflow,
+               COALESCE(-SUM(amount) FILTER (WHERE amount < 0),0) AS outflow
+          FROM transactions
+         WHERE tenant_id=$1 AND transaction_date >= (SELECT s FROM cur) - interval '1 month'
+         GROUP BY 1)
+      SELECT
+        (SELECT s FROM cur) AS cur_month,
+        (SELECT revenue FROM inv WHERE m = (SELECT s FROM cur)) AS rev_cur,
+        (SELECT revenue FROM inv WHERE m = (SELECT s FROM cur) - interval '1 month') AS rev_prev,
+        (SELECT n FROM inv WHERE m = (SELECT s FROM cur)) AS n_cur,
+        (SELECT n FROM inv WHERE m = (SELECT s FROM cur) - interval '1 month') AS n_prev,
+        (SELECT inflow FROM cash WHERE m = (SELECT s FROM cur)) AS in_cur,
+        (SELECT inflow FROM cash WHERE m = (SELECT s FROM cur) - interval '1 month') AS in_prev,
+        (SELECT outflow FROM cash WHERE m = (SELECT s FROM cur)) AS out_cur,
+        (SELECT outflow FROM cash WHERE m = (SELECT s FROM cur) - interval '1 month') AS out_prev
+    `, [t]);
+
+    // The variance explainer: which customers moved the revenue number, either way.
+    const { rows: drivers } = await pool.query(`
+      SELECT COALESCE(NULLIF(btrim(customer_name), ''), '(unnamed)') AS customer,
+             COALESCE(SUM(total_amount) FILTER (WHERE date_trunc('month', invoice_date::timestamp) = date_trunc('month', CURRENT_DATE)),0) AS cur,
+             COALESCE(SUM(total_amount) FILTER (WHERE date_trunc('month', invoice_date::timestamp) = date_trunc('month', CURRENT_DATE) - interval '1 month'),0) AS prev
+        FROM invoices
+       WHERE tenant_id=$1 AND status NOT IN ('draft','cancelled') AND voided_at IS NULL
+         AND invoice_date >= (date_trunc('month', CURRENT_DATE) - interval '1 month')::date
+       GROUP BY 1
+       HAVING ABS(COALESCE(SUM(total_amount) FILTER (WHERE date_trunc('month', invoice_date::timestamp) = date_trunc('month', CURRENT_DATE)),0)
+                - COALESCE(SUM(total_amount) FILTER (WHERE date_trunc('month', invoice_date::timestamp) = date_trunc('month', CURRENT_DATE) - interval '1 month'),0)) > 0.005
+       ORDER BY ABS(COALESCE(SUM(total_amount) FILTER (WHERE date_trunc('month', invoice_date::timestamp) = date_trunc('month', CURRENT_DATE)),0)
+                  - COALESCE(SUM(total_amount) FILTER (WHERE date_trunc('month', invoice_date::timestamp) = date_trunc('month', CURRENT_DATE) - interval '1 month'),0)) DESC
+       LIMIT 8`, [t]);
+
+    const row = (label, cur, prev, link) => {
+      const c = Number(cur) || 0, p = Number(prev) || 0;
+      return { label, current: c, previous: p, delta: Math.round((c - p) * 100) / 100,
+               pct: p !== 0 ? Math.round(((c - p) / Math.abs(p)) * 1000) / 10 : null, link };
+    };
+    res.json({
+      // Comparing a part-month against a whole month without saying so is how dashboards
+      // lie; the caller is told exactly what the current period covers.
+      note: `Current period is ${String(r.cur_month).slice(0, 7)} to date — not a full month yet.`,
+      rows: [
+        row("Invoiced (excl. drafts)", r.rev_cur, r.rev_prev, "/invoices"),
+        row("Invoices raised", r.n_cur, r.n_prev, "/invoices"),
+        row("Cash in", r.in_cur, r.in_prev, "/transactions?direction=in"),
+        row("Cash out", r.out_cur, r.out_prev, "/transactions?direction=out"),
+      ],
+      drivers: drivers.map((d) => ({
+        customer: d.customer, current: Number(d.cur), previous: Number(d.prev),
+        delta: Math.round((Number(d.cur) - Number(d.prev)) * 100) / 100,
+      })),
+    });
+  } catch (e) { next(e); }
+});
+
+// ── GET /api/reports/consolidated — every firm you belong to, one view (Wave 17)
+// The multi-firm switcher (#197) let one login act across firms, but numbers stayed
+// siloed: seeing the group meant switching N times and remembering. Membership is
+// verified per firm HERE — never trusted from the client.
+router.get("/consolidated", authenticate, async (req, res, next) => {
+  try {
+    const { pool } = require("../db");
+    const { rows: firms } = await pool.query(`
+      SELECT DISTINCT tenant_id FROM (
+        SELECT tenant_id FROM users WHERE id=$1
+        UNION
+        SELECT tenant_id FROM tenant_memberships WHERE user_id=$1 AND status='active'
+      ) f`, [req.user.id]);
+
+    const out = [];
+    for (const f of firms) {
+      const { rows: [prof] } = await pool.query(
+        "SELECT company_name FROM tenant_profile WHERE tenant_id=$1", [f.tenant_id]).catch(() => ({ rows: [{}] }));
+      const { rows: [m] } = await pool.query(`
+        WITH o AS (SELECT status, due_date, GREATEST(total_amount - paid_amount - COALESCE(credited_amount,0),0) AS out
+                     FROM invoices WHERE tenant_id=$1)
+        SELECT COALESCE(SUM(out) FILTER (WHERE status NOT IN ('paid','cancelled','draft')),0) AS receivables,
+               COALESCE(SUM(out) FILTER (WHERE status NOT IN ('paid','cancelled','draft') AND due_date < CURRENT_DATE),0) AS overdue
+          FROM o`, [f.tenant_id]);
+      const { rows: [c] } = await pool.query(`
+        SELECT COALESCE(SUM(amount) FILTER (WHERE amount > 0),0) AS inflow,
+               COALESCE(-SUM(amount) FILTER (WHERE amount < 0),0) AS outflow
+          FROM transactions WHERE tenant_id=$1 AND transaction_date >= CURRENT_DATE - 30`, [f.tenant_id]);
+      out.push({
+        tenant_id: f.tenant_id,
+        name: prof?.company_name || f.tenant_id,
+        receivables: Number(m.receivables), overdue: Number(m.overdue),
+        cash_in_30d: Number(c.inflow), cash_out_30d: Number(c.outflow),
+      });
+    }
+    const sum = (k) => Math.round(out.reduce((s, x) => s + x[k], 0) * 100) / 100;
+    res.json({
+      firms: out,
+      group: { receivables: sum("receivables"), overdue: sum("overdue"), cash_in_30d: sum("cash_in_30d"), cash_out_30d: sum("cash_out_30d") },
+      note: out.length === 1 ? "You belong to one firm — the group view grows as you're added to more." : undefined,
+    });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

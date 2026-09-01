@@ -225,10 +225,18 @@ function AppShell() {
   // Deep links (headroom:// + https app links) → in-app navigation (native only).
   useEffect(() => onDeepLink((path) => navigate(path)), [navigate]);
 
-  // Auto sign-out after 30 minutes of inactivity (protects unattended sessions).
-  useIdleLogout(useCallback(() => {
-    logout().then(() => { toast("Signed out after 2 hours of inactivity"); navigate("/login"); });
-  }, [logout, navigate]));
+  // Auto sign-out after 2 hours of inactivity (protects unattended sessions), with a
+  // 2-minute warning first — being logged out with no warning mid-thought reads as a
+  // crash, and touching anything cancels it.
+  useIdleLogout(
+    useCallback(() => {
+      logout().then(() => { toast("Signed out after 2 hours of inactivity"); navigate("/login"); });
+    }, [logout, navigate]),
+    2 * 60 * 60 * 1000,
+    useCallback(() => {
+      toast.warning("Still there? You'll be signed out in 2 minutes if nothing moves.", { duration: 115_000 });
+    }, []),
+  );
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
