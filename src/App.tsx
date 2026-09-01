@@ -34,6 +34,9 @@ import { PrefsProvider } from "@/hooks/usePrefs";
 import { ConfirmProvider, ThemeProvider, KeyboardShortcuts, useTheme } from "@/components/ui";
 
 const InvoiceDetailPage  = lazy(() => import("@/features/records/InvoiceDetailPage"));
+const CustomersPage      = lazy(() => import("@/features/customers/CustomersPage"));
+const TrashPage          = lazy(() => import("@/features/trash/TrashPage"));
+const CustomerDetailPage = lazy(() => import("@/features/customers/CustomerDetailPage"));
 const HomePage           = lazy(() => import("@/pages/HomePage"));
 const LoginPage          = lazy(() => import("@/pages/LoginPage"));
 const SignupPage         = lazy(() => import("@/pages/SignupPage"));
@@ -281,6 +284,11 @@ function AppShell() {
                     every one of ~75 routes was a hub page, so no record could be linked,
                     bookmarked or opened in a new tab. */}
                 <Route path="/invoices/:id"  element={<InvoiceDetailPage />} />
+                {/* Wave 3: the customer master. Customers previously existed only as free
+                    text on an invoice — no list, no ledger, no record to open. */}
+                <Route path="/customers"     element={<CustomersPage />} />
+                <Route path="/customers/:id" element={<CustomerDetailPage />} />
+                <Route path="/trash"         element={<TrashPage />} />{/* 30-day bin: no delete in the product is final any more */}
                 <Route path="/gst"           element={<GstPage />} />
                 <Route path="/payroll"       element={<PayrollPage />} />
                 <Route path="/suppliers"     element={<SuppliersPage />} />

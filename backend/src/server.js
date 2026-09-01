@@ -210,6 +210,7 @@ app.use("/api/vendor-bills",       require("./routes/vendorBills")); // real bil
 // Cross-cutting services every module gets for free: per-user preferences and saved
 // list views, per-record comments/followers/activity, recently-viewed, and a 30-day
 // trash so no delete in the product is final any more.
+app.use("/api/customers",          require("./routes/customers")); // customer master (Wave 3)
 app.use("/api/prefs",              require("./routes/prefs"));
 app.use("/api/records",            require("./routes/records"));
 app.use("/api/trash",              require("./routes/trash"));

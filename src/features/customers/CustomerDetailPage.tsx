@@ -1,0 +1,342 @@
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useParams, Link } from "react-router-dom";
+import { Archive, FileText, Plus, Receipt, Save, Trash2, UserPlus } from "lucide-react";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
+import { formatCurrency } from "@/lib/utils";
+import { deleteWithUndo } from "@/lib/undo";
+import Button from "@/components/ui/Button";
+import Modal from "@/components/ui/Modal";
+import { useConfirm } from "@/components/ui/Confirm";
+import { TextField, SelectField, TextAreaField } from "@/components/ui/Field";
+import { LoadingState, ErrorState } from "@/components/EmptyState";
+import { useTrackView } from "@/hooks/useRecentlyViewed";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import RecordShell, { CopyValue, Detail } from "@/features/records/RecordShell";
+
+/**
+ * /customers/:id — the customer 360 the product never had.
+ *
+ * Everything about one customer in one place: what they owe, how far past their credit
+ * limit they are, every document that moved the balance, the people who actually pay,
+ * and the details (place of supply, terms, GST treatment) that decide how their next
+ * invoice is taxed.
+ */
+type Contact = { id: string; name: string; role: string | null; email: string | null; phone: string | null; is_primary: boolean };
+type Customer = {
+  id: string; name: string; display_name: string | null; gstin: string | null; pan: string | null;
+  email: string | null; phone: string | null;
+  billing_line1: string | null; billing_line2: string | null; billing_city: string | null;
+  billing_state: string | null; billing_state_code: string | null; billing_pincode: string | null;
+  place_of_supply_code: string | null; gst_treatment: string; tds_section: string | null;
+  payment_terms_days: number; credit_limit: string; opening_balance: string; opening_balance_date: string | null;
+  notes: string | null; tags: string[]; archived_at: string | null; created_at: string; updated_at: string;
+  contacts: Contact[];
+  outstanding: number; overdue: number; lifetime_billed: number; invoice_count: number;
+  last_invoice_at: string | null; credit_available: number | null; over_limit: boolean;
+};
+type LedgerEntry = { at: string; kind: "invoice" | "receipt" | "credit_note"; ref_id: string; ref: string; debit: number; credit: number; balance: number; note: string };
+type Ledger = { opening_balance: number; entries: LedgerEntry[]; closing_balance: number };
+type StateOpt = { code: string; name: string };
+
+const TREATMENTS = [
+  ["regular", "Regular (registered)"], ["composition", "Composition scheme"], ["unregistered", "Unregistered / B2C"],
+  ["overseas", "Overseas (export)"], ["sez", "SEZ"], ["deemed_export", "Deemed export"],
+] as const;
+
+export default function CustomerDetailPage() {
+  const { id = "" } = useParams();
+  const navigate = useNavigate();
+  const confirm = useConfirm();
+  const [cust, setCust] = useState<Customer | null>(null);
+  const [ledger, setLedger] = useState<Ledger | null>(null);
+  const [states, setStates] = useState<StateOpt[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"ledger" | "details" | "contacts">("ledger");
+  const [addContact, setAddContact] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true); setError(null);
+    api.get<Customer>(`/api/customers/${id}`)
+      .then(setCust)
+      .catch((e) => setError(e instanceof Error ? e.message : "Couldn't load this customer"))
+      .finally(() => setLoading(false));
+    api.get<Ledger>(`/api/customers/${id}/ledger`).then(setLedger).catch(() => setLedger(null));
+  }, [id]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { api.get<StateOpt[]>("/api/customers/meta/states").then(setStates).catch(() => setStates([])); }, []);
+
+  useTrackView(cust ? { entity: "customer", id: cust.id, label: cust.name, href: `/customers/${cust.id}` } : null);
+
+  const archive = async () => {
+    if (!cust) return;
+    const on = !cust.archived_at;
+    if (!await confirm({
+      title: on ? `Archive ${cust.name}?` : `Restore ${cust.name}?`,
+      body: on ? "They come out of pickers and the active list. Every invoice and ledger entry stays exactly as it is." : "They'll appear in the active list and pickers again.",
+      confirmLabel: on ? "Archive" : "Restore",
+    })) return;
+    try { await api.post(`/api/customers/${cust.id}/archive`, { archived: on }); toast.success(on ? "Archived" : "Restored"); load(); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't do that"); }
+  };
+
+  const del = async () => {
+    if (!cust) return;
+    if (cust.invoice_count > 0) {
+      toast.error(`${cust.name} has ${cust.invoice_count} invoice(s)`, { description: "Archive them instead — deleting would leave that history without a customer." });
+      return;
+    }
+    if (!await confirm({ title: `Delete ${cust.name}?`, body: "They go to Trash for 30 days.", danger: true, confirmLabel: "Delete" })) return;
+    await deleteWithUndo({ label: cust.name, remove: () => api.delete(`/api/customers/${cust.id}`), onDone: () => navigate("/customers") });
+  };
+
+  if (loading) return <div className="max-w-7xl mx-auto"><LoadingState rows={6} label="Loading customer" /></div>;
+  if (error || !cust) return <div className="max-w-7xl mx-auto"><ErrorState title="Couldn't open this customer" message={error ?? undefined} onRetry={load} /></div>;
+
+  return (
+    <RecordShell
+      entity="customer" entityId={cust.id}
+      backTo="/customers" backLabel="All customers"
+      title={cust.name}
+      subtitle={
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {cust.gstin ? <CopyValue value={cust.gstin} /> : <span>{TREATMENTS.find(([k]) => k === cust.gst_treatment)?.[1] ?? cust.gst_treatment}</span>}
+          {cust.email && <span>· {cust.email}</span>}
+          {cust.phone && <span>· {cust.phone}</span>}
+        </span>
+      }
+      meta={{ createdAt: cust.created_at, updatedAt: cust.updated_at }}
+      badges={
+        <>
+          {cust.archived_at && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-border)]/50 text-[var(--color-muted)] font-semibold uppercase">Archived</span>}
+          {cust.over_limit && <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">Over credit limit</span>}
+          {cust.overdue > 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-semibold">{formatCurrency(cust.overdue)} overdue</span>}
+        </>
+      }
+      actions={
+        <>
+          <Button size="sm" variant="primary" icon={<FileText size={13} />}
+            onClick={() => navigate(`/invoices?compose=1&customer=${encodeURIComponent(cust.name)}`)}>New invoice</Button>
+          <Button size="sm" icon={<Archive size={13} />} onClick={archive}>{cust.archived_at ? "Restore" : "Archive"}</Button>
+          <Button size="sm" variant="ghost" icon={<Trash2 size={13} />} onClick={del} title="Delete (only possible with no invoices)" />
+        </>
+      }
+    >
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Detail label="Outstanding" value={<span className={`font-bold text-base ${cust.outstanding > 0 ? "text-amber-400" : "text-[var(--color-primary)]"}`}>{formatCurrency(cust.outstanding)}</span>} />
+        <Detail label="Overdue" value={<span className={cust.overdue > 0 ? "text-red-400 font-semibold" : ""}>{formatCurrency(cust.overdue)}</span>} />
+        <Detail label="Billed to date" value={formatCurrency(cust.lifetime_billed)} />
+        <Detail label="Credit available" value={
+          cust.credit_available == null
+            ? <span className="text-[var(--color-muted)]">No limit set</span>
+            : <span className={cust.credit_available < 0 ? "text-red-400 font-semibold" : ""}>{formatCurrency(cust.credit_available)}</span>} />
+      </div>
+
+      <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit" role="tablist">
+        {([["ledger", "Ledger"], ["contacts", `Contacts (${cust.contacts.length})`], ["details", "Details"]] as const).map(([id2, label]) => (
+          <button key={id2} role="tab" aria-selected={tab === id2} onClick={() => setTab(id2)}
+            className={`px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id2 ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "ledger" && <LedgerTable ledger={ledger} />}
+      {tab === "contacts" && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+            <h2 className="text-sm font-semibold">People at {cust.name}</h2>
+            <Button size="sm" variant="secondary" icon={<UserPlus size={12} />} onClick={() => setAddContact(true)}>Add contact</Button>
+          </div>
+          {cust.contacts.length === 0 ? (
+            <p className="px-4 py-8 text-sm text-[var(--color-muted)] text-center">
+              No contacts yet. The person who signs the PO and the person who pays it are rarely the same — add both so reminders reach the right one.
+            </p>
+          ) : (
+            <ul className="divide-y divide-[var(--color-border)]">
+              {cust.contacts.map((c) => (
+                <li key={c.id} className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">{c.name} {c.is_primary && <span className="text-[10px] text-[var(--color-primary)]">· primary</span>}</p>
+                    <p className="text-xs text-[var(--color-muted)]">{[c.role, c.email, c.phone].filter(Boolean).join(" · ") || "No details"}</p>
+                  </div>
+                  <button onClick={async () => {
+                    if (!await confirm({ title: `Remove ${c.name}?`, danger: true, confirmLabel: "Remove" })) return;
+                    try { await api.delete(`/api/customers/${cust.id}/contacts/${c.id}`); load(); } catch { toast.error("Couldn't remove that contact"); }
+                  }} className="text-[var(--color-muted)] hover:text-red-400" aria-label={`Remove ${c.name}`}><Trash2 size={13} /></button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {tab === "details" && <DetailsForm cust={cust} states={states} onSaved={load} />}
+
+      {addContact && (
+        <AddContactModal customerId={cust.id} onClose={() => setAddContact(false)} onAdded={() => { setAddContact(false); load(); }} />
+      )}
+    </RecordShell>
+  );
+}
+
+function LedgerTable({ ledger }: { ledger: Ledger | null }) {
+  if (!ledger) return <LoadingState rows={4} label="Loading ledger" />;
+  const ICON = { invoice: FileText, receipt: Receipt, credit_note: Receipt };
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-[var(--color-border)]">
+        <h2 className="text-sm font-semibold">Ledger</h2>
+        <p className="text-[11px] text-[var(--color-muted)]">Every document that moved this balance, oldest first.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm rcard">
+          <thead className="border-b border-[var(--color-border)]">
+            <tr>
+              <th className="text-left px-4 py-2.5 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Date</th>
+              <th className="text-left px-4 py-2.5 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Document</th>
+              <th className="text-right px-4 py-2.5 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Invoiced</th>
+              <th className="text-right px-4 py-2.5 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Received</th>
+              <th className="text-right px-4 py-2.5 text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Balance</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            <tr className="text-[var(--color-muted)]">
+              <td data-label="Date" className="px-4 py-2.5 text-xs">Opening</td>
+              <td data-label="Document" className="px-4 py-2.5 text-xs">Balance brought forward</td>
+              <td data-label="Invoiced" className="px-4 py-2.5" /><td data-label="Received" className="px-4 py-2.5" />
+              <td data-label="Balance" className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(ledger.opening_balance)}</td>
+            </tr>
+            {ledger.entries.map((e, i) => {
+              const Icon = ICON[e.kind];
+              return (
+                <tr key={`${e.ref_id}-${i}`}>
+                  <td data-label="Date" className="px-4 py-2.5 text-xs">{new Date(e.at).toLocaleDateString("en-IN")}</td>
+                  <td data-label="Document" className="px-4 py-2.5">
+                    <span className="inline-flex items-center gap-1.5 text-xs">
+                      <Icon size={11} className="text-[var(--color-muted)]" />
+                      {e.kind === "invoice"
+                        ? <Link to={`/invoices/${e.ref_id}`} className="font-mono text-[var(--color-primary)] hover:underline">{e.ref}</Link>
+                        : <span className="font-mono">{e.ref}</span>}
+                      <span className="text-[var(--color-muted)]">{e.kind === "credit_note" ? "credit note" : e.note}</span>
+                    </span>
+                  </td>
+                  <td data-label="Invoiced" className="px-4 py-2.5 text-right tabular-nums">{e.debit ? formatCurrency(e.debit) : "—"}</td>
+                  <td data-label="Received" className="px-4 py-2.5 text-right tabular-nums text-[var(--color-primary)]">{e.credit ? formatCurrency(e.credit) : "—"}</td>
+                  <td data-label="Balance" className="px-4 py-2.5 text-right tabular-nums font-medium">{formatCurrency(e.balance)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-bg)]/40">
+            <tr>
+              <td colSpan={4} className="px-4 py-3 text-right text-xs font-bold">Closing balance</td>
+              <td className="px-4 py-3 text-right tabular-nums font-bold">{formatCurrency(ledger.closing_balance)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function DetailsForm({ cust, states, onSaved }: { cust: Customer; states: StateOpt[]; onSaved: () => void }) {
+  const [form, setForm] = useState({
+    name: cust.name, gstin: cust.gstin ?? "", pan: cust.pan ?? "", email: cust.email ?? "", phone: cust.phone ?? "",
+    billing_line1: cust.billing_line1 ?? "", billing_city: cust.billing_city ?? "", billing_pincode: cust.billing_pincode ?? "",
+    place_of_supply_code: cust.place_of_supply_code ?? "", gst_treatment: cust.gst_treatment,
+    payment_terms_days: String(cust.payment_terms_days), credit_limit: String(Number(cust.credit_limit) || 0),
+    opening_balance: String(Number(cust.opening_balance) || 0), notes: cust.notes ?? "",
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const initial = JSON.stringify(form);
+  const [baseline] = useState(initial);
+  const dirty = initial !== baseline;
+  useUnsavedChanges(dirty && !busy);
+
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    setForm((f) => ({ ...f, [k]: e.target.value })); setErrors((x) => ({ ...x, [k]: "" }));
+  };
+
+  const save = async () => {
+    setBusy(true); setErrors({});
+    try {
+      await api.patch(`/api/customers/${cust.id}`, {
+        ...form,
+        payment_terms_days: Number(form.payment_terms_days) || 0,
+        credit_limit: Number(form.credit_limit) || 0,
+        opening_balance: Number(form.opening_balance) || 0,
+      });
+      toast.success("Saved");
+      onSaved();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Couldn't save";
+      setErrors({ form: msg });
+      toast.error(msg);
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 space-y-5">
+      <div className="grid sm:grid-cols-2 gap-3">
+        <TextField label="Customer name" required value={form.name} onChange={set("name")} error={errors.name} />
+        <TextField label="GSTIN" value={form.gstin} onChange={set("gstin")} error={errors.gstin}
+          help="Sets PAN and place of supply automatically." />
+        <TextField label="PAN" value={form.pan} onChange={set("pan")} error={errors.pan} />
+        <SelectField label="GST treatment" value={form.gst_treatment} onChange={set("gst_treatment")}
+          help="Decides how their invoices are taxed.">
+          {TREATMENTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </SelectField>
+        <SelectField label="Place of supply" value={form.place_of_supply_code} onChange={set("place_of_supply_code")}
+          help="This is what decides IGST vs CGST + SGST — stated here, not guessed from the GSTIN.">
+          <option value="">Not set</option>
+          {states.map((s) => <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
+        </SelectField>
+        <TextField label="Email" type="email" value={form.email} onChange={set("email")} error={errors.email} />
+        <TextField label="Phone" value={form.phone} onChange={set("phone")} error={errors.phone} />
+        <TextField label="Address" value={form.billing_line1} onChange={set("billing_line1")} />
+        <TextField label="City" value={form.billing_city} onChange={set("billing_city")} />
+        <TextField label="PIN code" value={form.billing_pincode} onChange={set("billing_pincode")} error={errors.billing_pincode} />
+        <TextField label="Payment terms (days)" type="number" min={0} max={365} value={form.payment_terms_days} onChange={set("payment_terms_days")}
+          help="New invoices get their due date from this." />
+        <TextField label="Credit limit" type="number" min={0} value={form.credit_limit} onChange={set("credit_limit")}
+          help="0 means no limit. One number, in one place — not three." />
+        <TextField label="Opening balance" type="number" value={form.opening_balance} onChange={set("opening_balance")}
+          help="What they already owed before you started using Headroom." />
+      </div>
+      <TextAreaField label="Notes" value={form.notes} onChange={set("notes")} help="Anything the next person handling this account should know." />
+      <div className="flex items-center justify-end gap-2">
+        {dirty && <span className="text-xs text-amber-400">Unsaved changes</span>}
+        <Button variant="primary" icon={<Save size={13} />} loading={busy} onClick={save}>Save changes</Button>
+      </div>
+    </div>
+  );
+}
+
+function AddContactModal({ customerId, onClose, onAdded }: { customerId: string; onClose: () => void; onAdded: () => void }) {
+  const [f, setF] = useState({ name: "", role: "", email: "", phone: "", is_primary: false });
+  const [busy, setBusy] = useState(false);
+  const add = async () => {
+    setBusy(true);
+    try { await api.post(`/api/customers/${customerId}/contacts`, f); toast.success("Contact added"); onAdded(); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't add that contact"); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Modal open onClose={onClose} title="Add a contact" size="sm"
+      footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button>
+               <Button variant="primary" loading={busy} disabled={!f.name.trim()} onClick={add} icon={<Plus size={13} />}>Add</Button></>}>
+      <div className="space-y-3">
+        <TextField label="Name" required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} autoFocus />
+        <TextField label="Role" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })} placeholder="e.g. Accounts payable" />
+        <TextField label="Email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+        <TextField label="Phone" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
+        <label className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
+          <input type="checkbox" className="accent-[var(--color-primary)]" checked={f.is_primary} onChange={(e) => setF({ ...f, is_primary: e.target.checked })} />
+          Primary contact — reminders and statements go here first
+        </label>
+      </div>
+    </Modal>
+  );
+}

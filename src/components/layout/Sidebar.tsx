@@ -149,6 +149,7 @@ const NAV_CATALOG: NavGroup[] = [
   ]},
   { label: "Get Paid & Sell", items: [
     { to: "/sales",           label: "Sales & CRM",        icon: Handshake,       tab: "sales"       },
+    { to: "/customers",       label: "Customers",          icon: Users,           tab: "customers"   },
     { to: "/invoices",        label: "Invoices",           icon: FilePlus,        tab: "invoices"    },
     { to: "/collections",     label: "Receivables & Collections", icon: PhoneCall, tab: "collections" },
     { to: "/payments",        label: "Payments",           icon: IndianRupee,     tab: "payments"    },
@@ -223,10 +224,10 @@ const ROLE_ONLY: Record<string, string[]> = {
 // collapsed under their job group. Only references CANONICAL (visible) tabs.
 const PRIMARY_NAV: Record<string, string[]> = {
   super_admin:        ["dashboard", "invoices", "collections", "transactions", "gst", "forecast", "agents", "flows", "collab", "insights", "admin"],
-  owner:              ["dashboard", "invoices", "collections", "transactions", "gst", "forecast", "agents", "flows", "collab", "insights"],
+  owner:              ["dashboard", "invoices", "customers", "collections", "transactions", "gst", "forecast", "agents", "flows", "collab", "insights"],
   finance_manager:    ["dashboard", "invoices", "collections", "transactions", "gst", "forecast", "agents", "insights", "banking", "collab"],
   accountant:         ["dashboard", "transactions", "books", "gst", "compliance", "agents", "insights", "advisor", "collab"],
-  sales:              ["dashboard", "sales", "invoices", "collections", "payments", "agents", "collab", "field"],
+  sales:              ["dashboard", "sales", "customers", "invoices", "collections", "payments", "agents", "collab", "field"],
   operations_manager: ["dashboard", "operations", "vendors", "marketplace", "agents", "flows", "collab", "transactions"],
   viewer:             ["dashboard", "health", "cfo-brief", "insights", "forecast"],
   investor:           ["investor", "capital", "credit", "lenders"],

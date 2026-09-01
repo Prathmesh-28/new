@@ -23,7 +23,7 @@ import RecordShell, { CopyValue, Detail } from "./RecordShell";
  */
 type Item = { id: string; description: string; hsn_sac: string | null; quantity: string; unit_price: string; gst_rate: string; amount: string };
 type Payment = { id: string; amount: string; mode: string; reference: string | null; received_at: string };
-type CreditNote = { id: string; note_number: string; amount: string; reason: string | null; created_at: string };
+type CreditNote = { id: string; note_number: string; total_amount: string; reason: string | null; created_at: string };
 type Reminder = { id: string; channel: string; status: string; reminded_at: string };
 type Invoice = {
   id: string; invoice_number: string; customer_name: string; customer_gstin: string | null;
@@ -242,7 +242,7 @@ export default function InvoiceDetailPage() {
             {inv.credit_notes.map((n) => (
               <li key={n.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
                 <span className="font-mono text-xs">{n.note_number}<span className="text-[var(--color-muted)] font-sans"> · {n.reason || "no reason given"}</span></span>
-                <span className="tabular-nums font-medium">{formatCurrency(Number(n.amount))}</span>
+                <span className="tabular-nums font-medium">{formatCurrency(Number(n.total_amount))}</span>
               </li>
             ))}
           </ul>

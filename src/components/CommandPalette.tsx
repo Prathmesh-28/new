@@ -5,6 +5,8 @@ import { useT } from "@/i18n";
 import { formatCurrency } from "@/lib/utils";
 import { TAB_CATALOG } from "@/data/roles";
 import { TOOL_CATALOG } from "@/data/toolCatalog";
+import { api } from "@/lib/api";
+import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import {
   Search, LayoutDashboard, ArrowRightLeft, TrendingUp, CreditCard, Briefcase,
   Package, Bell, Settings, Users, X, BarChart3, Sparkles, Building2, Store,
@@ -14,6 +16,9 @@ import {
 } from "lucide-react";
 
 type LucideIcon = typeof Search;
+
+type ServerCustomer = { id: string; name: string; gstin: string | null; outstanding: string | number; invoice_count: number };
+type ServerInvoice  = { id: string; invoice_number: string; customer_name: string; total_amount: string; status: string; due_date: string | null };
 
 const NAV_ITEMS: { label: string; path: string; icon: LucideIcon; desc?: string }[] = [
   { label: "Dashboard",    path: "/dashboard",    icon: LayoutDashboard, desc: "Overview & health score" },
@@ -110,10 +115,31 @@ export function CommandPalette({ open, onClose }: Props) {
   const [favs, setFavs] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef  = useRef<HTMLUListElement>(null);
+  // Records now come from the SERVER, not from whatever happens to be in the local store:
+  // the palette can therefore find an invoice or customer the current page never loaded,
+  // and every hit is a real permalink rather than a filtered list view.
+  const [serverHits, setServerHits] = useState<{ customers: ServerCustomer[]; invoices: ServerInvoice[] }>({ customers: [], invoices: [] });
+  const { items: recentRecords } = useRecentlyViewed(6);
 
   useEffect(() => {
-    if (open) { setQuery(""); setCursor(0); setFavs(readList(FAV_KEY)); setTimeout(() => inputRef.current?.focus(), 50); }
+    if (open) { setQuery(""); setCursor(0); setFavs(readList(FAV_KEY)); setServerHits({ customers: [], invoices: [] }); setTimeout(() => inputRef.current?.focus(), 50); }
   }, [open]);
+
+  useEffect(() => {
+    const term = query.trim();
+    if (!open || term.length < 2) { setServerHits({ customers: [], invoices: [] }); return; }
+    const ctl = new AbortController();
+    const t = window.setTimeout(async () => {
+      try {
+        const [cs, is] = await Promise.all([
+          api.get<{ data: ServerCustomer[] }>(`/api/customers?q=${encodeURIComponent(term)}&limit=5`),
+          api.get<{ data: ServerInvoice[] }>(`/api/invoices?q=${encodeURIComponent(term)}&limit=5`),
+        ]);
+        if (!ctl.signal.aborted) setServerHits({ customers: cs.data ?? [], invoices: is.data ?? [] });
+      } catch { /* the local results below still stand */ }
+    }, 220);
+    return () => { ctl.abort(); window.clearTimeout(t); };
+  }, [query, open]);
 
   const toggleFav = (path: string) => {
     setFavs(prev => {
@@ -130,6 +156,12 @@ export function CommandPalette({ open, onClose }: Props) {
     if (!q) {
       const out: Result[] = [];
       favs.map(pageByPath).filter(Boolean).forEach(n => out.push({ id: `fav${n!.path}`, label: n!.label, sub: n!.desc, type: "fav", path: n!.path, action: () => go(n!.path) }));
+      // Records the user actually opened recently — the product used to forget every one
+      // the moment they navigated away.
+      recentRecords.slice(0, 5).forEach(r => out.push({
+        id: `rv${r.entity}${r.entity_id}`, label: r.label || r.entity, sub: `Recently opened · ${r.entity}`,
+        type: "recent", path: r.href, action: () => go(r.href || "/dashboard"),
+      }));
       readList(REC_KEY).filter(p => !favs.includes(p)).map(pageByPath).filter(Boolean).slice(0, 5).forEach(n => out.push({ id: `rec${n!.path}`, label: n!.label, sub: n!.desc, type: "recent", path: n!.path, action: () => go(n!.path) }));
       PAGE_INDEX.filter(n => !favs.includes(n.path)).slice(0, 8).forEach(n => out.push({ id: n.path, label: n.label, sub: n.desc, type: "nav", path: n.path, action: () => go(n.path) }));
       return out.slice(0, 16);
@@ -158,24 +190,28 @@ export function CommandPalette({ open, onClose }: Props) {
     // records, not just transactions/alerts. No dedicated customers/vendors table
     // exists client-side — both are derived from the real records that name them
     // (invoices, procurement orders), same identity pattern lib/customerScore.js uses.
-    store.invoices.filter(inv =>
-      inv.customer.toLowerCase().includes(q) || inv.description.toLowerCase().includes(q) || (inv.invoiceNumber ?? "").toLowerCase().includes(q)
-    ).slice(0, 6).forEach(inv =>
-      out.push({ id: `inv${inv.id}`, label: inv.invoiceNumber ? `${inv.invoiceNumber} · ${inv.customer}` : inv.customer, sub: `${formatCurrency(inv.amount)} · ${inv.status} · due ${inv.dueDate}`, type: "invoice", action: () => { go(`/invoices?q=${encodeURIComponent(inv.invoiceNumber || inv.customer)}`); } })
-    );
-    const customerNames = [...new Set(store.invoices.map(i => i.customer).filter(Boolean))];
-    customerNames.filter(c => c.toLowerCase().includes(q)).slice(0, 5).forEach(c => {
-      const theirs = store.invoices.filter(i => i.customer === c);
-      const outstanding = theirs.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
-      out.push({ id: `cust${c}`, label: c, sub: `${theirs.length} invoice${theirs.length === 1 ? "" : "s"} · ${formatCurrency(outstanding)} outstanding`, type: "customer", action: () => { go(`/invoices?q=${encodeURIComponent(c)}`); } });
-    });
+    // Real records, from the server, each opening its OWN page. Before Wave 2/3 these
+    // results could only drop the user on a filtered list, because no record had a URL
+    // and there was no customers table to search.
+    serverHits.invoices.forEach(inv => out.push({
+      id: `inv${inv.id}`,
+      label: `${inv.invoice_number} · ${inv.customer_name}`,
+      sub: `${formatCurrency(Number(inv.total_amount))} · ${inv.status}${inv.due_date ? ` · due ${inv.due_date}` : ""}`,
+      type: "invoice", path: `/invoices/${inv.id}`, action: () => go(`/invoices/${inv.id}`),
+    }));
+    serverHits.customers.forEach(c => out.push({
+      id: `cust${c.id}`,
+      label: c.name,
+      sub: `${c.invoice_count} invoice${c.invoice_count === 1 ? "" : "s"} · ${formatCurrency(Number(c.outstanding) || 0)} outstanding${c.gstin ? ` · ${c.gstin}` : ""}`,
+      type: "customer", path: `/customers/${c.id}`, action: () => go(`/customers/${c.id}`),
+    }));
     const vendorNames = [...new Set((store.procurement ?? []).map(p => p.supplierName).filter(Boolean))];
     vendorNames.filter(v => v.toLowerCase().includes(q)).slice(0, 5).forEach(v => {
       const theirs = store.procurement.filter(p => p.supplierName === v);
       out.push({ id: `vend${v}`, label: v, sub: `${theirs.length} purchase order${theirs.length === 1 ? "" : "s"}`, type: "vendor", action: () => { navigate("/suppliers"); onClose(); } });
     });
     return out.slice(0, 16);
-  }, [query, favs, store.transactions, store.alerts, store.invoices, store.procurement, navigate, onClose]);
+  }, [query, favs, store.transactions, store.alerts, store.procurement, serverHits, recentRecords, navigate, onClose]);
 
   useEffect(() => { setCursor(0); }, [results.length]);
 

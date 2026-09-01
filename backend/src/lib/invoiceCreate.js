@@ -15,9 +15,44 @@ function nextInvoiceNumber(existing) {
 
 // Insert the invoice + items atomically on `client`. Totals are recomputed here from the
 // items (never trusted from the caller). Returns the inserted invoice row.
+/**
+ * Find (or create) the customer master row for this invoice.
+ *
+ * Invoices used to carry only a free-text name, so "Acme Traders" and "Acme traders" were
+ * different customers and no ledger was possible. Every invoice now links to a master row:
+ * an existing customer is matched case-insensitively on the trimmed name (the same key the
+ * unique index in 0034 uses), and an unknown name creates one rather than making the user
+ * stop and fill in a form before they can bill anyone.
+ *
+ * `customer_name` still gets written onto the invoice as the name AS BILLED — correcting a
+ * customer's name later must not silently rewrite invoices already issued.
+ */
+async function resolveCustomerId(client, tenantId, { customer_name, customer_gstin, customer_email, customer_phone, customer_id }) {
+  if (customer_id) {
+    const { rows } = await client.query("SELECT id FROM customers WHERE id=$1 AND tenant_id=$2", [customer_id, tenantId]);
+    if (rows[0]) return rows[0].id;
+  }
+  const name = String(customer_name || "").trim();
+  if (!name) return null;
+
+  const found = await client.query(
+    "SELECT id FROM customers WHERE tenant_id=$1 AND lower(btrim(name))=lower(btrim($2))", [tenantId, name]);
+  if (found.rows[0]) return found.rows[0].id;
+
+  const posCode = /^\d{2}/.test(String(customer_gstin || "").trim()) ? String(customer_gstin).trim().slice(0, 2) : null;
+  const { rows } = await client.query(
+    `INSERT INTO customers(tenant_id, name, gstin, email, phone, place_of_supply_code, gst_treatment)
+     VALUES($1,$2,$3,$4,$5,$6,$7)
+     ON CONFLICT (tenant_id, lower(btrim(name))) DO UPDATE SET updated_at = now()
+     RETURNING id`,
+    [tenantId, name, customer_gstin || null, customer_email || null, customer_phone || null,
+     posCode, customer_gstin ? "regular" : "unregistered"]);
+  return rows[0]?.id ?? null;
+}
+
 async function createInvoiceTx(client, tenantId, {
   customer_name, customer_gstin = null, customer_email = null, customer_phone = null,
-  gst_rate = 18, due_date = null, items = [], status = "draft",
+  gst_rate = 18, due_date = null, items = [], status = "draft", customer_id = null,
 }) {
   const subtotal = items.reduce((s, i) => s + (parseFloat(i.quantity) * parseFloat(i.unit_price)), 0);
   const gstSum = items.reduce((s, i) => {
@@ -41,13 +76,14 @@ async function createInvoiceTx(client, tenantId, {
     [tenantId]
   );
   const invoice_number = `INV-${new Date().getFullYear()}-${String(Number(mx.maxn) + 1).padStart(3, "0")}`;
+  const resolvedCustomerId = await resolveCustomerId(client, tenantId, { customer_name, customer_gstin, customer_email, customer_phone, customer_id });
   const { rows: [row] } = await client.query(
     `INSERT INTO invoices(tenant_id, invoice_number, customer_name, customer_gstin, customer_email,
-       customer_phone, subtotal, gst_rate, gst_amount, total_amount, status, due_date)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       customer_phone, subtotal, gst_rate, gst_amount, total_amount, status, due_date, customer_id)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
      RETURNING *`,
     [tenantId, invoice_number, customer_name, customer_gstin, customer_email, customer_phone,
-     subtotal, gst_rate, gst_amount, total, status, due_date]
+     subtotal, gst_rate, gst_amount, total, status, due_date, resolvedCustomerId]
   );
   for (const item of items) {
     const amt = parseFloat(item.quantity) * parseFloat(item.unit_price);
@@ -59,4 +95,4 @@ async function createInvoiceTx(client, tenantId, {
   return row;
 }
 
-module.exports = { nextInvoiceNumber, createInvoiceTx };
+module.exports = { nextInvoiceNumber, createInvoiceTx, resolveCustomerId };
