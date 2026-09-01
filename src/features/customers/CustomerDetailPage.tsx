@@ -31,6 +31,7 @@ type Customer = {
   place_of_supply_code: string | null; gst_treatment: string; tds_section: string | null;
   payment_terms_days: number; credit_limit: string; opening_balance: string; opening_balance_date: string | null;
   notes: string | null; tags: string[]; archived_at: string | null; created_at: string; updated_at: string;
+  do_not_contact: boolean; do_not_contact_reason: string | null;
   contacts: Contact[];
   outstanding: number; overdue: number; lifetime_billed: number; invoice_count: number;
   last_invoice_at: string | null; credit_available: number | null; over_limit: boolean;
@@ -112,6 +113,10 @@ export default function CustomerDetailPage() {
           {cust.archived_at && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-border)]/50 text-[var(--color-muted)] font-semibold uppercase">Archived</span>}
           {cust.over_limit && <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">Over credit limit</span>}
           {cust.overdue > 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-semibold">{formatCurrency(cust.overdue)} overdue</span>}
+          {cust.do_not_contact && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold"
+              title={cust.do_not_contact_reason || "Automated reminders are suppressed for this customer"}>Do not contact</span>
+          )}
         </>
       }
       actions={
@@ -247,6 +252,7 @@ function DetailsForm({ cust, states, onSaved }: { cust: Customer; states: StateO
     place_of_supply_code: cust.place_of_supply_code ?? "", gst_treatment: cust.gst_treatment,
     payment_terms_days: String(cust.payment_terms_days), credit_limit: String(Number(cust.credit_limit) || 0),
     opening_balance: String(Number(cust.opening_balance) || 0), notes: cust.notes ?? "",
+    do_not_contact: !!cust.do_not_contact, do_not_contact_reason: cust.do_not_contact_reason ?? "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -306,6 +312,26 @@ function DetailsForm({ cust, states, onSaved }: { cust: Customer; states: StateO
           help="What they already owed before you started using Headroom." />
       </div>
       <TextAreaField label="Notes" value={form.notes} onChange={set("notes")} help="Anything the next person handling this account should know." />
+
+      {/* Suppression. Automated chasers previously kept going out to a customer in a
+          dispute because nothing checked; the reminder endpoint now refuses when this is on. */}
+      <div className="rounded-lg border border-[var(--color-border)] p-3 space-y-2">
+        <label className="flex items-start gap-2 text-sm cursor-pointer">
+          <input type="checkbox" className="accent-[var(--color-primary)] mt-0.5"
+            checked={form.do_not_contact}
+            onChange={(e) => { setForm((f) => ({ ...f, do_not_contact: e.target.checked })); }} />
+          <span>
+            Don't send this customer automated messages
+            <span className="block text-xs text-[var(--color-muted)]">
+              Payment reminders and statements are blocked for them. You can still send something by hand.
+            </span>
+          </span>
+        </label>
+        {form.do_not_contact && (
+          <TextField label="Why" value={form.do_not_contact_reason} onChange={set("do_not_contact_reason")}
+            placeholder="e.g. disputing the delivery; asked us to stop" help="Shown to whoever tries to chase them." />
+        )}
+      </div>
       <div className="flex items-center justify-end gap-2">
         {dirty && <span className="text-xs text-amber-400">Unsaved changes</span>}
         <Button variant="primary" icon={<Save size={13} />} loading={busy} onClick={save}>Save changes</Button>

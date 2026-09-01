@@ -38,7 +38,7 @@ const WRITABLE = [
   "shipping_same", "shipping_line1", "shipping_line2", "shipping_city", "shipping_state", "shipping_state_code", "shipping_pincode",
   "place_of_supply_code", "gst_treatment", "tds_section",
   "payment_terms_days", "credit_limit", "opening_balance", "opening_balance_date",
-  "notes", "tags",
+  "notes", "tags", "do_not_contact", "do_not_contact_reason",
 ];
 
 /** Validate + normalise an incoming customer body. Returns { values, errors }. */
@@ -132,6 +132,7 @@ function clean(body, { partial } = {}) {
   }
   if (body.tags !== undefined) v.tags = Array.isArray(body.tags) ? body.tags.slice(0, 20).map((t) => String(t).slice(0, 40)) : [];
   if (body.shipping_same !== undefined) v.shipping_same = !!body.shipping_same;
+  if (body.do_not_contact !== undefined) v.do_not_contact = !!body.do_not_contact;
 
   for (const key of WRITABLE) {
     if (v[key] === undefined && body[key] !== undefined && !(key in errors)) {

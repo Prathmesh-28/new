@@ -37,6 +37,7 @@ const money = (v, currency = "INR") => {
 // Quantities and unit rates: grouped, two decimals, no currency prefix (the column says it).
 const qty = (v) => (Number(v) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const { computeInvoice, inWords } = require("../lib/invoiceTotals");
+const notifyLib = require("../lib/notify");
 
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant","sales"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
@@ -442,6 +443,26 @@ router.post("/:id/remind", authenticate, canWrite, async (req, res) => {
     );
     const invoice = rows[0];
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+
+    // Don't-contact list: a customer in a payment dispute, or one who asked to be left
+    // alone, kept receiving automated chasers because nothing checked. Refuse clearly
+    // rather than sending and hoping.
+    const suppressed = await notifyLib.isSuppressed(tenantId, invoice.customer_id);
+    if (suppressed.suppressed) {
+      return res.status(409).json({
+        error: `${suppressed.name || "This customer"} is marked do-not-contact${suppressed.reason ? ` (${suppressed.reason})` : ""}. Clear that on their record first.`,
+        code: "DO_NOT_CONTACT",
+      });
+    }
+
+    // Quiet hours: reminders used to go out whenever a cron happened to run. A chaser at
+    // 03:00 costs more goodwill than the day it saves.
+    if (await notifyLib.withinQuietHours(tenantId)) {
+      return res.status(409).json({
+        error: "It's outside the hours you set for messaging customers. Change the window in Settings → Notifications, or send it later.",
+        code: "QUIET_HOURS",
+      });
+    }
 
     // Spam-guard: protect the SMB's relationship with its customer. The cap (per
     // 7-day window) is a super-admin-tunable platform setting, defaulting to 3.
