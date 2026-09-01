@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Ban, Copy, Download, Eraser, FileText, History, Loader2, Paperclip, Printer, Send, Trash2, Wallet } from "lucide-react";
+import { Ban, Copy, Download, Eraser, FileText, History, Loader2, Paperclip, Printer, Send, Share2, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { api, authHeaders } from "@/lib/api";
 import { API_BASE } from "@/lib/apiBase";
@@ -202,6 +202,27 @@ export default function InvoiceDetailPage() {
           <Button size="sm" icon={<Send size={13} />} loading={busy === "send"} onClick={send}>Send</Button>
           <Button size="sm" icon={<Download size={13} />} loading={busy === "pdf"} onClick={downloadPdf}>PDF</Button>
           <Button size="sm" icon={<Printer size={13} />} onClick={() => window.print()}>Print</Button>
+          {typeof navigator !== "undefined" && "share" in navigator && (
+            <Button size="sm" icon={<Share2 size={13} />} loading={busy === "share"}
+              title="Share via WhatsApp, email or anything else on this device"
+              onClick={async () => {
+                setBusy("share");
+                try {
+                  // Prefer sharing the actual PDF file; platforms that can't take files
+                  // get the text summary instead of a silent failure.
+                  const res = await fetch(`${API_BASE}/api/invoices/${inv.id}/pdf`, { headers: authHeaders() });
+                  const blob = await res.blob();
+                  const file = new File([blob], `${inv.invoice_number}.pdf`, { type: "application/pdf" });
+                  const text = `Invoice ${inv.invoice_number} for ${formatCurrency(Number(inv.total_amount))}${inv.due_date ? `, due ${inv.due_date}` : ""}.`;
+                  if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: inv.invoice_number, text });
+                  else await navigator.share({ title: inv.invoice_number, text });
+                } catch (e) {
+                  // The user backing out of the share sheet is not an error.
+                  if (!(e instanceof DOMException && e.name === "AbortError"))
+                    toast.error("Couldn't open the share sheet");
+                } finally { setBusy(null); }
+              }}>Share</Button>
+          )}
           <Button size="sm" icon={<Copy size={13} />} loading={busy === "dup"} onClick={duplicate}>Duplicate</Button>
           {!inv.voided_at && inv.status !== "cancelled" && inv.outstanding > 0 && Number(inv.paid_amount) > 0 && (
             <Button size="sm" variant="ghost" icon={<Eraser size={13} />}

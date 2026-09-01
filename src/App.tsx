@@ -27,6 +27,7 @@ import QuickCreate from "@/components/QuickCreate";
 import { onAppResume } from "@/lib/mobile";
 import { onDeepLink } from "@/lib/native";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { registerPush } from "@/lib/nativeFeatures";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -224,6 +225,9 @@ function AppShell() {
 
   // Deep links (headroom:// + https app links) → in-app navigation (native only).
   useEffect(() => onDeepLink((path) => navigate(path)), [navigate]);
+
+  // Pull-to-refresh on touch devices — the universal "give me fresh numbers" gesture.
+  usePullToRefresh();
 
   // Auto sign-out after 2 hours of inactivity (protects unattended sessions), with a
   // 2-minute warning first — being logged out with no warning mid-thought reads as a

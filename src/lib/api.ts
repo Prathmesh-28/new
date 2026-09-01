@@ -51,13 +51,25 @@ export function authHeaders(): Record<string, string> {
   };
 }
 
+// Which failures are safe to retry? GETs always (idempotent by definition), and writes
+// ONLY when the caller attached an Idempotency-Key — the server-side idempotency layer
+// (Wave 1) makes replaying those exact requests safe. Anything else retried blindly could
+// double-post money.
+const isRetriableRequest = (path: string, init?: RequestInit) => {
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (method === "GET" || method === "HEAD") return true;
+  const h = (init?.headers ?? {}) as Record<string, string>;
+  return Object.keys(h).some((k) => k.toLowerCase() === "idempotency-key");
+};
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export async function authFetch<T = unknown>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
   const token = getToken();
   const active = getActiveFirm();
-  const res = await fetch(`${BASE}${path}`, {
+  const doFetch = () => fetch(`${BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -68,6 +80,31 @@ export async function authFetch<T = unknown>(
       ...(init?.headers as Record<string, string> ?? {}),
     },
   });
+
+  // Retry-with-backoff (Wave 19): a blip on a flaky connection or a briefly-restarting
+  // backend used to surface as an instant failure toast even though a second attempt
+  // would have succeeded. Two retries, 400ms/1200ms, ONLY for requests that are safe to
+  // repeat (see isRetriableRequest).
+  let res: Response;
+  const retriable = isRetriableRequest(path, init);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await doFetch();
+    } catch (e) {
+      if (retriable && attempt < 2 && navigator.onLine) { await sleep(attempt === 0 ? 400 : 1200); continue; }
+      throw e;
+    }
+    if (res.status >= 502 && res.status <= 504 && retriable && attempt < 2) { await sleep(attempt === 0 ? 400 : 1200); continue; }
+    break;
+  }
+
+  // Rate limiting with a real answer (Wave 19): a 429 used to surface as raw JSON. Say
+  // when to try again, from the server's own Retry-After when it sends one.
+  if (res.status === 429) {
+    const after = parseInt(res.headers.get("Retry-After") ?? "", 10);
+    const wait = Number.isFinite(after) && after > 0 ? after : 30;
+    throw new Error(`You're doing that a bit too fast — try again in ${wait >= 60 ? `${Math.ceil(wait / 60)} minute${wait >= 120 ? "s" : ""}` : `${wait} seconds`}.`);
+  }
 
   if (res.status === 401) {
     const refreshed = await tryRefresh();

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { api } from "@/lib/api";
+import { api, authHeaders } from "@/lib/api";
+import { API_BASE } from "@/lib/apiBase";
 import { toast } from "sonner";
 import { User, Lock, Check } from "lucide-react";
 import PasswordInput from "@/components/PasswordInput";
@@ -9,10 +10,51 @@ function AvatarCircle({ name, email }: { name: string; email: string }) {
   const initials = name
     ? name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()
     : email.slice(0, 2).toUpperCase();
+  // A photo when one exists (Wave 19); the initials disc stays the fallback rather than
+  // a broken-image icon. The endpoint requires auth and an <img> cannot send headers, so
+  // the photo is fetched as a blob and shown via an object URL.
+  const { user } = useAuth();
+  const [src, setSrc] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const loadPhoto = useCallback(() => {
+    if (!user?.id) return;
+    fetch(`${API_BASE}/api/users/${user.id}/avatar`, { headers: authHeaders() })
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((b) => setSrc((prev) => { if (prev) URL.revokeObjectURL(prev); return b ? URL.createObjectURL(b) : null; }))
+      .catch(() => setSrc(null));
+  }, [user?.id]);
+  useEffect(() => { loadPhoto(); }, [loadPhoto]);
+
+  const upload = async (f: File) => {
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const r = await fetch(`${API_BASE}/api/users/me/avatar`, { method: "POST", headers: authHeaders(), body: fd });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Upload failed");
+      toast.success("Photo updated");
+      loadPhoto();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't upload that"); }
+    finally { setBusy(false); }
+  };
+
   return (
-    <div className="w-20 h-20 rounded-full bg-[var(--color-primary)]/20 border-2 border-[var(--color-primary)]/30 flex items-center justify-center">
-      <span className="text-2xl font-bold text-[var(--color-primary)]">{initials}</span>
-    </div>
+    <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}
+      title="Change your photo" aria-label="Change your profile photo"
+      className="relative w-20 h-20 rounded-full bg-[var(--color-primary)]/20 border-2 border-[var(--color-primary)]/30 flex items-center justify-center overflow-hidden group">
+      {src ? (
+        <img src={src} alt="" className="w-full h-full object-cover" />
+      ) : (
+        <span className="text-2xl font-bold text-[var(--color-primary)]">{initials}</span>
+      )}
+      <span className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-black/50 text-[10px] text-white">
+        {busy ? "…" : "Change"}
+      </span>
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ""; }} />
+    </button>
   );
 }
 

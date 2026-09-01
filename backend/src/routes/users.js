@@ -313,4 +313,43 @@ router.get("/:id/activity", authenticate, requireOwnerOrAdmin, async (req, res, 
   } catch (e) { next(e); }
 });
 
+// ── Profile photo (Wave 19) ──────────────────────────────────────────────────
+// A face next to comments, approvals and the team list. Stored through the existing
+// encrypted vault (same crypto and limits as every other file), images only, 2 MB.
+const avatarUpload = require("multer")({ storage: require("multer").memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
+router.post("/me/avatar", authenticate, avatarUpload.single("file"), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "Pick an image first" });
+    if (!/^image\/(png|jpeg|webp)$/.test(req.file.mimetype))
+      return res.status(415).json({ error: "PNG, JPG or WebP only" });
+    const { encryptBuffer } = require("../lib/fileCrypto");
+    const { rows: [f] } = await pool.query(
+      `INSERT INTO files(tenant_id, uploader_id, name, mime_type, size, data, category, encrypted)
+       VALUES($1,$2,$3,$4,$5,$6,'avatar',true) RETURNING id`,
+      [req.user.tenant_id, req.user.id, `avatar-${req.user.id}`, req.file.mimetype, req.file.size, encryptBuffer(req.file.buffer)]);
+    // Point at the new photo; the old file (if any) is left for normal file retention
+    // rather than deleted inline, so a half-failed upload can never orphan the pointer.
+    await pool.query("UPDATE users SET avatar_file_id=$2 WHERE id=$1", [req.user.id, f.id]);
+    res.status(201).json({ ok: true, avatar_file_id: f.id });
+  } catch (e) { next(e); }
+});
+
+// Anyone in the firm may see a teammate's photo (that is what it is for).
+router.get("/:id/avatar", authenticate, async (req, res, next) => {
+  try {
+    const { rows: [u] } = await pool.query(
+      `SELECT u.avatar_file_id FROM users u WHERE u.id=$1 AND (u.tenant_id=$2
+          OR EXISTS (SELECT 1 FROM tenant_memberships m WHERE m.user_id=u.id AND m.tenant_id=$2 AND m.status='active'))`,
+      [req.params.id, req.user.tenant_id]);
+    if (!u?.avatar_file_id) return res.status(404).json({ error: "No photo" });
+    const { rows: [f] } = await pool.query(
+      "SELECT mime_type, data, encrypted FROM files WHERE id=$1", [u.avatar_file_id]);
+    if (!f) return res.status(404).json({ error: "No photo" });
+    const { decryptBuffer } = require("../lib/fileCrypto");
+    res.setHeader("Content-Type", f.mime_type);
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.send(f.encrypted ? decryptBuffer(f.data) : f.data);
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

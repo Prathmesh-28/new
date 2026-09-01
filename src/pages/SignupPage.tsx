@@ -225,7 +225,7 @@ export default function SignupPage() {
               <label className="block text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-1.5">
                 Password
               </label>
-              <PasswordInput
+              <PasswordInput showStrength
                 value={password} onChange={e => setPassword(e.target.value)}
                 required minLength={8} placeholder="At least 8 characters"
                 className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-muted)]/50"
