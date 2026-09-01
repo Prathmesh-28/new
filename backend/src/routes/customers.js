@@ -23,6 +23,7 @@ const listQuery = require("../lib/listQuery");
 const trash = require("../lib/trash");
 const { isValidGstin, isValidPan, gstinInfo } = require("../lib/validators");
 const { GST_STATES, stateName } = require("../lib/gstInvoice");
+const { hashToken: portalHash } = require("./portal");
 
 const WRITE_ROLES = ["super_admin", "owner", "finance_manager", "accountant", "sales"];
 const canWrite = (req, res, next) =>
@@ -415,6 +416,61 @@ router.delete("/:id/contacts/:contactId", authenticate, canWrite, async (req, re
       "DELETE FROM customer_contacts WHERE id=$1 AND customer_id=$2 AND tenant_id=$3",
       [req.params.contactId, req.params.id, req.user.tenant_id]);
     if (!rowCount) return res.status(404).json({ error: "Contact not found" });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// ── Portal link ──────────────────────────────────────────────────────────────
+// A link the CUSTOMER opens to see what they owe and pay it. Nothing like it existed:
+// every collection loop ended with a person re-attaching a PDF to an email.
+//
+// The token is shown ONCE, on creation. We store only its hash — a share link ends up in
+// email, WhatsApp and browser history, and a database dump must not hand out working links
+// to every customer's ledger.
+router.get("/:id/portal-link", authenticate, async (req, res, next) => {
+  try {
+    const { rows } = await q(req.user.tenant_id,
+      `SELECT id, token_hint, expires_at, revoked_at, view_count, last_viewed_at, created_at
+         FROM customer_portal_links WHERE tenant_id=$1 AND customer_id=$2 AND revoked_at IS NULL`,
+      [req.user.tenant_id, req.params.id]);
+    res.json(rows[0] || null);
+  } catch (e) { next(e); }
+});
+
+router.post("/:id/portal-link", authenticate, canWrite, async (req, res, next) => {
+  try {
+    const cust = await q(req.user.tenant_id, "SELECT id, name FROM customers WHERE id=$1 AND tenant_id=$2",
+      [req.params.id, req.user.tenant_id]);
+    if (!cust.rows[0]) return res.status(404).json({ error: "Customer not found" });
+
+    const token = require("crypto").randomBytes(24).toString("base64url"); // 32 chars, URL-safe
+    const days = Math.min(365, Math.max(1, parseInt(req.body?.expiresInDays, 10) || 90));
+
+    // One live link per customer: several at once are impossible to reason about when
+    // revoking. Replacing supersedes the old one rather than accumulating.
+    await q(req.user.tenant_id,
+      "UPDATE customer_portal_links SET revoked_at=now() WHERE tenant_id=$1 AND customer_id=$2 AND revoked_at IS NULL",
+      [req.user.tenant_id, req.params.id]);
+
+    const { rows } = await q(req.user.tenant_id,
+      `INSERT INTO customer_portal_links(tenant_id, customer_id, token_hash, token_hint, expires_at, created_by)
+       VALUES($1,$2,$3,$4, now() + ($5 || ' days')::interval, $6)
+       RETURNING id, token_hint, expires_at, created_at`,
+      [req.user.tenant_id, req.params.id, portalHash(token), token.slice(-4), String(days), req.user.id]);
+
+    auditReq(req, "portal_link_created", "customer", req.params.id, { expiresInDays: days });
+    // The raw token is returned exactly once — it cannot be recovered later, only replaced.
+    res.status(201).json({ ...rows[0], token, path: `/portal/${token}` });
+  } catch (e) { next(e); }
+});
+
+router.delete("/:id/portal-link", authenticate, canWrite, async (req, res, next) => {
+  try {
+    const { rowCount } = await q(req.user.tenant_id,
+      "UPDATE customer_portal_links SET revoked_at=now() WHERE tenant_id=$1 AND customer_id=$2 AND revoked_at IS NULL",
+      [req.user.tenant_id, req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: "There's no live link to turn off" });
+    auditReq(req, "portal_link_revoked", "customer", req.params.id, null);
     res.json({ ok: true });
   } catch (e) { next(e); }
 });

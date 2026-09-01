@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { Archive, FileText, Plus, Receipt, Save, Trash2, UserPlus } from "lucide-react";
+import { Archive, Copy, ExternalLink, FileText, Link2, Plus, Receipt, Save, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
@@ -54,8 +54,11 @@ export default function CustomerDetailPage() {
   const [states, setStates] = useState<StateOpt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"ledger" | "details" | "contacts">("ledger");
+  const [tab, setTab] = useState<"ledger" | "details" | "contacts" | "portal">("ledger");
   const [addContact, setAddContact] = useState(false);
+  const [portal, setPortal] = useState<PortalLink | null>(null);
+  const [freshToken, setFreshToken] = useState<string | null>(null);
+  const [portalBusy, setPortalBusy] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true); setError(null);
@@ -67,6 +70,10 @@ export default function CustomerDetailPage() {
   }, [id]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { api.get<StateOpt[]>("/api/customers/meta/states").then(setStates).catch(() => setStates([])); }, []);
+  const loadPortal = useCallback(() => {
+    api.get<PortalLink | null>(`/api/customers/${id}/portal-link`).then(setPortal).catch(() => setPortal(null));
+  }, [id]);
+  useEffect(() => { loadPortal(); }, [loadPortal]);
 
   useTrackView(cust ? { entity: "customer", id: cust.id, label: cust.name, href: `/customers/${cust.id}` } : null);
 
@@ -139,7 +146,7 @@ export default function CustomerDetailPage() {
       </div>
 
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit" role="tablist">
-        {([["ledger", "Ledger"], ["contacts", `Contacts (${cust.contacts.length})`], ["details", "Details"]] as const).map(([id2, label]) => (
+        {([["ledger", "Ledger"], ["contacts", `Contacts (${cust.contacts.length})`], ["details", "Details"], ["portal", "Customer portal"]] as const).map(([id2, label]) => (
           <button key={id2} role="tab" aria-selected={tab === id2} onClick={() => setTab(id2)}
             className={`px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id2 ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             {label}
@@ -177,6 +184,35 @@ export default function CustomerDetailPage() {
         </div>
       )}
       {tab === "details" && <DetailsForm cust={cust} states={states} onSaved={load} />}
+      {tab === "portal" && (
+        <PortalPanel
+          customerName={cust.name}
+          link={portal}
+          freshToken={freshToken}
+          busy={portalBusy}
+          onCreate={async (days) => {
+            setPortalBusy(true);
+            try {
+              const r = await api.post<{ token: string; path: string }>(`/api/customers/${cust.id}/portal-link`, { expiresInDays: days });
+              setFreshToken(r.token);
+              toast.success("Link created", { description: "Copy it now — it can't be shown again, only replaced." });
+              loadPortal();
+            } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't create the link"); }
+            finally { setPortalBusy(false); }
+          }}
+          onRevoke={async () => {
+            if (!await confirm({
+              title: "Turn off this customer's link?",
+              body: "Anyone holding it — including the customer — stops being able to open it. You can issue a new one afterwards.",
+              danger: true, confirmLabel: "Turn it off",
+            })) return;
+            setPortalBusy(true);
+            try { await api.delete(`/api/customers/${cust.id}/portal-link`); setFreshToken(null); toast.success("Link turned off"); loadPortal(); }
+            catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't turn it off"); }
+            finally { setPortalBusy(false); }
+          }}
+        />
+      )}
 
       {addContact && (
         <AddContactModal customerId={cust.id} onClose={() => setAddContact(false)} onAdded={() => { setAddContact(false); load(); }} />
@@ -336,6 +372,92 @@ function DetailsForm({ cust, states, onSaved }: { cust: Customer; states: StateO
         {dirty && <span className="text-xs text-amber-400">Unsaved changes</span>}
         <Button variant="primary" icon={<Save size={13} />} loading={busy} onClick={save}>Save changes</Button>
       </div>
+    </div>
+  );
+}
+
+type PortalLink = { id: string; token_hint: string; expires_at: string | null; view_count: number; last_viewed_at: string | null; created_at: string };
+
+/**
+ * The link a customer opens to see what they owe and pay it — the audit's highest-value
+ * money-hygiene gap, because without it every collection loop ends with a person
+ * re-attaching a PDF to an email.
+ *
+ * The token is shown exactly once. Only its hash is stored, so a database dump can't hand
+ * out working links to every customer's ledger; the trade-off is that a lost link is
+ * replaced, never recovered.
+ */
+function PortalPanel({
+  customerName, link, freshToken, busy, onCreate, onRevoke,
+}: {
+  customerName: string;
+  link: PortalLink | null;
+  freshToken: string | null;
+  busy: boolean;
+  onCreate: (days: number) => void;
+  onRevoke: () => void;
+}) {
+  const [days, setDays] = useState(90);
+  const url = freshToken ? `${window.location.origin}/portal/${freshToken}` : null;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-1.5"><Link2 size={14} /> Customer portal link</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-1">
+          A page {customerName} can open — no login — showing their open invoices, what they've paid, and a
+          download for every document. It only ever reaches their own records.
+        </p>
+      </div>
+
+      {url && (
+        <div className="rounded-lg border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/10 p-3 space-y-2">
+          <p className="text-xs font-semibold text-[var(--color-primary)]">Copy this now — it won't be shown again.</p>
+          <div className="flex items-center gap-2">
+            <input readOnly value={url} onFocus={(e) => e.currentTarget.select()}
+              className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-xs font-mono outline-none" />
+            <Button size="sm" variant="secondary" icon={<Copy size={12} />}
+              onClick={() => { navigator.clipboard?.writeText(url).then(() => toast.success("Copied")).catch(() => {}); }}>Copy</Button>
+            <a href={url} target="_blank" rel="noopener noreferrer"
+              className="p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"
+              title="Open it the way your customer will"><ExternalLink size={13} /></a>
+          </div>
+        </div>
+      )}
+
+      {link ? (
+        <div className="rounded-lg border border-[var(--color-border)] p-3 text-xs space-y-1">
+          <p className="font-medium">A link is live for this customer</p>
+          <p className="text-[var(--color-muted)]">
+            Ends in <span className="font-mono">…{link.token_hint}</span>
+            {link.expires_at ? ` · expires ${new Date(link.expires_at).toLocaleDateString("en-IN")}` : ""}
+          </p>
+          <p className="text-[var(--color-muted)]">
+            {link.view_count > 0
+              ? `Opened ${link.view_count} time${link.view_count === 1 ? "" : "s"}${link.last_viewed_at ? `, last on ${new Date(link.last_viewed_at).toLocaleDateString("en-IN")}` : ""}.`
+              : "Not opened yet."}
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-[var(--color-muted)]">No link is live for this customer.</p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="text-xs text-[var(--color-muted)]">Valid for</label>
+        <select value={days} onChange={(e) => setDays(Number(e.target.value))}
+          className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]">
+          {[30, 90, 180, 365].map((d) => <option key={d} value={d}>{d} days</option>)}
+        </select>
+        <Button size="sm" variant="primary" loading={busy} onClick={() => onCreate(days)}>
+          {link ? "Replace the link" : "Create a link"}
+        </Button>
+        {link && <Button size="sm" variant="ghost" loading={busy} onClick={onRevoke}>Turn it off</Button>}
+      </div>
+      {link && (
+        <p className="text-[11px] text-[var(--color-muted)]">
+          Replacing issues a new link and stops the old one working immediately.
+        </p>
+      )}
     </div>
   );
 }

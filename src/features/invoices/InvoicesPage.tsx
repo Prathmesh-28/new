@@ -46,7 +46,7 @@ interface Invoice {
  *  so paging the table below no longer changes the totals above it. */
 interface InvoiceSummary {
   counts: { total: number; open: number; overdue: number; paid: number; draft: number };
-  pending: number; overdue: number; paid: number; as_of: string;
+  pending: number; overdue: number; paid: number; draft_amount: number; as_of: string;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -937,6 +937,13 @@ export default function InvoicesPage() {
             {/* An unloaded total is shown as a dash, never as a confident zero. */}
             <p className={`text-xl font-semibold tabular-nums ${color}`}>{value == null ? "—" : formatCurrency(value)}</p>
             {count != null && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{count} invoice{count === 1 ? "" : "s"} · whole book</p>}
+            {/* A draft isn't a claim on anyone. Saying how much of "pending" is unissued
+                is more useful than quietly folding it in. */}
+            {label === tr("inv.stat.pending") && !!summary?.draft_amount && (
+              <p className="text-[10px] text-[var(--color-muted)] mt-0.5">
+                incl. {formatCurrency(summary.draft_amount)} not yet sent
+              </p>
+            )}
           </div>
         ))}
       </div>

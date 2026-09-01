@@ -213,6 +213,8 @@ app.use("/api/vendor-bills",       require("./routes/vendorBills")); // real bil
 app.use("/api/customers",          require("./routes/customers")); // customer master (Wave 3)
 app.use("/api/notifications",      require("./routes/notifications")); // per-user notification preferences (Wave 6)
 app.use("/api/support",            require("./routes/support"));       // help, feedback, changelog (Wave 7)
+// PUBLIC (no auth): the customer portal. The token in the URL is the authorisation.
+app.use("/api/portal",             require("./routes/portal").router);
 app.use("/api/prefs",              require("./routes/prefs"));
 app.use("/api/records",            require("./routes/records"));
 app.use("/api/trash",              require("./routes/trash"));
