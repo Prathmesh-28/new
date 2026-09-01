@@ -200,4 +200,33 @@ async function postInvoiceReceipt(tenantId, inv, { amount, ref, idempotencyKey }
   }
 }
 
-module.exports = { postInvoiceSale, postInvoiceReceipt, postInvoiceCreditNote };
+// Post the bad-debt write-off (idempotent per write-off id): Dr Bad Debts / Cr Debtor.
+// Deliberately NOT a credit note — output GST stays put (bad debts don't reverse GST),
+// and nothing lands in GSTR. The expense hits P&L where an auditor expects it.
+async function postInvoiceWriteoff(tenantId, inv, { amount, writeoffId, reason } = {}) {
+  try {
+    const amt = round2(num(amount));
+    if (amt <= 0) return null;
+    const sale = await postInvoiceSale(tenantId, inv); // debtor must exist before it's relieved
+    if (!sale) { console.warn("[invoiceGl] write-off skipped: sale voucher not established"); return null; }
+    const party = await resolvePartyLedgerByName(tenantId, inv.customer_name || "Customer", "SALES");
+    const badDebts = await ledgerIdByName(tenantId, "Bad Debts");
+    if (!party || !badDebts) return null;
+    return await postVoucher(
+      tenantId, null,
+      { voucherType: "JOURNAL", voucherDate: new Date().toISOString().slice(0, 10),
+        narration: `Write-off ${inv.invoice_number || ""}${reason ? ` — ${reason}` : ""}`.trim(),
+        reference: inv.invoice_number || null, partyLedgerId: party, source: "invoice" },
+      [
+        { ledgerId: badDebts, debit: toDb(amt), credit: "0" },
+        { ledgerId: party, debit: "0", credit: toDb(amt) },
+      ],
+      { idempotencyKey: `writeoff:inv:${inv.id}:${writeoffId}` }
+    );
+  } catch (e) {
+    console.warn("[invoiceGl] write-off voucher skipped:", e && e.message);
+    return null;
+  }
+}
+
+module.exports = { postInvoiceSale, postInvoiceReceipt, postInvoiceCreditNote, postInvoiceWriteoff };

@@ -24,6 +24,8 @@ const trash = require("../lib/trash");
 const { isValidGstin, isValidPan, gstinInfo } = require("../lib/validators");
 const { GST_STATES, stateName } = require("../lib/gstInvoice");
 const { hashToken: portalHash } = require("./portal");
+const { recordReceiptTx } = require("../lib/receipts");
+const { idempotent } = require("../middleware/idempotency");
 
 const WRITE_ROLES = ["super_admin", "owner", "finance_manager", "accountant", "sales"];
 const canWrite = (req, res, next) =>
@@ -418,6 +420,122 @@ router.delete("/:id/contacts/:contactId", authenticate, canWrite, async (req, re
     if (!rowCount) return res.status(404).json({ error: "Contact not found" });
     res.json({ ok: true });
   } catch (e) { next(e); }
+});
+
+// ── Advances (Wave 15) ───────────────────────────────────────────────────────
+// Money received BEFORE any invoice exists had nowhere to live: it was keyed as a fake
+// receipt or forgotten. An advance is held against the customer, allocated to invoices
+// later (each allocation is a real receipt through lib/receipts.js), and the unapplied
+// remainder can be refunded — with the table constraint guaranteeing applied + refunded
+// can never exceed the advance.
+//
+// GL note, stated rather than fudged: the correct posting is Dr Bank / Cr Advances-from-
+// customers on receipt, then Dr Advances / Cr Debtor on allocation. The default chart has
+// no advances liability ledger, so these entries are NOT auto-posted — the response says
+// so, and the books module's journal tools carry them until a seeded ledger exists.
+router.get("/:id/advances", authenticate, async (req, res, next) => {
+  try {
+    const { rows } = await q(req.user.tenant_id,
+      `SELECT *, amount - applied_amount - refunded_amount AS available
+         FROM customer_advances WHERE tenant_id=$1 AND customer_id=$2 ORDER BY received_at DESC, created_at DESC`,
+      [req.user.tenant_id, req.params.id]);
+    res.json(rows);
+  } catch (e) { next(e); }
+});
+
+router.post("/:id/advances", authenticate, canWrite, async (req, res, next) => {
+  const amount = Math.round((Number(req.body?.amount) || 0) * 100) / 100;
+  if (!(amount > 0)) return res.status(400).json({ error: "The advance amount must be greater than zero" });
+  try {
+    const out = await withTenant(req.user.tenant_id, async (client) => {
+      const { rows: [c] } = await client.query("SELECT id, name FROM customers WHERE id=$1 AND tenant_id=$2", [req.params.id, req.user.tenant_id]);
+      if (!c) throw Object.assign(new Error("Customer not found"), { status: 404 });
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`${req.user.tenant_id}:advance-number`]);
+      const { rows: [mx] } = await client.query(
+        `SELECT COALESCE(MAX((regexp_match(advance_number, 'ADV-\\d{4}-(\\d+)$'))[1]::int), 0) AS maxn
+           FROM customer_advances WHERE tenant_id=$1`, [req.user.tenant_id]);
+      const advanceNumber = `ADV-${new Date().getFullYear()}-${String(Number(mx.maxn) + 1).padStart(3, "0")}`;
+      const { rows: [adv] } = await client.query(
+        `INSERT INTO customer_advances(tenant_id, customer_id, advance_number, amount, mode, reference, notes, received_at, created_by)
+         VALUES($1,$2,$3,$4,$5,$6,$7,COALESCE($8::date, CURRENT_DATE),$9) RETURNING *`,
+        [req.user.tenant_id, c.id, advanceNumber, amount,
+         String(req.body?.mode || "other").toLowerCase(), req.body?.reference || null,
+         req.body?.notes || null, req.body?.received_at || null, req.user.id]);
+      return adv;
+    });
+    auditReq(req, "advance_received", "customer", req.params.id, { number: out.advance_number, amount });
+    res.status(201).json({ ...out, gl_note: "Not auto-posted to the GL (no advances liability ledger in the chart) — book it via a journal if your books need it before allocation." });
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    next(e);
+  }
+});
+
+router.post("/:id/advances/:advanceId/allocate", authenticate, canWrite, idempotent(), async (req, res, next) => {
+  const t = req.user.tenant_id;
+  const { invoiceId } = req.body || {};
+  if (!invoiceId) return res.status(400).json({ error: "Say which invoice to apply it to (invoiceId)" });
+  try {
+    const out = await withTenant(t, async (client) => {
+      const { rows: [adv] } = await client.query(
+        "SELECT * FROM customer_advances WHERE id=$1 AND customer_id=$2 AND tenant_id=$3 FOR UPDATE",
+        [req.params.advanceId, req.params.id, t]);
+      if (!adv) throw Object.assign(new Error("Advance not found"), { status: 404 });
+      const available = Math.round((Number(adv.amount) - Number(adv.applied_amount) - Number(adv.refunded_amount)) * 100) / 100;
+      if (!(available > 0)) throw Object.assign(new Error("This advance is fully used"), { status: 400 });
+
+      // The invoice must belong to THIS customer — an advance is their money.
+      const { rows: [inv0] } = await client.query(
+        `SELECT customer_id, GREATEST(total_amount - paid_amount - COALESCE(credited_amount,0),0) AS outstanding
+           FROM invoices WHERE id=$1 AND tenant_id=$2`, [invoiceId, t]);
+      if (!inv0) throw Object.assign(new Error("Invoice not found"), { status: 404 });
+      if (inv0.customer_id !== adv.customer_id)
+        throw Object.assign(new Error("That invoice belongs to a different customer — an advance can only settle its own customer's invoices"), { status: 409 });
+
+      const wanted = req.body?.amount != null ? Math.round(Number(req.body.amount) * 100) / 100 : Math.min(available, Number(inv0.outstanding));
+      if (!(wanted > 0)) throw Object.assign(new Error("Nothing to apply"), { status: 400 });
+      if (wanted > available) throw Object.assign(new Error(`Only ₹${available.toLocaleString("en-IN")} of this advance is unused`), { status: 400 });
+
+      const rec = await recordReceiptTx(client, t, {
+        invoiceId, amount: wanted, mode: "advance",
+        reference: adv.advance_number, userId: req.user.id,
+      });
+      await client.query(
+        "UPDATE customer_advances SET applied_amount = applied_amount + $2 WHERE id=$1", [adv.id, wanted]);
+      return { ...rec, applied: wanted, advance: adv.advance_number };
+    });
+    auditReq(req, "advance_allocated", "invoice", invoiceId, { advance: out.advance, amount: out.applied });
+    res.status(201).json({ payment: out.pay, invoice: out.inv, applied: out.applied,
+      gl_note: "Recorded in receivables; the Dr Advances / Cr Debtor journal is not auto-posted (no advances ledger in the chart)." });
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    if (e.code === "OVERPAYMENT" || e.code === "CANCELLED") return res.status(400).json({ error: e.message });
+    next(e);
+  }
+});
+
+router.post("/:id/advances/:advanceId/refund", authenticate, canWrite, idempotent(), async (req, res, next) => {
+  try {
+    const out = await withTenant(req.user.tenant_id, async (client) => {
+      const { rows: [adv] } = await client.query(
+        "SELECT * FROM customer_advances WHERE id=$1 AND customer_id=$2 AND tenant_id=$3 FOR UPDATE",
+        [req.params.advanceId, req.params.id, req.user.tenant_id]);
+      if (!adv) throw Object.assign(new Error("Advance not found"), { status: 404 });
+      const available = Math.round((Number(adv.amount) - Number(adv.applied_amount) - Number(adv.refunded_amount)) * 100) / 100;
+      const amount = req.body?.amount != null ? Math.round(Number(req.body.amount) * 100) / 100 : available;
+      if (!(amount > 0)) throw Object.assign(new Error("Nothing is left to refund on this advance"), { status: 400 });
+      if (amount > available) throw Object.assign(new Error(`Only ₹${available.toLocaleString("en-IN")} is unapplied — refund that or less`), { status: 400 });
+      const { rows: [upd] } = await client.query(
+        "UPDATE customer_advances SET refunded_amount = refunded_amount + $2 WHERE id=$1 RETURNING *", [adv.id, amount]);
+      return { adv: upd, amount };
+    });
+    auditReq(req, "advance_refunded", "customer", req.params.id, { advance: out.adv.advance_number, amount: out.amount });
+    res.json({ ...out.adv, refunded_now: out.amount,
+      note: "This records the refund against the advance. Actually moving the money back is a payout — do that through your bank/payouts as usual." });
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    next(e);
+  }
 });
 
 // ── Portal link ──────────────────────────────────────────────────────────────

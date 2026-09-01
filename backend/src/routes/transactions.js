@@ -3,6 +3,8 @@ const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
 const trash = require("../lib/trash");
 const { q, withTenant: withTenantTx } = require("../lib/tenantDb");
+const { recordReceiptTx } = require("../lib/receipts");
+const { idempotent } = require("../middleware/idempotency");
 const { auditReq } = require("../lib/audit");
 
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant"];
@@ -228,6 +230,104 @@ router.get("/:id([0-9a-fA-F-]{36})", authenticate, async (req, res, next) => {
 
     res.json({ ...rows[0], nearby });
   } catch (e) { next(e); }
+});
+
+// ── Bank ↔ invoice matching (Wave 15) ────────────────────────────────────────
+// Reconciliation was eyeballs and memory: a bank credit sat in the ledger, the invoice it
+// paid sat in receivables, and a human held the join in their head — so the same receipt
+// could be keyed twice, or never. Suggestions are scored, and applying one records the
+// receipt through the SAME code path as a manual payment (lib/receipts.js), stamping
+// provenance both ways so a credit can never be matched twice.
+router.get("/match-suggestions", authenticate, async (req, res, next) => {
+  try {
+    const t = req.user.tenant_id;
+    const { rows: credits } = await pool.query(
+      `SELECT id, amount, description_raw, merchant_name, transaction_date FROM transactions
+        WHERE tenant_id=$1 AND amount > 0 AND matched_invoice_id IS NULL
+          AND transaction_date >= CURRENT_DATE - 90
+        ORDER BY transaction_date DESC LIMIT 100`, [t]);
+    const { rows: open } = await q(t,
+      `SELECT id, invoice_number, customer_name, invoice_date, due_date,
+              GREATEST(total_amount - paid_amount - COALESCE(credited_amount,0), 0) AS outstanding
+         FROM invoices
+        WHERE tenant_id=$1 AND status NOT IN ('paid','cancelled') AND voided_at IS NULL
+          AND GREATEST(total_amount - paid_amount - COALESCE(credited_amount,0), 0) > 0`, [t]);
+
+    const norm = (x) => String(x || "").toLowerCase();
+    const suggestions = [];
+    for (const c of credits) {
+      const hay = norm(c.description_raw) + " " + norm(c.merchant_name);
+      const amt = Number(c.amount);
+      const cands = [];
+      for (const i of open) {
+        const out = Number(i.outstanding);
+        let score = 0;
+        const reasons = [];
+        // The signals a human actually uses, in the order they trust them.
+        if (hay.includes(norm(i.invoice_number))) { score += 60; reasons.push("narration quotes the invoice number"); }
+        if (Math.abs(out - amt) < 0.01) { score += 30; reasons.push("amount matches the outstanding exactly"); }
+        else if (out > 0 && Math.abs(out - amt) / out <= 0.02) { score += 15; reasons.push("amount within 2% of the outstanding"); }
+        else if (amt < out) { score += 4; reasons.push("could be a part payment"); }
+        const nameTokens = norm(i.customer_name).split(/[^a-z0-9]+/).filter((w) => w.length > 3);
+        if (nameTokens.some((w) => hay.includes(w))) { score += 20; reasons.push("narration mentions the customer"); }
+        if (score >= 20) cands.push({ invoice_id: i.id, invoice_number: i.invoice_number, customer_name: i.customer_name, outstanding: out, score, reasons });
+      }
+      cands.sort((a, b) => b.score - a.score);
+      if (cands.length) suggestions.push({
+        transaction: { id: c.id, amount: amt, date: c.transaction_date, narration: c.merchant_name || c.description_raw },
+        candidates: cands.slice(0, 3),
+      });
+    }
+    suggestions.sort((a, b) => b.candidates[0].score - a.candidates[0].score);
+    res.json({ suggestions, unmatched_credits: credits.length, open_invoices: open.length });
+  } catch (e) { next(e); }
+});
+
+router.post("/:id([0-9a-fA-F-]{36})/match", authenticate, canWrite, idempotent(), async (req, res, next) => {
+  const t = req.user.tenant_id;
+  const invoiceId = req.body?.invoiceId;
+  if (!invoiceId) return res.status(400).json({ error: "Say which invoice this credit pays (invoiceId)" });
+  try {
+    const outcome = await withTenantTx(t, async (client) => {
+      const { rows: [txn] } = await client.query(
+        "SELECT * FROM transactions WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [req.params.id, t]);
+      if (!txn) throw Object.assign(new Error("Bank line not found"), { status: 404 });
+      if (Number(txn.amount) <= 0) throw Object.assign(new Error("Only a credit (money in) can be matched to an invoice"), { status: 400 });
+      if (txn.matched_invoice_id) throw Object.assign(new Error("This bank line is already matched — unmatch it first if that was wrong"), { status: 409 });
+
+      // Cap at the invoice's outstanding: a credit larger than the balance still matches,
+      // but only the balance is applied (the rest stays a plain bank line to deal with).
+      const { rows: [inv0] } = await client.query(
+        `SELECT GREATEST(total_amount - paid_amount - COALESCE(credited_amount,0),0) AS outstanding
+           FROM invoices WHERE id=$1 AND tenant_id=$2`, [invoiceId, t]);
+      if (!inv0) throw Object.assign(new Error("Invoice not found"), { status: 404 });
+      const applied = Math.min(Number(txn.amount), Number(inv0.outstanding));
+      if (!(applied > 0)) throw Object.assign(new Error("Nothing is outstanding on that invoice"), { status: 400 });
+
+      const rec = await recordReceiptTx(client, t, {
+        invoiceId, amount: applied, mode: "bank",
+        reference: (txn.merchant_name || txn.description_raw || "bank credit").slice(0, 120),
+        receivedAt: txn.transaction_date, userId: req.user.id, transactionId: txn.id,
+      });
+      await client.query(
+        "UPDATE transactions SET matched_invoice_id=$2, matched_payment_id=$3 WHERE id=$1", [txn.id, invoiceId, rec.pay.id]);
+      return { ...rec, applied, txnAmount: Number(txn.amount) };
+    });
+
+    require("../lib/invoiceGl").postInvoiceReceipt(t, outcome.inv,
+      { amount: outcome.pay.amount, ref: outcome.pay.reference, idempotencyKey: `recv:inv:${outcome.inv.id}:p:${outcome.pay.id}` }).catch(() => {});
+    auditReq(req, "bank_matched", "invoice", invoiceId, { transaction: req.params.id, applied: outcome.applied });
+    res.status(201).json({
+      payment: outcome.pay, invoice: outcome.inv, applied: outcome.applied,
+      note: outcome.applied < outcome.txnAmount
+        ? `₹${(outcome.txnAmount - outcome.applied).toLocaleString("en-IN")} of this credit exceeded the invoice balance and stays unallocated.`
+        : undefined,
+    });
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    if (e.code === "OVERPAYMENT" || e.code === "CANCELLED") return res.status(400).json({ error: e.message });
+    next(e);
+  }
 });
 
 // ── Import batches: see them, take one back (Wave 11) ────────────────────────

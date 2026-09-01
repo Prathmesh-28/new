@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Ban, Copy, Download, FileText, History, Loader2, Paperclip, Printer, Send, Trash2, Wallet } from "lucide-react";
+import { Ban, Copy, Download, Eraser, FileText, History, Loader2, Paperclip, Printer, Send, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { api, authHeaders } from "@/lib/api";
 import { API_BASE } from "@/lib/apiBase";
@@ -203,6 +203,19 @@ export default function InvoiceDetailPage() {
           <Button size="sm" icon={<Download size={13} />} loading={busy === "pdf"} onClick={downloadPdf}>PDF</Button>
           <Button size="sm" icon={<Printer size={13} />} onClick={() => window.print()}>Print</Button>
           <Button size="sm" icon={<Copy size={13} />} loading={busy === "dup"} onClick={duplicate}>Duplicate</Button>
+          {!inv.voided_at && inv.status !== "cancelled" && inv.outstanding > 0 && Number(inv.paid_amount) > 0 && (
+            <Button size="sm" variant="ghost" icon={<Eraser size={13} />}
+              title="Absorb the unpaid remainder as a bad debt (GST stays put; Dr Bad Debts in the books)"
+              onClick={async () => {
+                const reason = window.prompt(`Write off the remaining ${formatCurrency(inv.outstanding)} on ${inv.invoice_number}?\n\nWhy? (an auditor reads this)`);
+                if (!reason?.trim()) return;
+                try {
+                  await api.post(`/api/invoices/${inv.id}/write-off`, { reason: reason.trim() });
+                  toast.success("Written off", { description: "Booked to Bad Debts. GST was not reversed — bad debts don't reverse GST." });
+                  load();
+                } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't write it off"); }
+              }}>Write off balance</Button>
+          )}
           {!inv.voided_at && Number(inv.paid_amount) === 0 && (
             <Button size="sm" icon={<Ban size={13} />} onClick={() => setVoidOpen(true)}
               title="Cancel this invoice but keep its number and paper trail">Void</Button>

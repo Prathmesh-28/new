@@ -54,7 +54,7 @@ export default function CustomerDetailPage() {
   const [states, setStates] = useState<StateOpt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"ledger" | "details" | "contacts" | "portal">("ledger");
+  const [tab, setTab] = useState<"ledger" | "advances" | "details" | "contacts" | "portal">("ledger");
   const [addContact, setAddContact] = useState(false);
   const [portal, setPortal] = useState<PortalLink | null>(null);
   const [freshToken, setFreshToken] = useState<string | null>(null);
@@ -146,7 +146,7 @@ export default function CustomerDetailPage() {
       </div>
 
       <div className="flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-1 w-fit" role="tablist">
-        {([["ledger", "Ledger"], ["contacts", `Contacts (${cust.contacts.length})`], ["details", "Details"], ["portal", "Customer portal"]] as const).map(([id2, label]) => (
+        {([["ledger", "Ledger"], ["advances", "Advances"], ["contacts", `Contacts (${cust.contacts.length})`], ["details", "Details"], ["portal", "Customer portal"]] as const).map(([id2, label]) => (
           <button key={id2} role="tab" aria-selected={tab === id2} onClick={() => setTab(id2)}
             className={`px-3 py-1.5 text-xs rounded font-medium transition-colors ${tab === id2 ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             {label}
@@ -183,6 +183,7 @@ export default function CustomerDetailPage() {
           )}
         </div>
       )}
+      {tab === "advances" && <AdvancesPanel customerId={cust.id} onChanged={load} />}
       {tab === "details" && <DetailsForm cust={cust} states={states} onSaved={load} />}
       {tab === "portal" && (
         <PortalPanel
@@ -372,6 +373,115 @@ function DetailsForm({ cust, states, onSaved }: { cust: Customer; states: StateO
         {dirty && <span className="text-xs text-amber-400">Unsaved changes</span>}
         <Button variant="primary" icon={<Save size={13} />} loading={busy} onClick={save}>Save changes</Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Advances (Wave 15). Money received before any invoice exists used to be keyed as a fake
+ * receipt or forgotten. Held here against the customer, allocated to invoices later
+ * (each allocation is a real numbered receipt), unapplied remainder refundable.
+ */
+function AdvancesPanel({ customerId, onChanged }: { customerId: string; onChanged: () => void }) {
+  type Advance = { id: string; advance_number: string; amount: string; applied_amount: string; refunded_amount: string; available: string; mode: string; reference: string | null; received_at: string };
+  type OpenInv = { id: string; invoice_number: string; total_amount: string };
+  const confirm = useConfirm();
+  const [advances, setAdvances] = useState<Advance[]>([]);
+  const [amount, setAmount] = useState("");
+  const [reference, setReference] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api.get<Advance[]>(`/api/customers/${customerId}/advances`).then(setAdvances).catch(() => setAdvances([]));
+  }, [customerId]);
+  useEffect(() => { load(); }, [load]);
+
+  const receive = async () => {
+    const amt = Number(amount);
+    if (!(amt > 0)) { toast.error("Enter the advance amount"); return; }
+    setBusy("new");
+    try {
+      const a = await api.post<{ advance_number: string }>(`/api/customers/${customerId}/advances`, { amount: amt, reference: reference || undefined, mode: "bank" });
+      toast.success(`${a.advance_number} recorded`);
+      setAmount(""); setReference(""); load(); onChanged();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't record that"); }
+    finally { setBusy(null); }
+  };
+
+  const allocate = async (adv: Advance) => {
+    // Ask which open invoice — a lightweight prompt against this customer's own invoices.
+    setBusy(adv.id);
+    try {
+      const open = await api.get<{ data: OpenInv[] }>(`/api/invoices?q=&limit=50&unpaid=1`);
+      setBusy(null);
+      const invNo = window.prompt(
+        `Apply ${adv.advance_number} (₹${Number(adv.available).toLocaleString("en-IN")} unused) to which invoice?\n\nOpen invoices: ${open.data.map(i => i.invoice_number).join(", ") || "none"}\n\nType the invoice number:`);
+      if (!invNo?.trim()) return;
+      const target = open.data.find(i => i.invoice_number.toLowerCase() === invNo.trim().toLowerCase());
+      if (!target) { toast.error(`No open invoice called "${invNo.trim()}"`); return; }
+      setBusy(adv.id);
+      const r = await api.post<{ applied: number; payment: { receipt_number: string }; gl_note?: string }>(
+        `/api/customers/${customerId}/advances/${adv.id}/allocate`, { invoiceId: target.id });
+      toast.success(`Applied ${formatCurrency(r.applied)} — receipt ${r.payment.receipt_number}`, { description: r.gl_note });
+      load(); onChanged();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't allocate that"); }
+    finally { setBusy(null); }
+  };
+
+  const refund = async (adv: Advance) => {
+    if (!await confirm({
+      title: `Refund the unused ${formatCurrency(Number(adv.available))} of ${adv.advance_number}?`,
+      body: "This records the refund against the advance. Actually moving the money back is a payout — do that through your bank as usual.",
+      confirmLabel: "Record the refund",
+    })) return;
+    setBusy(adv.id);
+    try { await api.post(`/api/customers/${customerId}/advances/${adv.id}/refund`, {}); toast.success("Refund recorded"); load(); onChanged(); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't record that"); }
+    finally { setBusy(null); }
+  };
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold">Advances</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">Money received before an invoice exists. Apply it to invoices as they're raised; refund what's never used.</p>
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <div><label className="block text-xs font-medium text-[var(--color-muted)] mb-1" htmlFor="adv-amt">Amount received</label>
+          <input id="adv-amt" type="number" min="0" value={amount} onChange={(e) => setAmount(e.target.value)}
+            className="w-36 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" /></div>
+        <div className="flex-1 min-w-[140px]"><label className="block text-xs font-medium text-[var(--color-muted)] mb-1" htmlFor="adv-ref">Reference</label>
+          <input id="adv-ref" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="UTR / cheque no."
+            className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" /></div>
+        <Button variant="primary" size="sm" loading={busy === "new"} onClick={receive} icon={<Plus size={13} />}>Record advance</Button>
+      </div>
+      {advances.length === 0 ? (
+        <p className="text-xs text-[var(--color-muted)]">No advances on record for this customer.</p>
+      ) : (
+        <ul className="divide-y divide-[var(--color-border)]">
+          {advances.map((a) => {
+            const avail = Number(a.available);
+            return (
+              <li key={a.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm min-w-0">
+                  <span className="font-mono text-xs">{a.advance_number}</span>
+                  <span className="text-[var(--color-muted)] text-xs"> · {a.received_at}{a.reference ? ` · ${a.reference}` : ""}</span>
+                  <p className="text-xs text-[var(--color-muted)] mt-0.5">
+                    {formatCurrency(Number(a.amount))} received · {formatCurrency(Number(a.applied_amount))} applied · {formatCurrency(Number(a.refunded_amount))} refunded ·{" "}
+                    <span className={avail > 0 ? "text-[var(--color-primary)] font-medium" : ""}>{formatCurrency(avail)} unused</span>
+                  </p>
+                </div>
+                {avail > 0 && (
+                  <span className="flex items-center gap-2 shrink-0">
+                    <Button size="sm" variant="secondary" loading={busy === a.id} onClick={() => allocate(a)}>Apply to an invoice</Button>
+                    <Button size="sm" variant="ghost" loading={busy === a.id} onClick={() => refund(a)}>Refund</Button>
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

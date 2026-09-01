@@ -15,6 +15,7 @@ const { writeAudit, auditReq } = require("../lib/audit");
 const { computeInvoice } = require("../lib/invoiceTotals");
 const { renderInvoicePdf } = require("../lib/invoicePdf");
 const notifyLib = require("../lib/notify");
+const { recordReceiptTx } = require("../lib/receipts");
 
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant","sales"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
@@ -592,34 +593,17 @@ router.post("/:id/payments", authenticate, canWrite, idempotent(), async (req, r
   if (!PAY_MODES.has(mode)) return res.status(400).json({ error: `mode must be one of: ${[...PAY_MODES].join(", ")}` });
   if (receivedAt && !/^\d{4}-\d{2}-\d{2}$/.test(receivedAt)) return res.status(400).json({ error: "received_at must be YYYY-MM-DD" });
 
-  const outcome = await withTenant(t, async (client) => {
-    const { rows: [inv] } = await client.query("SELECT * FROM invoices WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [req.params.id, t]);
-    if (!inv) return { notFound: true };
-    if (inv.status === "cancelled") return { cancelled: true };
-    const eff = applyReceipt({ total: inv.total_amount, paidAmount: inv.paid_amount || 0, creditedAmount: inv.credited_amount || 0 }, amount);
-    if (!eff.ok) return { over: true, balance: eff.balanceBefore };
-    // Every receipt gets a number the customer can quote (item 105 of the gap audit: a
-    // customer who paid got no acknowledgement — the receipt existed only as a table row).
-    // Serialised per tenant with the same advisory-lock pattern invoice numbering uses.
-    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`${t}:receipt-number`]);
-    const { rows: [rmax] } = await client.query(
-      `SELECT COALESCE(MAX((regexp_match(receipt_number, 'RCT-\\d{4}-(\\d+)$'))[1]::int), 0) AS maxn
-         FROM invoice_payments WHERE tenant_id=$1 AND receipt_number IS NOT NULL`, [t]);
-    const receiptNumber = `RCT-${new Date().getFullYear()}-${String(Number(rmax.maxn) + 1).padStart(3, "0")}`;
-    const { rows: [pay] } = await client.query(
-      "INSERT INTO invoice_payments(tenant_id, invoice_id, amount, mode, reference, received_at, created_by, receipt_number) VALUES($1,$2,$3,$4,$5,COALESCE($6::date, CURRENT_DATE),$7,$8) RETURNING *",
-      [t, inv.id, amount, mode, reference, receivedAt, req.user.id || null, receiptNumber]);
-    const { rows: [upd] } = await client.query(
-      `UPDATE invoices SET paid_amount=$1,
-         status=CASE WHEN $2 THEN 'paid' WHEN status='draft' THEN 'sent' ELSE status END,
-         paid_at=CASE WHEN $2 THEN now() ELSE paid_at END
-       WHERE id=$3 AND tenant_id=$4 RETURNING *`,
-      [eff.newPaid, eff.fullyPaid, inv.id, t]);
-    return { inv: upd, pay, fullyPaid: eff.fullyPaid };
-  });
-  if (outcome.notFound) return res.status(404).json({ error: "Invoice not found" });
-  if (outcome.cancelled) return res.status(400).json({ error: "Can't record a payment against a cancelled invoice." });
-  if (outcome.over) return res.status(400).json({ error: `That's more than the ₹${outcome.balance.toLocaleString("en-IN")} still outstanding — record the balance or less.` });
+  // Shared recorder (lib/receipts.js) — the same code path bank-match uses, so the two
+  // can never drift on numbering, guards or status transitions.
+  let outcome;
+  try {
+    outcome = await withTenant(t, (client) =>
+      recordReceiptTx(client, t, { invoiceId: req.params.id, amount, mode, reference, receivedAt, userId: req.user.id || null }));
+  } catch (e) {
+    if (e.code === "NOT_FOUND") return res.status(404).json({ error: "Invoice not found" });
+    if (e.code === "CANCELLED" || e.code === "OVERPAYMENT") return res.status(400).json({ error: e.message });
+    throw e;
+  }
 
   // GL receipt for THIS payment only, keyed per payment id → no double-post vs the settling receipt.
   require("../lib/invoiceGl").postInvoiceReceipt(t, outcome.inv, { amount: outcome.pay.amount, ref: reference || outcome.inv.invoice_number, idempotencyKey: `recv:inv:${outcome.inv.id}:p:${outcome.pay.id}` }).catch(() => {});
@@ -628,6 +612,53 @@ router.post("/:id/payments", authenticate, canWrite, idempotent(), async (req, r
   require("../modules/analytics").track(t, req.user.id, { event: "invoice_payment", props: { amount: outcome.pay.amount, fully_paid: outcome.fullyPaid } }).catch(() => {});
   res.status(201).json({ payment: outcome.pay, invoice: { ...outcome.inv, aging: computeAging(outcome.inv) }, balance_due: remainingToSettle({ total: outcome.inv.total_amount, paidAmount: outcome.inv.paid_amount, creditedAmount: outcome.inv.credited_amount || 0 }) });
   } catch (e) { console.error("[invoices] record payment failed:", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
+// ── POST /api/invoices/:id/write-off — stop chasing what you'll never collect ─
+// A residual balance (a short payment, a 40-paise round-off leftover, a customer who's
+// gone) had no exit: it aged in the receivables report forever. This absorbs the
+// outstanding into the invoice's settlement via credited_amount — the SAME field every
+// existing aggregate already nets off, so no outstanding calculation anywhere changes —
+// while invoice_writeoffs keeps the honest record and the GL books Dr Bad Debts.
+// Deliberately NOT a credit note: bad debts don't reverse output GST.
+router.post("/:id([0-9a-fA-F-]{36})/write-off", authenticate, canWrite, idempotent(), async (req, res, next) => {
+  const t = req.user.tenant_id;
+  const reason = String(req.body?.reason || "").trim();
+  if (!reason) return res.status(400).json({ error: "A reason is required — an auditor reads these", errors: { reason: "Say why this is being written off" } });
+  try {
+    const outcome = await withTenant(t, async (client) => {
+      const { rows: [inv] } = await client.query("SELECT * FROM invoices WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [req.params.id, t]);
+      if (!inv) return { notFound: true };
+      if (inv.status === "cancelled" || inv.voided_at) return { err: "This invoice is cancelled — there's nothing to write off." };
+      const outstanding = remainingToSettle({ total: inv.total_amount, paidAmount: inv.paid_amount || 0, creditedAmount: inv.credited_amount || 0 });
+      const amount = req.body?.amount != null ? round2(req.body.amount) : outstanding;
+      if (!(amount > 0)) return { err: "Nothing is outstanding on this invoice." };
+      if (amount > outstanding) return { err: `Only ₹${outstanding.toLocaleString("en-IN")} is outstanding — a write-off can't exceed that.` };
+
+      const { rows: [wo] } = await client.query(
+        "INSERT INTO invoice_writeoffs(tenant_id, invoice_id, amount, reason, created_by) VALUES($1,$2,$3,$4,$5) RETURNING *",
+        [t, inv.id, amount, reason.slice(0, 500), req.user.id]);
+
+      const newCredited = round2(round2(inv.credited_amount || 0) + amount);
+      const paid = round2(inv.paid_amount || 0);
+      const balanceAfter = round2(round2(inv.total_amount) - newCredited - paid);
+      // Same settle rule the credit-note path uses: zero balance with cash collected is
+      // "paid"; zero balance with none is effectively closed out.
+      const newStatus = balanceAfter <= 0 ? (paid > 0 ? "paid" : "cancelled") : inv.status;
+      const { rows: [upd] } = await client.query(
+        `UPDATE invoices SET credited_amount=$1, status=$2,
+           paid_at=CASE WHEN $2='paid' AND paid_at IS NULL THEN now() ELSE paid_at END
+         WHERE id=$3 AND tenant_id=$4 RETURNING *`,
+        [newCredited, newStatus, inv.id, t]);
+      return { inv: upd, wo, balanceAfter };
+    });
+    if (outcome.notFound) return res.status(404).json({ error: "Invoice not found" });
+    if (outcome.err) return res.status(400).json({ error: outcome.err });
+
+    require("../lib/invoiceGl").postInvoiceWriteoff(t, outcome.inv, { amount: outcome.wo.amount, writeoffId: outcome.wo.id, reason }).catch(() => {});
+    auditReq(req, "written_off", "invoice", req.params.id, { amount: Number(outcome.wo.amount), reason });
+    res.status(201).json({ writeoff: outcome.wo, invoice: outcome.inv, balance_due: outcome.balanceAfter });
+  } catch (e) { next(e); }
 });
 
 // ── Credit notes (real documents: numbered, GL-posted, GSTR-visible) ──
