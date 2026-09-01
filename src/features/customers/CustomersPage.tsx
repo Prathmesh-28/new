@@ -142,6 +142,7 @@ export default function CustomersPage() {
         onQueryChange={(q: TableQuery) => setQuery(q)}
         searchPlaceholder="Find a customer by name, GSTIN, email, phone or city…"
         onRowClick={(c) => navigate(`/customers/${c.id}`)}
+        rowHref={(c) => `/customers/${c.id}`}
         toolbar={
           <button type="button"
             onClick={() => setFilter("archived", showingArchived ? null : "1")}

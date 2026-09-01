@@ -33,7 +33,9 @@ const ENTITIES = {
   },
   transaction: {
     table: "transactions",
-    label: (r) => `${r.description || "Transaction"} · ${r.amount}`,
+    // merchant_name/description_raw are the columns transactions actually has; a label of
+    // "Transaction · -4500" tells the user nothing about which one they deleted.
+    label: (r) => `${r.merchant_name || r.description_raw || "Transaction"} · ${Number(r.amount) > 0 ? "+" : "-"}${Math.abs(Number(r.amount) || 0)}`,
     children: [],
     href: (id) => `/transactions/${id}`,
   },

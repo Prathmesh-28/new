@@ -19,6 +19,8 @@ type LucideIcon = typeof Search;
 
 type ServerCustomer = { id: string; name: string; gstin: string | null; outstanding: string | number; invoice_count: number };
 type ServerInvoice  = { id: string; invoice_number: string; customer_name: string; total_amount: string; status: string; due_date: string | null };
+type ServerTxn      = { id: string; amount: string; merchant_name: string | null; description_raw: string | null; category: string; transaction_date: string };
+type ServerVendor   = { id: string; name: string; gstin: string | null; category: string | null; is_msme: boolean };
 
 const NAV_ITEMS: { label: string; path: string; icon: LucideIcon; desc?: string }[] = [
   { label: "Dashboard",    path: "/dashboard",    icon: LayoutDashboard, desc: "Overview & health score" },
@@ -118,24 +120,31 @@ export function CommandPalette({ open, onClose }: Props) {
   // Records now come from the SERVER, not from whatever happens to be in the local store:
   // the palette can therefore find an invoice or customer the current page never loaded,
   // and every hit is a real permalink rather than a filtered list view.
-  const [serverHits, setServerHits] = useState<{ customers: ServerCustomer[]; invoices: ServerInvoice[] }>({ customers: [], invoices: [] });
+  const [serverHits, setServerHits] = useState<{ customers: ServerCustomer[]; invoices: ServerInvoice[]; transactions: ServerTxn[]; vendors: ServerVendor[] }>(
+    { customers: [], invoices: [], transactions: [], vendors: [] });
   const { items: recentRecords } = useRecentlyViewed(6);
 
   useEffect(() => {
-    if (open) { setQuery(""); setCursor(0); setFavs(readList(FAV_KEY)); setServerHits({ customers: [], invoices: [] }); setTimeout(() => inputRef.current?.focus(), 50); }
+    if (open) { setQuery(""); setCursor(0); setFavs(readList(FAV_KEY)); setServerHits({ customers: [], invoices: [], transactions: [], vendors: [] }); setTimeout(() => inputRef.current?.focus(), 50); }
   }, [open]);
 
   useEffect(() => {
     const term = query.trim();
-    if (!open || term.length < 2) { setServerHits({ customers: [], invoices: [] }); return; }
+    if (!open || term.length < 2) { setServerHits({ customers: [], invoices: [], transactions: [], vendors: [] }); return; }
     const ctl = new AbortController();
     const t = window.setTimeout(async () => {
       try {
-        const [cs, is] = await Promise.all([
-          api.get<{ data: ServerCustomer[] }>(`/api/customers?q=${encodeURIComponent(term)}&limit=5`),
-          api.get<{ data: ServerInvoice[] }>(`/api/invoices?q=${encodeURIComponent(term)}&limit=5`),
+        // One search across the real records, so the palette finds things the current
+        // page never loaded. A module that isn't deployed simply contributes nothing.
+        const [cs, is, ts, vs] = await Promise.all([
+          api.get<{ data: ServerCustomer[] }>(`/api/customers?q=${encodeURIComponent(term)}&limit=5`).catch(() => ({ data: [] })),
+          api.get<{ data: ServerInvoice[] }>(`/api/invoices?q=${encodeURIComponent(term)}&limit=5`).catch(() => ({ data: [] })),
+          api.get<{ data: ServerTxn[] }>(`/api/transactions?q=${encodeURIComponent(term)}&limit=5`).catch(() => ({ data: [] })),
+          api.get<{ data: ServerVendor[] }>(`/api/vendors?q=${encodeURIComponent(term)}&limit=5`).catch(() => ({ data: [] })),
         ]);
-        if (!ctl.signal.aborted) setServerHits({ customers: cs.data ?? [], invoices: is.data ?? [] });
+        if (!ctl.signal.aborted) setServerHits({
+          customers: cs.data ?? [], invoices: is.data ?? [], transactions: ts.data ?? [], vendors: vs.data ?? [],
+        });
       } catch { /* the local results below still stand */ }
     }, 220);
     return () => { ctl.abort(); window.clearTimeout(t); };
@@ -178,11 +187,17 @@ export function CommandPalette({ open, onClose }: Props) {
     PAGE_INDEX.filter(n => n.label.toLowerCase().includes(q) || n.desc?.toLowerCase().includes(q) || n.path.includes(q)).forEach(n =>
       out.push({ id: n.path, label: n.label, sub: n.desc, type: "nav", path: n.path, action: () => go(n.path) })
     );
-    store.transactions.filter(t =>
-      t.description.toLowerCase().includes(q) || t.counterparty.toLowerCase().includes(q)
-    ).slice(0, 6).forEach(t =>
-      out.push({ id: t.id, label: t.description, sub: `${t.date} · ${formatCurrency(t.amount)} · ${t.category}`, type: "transaction", action: () => { go(`/transactions?q=${encodeURIComponent(t.description || t.counterparty)}`); } })
-    );
+    serverHits.transactions.forEach(t => out.push({
+      id: `txn${t.id}`,
+      label: t.merchant_name || t.description_raw || "Transaction",
+      sub: `${t.transaction_date} · ${formatCurrency(Number(t.amount))} · ${t.category}`,
+      type: "transaction", path: `/transactions/${t.id}`, action: () => go(`/transactions/${t.id}`),
+    }));
+    serverHits.vendors.forEach(v => out.push({
+      id: `vend${v.id}`, label: v.name,
+      sub: [v.category, v.gstin, v.is_msme ? "MSME" : null].filter(Boolean).join(" · ") || "Vendor",
+      type: "vendor", path: `/vendors/${v.id}`, action: () => go(`/vendors/${v.id}`),
+    }));
     store.alerts.filter(a => a.title.toLowerCase().includes(q) || a.message.toLowerCase().includes(q)).slice(0, 4).forEach(a =>
       out.push({ id: a.id, label: a.title, sub: a.message.slice(0, 60), type: "alert", action: () => { navigate("/alerts"); onClose(); } })
     );
@@ -205,13 +220,9 @@ export function CommandPalette({ open, onClose }: Props) {
       sub: `${c.invoice_count} invoice${c.invoice_count === 1 ? "" : "s"} · ${formatCurrency(Number(c.outstanding) || 0)} outstanding${c.gstin ? ` · ${c.gstin}` : ""}`,
       type: "customer", path: `/customers/${c.id}`, action: () => go(`/customers/${c.id}`),
     }));
-    const vendorNames = [...new Set((store.procurement ?? []).map(p => p.supplierName).filter(Boolean))];
-    vendorNames.filter(v => v.toLowerCase().includes(q)).slice(0, 5).forEach(v => {
-      const theirs = store.procurement.filter(p => p.supplierName === v);
-      out.push({ id: `vend${v}`, label: v, sub: `${theirs.length} purchase order${theirs.length === 1 ? "" : "s"}`, type: "vendor", action: () => { navigate("/suppliers"); onClose(); } });
-    });
+
     return out.slice(0, 16);
-  }, [query, favs, store.transactions, store.alerts, store.procurement, serverHits, recentRecords, navigate, onClose]);
+  }, [query, favs, store.alerts, serverHits, recentRecords, navigate, onClose]);
 
   useEffect(() => { setCursor(0); }, [results.length]);
 

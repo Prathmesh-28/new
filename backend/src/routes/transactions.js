@@ -1,6 +1,8 @@
 const router = require("express").Router();
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
+const trash = require("../lib/trash");
+const { auditReq } = require("../lib/audit");
 
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
@@ -17,6 +19,15 @@ router.get("/", authenticate, async (req, res) => {
   const vals = [req.user.tenant_id];
   let p = 2;
 
+  if (req.query.q) {
+    // The list paged but had no search: finding one payment meant clicking through pages.
+    conditions.push(`(COALESCE(t.description_raw,'') ILIKE $${p} OR COALESCE(t.merchant_name,'') ILIKE $${p} OR COALESCE(t.category,'') ILIKE $${p})`);
+    vals.push(`%${String(req.query.q).slice(0, 120)}%`); p++;
+  }
+  if (req.query.minAmount) { conditions.push(`abs(t.amount) >= $${p++}`); vals.push(Number(req.query.minAmount)); }
+  if (req.query.maxAmount) { conditions.push(`abs(t.amount) <= $${p++}`); vals.push(Number(req.query.maxAmount)); }
+  if (req.query.direction === "in")  conditions.push("t.amount > 0");
+  if (req.query.direction === "out") conditions.push("t.amount < 0");
   if (req.query.category)   { conditions.push(`t.category=$${p++}`);          vals.push(req.query.category); }
   if (req.query.account_id) { conditions.push(`t.bank_account_id=$${p++}`);   vals.push(req.query.account_id); }
   if (req.query.from)       { conditions.push(`t.transaction_date>=$${p++}`); vals.push(req.query.from); }
@@ -24,11 +35,17 @@ router.get("/", authenticate, async (req, res) => {
   if (req.query.q)          { conditions.push(`(t.description_raw ILIKE $${p} OR t.merchant_name ILIKE $${p})`); vals.push(`%${req.query.q}%`); p++; }
 
   const where = conditions.join(" AND ");
+  // Allowlist-only, like every other list (lib/listQuery): a client string is never
+  // interpolated into an ORDER BY.
+  const SORTABLE = { transaction_date: "t.transaction_date", amount: "t.amount", merchant_name: "t.merchant_name", category: "t.category", created_at: "t.created_at" };
+  const sortCol = SORTABLE[String(req.query.sort || "")] || "t.transaction_date";
+  const sortDir = String(req.query.order || "desc").toLowerCase() === "asc" ? "ASC" : "DESC";
+  const orderBy = `ORDER BY ${sortCol} ${sortDir} NULLS LAST, t.created_at DESC`;
 
   const [dataRes, countRes] = await Promise.all([
     pool.query(
       `SELECT t.*, b.account_name FROM transactions t LEFT JOIN bank_accounts b ON b.id=t.bank_account_id
-       WHERE ${where} ORDER BY t.transaction_date DESC, t.created_at DESC LIMIT $${p} OFFSET $${p+1}`,
+       WHERE ${where} ${orderBy} LIMIT $${p} OFFSET $${p+1}`,
       [...vals, limit, offset]
     ),
     pool.query(`SELECT COUNT(*)::int AS total FROM transactions t WHERE ${where}`, vals),
@@ -154,14 +171,43 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
   res.json(rows[0]);
 });
 
-// DELETE /api/transactions/:id
-router.delete("/:id", authenticate, canWrite, async (req, res) => {
-  const { rowCount } = await pool.query(
-    "DELETE FROM transactions WHERE id=$1 AND tenant_id=$2",
-    [req.params.id, req.user.tenant_id]
-  );
-  if (!rowCount) return res.status(404).json({ error: "Not found" });
-  res.json({ ok: true });
+// DELETE /api/transactions/:id — into the 30-day bin, not gone.
+router.delete("/:id", authenticate, canWrite, async (req, res, next) => {
+  try {
+    const out = await trash.softDelete(req.user.tenant_id, "transaction", req.params.id, req.user.id);
+    auditReq(req, "deleted", "transaction", req.params.id, { label: out.label });
+    res.json({ ok: true, trashId: out.trashId, label: out.label });
+  } catch (e) {
+    if (e.status === 404) return res.status(404).json({ error: "Not found" });
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    next(e);
+  }
+});
+
+// GET /api/transactions/:id — one transaction. There was no way to fetch a single one,
+// which is why no transaction had a URL of its own. UUID-constrained and registered last
+// so it can never shadow /summary.
+router.get("/:id([0-9a-fA-F-]{36})", authenticate, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT t.*, b.account_name, b.account_type, b.provider
+         FROM transactions t LEFT JOIN bank_accounts b ON b.id = t.bank_account_id
+        WHERE t.id=$1 AND t.tenant_id=$2`,
+      [req.params.id, req.user.tenant_id]);
+    if (!rows[0]) return res.status(404).json({ error: "Transaction not found" });
+
+    // The other transactions this one sits between, so the user can see it in context
+    // instead of losing their place when they open it.
+    const { rows: nearby } = await pool.query(
+      `SELECT id, transaction_date, amount, merchant_name, description_raw
+         FROM transactions
+        WHERE tenant_id=$1 AND bank_account_id IS NOT DISTINCT FROM $2 AND id <> $3
+          AND transaction_date BETWEEN $4::date - 3 AND $4::date + 3
+        ORDER BY transaction_date DESC, created_at DESC LIMIT 8`,
+      [req.user.tenant_id, rows[0].bank_account_id, rows[0].id, rows[0].transaction_date]);
+
+    res.json({ ...rows[0], nearby });
+  } catch (e) { next(e); }
 });
 
 module.exports = router;

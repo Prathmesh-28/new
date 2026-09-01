@@ -60,6 +60,12 @@ type Props<T> = {
   empty?: ReactNode;
   /** Row click — give this a permalink navigation, not a modal. */
   onRowClick?: (row: T) => void;
+  /**
+   * The row's permalink. Supplying it makes ⌘/Ctrl-click and middle-click open the record
+   * in a new tab, and shows the destination in the browser's status bar — which a
+   * div-with-an-onClick cannot do, so "open in a new tab" was impossible on every list.
+   */
+  rowHref?: (row: T) => string;
   /** Enables the checkbox column and the bulk bar. */
   bulkActions?: (selected: T[], clear: () => void) => ReactNode;
   toolbar?: ReactNode;
@@ -81,7 +87,7 @@ const num = (v: unknown) => {
 };
 
 export default function DataTable<T>({
-  listKey, columns, rows, rowKey, loading, error, onRetry, empty, onRowClick,
+  listKey, columns, rows, rowKey, loading, error, onRetry, empty, onRowClick, rowHref,
   bulkActions, toolbar, searchPlaceholder = "Search this list…", defaultSort,
   pageSize = 25, serverMode, total, query, onQueryChange, exportName, className,
 }: Props<T>) {
@@ -380,7 +386,17 @@ export default function DataTable<T>({
                 const isSel = selected.has(k);
                 return (
                   <tr key={k}
-                    onClick={() => onRowClick?.(row)}
+                    onClick={(e) => {
+                      // Honour the browser's own conventions for opening in a new tab
+                      // before falling back to in-app navigation.
+                      const href = rowHref?.(row);
+                      if (href && (e.metaKey || e.ctrlKey)) { window.open(href, "_blank", "noopener"); return; }
+                      onRowClick?.(row);
+                    }}
+                    onAuxClick={(e) => {
+                      const href = rowHref?.(row);
+                      if (href && e.button === 1) { e.preventDefault(); window.open(href, "_blank", "noopener"); }
+                    }}
                     aria-selected={isSel || undefined}
                     className={cn("transition-colors",
                       onRowClick && "cursor-pointer",

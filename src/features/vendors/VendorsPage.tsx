@@ -51,7 +51,9 @@ function useVendorMaster() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await api.get<VendorMaster[]>("/api/vendors");
+      // ?all=1 keeps the whole-set shape this page's aggregates rely on; the list
+      // endpoint is now paged by default (backend routes/vendors.js).
+      const rows = await api.get<VendorMaster[]>("/api/vendors?all=1");
       setVendors(Array.isArray(rows) ? rows : []);
     } catch (e) {
       // Offline / not-yet-seeded: keep whatever we had, surface once.

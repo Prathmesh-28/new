@@ -5,6 +5,9 @@ const router = require("express").Router();
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
 const fc = require("../lib/fieldcrypto");
+const listQuery = require("../lib/listQuery");
+const trash = require("../lib/trash");
+const { auditReq } = require("../lib/audit");
 
 // Vendor PAN + bank account encrypted at rest (decrypted on read for authorised roles).
 const VENDOR_PII = ["pan", "bank_account"];
@@ -24,12 +27,67 @@ const pick = (body) => {
   return out;
 };
 
-// List all vendors for the tenant.
-router.get("/", async (req, res) => {
+// List vendors — paged, sorted and searchable via the shared list contract. It used to
+// return EVERY vendor with no search and no ordering beyond name, so a firm with a few
+// hundred suppliers had to scroll.
+//
+// `?all=1` keeps the old whole-set shape for the pages that still aggregate over it.
+router.get("/", async (req, res, next) => {
   try {
-    const { rows } = await pool.query("SELECT * FROM vendor_master WHERE tenant_id=$1 ORDER BY name", [tenantOf(req)]);
-    res.json(rows.map(decV));
-  } catch (e) { console.error("[vendors]", e.message); res.status(500).json({ error: "Internal error" }); }
+    const tenantId = tenantOf(req);
+    const parsed = listQuery.parseList(req, {
+      sortable: ["name", "created_at", "payment_terms_days", "category"],
+      defaultSort: "name", defaultOrder: "asc",
+      // pan and bank_account are encrypted at rest, so they are deliberately NOT
+      // searchable — an ILIKE against ciphertext would silently match nothing.
+      searchable: ["name", "gstin", "email", "phone", "contact_name", "category"],
+    });
+    const vals = [tenantId];
+    const conditions = ["tenant_id = $1"];
+    if (req.query.msme === "1") conditions.push("is_msme = true");
+    if (req.query.category) { vals.push(String(req.query.category)); conditions.push(`category = $${vals.length}`); }
+    const srch = listQuery.search(parsed, "", vals.length + 1);
+    if (srch.clause) { conditions.push(srch.clause); vals.push(...srch.params); }
+    const where = conditions.join(" AND ");
+    const page = listQuery.paginate(parsed, vals.length + 1);
+
+    const [data, count] = await Promise.all([
+      pool.query(`SELECT * FROM vendor_master WHERE ${where} ${listQuery.orderBy(parsed)} ${page.clause}`, [...vals, ...page.params]),
+      pool.query(`SELECT count(*)::int AS n FROM vendor_master WHERE ${where}`, vals),
+    ]);
+    const rows = data.rows.map(decV);
+    // Legacy callers asked for a bare array; keep that shape for ?all=1 only.
+    if (parsed.all) return res.json(rows);
+    res.json(listQuery.envelope(rows, count.rows[0].n, parsed));
+  } catch (e) { next(e); }
+});
+
+// GET /api/vendors/:id — one vendor, with what we've bought from them and what's owed.
+router.get("/:id([0-9a-fA-F-]{36})", async (req, res, next) => {
+  try {
+    const tenantId = tenantOf(req);
+    const { rows } = await pool.query("SELECT * FROM vendor_master WHERE id=$1 AND tenant_id=$2", [req.params.id, tenantId]);
+    if (!rows[0]) return res.status(404).json({ error: "Vendor not found" });
+    const vendor = decV(rows[0]);
+
+    // Purchase history lives in vendor bills; a vendor page without "what do we owe them"
+    // is a phone book. Missing table (module not deployed) must not break the page.
+    let bills = [], totals = { outstanding: 0, billed: 0, count: 0 };
+    try {
+      const b = await pool.query(
+        `SELECT id, bill_number, bill_date, total_amount, paid_amount, status, due_date
+           FROM vendor_bills WHERE tenant_id=$1 AND vendor_id=$2
+          ORDER BY bill_date DESC NULLS LAST LIMIT 25`, [tenantId, vendor.id]);
+      bills = b.rows;
+      const t = await pool.query(
+        `SELECT COALESCE(SUM(GREATEST(total_amount - COALESCE(paid_amount,0), 0)) FILTER (WHERE status <> 'paid'), 0) AS outstanding,
+                COALESCE(SUM(total_amount), 0) AS billed, COUNT(*)::int AS count
+           FROM vendor_bills WHERE tenant_id=$1 AND vendor_id=$2`, [tenantId, vendor.id]);
+      totals = { outstanding: Number(t.rows[0].outstanding), billed: Number(t.rows[0].billed), count: t.rows[0].count };
+    } catch { /* vendor bills not present in this deployment */ }
+
+    res.json({ ...vendor, bills, ...totals });
+  } catch (e) { next(e); }
 });
 
 // Create a vendor (owner/admin).
@@ -65,12 +123,18 @@ router.patch("/:id", canWrite, async (req, res) => {
   } catch (e) { console.error("[vendors]", e.message); res.status(500).json({ error: "Internal error" }); }
 });
 
-// Delete a vendor (owner/admin).
-router.delete("/:id", canWrite, async (req, res) => {
+// Delete a vendor (owner/admin) — into the 30-day bin. It also used to answer {ok:true}
+// for an id that never existed, so a mistyped delete looked like it had worked.
+router.delete("/:id", canWrite, async (req, res, next) => {
   try {
-    await pool.query("DELETE FROM vendor_master WHERE id=$1 AND tenant_id=$2", [req.params.id, tenantOf(req)]);
-    res.json({ ok: true });
-  } catch (e) { console.error("[vendors]", e.message); res.status(500).json({ error: "Internal error" }); }
+    const out = await trash.softDelete(tenantOf(req), "vendor", req.params.id, req.user.id);
+    auditReq(req, "deleted", "vendor", req.params.id, { label: out.label });
+    res.json({ ok: true, trashId: out.trashId, label: out.label });
+  } catch (e) {
+    if (e.status === 404) return res.status(404).json({ error: "Vendor not found" });
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    next(e);
+  }
 });
 
 module.exports = router;

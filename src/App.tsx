@@ -38,6 +38,8 @@ import { ConfirmProvider, ThemeProvider, KeyboardShortcuts, useTheme } from "@/c
 const InvoiceDetailPage  = lazy(() => import("@/features/records/InvoiceDetailPage"));
 const CustomersPage      = lazy(() => import("@/features/customers/CustomersPage"));
 const TrashPage          = lazy(() => import("@/features/trash/TrashPage"));
+const TransactionDetailPage = lazy(() => import("@/features/records/TransactionDetailPage"));
+const VendorDetailPage      = lazy(() => import("@/features/records/VendorDetailPage"));
 const CustomerDetailPage = lazy(() => import("@/features/customers/CustomerDetailPage"));
 const HomePage           = lazy(() => import("@/pages/HomePage"));
 const LoginPage          = lazy(() => import("@/pages/LoginPage"));
@@ -267,6 +269,7 @@ function AppShell() {
                 <Route path="/set-password"  element={<SetPasswordPage />} />
                 <Route path="/dashboard"     element={<Dashboard />} />
                 <Route path="/transactions"  element={<TransactionsPage />} />
+                <Route path="/transactions/:id" element={<TransactionDetailPage />} />
                 <Route path="/alerts"        element={<AlertsPage />} />
                 <Route path="/receivables"   element={<ReceivablesPage />} />
                 <Route path="/forecast"      element={<ForecastHub />} />
@@ -305,6 +308,7 @@ function AppShell() {
                 <Route path="/analytics"     element={<AnalyticsPage />} />
                 <Route path="/cfo-brief"     element={<CfoBriefPage />} />
                 <Route path="/vendors"       element={<VendorsPage />} />
+                <Route path="/vendors/:id"   element={<VendorDetailPage />} />
                 <Route path="/budgets"       element={<BudgetsPage />} />
                 <Route path="/tax"           element={<TaxPage />} />
                 <Route path="/health"        element={<FinancialHealthPage />} />

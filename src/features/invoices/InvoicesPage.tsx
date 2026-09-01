@@ -1035,6 +1035,7 @@ export default function InvoicesPage() {
           onQueryChange={(q: TableQuery) => setQuery(q)}
           searchPlaceholder="Find an invoice, customer, GSTIN or email…"
           onRowClick={(i) => navigate(`/invoices/${i.id}`)}
+          rowHref={(i) => `/invoices/${i.id}`}
           bulkActions={(rows, clear) => (
             <>
               <Button size="sm" variant="secondary" icon={<Check size={12} />} onClick={() => bulkMarkPaid(rows, clear)}>Mark paid</Button>
