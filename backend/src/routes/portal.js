@@ -118,4 +118,56 @@ router.get("/:token/invoice/:id/pdf", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── PUBLIC: the vendor portal (Wave 16) ──────────────────────────────────────
+// The mirror for suppliers: which of their bills are booked, what's been paid, what's
+// still due to them. Bills are PURCHASE vouchers on the vendor's ledger (the same source
+// the AP ageing uses), so this page and the firm's books cannot disagree.
+router.get("/vendor/:token", async (req, res, next) => {
+  try {
+    if (!req.params.token || String(req.params.token).length < 20)
+      return res.status(404).json({ error: "This link isn't valid." });
+    const { rows } = await pool.query(
+      `SELECT l.*, v.name AS vendor_name FROM vendor_portal_links l
+        JOIN vendor_master v ON v.id = l.vendor_id
+       WHERE l.token_hash = $1`, [hashToken(req.params.token)]);
+    const link = rows[0];
+    if (!link) return res.status(404).json({ error: "This link isn't valid. Ask your customer for a new one." });
+    if (link.revoked_at) return res.status(404).json({ error: "This link has been turned off. Ask your customer for a new one." });
+    if (link.expires_at && new Date(link.expires_at) < new Date())
+      return res.status(404).json({ error: "This link has expired. Ask your customer for a new one." });
+
+    pool.query("UPDATE vendor_portal_links SET view_count=view_count+1, last_viewed_at=now() WHERE id=$1", [link.id]).catch(() => {});
+
+    const bills = await require("../modules/vendorBills").listBills(link.tenant_id, link.vendor_id).catch(() => []);
+    const open = bills.filter((b) => !b.is_cancelled && Number(b.gross) - Number(b.allocated) > 0.005);
+    const totalDue = open.reduce((s, b) => s + (Number(b.gross) - Number(b.allocated)), 0);
+
+    const { rows: prof } = await pool.query(
+      "SELECT company_name, gstin FROM tenant_profile WHERE tenant_id=$1", [link.tenant_id]).catch(() => ({ rows: [] }));
+    let firmName = prof[0]?.company_name || null;
+    if (!firmName) {
+      const { rows: kv } = await pool.query(
+        "SELECT value FROM kv_store WHERE tenant_id=$1 AND key='store' LIMIT 1", [link.tenant_id]).catch(() => ({ rows: [] }));
+      firmName = kv[0]?.value?.value?.firm?.name || "Your customer";
+    }
+
+    res.json({
+      buyer: { name: firmName, gstin: prof[0]?.gstin || null },
+      vendor: { name: link.vendor_name },
+      summary: {
+        total_due_to_you: Math.round(totalDue * 100) / 100,
+        open_bills: open.length,
+        bills_on_record: bills.length,
+      },
+      bills: bills.slice(0, 100).map((b) => ({
+        voucher_number: b.voucher_number, date: b.voucher_date, reference: b.reference,
+        gross: Number(b.gross), paid: Number(b.allocated),
+        outstanding: Math.max(0, Math.round((Number(b.gross) - Number(b.allocated)) * 100) / 100),
+        cancelled: !!b.is_cancelled,
+      })),
+      as_of: new Date().toISOString(),
+    });
+  } catch (e) { next(e); }
+});
+
 module.exports = { router, hashToken };

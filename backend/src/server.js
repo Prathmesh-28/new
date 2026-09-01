@@ -216,6 +216,7 @@ app.use("/api/support",            require("./routes/support"));       // help, 
 // PUBLIC (no auth): the customer portal. The token in the URL is the authorisation.
 app.use("/api/portal",             require("./routes/portal").router);
 app.use("/api/reports",            require("./routes/reports"));       // reports home + scheduled email (Wave 12)
+app.use("/api/tools",              require("./routes/tools"));         // cheque printing etc. (Wave 16)
 app.use("/api/prefs",              require("./routes/prefs"));
 app.use("/api/records",            require("./routes/records"));
 app.use("/api/trash",              require("./routes/trash"));

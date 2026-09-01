@@ -41,6 +41,7 @@ const TrashPage          = lazy(() => import("@/features/trash/TrashPage"));
 const ReportsPage        = lazy(() => import("@/features/reports/ReportsPage"));
 const ItemsPage          = lazy(() => import("@/features/items/ItemsPage"));
 const ReconcilePage      = lazy(() => import("@/features/reconcile/ReconcilePage"));
+const ChequePage         = lazy(() => import("@/features/tools/ChequePage"));
 const TransactionDetailPage = lazy(() => import("@/features/records/TransactionDetailPage"));
 const VendorDetailPage      = lazy(() => import("@/features/records/VendorDetailPage"));
 const CustomerDetailPage = lazy(() => import("@/features/customers/CustomerDetailPage"));
@@ -53,6 +54,7 @@ const SetPasswordPage    = lazy(() => import("@/pages/SetPasswordPage"));
 const NotFoundPage       = lazy(() => import("@/pages/NotFoundPage"));
 const PublicCampaignPage = lazy(() => import("@/pages/PublicCampaignPage"));
 const CustomerPortalPage = lazy(() => import("@/pages/CustomerPortalPage"));
+const VendorPortalPage   = lazy(() => import("@/pages/VendorPortalPage"));
 const PublicCreditPassportPage = lazy(() => import("@/pages/PublicCreditPassportPage"));
 const SsoCallbackPage    = lazy(() => import("@/pages/SsoCallbackPage"));
 const PublicProfilePage  = lazy(() => import("@/pages/PublicProfilePage"));
@@ -308,6 +310,7 @@ function AppShell() {
                 <Route path="/reports"       element={<ReportsPage />} />{/* Wave 12: the front door reports never had */}
                 <Route path="/items"         element={<ItemsPage />} />{/* item master front door — the engine lived buried in Books */}
                 <Route path="/reconcile"     element={<ReconcilePage />} />{/* Wave 15: bank credits → the invoices they pay */}
+                <Route path="/cheque"        element={<ChequePage />} />{/* Wave 16: print-ready cheque leaves */}
                 <Route path="/gst"           element={<GstPage />} />
                 <Route path="/payroll"       element={<PayrollPage />} />
                 <Route path="/suppliers"     element={<SuppliersPage />} />
@@ -402,6 +405,7 @@ export default function App() {
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/c/:token"        element={<PublicCampaignPage />} />{/* PUBLIC: backer pledge page */}
                 <Route path="/portal/:token"   element={<CustomerPortalPage />} />{/* PUBLIC: a customer's own account with their supplier */}
+                <Route path="/vendor-portal/:token" element={<VendorPortalPage />} />{/* PUBLIC: a supplier's own account with their buyer */}
                 <Route path="/passport/:token" element={<PublicCreditPassportPage />} />{/* PUBLIC: shareable credit passport */}
                 <Route path="/sso-callback"    element={<SsoCallbackPage />} />{/* PUBLIC: SSO token landing */}
                 <Route path="/p/:slug"         element={<PublicProfilePage />} />{/* PUBLIC: company profile / business card */}

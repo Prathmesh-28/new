@@ -70,21 +70,26 @@ router.get("/:id([0-9a-fA-F-]{36})", async (req, res, next) => {
     if (!rows[0]) return res.status(404).json({ error: "Vendor not found" });
     const vendor = decV(rows[0]);
 
-    // Purchase history lives in vendor bills; a vendor page without "what do we owe them"
-    // is a phone book. Missing table (module not deployed) must not break the page.
+    // Purchase history = PURCHASE vouchers on this vendor's ledger — the same source the
+    // AP ageing uses (modules/vendorBills), so this page and the books cannot disagree.
+    // (Wave 8 shipped this against a vendor_bills table that doesn't exist; the try/catch
+    // hid it and every vendor showed zero history. Fixed to the real source.)
     let bills = [], totals = { outstanding: 0, billed: 0, count: 0 };
     try {
-      const b = await pool.query(
-        `SELECT id, bill_number, bill_date, total_amount, paid_amount, status, due_date
-           FROM vendor_bills WHERE tenant_id=$1 AND vendor_id=$2
-          ORDER BY bill_date DESC NULLS LAST LIMIT 25`, [tenantId, vendor.id]);
-      bills = b.rows;
-      const t = await pool.query(
-        `SELECT COALESCE(SUM(GREATEST(total_amount - COALESCE(paid_amount,0), 0)) FILTER (WHERE status <> 'paid'), 0) AS outstanding,
-                COALESCE(SUM(total_amount), 0) AS billed, COUNT(*)::int AS count
-           FROM vendor_bills WHERE tenant_id=$1 AND vendor_id=$2`, [tenantId, vendor.id]);
-      totals = { outstanding: Number(t.rows[0].outstanding), billed: Number(t.rows[0].billed), count: t.rows[0].count };
-    } catch { /* vendor bills not present in this deployment */ }
+      const raw = await require("../modules/vendorBills").listBills(tenantId, vendor.id);
+      bills = raw.slice(0, 25).map((b) => ({
+        id: b.id, bill_number: b.voucher_number, bill_date: b.voucher_date,
+        total_amount: b.gross, paid_amount: b.allocated,
+        status: b.is_cancelled ? "cancelled" : (Number(b.gross) - Number(b.allocated) <= 0.005 ? "paid" : "open"),
+        due_date: null,
+      }));
+      const live = raw.filter((b) => !b.is_cancelled);
+      totals = {
+        outstanding: Math.round(live.reduce((s, b) => s + Math.max(0, Number(b.gross) - Number(b.allocated)), 0) * 100) / 100,
+        billed: Math.round(live.reduce((s, b) => s + Number(b.gross), 0) * 100) / 100,
+        count: live.length,
+      };
+    } catch { /* vendor never billed via the books → empty history is the truth */ }
 
     res.json({ ...vendor, bills, ...totals });
   } catch (e) { next(e); }
@@ -135,6 +140,49 @@ router.delete("/:id", canWrite, async (req, res, next) => {
     if (e.status) return res.status(e.status).json({ error: e.message });
     next(e);
   }
+});
+
+// ── Vendor portal link (Wave 16) ─────────────────────────────────────────────
+// Same contract as the customer portal on the customers route: token shown once, stored
+// hashed, one live link per vendor, replace supersedes, revoke kills immediately.
+router.get("/:id/portal-link", async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, token_hint, expires_at, view_count, last_viewed_at, created_at
+         FROM vendor_portal_links WHERE tenant_id=$1 AND vendor_id=$2 AND revoked_at IS NULL`,
+      [tenantOf(req), req.params.id]);
+    res.json(rows[0] || null);
+  } catch (e) { next(e); }
+});
+
+router.post("/:id/portal-link", canWrite, async (req, res, next) => {
+  try {
+    const tenantId = tenantOf(req);
+    const { rows: [v] } = await pool.query("SELECT id, name FROM vendor_master WHERE id=$1 AND tenant_id=$2", [req.params.id, tenantId]);
+    if (!v) return res.status(404).json({ error: "Vendor not found" });
+    const token = require("crypto").randomBytes(24).toString("base64url");
+    const days = Math.min(365, Math.max(1, parseInt(req.body?.expiresInDays, 10) || 90));
+    await pool.query("UPDATE vendor_portal_links SET revoked_at=now() WHERE tenant_id=$1 AND vendor_id=$2 AND revoked_at IS NULL", [tenantId, v.id]);
+    const { hashToken } = require("./portal");
+    const { rows } = await pool.query(
+      `INSERT INTO vendor_portal_links(tenant_id, vendor_id, token_hash, token_hint, expires_at, created_by)
+       VALUES($1,$2,$3,$4, now() + ($5 || ' days')::interval, $6)
+       RETURNING id, token_hint, expires_at, created_at`,
+      [tenantId, v.id, hashToken(token), token.slice(-4), String(days), req.user.id]);
+    auditReq(req, "vendor_portal_link_created", "vendor", v.id, { expiresInDays: days });
+    res.status(201).json({ ...rows[0], token, path: `/vendor-portal/${token}` });
+  } catch (e) { next(e); }
+});
+
+router.delete("/:id/portal-link", canWrite, async (req, res, next) => {
+  try {
+    const { rowCount } = await pool.query(
+      "UPDATE vendor_portal_links SET revoked_at=now() WHERE tenant_id=$1 AND vendor_id=$2 AND revoked_at IS NULL",
+      [tenantOf(req), req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: "There's no live link to turn off" });
+    auditReq(req, "vendor_portal_link_revoked", "vendor", req.params.id, null);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
 });
 
 module.exports = router;

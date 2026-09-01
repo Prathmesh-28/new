@@ -36,6 +36,7 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
   { label: "Reports home", path: "/reports", group: "Planning", keywords: ["reports", "schedule", "email report", "summary", "daily", "weekly"] },
   { label: "Items (stock master)", path: "/items", group: "Operations", keywords: ["items", "products", "stock", "inventory", "hsn", "reorder"] },
   { label: "Bank matching (reconcile credits to invoices)", path: "/reconcile", group: "Collections", keywords: ["reconcile", "match", "bank", "neft", "receipt", "credit"] },
+  { label: "Print a cheque", path: "/cheque", group: "Payments", keywords: ["cheque", "check", "print", "leaf", "amount in words"] },
   { label: "Email me a daily business summary", path: "/reports", group: "Planning", keywords: ["digest", "summary", "email", "schedule"] },
   { label: "Sales forecast", path: "/sales?tab=forecast", group: "Sales", keywords: ["revenue", "pipeline forecast"] },
   { label: "Renewal tracker", path: "/sales?tab=renewals", group: "Sales", keywords: ["renewal", "retention", "churn"] },

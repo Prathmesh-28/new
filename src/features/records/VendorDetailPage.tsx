@@ -31,6 +31,66 @@ type Vendor = {
   bills: Bill[]; outstanding: number; billed: number; count: number;
 };
 
+/** Share-a-link panel: the supplier sees their own bills and what's due to them, straight
+ *  from these books — so they stop calling to ask. Token shown once, stored hashed. */
+function VendorPortalCard({ vendorId, vendorName }: { vendorId: string; vendorName: string }) {
+  type PLink = { id: string; token_hint: string; expires_at: string | null; view_count: number };
+  const confirm = useConfirm();
+  const [link, setLink] = useState<PLink | null>(null);
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => {
+    api.get<PLink | null>(`/api/vendors/${vendorId}/portal-link`).then(setLink).catch(() => setLink(null));
+  }, [vendorId]);
+  useEffect(() => { load(); }, [load]);
+
+  const create = async () => {
+    setBusy(true);
+    try {
+      const r = await api.post<{ token: string }>(`/api/vendors/${vendorId}/portal-link`, { expiresInDays: 90 });
+      setFresh(r.token);
+      toast.success("Link created", { description: "Copy it now — it can't be shown again, only replaced." });
+      load();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't create the link"); }
+    finally { setBusy(false); }
+  };
+  const revoke = async () => {
+    if (!await confirm({ title: `Turn off ${vendorName}'s link?`, body: "They stop being able to open it immediately.", danger: true, confirmLabel: "Turn it off" })) return;
+    setBusy(true);
+    try { await api.delete(`/api/vendors/${vendorId}/portal-link`); setFresh(null); toast.success("Link turned off"); load(); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't turn it off"); }
+    finally { setBusy(false); }
+  };
+  const url = fresh ? `${window.location.origin}/vendor-portal/${fresh}` : null;
+
+  return (
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 space-y-3">
+      <div>
+        <h2 className="text-sm font-semibold">Supplier portal link</h2>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">
+          A page {vendorName} can open — no login — showing their booked bills, what's been paid, and what's still due to them. They stop calling to ask.
+        </p>
+      </div>
+      {url && (
+        <div className="flex items-center gap-2">
+          <input readOnly value={url} onFocus={(e) => e.currentTarget.select()}
+            className="flex-1 bg-[var(--color-bg)] border border-[var(--color-primary)]/40 rounded-lg px-3 py-2 text-xs font-mono outline-none" />
+          <Button size="sm" variant="secondary" onClick={() => { navigator.clipboard?.writeText(url).then(() => toast.success("Copied")).catch(() => {}); }}>Copy</Button>
+        </div>
+      )}
+      <div className="flex items-center gap-2 text-xs">
+        {link
+          ? <span className="text-[var(--color-muted)]">Live link ends in <span className="font-mono">…{link.token_hint}</span>{link.view_count ? ` · opened ${link.view_count}×` : " · not opened yet"}</span>
+          : <span className="text-[var(--color-muted)]">No link is live.</span>}
+        <span className="flex-1" />
+        <Button size="sm" variant="primary" loading={busy} onClick={create}>{link ? "Replace" : "Create a link"}</Button>
+        {link && <Button size="sm" variant="ghost" loading={busy} onClick={revoke}>Turn off</Button>}
+      </div>
+    </div>
+  );
+}
+
 export default function VendorDetailPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
@@ -184,6 +244,8 @@ export default function VendorDetailPage() {
       <div className="flex justify-end">
         <Button variant="primary" icon={<Save size={13} />} loading={saving} onClick={save}>Save changes</Button>
       </div>
+
+      <VendorPortalCard vendorId={v.id} vendorName={v.name} />
 
       {v.bills.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
