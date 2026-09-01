@@ -15,6 +15,7 @@ import { useT } from "@/i18n";
 import BillingCard from "./BillingCard";
 import AppLockCard from "./AppLockCard";
 import SecurityCard from "./SecurityCard";
+import SessionsCard from "./SessionsCard";
 import NotificationsCard from "./NotificationsCard";
 import PrivacyCard from "./PrivacyCard";
 import DatePicker from "@/components/DatePicker";
@@ -2145,7 +2146,7 @@ export default function SettingsPage() {
       </button>
 
       {/* Two-factor authentication */}
-      <div id="security" className="scroll-mt-24"><SecurityCard /></div>
+      <div id="security" className="scroll-mt-24 space-y-4"><SecurityCard /><SessionsCard /></div>
 
       {/* App lock */}
       <div id="app-lock" className="scroll-mt-24"><AppLockCard /></div>

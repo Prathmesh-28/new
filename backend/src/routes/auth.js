@@ -4,7 +4,8 @@ const crypto  = require("crypto");
 const { pool } = require("../db");
 const { signAccess, signRefresh, verifyRefresh } = require("../lib/jwt");
 const { authenticate } = require("../middleware/auth");
-const { sendOtp, sendWelcome, sendPasswordResetSuccess } = require("../lib/email");
+const { sendOtp, sendWelcome, sendPasswordResetSuccess, sendMail } = require("../lib/email");
+const { writeAudit } = require("../lib/audit");
 const { validateBody } = require("../lib/validate");
 const { requireHuman } = require("../lib/turnstile");
 
@@ -220,10 +221,41 @@ router.post("/login", validateBody({
     "INSERT INTO login_events(user_id, tenant_id, ip, user_agent) VALUES($1,$2,$3,$4)",
     [user.id, user.tenant_id, req.ip || null, (req.headers["user-agent"] || "").slice(0, 300)]
   ).catch(() => {});
-  const payload = { sub: user.id, role: user.role, tenant: user.tenant_id };
+  // A session row per sign-in: it is what makes "where am I signed in?" and "log out
+  // everywhere" possible at all, and it lets a replayed refresh token be spotted.
+  const sessions = require("../lib/sessions");
+  const { isNew, label } = await sessions.isNewDevice(user.id, req.headers["user-agent"]);
+  const basePayload = { sub: user.id, role: user.role, tenant: user.tenant_id };
+  // The session id has to be inside the refresh token, so the token is minted first with a
+  // placeholder-free two-step: create the row, then sign with its id.
+  const session = await sessions.createSession({
+    userId: user.id, tenantId: user.tenant_id, ip: req.ip,
+    userAgent: req.headers["user-agent"], refreshToken: "pending",
+  });
+  const payload = { ...basePayload, sid: session.id };
+  const refreshToken = signRefresh(payload);
+  await pool.query("UPDATE user_sessions SET refresh_hash=$2 WHERE id=$1", [session.id, sessions.hash(refreshToken)]);
+
+  pool.query("UPDATE login_events SET session_id=$2, new_device=$3 WHERE user_id=$1 AND session_id IS NULL",
+    [user.id, session.id, isNew]).catch(() => {});
+
+  // Tell the account owner when their credentials are used somewhere new. login_events has
+  // been recorded for months and shown to nobody.
+  if (isNew) {
+    const when = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    sendMail({
+      to: user.email,
+      subject: "New sign-in to your Headroom account",
+      html: `<p>Your Headroom account was signed in to from a device we haven't seen before.</p>
+             <p><strong>${label}</strong><br>${when} (IST)${req.ip ? `<br>IP ${req.ip}` : ""}</p>
+             <p>If this was you, nothing to do. If it wasn't, change your password and use
+             <strong>Sign out everywhere</strong> in Settings → Security straight away.</p>`,
+    }).catch(() => { /* a missed alert must never block a valid sign-in */ });
+  }
+
   res.json({
     access:  signAccess(payload),
-    refresh: signRefresh(payload),
+    refresh: refreshToken,
     user:    { id: user.id, email: user.email, role: user.role, tenant_id: user.tenant_id, first_login: firstLogin, plan: user.subscription_plan || "free", locale: user.locale || null },
   });
  } catch (e) {
@@ -244,15 +276,100 @@ router.post("/refresh", async (req, res) => {
     const { rows } = await pool.query("SELECT * FROM users WHERE id=$1", [payload.sub]);
     if (!rows[0]) return res.status(401).json({ error: "User not found" });
     const u = rows[0];
-    const p = { sub: u.id, role: u.role, tenant: u.tenant_id };
-    res.json({ access: signAccess(p), refresh: signRefresh(p) });
+    const sessions = require("../lib/sessions");
+
+    // Tokens minted before sessions existed have no sid. Rather than force everyone to
+    // sign in again on deploy, they are honoured once and upgraded to a real session.
+    if (!payload.sid) {
+      const session = await sessions.createSession({
+        userId: u.id, tenantId: u.tenant_id, ip: req.ip,
+        userAgent: req.headers["user-agent"], refreshToken: "pending",
+      });
+      const p = { sub: u.id, role: u.role, tenant: u.tenant_id, sid: session.id };
+      const newRefresh = signRefresh(p);
+      await pool.query("UPDATE user_sessions SET refresh_hash=$2 WHERE id=$1", [session.id, sessions.hash(newRefresh)]);
+      return res.json({ access: signAccess(p), refresh: newRefresh });
+    }
+
+    const p = { sub: u.id, role: u.role, tenant: u.tenant_id, sid: payload.sid };
+    const newRefresh = signRefresh(p);
+    const check = await sessions.rotate({ sessionId: payload.sid, presentedToken: refresh, newToken: newRefresh, ip: req.ip });
+    if (!check.ok) {
+      const why = {
+        reuse:   "This session was ended for security — that sign-in token had already been used. Please sign in again.",
+        revoked: "That session was signed out. Please sign in again.",
+        expired: "That session expired. Please sign in again.",
+        missing: "Please sign in again.",
+      }[check.reason];
+      return res.status(401).json({ error: why, code: check.reason.toUpperCase() });
+    }
+    res.json({ access: signAccess(p), refresh: newRefresh });
   } catch {
     res.status(401).json({ error: "Invalid refresh token" });
   }
 });
 
 // POST /auth/logout - stateless, client drops tokens
-router.post("/logout", (_req, res) => res.json({ ok: true }));
+// POST /auth/logout — ends the session server-side, not just in the client's storage.
+// It used to be a no-op, so a token copied off a shared machine kept working for 7 days
+// after the user "logged out".
+router.post("/logout", async (req, res) => {
+  try {
+    const token = req.body?.refresh;
+    if (token) {
+      const p = require("../lib/jwt").verifyRefresh(token);
+      if (p?.sid) await require("../lib/sessions").revoke(p.sid, "signed out");
+    }
+  } catch { /* an unreadable token is already useless */ }
+  res.json({ ok: true });
+});
+
+// ── GET /auth/sessions — where am I signed in? ──────────────────────────────
+router.get("/sessions", authenticate, async (req, res, next) => {
+  try {
+    const rows = await require("../lib/sessions").list(req.user.id);
+    res.json(rows.map((r) => ({ ...r, current: r.id === req.sessionId })));
+  } catch (e) { next(e); }
+});
+
+// DELETE /auth/sessions/:id — end one device.
+router.delete("/sessions/:id", authenticate, async (req, res, next) => {
+  try {
+    const { rowCount } = await pool.query(
+      "UPDATE user_sessions SET revoked_at=now(), revoked_reason='ended by user' WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL",
+      [req.params.id, req.user.id]);
+    if (!rowCount) return res.status(404).json({ error: "That session is already ended" });
+    writeAudit(req.user.id, "session_revoked", "session", req.params.id, null, req.user.tenant_id);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// POST /auth/sessions/revoke-all — sign out everywhere. Keeps the current device unless
+// asked otherwise, because signing yourself out while trying to secure the account is a
+// surprise, not a feature.
+router.post("/sessions/revoke-all", authenticate, async (req, res, next) => {
+  try {
+    const keepCurrent = req.body?.keepCurrent !== false;
+    const n = await require("../lib/sessions").revokeAll(req.user.id, {
+      exceptSessionId: keepCurrent ? req.sessionId : null,
+      reason: "signed out everywhere by the user",
+    });
+    writeAudit(req.user.id, "sessions_revoked_all", "user", req.user.id, { count: n }, req.user.tenant_id);
+    res.json({ ended: n });
+  } catch (e) { next(e); }
+});
+
+// GET /auth/login-history — recorded since forever, shown to the account owner for the
+// first time.
+router.get("/login-history", authenticate, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, ip, user_agent, new_device, created_at FROM login_events
+        WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50`, [req.user.id]);
+    const { deviceLabel } = require("../lib/sessions");
+    res.json(rows.map((r) => ({ ...r, device_label: deviceLabel(r.user_agent) })));
+  } catch (e) { next(e); }
+});
 
 // ── Multi-firm switcher (#197) ────────────────────────────────────────────────
 // GET /auth/my-firms - the firms this user may act in (populates the switcher UI).

@@ -8,8 +8,23 @@ async function authenticate(req, res, next) {
 
   try {
     const payload = verifyAccess(token);
-    const { rows } = await pool.query("SELECT * FROM users WHERE id=$1", [payload.sub]);
+    // The session's revocation state rides along on the query this middleware already ran,
+    // so "sign out everywhere" takes effect on the NEXT request rather than up to 15
+    // minutes later when the access token happens to expire — and it costs no extra
+    // round-trip. Tokens minted before sessions existed (no sid) simply have no row and
+    // keep working until they expire.
+    const { rows } = await pool.query(
+      `SELECT u.*, s.revoked_at AS session_revoked_at, s.id AS session_id
+         FROM users u
+         LEFT JOIN user_sessions s ON s.id = $2::uuid AND s.user_id = u.id
+        WHERE u.id = $1`,
+      [payload.sub, payload.sid || null]
+    );
     if (!rows[0]) return res.status(401).json({ error: "User not found" });
+    if (payload.sid && rows[0].session_id && rows[0].session_revoked_at) {
+      return res.status(401).json({ error: "That session was signed out. Please sign in again.", code: "SESSION_REVOKED" });
+    }
+    req.sessionId = payload.sid || null;
     req.user = rows[0];
 
     // ── Super-admin impersonation ("ombudsman" god-mode) ───────────────────────

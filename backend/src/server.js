@@ -658,6 +658,12 @@ initDb()
         const n = await require("./lib/trash").purgeExpired(pool);
         if (n) console.log(`[retention] emptied ${n} trashed record(s) past their 30-day window`);
       } catch (err) { console.error("[retention-trash]", err.message); }
+      // Sign-in sessions: drop rows long past expiry/revocation so the table stays a
+      // working set rather than a permanent log of every device anyone ever used.
+      try {
+        const n = await require("./lib/sessions").purgeExpired();
+        if (n) console.log(`[retention] removed ${n} expired sign-in session(s)`);
+      } catch (err) { console.error("[retention-sessions]", err.message); }
     }, { timezone: "UTC" });
     // Billing lifecycle: trials that ran out, and cancelled/halted Razorpay
     // subscriptions past the period already billed for - both fall back to Free.

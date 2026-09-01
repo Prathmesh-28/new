@@ -17,7 +17,13 @@ if (isProd && (!process.env.JWT_SECRET || SECRET === DEV_SECRET)) {
 }
 
 function signAccess(payload)  { return jwt.sign({ ...payload, typ: "access" },  SECRET,  { expiresIn: "15m" }); }
-function signRefresh(payload) { return jwt.sign({ ...payload, typ: "refresh" }, REFRESH, { expiresIn: "7d"  }); }
+// Every refresh token gets a unique jti. Without it, two signings of the same payload
+// within the same second produce a BYTE-IDENTICAL token — which silently defeated session
+// rotation (the "new" token equalled the old one, so a replayed token still matched the
+// stored hash and reuse detection could never fire).
+function signRefresh(payload) {
+  return jwt.sign({ ...payload, typ: "refresh", jti: crypto.randomUUID() }, REFRESH, { expiresIn: "7d" });
+}
 
 function verifyAccess(token) {
   const p = jwt.verify(token, SECRET);
