@@ -21,6 +21,8 @@ import HeadroomAssistant from "@/components/HeadroomAssistant";
 import AppLockGate from "@/components/AppLockGate";
 import InstallPrompt from "@/components/InstallPrompt";
 import NotificationBell from "@/components/NotificationBell";
+import SupportButton from "@/components/SupportButton";
+import WhatsNew from "@/components/WhatsNew";
 import QuickCreate from "@/components/QuickCreate";
 import { onAppResume } from "@/lib/mobile";
 import { onDeepLink } from "@/lib/native";
@@ -246,6 +248,13 @@ function AppShell() {
         <ReadOnlyBanner />
         <PreviewBanner />
         <NotificationBell />
+        {/* Sits just left of the bell, mirroring its fixed placement, so release notes are
+            reachable from every page rather than buried in a settings screen. */}
+        <div className="fixed z-50 top-1.5 right-24 md:top-4 md:right-16" data-no-print>
+          <WhatsNew />
+        </div>
+        {/* Reaching a human used to mean leaving the product to find an email address. */}
+        <SupportButton />
         <QuickCreate />
         <MobileBottomNav onOpenSearch={openPalette} />
         <main className="flex-1 px-5 py-5 md:p-6 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-6 overflow-auto">

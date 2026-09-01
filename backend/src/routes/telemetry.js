@@ -7,14 +7,19 @@ const logger = require("../lib/logger");
 // sits under the general /api rate limiter.
 router.post("/error", (req, res) => {
   const b = req.body || {};
+  // A short reference the user can quote. Previously a crash gave them a generic screen
+  // and nothing to say to support beyond "it broke", and the log entry it produced could
+  // not be tied back to their report.
+  const ref = require("crypto").randomBytes(4).toString("hex").toUpperCase();
   logger.error("client_error", {
+    ref,
     cmsg:    String(b.message || "").slice(0, 500),
     stack:   String(b.stack || "").slice(0, 2000),
     url:     String(b.url || "").slice(0, 300),
     release: String(b.release || "").slice(0, 40),
     ua:      String(req.headers["user-agent"] || "").slice(0, 200),
   });
-  res.status(204).end();
+  res.json({ ref });
 });
 
 module.exports = router;

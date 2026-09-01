@@ -7,9 +7,16 @@ const seen = new Set<string>();
 let sent = 0;
 const MAX_PER_SESSION = 20;
 
+// The reference the backend assigned to the most recent report, so the crash screen and a
+// support ticket can quote the same id as the server log. Cleared on a successful reload.
+let lastRef: string | null = null;
+export const lastErrorRef = () => lastRef;
+
 export function reportError(message: string, stack?: string) {
-  if (!import.meta.env.PROD) return;
+  // In dev the console is the sink, but a local crash should still produce a reference so
+  // the error screen looks and behaves the same way it will in production.
   if (!message) return;
+  if (!import.meta.env.PROD) { lastRef = `DEV-${Math.random().toString(16).slice(2, 10).toUpperCase()}`; return; }
   const key = (message + (stack ?? "")).slice(0, 200);
   if (seen.has(key) || sent >= MAX_PER_SESSION) return;
   seen.add(key);
@@ -25,7 +32,10 @@ export function reportError(message: string, stack?: string) {
         url: location.href,
         release: import.meta.env.VITE_RELEASE ?? "",
       }),
-    }).catch(() => { /* best-effort */ });
+    })
+      .then((r) => r.json())
+      .then((r: { ref?: string }) => { if (r?.ref) lastRef = r.ref; })
+      .catch(() => { /* best-effort — the crash screen just won't show a reference */ });
   } catch { /* ignore */ }
 }
 

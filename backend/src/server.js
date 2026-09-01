@@ -212,6 +212,7 @@ app.use("/api/vendor-bills",       require("./routes/vendorBills")); // real bil
 // trash so no delete in the product is final any more.
 app.use("/api/customers",          require("./routes/customers")); // customer master (Wave 3)
 app.use("/api/notifications",      require("./routes/notifications")); // per-user notification preferences (Wave 6)
+app.use("/api/support",            require("./routes/support"));       // help, feedback, changelog (Wave 7)
 app.use("/api/prefs",              require("./routes/prefs"));
 app.use("/api/records",            require("./routes/records"));
 app.use("/api/trash",              require("./routes/trash"));
