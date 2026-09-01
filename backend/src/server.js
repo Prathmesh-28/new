@@ -206,6 +206,14 @@ app.use("/api/lenders",            require("./routes/lenders"));
 app.use("/api/vendors",            require("./routes/vendors"));   // vendor master (profiles)
 app.use("/api/vendor-bills",       require("./routes/vendorBills")); // real bills → GL + AP aging
 
+// ── Platform foundation (Wave 1 of the 200-gap build) ───────────────────────
+// Cross-cutting services every module gets for free: per-user preferences and saved
+// list views, per-record comments/followers/activity, recently-viewed, and a 30-day
+// trash so no delete in the product is final any more.
+app.use("/api/prefs",              require("./routes/prefs"));
+app.use("/api/records",            require("./routes/records"));
+app.use("/api/trash",              require("./routes/trash"));
+
 // ── Platform admin endpoints (super_admin only) ─────────────────────────────
 // These are the PLATFORM owner's god-view across every tenant/company - distinct
 // from an SMB owner, who only ever sees their own tenant.
@@ -642,6 +650,13 @@ initDb()
           console.log(`[retention] statutory ${r.enforced ? "purged" : "dry-run"}:`, r);
         }
       } catch (err) { console.error("[retention-statutory]", err.message); }
+      // Trash: the UI promises "recoverable for 30 days", so something has to actually
+      // empty it on day 31. Without this the archive grows forever and the promise is a
+      // guess rather than a policy.
+      try {
+        const n = await require("./lib/trash").purgeExpired(pool);
+        if (n) console.log(`[retention] emptied ${n} trashed record(s) past their 30-day window`);
+      } catch (err) { console.error("[retention-trash]", err.message); }
     }, { timezone: "UTC" });
     // Billing lifecycle: trials that ran out, and cancelled/halted Razorpay
     // subscriptions past the period already billed for - both fall back to Free.

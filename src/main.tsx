@@ -11,6 +11,18 @@ import { recoverFromChunkError } from "@/lib/chunkReload";
 // Capture uncaught errors + unhandled promise rejections → backend telemetry.
 installGlobalErrorReporting();
 
+// Paint the user's theme BEFORE React mounts. The stored preference is read from the
+// localStorage mirror rather than waiting on /api/prefs, so a light-mode user never sees
+// a flash of the dark app while the request is in flight.
+try {
+  const saved = localStorage.getItem("hr_theme") as "light" | "dark" | "system" | null;
+  const mode = saved || "dark";
+  const resolved = mode === "system"
+    ? (window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark")
+    : mode;
+  document.documentElement.setAttribute("data-theme", resolved);
+} catch { document.documentElement.setAttribute("data-theme", "dark"); }
+
 // A new deploy renames hashed chunks; a tab on the old index.html fails the next
 // lazy import. Vite fires `vite:preloadError` - reload once to pull the fresh
 // index.html instead of showing a blank error screen.

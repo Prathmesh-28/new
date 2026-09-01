@@ -48,12 +48,18 @@ async function dispatchEscalation(tenantId, alert) {
 }
 
 // Insert one alert row + best-effort escalation dispatch. Returns the inserted row.
-async function raiseAlert(tenantId, { ruleId, severity = "medium", title, message, meta } = {}) {
+//
+// `userId` addresses the alert to ONE person (an @mention, an approval assigned to them);
+// leaving it null keeps the historical firm-wide behaviour. `entity`/`entityId`/`link`
+// let the notification open the record it is about instead of dumping the user on a hub
+// page — the gap audit found no notification anywhere deep-linked to its record.
+async function raiseAlert(tenantId, { ruleId, severity = "medium", title, message, meta, userId = null, entity = null, entityId = null, link = null } = {}) {
   if (!ruleId) throw new Error("raiseAlert: ruleId is required");
   const { rows } = await pool.query(
-    `INSERT INTO alerts(tenant_id, rule_id, severity, title, message, meta)
-     VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [tenantId, ruleId, severity, title, message, meta !== undefined ? JSON.stringify(meta) : null]
+    `INSERT INTO alerts(tenant_id, rule_id, severity, title, message, meta, user_id, entity, entity_id, link)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [tenantId, ruleId, severity, title, message, meta !== undefined ? JSON.stringify(meta) : null,
+     userId, entity, entityId != null ? String(entityId) : null, link]
   );
   const alert = rows[0];
   dispatchEscalation(tenantId, alert).catch((e) => console.warn("[alerts] escalation error", e.message));

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useApp } from "@/context/AppContext";
 import { useT } from "@/i18n";
@@ -8,6 +8,11 @@ import type { Invoice as StoreInvoice } from "@/data/types";
 import { formatCurrency } from "@/lib/utils";
 import DiscussButton from "@/features/collab/DiscussButton";
 import { LoadingState, ErrorState } from "@/components/EmptyState";
+import DataTable, { type Column, type TableQuery } from "@/components/ui/DataTable";
+import Button from "@/components/ui/Button";
+import { useConfirm } from "@/components/ui/Confirm";
+import { useListQuery } from "@/hooks/useListQuery";
+import { deleteWithUndo } from "@/lib/undo";
 import DatePicker from "@/components/DatePicker";
 import CurrencyInput from "@/components/CurrencyInput";
 import RecordPaymentModal from "@/components/RecordPaymentModal";
@@ -31,6 +36,13 @@ interface Invoice {
   total_amount: number; status: string; due_date?: string; paid_at?: string;
   paid_amount?: number; credited_amount?: number;
   irn?: string; upi_link?: string; aging?: string; items?: InvoiceItem[]; created_at: string;
+}
+
+/** Header figures, computed in SQL over every invoice (GET /api/invoices/summary) —
+ *  so paging the table below no longer changes the totals above it. */
+interface InvoiceSummary {
+  counts: { total: number; open: number; overdue: number; paid: number; draft: number };
+  pending: number; overdue: number; paid: number; as_of: string;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -387,7 +399,6 @@ export default function InvoicesPage() {
   const [showNew, setShowNew]   = useState(false);
   const [composeInitial, setComposeInitial] = useState<{ customer?: string; amount?: string; desc?: string; dealId?: string } | undefined>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [recordQuery, setRecordQuery] = useState(() => searchParams.get("q") ?? "");
   const [qrInvoice, setQrInvoice] = useState<Invoice | null>(null);
   const [payInvoice, setPayInvoice] = useState<Invoice | null>(null);
 
@@ -412,7 +423,15 @@ export default function InvoicesPage() {
   // Keep global-launcher record links useful after navigation and browser history
   // changes. The query deliberately remains in the URL so the filtered invoice
   // view can be shared or refreshed.
-  useEffect(() => { setRecordQuery(searchParams.get("q") ?? ""); }, [searchParams]);
+
+  // Page rows drive the table; `invoices` (the full set) drives the analysis tools.
+  const [pageRows, setPageRows]   = useState<Invoice[]>([]);
+  const [pageTotal, setPageTotal] = useState(0);
+  const [summary, setSummary]     = useState<InvoiceSummary | null>(null);
+  const { query, setQuery, toApiQuery, write: writeQuery } = useListQuery({ limit: 50, sort: "created_at", order: "desc" });
+  const navigate = useNavigate();
+  const confirm  = useConfirm();
+
   const [tab, setTab]           = useState<
     "all" | "pending" | "paid" | "collection"
     | "quote" | "proforma" | "recurring" | "paylink" | "creditnote" | "creditlimit"
@@ -478,16 +497,46 @@ export default function InvoicesPage() {
     }));
   }, [setStore]);
 
-  const load = useCallback(async () => {
+  // ── Loading, in three parts ───────────────────────────────────────────────
+  // The list used to be one request that pulled EVERY invoice with every line item and
+  // filtered in the browser. It is now:
+  //   1. one PAGE of rows for the table (server-sorted/searched/filtered),
+  //   2. the header figures as SQL aggregates over the whole book (/summary), so paging
+  //      the table no longer changes the totals,
+  //   3. the full set, fetched AFTER the page paints, only because the analysis tools
+  //      below (GSTR-1, ageing, duplicate detection…) and the global store mirror still
+  //      reason over every invoice. That is the remaining unbounded read on this page and
+  //      it is deliberately off the critical path rather than in front of it.
+  const loadPage = useCallback(async () => {
     setLoading(true); setLoadError(false);
     try {
-      const data = await api.get<Invoice[]>("/api/invoices");
-      setInvoices(data);
-      syncToStore(data);
+      const tabFilter = tab === "pending" ? { unpaid: "1" } : tab === "paid" ? { status: "paid" } : {};
+      const res = await api.get<{ data: Invoice[]; total: number }>(`/api/invoices?${toApiQuery(tabFilter)}`);
+      setPageRows(res.data);
+      setPageTotal(res.total);
     } catch { setLoadError(true); } finally { setLoading(false); }
+  }, [toApiQuery, tab]);
+
+  const loadSummary = useCallback(() => {
+    api.get<InvoiceSummary>("/api/invoices/summary").then(setSummary).catch(() => setSummary(null));
+  }, []);
+
+  const loadAll = useCallback(async () => {
+    try {
+      const res = await api.get<{ data: Invoice[] }>("/api/invoices?all=1");
+      setInvoices(res.data);
+      syncToStore(res.data);
+    } catch { /* the page still works from `pageRows`; tools show their own empty state */ }
   }, [syncToStore]);
 
-  useEffect(() => { load(); }, [load]);
+  const load = useCallback(async () => {
+    await loadPage();
+    loadSummary();
+    void loadAll();
+  }, [loadPage, loadSummary, loadAll]);
+
+  useEffect(() => { void loadPage(); }, [loadPage]);
+  useEffect(() => { loadSummary(); void loadAll(); }, [loadSummary, loadAll]);
 
   const markStatus = async (id: string, status: string) => {
     try {
@@ -520,25 +569,133 @@ export default function InvoicesPage() {
       .catch(() => toast.error("PDF generation failed"));
   };
 
-  const overdueCount = invoices.filter(i => i.aging && i.aging !== "current" && i.status !== "paid" && i.status !== "cancelled").length;
+  const overdueCount = summary?.counts.overdue ?? 0;
 
-  const filtered = invoices.filter(inv => {
-    const matchesTab = tab === "all" ? true :
-      tab === "pending" ? inv.status !== "paid" && inv.status !== "cancelled" :
-      tab === "paid" ? inv.status === "paid" : true;
-    const q = recordQuery.trim().toLowerCase();
-    const matchesQuery = !q || [inv.customer_name, inv.invoice_number, inv.customer_email]
-      .filter(Boolean).some(value => String(value).toLowerCase().includes(q));
-    return matchesTab && matchesQuery;
-  });
-
-  // Open buckets sum the OUTSTANDING balance (partial receipts + credit notes netted), so
-  // the header KPIs agree with the per-row "due" figures. Paid sums what was actually
-  // collected (paid_amount), so credit-adjusted invoices don't inflate it.
+  // Outstanding = invoiced − received − credited, floored at zero. Same definition the
+  // /summary aggregate uses, so a row's "due" and the header totals can't disagree.
   const outstanding = (i: Invoice) => Math.max(0, (parseFloat(String(i.total_amount)) || 0) - (Number(i.paid_amount) || 0) - (Number(i.credited_amount) || 0));
-  const totalPending = invoices.filter(i => i.status !== "paid" && i.status !== "cancelled").reduce((s, i) => s + outstanding(i), 0);
-  const totalOverdue = invoices.filter(i => i.status !== "paid" && i.status !== "cancelled" && i.aging && i.aging !== "current" && i.aging !== "paid").reduce((s, i) => s + outstanding(i), 0);
-  const totalPaid    = invoices.filter(i => i.status === "paid").reduce((s, i) => s + (Number(i.paid_amount) || parseFloat(String(i.total_amount)) || 0), 0);
+
+  // ── Bulk actions on the selected rows ─────────────────────────────────────
+  const bulkMarkPaid = async (rows: Invoice[], clear: () => void) => {
+    const eligible = rows.filter(i => i.status !== "paid" && i.status !== "cancelled");
+    if (!eligible.length) { toast.info("Nothing to mark — those are already paid or cancelled."); return; }
+    const sum = eligible.reduce((t, i) => t + outstanding(i), 0);
+    if (!await confirm({
+      title: `Mark ${eligible.length} invoice${eligible.length === 1 ? "" : "s"} as paid?`,
+      body: `This records receipts totalling ${formatCurrency(sum)} and posts them to the ledger. It can't be undone in bulk.`,
+      confirmLabel: "Mark them paid",
+    })) return;
+    // Sequential, not Promise.all: each one posts to the ledger, and a half-applied
+    // parallel batch is far harder to reason about than a slower serial one.
+    let ok = 0;
+    for (const inv of eligible) {
+      try { await api.patch(`/api/invoices/${inv.id}`, { status: "paid" }); ok++; }
+      catch { /* counted below */ }
+    }
+    ok === eligible.length ? toast.success(`${ok} marked paid`) : toast.warning(`${ok} of ${eligible.length} marked paid — the rest failed`);
+    clear(); void load();
+  };
+
+  const bulkDelete = async (rows: Invoice[], clear: () => void) => {
+    if (!await confirm({
+      title: `Delete ${rows.length} invoice${rows.length === 1 ? "" : "s"}?`,
+      body: "They go to Trash for 30 days and can be restored from there.",
+      danger: true, confirmLabel: "Delete",
+    })) return;
+    let ok = 0;
+    for (const inv of rows) {
+      try { await api.delete(`/api/invoices/${inv.id}`); ok++; } catch { /* counted below */ }
+    }
+    toast.success(`${ok} deleted`, { description: "Restore any of them from Trash." });
+    clear(); void load();
+  };
+
+  const COLUMNS: Column<Invoice>[] = [
+    { key: "invoice_number", header: "Invoice", locked: true,
+      value: (i) => i.invoice_number,
+      render: (i) => (
+        <>
+          <p className="font-mono text-xs font-medium text-[var(--color-primary)]">{i.invoice_number}</p>
+          <p className="text-[10px] text-[var(--color-muted)]">{new Date(i.created_at).toLocaleDateString("en-IN")}</p>
+        </>
+      ) },
+    { key: "customer_name", header: "Customer",
+      render: (i) => (
+        <>
+          <p className="font-medium truncate max-w-[200px]">{i.customer_name}</p>
+          {i.customer_gstin && <p className="text-[10px] text-[var(--color-muted)] font-mono">{i.customer_gstin}</p>}
+        </>
+      ) },
+    { key: "customer_email", header: "Email", defaultHidden: true, hideOnMobile: true,
+      render: (i) => <span className="text-xs text-[var(--color-muted)]">{i.customer_email || "—"}</span> },
+    { key: "total_amount", header: "Amount", align: "right", total: "sum",
+      value: (i) => Number(i.total_amount),
+      render: (i) => (
+        <>
+          <p className="font-semibold">{formatCurrency(parseFloat(String(i.total_amount)))}</p>
+          {outstanding(i) > 0 && outstanding(i) !== Number(i.total_amount)
+            ? <p className="text-[10px] text-amber-400">{formatCurrency(outstanding(i))} due</p>
+            : <p className="text-[10px] text-[var(--color-muted)]">+GST {i.gst_rate}%</p>}
+        </>
+      ) },
+    { key: "paid_amount", header: "Received", align: "right", defaultHidden: true, total: "sum",
+      value: (i) => Number(i.paid_amount) || 0,
+      render: (i) => formatCurrency(Number(i.paid_amount) || 0) },
+    { key: "due_date", header: "Due", hideOnMobile: true,
+      value: (i) => i.due_date ?? "",
+      render: (i) => i.due_date
+        ? <span className={`text-xs tabular-nums ${AGING_COLOR[i.aging ?? "current"] ?? ""}`}>
+            {i.aging === "90d+" ? "90d+ overdue" : i.aging === "60d" ? "60d overdue" : i.aging === "30d" ? "30d overdue" : i.due_date}
+          </span>
+        : <span className="text-xs text-[var(--color-muted)]">—</span> },
+    { key: "status", header: "Status",
+      render: (i) => (Number(i.paid_amount) > 0 && i.status !== "paid" && i.status !== "cancelled") ? (
+        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium bg-amber-900/25 text-amber-400 border-amber-800/40" title="Partially paid">
+          <Wallet size={9} /> partial
+        </span>
+      ) : (
+        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLOR[i.status] ?? ""}`}>
+          {i.status === "paid" ? <Check size={9} /> : i.status === "sent" ? <Send size={9} /> : i.status === "draft" ? <Clock size={9} /> : <AlertCircle size={9} />}
+          {i.status}
+        </span>
+      ) },
+    { key: "__actions", header: "", locked: true, sortable: false, align: "right",
+      render: (inv) => (
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => downloadPdf(inv.id, inv.invoice_number)} title="Download PDF" aria-label={`Download ${inv.invoice_number} as PDF`}
+            className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/5 rounded"><Download size={13} /></button>
+          {inv.status !== "paid" && inv.status !== "cancelled" && (
+            <>
+              {inv.customer_email && inv.status !== "sent" && (
+                <button onClick={() => sendInvoice(inv.id)} title="Send by email" aria-label={`Email ${inv.invoice_number}`}
+                  className="p-1.5 text-[var(--color-muted)] hover:text-blue-400 hover:bg-blue-900/10 rounded"><Send size={13} /></button>
+              )}
+              <button onClick={() => setQrInvoice(inv)} title="UPI / card payment link" aria-label={`Payment link for ${inv.invoice_number}`}
+                className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 rounded"><QrCode size={13} /></button>
+              <button onClick={() => setPayInvoice(inv)} title="Record a payment (partial or full)" aria-label={`Record a payment on ${inv.invoice_number}`}
+                className="p-1.5 text-[var(--color-muted)] hover:text-amber-400 hover:bg-amber-900/10 rounded"><Wallet size={13} /></button>
+              <button onClick={() => markStatus(inv.id, "paid")} title="Mark fully paid" aria-label={`Mark ${inv.invoice_number} paid`}
+                className="p-1.5 text-[var(--color-muted)] hover:text-green-400 hover:bg-green-900/10 rounded"><Check size={13} /></button>
+            </>
+          )}
+          <button
+            onClick={async () => {
+              if (!await confirm({
+                title: `Delete ${inv.invoice_number}?`,
+                body: `${inv.customer_name} · ${formatCurrency(Number(inv.total_amount))}. It goes to Trash for 30 days.`,
+                danger: true, confirmLabel: "Delete",
+              })) return;
+              await deleteWithUndo({
+                label: `Invoice ${inv.invoice_number}`,
+                remove: () => api.delete(`/api/invoices/${inv.id}`),
+                onDone: load,
+              });
+            }}
+            title="Delete (recoverable for 30 days)" aria-label={`Delete ${inv.invoice_number}`}
+            className="p-1.5 text-[var(--color-muted)] hover:text-red-400 hover:bg-red-900/10 rounded"><Trash2 size={13} /></button>
+        </div>
+      ) },
+  ];
 
   return (
     <div className="space-y-4">
@@ -555,13 +712,15 @@ export default function InvoicesPage() {
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: tr("inv.stat.pending"),  value: totalPending, color: "text-yellow-400" },
-          { label: tr("inv.stat.overdue"),  value: totalOverdue, color: "text-red-400" },
-          { label: tr("inv.stat.paidAll"), value: totalPaid, color: "text-green-400" },
-        ].map(({ label, value, color }) => (
+          { label: tr("inv.stat.pending"), value: summary?.pending, count: summary?.counts.open,    color: "text-yellow-400" },
+          { label: tr("inv.stat.overdue"), value: summary?.overdue, count: summary?.counts.overdue, color: "text-red-400" },
+          { label: tr("inv.stat.paidAll"), value: summary?.paid,    count: summary?.counts.paid,    color: "text-green-400" },
+        ].map(({ label, value, count, color }) => (
           <div key={label} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
             <p className="text-xs text-[var(--color-muted)] mb-1">{label}</p>
-            <p className={`text-xl font-semibold tabular-nums ${color}`}>{formatCurrency(value)}</p>
+            {/* An unloaded total is shown as a dash, never as a confident zero. */}
+            <p className={`text-xl font-semibold tabular-nums ${color}`}>{value == null ? "—" : formatCurrency(value)}</p>
+            {count != null && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{count} invoice{count === 1 ? "" : "s"} · whole book</p>}
           </div>
         ))}
       </div>
@@ -579,15 +738,9 @@ export default function InvoicesPage() {
         ))}
       </div>
 
-      {(tab === "all" || tab === "pending" || tab === "paid") && (
-        <div className="relative max-w-md">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
-          <input value={recordQuery} onChange={e => setRecordQuery(e.target.value)}
-            placeholder="Find invoice, customer, or email…"
-            aria-label="Find invoices"
-            className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg py-2 pl-9 pr-3 text-sm outline-none focus:border-[var(--color-primary)]" />
-        </div>
-      )}
+      {/* The list's own search now lives in the table toolbar and writes ?q= to the URL
+          (hooks/useListQuery), so a filtered view can be shared, bookmarked and returned
+          to with Back. The old input here searched only the rows already in memory. */}
 
       {/* Billing tools - grouped to keep the bar calm. Pick a category, then
           its tools appear below. The active tool's group stays selected. */}
@@ -645,117 +798,41 @@ export default function InvoicesPage() {
        tab === "discount"      ? <DiscountTaxCalculator /> :
        tab === "collection" ? (
         <CollectionAutoPanel invoices={invoices} onRefresh={load} />
-      ) : loading ? (
-        <LoadingState rows={5} label={tr("inv.loading")} />
-      ) : loadError ? (
-        <ErrorState title={tr("inv.errorTitle")} message={tr("inv.errorMsg")} onRetry={load} />
-      ) : filtered.length === 0 ? (
-        <div className="border border-dashed border-[var(--color-border)] rounded-lg p-12 text-center">
-          <FileText size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
-          <p className="text-sm text-[var(--color-muted)]">{tr("inv.empty")}</p>
-          <button onClick={() => setShowNew(true)} className="mt-4 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg">{tr("inv.createInvoice")}</button>
-        </div>
       ) : (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[680px] rcard">
-            <thead className="bg-[var(--color-surface)] border-b border-[var(--color-border)]">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Invoice</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Customer</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Amount</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider hidden md:table-cell">Due</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-border)]">
-              {filtered.map(inv => (
-                <tr key={inv.id} className="hover:bg-white/2 transition-colors">
-                  <td data-label="Invoice" className="px-4 py-3">
-                    <p className="font-mono text-xs font-medium">{inv.invoice_number}</p>
-                    <p className="text-[10px] text-[var(--color-muted)]">{new Date(inv.created_at).toLocaleDateString("en-IN")}</p>
-                  </td>
-                  <td data-label="Customer" className="px-4 py-3">
-                    <p className="font-medium truncate max-w-[160px]">{inv.customer_name}</p>
-                    {inv.customer_gstin && <p className="text-[10px] text-[var(--color-muted)]">{inv.customer_gstin}</p>}
-                  </td>
-                  <td data-label="Amount" className="px-4 py-3 text-right tabular-nums">
-                    <p className="font-semibold">{formatCurrency(parseFloat(String(inv.total_amount)))}</p>
-                    {(Number(inv.paid_amount) > 0 || Number(inv.credited_amount) > 0) && inv.status !== "paid" && inv.status !== "cancelled" ? (
-                      <p className="text-[10px] text-amber-400" title={`${formatCurrency(Number(inv.paid_amount) || 0)} received${Number(inv.credited_amount) > 0 ? ` · ${formatCurrency(Number(inv.credited_amount))} credited` : ""}`}>
-                        {formatCurrency(Math.max(0, parseFloat(String(inv.total_amount)) - (Number(inv.paid_amount) || 0) - (Number(inv.credited_amount) || 0)))} due
-                      </p>
-                    ) : (
-                      <p className="text-[10px] text-[var(--color-muted)]">+GST {inv.gst_rate}%</p>
-                    )}
-                  </td>
-                  <td data-label="Due" className="px-4 py-3 hidden md:table-cell">
-                    {inv.due_date ? (
-                      <span className={`text-xs tabular-nums ${AGING_COLOR[inv.aging ?? "current"] ?? ""}`}>
-                        {inv.aging === "90d+" ? "90d+ overdue" : inv.aging === "60d" ? "60d overdue" : inv.aging === "30d" ? "30d overdue" : inv.due_date}
-                      </span>
-                    ) : <span className="text-xs text-[var(--color-muted)]">-</span>}
-                  </td>
-                  <td data-label="Status" className="px-4 py-3">
-                    {Number(inv.paid_amount) > 0 && inv.status !== "paid" && inv.status !== "cancelled" ? (
-                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium bg-amber-900/25 text-amber-400 border-amber-800/40" title="Partially paid">
-                        <Wallet size={9} /> partial
-                      </span>
-                    ) : (
-                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLOR[inv.status] ?? ""}`}>
-                        {inv.status === "paid" ? <Check size={9} /> : inv.status === "sent" ? <Send size={9} /> : inv.status === "draft" ? <Clock size={9} /> : <AlertCircle size={9} />}
-                        {inv.status}
-                      </span>
-                    )}
-                  </td>
-                  <td data-label="" className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => downloadPdf(inv.id, inv.invoice_number)} title="Download PDF"
-                        className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/5 rounded">
-                        <Download size={13} />
-                      </button>
-                      {inv.status !== "paid" && inv.status !== "cancelled" && (
-                        <>
-                          {inv.customer_email && inv.status !== "sent" && (
-                            <button onClick={() => sendInvoice(inv.id)} title="Send by email"
-                              className="p-1.5 text-[var(--color-muted)] hover:text-blue-400 hover:bg-blue-900/10 rounded">
-                              <Send size={13} />
-                            </button>
-                          )}
-                          <button onClick={() => setQrInvoice(inv)} title="UPI / card payment link"
-                            className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 rounded">
-                            <QrCode size={13} />
-                          </button>
-                          {inv.aging && inv.aging !== "current" && (
-                            <button onClick={async () => {
-                              try {
-                                const r = await api.post<{ delivered?: boolean; message?: string }>(`/api/invoices/${inv.id}/remind`, {});
-                                if (r.delivered) toast.success(r.message || "Reminder sent");
-                                else toast.warning(r.message || "Reminder recorded but NOT delivered - messaging isn't configured.");
-                              }
-                              catch (e) { toast.error(e instanceof Error ? e.message : "Failed to send reminder"); }
-                            }} title="Send WhatsApp reminder"
-                              className="p-1.5 text-[var(--color-muted)] hover:text-green-400 hover:bg-green-900/10 rounded">
-                              <MessageCircle size={13} />
-                            </button>
-                          )}
-                          <button onClick={() => setPayInvoice(inv)} title="Record a payment (partial or full)"
-                            className="p-1.5 text-[var(--color-muted)] hover:text-amber-400 hover:bg-amber-900/10 rounded">
-                            <Wallet size={13} />
-                          </button>
-                          <button onClick={() => markStatus(inv.id, "paid")} title="Mark fully paid"
-                            className="p-1.5 text-[var(--color-muted)] hover:text-green-400 hover:bg-green-900/10 rounded">
-                            <Check size={13} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        /* One shared table (components/ui/DataTable): sortable headers, a column
+           picker, row density, select-all + bulk actions, server-side paging and
+           search, "Showing 1-50 of N", CSV/Excel export of exactly this view, and a
+           row click that opens the invoice's own URL. Every one of those was missing
+           from the hand-rolled table this replaced. */
+        <DataTable<Invoice>
+          listKey="invoices"
+          exportName="invoices"
+          columns={COLUMNS}
+          rows={pageRows}
+          rowKey={(i) => i.id}
+          loading={loading}
+          error={loadError ? tr("inv.errorMsg") : null}
+          onRetry={loadPage}
+          serverMode
+          total={pageTotal}
+          query={query}
+          onQueryChange={(q: TableQuery) => setQuery(q)}
+          searchPlaceholder="Find an invoice, customer, GSTIN or email…"
+          onRowClick={(i) => navigate(`/invoices/${i.id}`)}
+          bulkActions={(rows, clear) => (
+            <>
+              <Button size="sm" variant="secondary" icon={<Check size={12} />} onClick={() => bulkMarkPaid(rows, clear)}>Mark paid</Button>
+              <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} onClick={() => bulkDelete(rows, clear)}>Delete</Button>
+            </>
+          )}
+          empty={
+            <div className="border border-dashed border-[var(--color-border)] rounded-lg p-12 text-center">
+              <FileText size={28} className="mx-auto mb-3 text-[var(--color-muted)] opacity-30" />
+              <p className="text-sm text-[var(--color-muted)]">{tr("inv.empty")}</p>
+              <button onClick={() => setShowNew(true)} className="mt-4 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-2 rounded-lg">{tr("inv.createInvoice")}</button>
+            </div>
+          }
+        />
       )}
 
       {showNew   && <NewInvoiceModal initial={composeInitial} onClose={() => { setShowNew(false); setComposeInitial(undefined); }} onCreated={load} />}

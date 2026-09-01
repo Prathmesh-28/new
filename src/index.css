@@ -30,6 +30,25 @@
   --ol-txt-mut: #6B7384;
 }
 
+/* ── Light theme ───────────────────────────────────────────────────────────────
+   The app shipped dark-only, hardcoded — no choice, and unreadable for anyone working
+   next to a window or printing a screen. Tailwind v4's @theme emits the palette as
+   custom properties on :root, so a light mode is a token swap: same variable names,
+   different values, applied by data-theme on <html> (ThemeProvider). Components need no
+   changes because they already reference the tokens rather than raw colours. */
+:root[data-theme="light"] {
+  --color-primary:       #2F8A55;
+  --color-primary-light: #3D9A60;
+  --color-accent:        #EDF2F7;
+  --color-bg:            #F5F7FA;
+  --color-surface:       #FFFFFF;
+  --color-border:        #DDE3ED;
+  --color-text:          #16203A;
+  --color-muted:         #5C6880;
+  color-scheme: light;
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+
 * { box-sizing: border-box; }
 
 body {
@@ -197,3 +216,9 @@ p, span, h1, h2, h3, h4, label, a, button, li, td, th, dd, dt {
   }
   main table.rcard td[data-label=""]::before { display: none; }
 }
+
+/* Hover tints are written as white overlays for the dark theme; in light mode a white
+   overlay is invisible, so flip them to a dark tint at the one place they are defined. */
+:root[data-theme="light"] .hover\:bg-white\/2:hover { background-color: rgba(22, 32, 58, 0.04); }
+:root[data-theme="light"] .bg-white\/2 { background-color: rgba(22, 32, 58, 0.03); }
+:root[data-theme="light"] .bg-white\/5 { background-color: rgba(22, 32, 58, 0.05); }

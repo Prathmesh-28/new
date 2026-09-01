@@ -9,6 +9,10 @@ const { sendWhatsApp } = require("../lib/whatsapp");
 const platformConfig = require("../lib/platformConfig");
 
 const { round2, applyReceipt, remainingToSettle, effectiveTotal, creditableBalance } = require("../lib/invoicePaymentMath");
+const listQuery = require("../lib/listQuery");
+const trash = require("../lib/trash");
+const { idempotent } = require("../middleware/idempotency");
+const { writeAudit, auditReq } = require("../lib/audit");
 const { taxSplit } = require("../lib/gstInvoice");
 
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant","sales"];
@@ -40,30 +44,78 @@ function computeAging(invoice) {
 }
 
 // GET /api/invoices
+// Paginated, sortable, searchable — the shared list contract (lib/listQuery.js).
+// This endpoint previously selected EVERY invoice for the tenant with every line item
+// joined, and the browser did the filtering: fine at 50 invoices, a timeout at 20,000.
+//   ?page=1&limit=50&sort=due_date&order=asc&q=acme&status=sent
+//   ?all=1  → the whole set (hard-capped), for the aggregate pages that still need it.
 router.get("/", authenticate, async (req, res) => {
-  const { rows } = await q(req.user.tenant_id,
-    `SELECT i.*, json_agg(ii ORDER BY ii.id) AS items
-     FROM invoices i
-     LEFT JOIN invoice_items ii ON ii.invoice_id = i.id
-     WHERE i.tenant_id = $1
-     GROUP BY i.id
-     ORDER BY i.created_at DESC`,
-    [req.user.tenant_id]
-  );
-  res.json(rows.map(r => ({ ...r, aging: computeAging(r), items: r.items?.filter(Boolean) ?? [] })));
+  const parsed = listQuery.parseList(req, {
+    sortable: ["created_at", "invoice_number", "customer_name", "total_amount", "due_date", "status", "paid_amount"],
+    defaultSort: "created_at",
+    defaultOrder: "desc",
+    searchable: ["invoice_number", "customer_name", "customer_gstin", "customer_email"],
+  });
+
+  const conditions = ["i.tenant_id = $1"];
+  const vals = [req.user.tenant_id];
+
+  if (req.query.status) { vals.push(String(req.query.status)); conditions.push(`i.status = $${vals.length}`); }
+  if (req.query.from)   { vals.push(String(req.query.from));   conditions.push(`i.created_at >= $${vals.length}`); }
+  if (req.query.to)     { vals.push(String(req.query.to));     conditions.push(`i.created_at <= $${vals.length}`); }
+  if (req.query.minAmount) { vals.push(Number(req.query.minAmount)); conditions.push(`i.total_amount >= $${vals.length}`); }
+  if (req.query.maxAmount) { vals.push(Number(req.query.maxAmount)); conditions.push(`i.total_amount <= $${vals.length}`); }
+  if (req.query.unpaid === "1") conditions.push("i.status NOT IN ('paid','cancelled')");
+
+  const srch = listQuery.search(parsed, "i", vals.length + 1);
+  if (srch.clause) { conditions.push(srch.clause); vals.push(...srch.params); }
+  const where = conditions.join(" AND ");
+
+  const pageClause = listQuery.paginate(parsed, vals.length + 1);
+
+  const [dataRes, countRes] = await Promise.all([
+    q(req.user.tenant_id,
+      `SELECT i.*, COALESCE(json_agg(ii ORDER BY ii.id) FILTER (WHERE ii.id IS NOT NULL), '[]'::json) AS items
+         FROM invoices i
+         LEFT JOIN invoice_items ii ON ii.invoice_id = i.id
+        WHERE ${where}
+        GROUP BY i.id
+        ${listQuery.orderBy(parsed, "i")}
+        ${pageClause.clause}`,
+      [...vals, ...pageClause.params]),
+    q(req.user.tenant_id, `SELECT count(*)::int AS n FROM invoices i WHERE ${where}`, vals),
+  ]);
+
+  const data = dataRes.rows.map(r => ({ ...r, aging: computeAging(r), items: r.items ?? [] }));
+  res.json(listQuery.envelope(data, countRes.rows[0].n, parsed));
 });
 
 // POST /api/invoices
-router.post("/", authenticate, canWrite, async (req, res) => {
+router.post("/", authenticate, canWrite, idempotent(), async (req, res) => {
   const { customer_name, customer_gstin, customer_email, customer_phone, gst_rate = 18, due_date, items = [] } = req.body;
   if (!customer_name || !items.length) return res.status(400).json({ error: "customer_name and items required" });
+  // A malformed date used to reach Postgres and reject asynchronously with nothing
+  // catching it: the request never answered and the caller hung until its own timeout.
+  // Validate here and say which field is wrong.
+  if (due_date != null && due_date !== "" && Number.isNaN(Date.parse(due_date)))
+    return res.status(400).json({ error: `due_date "${due_date}" is not a valid date (use YYYY-MM-DD)` });
 
   // One tenant-scoped transaction (RLS GUC set once): next-number read + invoice insert +
   // line items — atomic, via the factory shared with the recurring-invoice cron.
-  const inv = await withTenant(req.user.tenant_id, (client) =>
-    createInvoiceTx(client, req.user.tenant_id, { customer_name, customer_gstin, customer_email, customer_phone, gst_rate, due_date, items })
-  );
+  let inv;
+  try {
+    inv = await withTenant(req.user.tenant_id, (client) =>
+      createInvoiceTx(client, req.user.tenant_id, { customer_name, customer_gstin, customer_email, customer_phone, gst_rate, due_date, items })
+    );
+  } catch (e) {
+    // 22xxx = Postgres data exceptions (bad date, numeric overflow, …): the client sent
+    // something unusable, so answer 400 with the reason rather than hanging or 500ing.
+    if (String(e.code || "").startsWith("22")) return res.status(400).json({ error: `Couldn't save this invoice: ${e.message}` });
+    console.error("[invoices] create failed:", e.message);
+    return res.status(500).json({ error: "Couldn't save this invoice. Nothing was charged or recorded — try again." });
+  }
 
+  auditReq(req, "created", "invoice", inv.id, { invoice_number: inv.invoice_number, customer: customer_name, total: Number(inv.total_amount) });
   require("../modules/flows/runner").emitEvent(req.user.tenant_id, "invoice.created", { invoice: inv }).catch(() => {});
   require("../modules/analytics").track(req.user.tenant_id, req.user.id, { event: "invoice_created", props: { total: Number(inv.total_amount) } }).catch(() => {});
   res.status(201).json(inv);
@@ -134,18 +186,19 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
 
 // DELETE /api/invoices/:id - remove an invoice (and its line items), tenant-scoped.
 // The Receivables page calls this to sync a deletion to the ledger.
-router.delete("/:id", authenticate, canWrite, async (req, res) => {
-  const deleted = await withTenant(req.user.tenant_id, async (client) => {
-    const { rows: [inv] } = await client.query(
-      "DELETE FROM invoices WHERE id=$1 AND tenant_id=$2 RETURNING id",
-      [req.params.id, req.user.tenant_id]
-    );
-    if (!inv) return false;
-    await client.query("DELETE FROM invoice_items WHERE invoice_id=$1", [inv.id]).catch(() => {});
-    return true;
-  });
-  if (!deleted) return res.status(404).json({ error: "Invoice not found" });
-  res.status(204).end();
+// Goes to the 30-day bin instead of vanishing: the response carries the trashId so the
+// client can show an Undo that restores the invoice, its line items, receipts, reminders
+// and credit notes with the original id (lib/trash.js).
+router.delete("/:id", authenticate, canWrite, async (req, res, next) => {
+  try {
+    const out = await trash.softDelete(req.user.tenant_id, "invoice", req.params.id, req.user.id);
+    auditReq(req, "deleted", "invoice", req.params.id, { label: out.label });
+    res.json({ ok: true, trashId: out.trashId, label: out.label, undoUntil: out.purgeAfter });
+  } catch (e) {
+    if (e.status === 404) return res.status(404).json({ error: "Invoice not found" });
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    next(e);
+  }
 });
 
 // GET /api/invoices/:id/pdf - generate PDF with PDFKit
@@ -596,7 +649,7 @@ router.get("/:id/payments", authenticate, async (req, res) => {
 // POST /:id/payments — record a receipt (partial or full). Updates paid_amount, flips status to
 // 'paid' only when fully settled, and posts a GL RECEIPT for THIS amount (idempotent per payment
 // id) so the books track partial collection. Overpayment is refused so AR is never driven negative.
-router.post("/:id/payments", authenticate, canWrite, async (req, res) => {
+router.post("/:id/payments", authenticate, canWrite, idempotent(), async (req, res) => {
   try {
   const t = req.user.tenant_id;
   const amount = round2(req.body?.amount);
@@ -673,7 +726,7 @@ router.get("/:id/credit-notes", authenticate, async (req, res) => {
 // books a CREDIT_NOTE voucher that flows into GSTR-1 CDNR / GSTR-3B 4I via the existing engine.
 // Capped at the UNCOLLECTED balance: crediting money already received is a refund — a different,
 // payout-gated flow we refuse to fake.
-router.post("/:id/credit-notes", authenticate, canWrite, async (req, res) => {
+router.post("/:id/credit-notes", authenticate, canWrite, idempotent(), async (req, res) => {
   try {
     const t = req.user.tenant_id;
     const amount = round2(req.body?.amount);
@@ -808,6 +861,74 @@ router.post("/recurring/:rid/run-now", authenticate, canWrite, async (req, res) 
     if (!inv) return res.status(400).json({ error: "Schedule not found, inactive, or has no items." });
     res.status(201).json(inv);
   } catch (e) { console.error("[invoices] recurring run-now failed:", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
+// ── GET /api/invoices/summary — the KPI numbers, computed in SQL ─────────────
+// The Invoices page used to add up its own header figures by pulling EVERY invoice into
+// the browser. Those three numbers are three aggregates; doing them here means the page
+// can fetch one page of rows and still show totals for the whole book.
+//
+// Outstanding is total − received − credited, floored at zero, which is the same
+// definition the per-row "due" figure uses (lib/invoicePaymentMath).
+router.get("/summary", authenticate, async (req, res, next) => {
+  try {
+    const { rows } = await q(req.user.tenant_id, `
+      WITH o AS (
+        SELECT status, due_date, total_amount, paid_amount, COALESCE(credited_amount,0) AS credited_amount,
+               GREATEST(total_amount - paid_amount - COALESCE(credited_amount,0), 0) AS outstanding
+          FROM invoices WHERE tenant_id=$1
+      )
+      SELECT
+        count(*)::int                                                              AS total_count,
+        count(*) FILTER (WHERE status NOT IN ('paid','cancelled'))::int            AS open_count,
+        count(*) FILTER (WHERE status NOT IN ('paid','cancelled')
+                           AND due_date IS NOT NULL AND due_date < CURRENT_DATE)::int AS overdue_count,
+        count(*) FILTER (WHERE status='paid')::int                                 AS paid_count,
+        count(*) FILTER (WHERE status='draft')::int                                AS draft_count,
+        COALESCE(sum(outstanding) FILTER (WHERE status NOT IN ('paid','cancelled')),0)   AS pending_amount,
+        COALESCE(sum(outstanding) FILTER (WHERE status NOT IN ('paid','cancelled')
+                           AND due_date IS NOT NULL AND due_date < CURRENT_DATE),0)      AS overdue_amount,
+        COALESCE(sum(paid_amount) FILTER (WHERE status='paid'),0)                        AS paid_amount
+      FROM o`, [req.user.tenant_id]);
+    const r = rows[0];
+    res.json({
+      counts: { total: r.total_count, open: r.open_count, overdue: r.overdue_count, paid: r.paid_count, draft: r.draft_count },
+      pending: Number(r.pending_amount), overdue: Number(r.overdue_amount), paid: Number(r.paid_amount),
+      as_of: new Date().toISOString(),
+    });
+  } catch (e) { next(e); }
+});
+
+// ── GET /api/invoices/:id — one invoice, everything about it ─────────────────
+// There was no way to fetch a single invoice: the UI had to pull the whole list and find
+// the row client-side, which is also why no invoice had a URL of its own. Registered
+// LAST and constrained to a UUID so it can never shadow /recurring, /credit-notes/all or
+// /confirmations/log above.
+router.get("/:id([0-9a-fA-F-]{36})", authenticate, async (req, res, next) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const { rows } = await q(tenantId,
+      `SELECT i.*, COALESCE(json_agg(ii ORDER BY ii.id) FILTER (WHERE ii.id IS NOT NULL), '[]'::json) AS items
+         FROM invoices i LEFT JOIN invoice_items ii ON ii.invoice_id = i.id
+        WHERE i.id=$1 AND i.tenant_id=$2 GROUP BY i.id`,
+      [req.params.id, tenantId]);
+    const inv = rows[0];
+    if (!inv) return res.status(404).json({ error: "Invoice not found" });
+
+    const [payments, notes, reminders] = await Promise.all([
+      q(tenantId, "SELECT * FROM invoice_payments WHERE invoice_id=$1 AND tenant_id=$2 ORDER BY received_at, created_at", [inv.id, tenantId]).then(r => r.rows).catch(() => []),
+      q(tenantId, "SELECT * FROM invoice_credit_notes WHERE invoice_id=$1 AND tenant_id=$2 ORDER BY created_at", [inv.id, tenantId]).then(r => r.rows).catch(() => []),
+      q(tenantId, "SELECT * FROM invoice_reminders WHERE invoice_id=$1 AND tenant_id=$2 ORDER BY reminded_at DESC LIMIT 20", [inv.id, tenantId]).then(r => r.rows).catch(() => []),
+    ]);
+
+    res.json({
+      ...inv,
+      aging: computeAging(inv),
+      items: inv.items ?? [],
+      payments, credit_notes: notes, reminders,
+      outstanding: remainingToSettle({ total: inv.total_amount, paidAmount: inv.paid_amount || 0, creditedAmount: inv.credited_amount || 0 }),
+    });
+  } catch (e) { next(e); }
 });
 
 module.exports = router;

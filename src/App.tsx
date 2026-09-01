@@ -30,7 +30,10 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Capacitor } from "@capacitor/core";
 import { FEATURE_ENTITLEMENTS, PLAN_RANK, type PlanTier } from "@/data/types";
+import { PrefsProvider } from "@/hooks/usePrefs";
+import { ConfirmProvider, ThemeProvider, KeyboardShortcuts, useTheme } from "@/components/ui";
 
+const InvoiceDetailPage  = lazy(() => import("@/features/records/InvoiceDetailPage"));
 const HomePage           = lazy(() => import("@/pages/HomePage"));
 const LoginPage          = lazy(() => import("@/pages/LoginPage"));
 const SignupPage         = lazy(() => import("@/pages/SignupPage"));
@@ -274,6 +277,10 @@ function AppShell() {
                 <Route path="/hrms"          element={<HrmsPage />} />
                 <Route path="/insights"      element={<InsightsPage />} />
                 <Route path="/invoices"      element={<InvoicesPage />} />
+                {/* Record permalinks. Until Wave 2 the product had no detail routes at all:
+                    every one of ~75 routes was a hub page, so no record could be linked,
+                    bookmarked or opened in a new tab. */}
+                <Route path="/invoices/:id"  element={<InvoiceDetailPage />} />
                 <Route path="/gst"           element={<GstPage />} />
                 <Route path="/payroll"       element={<PayrollPage />} />
                 <Route path="/suppliers"     element={<SuppliersPage />} />
@@ -337,13 +344,25 @@ function AppShell() {
   );
 }
 
+// Toasts have to follow the app's theme, otherwise a light-mode user gets dark toasts.
+function ThemedToaster() {
+  const { resolved } = useTheme();
+  return <Toaster position="top-right" theme={resolved} richColors />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <AppProvider>
         <CapabilitiesProvider>
+        {/* PrefsProvider must sit above ThemeProvider (theme is a stored preference) and
+            above every page, since tables read their column/density prefs from it. */}
+        <PrefsProvider>
+        <ThemeProvider>
+        <ConfirmProvider>
         <BrowserRouter>
-          <Toaster position="top-right" theme="dark" richColors />
+          <KeyboardShortcuts />
+          <ThemedToaster />
           <InstallPrompt />
           <ErrorBoundary>
             <Suspense fallback={<PageLoader />}>
@@ -365,6 +384,9 @@ export default function App() {
             <HeadroomAssistant />
           </ErrorBoundary>
         </BrowserRouter>
+        </ConfirmProvider>
+        </ThemeProvider>
+        </PrefsProvider>
         </CapabilitiesProvider>
       </AppProvider>
     </AuthProvider>
