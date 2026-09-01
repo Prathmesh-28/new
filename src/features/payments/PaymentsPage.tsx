@@ -731,7 +731,7 @@ function MandateTracker() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm rcard min-w-[640px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Customer", "Cap", "Frequency", "Rail", "Next debit", "Status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -742,16 +742,16 @@ function MandateTracker() {
                   const days = differenceInCalendarDays(new Date(m.nextDebit), today);
                   return (
                     <tr key={m.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{m.customer}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(m.cap)}</td>
-                      <td className="px-4 py-2.5 capitalize text-[var(--color-muted)]">{m.frequency.replace("-", " ")}</td>
-                      <td className="px-4 py-2.5">{RAIL_LABEL[m.rail]}</td>
-                      <td className="px-4 py-2.5 tabular-nums">
+                      <td data-label="Customer" className="px-4 py-2.5 font-medium">{m.customer}</td>
+                      <td data-label="Cap" className="px-4 py-2.5 tabular-nums">{formatCurrency(m.cap)}</td>
+                      <td data-label="Frequency" className="px-4 py-2.5 capitalize text-[var(--color-muted)]">{m.frequency.replace("-", " ")}</td>
+                      <td data-label="Rail" className="px-4 py-2.5">{RAIL_LABEL[m.rail]}</td>
+                      <td data-label="Next debit" className="px-4 py-2.5 tabular-nums">
                         {format(new Date(m.nextDebit), "d MMM yyyy")}
                         {m.status === "active" && <span className={`ml-2 text-[10px] ${days <= 3 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{days < 0 ? "overdue" : `${days}d`}</span>}
                       </td>
-                      <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[m.status]}`}>{m.status}</span></td>
-                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <td data-label="Status" className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[m.status]}`}>{m.status}</span></td>
+                      <td data-label="" className="px-4 py-2.5 text-right whitespace-nowrap">
                         <button onClick={() => cycle(m.id)} className="text-[10px] text-[var(--color-primary)] hover:underline mr-3">Cycle status</button>
                         <button onClick={() => setMandates(mandates.filter(x => x.id !== m.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
                       </td>
@@ -920,7 +920,7 @@ function SettlementRecon() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm rcard min-w-[720px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Date", "Gross", "MDR", "Fee+GST", "Expected payout", "Received", "Variance", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -929,16 +929,16 @@ function SettlementRecon() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {[...evaluated].sort((a, b) => b.date.localeCompare(a.date)).map(b => (
                   <tr key={b.id} className={`hover:bg-white/2 ${!b.matched ? "bg-red-950/10" : ""}`}>
-                    <td className="px-4 py-2.5 tabular-nums">{format(new Date(b.date), "d MMM")}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(b.gross)}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{b.mdrPct}%</td>
-                    <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(b.fee + b.gstOnFee))}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(b.expectedPayout))}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(b.payoutReceived)}</td>
-                    <td className={`px-4 py-2.5 tabular-nums font-semibold ${b.matched ? "text-green-400" : "text-red-400"}`}>
+                    <td data-label="Date" className="px-4 py-2.5 tabular-nums">{format(new Date(b.date), "d MMM")}</td>
+                    <td data-label="Gross" className="px-4 py-2.5 tabular-nums">{formatAmount(b.gross)}</td>
+                    <td data-label="MDR" className="px-4 py-2.5 tabular-nums">{b.mdrPct}%</td>
+                    <td data-label="Fee+GST" className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(b.fee + b.gstOnFee))}</td>
+                    <td data-label="Expected payout" className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(b.expectedPayout))}</td>
+                    <td data-label="Received" className="px-4 py-2.5 tabular-nums">{formatAmount(b.payoutReceived)}</td>
+                    <td data-label="Variance" className={`px-4 py-2.5 tabular-nums font-semibold ${b.matched ? "text-green-400" : "text-red-400"}`}>
                       {b.matched ? <span className="inline-flex items-center gap-1"><CheckCircle2 size={11} /> ₹0</span> : formatCurrency(Math.round(b.variance))}
                     </td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => setBatches(batches.filter(x => x.id !== b.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setBatches(batches.filter(x => x.id !== b.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1025,7 +1025,7 @@ function RefundTracker() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[680px]">
+            <table className="w-full text-sm rcard min-w-[680px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Customer", "Ref", "Amount", "Reason", "Age", "Status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1036,13 +1036,13 @@ function RefundTracker() {
                   const age = differenceInCalendarDays(new Date(), new Date(r.requested));
                   return (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{r.customer}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.orderRef || "-"}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{r.reason || "-"}</td>
-                      <td className={`px-4 py-2.5 tabular-nums ${r.status === "pending" && age > 5 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{age}d</td>
-                      <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
-                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <td data-label="Customer" className="px-4 py-2.5 font-medium">{r.customer}</td>
+                      <td data-label="Ref" className="px-4 py-2.5 text-[var(--color-muted)]">{r.orderRef || "-"}</td>
+                      <td data-label="Amount" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
+                      <td data-label="Reason" className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{r.reason || "-"}</td>
+                      <td data-label="Age" className={`px-4 py-2.5 tabular-nums ${r.status === "pending" && age > 5 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{age}d</td>
+                      <td data-label="Status" className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
+                      <td data-label="" className="px-4 py-2.5 text-right whitespace-nowrap">
                         {r.status === "pending" && (
                           <>
                             <button onClick={() => setStatus(r.id, "processed")} className="text-[10px] text-green-400 hover:underline mr-2">Mark refunded</button>
@@ -1100,7 +1100,7 @@ function SplitCalculator() {
                 <option value="fixed">Fixed ₹</option>
               </select>
               <input type="number" value={p.value} onChange={e => update(p.id, { value: parseFloat(e.target.value) || 0 })} className={`${INP} col-span-3`} />
-              <button onClick={() => remove(p.id)} className="col-span-1 text-[var(--color-muted)] hover:text-red-400 text-sm">✕</button>
+              <button onClick={() => remove(p.id)} aria-label="Remove party" className="col-span-1 text-[var(--color-muted)] hover:text-red-400 text-sm">✕</button>
             </div>
           ))}
         </div>
@@ -1597,7 +1597,7 @@ function BulkPayoutBuilder() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm rcard min-w-[640px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Beneficiary", "Account", "IFSC", "Amount", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1606,11 +1606,11 @@ function BulkPayoutBuilder() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {rows.map(r => (
                     <tr key={r.id} className={`hover:bg-white/2 ${dupAccounts.has(r.account) ? "bg-red-950/10" : ""}`}>
-                      <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.account}{dupAccounts.has(r.account) && <span className="ml-2 text-[9px] text-red-400">DUP</span>}</td>
-                      <td className="px-4 py-2.5">{r.ifsc || <span className="text-[var(--color-muted)]">-</span>}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                      <td data-label="Beneficiary" className="px-4 py-2.5 font-medium">{r.name}</td>
+                      <td data-label="Account" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.account}{dupAccounts.has(r.account) && <span className="ml-2 text-[9px] text-red-400">DUP</span>}</td>
+                      <td data-label="IFSC" className="px-4 py-2.5">{r.ifsc || <span className="text-[var(--color-muted)]">-</span>}</td>
+                      <td data-label="Amount" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} aria-label="Remove beneficiary" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -1707,7 +1707,7 @@ function ReminderScheduler() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm rcard min-w-[640px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Customer", "Amount", "Due", "Channel", "Cadence", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1718,15 +1718,15 @@ function ReminderScheduler() {
                   const days = differenceInCalendarDays(new Date(r.dueDate), today);
                   return (
                     <tr key={r.id} className={`hover:bg-white/2 ${r.done ? "opacity-50" : ""}`}>
-                      <td className={`px-4 py-2.5 font-medium ${r.done ? "line-through" : ""}`}>{r.customer}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
-                      <td className="px-4 py-2.5 tabular-nums">
+                      <td data-label="Customer" className={`px-4 py-2.5 font-medium ${r.done ? "line-through" : ""}`}>{r.customer}</td>
+                      <td data-label="Amount" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
+                      <td data-label="Due" className="px-4 py-2.5 tabular-nums">
                         {format(new Date(r.dueDate), "d MMM")}
                         {!r.done && <span className={`ml-2 text-[10px] ${days < 0 ? "text-red-400" : days <= 2 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{days < 0 ? `${-days}d overdue` : `${days}d`}</span>}
                       </td>
-                      <td className="px-4 py-2.5 capitalize text-[var(--color-muted)]">{r.channel}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{CADENCE_LABEL[r.cadence]}</td>
-                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <td data-label="Channel" className="px-4 py-2.5 capitalize text-[var(--color-muted)]">{r.channel}</td>
+                      <td data-label="Cadence" className="px-4 py-2.5 text-[var(--color-muted)]">{CADENCE_LABEL[r.cadence]}</td>
+                      <td data-label="" className="px-4 py-2.5 text-right whitespace-nowrap">
                         <button onClick={() => toggle(r.id)} className="text-[10px] text-[var(--color-primary)] hover:underline mr-3">{r.done ? "Reopen" : "Mark paid"}</button>
                         <button onClick={() => setReminders(reminders.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
                       </td>
@@ -1899,7 +1899,7 @@ function DisputeTracker() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm rcard min-w-[720px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Customer", "Ref", "Amount", "Deadline", "Stage", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1911,15 +1911,15 @@ function DisputeTracker() {
                   const open = d.stage === "received" || d.stage === "evidence-sent";
                   return (
                     <tr key={d.id} className={`hover:bg-white/2 ${open && daysLeft < 0 ? "bg-red-950/10" : ""}`}>
-                      <td className="px-4 py-2.5 font-medium">{d.customer}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{d.orderRef || "-"}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(d.amount)}</td>
-                      <td className="px-4 py-2.5 tabular-nums">
+                      <td data-label="Customer" className="px-4 py-2.5 font-medium">{d.customer}</td>
+                      <td data-label="Ref" className="px-4 py-2.5 text-[var(--color-muted)]">{d.orderRef || "-"}</td>
+                      <td data-label="Amount" className="px-4 py-2.5 tabular-nums">{formatCurrency(d.amount)}</td>
+                      <td data-label="Deadline" className="px-4 py-2.5 tabular-nums">
                         {format(new Date(d.deadline), "d MMM")}
                         {open && <span className={`ml-2 text-[10px] ${daysLeft < 0 ? "text-red-400" : daysLeft <= 2 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{daysLeft < 0 ? "lapsed" : `${daysLeft}d left`}</span>}
                       </td>
-                      <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STAGE_STYLE[d.stage]}`}>{d.stage.replace("-", " ")}</span></td>
-                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <td data-label="Stage" className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STAGE_STYLE[d.stage]}`}>{d.stage.replace("-", " ")}</span></td>
+                      <td data-label="" className="px-4 py-2.5 text-right whitespace-nowrap">
                         {d.stage === "received" && <button onClick={() => setStage(d.id, "evidence-sent")} className="text-[10px] text-blue-400 hover:underline mr-2">Evidence sent</button>}
                         {open && (
                           <>
@@ -2026,7 +2026,7 @@ function EmiOnInvoiceBuilder() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[560px]">
+              <table className="w-full text-sm rcard min-w-[560px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["#", "Due date", "Principal", "Interest", "EMI", "Balance"].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2035,12 +2035,12 @@ function EmiOnInvoiceBuilder() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {schedule.map(s => (
                     <tr key={s.n} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{s.n}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{format(s.date, "d MMM yyyy")}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(s.principal))}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(s.interest))}</td>
-                      <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(Math.round(s.principal + s.interest))}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(s.balance))}</td>
+                      <td data-label="#" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{s.n}</td>
+                      <td data-label="Due date" className="px-4 py-2.5 tabular-nums">{format(s.date, "d MMM yyyy")}</td>
+                      <td data-label="Principal" className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(s.principal))}</td>
+                      <td data-label="Interest" className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(s.interest))}</td>
+                      <td data-label="EMI" className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(Math.round(s.principal + s.interest))}</td>
+                      <td data-label="Balance" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(s.balance))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2209,7 +2209,7 @@ function SettlementForecaster() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[480px]">
+            <table className="w-full text-sm rcard min-w-[480px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Settles on", "Gross", "Net payout"].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2218,9 +2218,9 @@ function SettlementForecaster() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {forecast.map(f => (
                   <tr key={f.date} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 tabular-nums font-medium">{format(new Date(f.date), "EEE, d MMM")}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatAmount(Math.round(f.gross))}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-green-400 font-semibold">{formatCurrency(Math.round(f.payout))}</td>
+                    <td data-label="Settles on" className="px-4 py-2.5 tabular-nums font-medium">{format(new Date(f.date), "EEE, d MMM")}</td>
+                    <td data-label="Gross" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatAmount(Math.round(f.gross))}</td>
+                    <td data-label="Net payout" className="px-4 py-2.5 tabular-nums text-green-400 font-semibold">{formatCurrency(Math.round(f.payout))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -2411,7 +2411,7 @@ function UtrReconciliation() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm rcard min-w-[640px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["UTR / RRN", "Expected", "Received", "Status", "Note", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2420,12 +2420,12 @@ function UtrReconciliation() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {evaluated.map(e => (
                   <tr key={e.utr} className={`hover:bg-white/2 ${e.status === "mismatch" ? "bg-red-950/10" : ""}`}>
-                    <td className="px-4 py-2.5 font-mono text-[11px]">{e.utr}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{e.exp ? formatCurrency(e.exp.amount) : <span className="text-[var(--color-muted)]">-</span>}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{e.rec ? formatCurrency(e.rec.amount) : <span className="text-[var(--color-muted)]">-</span>}</td>
-                    <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[e.status]}`}>{e.status}</span></td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{e.note || "-"}</td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.utr !== e.utr))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    <td data-label="UTR / RRN" className="px-4 py-2.5 font-mono text-[11px]">{e.utr}</td>
+                    <td data-label="Expected" className="px-4 py-2.5 tabular-nums">{e.exp ? formatCurrency(e.exp.amount) : <span className="text-[var(--color-muted)]">-</span>}</td>
+                    <td data-label="Received" className="px-4 py-2.5 tabular-nums">{e.rec ? formatCurrency(e.rec.amount) : <span className="text-[var(--color-muted)]">-</span>}</td>
+                    <td data-label="Status" className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[e.status]}`}>{e.status}</span></td>
+                    <td data-label="Note" className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{e.note || "-"}</td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.utr !== e.utr))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -2558,7 +2558,7 @@ function NachRegister() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[820px]">
+            <table className="w-full text-sm rcard min-w-[820px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["UMRN", "Customer", "Max debit", "Freq", "Banks", "Validity", "Status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2569,17 +2569,17 @@ function NachRegister() {
                   const daysLeft = differenceInCalendarDays(new Date(r.end), new Date());
                   return (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-mono text-[11px]">{r.umrn || "-"}</td>
-                      <td className="px-4 py-2.5 font-medium">{r.customer} <span className="text-[9px] text-[var(--color-muted)]">{r.mode === "e-mandate" ? "e-NACH" : "physical"}</span></td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
-                      <td className="px-4 py-2.5 capitalize text-[var(--color-muted)]">{r.freq.replace("-", " ")}</td>
-                      <td className="px-4 py-2.5 text-[11px] text-[var(--color-muted)]">{r.sponsorBank || "-"} → {r.debitBank || "-"}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[11px]">
+                      <td data-label="UMRN" className="px-4 py-2.5 font-mono text-[11px]">{r.umrn || "-"}</td>
+                      <td data-label="Customer" className="px-4 py-2.5 font-medium">{r.customer} <span className="text-[9px] text-[var(--color-muted)]">{r.mode === "e-mandate" ? "e-NACH" : "physical"}</span></td>
+                      <td data-label="Max debit" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
+                      <td data-label="Freq" className="px-4 py-2.5 capitalize text-[var(--color-muted)]">{r.freq.replace("-", " ")}</td>
+                      <td data-label="Banks" className="px-4 py-2.5 text-[11px] text-[var(--color-muted)]">{r.sponsorBank || "-"} → {r.debitBank || "-"}</td>
+                      <td data-label="Validity" className="px-4 py-2.5 tabular-nums text-[11px]">
                         {format(new Date(r.start), "MMM yy")}-{format(new Date(r.end), "MMM yy")}
                         {r.status === "active" && daysLeft <= 30 && <span className="ml-1 text-[9px] text-orange-400">{daysLeft < 0 ? "expired" : `${daysLeft}d`}</span>}
                       </td>
-                      <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
-                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <td data-label="Status" className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
+                      <td data-label="" className="px-4 py-2.5 text-right whitespace-nowrap">
                         {r.status === "pending" && (
                           <>
                             <button onClick={() => setStatus(r.id, "active")} className="text-[10px] text-green-400 hover:underline mr-2">Approve</button>
@@ -2660,7 +2660,7 @@ function GatewayComparator() {
               <input type="number" value={g.flat} onChange={e => update(g.id, { flat: parseFloat(e.target.value) || 0 })} className={`${INP} col-span-2`} />
               <input type="number" value={g.successPct} onChange={e => update(g.id, { successPct: parseFloat(e.target.value) || 0 })} className={`${INP} col-span-2`} />
               <input type="number" value={g.settleDays} onChange={e => update(g.id, { settleDays: parseFloat(e.target.value) || 0 })} className={`${INP} col-span-2`} />
-              <button onClick={() => setGws(gws.filter(x => x.id !== g.id))} className="col-span-1 text-[var(--color-muted)] hover:text-red-400 text-sm">✕</button>
+              <button onClick={() => setGws(gws.filter(x => x.id !== g.id))} aria-label="Remove gateway" className="col-span-1 text-[var(--color-muted)] hover:text-red-400 text-sm">✕</button>
             </div>
           ))}
           <button onClick={addGw} className="flex items-center gap-1.5 text-xs text-[var(--color-primary)] hover:underline"><Plus size={12} /> Add gateway</button>
@@ -2670,7 +2670,7 @@ function GatewayComparator() {
       {evaluated.length > 0 && vol > 0 && (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm rcard min-w-[640px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Gateway", "Total cost/mo", "Realised GMV", "Eff. cost %", "Settle", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2679,15 +2679,15 @@ function GatewayComparator() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {[...evaluated].sort((a, b) => a.effPct - b.effPct).map(g => (
                   <tr key={g.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium">{g.name}
+                    <td data-label="Gateway" className="px-4 py-2.5 font-medium">{g.name}
                       {cheapest?.id === g.id && <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded-full border border-blue-800/40 bg-blue-900/30 text-blue-400">cheapest</span>}
                       {bestEff?.id === g.id && <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded-full border border-green-800/40 bg-green-900/30 text-green-400">best value</span>}
                     </td>
-                    <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(g.totalCost))}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(g.realisedGmv))}</td>
-                    <td className="px-4 py-2.5 tabular-nums font-semibold">{g.effPct.toFixed(2)}%</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">T+{g.settleDays}</td>
-                    <td className="px-4 py-2.5"></td>
+                    <td data-label="Total cost/mo" className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(g.totalCost))}</td>
+                    <td data-label="Realised GMV" className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(g.realisedGmv))}</td>
+                    <td data-label="Eff. cost %" className="px-4 py-2.5 tabular-nums font-semibold">{g.effPct.toFixed(2)}%</td>
+                    <td data-label="Settle" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">T+{g.settleDays}</td>
+                    <td data-label="" className="px-4 py-2.5"></td>
                   </tr>
                 ))}
               </tbody>
@@ -2774,7 +2774,7 @@ function DunningLadder() {
                 <option value="call">Call</option>
               </select>
               <input value={s.action} onChange={e => update(s.id, { action: e.target.value })} className={`${INP} col-span-5`} />
-              <button onClick={() => setSteps(steps.filter(x => x.id !== s.id))} className="col-span-1 text-[var(--color-muted)] hover:text-red-400 text-sm">✕</button>
+              <button onClick={() => setSteps(steps.filter(x => x.id !== s.id))} aria-label="Remove step" className="col-span-1 text-[var(--color-muted)] hover:text-red-400 text-sm">✕</button>
             </div>
           ))}
           <button onClick={addStep} className="flex items-center gap-1.5 text-xs text-[var(--color-primary)] hover:underline"><Plus size={12} /> Add step</button>
@@ -2866,7 +2866,7 @@ function VirtualAccountAllocator() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[480px]">
+            <table className="w-full text-sm rcard min-w-[480px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Customer", "Allocation code (internal only)", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2875,9 +2875,9 @@ function VirtualAccountAllocator() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium">{r.customer}</td>
-                    <td className="px-4 py-2.5 font-mono text-[11px]">{r.allocationCode}</td>
-                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    <td data-label="Customer" className="px-4 py-2.5 font-medium">{r.customer}</td>
+                    <td data-label="Allocation code (internal only)" className="px-4 py-2.5 font-mono text-[11px]">{r.allocationCode}</td>
+                    <td data-label="" className="px-4 py-2.5 text-right whitespace-nowrap">
                       <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
                     </td>
                   </tr>
@@ -2978,7 +2978,7 @@ function PayeeVerifyLog() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm rcard min-w-[720px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Expected", "Identifier", "Name at bank", "Checked", "Result", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2987,12 +2987,12 @@ function PayeeVerifyLog() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.id} className={`hover:bg-white/2 ${r.result !== "verified" ? "bg-orange-950/10" : ""}`}>
-                    <td className="px-4 py-2.5 font-medium">{r.payee}</td>
-                    <td className="px-4 py-2.5 font-mono text-[11px]">{r.identifier}{r.type === "bank" && r.ifsc ? ` · ${r.ifsc}` : ""}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.nameAtBank}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(r.checked), "d MMM")}</td>
-                    <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.result]}`}>{r.result.replace("-", " ")}</span></td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    <td data-label="Expected" className="px-4 py-2.5 font-medium">{r.payee}</td>
+                    <td data-label="Identifier" className="px-4 py-2.5 font-mono text-[11px]">{r.identifier}{r.type === "bank" && r.ifsc ? ` · ${r.ifsc}` : ""}</td>
+                    <td data-label="Name at bank" className="px-4 py-2.5 text-[var(--color-muted)]">{r.nameAtBank}</td>
+                    <td data-label="Checked" className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(r.checked), "d MMM")}</td>
+                    <td data-label="Result" className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.result]}`}>{r.result.replace("-", " ")}</span></td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -3197,7 +3197,7 @@ function DuplicateGuard() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[600px]">
+            <table className="w-full text-sm rcard min-w-[600px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Customer", "Amount", "Ref", "Date", "Flag", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -3206,12 +3206,12 @@ function DuplicateGuard() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {entries.map(e => (
                   <tr key={e.id} className={`hover:bg-white/2 ${flagged.dupIds.has(e.id) ? "bg-orange-950/10" : ""}`}>
-                    <td className="px-4 py-2.5 font-medium">{e.customer}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(e.amount)}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{e.ref || "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(e.date), "d MMM")}</td>
-                    <td className="px-4 py-2.5">{flagged.dupIds.has(e.id) ? <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-orange-800/40 bg-orange-900/30 text-orange-400">dupe?</span> : <span className="text-[10px] text-green-400">ok</span>}</td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => setEntries(entries.filter(x => x.id !== e.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    <td data-label="Customer" className="px-4 py-2.5 font-medium">{e.customer}</td>
+                    <td data-label="Amount" className="px-4 py-2.5 tabular-nums">{formatCurrency(e.amount)}</td>
+                    <td data-label="Ref" className="px-4 py-2.5 text-[var(--color-muted)]">{e.ref || "-"}</td>
+                    <td data-label="Date" className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(e.date), "d MMM")}</td>
+                    <td data-label="Flag" className="px-4 py-2.5">{flagged.dupIds.has(e.id) ? <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-orange-800/40 bg-orange-900/30 text-orange-400">dupe?</span> : <span className="text-[10px] text-green-400">ok</span>}</td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setEntries(entries.filter(x => x.id !== e.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -3300,7 +3300,7 @@ function FeeTierModeler() {
               <span key={t.id} className="flex items-center gap-2 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-full px-3 py-1.5">
                 <span className="font-medium">≤ {formatCurrency(t.upto)}</span>
                 <span className="text-[var(--color-primary)] tabular-nums">{t.ratePct}%</span>
-                <button onClick={() => setTiers(tiers.filter(x => x.id !== t.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={11} /></button>
+                <button onClick={() => setTiers(tiers.filter(x => x.id !== t.id))} aria-label="Remove tier" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={11} /></button>
               </span>
             ))}
           </div>
@@ -3413,7 +3413,7 @@ function PaymentAllocator() {
               <div key={r.id} className="flex items-center justify-between text-sm border-b border-[var(--color-border)] pb-1.5">
                 <span className="font-medium flex items-center gap-2">
                   {r.number}
-                  <button onClick={() => setInvoices(invoices.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={11} /></button>
+                  <button onClick={() => setInvoices(invoices.filter(x => x.id !== r.id))} aria-label="Remove invoice" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={11} /></button>
                 </span>
                 <span className="tabular-nums text-[var(--color-muted)]">
                   applied <span className="text-green-400 font-medium">{formatCurrency(Math.round(r.applied))}</span> · bal {formatCurrency(Math.round(r.due - r.applied))}
@@ -3502,7 +3502,7 @@ function RollingReserveTracker() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[620px]">
+              <table className="w-full text-sm rcard min-w-[620px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Month", "Gross", "Reserve %", "Held", "Releases", "Status", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -3511,15 +3511,15 @@ function RollingReserveTracker() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {held.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{format(new Date(r.month + "-01"), "MMM yyyy")}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.reservePct}%</td>
-                      <td className="px-4 py-2.5 tabular-nums font-medium">{formatCurrency(Math.round(r.amount))}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(r.releaseMonth + "-01"), "MMM yyyy")}</td>
-                      <td className="px-4 py-2.5">{r.released
+                      <td data-label="Month" className="px-4 py-2.5 font-medium">{format(new Date(r.month + "-01"), "MMM yyyy")}</td>
+                      <td data-label="Gross" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
+                      <td data-label="Reserve %" className="px-4 py-2.5 tabular-nums">{r.reservePct}%</td>
+                      <td data-label="Held" className="px-4 py-2.5 tabular-nums font-medium">{formatCurrency(Math.round(r.amount))}</td>
+                      <td data-label="Releases" className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(r.releaseMonth + "-01"), "MMM yyyy")}</td>
+                      <td data-label="Status" className="px-4 py-2.5">{r.released
                         ? <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-green-800/40 bg-green-900/30 text-green-400">released</span>
                         : <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-orange-800/40 bg-orange-900/30 text-orange-400">held</span>}</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -3610,7 +3610,7 @@ function MethodDowntimeLog() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm rcard min-w-[640px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Method", "Started", "Duration", "Failed", "Lost", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -3619,12 +3619,12 @@ function MethodDowntimeLog() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {rows.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{r.method}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(r.start), "d MMM HH:mm")}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.minutes} min</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.failedTxns || "-"}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.lostValue ? formatCurrency(r.lostValue) : "-"}</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                      <td data-label="Method" className="px-4 py-2.5 font-medium">{r.method}</td>
+                      <td data-label="Started" className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(r.start), "d MMM HH:mm")}</td>
+                      <td data-label="Duration" className="px-4 py-2.5 tabular-nums">{r.minutes} min</td>
+                      <td data-label="Failed" className="px-4 py-2.5 tabular-nums">{r.failedTxns || "-"}</td>
+                      <td data-label="Lost" className="px-4 py-2.5 tabular-nums">{r.lostValue ? formatCurrency(r.lostValue) : "-"}</td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -3688,7 +3688,7 @@ function MandateRetryPlanner() {
 
       <div className={`${CARD} overflow-hidden`}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm rcard">
             <thead className="border-b border-[var(--color-border)]">
               <tr>{["Attempt", "Date", "Why then", "Amount"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -3697,10 +3697,10 @@ function MandateRetryPlanner() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {attempts.map(a => (
                 <tr key={a.label} className="hover:bg-white/2">
-                  <td className="px-4 py-2.5 font-medium">{a.label}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{format(a.date, "EEE d MMM")}</td>
-                  <td className="px-4 py-2.5 text-[var(--color-muted)] text-[11px]">{a.rationale}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{amt > 0 ? formatCurrency(amt) : "-"}</td>
+                  <td data-label="Attempt" className="px-4 py-2.5 font-medium">{a.label}</td>
+                  <td data-label="Date" className="px-4 py-2.5 tabular-nums">{format(a.date, "EEE d MMM")}</td>
+                  <td data-label="Why then" className="px-4 py-2.5 text-[var(--color-muted)] text-[11px]">{a.rationale}</td>
+                  <td data-label="Amount" className="px-4 py-2.5 tabular-nums">{amt > 0 ? formatCurrency(amt) : "-"}</td>
                 </tr>
               ))}
             </tbody>
@@ -3833,7 +3833,7 @@ function SettlementTdsTagger() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[600px]">
+            <table className="w-full text-sm rcard min-w-[600px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Date", "Source", "Gross", "TDS %", "TDS amount", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -3842,12 +3842,12 @@ function SettlementTdsTagger() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {[...evaluated].sort((a, b) => b.date.localeCompare(a.date)).map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 tabular-nums">{format(new Date(r.date), "d MMM")}</td>
-                    <td className="px-4 py-2.5 font-medium">{r.source}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(r.gross)}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.tdsPct}%</td>
-                    <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(r.tds))}</td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    <td data-label="Date" className="px-4 py-2.5 tabular-nums">{format(new Date(r.date), "d MMM")}</td>
+                    <td data-label="Source" className="px-4 py-2.5 font-medium">{r.source}</td>
+                    <td data-label="Gross" className="px-4 py-2.5 tabular-nums">{formatAmount(r.gross)}</td>
+                    <td data-label="TDS %" className="px-4 py-2.5 tabular-nums">{r.tdsPct}%</td>
+                    <td data-label="TDS amount" className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(r.tds))}</td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -3931,7 +3931,7 @@ function PreAuthHoldTracker() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[680px]">
+            <table className="w-full text-sm rcard min-w-[680px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Customer", "Blocked", "Placed", "Auth expires", "Status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -3943,15 +3943,15 @@ function PreAuthHoldTracker() {
                   const daysLeft = differenceInCalendarDays(expiry, today);
                   return (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{r.customer}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.held)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(r.placed), "d MMM")}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[11px]">
+                      <td data-label="Customer" className="px-4 py-2.5 font-medium">{r.customer}</td>
+                      <td data-label="Blocked" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.held)}</td>
+                      <td data-label="Placed" className="px-4 py-2.5 tabular-nums text-[11px]">{format(new Date(r.placed), "d MMM")}</td>
+                      <td data-label="Auth expires" className="px-4 py-2.5 tabular-nums text-[11px]">
                         {format(expiry, "d MMM")}
                         {r.status === "held" && <span className={`ml-2 text-[10px] ${daysLeft <= 1 ? "text-red-400" : daysLeft <= 3 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{daysLeft < 0 ? "lapsed" : `${daysLeft}d`}</span>}
                       </td>
-                      <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
-                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <td data-label="Status" className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
+                      <td data-label="" className="px-4 py-2.5 text-right whitespace-nowrap">
                         {r.status === "held" && (
                           <>
                             <button onClick={() => setStatus(r.id, "captured")} className="text-[10px] text-green-400 hover:underline mr-2">Capture</button>
@@ -4138,7 +4138,7 @@ function FeeGstItcTracker() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm rcard min-w-[640px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Month", "Gateway", "Fee (ex-GST)", "GST", "Gross debit", "ITC", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -4147,13 +4147,13 @@ function FeeGstItcTracker() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {[...evaluated].sort((a, b) => b.month.localeCompare(a.month)).map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 tabular-nums">{r.month}</td>
-                    <td className="px-4 py-2.5 font-medium">{r.gateway}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.feeBase))}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-blue-400">{formatCurrency(Math.round(r.gst))} <span className="text-[10px] text-[var(--color-muted)]">@{r.gstPct}%</span></td>
-                    <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(r.gross))}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(Math.round(r.gst))}</td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    <td data-label="Month" className="px-4 py-2.5 tabular-nums">{r.month}</td>
+                    <td data-label="Gateway" className="px-4 py-2.5 font-medium">{r.gateway}</td>
+                    <td data-label="Fee (ex-GST)" className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.feeBase))}</td>
+                    <td data-label="GST" className="px-4 py-2.5 tabular-nums text-blue-400">{formatCurrency(Math.round(r.gst))} <span className="text-[10px] text-[var(--color-muted)]">@{r.gstPct}%</span></td>
+                    <td data-label="Gross debit" className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(Math.round(r.gross))}</td>
+                    <td data-label="ITC" className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(Math.round(r.gst))}</td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -4245,7 +4245,7 @@ function PennyDropVerifier() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm rcard min-w-[720px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Payee", "Account", "IFSC", "Bank name", "Status", "Checked", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -4254,13 +4254,13 @@ function PennyDropVerifier() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.id} className={`hover:bg-white/2 ${r.status === "failed" ? "bg-red-950/10" : ""}`}>
-                    <td className="px-4 py-2.5 font-medium">{r.payee}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[11px]">{r.account}</td>
-                    <td className="px-4 py-2.5 font-mono text-[11px]">{r.ifsc}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[180px] truncate">{r.nameAtBank || "-"}</td>
-                    <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
-                    <td className="px-4 py-2.5 tabular-nums text-[11px] text-[var(--color-muted)]">{format(new Date(r.ts), "d MMM")}</td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    <td data-label="Payee" className="px-4 py-2.5 font-medium">{r.payee}</td>
+                    <td data-label="Account" className="px-4 py-2.5 tabular-nums text-[11px]">{r.account}</td>
+                    <td data-label="IFSC" className="px-4 py-2.5 font-mono text-[11px]">{r.ifsc}</td>
+                    <td data-label="Bank name" className="px-4 py-2.5 text-[var(--color-muted)] max-w-[180px] truncate">{r.nameAtBank || "-"}</td>
+                    <td data-label="Status" className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
+                    <td data-label="Checked" className="px-4 py-2.5 tabular-nums text-[11px] text-[var(--color-muted)]">{format(new Date(r.ts), "d MMM")}</td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -4360,7 +4360,7 @@ function PayoutApprovalDesk() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[760px]">
+            <table className="w-full text-sm rcard min-w-[760px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Payee", "Amount", "Purpose", "Requested by", "When", "Status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -4369,13 +4369,13 @@ function PayoutApprovalDesk() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium">{r.payee}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{r.purpose || "-"}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.requestedBy}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[11px] text-[var(--color-muted)]">{format(new Date(r.ts), "d MMM")}</td>
-                    <td className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
-                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    <td data-label="Payee" className="px-4 py-2.5 font-medium">{r.payee}</td>
+                    <td data-label="Amount" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
+                    <td data-label="Purpose" className="px-4 py-2.5 text-[var(--color-muted)] max-w-[160px] truncate">{r.purpose || "-"}</td>
+                    <td data-label="Requested by" className="px-4 py-2.5 text-[var(--color-muted)]">{r.requestedBy}</td>
+                    <td data-label="When" className="px-4 py-2.5 tabular-nums text-[11px] text-[var(--color-muted)]">{format(new Date(r.ts), "d MMM")}</td>
+                    <td data-label="Status" className="px-4 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span></td>
+                    <td data-label="" className="px-4 py-2.5 text-right whitespace-nowrap">
                       {r.status === "pending" && (
                         <>
                           <button onClick={() => setStatus(r.id, "approved")} className="text-[10px] text-green-400 hover:underline mr-2">Approve</button>
@@ -4475,7 +4475,7 @@ function RecoveryAnalytics() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm rcard min-w-[720px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Cohort", "Failed", "Failed value", "Avg ticket", "Recovery", "Recovered", "Still recoverable", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -4484,14 +4484,14 @@ function RecoveryAnalytics() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {evaluated.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium">{r.label}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.failedCount}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(r.failedValue)}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(r.avgTicket))}</td>
-                    <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.recoveryRate >= 0.5 ? "text-green-400" : r.recoveryRate >= 0.25 ? "text-yellow-400" : "text-orange-400"}`}>{(r.recoveryRate * 100).toFixed(0)}%</td>
-                    <td className="px-4 py-2.5 tabular-nums text-green-400">{formatAmount(Math.round(r.recoveredValue))}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-yellow-400">{formatAmount(Math.round(r.stillRecoverable))}</td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    <td data-label="Cohort" className="px-4 py-2.5 font-medium">{r.label}</td>
+                    <td data-label="Failed" className="px-4 py-2.5 tabular-nums">{r.failedCount}</td>
+                    <td data-label="Failed value" className="px-4 py-2.5 tabular-nums">{formatAmount(r.failedValue)}</td>
+                    <td data-label="Avg ticket" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(r.avgTicket))}</td>
+                    <td data-label="Recovery" className={`px-4 py-2.5 tabular-nums font-semibold ${r.recoveryRate >= 0.5 ? "text-green-400" : r.recoveryRate >= 0.25 ? "text-yellow-400" : "text-orange-400"}`}>{(r.recoveryRate * 100).toFixed(0)}%</td>
+                    <td data-label="Recovered" className="px-4 py-2.5 tabular-nums text-green-400">{formatAmount(Math.round(r.recoveredValue))}</td>
+                    <td data-label="Still recoverable" className="px-4 py-2.5 tabular-nums text-yellow-400">{formatAmount(Math.round(r.stillRecoverable))}</td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -4579,7 +4579,7 @@ function TipPoolingSplitter() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[480px]">
+            <table className="w-full text-sm rcard min-w-[480px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Staff", "Shares", "% of pool", "Payout", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -4588,11 +4588,11 @@ function TipPoolingSplitter() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {finalRows.map(a => (
                   <tr key={a.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium">{a.name}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{a.shares}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{totalShares > 0 ? `${(a.shares / totalShares * 100).toFixed(1)}%` : "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(a.paid)}</td>
-                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    <td data-label="Staff" className="px-4 py-2.5 font-medium">{a.name}</td>
+                    <td data-label="Shares" className="px-4 py-2.5 tabular-nums">{a.shares}</td>
+                    <td data-label="% of pool" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{totalShares > 0 ? `${(a.shares / totalShares * 100).toFixed(1)}%` : "-"}</td>
+                    <td data-label="Payout" className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(a.paid)}</td>
+                    <td data-label="" className="px-4 py-2.5 text-right whitespace-nowrap">
                       <button onClick={() => copy(`${a.name}: ${formatCurrency(a.paid)}`, "Payout copied")} className="text-[10px] text-[var(--color-primary)] hover:underline mr-3">Copy</button>
                       <button onClick={() => setStaff(staff.filter(x => x.id !== a.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
                     </td>

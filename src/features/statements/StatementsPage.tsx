@@ -444,7 +444,7 @@ export default function StatementsPage() {
             <p className="text-xs text-[var(--color-muted)] mt-0.5">Direct-method month-by-month, with a rolling closing-cash balance anchored to today's bank position.</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs min-w-[820px]">
+            <table className="w-full text-xs rcard min-w-[820px]">
               <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
                 <tr>
                   {["Month", "Receipts", "Suppliers", "Payroll", "Taxes", "Operating", "Financing", "Net", "Closing cash"].map((h, i) => (
@@ -455,15 +455,15 @@ export default function StatementsPage() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {monthly.map((m, i) => (
                   <tr key={m.monthKey} className={`hover:bg-white/2 ${i === monthly.length - 1 ? "bg-[var(--color-accent)]/30" : ""}`}>
-                    <td className="px-3 py-2 font-medium">{m.label}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-green-400">{formatAmount(m.receipts)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-red-400">({formatAmount(m.supplierPayments)})</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-red-400">({formatAmount(m.payroll)})</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-red-400">({formatAmount(m.taxes)})</td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${m.operating >= 0 ? "" : "text-red-400"}`}>{m.operating < 0 ? `(${formatAmount(Math.abs(m.operating))})` : formatAmount(m.operating)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{m.financing < 0 ? `(${formatAmount(Math.abs(m.financing))})` : formatAmount(m.financing)}</td>
-                    <td className={`px-3 py-2 text-right tabular-nums font-semibold ${m.net >= 0 ? "text-green-400" : "text-red-400"}`}>{m.net < 0 ? `(${formatAmount(Math.abs(m.net))})` : formatAmount(m.net)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-bold text-[var(--color-primary)]">{formatAmount(m.closing)}</td>
+                    <td data-label="Month" className="px-3 py-2 font-medium">{m.label}</td>
+                    <td data-label="Receipts" className="px-3 py-2 text-right tabular-nums text-green-400">{formatAmount(m.receipts)}</td>
+                    <td data-label="Suppliers" className="px-3 py-2 text-right tabular-nums text-red-400">({formatAmount(m.supplierPayments)})</td>
+                    <td data-label="Payroll" className="px-3 py-2 text-right tabular-nums text-red-400">({formatAmount(m.payroll)})</td>
+                    <td data-label="Taxes" className="px-3 py-2 text-right tabular-nums text-red-400">({formatAmount(m.taxes)})</td>
+                    <td data-label="Operating" className={`px-3 py-2 text-right tabular-nums ${m.operating >= 0 ? "" : "text-red-400"}`}>{m.operating < 0 ? `(${formatAmount(Math.abs(m.operating))})` : formatAmount(m.operating)}</td>
+                    <td data-label="Financing" className="px-3 py-2 text-right tabular-nums">{m.financing < 0 ? `(${formatAmount(Math.abs(m.financing))})` : formatAmount(m.financing)}</td>
+                    <td data-label="Net" className={`px-3 py-2 text-right tabular-nums font-semibold ${m.net >= 0 ? "text-green-400" : "text-red-400"}`}>{m.net < 0 ? `(${formatAmount(Math.abs(m.net))})` : formatAmount(m.net)}</td>
+                    <td data-label="Closing cash" className="px-3 py-2 text-right tabular-nums font-bold text-[var(--color-primary)]">{formatAmount(m.closing)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -874,7 +874,7 @@ function ComparativeStatements({ today }: { today: Date }) {
           <p className="text-xs text-[var(--color-muted)] mt-0.5">{view === "comparative" ? `${priorFy.label} vs ${curFy.label} (YTD)` : "Each line as a percentage of revenue"}</p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm rcard min-w-[640px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wide">Particulars</th>
@@ -902,20 +902,20 @@ function ComparativeStatements({ today }: { today: Date }) {
                 const bold = r.level === 2 || r.level === 3;
                 return (
                   <tr key={r.label} className={`hover:bg-white/2 ${bold ? "bg-[var(--color-accent)]/30" : ""}`}>
-                    <td className={`px-4 py-2 ${bold ? "font-bold" : ""}`}>{r.label}</td>
+                    <td data-label="Particulars" className={`px-4 py-2 ${bold ? "font-bold" : ""}`}>{r.label}</td>
                     {view === "comparative" ? (
                       <>
-                        <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{amt(p)}</td>
-                        <td className={`px-4 py-2 text-right tabular-nums ${bold ? "font-bold" : ""}`}>{amt(c)}</td>
-                        <td className={`px-4 py-2 text-right tabular-nums ${change >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(change)}</td>
-                        <td className={`px-4 py-2 text-right tabular-nums ${pct >= 0 ? "text-green-400" : "text-red-400"}`}>{pct >= 0 ? "+" : ""}{pct}%</td>
+                        <td data-label={priorFy.label} className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{amt(p)}</td>
+                        <td data-label={curFy.label} className={`px-4 py-2 text-right tabular-nums ${bold ? "font-bold" : ""}`}>{amt(c)}</td>
+                        <td data-label="Change" className={`px-4 py-2 text-right tabular-nums ${change >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(change)}</td>
+                        <td data-label="YoY %" className={`px-4 py-2 text-right tabular-nums ${pct >= 0 ? "text-green-400" : "text-red-400"}`}>{pct >= 0 ? "+" : ""}{pct}%</td>
                       </>
                     ) : (
                       <>
-                        <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{amt(p)}</td>
-                        <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{csz(p, prior.revenue)}%</td>
-                        <td className={`px-4 py-2 text-right tabular-nums ${bold ? "font-bold" : ""}`}>{amt(c)}</td>
-                        <td className="px-4 py-2 text-right tabular-nums">{csz(c, cur.revenue)}%</td>
+                        <td data-label={`${priorFy.label} ₹`} className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{amt(p)}</td>
+                        <td data-label="% rev" className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{csz(p, prior.revenue)}%</td>
+                        <td data-label={`${curFy.label} ₹`} className={`px-4 py-2 text-right tabular-nums ${bold ? "font-bold" : ""}`}>{amt(c)}</td>
+                        <td data-label="% rev" className="px-4 py-2 text-right tabular-nums">{csz(c, cur.revenue)}%</td>
                       </>
                     )}
                   </tr>
@@ -996,7 +996,7 @@ function SegmentReporting({ start, end, label }: { start: string; end: string; l
             ))}
           </div>
           <div className={`${CARD} overflow-x-auto`}>
-            <table className="w-full text-sm min-w-[620px]">
+            <table className="w-full text-sm rcard min-w-[620px]">
               <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
                 <tr>
                   {["Segment", "Revenue", "% of total", "Allocated cost", "Segment result", "Result margin"].map((h, i) => (
@@ -1007,21 +1007,21 @@ function SegmentReporting({ start, end, label }: { start: string; end: string; l
               <tbody className="divide-y divide-[var(--color-border)]">
                 {segments.rows.map(s => (
                   <tr key={s.name} className="hover:bg-white/2">
-                    <td className="px-4 py-2 font-medium max-w-[200px] truncate">{s.name}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{fc(s.revenue)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{s.sharePct}%</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-red-400">({fc(s.cost)})</td>
-                    <td className={`px-4 py-2 text-right tabular-nums font-semibold ${s.result >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(s.result)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{s.revenue > 0 ? Math.round((s.result / s.revenue) * 100) : 0}%</td>
+                    <td data-label="Segment" className="px-4 py-2 font-medium max-w-[200px] truncate">{s.name}</td>
+                    <td data-label="Revenue" className="px-4 py-2 text-right tabular-nums">{fc(s.revenue)}</td>
+                    <td data-label="% of total" className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{s.sharePct}%</td>
+                    <td data-label="Allocated cost" className="px-4 py-2 text-right tabular-nums text-red-400">({fc(s.cost)})</td>
+                    <td data-label="Segment result" className={`px-4 py-2 text-right tabular-nums font-semibold ${s.result >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(s.result)}</td>
+                    <td data-label="Result margin" className="px-4 py-2 text-right tabular-nums">{s.revenue > 0 ? Math.round((s.result / s.revenue) * 100) : 0}%</td>
                   </tr>
                 ))}
                 <tr className="bg-[var(--color-accent)]/30 font-bold">
-                  <td className="px-4 py-2">Total</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{fc(segments.totalRevenue)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">100%</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-red-400">({fc(segments.totalCost)})</td>
-                  <td className={`px-4 py-2 text-right tabular-nums ${segments.totalResult >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(segments.totalResult)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{segments.totalRevenue > 0 ? Math.round((segments.totalResult / segments.totalRevenue) * 100) : 0}%</td>
+                  <td data-label="Segment" className="px-4 py-2">Total</td>
+                  <td data-label="Revenue" className="px-4 py-2 text-right tabular-nums">{fc(segments.totalRevenue)}</td>
+                  <td data-label="% of total" className="px-4 py-2 text-right tabular-nums">100%</td>
+                  <td data-label="Allocated cost" className="px-4 py-2 text-right tabular-nums text-red-400">({fc(segments.totalCost)})</td>
+                  <td data-label="Segment result" className={`px-4 py-2 text-right tabular-nums ${segments.totalResult >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(segments.totalResult)}</td>
+                  <td data-label="Result margin" className="px-4 py-2 text-right tabular-nums">{segments.totalRevenue > 0 ? Math.round((segments.totalResult / segments.totalRevenue) * 100) : 0}%</td>
                 </tr>
               </tbody>
             </table>
@@ -1219,7 +1219,7 @@ function WorkingCapitalStatement({ today }: { today: Date }) {
         <p className="text-xs text-[var(--color-muted)]">Line-by-line movement in current assets and current liabilities between {prior.asOf} and {cur.asOf}, with the net effect on working capital.</p>
       </div>
       <div className={`${CARD} overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[640px]">
+        <table className="w-full text-sm rcard min-w-[640px]">
           <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
             <tr>
               {["Particulars", prior.asOf, cur.asOf, "Increase in WC", "Decrease in WC"].map((h, i) => (
@@ -1234,19 +1234,19 @@ function WorkingCapitalStatement({ today }: { today: Date }) {
               const wcEffect = x.kind === "asset" ? delta : -delta;
               return (
                 <tr key={x.label} className="hover:bg-white/2">
-                  <td className="px-4 py-2 font-medium">{x.label}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{formatAmount(x.p)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{formatAmount(x.c)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-green-400">{wcEffect > 0 ? formatAmount(wcEffect) : "-"}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-red-400">{wcEffect < 0 ? formatAmount(Math.abs(wcEffect)) : "-"}</td>
+                  <td data-label="Particulars" className="px-4 py-2 font-medium">{x.label}</td>
+                  <td data-label={prior.asOf} className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{formatAmount(x.p)}</td>
+                  <td data-label={cur.asOf} className="px-4 py-2 text-right tabular-nums">{formatAmount(x.c)}</td>
+                  <td data-label="Increase in WC" className="px-4 py-2 text-right tabular-nums text-green-400">{wcEffect > 0 ? formatAmount(wcEffect) : "-"}</td>
+                  <td data-label="Decrease in WC" className="px-4 py-2 text-right tabular-nums text-red-400">{wcEffect < 0 ? formatAmount(Math.abs(wcEffect)) : "-"}</td>
                 </tr>
               );
             })}
             <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
-              <td className="px-4 py-2">Net working capital</td>
-              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(rows.priWC)}</td>
-              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(rows.curWC)}</td>
-              <td colSpan={2} className={`px-4 py-2 text-right tabular-nums ${rows.curWC - rows.priWC >= 0 ? "text-green-400" : "text-red-400"}`}>
+              <td data-label="Particulars" className="px-4 py-2">Net working capital</td>
+              <td data-label={prior.asOf} className="px-4 py-2 text-right tabular-nums">{formatAmount(rows.priWC)}</td>
+              <td data-label={cur.asOf} className="px-4 py-2 text-right tabular-nums">{formatAmount(rows.curWC)}</td>
+              <td data-label="Change in WC" colSpan={2} className={`px-4 py-2 text-right tabular-nums ${rows.curWC - rows.priWC >= 0 ? "text-green-400" : "text-red-400"}`}>
                 {rows.curWC - rows.priWC >= 0 ? "Increase " : "Decrease "}{formatAmount(Math.abs(rows.curWC - rows.priWC))}
               </td>
             </tr>
@@ -1292,7 +1292,7 @@ function ChangesInEquity({ today }: { today: Date }) {
         <p className="text-xs text-[var(--color-muted)]">Movement in share capital and reserves &amp; surplus for the year ended {cur.asOf}, opening from balances a year earlier. Required under Ind AS Division II, Schedule III.</p>
       </div>
       <div className={`${CARD} overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[560px]">
+        <table className="w-full text-sm rcard min-w-[560px]">
           <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
             <tr>
               {["Particulars", "Share capital", "Reserves & surplus", "Total equity"].map((h, i) => (
@@ -1302,28 +1302,28 @@ function ChangesInEquity({ today }: { today: Date }) {
           </thead>
           <tbody className="divide-y divide-[var(--color-border)]">
             <tr className="bg-[var(--color-accent)]/30 font-bold">
-              <td className="px-4 py-2">Balance at {prior.asOf}</td>
-              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(opening.capital)}</td>
-              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(opening.reserves)}</td>
-              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(opening.capital + opening.reserves)}</td>
+              <td data-label="Particulars" className="px-4 py-2">Balance at {prior.asOf}</td>
+              <td data-label="Share capital" className="px-4 py-2 text-right tabular-nums">{formatAmount(opening.capital)}</td>
+              <td data-label="Reserves & surplus" className="px-4 py-2 text-right tabular-nums">{formatAmount(opening.reserves)}</td>
+              <td data-label="Total equity" className="px-4 py-2 text-right tabular-nums">{formatAmount(opening.capital + opening.reserves)}</td>
             </tr>
             {movementRows.map(m => {
               const cap = m.col.capital ?? 0, res = m.col.reserves ?? 0;
               if (cap === 0 && res === 0) return null;
               return (
                 <tr key={m.label} className="hover:bg-white/2">
-                  <td className="px-4 py-2">{m.label}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{cap === 0 ? "-" : amt(cap)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{res === 0 ? "-" : amt(res)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{amt(cap + res)}</td>
+                  <td data-label="Particulars" className="px-4 py-2">{m.label}</td>
+                  <td data-label="Share capital" className="px-4 py-2 text-right tabular-nums">{cap === 0 ? "-" : amt(cap)}</td>
+                  <td data-label="Reserves & surplus" className="px-4 py-2 text-right tabular-nums">{res === 0 ? "-" : amt(res)}</td>
+                  <td data-label="Total equity" className="px-4 py-2 text-right tabular-nums">{amt(cap + res)}</td>
                 </tr>
               );
             })}
             <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
-              <td className="px-4 py-2">Balance at {cur.asOf}</td>
-              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(closing.capital)}</td>
-              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(closing.reserves)}</td>
-              <td className="px-4 py-2 text-right tabular-nums text-[var(--color-primary)]">{formatAmount(closing.capital + closing.reserves)}</td>
+              <td data-label="Particulars" className="px-4 py-2">Balance at {cur.asOf}</td>
+              <td data-label="Share capital" className="px-4 py-2 text-right tabular-nums">{formatAmount(closing.capital)}</td>
+              <td data-label="Reserves & surplus" className="px-4 py-2 text-right tabular-nums">{formatAmount(closing.reserves)}</td>
+              <td data-label="Total equity" className="px-4 py-2 text-right tabular-nums text-[var(--color-primary)]">{formatAmount(closing.capital + closing.reserves)}</td>
             </tr>
           </tbody>
         </table>
@@ -1410,7 +1410,7 @@ function DepreciationSchedule({ today }: { today: Date }) {
         ))}
       </div>
       <div className={`${CARD} overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[760px]">
+        <table className="w-full text-sm rcard min-w-[760px]">
           <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
             <tr>
               {["Asset", "Block", "Method", "Life", "Gross cost", "Opening WDV", "Depreciation", "Closing WDV"].map((h, i) => (
@@ -1421,22 +1421,22 @@ function DepreciationSchedule({ today }: { today: Date }) {
           <tbody className="divide-y divide-[var(--color-border)]">
             {rows.map(r => (
               <tr key={r.id} className={`hover:bg-white/2 ${r.disposed ? "opacity-60" : ""}`}>
-                <td className="px-3 py-2 font-medium">{r.name}{r.disposed ? " (disposed)" : ""}</td>
-                <td className="px-3 py-2 text-[var(--color-muted)]">{r.category}</td>
-                <td className="px-3 py-2">{r.method}</td>
-                <td className="px-3 py-2">{r.life}y</td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatAmount(r.cost)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatAmount(r.opening)}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-red-400">{formatAmount(r.dep)}</td>
-                <td className="px-3 py-2 text-right tabular-nums font-semibold">{formatAmount(r.closing)}</td>
+                <td data-label="Asset" className="px-3 py-2 font-medium">{r.name}{r.disposed ? " (disposed)" : ""}</td>
+                <td data-label="Block" className="px-3 py-2 text-[var(--color-muted)]">{r.category}</td>
+                <td data-label="Method" className="px-3 py-2">{r.method}</td>
+                <td data-label="Life" className="px-3 py-2">{r.life}y</td>
+                <td data-label="Gross cost" className="px-3 py-2 text-right tabular-nums">{formatAmount(r.cost)}</td>
+                <td data-label="Opening WDV" className="px-3 py-2 text-right tabular-nums">{formatAmount(r.opening)}</td>
+                <td data-label="Depreciation" className="px-3 py-2 text-right tabular-nums text-red-400">{formatAmount(r.dep)}</td>
+                <td data-label="Closing WDV" className="px-3 py-2 text-right tabular-nums font-semibold">{formatAmount(r.closing)}</td>
               </tr>
             ))}
             <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
-              <td className="px-3 py-2" colSpan={4}>Total</td>
-              <td className="px-3 py-2 text-right tabular-nums">{formatAmount(totals.cost)}</td>
-              <td className="px-3 py-2 text-right tabular-nums">-</td>
-              <td className="px-3 py-2 text-right tabular-nums text-red-400">{formatAmount(totals.depForYear)}</td>
-              <td className="px-3 py-2 text-right tabular-nums text-[var(--color-primary)]">{formatAmount(totals.nbv)}</td>
+              <td data-label="Asset" className="px-3 py-2" colSpan={4}>Total</td>
+              <td data-label="Gross cost" className="px-3 py-2 text-right tabular-nums">{formatAmount(totals.cost)}</td>
+              <td data-label="Opening WDV" className="px-3 py-2 text-right tabular-nums">-</td>
+              <td data-label="Depreciation" className="px-3 py-2 text-right tabular-nums text-red-400">{formatAmount(totals.depForYear)}</td>
+              <td data-label="Closing WDV" className="px-3 py-2 text-right tabular-nums text-[var(--color-primary)]">{formatAmount(totals.nbv)}</td>
             </tr>
           </tbody>
         </table>
@@ -1670,7 +1670,7 @@ function MisPack({ start, end, asOf, label }: { start: string; end: string; asOf
         <div className="px-5 py-3 border-b border-[var(--color-border)]">
           <p className="text-sm font-semibold">Cash trend · last 6 months</p>
         </div>
-        <table className="w-full text-xs min-w-[560px]">
+        <table className="w-full text-xs rcard min-w-[560px]">
           <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
             <tr>
               {["Month", "Receipts", "Operating", "Net", "Closing cash"].map((h, i) => (
@@ -1681,11 +1681,11 @@ function MisPack({ start, end, asOf, label }: { start: string; end: string; asOf
           <tbody className="divide-y divide-[var(--color-border)]">
             {monthly.map((m, i) => (
               <tr key={m.monthKey} className={`hover:bg-white/2 ${i === monthly.length - 1 ? "bg-[var(--color-accent)]/30" : ""}`}>
-                <td className="px-3 py-2 font-medium">{m.label}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-green-400">{formatAmount(m.receipts)}</td>
-                <td className={`px-3 py-2 text-right tabular-nums ${m.operating >= 0 ? "" : "text-red-400"}`}>{amt(m.operating)}</td>
-                <td className={`px-3 py-2 text-right tabular-nums font-semibold ${m.net >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(m.net)}</td>
-                <td className="px-3 py-2 text-right tabular-nums font-bold text-[var(--color-primary)]">{formatAmount(m.closing)}</td>
+                <td data-label="Month" className="px-3 py-2 font-medium">{m.label}</td>
+                <td data-label="Receipts" className="px-3 py-2 text-right tabular-nums text-green-400">{formatAmount(m.receipts)}</td>
+                <td data-label="Operating" className={`px-3 py-2 text-right tabular-nums ${m.operating >= 0 ? "" : "text-red-400"}`}>{amt(m.operating)}</td>
+                <td data-label="Net" className={`px-3 py-2 text-right tabular-nums font-semibold ${m.net >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(m.net)}</td>
+                <td data-label="Closing cash" className="px-3 py-2 text-right tabular-nums font-bold text-[var(--color-primary)]">{formatAmount(m.closing)}</td>
               </tr>
             ))}
           </tbody>
@@ -2030,7 +2030,7 @@ function BudgetVariance({ start, end, label }: { start: string; end: string; lab
         <div className={`${CARD} p-8 text-center text-sm text-[var(--color-muted)]`}>Enter at least one budget figure above to see the variance analysis.</div>
       ) : (
         <div className={`${CARD} overflow-x-auto`}>
-          <table className="w-full text-sm min-w-[680px]">
+          <table className="w-full text-sm rcard min-w-[680px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["Line item", "Budget", "Actual", "Variance", "Variance %", "Status"].map((h, i) => (
@@ -2041,21 +2041,21 @@ function BudgetVariance({ start, end, label }: { start: string; end: string; lab
             <tbody className="divide-y divide-[var(--color-border)]">
               {lines.map(l => (
                 <tr key={l.key} className="hover:bg-white/2">
-                  <td className="px-4 py-2 font-medium">{l.label}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{formatAmount(l.budget)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{formatAmount(l.actual)}</td>
-                  <td className={`px-4 py-2 text-right tabular-nums ${l.favourable ? "text-green-400" : "text-red-400"}`}>{amt(l.variance)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{l.variancePct === null ? "-" : `${l.variancePct >= 0 ? "+" : ""}${l.variancePct.toFixed(1)}%`}</td>
-                  <td className={`px-4 py-2 text-center text-[10px] font-semibold ${l.favourable ? "text-green-400" : "text-red-400"}`}>{l.favourable ? "FAVOURABLE" : "ADVERSE"}</td>
+                  <td data-label="Line item" className="px-4 py-2 font-medium">{l.label}</td>
+                  <td data-label="Budget" className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{formatAmount(l.budget)}</td>
+                  <td data-label="Actual" className="px-4 py-2 text-right tabular-nums">{formatAmount(l.actual)}</td>
+                  <td data-label="Variance" className={`px-4 py-2 text-right tabular-nums ${l.favourable ? "text-green-400" : "text-red-400"}`}>{amt(l.variance)}</td>
+                  <td data-label="Variance %" className="px-4 py-2 text-right tabular-nums">{l.variancePct === null ? "-" : `${l.variancePct >= 0 ? "+" : ""}${l.variancePct.toFixed(1)}%`}</td>
+                  <td data-label="Status" className={`px-4 py-2 text-center text-[10px] font-semibold ${l.favourable ? "text-green-400" : "text-red-400"}`}>{l.favourable ? "FAVOURABLE" : "ADVERSE"}</td>
                 </tr>
               ))}
               <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
-                <td className="px-4 py-2">EBITDA</td>
-                <td className="px-4 py-2 text-right tabular-nums">{formatAmount(budgetEbitda)}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{formatAmount(actualEbitda)}</td>
-                <td className={`px-4 py-2 text-right tabular-nums ${ebitdaVariance >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(ebitdaVariance)}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{budgetEbitda !== 0 ? `${ebitdaVariance >= 0 ? "+" : ""}${(ebitdaVariance / Math.abs(budgetEbitda) * 100).toFixed(1)}%` : "-"}</td>
-                <td className={`px-4 py-2 text-center text-[10px] font-semibold ${ebitdaVariance >= 0 ? "text-green-400" : "text-red-400"}`}>{ebitdaVariance >= 0 ? "FAVOURABLE" : "ADVERSE"}</td>
+                <td data-label="Line item" className="px-4 py-2">EBITDA</td>
+                <td data-label="Budget" className="px-4 py-2 text-right tabular-nums">{formatAmount(budgetEbitda)}</td>
+                <td data-label="Actual" className="px-4 py-2 text-right tabular-nums">{formatAmount(actualEbitda)}</td>
+                <td data-label="Variance" className={`px-4 py-2 text-right tabular-nums ${ebitdaVariance >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(ebitdaVariance)}</td>
+                <td data-label="Variance %" className="px-4 py-2 text-right tabular-nums">{budgetEbitda !== 0 ? `${ebitdaVariance >= 0 ? "+" : ""}${(ebitdaVariance / Math.abs(budgetEbitda) * 100).toFixed(1)}%` : "-"}</td>
+                <td data-label="Status" className={`px-4 py-2 text-center text-[10px] font-semibold ${ebitdaVariance >= 0 ? "text-green-400" : "text-red-400"}`}>{ebitdaVariance >= 0 ? "FAVOURABLE" : "ADVERSE"}</td>
               </tr>
             </tbody>
           </table>
@@ -2103,7 +2103,7 @@ function MonthlyTrendPL({ today }: { today: Date }) {
         ))}
       </div>
       <div className={`${CARD} overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[560px]">
+        <table className="w-full text-sm rcard min-w-[560px]">
           <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
             <tr>
               {["Month", "Revenue", "Expense", "Net", "Margin %", "Revenue trend"].map((h, i) => (
@@ -2116,12 +2116,12 @@ function MonthlyTrendPL({ today }: { today: Date }) {
               const margin = m.revenue > 0 ? Math.round((m.net / m.revenue) * 100) : 0;
               return (
                 <tr key={m.key} className="hover:bg-white/2">
-                  <td className="px-4 py-2 font-medium">{m.label}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-green-400">{formatAmount(m.revenue)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(m.expense)})</td>
-                  <td className={`px-4 py-2 text-right tabular-nums font-semibold ${m.net >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(m.net)}</td>
-                  <td className={`px-4 py-2 text-right tabular-nums ${margin >= 0 ? "" : "text-red-400"}`}>{margin}%</td>
-                  <td className="px-4 py-2">
+                  <td data-label="Month" className="px-4 py-2 font-medium">{m.label}</td>
+                  <td data-label="Revenue" className="px-4 py-2 text-right tabular-nums text-green-400">{formatAmount(m.revenue)}</td>
+                  <td data-label="Expense" className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(m.expense)})</td>
+                  <td data-label="Net" className={`px-4 py-2 text-right tabular-nums font-semibold ${m.net >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(m.net)}</td>
+                  <td data-label="Margin %" className={`px-4 py-2 text-right tabular-nums ${margin >= 0 ? "" : "text-red-400"}`}>{margin}%</td>
+                  <td data-label="Revenue trend" className="px-4 py-2">
                     <div className="h-2 rounded-full bg-[var(--color-bg)] overflow-hidden w-full min-w-[80px]">
                       <div className="h-full bg-[var(--color-primary)] rounded-full" style={{ width: `${Math.round((m.revenue / maxRev) * 100)}%` }} />
                     </div>
@@ -2130,12 +2130,12 @@ function MonthlyTrendPL({ today }: { today: Date }) {
               );
             })}
             <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
-              <td className="px-4 py-2">Total</td>
-              <td className="px-4 py-2 text-right tabular-nums text-green-400">{formatAmount(stats.totalRev)}</td>
-              <td className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(stats.totalExp)})</td>
-              <td className={`px-4 py-2 text-right tabular-nums ${stats.totalNet >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(stats.totalNet)}</td>
-              <td className="px-4 py-2 text-right tabular-nums">{stats.totalRev > 0 ? Math.round((stats.totalNet / stats.totalRev) * 100) : 0}%</td>
-              <td className="px-4 py-2 text-[10px] text-[var(--color-muted)]">Peak: {stats.peakLabel}</td>
+              <td data-label="Month" className="px-4 py-2">Total</td>
+              <td data-label="Revenue" className="px-4 py-2 text-right tabular-nums text-green-400">{formatAmount(stats.totalRev)}</td>
+              <td data-label="Expense" className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(stats.totalExp)})</td>
+              <td data-label="Net" className={`px-4 py-2 text-right tabular-nums ${stats.totalNet >= 0 ? "text-green-400" : "text-red-400"}`}>{amt(stats.totalNet)}</td>
+              <td data-label="Margin %" className="px-4 py-2 text-right tabular-nums">{stats.totalRev > 0 ? Math.round((stats.totalNet / stats.totalRev) * 100) : 0}%</td>
+              <td data-label="Revenue trend" className="px-4 py-2 text-[10px] text-[var(--color-muted)]">Peak: {stats.peakLabel}</td>
             </tr>
           </tbody>
         </table>
@@ -2214,7 +2214,7 @@ function ExpenseSchedule({ start, end, label }: { start: string; end: string; la
             ))}
           </div>
           <div className={`${CARD} overflow-x-auto`}>
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm rcard min-w-[640px]">
               <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
                 <tr>
                   {["Expense head", "Nature", "Entries", "Amount", "% of total", "% of revenue"].map((h, i) => (
@@ -2225,20 +2225,20 @@ function ExpenseSchedule({ start, end, label }: { start: string; end: string; la
               <tbody className="divide-y divide-[var(--color-border)]">
                 {heads.rows.map(r => (
                   <tr key={r.head} className="hover:bg-white/2">
-                    <td className="px-4 py-2 font-medium max-w-[220px] truncate">{r.head}</td>
-                    <td className="px-4 py-2 text-[var(--color-muted)] text-xs">{r.payroll ? "Employee benefits" : "Operating"}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{r.count}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(r.amount)})</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{sharePct(r.amount)}%</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{revPct(r.amount)}%</td>
+                    <td data-label="Expense head" className="px-4 py-2 font-medium max-w-[220px] truncate">{r.head}</td>
+                    <td data-label="Nature" className="px-4 py-2 text-[var(--color-muted)] text-xs">{r.payroll ? "Employee benefits" : "Operating"}</td>
+                    <td data-label="Entries" className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{r.count}</td>
+                    <td data-label="Amount" className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(r.amount)})</td>
+                    <td data-label="% of total" className="px-4 py-2 text-right tabular-nums">{sharePct(r.amount)}%</td>
+                    <td data-label="% of revenue" className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{revPct(r.amount)}%</td>
                   </tr>
                 ))}
                 <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
-                  <td className="px-4 py-2" colSpan={2}>Total</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{heads.rows.reduce((s, r) => s + r.count, 0)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(heads.total)})</td>
-                  <td className="px-4 py-2 text-right tabular-nums">100%</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{revPct(heads.total)}%</td>
+                  <td data-label="Expense head" className="px-4 py-2" colSpan={2}>Total</td>
+                  <td data-label="Entries" className="px-4 py-2 text-right tabular-nums">{heads.rows.reduce((s, r) => s + r.count, 0)}</td>
+                  <td data-label="Amount" className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(heads.total)})</td>
+                  <td data-label="% of total" className="px-4 py-2 text-right tabular-nums">100%</td>
+                  <td data-label="% of revenue" className="px-4 py-2 text-right tabular-nums">{revPct(heads.total)}%</td>
                 </tr>
               </tbody>
             </table>
@@ -2300,7 +2300,7 @@ function RelatedPartyDisclosure({ start, end, asOf, label }: { start: string; en
             <p className="text-sm font-semibold">Counterparties - tag related parties</p>
             <p className="text-xs text-[var(--color-muted)] mt-0.5">Top counterparties by total dealing value. Tap the toggle to include a party in the disclosure note.</p>
           </div>
-          <table className="w-full text-sm min-w-[620px]">
+          <table className="w-full text-sm rcard min-w-[620px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["Counterparty", "Sales to", "Purchases from", "Loan flows", "Related?"].map((h, i) => (
@@ -2310,14 +2310,14 @@ function RelatedPartyDisclosure({ start, end, asOf, label }: { start: string; en
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {parties.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-[var(--color-muted)]">No counterparty transactions in this period.</td></tr>
+                <tr><td data-label="" colSpan={5} className="px-4 py-8 text-center text-sm text-[var(--color-muted)]">No counterparty transactions in this period.</td></tr>
               ) : parties.slice(0, 20).map(p => (
                 <tr key={p.name} className={`hover:bg-white/2 ${related[p.name] ? "bg-[var(--color-primary)]/5" : ""}`}>
-                  <td className="px-4 py-2 font-medium max-w-[200px] truncate">{p.name}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-green-400">{p.sales > 0 ? formatAmount(p.sales) : "-"}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-red-400">{p.purchases > 0 ? formatAmount(p.purchases) : "-"}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{p.loans !== 0 ? amt(p.loans) : "-"}</td>
-                  <td className="px-4 py-2 text-center">
+                  <td data-label="Counterparty" className="px-4 py-2 font-medium max-w-[200px] truncate">{p.name}</td>
+                  <td data-label="Sales to" className="px-4 py-2 text-right tabular-nums text-green-400">{p.sales > 0 ? formatAmount(p.sales) : "-"}</td>
+                  <td data-label="Purchases from" className="px-4 py-2 text-right tabular-nums text-red-400">{p.purchases > 0 ? formatAmount(p.purchases) : "-"}</td>
+                  <td data-label="Loan flows" className="px-4 py-2 text-right tabular-nums">{p.loans !== 0 ? amt(p.loans) : "-"}</td>
+                  <td data-label="Related?" className="px-4 py-2 text-center">
                     <button onClick={() => toggle(p.name)}
                       className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${related[p.name] ? "bg-[var(--color-primary)] text-[var(--color-bg)] border-[var(--color-primary)]" : "text-[var(--color-muted)] border-[var(--color-border)] hover:text-[var(--color-text)]"}`}>
                       {related[p.name] ? "RELATED" : "Tag"}
@@ -2449,7 +2449,7 @@ function ContingentLiabilities({ asOf }: { asOf: Date }) {
         <div className={`${CARD} p-8 text-center text-sm text-[var(--color-muted)]`}>No contingencies recorded. Add guarantees, claims or commitments above so they are not forgotten at year-end.</div>
       ) : (
         <div className={`${CARD} overflow-x-auto`}>
-          <table className="w-full text-sm min-w-[620px]">
+          <table className="w-full text-sm rcard min-w-[620px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["Particulars", "Type", "Likelihood", "Amount", ""].map((h, i) => (
@@ -2460,19 +2460,19 @@ function ContingentLiabilities({ asOf }: { asOf: Date }) {
             <tbody className="divide-y divide-[var(--color-border)]">
               {items.map(i => (
                 <tr key={i.id} className="hover:bg-white/2">
-                  <td className="px-4 py-2 font-medium max-w-[240px] truncate">{i.particulars}</td>
-                  <td className="px-4 py-2 text-[var(--color-muted)] text-xs">{typeLabel(i.type)}</td>
-                  <td className={`px-4 py-2 text-xs font-semibold capitalize ${tone(i.likelihood)}`}>{i.likelihood}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{formatAmount(i.amount)}</td>
-                  <td className="px-4 py-2 text-center">
+                  <td data-label="Particulars" className="px-4 py-2 font-medium max-w-[240px] truncate">{i.particulars}</td>
+                  <td data-label="Type" className="px-4 py-2 text-[var(--color-muted)] text-xs">{typeLabel(i.type)}</td>
+                  <td data-label="Likelihood" className={`px-4 py-2 text-xs font-semibold capitalize ${tone(i.likelihood)}`}>{i.likelihood}</td>
+                  <td data-label="Amount" className="px-4 py-2 text-right tabular-nums">{formatAmount(i.amount)}</td>
+                  <td data-label="" className="px-4 py-2 text-center">
                     <button onClick={() => remove(i.id)} className="text-[10px] text-[var(--color-muted)] hover:text-red-400 transition-colors">Remove</button>
                   </td>
                 </tr>
               ))}
               <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
-                <td className="px-4 py-2" colSpan={3}>Total contingent liabilities &amp; commitments</td>
-                <td className="px-4 py-2 text-right tabular-nums text-[var(--color-primary)]">{formatAmount(total)}</td>
-                <td />
+                <td data-label="Particulars" className="px-4 py-2" colSpan={3}>Total contingent liabilities &amp; commitments</td>
+                <td data-label="Amount" className="px-4 py-2 text-right tabular-nums text-[var(--color-primary)]">{formatAmount(total)}</td>
+                <td data-label="" />
               </tr>
             </tbody>
           </table>
@@ -2634,7 +2634,7 @@ function ProvisionsReserves({ today }: { today: Date }) {
       </div>
 
       <div className={`${CARD} overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[680px]">
+        <table className="w-full text-sm rcard min-w-[680px]">
           <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
             <tr>
               {["Provision / reserve", "Opening", "Additions", "Utilisation", "Closing", ""].map((h, i) => (
@@ -2647,24 +2647,24 @@ function ProvisionsReserves({ today }: { today: Date }) {
               const isManual = i >= derived.length;
               return (
                 <tr key={`${r.label}-${i}`} className="hover:bg-white/2">
-                  <td className="px-4 py-2 font-medium max-w-[240px] truncate">{r.label}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{formatAmount(r.opening)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-green-400">{formatAmount(r.additions)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(r.utilisation)})</td>
-                  <td className="px-4 py-2 text-right tabular-nums font-semibold">{formatAmount(r.closing)}</td>
-                  <td className="px-4 py-2 text-center">
+                  <td data-label="Provision / reserve" className="px-4 py-2 font-medium max-w-[240px] truncate">{r.label}</td>
+                  <td data-label="Opening" className="px-4 py-2 text-right tabular-nums text-[var(--color-muted)]">{formatAmount(r.opening)}</td>
+                  <td data-label="Additions" className="px-4 py-2 text-right tabular-nums text-green-400">{formatAmount(r.additions)}</td>
+                  <td data-label="Utilisation" className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(r.utilisation)})</td>
+                  <td data-label="Closing" className="px-4 py-2 text-right tabular-nums font-semibold">{formatAmount(r.closing)}</td>
+                  <td data-label="" className="px-4 py-2 text-center">
                     {isManual && <button onClick={() => removeManual(i - derived.length)} className="text-[10px] text-[var(--color-muted)] hover:text-red-400 transition-colors">Remove</button>}
                   </td>
                 </tr>
               );
             })}
             <tr className="bg-[var(--color-accent)]/30 font-bold border-t-2 border-[var(--color-border)]">
-              <td className="px-4 py-2">Total</td>
-              <td className="px-4 py-2 text-right tabular-nums">{formatAmount(totals.opening)}</td>
-              <td className="px-4 py-2 text-right tabular-nums text-green-400">{formatAmount(totals.additions)}</td>
-              <td className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(totals.utilisation)})</td>
-              <td className="px-4 py-2 text-right tabular-nums text-[var(--color-primary)]">{formatAmount(totals.closing)}</td>
-              <td />
+              <td data-label="Provision / reserve" className="px-4 py-2">Total</td>
+              <td data-label="Opening" className="px-4 py-2 text-right tabular-nums">{formatAmount(totals.opening)}</td>
+              <td data-label="Additions" className="px-4 py-2 text-right tabular-nums text-green-400">{formatAmount(totals.additions)}</td>
+              <td data-label="Utilisation" className="px-4 py-2 text-right tabular-nums text-red-400">({formatAmount(totals.utilisation)})</td>
+              <td data-label="Closing" className="px-4 py-2 text-right tabular-nums text-[var(--color-primary)]">{formatAmount(totals.closing)}</td>
+              <td data-label="" />
             </tr>
           </tbody>
         </table>

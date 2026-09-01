@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import DataTable, { type Column, type TableQuery } from "@/components/ui/DataTable";
+import SavedViewsMenu from "@/components/ui/SavedViewsMenu";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { useConfirm } from "@/components/ui/Confirm";
@@ -37,7 +38,7 @@ const TREATMENT_LABEL: Record<string, string> = {
 export default function CustomersPage() {
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const { query, setQuery, toApiQuery, filters, setFilter } = useListQuery({ limit: 50, sort: "name", order: "asc" });
+  const { query, setQuery, toApiQuery, filters, setFilter, write: writeQuery, activeFilterCount } = useListQuery({ limit: 50, sort: "name", order: "asc" });
   const [rows, setRows] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -144,6 +145,13 @@ export default function CustomersPage() {
         onRowClick={(c) => navigate(`/customers/${c.id}`)}
         rowHref={(c) => `/customers/${c.id}`}
         toolbar={
+          <>
+          <SavedViewsMenu
+            listKey="customers"
+            isFiltered={activeFilterCount > 0}
+            currentConfig={() => ({ q: query.q || null, sort: query.sort, order: query.order, ...filters })}
+            onApply={(cfg) => writeQuery({ page: null, ...cfg }, true)}
+          />
           <button type="button"
             onClick={() => setFilter("archived", showingArchived ? null : "1")}
             className={`px-3 py-2 rounded-lg border text-xs font-medium ${showingArchived
@@ -151,6 +159,7 @@ export default function CustomersPage() {
               : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>
             {showingArchived ? "Showing archived" : "Show archived"}
           </button>
+          </>
         }
         bulkActions={(sel, clear) => (
           <Button size="sm" variant="secondary" icon={<Archive size={12} />} onClick={() => archive(sel, clear)}>

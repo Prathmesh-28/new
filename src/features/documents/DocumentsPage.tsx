@@ -162,7 +162,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-bold">Upload document</h2>
-          <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
+          <button onClick={onClose} aria-label="Close" className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
         </div>
 
         <div
@@ -209,6 +209,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
             <button
               type="button"
               onClick={() => setHasExpiry(v => !v)}
+              aria-label="Has expiry date"
               className={`w-8 h-4 rounded-full transition-colors shrink-0 relative ${hasExpiry ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}
             >
               <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${hasExpiry ? "left-4" : "left-0.5"}`} />
@@ -509,6 +510,7 @@ export default function DocumentsPage() {
                       onClick={() => handlePreview(doc)}
                       className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors rounded"
                       title="Preview"
+                      aria-label="Preview"
                     >
                       <Eye size={14} />
                     </button>
@@ -516,6 +518,7 @@ export default function DocumentsPage() {
                       onClick={() => handleDownload(doc)}
                       className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors rounded"
                       title="Download"
+                      aria-label="Download"
                     >
                       <Download size={14} />
                     </button>
@@ -523,6 +526,7 @@ export default function DocumentsPage() {
                       onClick={() => handleDelete(doc)}
                       className="p-1.5 text-[var(--color-muted)] hover:text-red-400 transition-colors rounded"
                       title="Delete"
+                      aria-label="Delete"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -759,19 +763,19 @@ function ReceiptOcrCapture() {
           ))}
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[600px]">
+          <table className="w-full text-sm min-w-[600px] rcard">
             <thead><tr className="border-b border-[var(--color-border)]">{["Vendor", "Category", "Amount", "GST", "Date", "Voucher", "Source", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {expenses.map(e => (
                 <tr key={e.id} className="hover:bg-white/2">
-                  <td className="px-3 py-2.5 text-xs font-medium">{e.vendor}</td>
-                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{e.category}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{fc(e.amount)}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums">{e.gst > 0 ? fc(e.gst) : "-"}</td>
-                  <td className="px-3 py-2.5 text-xs">{e.date}</td>
-                  <td className="px-3 py-2.5 text-xs">{e.voucherNumber ? <span className="text-green-400 font-mono">#{e.voucherNumber}</span> : <span className="text-[var(--color-muted)]">log only</span>}</td>
-                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[140px] truncate flex items-center gap-1"><Receipt size={11} /> {e.fileName}</td>
-                  <td className="px-3 py-2.5"><button onClick={() => setExpenses(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  <td data-label="Vendor" className="px-3 py-2.5 text-xs font-medium">{e.vendor}</td>
+                  <td data-label="Category" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{e.category}</td>
+                  <td data-label="Amount" className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{fc(e.amount)}</td>
+                  <td data-label="GST" className="px-3 py-2.5 text-xs tabular-nums">{e.gst > 0 ? fc(e.gst) : "-"}</td>
+                  <td data-label="Date" className="px-3 py-2.5 text-xs">{e.date}</td>
+                  <td data-label="Voucher" className="px-3 py-2.5 text-xs">{e.voucherNumber ? <span className="text-green-400 font-mono">#{e.voucherNumber}</span> : <span className="text-[var(--color-muted)]">log only</span>}</td>
+                  <td data-label="Source" className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[140px] truncate flex items-center gap-1"><Receipt size={11} /> {e.fileName}</td>
+                  <td data-label="" className="px-3 py-2.5"><button onClick={() => setExpenses(prev => prev.filter(x => x.id !== e.id))} aria-label="Remove expense entry" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                 </tr>
               ))}
             </tbody>
@@ -861,17 +865,17 @@ function DocumentSendTrack() {
           ))}
         </div>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm min-w-[640px] rcard">
             <thead><tr className="border-b border-[var(--color-border)]">{["Document", "Signer", "Sent via", "Sent", "Status", "Actions"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {docs.map(d => (
                 <tr key={d.id} className="hover:bg-white/2">
-                  <td className="px-3 py-2.5 text-xs font-medium">{d.title}</td>
-                  <td className="px-3 py-2.5 text-xs">{d.signer}{d.email ? <span className="block text-[10px] text-[var(--color-muted)]">{d.email}</span> : null}</td>
-                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{CHANNELS[d.channel]}</td>
-                  <td className="px-3 py-2.5 text-xs">{format(new Date(d.sentAt), "d MMM")}</td>
-                  <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[d.status]}`}>{d.status}</span></td>
-                  <td className="px-3 py-2.5">
+                  <td data-label="Document" className="px-3 py-2.5 text-xs font-medium">{d.title}</td>
+                  <td data-label="Signer" className="px-3 py-2.5 text-xs">{d.signer}{d.email ? <span className="block text-[10px] text-[var(--color-muted)]">{d.email}</span> : null}</td>
+                  <td data-label="Sent via" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{CHANNELS[d.channel]}</td>
+                  <td data-label="Sent" className="px-3 py-2.5 text-xs">{format(new Date(d.sentAt), "d MMM")}</td>
+                  <td data-label="Status" className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[d.status]}`}>{d.status}</span></td>
+                  <td data-label="" className="px-3 py-2.5">
                     <div className="flex items-center gap-2">
                       {d.status !== "signed" && d.status !== "declined" && (
                         <button onClick={() => advance(d.id)} className="text-[10px] text-[var(--color-primary)] hover:underline">Mark {SIGN_FLOW[d.status]}</button>
@@ -879,7 +883,7 @@ function DocumentSendTrack() {
                       {d.status !== "signed" && d.status !== "declined" && (
                         <button onClick={() => decline(d.id)} className="text-[10px] text-red-400 hover:underline">Decline</button>
                       )}
-                      <button onClick={() => setDocs(prev => prev.filter(x => x.id !== d.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                      <button onClick={() => setDocs(prev => prev.filter(x => x.id !== d.id))} aria-label="Remove signature record" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
                     </div>
                   </td>
                 </tr>
@@ -970,20 +974,20 @@ function ExpiryRenewalVault() {
 
       {enriched.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[620px]">
+          <table className="w-full text-sm min-w-[620px] rcard">
             <thead><tr className="border-b border-[var(--color-border)]">{["Document", "Type", "Owner", "Expires", "Countdown", "Status", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {enriched.map(i => {
                 const t = tone(i);
                 return (
                   <tr key={i.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium">{i.name}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.type}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.owner || "-"}</td>
-                    <td className="px-3 py-2.5 text-xs">{format(new Date(i.expiresAt), "d MMM yyyy")}</td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${t.txt}`}>{i.days < 0 ? `${Math.abs(i.days)}d ago` : `in ${i.days}d`}</td>
-                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${t.badge}`}>{t.label}</span></td>
-                    <td className="px-3 py-2.5"><button onClick={() => setItems(prev => prev.filter(x => x.id !== i.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    <td data-label="Document" className="px-3 py-2.5 text-xs font-medium">{i.name}</td>
+                    <td data-label="Type" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.type}</td>
+                    <td data-label="Owner" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.owner || "-"}</td>
+                    <td data-label="Expires" className="px-3 py-2.5 text-xs">{format(new Date(i.expiresAt), "d MMM yyyy")}</td>
+                    <td data-label="Countdown" className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${t.txt}`}>{i.days < 0 ? `${Math.abs(i.days)}d ago` : `in ${i.days}d`}</td>
+                    <td data-label="Status" className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${t.badge}`}>{t.label}</span></td>
+                    <td data-label="" className="px-3 py-2.5"><button onClick={() => setItems(prev => prev.filter(x => x.id !== i.id))} aria-label="Remove document" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                   </tr>
                 );
               })}
@@ -1136,16 +1140,16 @@ function BankStatementParser() {
           </div>
         )}
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[620px]">
+          <table className="w-full text-sm min-w-[620px] rcard">
             <thead><tr className="border-b border-[var(--color-border)]">{["Date", "Description", "Debit", "Credit", "Status"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {rows.map(r => (
                 <tr key={r.id} className={`hover:bg-white/2 ${r.needsReview ? "bg-yellow-950/10" : ""}`}>
-                  <td className="px-3 py-2.5 text-xs whitespace-nowrap">{r.date}</td>
-                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{r.description}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums text-red-400">{r.debit > 0 ? fc(r.debit) : "-"}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums text-green-400">{r.credit > 0 ? fc(r.credit) : "-"}</td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
+                  <td data-label="Date" className="px-3 py-2.5 text-xs whitespace-nowrap">{r.date}</td>
+                  <td data-label="Description" className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{r.description}</td>
+                  <td data-label="Debit" className="px-3 py-2.5 text-xs tabular-nums text-red-400">{r.debit > 0 ? fc(r.debit) : "-"}</td>
+                  <td data-label="Credit" className="px-3 py-2.5 text-xs tabular-nums text-green-400">{r.credit > 0 ? fc(r.credit) : "-"}</td>
+                  <td data-label="Status" className="px-3 py-2.5 whitespace-nowrap">
                     {r.needsReview ? (
                       <span className="inline-flex items-center gap-1.5">
                         <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-medium bg-yellow-900/30 text-yellow-400 border-yellow-800/40">Confirm</span>
@@ -1240,18 +1244,18 @@ function AuditTrailLog() {
 
       {visible.length > 0 ? (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm min-w-[640px] rcard">
             <thead><tr className="border-b border-[var(--color-border)]">{["When", "Document", "Ver", "Action", "Actor", "Note", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {visible.map(e => (
                 <tr key={e.id} className="hover:bg-white/2">
-                  <td className="px-3 py-2.5 text-xs whitespace-nowrap text-[var(--color-muted)] flex items-center gap-1"><Clock size={10} /> {format(new Date(e.at), "d MMM, HH:mm")}</td>
-                  <td className="px-3 py-2.5 text-xs font-medium">{e.document}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums">v{e.version}</td>
-                  <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${ACTION_STYLE[e.action]}`}>{e.action}</span></td>
-                  <td className="px-3 py-2.5 text-xs">{e.actor}</td>
-                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[180px] truncate">{e.note || "-"}</td>
-                  <td className="px-3 py-2.5"><button onClick={() => setEntries(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  <td data-label="When" className="px-3 py-2.5 text-xs whitespace-nowrap text-[var(--color-muted)] flex items-center gap-1"><Clock size={10} /> {format(new Date(e.at), "d MMM, HH:mm")}</td>
+                  <td data-label="Document" className="px-3 py-2.5 text-xs font-medium">{e.document}</td>
+                  <td data-label="Ver" className="px-3 py-2.5 text-xs tabular-nums">v{e.version}</td>
+                  <td data-label="Action" className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${ACTION_STYLE[e.action]}`}>{e.action}</span></td>
+                  <td data-label="Actor" className="px-3 py-2.5 text-xs">{e.actor}</td>
+                  <td data-label="Note" className="px-3 py-2.5 text-xs text-[var(--color-muted)] max-w-[180px] truncate">{e.note || "-"}</td>
+                  <td data-label="" className="px-3 py-2.5"><button onClick={() => setEntries(prev => prev.filter(x => x.id !== e.id))} aria-label="Remove log entry" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                 </tr>
               ))}
             </tbody>
@@ -1553,24 +1557,24 @@ function ShareLinkTracker({ docs }: { docs: Doc[] }) {
 
       {!loading && links.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[660px]">
+          <table className="w-full text-sm min-w-[660px] rcard">
             <thead><tr className="border-b border-[var(--color-border)]">{["Document", "Recipient", "Access", "Created", "Expires", "Status", "Actions"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {links.map(l => {
                 const s = linkState(l);
                 return (
                   <tr key={l.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium">{l.docName}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{l.recipient || "-"}</td>
-                    <td className="px-3 py-2.5 text-xs capitalize">{l.access === "download" ? "Download" : "View"}</td>
-                    <td className="px-3 py-2.5 text-xs">{format(new Date(l.createdAt), "d MMM")}</td>
-                    <td className="px-3 py-2.5 text-xs">{l.expiresAt ? format(new Date(l.expiresAt), "d MMM yyyy") : "Never"}</td>
-                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${s.style}`}>{s.label}</span></td>
-                    <td className="px-3 py-2.5">
+                    <td data-label="Document" className="px-3 py-2.5 text-xs font-medium">{l.docName}</td>
+                    <td data-label="Recipient" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{l.recipient || "-"}</td>
+                    <td data-label="Access" className="px-3 py-2.5 text-xs capitalize">{l.access === "download" ? "Download" : "View"}</td>
+                    <td data-label="Created" className="px-3 py-2.5 text-xs">{format(new Date(l.createdAt), "d MMM")}</td>
+                    <td data-label="Expires" className="px-3 py-2.5 text-xs">{l.expiresAt ? format(new Date(l.expiresAt), "d MMM yyyy") : "Never"}</td>
+                    <td data-label="Status" className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${s.style}`}>{s.label}</span></td>
+                    <td data-label="" className="px-3 py-2.5">
                       <div className="flex items-center gap-2">
                         <button onClick={() => copyLink(l)} className="text-[10px] text-[var(--color-primary)] hover:underline flex items-center gap-0.5"><Copy size={10} /> Copy</button>
                         {!l.revokedAt && <button onClick={() => void revoke(l.id)} className="text-[10px] text-red-400 hover:underline">Revoke</button>}
-                        <button onClick={() => void remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                        <button onClick={() => void remove(l.id)} aria-label="Delete share link" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
                       </div>
                     </td>
                   </tr>
@@ -1642,7 +1646,7 @@ function KycCollector() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs tabular-nums text-[var(--color-muted)]">{got}/{KYC_DOCS.length}</span>
-                <button onClick={() => remove(p.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                <button onClick={() => remove(p.id)} aria-label="Remove counterparty" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1730,20 +1734,20 @@ function ContractKeyDates() {
 
       {enriched.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[680px]">
+          <table className="w-full text-sm min-w-[680px] rcard">
             <thead><tr className="border-b border-[var(--color-border)]">{["Contract", "Event", "Counterparty", "Date", "Countdown", "Status", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {enriched.map(d => {
                 const t = tone(d.days);
                 return (
                   <tr key={d.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium">{d.contract}{d.note ? <span className="block text-[10px] text-[var(--color-muted)]">{d.note}</span> : null}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{d.kind}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{d.counterparty || "-"}</td>
-                    <td className="px-3 py-2.5 text-xs">{format(new Date(d.date), "d MMM yyyy")}</td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${t.txt}`}>{d.days < 0 ? `${Math.abs(d.days)}d ago` : `in ${d.days}d`}</td>
-                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${t.badge}`}>{t.label}</span></td>
-                    <td className="px-3 py-2.5"><button onClick={() => setDates(prev => prev.filter(x => x.id !== d.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    <td data-label="Contract" className="px-3 py-2.5 text-xs font-medium">{d.contract}{d.note ? <span className="block text-[10px] text-[var(--color-muted)]">{d.note}</span> : null}</td>
+                    <td data-label="Event" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{d.kind}</td>
+                    <td data-label="Counterparty" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{d.counterparty || "-"}</td>
+                    <td data-label="Date" className="px-3 py-2.5 text-xs">{format(new Date(d.date), "d MMM yyyy")}</td>
+                    <td data-label="Countdown" className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${t.txt}`}>{d.days < 0 ? `${Math.abs(d.days)}d ago` : `in ${d.days}d`}</td>
+                    <td data-label="Status" className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${t.badge}`}>{t.label}</span></td>
+                    <td data-label="" className="px-3 py-2.5"><button onClick={() => setDates(prev => prev.filter(x => x.id !== d.id))} aria-label="Remove contract date" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                   </tr>
                 );
               })}
@@ -1839,22 +1843,22 @@ function BillFilingTracker() {
 
       {shown.length > 0 ? (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[660px]">
+          <table className="w-full text-sm min-w-[660px] rcard">
             <thead><tr className="border-b border-[var(--color-border)]">{["Vendor", "Bill no.", "Amount", "Bill date", "Location", "", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {shown.map(i => (
                 <tr key={i.id} className="hover:bg-white/2">
-                  <td className="px-3 py-2.5 text-xs font-medium">{i.vendor}</td>
-                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.billNo || "-"}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{i.amount > 0 ? fc(i.amount) : "-"}</td>
-                  <td className="px-3 py-2.5 text-xs">{format(new Date(i.billDate), "d MMM yyyy")}</td>
-                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.location || "-"}</td>
-                  <td className="px-3 py-2.5">
+                  <td data-label="Vendor" className="px-3 py-2.5 text-xs font-medium">{i.vendor}</td>
+                  <td data-label="Bill no." className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.billNo || "-"}</td>
+                  <td data-label="Amount" className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{i.amount > 0 ? fc(i.amount) : "-"}</td>
+                  <td data-label="Bill date" className="px-3 py-2.5 text-xs">{format(new Date(i.billDate), "d MMM yyyy")}</td>
+                  <td data-label="Location" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.location || "-"}</td>
+                  <td data-label="" className="px-3 py-2.5">
                     {i.status === "to-file"
                       ? <button onClick={() => markFiled(i.id)} className="text-[10px] text-green-400 hover:underline flex items-center gap-1"><CheckCircle2 size={11} /> Mark filed</button>
                       : <span className="text-[10px] text-[var(--color-muted)] flex items-center gap-1"><Archive size={11} /> Filed {i.filedAt ? format(new Date(i.filedAt), "d MMM") : ""} <button onClick={() => unfile(i.id)} className="ml-1 hover:underline">undo</button></span>}
                   </td>
-                  <td className="px-3 py-2.5"><button onClick={() => setItems(prev => prev.filter(x => x.id !== i.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  <td data-label="" className="px-3 py-2.5"><button onClick={() => setItems(prev => prev.filter(x => x.id !== i.id))} aria-label="Remove bill" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                 </tr>
               ))}
             </tbody>
@@ -1952,29 +1956,29 @@ function ApprovalFlow() {
 
       {reqs.length > 0 ? (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[720px]">
+          <table className="w-full text-sm min-w-[720px] rcard">
             <thead><tr className="border-b border-[var(--color-border)]">{["Document", "Approver", "Amount", "Raised", "Status", "Actions"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {reqs.map(r => (
                 <tr key={r.id} className="hover:bg-white/2">
-                  <td className="px-3 py-2.5 text-xs font-medium">{r.title}
+                  <td data-label="Document" className="px-3 py-2.5 text-xs font-medium">{r.title}
                     {r.reason ? <span className="block text-[10px] text-[var(--color-muted)]">{r.reason}</span> : null}
                     {r.raisedBy ? <span className="block text-[10px] text-[var(--color-muted)]">by {r.raisedBy}</span> : null}
                   </td>
-                  <td className="px-3 py-2.5 text-xs">{r.approver}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{r.amount > 0 ? fc(r.amount) : "-"}</td>
-                  <td className="px-3 py-2.5 text-xs">{format(new Date(r.raisedAt), "d MMM")}</td>
-                  <td className="px-3 py-2.5">
+                  <td data-label="Approver" className="px-3 py-2.5 text-xs">{r.approver}</td>
+                  <td data-label="Amount" className="px-3 py-2.5 text-xs tabular-nums text-orange-400">{r.amount > 0 ? fc(r.amount) : "-"}</td>
+                  <td data-label="Raised" className="px-3 py-2.5 text-xs">{format(new Date(r.raisedAt), "d MMM")}</td>
+                  <td data-label="Status" className="px-3 py-2.5">
                     <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span>
                     {r.status !== "pending" && r.decisionNote ? <span className="block text-[10px] text-[var(--color-muted)] mt-0.5 max-w-[160px] truncate">{r.decisionNote}</span> : null}
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td data-label="" className="px-3 py-2.5">
                     <div className="flex items-center gap-2">
                       {r.status === "pending" && <>
                         <button onClick={() => decide(r.id, "approved")} className="text-[10px] text-green-400 hover:underline flex items-center gap-0.5"><ThumbsUp size={10} /> Approve</button>
                         <button onClick={() => decide(r.id, "rejected")} className="text-[10px] text-red-400 hover:underline flex items-center gap-0.5"><XCircle size={10} /> Reject</button>
                       </>}
-                      <button onClick={() => setReqs(prev => prev.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                      <button onClick={() => setReqs(prev => prev.filter(x => x.id !== r.id))} aria-label="Remove approval request" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
                     </div>
                   </td>
                 </tr>
@@ -2086,18 +2090,18 @@ function GstinValidator() {
 
       {register.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm min-w-[640px] rcard">
             <thead><tr className="border-b border-[var(--color-border)]">{["Party", "GSTIN", "State", "PAN", "Checked", "Result", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {register.map(e => (
                 <tr key={e.id} className="hover:bg-white/2">
-                  <td className="px-3 py-2.5 text-xs font-medium">{e.label}</td>
-                  <td className="px-3 py-2.5 text-xs font-mono">{e.gstin}</td>
-                  <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{e.state || "-"}</td>
-                  <td className="px-3 py-2.5 text-xs font-mono text-[var(--color-muted)]">{e.pan || "-"}</td>
-                  <td className="px-3 py-2.5 text-xs">{format(new Date(e.checkedAt), "d MMM")}</td>
-                  <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${e.valid ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-red-900/30 text-red-400 border-red-800/40"}`}>{e.valid ? "Valid" : "Invalid"}</span></td>
-                  <td className="px-3 py-2.5"><button onClick={() => setRegister(prev => prev.filter(x => x.id !== e.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  <td data-label="Party" className="px-3 py-2.5 text-xs font-medium">{e.label}</td>
+                  <td data-label="GSTIN" className="px-3 py-2.5 text-xs font-mono">{e.gstin}</td>
+                  <td data-label="State" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{e.state || "-"}</td>
+                  <td data-label="PAN" className="px-3 py-2.5 text-xs font-mono text-[var(--color-muted)]">{e.pan || "-"}</td>
+                  <td data-label="Checked" className="px-3 py-2.5 text-xs">{format(new Date(e.checkedAt), "d MMM")}</td>
+                  <td data-label="Result" className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${e.valid ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-red-900/30 text-red-400 border-red-800/40"}`}>{e.valid ? "Valid" : "Invalid"}</span></td>
+                  <td data-label="" className="px-3 py-2.5"><button onClick={() => setRegister(prev => prev.filter(x => x.id !== e.id))} aria-label="Remove register entry" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                 </tr>
               ))}
             </tbody>
@@ -2194,7 +2198,7 @@ function DocumentRequestTracker() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs tabular-nums text-[var(--color-muted)]">{got}/{r.items.length}</span>
-                <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                <button onClick={() => remove(r.id)} aria-label="Remove document request" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
               </div>
             </div>
             <div className="space-y-1">
@@ -2357,26 +2361,26 @@ function ComplianceCalendar() {
 
       {enriched.length > 0 ? (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[680px]">
+          <table className="w-full text-sm min-w-[680px] rcard">
             <thead><tr className="border-b border-[var(--color-border)]">{["Filing", "Category", "Due", "Countdown", "Docs", "Status", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {enriched.map(t => {
                 const tn = tone(t);
                 return (
                   <tr key={t.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium">{t.name}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{t.category}</td>
-                    <td className="px-3 py-2.5 text-xs">{format(new Date(t.dueDate), "d MMM yyyy")}</td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${t.filed ? "text-[var(--color-muted)]" : tn.txt}`}>{t.filed ? "-" : t.days < 0 ? `${Math.abs(t.days)}d ago` : `in ${t.days}d`}</td>
-                    <td className="px-3 py-2.5">
+                    <td data-label="Filing" className="px-3 py-2.5 text-xs font-medium">{t.name}</td>
+                    <td data-label="Category" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{t.category}</td>
+                    <td data-label="Due" className="px-3 py-2.5 text-xs">{format(new Date(t.dueDate), "d MMM yyyy")}</td>
+                    <td data-label="Countdown" className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${t.filed ? "text-[var(--color-muted)]" : tn.txt}`}>{t.filed ? "-" : t.days < 0 ? `${Math.abs(t.days)}d ago` : `in ${t.days}d`}</td>
+                    <td data-label="Docs" className="px-3 py-2.5">
                       <button onClick={() => toggleDocs(t.id)} className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium flex items-center gap-1 ${t.docsReady ? "bg-green-900/30 text-green-400 border-green-800/40" : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>
                         {t.docsReady ? <CheckCircle2 size={10} /> : <Clock size={10} />} {t.docsReady ? "Ready" : "Pending"}
                       </button>
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td data-label="Status" className="px-3 py-2.5">
                       <button onClick={() => toggleFiled(t.id)} className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${tn.badge}`}>{tn.label}</button>
                     </td>
-                    <td className="px-3 py-2.5"><button onClick={() => remove(t.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    <td data-label="" className="px-3 py-2.5"><button onClick={() => remove(t.id)} aria-label="Remove filing" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                   </tr>
                 );
               })}
@@ -2454,7 +2458,7 @@ function DocumentBundles() {
                 {b.reference && <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-muted)]">{b.reference}</span>}
                 <span className="text-[10px] text-[var(--color-muted)]">{b.docs.length} doc{b.docs.length === 1 ? "" : "s"}</span>
               </button>
-              <button onClick={() => removeBundle(b.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+              <button onClick={() => removeBundle(b.id)} aria-label="Remove bundle" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
             </div>
 
             {b.docs.length > 0 && (
@@ -2464,7 +2468,7 @@ function DocumentBundles() {
                     <FileText size={11} className="text-[var(--color-muted)]" />
                     <span className="text-[var(--color-text)]">{d.name}</span>
                     <span className="text-[var(--color-muted)]">· {d.type}</span>
-                    <button onClick={() => removeDoc(b.id, d.id)} className="text-[var(--color-muted)] hover:text-red-400">✕</button>
+                    <button onClick={() => removeDoc(b.id, d.id)} aria-label="Remove document from bundle" className="text-[var(--color-muted)] hover:text-red-400">✕</button>
                   </span>
                 ))}
               </div>
@@ -2557,7 +2561,7 @@ function StorageUsageSummary() {
                   <span className={`font-medium ${cat.color}`}>{cat.label} <span className="text-[var(--color-muted)]">· {l.count} file{l.count > 1 ? "s" : ""}</span></span>
                   <span className="flex items-center gap-2">
                     <span className="tabular-nums">{fmtMb(l.mb)} ({pct.toFixed(0)}%)</span>
-                    <button onClick={() => setLines(prev => prev.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400">✕</button>
+                    <button onClick={() => setLines(prev => prev.filter(x => x.id !== l.id))} aria-label="Remove usage entry" className="text-[var(--color-muted)] hover:text-red-400">✕</button>
                   </span>
                 </div>
                 <div className="h-2 rounded-full bg-[var(--color-bg)] overflow-hidden">
@@ -2625,7 +2629,7 @@ function AccessPermissionMatrix() {
         <EmptyState icon={KeyRound} title="No access rules yet" description="Add a role to generate a permission row across every document category, then click cells to set view, edit or manage access." />
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm min-w-[640px] rcard">
             <thead><tr className="border-b border-[var(--color-border)]">
               <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">Role</th>
               {CATEGORIES.map(c => <th key={c.id} className="px-3 py-2.5 text-center text-xs font-semibold text-[var(--color-muted)]">{c.label}</th>)}
@@ -2634,17 +2638,17 @@ function AccessPermissionMatrix() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {roles.map(r => (
                 <tr key={r} className="hover:bg-white/2">
-                  <td className="px-3 py-2.5 text-xs font-medium">{r}</td>
+                  <td data-label="Role" className="px-3 py-2.5 text-xs font-medium">{r}</td>
                   {CATEGORIES.map(c => {
                     const cell = rules.find(x => x.role === r && x.category === c.id);
-                    if (!cell) return <td key={c.id} />;
+                    if (!cell) return <td key={c.id} data-label="" />;
                     return (
-                      <td key={c.id} className="px-3 py-2.5 text-center">
+                      <td key={c.id} data-label={c.label} className="px-3 py-2.5 text-center">
                         <button onClick={() => cycle(cell.id)} className={`text-[9px] px-2 py-0.5 rounded-full border font-medium capitalize ${ACCESS_STYLE[cell.level]}`}>{cell.level}</button>
                       </td>
                     );
                   })}
-                  <td className="px-3 py-2.5 text-right"><button onClick={() => removeRole(r)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                  <td data-label="" className="px-3 py-2.5 text-right"><button onClick={() => removeRole(r)} aria-label="Remove role" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                 </tr>
               ))}
             </tbody>
@@ -2691,7 +2695,7 @@ function WatermarkNoteGenerator() {
           <input value={docName} onChange={e => setDocName(e.target.value)} placeholder="Document name (optional)" className={INP} />
           <input value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="Recipient / party (optional)" className={INP} />
           <label className="flex items-center gap-2 text-sm text-[var(--color-muted)]">
-            <button type="button" onClick={() => setIncludeDate(v => !v)} className={`w-8 h-4 rounded-full transition-colors shrink-0 relative ${includeDate ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}>
+            <button type="button" aria-label="Include issue date" onClick={() => setIncludeDate(v => !v)} className={`w-8 h-4 rounded-full transition-colors shrink-0 relative ${includeDate ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}>
               <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${includeDate ? "left-4" : "left-0.5"}`} />
             </button>
             Include issue date
@@ -2846,7 +2850,7 @@ function VersionLog() {
                         <p className="text-xs font-medium tabular-nums">{v.version}</p>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] text-[var(--color-muted)]">{v.changedBy} · {format(new Date(v.loggedAt), "d MMM yyyy")}</span>
-                          <button onClick={() => setEntries(prev => prev.filter(x => x.id !== v.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                          <button onClick={() => setEntries(prev => prev.filter(x => x.id !== v.id))} aria-label="Remove version entry" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
                         </div>
                       </div>
                       {v.note && <p className="text-xs text-[var(--color-muted)] mt-0.5">{v.note}</p>}
@@ -2931,21 +2935,21 @@ function SignatoryRegister() {
             ))}
           </div>
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm min-w-[640px] rcard">
               <thead><tr className="border-b border-[var(--color-border)]">{["Name", "Designation", "Authority", "Limit", "On file", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {people.map(p => (
                   <tr key={p.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium">{p.name}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{p.designation}</td>
-                    <td className="px-3 py-2.5 text-xs">{p.authority}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{p.limit > 0 ? fc(p.limit) : "No limit"}</td>
-                    <td className="px-3 py-2.5">
+                    <td data-label="Name" className="px-3 py-2.5 text-xs font-medium">{p.name}</td>
+                    <td data-label="Designation" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{p.designation}</td>
+                    <td data-label="Authority" className="px-3 py-2.5 text-xs">{p.authority}</td>
+                    <td data-label="Limit" className="px-3 py-2.5 text-xs tabular-nums">{p.limit > 0 ? fc(p.limit) : "No limit"}</td>
+                    <td data-label="On file" className="px-3 py-2.5">
                       <button onClick={() => toggleFile(p.id)} className={`text-[9px] px-2 py-0.5 rounded-full border font-medium ${p.signatureOnFile ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
                         {p.signatureOnFile ? "On file" : "Pending"}
                       </button>
                     </td>
-                    <td className="px-3 py-2.5"><button onClick={() => setPeople(prev => prev.filter(x => x.id !== p.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    <td data-label="" className="px-3 py-2.5"><button onClick={() => setPeople(prev => prev.filter(x => x.id !== p.id))} aria-label="Remove signatory" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -3016,21 +3020,21 @@ function RedactionChecklist() {
         <EmptyState icon={EyeOff} title="No redactions logged" description="Record each external share with the PII fields you masked, building a DPDP-friendly trail of what left the building and to whom." />
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm min-w-[640px] rcard">
             <thead><tr className="border-b border-[var(--color-border)]">{["Document", "Shared with", "Fields masked", "Logged", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {items.map(it => {
                 const n = redactedCount(it.fields);
                 return (
                   <tr key={it.id} className="hover:bg-white/2 align-top">
-                    <td className="px-3 py-2.5 text-xs font-medium">{it.docName}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{it.sharedWith}</td>
-                    <td className="px-3 py-2.5 text-xs">
+                    <td data-label="Document" className="px-3 py-2.5 text-xs font-medium">{it.docName}</td>
+                    <td data-label="Shared with" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{it.sharedWith}</td>
+                    <td data-label="Fields masked" className="px-3 py-2.5 text-xs">
                       <span className={`text-[9px] px-2 py-0.5 rounded-full border font-medium ${n > 0 ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{n} masked</span>
                       <span className="block text-[10px] text-[var(--color-muted)] mt-1">{REDACT_FIELDS.filter(k => it.fields[k]).join(", ") || "none"}</span>
                     </td>
-                    <td className="px-3 py-2.5 text-xs">{format(new Date(it.loggedAt), "d MMM yyyy")}</td>
-                    <td className="px-3 py-2.5"><button onClick={() => setItems(prev => prev.filter(x => x.id !== it.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    <td data-label="Logged" className="px-3 py-2.5 text-xs">{format(new Date(it.loggedAt), "d MMM yyyy")}</td>
+                    <td data-label="" className="px-3 py-2.5"><button onClick={() => setItems(prev => prev.filter(x => x.id !== it.id))} aria-label="Remove redaction entry" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                   </tr>
                 );
               })}
@@ -3182,7 +3186,7 @@ function ObligationTracker() {
                 : i.days <= 7 ? "text-yellow-400" : "text-[var(--color-muted)]";
               return (
                 <div key={i.id} className="flex items-center gap-3 px-4 py-3">
-                  <button onClick={() => toggle(i.id)} className="shrink-0">
+                  <button onClick={() => toggle(i.id)} aria-label={i.done ? "Mark obligation as not done" : "Mark obligation as done"} className="shrink-0">
                     {i.done ? <CheckCircle2 size={16} className="text-green-400" /> : <XCircle size={16} className="text-[var(--color-muted)]" />}
                   </button>
                   <div className="flex-1 min-w-0">
@@ -3195,7 +3199,7 @@ function ObligationTracker() {
                       {!i.done && i.days !== null && (i.days < 0 ? ` · ${Math.abs(i.days)}d overdue` : i.days === 0 ? " · today" : ` · in ${i.days}d`)}
                     </span>
                   )}
-                  <button onClick={() => setItems(prev => prev.filter(x => x.id !== i.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs shrink-0">✕</button>
+                  <button onClick={() => setItems(prev => prev.filter(x => x.id !== i.id))} aria-label="Remove obligation" className="text-[var(--color-muted)] hover:text-red-400 text-xs shrink-0">✕</button>
                 </div>
               );
             })}
@@ -3275,7 +3279,7 @@ function AgreementRepository() {
                 <td data-label="Type" className="py-1.5 capitalize">{o.type.replace("_", " ")}</td>
                 <td data-label="Agreement" className="py-1.5">{o.title} {o.counterparty && <span className="text-[var(--color-muted)]">({o.counterparty})</span>}</td>
                 <td data-label="What" className="py-1.5 text-xs text-[var(--color-muted)]">{o.description}</td>
-                <td className="py-1.5"><button onClick={() => setStatus(o.id, "done")} className="text-[11px] text-emerald-400 border border-emerald-800/40 px-2 py-0.5 rounded">Done</button></td>
+                <td data-label="" className="py-1.5"><button onClick={() => setStatus(o.id, "done")} className="text-[11px] text-emerald-400 border border-emerald-800/40 px-2 py-0.5 rounded">Done</button></td>
               </tr>
             ))}
           </tbody></table>
@@ -3293,7 +3297,7 @@ function AgreementRepository() {
                 <td data-label="Counterparty" className="py-1.5">{a.counterparty || "—"}</td>
                 <td data-label="Renewal" className="py-1.5">{a.renewal_date || a.end_date || "—"}{a.auto_renew && <span className="text-[10px] text-amber-400 ml-1">auto</span>}</td>
                 <td data-label="Value" className="py-1.5">{a.value_amount != null ? formatCurrency(a.value_amount) : "—"}</td>
-                <td className="py-1.5"><button onClick={() => del(a.id)} className="text-red-400"><Trash2 size={13} /></button></td>
+                <td data-label="" className="py-1.5"><button onClick={() => del(a.id)} aria-label="Delete agreement" className="text-red-400"><Trash2 size={13} /></button></td>
               </tr>
             ))}
           </tbody></table>

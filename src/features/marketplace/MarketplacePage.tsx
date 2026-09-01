@@ -551,7 +551,7 @@ function SettlementRecon() {
           <div className={`${CARD} overflow-hidden`}>
             <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Settlement lines</p></div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm rcard min-w-[640px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Order", "Order value", "Fees", "Refunds", "TCS", "Net", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -562,13 +562,13 @@ function SettlementRecon() {
                     const net = l.orderValue - l.fees - l.refunds - l.tcs;
                     return (
                       <tr key={l.id} className="hover:bg-white/2">
-                        <td className="px-4 py-2.5 font-medium text-xs">{l.orderId}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{formatCurrency(l.orderValue)}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(l.fees)}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(l.refunds)}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-purple-400">{formatCurrency(l.tcs)}</td>
-                        <td className={`px-4 py-2.5 tabular-nums font-semibold ${net >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(net))}</td>
-                        <td className="px-4 py-2.5 text-right"><button onClick={() => setLines(lines.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                        <td data-label="Order" className="px-4 py-2.5 font-medium text-xs">{l.orderId}</td>
+                        <td data-label="Order value" className="px-4 py-2.5 tabular-nums">{formatCurrency(l.orderValue)}</td>
+                        <td data-label="Fees" className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(l.fees)}</td>
+                        <td data-label="Refunds" className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(l.refunds)}</td>
+                        <td data-label="TCS" className="px-4 py-2.5 tabular-nums text-purple-400">{formatCurrency(l.tcs)}</td>
+                        <td data-label="Net" className={`px-4 py-2.5 tabular-nums font-semibold ${net >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(net))}</td>
+                        <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove settlement line" onClick={() => setLines(lines.filter(x => x.id !== l.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                       </tr>
                     );
                   })}
@@ -756,7 +756,7 @@ function RtoLossTracker() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm rcard min-w-[640px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["SKU", "Channel", "Type", "Order ₹", "Freight (fwd+rev)", "Events", "Loss", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -765,14 +765,14 @@ function RtoLossTracker() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {rows.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
-                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.channel}</td>
-                      <td className="px-4 py-2.5 text-xs uppercase">{r.kind}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.orderValue)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.fwdFreight + r.revFreight)}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.count}</td>
-                      <td className="px-4 py-2.5 tabular-nums font-semibold text-red-400">{formatCurrency(Math.round(rtoLossOf(r)))}</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="SKU" className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
+                      <td data-label="Channel" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.channel}</td>
+                      <td data-label="Type" className="px-4 py-2.5 text-xs uppercase">{r.kind}</td>
+                      <td data-label="Order ₹" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.orderValue)}</td>
+                      <td data-label="Freight (fwd+rev)" className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.fwdFreight + r.revFreight)}</td>
+                      <td data-label="Events" className="px-4 py-2.5 tabular-nums">{r.count}</td>
+                      <td data-label="Loss" className="px-4 py-2.5 tabular-nums font-semibold text-red-400">{formatCurrency(Math.round(rtoLossOf(r)))}</td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove return event" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -873,7 +873,7 @@ function SalesConsolidator() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[700px]">
+              <table className="w-full text-sm rcard min-w-[700px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Channel", "Source", "Orders", "Gross", "Fees", "Returns", "Net", "Mix %", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -882,19 +882,19 @@ function SalesConsolidator() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {merged.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{r.channel}</td>
-                      <td className="px-4 py-2.5">
+                      <td data-label="Channel" className="px-4 py-2.5 font-medium">{r.channel}</td>
+                      <td data-label="Source" className="px-4 py-2.5">
                         <span className={`text-[10px] px-1.5 py-0.5 rounded ${r.source === "imported" ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)]" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>{r.source === "imported" ? "Imported" : "Manual"}</span>
                       </td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.orders}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.grossSales)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(r.fees)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.returns)}</td>
-                      <td className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(Math.round(net(r)))}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{totNet > 0 ? `${Math.round((net(r) / totNet) * 100)}%` : "-"}</td>
-                      <td className="px-4 py-2.5 text-right">
+                      <td data-label="Orders" className="px-4 py-2.5 tabular-nums">{r.orders}</td>
+                      <td data-label="Gross" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.grossSales)}</td>
+                      <td data-label="Fees" className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(r.fees)}</td>
+                      <td data-label="Returns" className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.returns)}</td>
+                      <td data-label="Net" className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(Math.round(net(r)))}</td>
+                      <td data-label="Mix %" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{totNet > 0 ? `${Math.round((net(r) / totNet) * 100)}%` : "-"}</td>
+                      <td data-label="" className="px-4 py-2.5 text-right">
                         {r.source === "manual"
-                          ? <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                          ? <button aria-label="Remove channel row" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
                           : <span className="text-[10px] text-[var(--color-muted)]">CSV</span>}
                       </td>
                     </tr>
@@ -1001,7 +1001,7 @@ function PayoutCalendar() {
           <div className={`${CARD} p-4`}><p className="text-xs text-[var(--color-muted)] mb-1">Total locked in payouts</p><p className="text-xl font-bold tabular-nums text-yellow-400">{formatCurrency(Math.round(totalPending))}</p></div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[560px]">
+              <table className="w-full text-sm rcard min-w-[560px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Channel", "Cycle", "Last payout", "Next payout", "When", "Pending", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1010,17 +1010,17 @@ function PayoutCalendar() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {projected.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{r.channel}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.cycleDays}d</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.lastPayout}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.next}</td>
-                      <td className="px-4 py-2.5">
+                      <td data-label="Channel" className="px-4 py-2.5 font-medium">{r.channel}</td>
+                      <td data-label="Cycle" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.cycleDays}d</td>
+                      <td data-label="Last payout" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.lastPayout}</td>
+                      <td data-label="Next payout" className="px-4 py-2.5 tabular-nums">{r.next}</td>
+                      <td data-label="When" className="px-4 py-2.5">
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${r.daysAway <= 0 ? "bg-green-950/30 text-green-400" : r.daysAway <= 3 ? "bg-yellow-950/30 text-yellow-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>
                           {r.daysAway <= 0 ? "Due / overdue" : r.daysAway === 1 ? "Tomorrow" : `${r.daysAway}d`}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 tabular-nums text-yellow-400">{formatCurrency(r.pendingAmount)}</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="Pending" className="px-4 py-2.5 tabular-nums text-yellow-400">{formatCurrency(r.pendingAmount)}</td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove channel" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -1083,7 +1083,7 @@ function Tcs52Tracker() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[560px]">
+              <table className="w-full text-sm rcard min-w-[560px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Operator", "Month", "Net sales", "TCS @1%", "GSTR-8 matched", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1092,17 +1092,17 @@ function Tcs52Tracker() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {rows.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{r.operator}</td>
-                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.month}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.netTaxableSales)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-purple-400 font-semibold">{formatCurrency(r.tcsCollected)}</td>
-                      <td className="px-4 py-2.5">
+                      <td data-label="Operator" className="px-4 py-2.5 font-medium">{r.operator}</td>
+                      <td data-label="Month" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.month}</td>
+                      <td data-label="Net sales" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.netTaxableSales)}</td>
+                      <td data-label="TCS @1%" className="px-4 py-2.5 tabular-nums text-purple-400 font-semibold">{formatCurrency(r.tcsCollected)}</td>
+                      <td data-label="GSTR-8 matched" className="px-4 py-2.5">
                         <button onClick={() => setRows(rows.map(x => x.id === r.id ? { ...x, reconciled: !x.reconciled } : x))}
                           className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${r.reconciled ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
                           {r.reconciled ? "Matched" : "Unmatched"}
                         </button>
                       </td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove entry" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -1171,7 +1171,7 @@ function SkuPnL() {
       {rows.length > 0 && (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[760px]">
+            <table className="w-full text-sm rcard min-w-[760px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["SKU", "Channel", "Price", "Net / unit", "Margin %", "Units", "Total profit", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1184,14 +1184,14 @@ function SkuPnL() {
                   const total = netUnit * r.unitsSold;
                   return (
                     <tr key={r.id} className={`hover:bg-white/2 ${netUnit < 0 ? "bg-red-950/15" : ""}`}>
-                      <td className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
-                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.channel}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.price)}</td>
-                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${netUnit >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(netUnit))}</td>
-                      <td className={`px-4 py-2.5 tabular-nums ${marginPct >= 0 ? "text-[var(--color-text)]" : "text-red-400"}`}>{marginPct.toFixed(1)}%</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.unitsSold}</td>
-                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${total >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(total))}</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="SKU" className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
+                      <td data-label="Channel" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.channel}</td>
+                      <td data-label="Price" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.price)}</td>
+                      <td data-label="Net / unit" className={`px-4 py-2.5 tabular-nums font-semibold ${netUnit >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(netUnit))}</td>
+                      <td data-label="Margin %" className={`px-4 py-2.5 tabular-nums ${marginPct >= 0 ? "text-[var(--color-text)]" : "text-red-400"}`}>{marginPct.toFixed(1)}%</td>
+                      <td data-label="Units" className="px-4 py-2.5 tabular-nums">{r.unitsSold}</td>
+                      <td data-label="Total profit" className={`px-4 py-2.5 tabular-nums font-semibold ${total >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.round(total))}</td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove SKU" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   );
                 })}
@@ -1510,7 +1510,7 @@ function InventorySync() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[720px]">
+              <table className="w-full text-sm rcard min-w-[720px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["SKU", "Warehouse", "Amazon", "Flipkart", "Meesho", "ONDC", "Listed", "Status", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1522,17 +1522,17 @@ function InventorySync() {
                     const over = lst > r.warehouse;
                     return (
                       <tr key={r.id} className={`hover:bg-white/2 ${over ? "bg-red-950/15" : ""}`}>
-                        <td className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{r.warehouse}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{r.amazon}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{r.flipkart}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{r.meesho}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{r.ondc}</td>
-                        <td className="px-4 py-2.5 tabular-nums font-semibold">{lst}</td>
-                        <td className="px-4 py-2.5">
+                        <td data-label="SKU" className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
+                        <td data-label="Warehouse" className="px-4 py-2.5 tabular-nums">{r.warehouse}</td>
+                        <td data-label="Amazon" className="px-4 py-2.5 tabular-nums">{r.amazon}</td>
+                        <td data-label="Flipkart" className="px-4 py-2.5 tabular-nums">{r.flipkart}</td>
+                        <td data-label="Meesho" className="px-4 py-2.5 tabular-nums">{r.meesho}</td>
+                        <td data-label="ONDC" className="px-4 py-2.5 tabular-nums">{r.ondc}</td>
+                        <td data-label="Listed" className="px-4 py-2.5 tabular-nums font-semibold">{lst}</td>
+                        <td data-label="Status" className="px-4 py-2.5">
                           <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${over ? "bg-red-900/30 text-red-400 border-red-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>{over ? `Oversold ${lst - r.warehouse}` : "In sync"}</span>
                         </td>
-                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                        <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove SKU" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                       </tr>
                     );
                   })}
@@ -1665,7 +1665,7 @@ function PpcBudgetAllocator() {
               <div key={r.id}>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-medium flex items-center gap-2">{r.campaign}
-                    <button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400">✕</button>
+                    <button aria-label="Remove campaign" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400">✕</button>
                   </span>
                   <span className="tabular-nums text-[var(--color-primary)] font-semibold">{formatCurrency(Math.round(alloc))} · {(share * 100).toFixed(0)}%</span>
                 </div>
@@ -1812,7 +1812,7 @@ function RatingTracker() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[560px]">
+              <table className="w-full text-sm rcard min-w-[560px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["SKU", "Channel", "Rating", "Reviews", "Status", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1821,14 +1821,14 @@ function RatingTracker() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {rows.map(r => (
                     <tr key={r.id} className={`hover:bg-white/2 ${r.rating < 4 ? "bg-red-950/15" : ""}`}>
-                      <td className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
-                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.channel}</td>
-                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.rating >= 4 ? "text-green-400" : "text-red-400"}`}>{r.rating.toFixed(1)} ★</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.reviews}</td>
-                      <td className="px-4 py-2.5">
+                      <td data-label="SKU" className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
+                      <td data-label="Channel" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.channel}</td>
+                      <td data-label="Rating" className={`px-4 py-2.5 tabular-nums font-semibold ${r.rating >= 4 ? "text-green-400" : "text-red-400"}`}>{r.rating.toFixed(1)} ★</td>
+                      <td data-label="Reviews" className="px-4 py-2.5 tabular-nums">{r.reviews}</td>
+                      <td data-label="Status" className="px-4 py-2.5">
                         <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${r.rating >= 4 ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-red-900/30 text-red-400 border-red-800/40"}`}>{r.rating >= 4 ? "Healthy" : "At risk"}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove listing" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -1887,7 +1887,7 @@ function Gstr8Recon() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm rcard min-w-[640px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Operator", "Month", "Per books", "In GSTR-8", "Gap", "Status", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1899,15 +1899,15 @@ function Gstr8Recon() {
                     const matched = Math.abs(diff) < 1;
                     return (
                       <tr key={r.id} className={`hover:bg-white/2 ${matched ? "" : "bg-red-950/15"}`}>
-                        <td className="px-4 py-2.5 font-medium">{r.operator}</td>
-                        <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.month}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.tcsAsPerBooks)}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-purple-400">{formatCurrency(r.tcsInGstr8)}</td>
-                        <td className={`px-4 py-2.5 tabular-nums font-semibold ${matched ? "text-[var(--color-muted)]" : diff < 0 ? "text-red-400" : "text-yellow-400"}`}>{diff >= 0 ? "+" : ""}{formatCurrency(Math.round(diff))}</td>
-                        <td className="px-4 py-2.5">
+                        <td data-label="Operator" className="px-4 py-2.5 font-medium">{r.operator}</td>
+                        <td data-label="Month" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.month}</td>
+                        <td data-label="Per books" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.tcsAsPerBooks)}</td>
+                        <td data-label="In GSTR-8" className="px-4 py-2.5 tabular-nums text-purple-400">{formatCurrency(r.tcsInGstr8)}</td>
+                        <td data-label="Gap" className={`px-4 py-2.5 tabular-nums font-semibold ${matched ? "text-[var(--color-muted)]" : diff < 0 ? "text-red-400" : "text-yellow-400"}`}>{diff >= 0 ? "+" : ""}{formatCurrency(Math.round(diff))}</td>
+                        <td data-label="Status" className="px-4 py-2.5">
                           <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${matched ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-red-900/30 text-red-400 border-red-800/40"}`}>{matched ? "Matched" : diff < 0 ? "Under-reported" : "Over-reported"}</span>
                         </td>
-                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                        <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove entry" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                       </tr>
                     );
                   })}
@@ -1993,7 +1993,7 @@ function RefundCostTracker() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm rcard min-w-[640px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["SKU", "Type", "Order ₹", "Refund ₹", "Lost/Repl COGS", "Events", "Cost", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2002,14 +2002,14 @@ function RefundCostTracker() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {rows.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
-                      <td className="px-4 py-2.5 text-xs uppercase">{r.kind}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.orderValue)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.refundAmt)}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.replacementCogs)}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.count}</td>
-                      <td className="px-4 py-2.5 tabular-nums font-semibold text-red-400">{formatCurrency(Math.round(refundCostOf(r)))}</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="SKU" className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
+                      <td data-label="Type" className="px-4 py-2.5 text-xs uppercase">{r.kind}</td>
+                      <td data-label="Order ₹" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.orderValue)}</td>
+                      <td data-label="Refund ₹" className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.refundAmt)}</td>
+                      <td data-label="Lost/Repl COGS" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.replacementCogs)}</td>
+                      <td data-label="Events" className="px-4 py-2.5 tabular-nums">{r.count}</td>
+                      <td data-label="Cost" className="px-4 py-2.5 tabular-nums font-semibold text-red-400">{formatCurrency(Math.round(refundCostOf(r)))}</td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove refund event" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -2224,7 +2224,7 @@ function BuyBoxTracker() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[680px]">
+              <table className="w-full text-sm rcard min-w-[680px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["SKU", "Channel", "Views", "Wins", "Win %", "Your ₹ vs lowest", "Gap", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2236,14 +2236,14 @@ function BuyBoxTracker() {
                     const gap = r.yourPrice - r.lowestPrice;
                     return (
                       <tr key={r.id} className="hover:bg-white/2">
-                        <td className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
-                        <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.channel}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{r.impressions.toLocaleString("en-IN")}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{r.buyBoxWins.toLocaleString("en-IN")}</td>
-                        <td className={`px-4 py-2.5 tabular-nums font-semibold ${rate >= 80 ? "text-green-400" : rate >= 50 ? "text-yellow-400" : "text-red-400"}`}>{rate.toFixed(0)}%</td>
-                        <td className="px-4 py-2.5 tabular-nums text-xs">{formatCurrency(r.yourPrice)} / {formatCurrency(r.lowestPrice)}</td>
-                        <td className={`px-4 py-2.5 tabular-nums ${gap > 0 ? "text-red-400" : "text-green-400"}`}>{gap > 0 ? `+${formatCurrency(gap)}` : formatCurrency(gap)}</td>
-                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                        <td data-label="SKU" className="px-4 py-2.5 font-medium text-xs">{r.sku}</td>
+                        <td data-label="Channel" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.channel}</td>
+                        <td data-label="Views" className="px-4 py-2.5 tabular-nums">{r.impressions.toLocaleString("en-IN")}</td>
+                        <td data-label="Wins" className="px-4 py-2.5 tabular-nums">{r.buyBoxWins.toLocaleString("en-IN")}</td>
+                        <td data-label="Win %" className={`px-4 py-2.5 tabular-nums font-semibold ${rate >= 80 ? "text-green-400" : rate >= 50 ? "text-yellow-400" : "text-red-400"}`}>{rate.toFixed(0)}%</td>
+                        <td data-label="Your ₹ vs lowest" className="px-4 py-2.5 tabular-nums text-xs">{formatCurrency(r.yourPrice)} / {formatCurrency(r.lowestPrice)}</td>
+                        <td data-label="Gap" className={`px-4 py-2.5 tabular-nums ${gap > 0 ? "text-red-400" : "text-green-400"}`}>{gap > 0 ? `+${formatCurrency(gap)}` : formatCurrency(gap)}</td>
+                        <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove SKU" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                       </tr>
                     );
                   })}
@@ -2312,7 +2312,7 @@ function ReserveReleaseTracker() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[560px]">
+              <table className="w-full text-sm rcard min-w-[560px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Channel", "Held", "Held on", "Release date", "When", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2321,16 +2321,16 @@ function ReserveReleaseTracker() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {projected.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{r.channel}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-yellow-400">{formatCurrency(r.amount)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.heldOn}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.release}</td>
-                      <td className="px-4 py-2.5">
+                      <td data-label="Channel" className="px-4 py-2.5 font-medium">{r.channel}</td>
+                      <td data-label="Held" className="px-4 py-2.5 tabular-nums text-yellow-400">{formatCurrency(r.amount)}</td>
+                      <td data-label="Held on" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.heldOn}</td>
+                      <td data-label="Release date" className="px-4 py-2.5 tabular-nums">{r.release}</td>
+                      <td data-label="When" className="px-4 py-2.5">
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${r.daysAway <= 0 ? "bg-green-950/30 text-green-400" : r.daysAway <= 3 ? "bg-yellow-950/30 text-yellow-400" : "bg-[var(--color-accent)] text-[var(--color-muted)]"}`}>
                           {r.daysAway <= 0 ? "Released" : r.daysAway === 1 ? "Tomorrow" : `${r.daysAway}d`}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove reserve" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -2402,7 +2402,7 @@ function ChargebackLedger() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[680px]">
+              <table className="w-full text-sm rcard min-w-[680px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Order", "Channel", "Reason", "Amount", "Raised", "Status", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2411,12 +2411,12 @@ function ChargebackLedger() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {rows.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium text-xs">{r.orderId}</td>
-                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.channel}</td>
-                      <td className="px-4 py-2.5 text-xs">{r.reason}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
-                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.raisedOn}</td>
-                      <td className="px-4 py-2.5">
+                      <td data-label="Order" className="px-4 py-2.5 font-medium text-xs">{r.orderId}</td>
+                      <td data-label="Channel" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.channel}</td>
+                      <td data-label="Reason" className="px-4 py-2.5 text-xs">{r.reason}</td>
+                      <td data-label="Amount" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.amount)}</td>
+                      <td data-label="Raised" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.raisedOn}</td>
+                      <td data-label="Status" className="px-4 py-2.5">
                         <select value={r.status} onChange={e => setStatus(r.id, e.target.value as ChargebackRow["status"])}
                           className={`text-[10px] px-1.5 py-0.5 rounded border bg-[var(--color-bg)] ${r.status === "won" ? "text-green-400 border-green-800/40" : r.status === "lost" ? "text-red-400 border-red-800/40" : "text-yellow-400 border-yellow-800/40"}`}>
                           <option value="open">Open</option>
@@ -2424,7 +2424,7 @@ function ChargebackLedger() {
                           <option value="lost">Lost</option>
                         </select>
                       </td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove chargeback" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -2483,7 +2483,7 @@ function BundleCogsSplitter() {
               <span className="text-sm">{c.name} <span className="text-[var(--color-muted)] text-xs">× {c.qty}</span></span>
               <span className="flex items-center gap-3">
                 <span className="tabular-nums text-sm">{formatCurrency(c.cogs * c.qty)}</span>
-                <button onClick={() => setComponents(components.filter(x => x.id !== c.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
+                <button aria-label="Remove component" onClick={() => setComponents(components.filter(x => x.id !== c.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button>
               </span>
             </div>
           ))}
@@ -2758,7 +2758,7 @@ function HoldingCostCalculator() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[560px]">
+              <table className="w-full text-sm rcard min-w-[560px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Channel", "Monthly GMV", "Payout lag", "Capital locked", "Annual cost", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2767,12 +2767,12 @@ function HoldingCostCalculator() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {enriched.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{r.channel}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.monthlyGmv)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.payoutDays}d</td>
-                      <td className="px-4 py-2.5 tabular-nums text-yellow-400">{formatCurrency(Math.round(r.lockedCapital))}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(r.annualCost))}</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="Channel" className="px-4 py-2.5 font-medium">{r.channel}</td>
+                      <td data-label="Monthly GMV" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.monthlyGmv)}</td>
+                      <td data-label="Payout lag" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.payoutDays}d</td>
+                      <td data-label="Capital locked" className="px-4 py-2.5 tabular-nums text-yellow-400">{formatCurrency(Math.round(r.lockedCapital))}</td>
+                      <td data-label="Annual cost" className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(r.annualCost))}</td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove channel" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -2840,19 +2840,19 @@ function CouponRoi() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm rcard min-w-[640px]">
                 <thead className="border-b border-[var(--color-border)]"><tr>{["Promo", "Spend", "Incr. units", "Incr. margin", "Net", "ROI", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {enriched.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.spend))}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.incrUnits}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.incrMargin))}</td>
-                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.netGain >= 0 ? "text-green-400" : "text-red-400"}`}>{r.netGain >= 0 ? "+" : ""}{formatCurrency(Math.round(r.netGain))}</td>
-                      <td className={`px-4 py-2.5 tabular-nums ${r.roi >= 0 ? "text-green-400" : "text-red-400"}`}>{(r.roi * 100).toFixed(0)}%</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="Promo" className="px-4 py-2.5 font-medium">{r.name}</td>
+                      <td data-label="Spend" className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.spend))}</td>
+                      <td data-label="Incr. units" className="px-4 py-2.5 tabular-nums">{r.incrUnits}</td>
+                      <td data-label="Incr. margin" className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.incrMargin))}</td>
+                      <td data-label="Net" className={`px-4 py-2.5 tabular-nums font-semibold ${r.netGain >= 0 ? "text-green-400" : "text-red-400"}`}>{r.netGain >= 0 ? "+" : ""}{formatCurrency(Math.round(r.netGain))}</td>
+                      <td data-label="ROI" className={`px-4 py-2.5 tabular-nums ${r.roi >= 0 ? "text-green-400" : "text-red-400"}`}>{(r.roi * 100).toFixed(0)}%</td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove promo" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -2906,7 +2906,7 @@ function ConversionTracker() {
           <div className={`${CARD} p-4 max-w-2xl`}><p className="text-xs text-[var(--color-muted)] mb-1">Blended conversion across {enriched.length} listing(s)</p><p className="text-xl font-bold tabular-nums text-[var(--color-primary)]">{(blended * 100).toFixed(1)}%</p></div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[520px]">
+              <table className="w-full text-sm rcard min-w-[520px]">
                 <thead className="border-b border-[var(--color-border)]"><tr>{["Listing", "Sessions", "Orders", "CVR", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
@@ -2914,11 +2914,11 @@ function ConversionTracker() {
                     const flag = r.cvr < blended * 0.6;
                     return (
                       <tr key={r.id} className="hover:bg-white/2">
-                        <td className="px-4 py-2.5 font-medium flex items-center gap-1.5">{flag && <AlertTriangle size={12} className="text-yellow-400" />}{r.listing}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{r.sessions}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{r.orders}</td>
-                        <td className={`px-4 py-2.5 tabular-nums font-semibold ${flag ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{(r.cvr * 100).toFixed(1)}%</td>
-                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                        <td data-label="Listing" className="px-4 py-2.5 font-medium flex items-center gap-1.5">{flag && <AlertTriangle size={12} className="text-yellow-400" />}{r.listing}</td>
+                        <td data-label="Sessions" className="px-4 py-2.5 tabular-nums">{r.sessions}</td>
+                        <td data-label="Orders" className="px-4 py-2.5 tabular-nums">{r.orders}</td>
+                        <td data-label="CVR" className={`px-4 py-2.5 tabular-nums font-semibold ${flag ? "text-yellow-400" : "text-[var(--color-text)]"}`}>{(r.cvr * 100).toFixed(1)}%</td>
+                        <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove listing" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                       </tr>
                     );
                   })}
@@ -2974,7 +2974,7 @@ function ReturnRateBySku() {
           <div className={`${CARD} p-4 max-w-2xl`}><p className="text-xs text-[var(--color-muted)] mb-1">Portfolio return rate ({totRet} of {totDel} units)</p><p className={`text-xl font-bold tabular-nums ${avg > 0.2 ? "text-red-400" : avg > 0.1 ? "text-yellow-400" : "text-green-400"}`}>{(avg * 100).toFixed(1)}%</p></div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[520px]">
+              <table className="w-full text-sm rcard min-w-[520px]">
                 <thead className="border-b border-[var(--color-border)]"><tr>{["SKU", "Delivered", "Returned", "Return rate", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
@@ -2982,11 +2982,11 @@ function ReturnRateBySku() {
                     const color = r.rate > 0.2 ? "text-red-400" : r.rate > 0.1 ? "text-yellow-400" : "text-green-400";
                     return (
                       <tr key={r.id} className="hover:bg-white/2">
-                        <td className="px-4 py-2.5 font-medium">{r.sku}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{r.delivered}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{r.returned}</td>
-                        <td className={`px-4 py-2.5 tabular-nums font-semibold ${color}`}>{(r.rate * 100).toFixed(1)}%</td>
-                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                        <td data-label="SKU" className="px-4 py-2.5 font-medium">{r.sku}</td>
+                        <td data-label="Delivered" className="px-4 py-2.5 tabular-nums">{r.delivered}</td>
+                        <td data-label="Returned" className="px-4 py-2.5 tabular-nums">{r.returned}</td>
+                        <td data-label="Return rate" className={`px-4 py-2.5 tabular-nums font-semibold ${color}`}>{(r.rate * 100).toFixed(1)}%</td>
+                        <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove SKU" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                       </tr>
                     );
                   })}
@@ -3050,20 +3050,20 @@ function FeeReconciliation() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[560px]">
+              <table className="w-full text-sm rcard min-w-[560px]">
                 <thead className="border-b border-[var(--color-border)]"><tr>{["Order", "Expected", "Charged", "Variance", "Status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {enriched.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{r.order}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.expected))}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.charged))}</td>
-                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.diff > 0 ? "text-red-400" : r.diff < 0 ? "text-green-400" : "text-[var(--color-muted)]"}`}>{r.diff > 0 ? "+" : ""}{formatCurrency(Math.round(r.diff))}</td>
-                      <td className="px-4 py-2.5">{r.overcharged
+                      <td data-label="Order" className="px-4 py-2.5 font-medium">{r.order}</td>
+                      <td data-label="Expected" className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.expected))}</td>
+                      <td data-label="Charged" className="px-4 py-2.5 tabular-nums">{formatCurrency(Math.round(r.charged))}</td>
+                      <td data-label="Variance" className={`px-4 py-2.5 tabular-nums font-semibold ${r.diff > 0 ? "text-red-400" : r.diff < 0 ? "text-green-400" : "text-[var(--color-muted)]"}`}>{r.diff > 0 ? "+" : ""}{formatCurrency(Math.round(r.diff))}</td>
+                      <td data-label="Status" className="px-4 py-2.5">{r.overcharged
                         ? <span className="text-xs text-red-400 flex items-center gap-1"><AlertTriangle size={12} /> Overcharged</span>
                         : <span className="text-xs text-green-400 flex items-center gap-1"><CheckCircle2 size={12} /> OK</span>}</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove line" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -3197,24 +3197,24 @@ function CodRemittanceTracker() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm rcard min-w-[640px]">
                 <thead className="border-b border-[var(--color-border)]"><tr>{["Partner", "Orders", "Collected", "Remitted", "Float", "Due by", "Status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {enriched.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{r.partner}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.orders}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.collected)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(r.remitted)}</td>
-                      <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.float > 0 ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>{formatCurrency(Math.round(r.float))}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.expectedOn}</td>
-                      <td className="px-4 py-2.5">{r.float <= 0
+                      <td data-label="Partner" className="px-4 py-2.5 font-medium">{r.partner}</td>
+                      <td data-label="Orders" className="px-4 py-2.5 tabular-nums">{r.orders}</td>
+                      <td data-label="Collected" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.collected)}</td>
+                      <td data-label="Remitted" className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(r.remitted)}</td>
+                      <td data-label="Float" className={`px-4 py-2.5 tabular-nums font-semibold ${r.float > 0 ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>{formatCurrency(Math.round(r.float))}</td>
+                      <td data-label="Due by" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.expectedOn}</td>
+                      <td data-label="Status" className="px-4 py-2.5">{r.float <= 0
                         ? <span className="text-xs text-green-400 flex items-center gap-1"><CheckCircle2 size={12} /> Settled</span>
                         : r.overdue
                           ? <span className="text-xs text-red-400 flex items-center gap-1"><AlertTriangle size={12} /> Overdue</span>
                           : <span className="text-xs text-yellow-400 flex items-center gap-1"><Hourglass size={12} /> Pending</span>}</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove COD batch" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -3290,7 +3290,7 @@ function GatewayFeeRecon() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm rcard min-w-[640px]">
                 <thead className="border-b border-[var(--color-border)]"><tr>{["Gateway", "Method", "Gross", "Fee", "Net", "Eff %", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
@@ -3298,13 +3298,13 @@ function GatewayFeeRecon() {
                     const fee = feeOf(r);
                     return (
                       <tr key={r.id} className="hover:bg-white/2">
-                        <td className="px-4 py-2.5 font-medium">{r.gateway}</td>
-                        <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.method}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(Math.round(fee))}</td>
-                        <td className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(Math.round(r.gross - fee))}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.gross > 0 ? `${(fee / r.gross * 100).toFixed(2)}%` : "-"}</td>
-                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                        <td data-label="Gateway" className="px-4 py-2.5 font-medium">{r.gateway}</td>
+                        <td data-label="Method" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.method}</td>
+                        <td data-label="Gross" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
+                        <td data-label="Fee" className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(Math.round(fee))}</td>
+                        <td data-label="Net" className="px-4 py-2.5 tabular-nums font-semibold text-green-400">{formatCurrency(Math.round(r.gross - fee))}</td>
+                        <td data-label="Eff %" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.gross > 0 ? `${(fee / r.gross * 100).toFixed(2)}%` : "-"}</td>
+                        <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove transaction" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                       </tr>
                     );
                   })}
@@ -3372,7 +3372,7 @@ function NegativeBalanceTracker() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm rcard min-w-[640px]">
                 <thead className="border-b border-[var(--color-border)]"><tr>{["Channel", "Reason", "Raised", "Amount", "Recovered", "Outstanding", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
@@ -3380,13 +3380,13 @@ function NegativeBalanceTracker() {
                     const out = r.amount - r.recovered;
                     return (
                       <tr key={r.id} className="hover:bg-white/2">
-                        <td className="px-4 py-2.5 font-medium">{r.channel}</td>
-                        <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.reason}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.raisedOn}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(r.amount)}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(r.recovered)}</td>
-                        <td className={`px-4 py-2.5 tabular-nums font-semibold ${out > 0 ? "text-yellow-400" : "text-green-400"}`}>{formatCurrency(Math.round(out))}</td>
-                        <td className="px-4 py-2.5 text-right"><button onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                        <td data-label="Channel" className="px-4 py-2.5 font-medium">{r.channel}</td>
+                        <td data-label="Reason" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.reason}</td>
+                        <td data-label="Raised" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.raisedOn}</td>
+                        <td data-label="Amount" className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(r.amount)}</td>
+                        <td data-label="Recovered" className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(r.recovered)}</td>
+                        <td data-label="Outstanding" className={`px-4 py-2.5 tabular-nums font-semibold ${out > 0 ? "text-yellow-400" : "text-green-400"}`}>{formatCurrency(Math.round(out))}</td>
+                        <td data-label="" className="px-4 py-2.5 text-right"><button aria-label="Remove entry" onClick={() => setRows(rows.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                       </tr>
                     );
                   })}

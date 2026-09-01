@@ -311,7 +311,7 @@ export default function ScenariosPage() {
                   {ev.monthlyImpact >= 0 ? "+" : ""}{formatCurrency(ev.monthlyImpact)}/mo
                 </span>
                 <span className="text-xs text-[var(--color-muted)]">mo {ev.startMonth}-{ev.startMonth + ev.durationMonths}</span>
-                <button onClick={() => removeEvent(ev.id)} className="text-[var(--color-muted)] hover:text-red-400 transition-colors shrink-0">
+                <button onClick={() => removeEvent(ev.id)} aria-label={`Remove ${ev.label}`} className="text-[var(--color-muted)] hover:text-red-400 transition-colors shrink-0">
                   <Trash2 size={13} />
                 </button>
               </div>
@@ -539,14 +539,14 @@ function PriceChangeSimulator() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[420px]">
+        <table className="w-full text-sm min-w-[420px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "Before", "After"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {rows.map(r => (
               <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                <td className="px-4 py-2.5">{r.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.old}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.nw}</td>
+                <td data-label="Metric" className="px-4 py-2.5">{r.label}</td>
+                <td data-label="Before" className="px-4 py-2.5 tabular-nums">{r.old}</td>
+                <td data-label="After" className="px-4 py-2.5 tabular-nums">{r.nw}</td>
               </tr>
             ))}
           </tbody>
@@ -636,7 +636,7 @@ function HeadcountScenario() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[420px]">
+        <table className="w-full text-sm min-w-[420px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "Before hiring", "After hiring"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {[
@@ -646,9 +646,9 @@ function HeadcountScenario() {
               { label: "Runway",          b: runwayLabel(baseRunway), a: runwayLabel(scenRunway), bold: true },
             ].map(r => (
               <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                <td className="px-4 py-2.5">{r.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.b}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.a}</td>
+                <td data-label="Metric" className="px-4 py-2.5">{r.label}</td>
+                <td data-label="Before hiring" className="px-4 py-2.5 tabular-nums">{r.b}</td>
+                <td data-label="After hiring" className="px-4 py-2.5 tabular-nums">{r.a}</td>
               </tr>
             ))}
           </tbody>
@@ -820,7 +820,7 @@ function BreakevenAnalyzer() {
 
       {viable && (
         <div className={`${CARD} p-0 overflow-x-auto`}>
-          <table className="w-full text-sm min-w-[420px]">
+          <table className="w-full text-sm min-w-[420px] rcard">
             <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "Units", "Revenue (₹)"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
             <tbody>
               {[
@@ -829,9 +829,9 @@ function BreakevenAnalyzer() {
                 { label: "Margin of safety", u: mosUnits.toLocaleString("en-IN"), r: fc(Math.round(mosRevenue)), bold: true },
               ].map(r => (
                 <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                  <td className="px-4 py-2.5">{r.label}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{r.u}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{r.r}</td>
+                  <td data-label="Metric" className="px-4 py-2.5">{r.label}</td>
+                  <td data-label="Units" className="px-4 py-2.5 tabular-nums">{r.u}</td>
+                  <td data-label="Revenue (₹)" className="px-4 py-2.5 tabular-nums">{r.r}</td>
                 </tr>
               ))}
             </tbody>
@@ -937,7 +937,7 @@ function RevenueShockStressTest() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[420px]">
+        <table className="w-full text-sm min-w-[420px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "Normal", `After −${(drop * 100).toFixed(0)}%`].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {[
@@ -947,9 +947,9 @@ function RevenueShockStressTest() {
               { label: "Runway",          b: label(baseRunway), a: label(shockRunway), bold: true },
             ].map(r => (
               <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                <td className="px-4 py-2.5">{r.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.b}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.a}</td>
+                <td data-label="Metric" className="px-4 py-2.5">{r.label}</td>
+                <td data-label="Normal" className="px-4 py-2.5 tabular-nums">{r.b}</td>
+                <td data-label={`After −${(drop * 100).toFixed(0)}%`} className="px-4 py-2.5 tabular-nums">{r.a}</td>
               </tr>
             ))}
           </tbody>
@@ -1227,7 +1227,7 @@ function SupplierPriceRiseImpact() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[420px]">
+        <table className="w-full text-sm min-w-[420px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "Before", "After rise"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {[
@@ -1237,9 +1237,9 @@ function SupplierPriceRiseImpact() {
               { label: "Monthly profit", b: fc(Math.round(oldMargin * Q)), a: fc(Math.round(newMargin * Q)), bold: true },
             ].map(r => (
               <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                <td className="px-4 py-2.5">{r.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.b}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.a}</td>
+                <td data-label="Metric" className="px-4 py-2.5">{r.label}</td>
+                <td data-label="Before" className="px-4 py-2.5 tabular-nums">{r.b}</td>
+                <td data-label="After rise" className="px-4 py-2.5 tabular-nums">{r.a}</td>
               </tr>
             ))}
           </tbody>
@@ -1410,7 +1410,7 @@ function MarketingRoiScenario() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[420px]">
+        <table className="w-full text-sm min-w-[420px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "First order", "With LTV"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {[
@@ -1420,9 +1420,9 @@ function MarketingRoiScenario() {
               { label: "Net profit", b: `${netFirst >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(netFirst)))}`, a: `${netLtv >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(netLtv)))}`, bold: true },
             ].map(r => (
               <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                <td className="px-4 py-2.5">{r.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.b}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.a}</td>
+                <td data-label="Metric" className="px-4 py-2.5">{r.label}</td>
+                <td data-label="First order" className="px-4 py-2.5 tabular-nums">{r.b}</td>
+                <td data-label="With LTV" className="px-4 py-2.5 tabular-nums">{r.a}</td>
               </tr>
             ))}
           </tbody>
@@ -1519,7 +1519,7 @@ function CapexBuyVsLease() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[480px]">
+        <table className="w-full text-sm min-w-[480px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Component", "Buy", "Loan", "Lease"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {[
@@ -1529,10 +1529,10 @@ function CapexBuyVsLease() {
               { label: "Net cost", buy: fc(Math.round(buyNet)), loan: fc(Math.round(loanNet)), lease: fc(Math.round(leaseNet)), bold: true },
             ].map(r => (
               <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                <td className="px-4 py-2.5">{r.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.buy}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.loan}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.lease}</td>
+                <td data-label="Component" className="px-4 py-2.5">{r.label}</td>
+                <td data-label="Buy" className="px-4 py-2.5 tabular-nums">{r.buy}</td>
+                <td data-label="Loan" className="px-4 py-2.5 tabular-nums">{r.loan}</td>
+                <td data-label="Lease" className="px-4 py-2.5 tabular-nums">{r.lease}</td>
               </tr>
             ))}
           </tbody>
@@ -1619,7 +1619,7 @@ function DebtVsEquityRaise() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[420px]">
+        <table className="w-full text-sm min-w-[420px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "Term loan", "Equity round"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {[
@@ -1629,9 +1629,9 @@ function DebtVsEquityRaise() {
               { label: "True cost", b: fc(Math.round(debtNetCost)), a: fc(Math.round(equityCostAtExit)), bold: true },
             ].map(row => (
               <tr key={row.label} className={`border-b border-[var(--color-border)] last:border-0 ${row.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                <td className="px-4 py-2.5">{row.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{row.b}</td>
-                <td className="px-4 py-2.5 tabular-nums">{row.a}</td>
+                <td data-label="Metric" className="px-4 py-2.5">{row.label}</td>
+                <td data-label="Term loan" className="px-4 py-2.5 tabular-nums">{row.b}</td>
+                <td data-label="Equity round" className="px-4 py-2.5 tabular-nums">{row.a}</td>
               </tr>
             ))}
           </tbody>
@@ -1730,7 +1730,7 @@ function TopClientLossImpact() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[420px]">
+        <table className="w-full text-sm min-w-[420px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "Now", "After losing top client"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {[
@@ -1740,9 +1740,9 @@ function TopClientLossImpact() {
               { label: "Runway",          b: label(baseRunway), a: label(newRunway), bold: true },
             ].map(row => (
               <tr key={row.label} className={`border-b border-[var(--color-border)] last:border-0 ${row.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                <td className="px-4 py-2.5">{row.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{row.b}</td>
-                <td className="px-4 py-2.5 tabular-nums">{row.a}</td>
+                <td data-label="Metric" className="px-4 py-2.5">{row.label}</td>
+                <td data-label="Now" className="px-4 py-2.5 tabular-nums">{row.b}</td>
+                <td data-label="After losing top client" className="px-4 py-2.5 tabular-nums">{row.a}</td>
               </tr>
             ))}
           </tbody>
@@ -1830,7 +1830,7 @@ function SalaryHikeAffordability() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[420px]">
+        <table className="w-full text-sm min-w-[420px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "Before hike", "After hike"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {[
@@ -1840,9 +1840,9 @@ function SalaryHikeAffordability() {
               { label: "Runway",          b: label(baseRunway), a: label(newRunway), bold: true },
             ].map(row => (
               <tr key={row.label} className={`border-b border-[var(--color-border)] last:border-0 ${row.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                <td className="px-4 py-2.5">{row.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{row.b}</td>
-                <td className="px-4 py-2.5 tabular-nums">{row.a}</td>
+                <td data-label="Metric" className="px-4 py-2.5">{row.label}</td>
+                <td data-label="Before hike" className="px-4 py-2.5 tabular-nums">{row.b}</td>
+                <td data-label="After hike" className="px-4 py-2.5 tabular-nums">{row.a}</td>
               </tr>
             ))}
           </tbody>
@@ -1923,7 +1923,7 @@ function InventoryBuildupImpact() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[420px]">
+        <table className="w-full text-sm min-w-[420px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "Now", "After build-up"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {[
@@ -1933,9 +1933,9 @@ function InventoryBuildupImpact() {
               { label: "Net annual benefit", b: "-", a: `${netAnnual >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(netAnnual)))}`, bold: true },
             ].map(row => (
               <tr key={row.label} className={`border-b border-[var(--color-border)] last:border-0 ${row.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                <td className="px-4 py-2.5">{row.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{row.b}</td>
-                <td className="px-4 py-2.5 tabular-nums">{row.a}</td>
+                <td data-label="Metric" className="px-4 py-2.5">{row.label}</td>
+                <td data-label="Now" className="px-4 py-2.5 tabular-nums">{row.b}</td>
+                <td data-label="After build-up" className="px-4 py-2.5 tabular-nums">{row.a}</td>
               </tr>
             ))}
           </tbody>
@@ -2016,7 +2016,7 @@ function FxRateShock() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[420px]">
+        <table className="w-full text-sm min-w-[420px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "At ₹" + rate.toFixed(2), "At ₹" + newRate.toFixed(2)].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {[
@@ -2026,9 +2026,9 @@ function FxRateShock() {
               { label: "Margin impact / mo", b: "-", a: `${marginSwing >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(marginSwing)))}`, bold: true },
             ].map(row => (
               <tr key={row.label} className={`border-b border-[var(--color-border)] last:border-0 ${row.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                <td className="px-4 py-2.5">{row.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{row.b}</td>
-                <td className="px-4 py-2.5 tabular-nums">{row.a}</td>
+                <td data-label="Metric" className="px-4 py-2.5">{row.label}</td>
+                <td data-label={"At ₹" + rate.toFixed(2)} className="px-4 py-2.5 tabular-nums">{row.b}</td>
+                <td data-label={"At ₹" + newRate.toFixed(2)} className="px-4 py-2.5 tabular-nums">{row.a}</td>
               </tr>
             ))}
           </tbody>
@@ -2099,7 +2099,7 @@ function AutomationRoiScenario() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[420px]">
+        <table className="w-full text-sm min-w-[420px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Horizon", "Cumulative cost", "Cumulative saving", "Net"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {[12, 24, 36].map(m => {
@@ -2108,10 +2108,10 @@ function AutomationRoiScenario() {
               const net  = save - cost;
               return (
                 <tr key={m} className={`border-b border-[var(--color-border)] last:border-0 ${m === 36 ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                  <td className="px-4 py-2.5">{m} months</td>
-                  <td className="px-4 py-2.5 tabular-nums">{fc(Math.round(cost))}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{fc(Math.round(save))}</td>
-                  <td className={`px-4 py-2.5 tabular-nums ${net >= 0 ? "text-green-400" : "text-red-400"}`}>{net >= 0 ? "+" : "−"}{fc(Math.abs(Math.round(net)))}</td>
+                  <td data-label="Horizon" className="px-4 py-2.5">{m} months</td>
+                  <td data-label="Cumulative cost" className="px-4 py-2.5 tabular-nums">{fc(Math.round(cost))}</td>
+                  <td data-label="Cumulative saving" className="px-4 py-2.5 tabular-nums">{fc(Math.round(save))}</td>
+                  <td data-label="Net" className={`px-4 py-2.5 tabular-nums ${net >= 0 ? "text-green-400" : "text-red-400"}`}>{net >= 0 ? "+" : "−"}{fc(Math.abs(Math.round(net)))}</td>
                 </tr>
               );
             })}
@@ -2189,7 +2189,7 @@ function ChurnIncreaseImpact() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[420px]">
+        <table className="w-full text-sm min-w-[420px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Metric", "Current churn", "Higher churn"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {[
@@ -2199,9 +2199,9 @@ function ChurnIncreaseImpact() {
               { label: "MRR after 12 mo", b: fc(Math.round(mrrBase12)), a: fc(Math.round(mrrAfter12)), bold: true },
             ].map(r => (
               <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                <td className="px-4 py-2.5">{r.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.b}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.a}</td>
+                <td data-label="Metric" className="px-4 py-2.5">{r.label}</td>
+                <td data-label="Current churn" className="px-4 py-2.5 tabular-nums">{r.b}</td>
+                <td data-label="Higher churn" className="px-4 py-2.5 tabular-nums">{r.a}</td>
               </tr>
             ))}
           </tbody>
@@ -2280,7 +2280,7 @@ function CapacityExpansionModel() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[420px]">
+        <table className="w-full text-sm min-w-[420px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Utilisation", "Units / mo", "Added profit / mo", "Payback"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {[0.5, 0.7, 0.9, 1].map(uu => {
@@ -2289,10 +2289,10 @@ function CapacityExpansionModel() {
               const pb = prof > 0 ? cap / prof : Infinity;
               return (
                 <tr key={uu} className={`border-b border-[var(--color-border)] last:border-0 ${Math.abs(uu - u) < 0.001 ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                  <td className="px-4 py-2.5">{(uu * 100).toFixed(0)}%</td>
-                  <td className="px-4 py-2.5 tabular-nums">{Math.round(ru)}</td>
-                  <td className={`px-4 py-2.5 tabular-nums ${prof >= 0 ? "text-green-400" : "text-red-400"}`}>{prof >= 0 ? "+" : "−"}{fc(Math.abs(Math.round(prof)))}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{pb === Infinity ? "never" : `${pb.toFixed(1)} mo`}</td>
+                  <td data-label="Utilisation" className="px-4 py-2.5">{(uu * 100).toFixed(0)}%</td>
+                  <td data-label="Units / mo" className="px-4 py-2.5 tabular-nums">{Math.round(ru)}</td>
+                  <td data-label="Added profit / mo" className={`px-4 py-2.5 tabular-nums ${prof >= 0 ? "text-green-400" : "text-red-400"}`}>{prof >= 0 ? "+" : "−"}{fc(Math.abs(Math.round(prof)))}</td>
+                  <td data-label="Payback" className="px-4 py-2.5 tabular-nums">{pb === Infinity ? "never" : `${pb.toFixed(1)} mo`}</td>
                 </tr>
               );
             })}
@@ -2376,7 +2376,7 @@ function CostInflationPassthrough() {
       </div>
 
       <div className={`${CARD} p-0 overflow-x-auto`}>
-        <table className="w-full text-sm min-w-[420px]">
+        <table className="w-full text-sm min-w-[420px] rcard">
           <thead><tr className="border-b border-[var(--color-border)]">{["Strategy", "Price", "Margin / unit", "Margin %"].map(h => <th key={h} className="text-left text-xs font-semibold text-[var(--color-muted)] px-4 py-2.5">{h}</th>)}</tr></thead>
           <tbody>
             {[
@@ -2386,10 +2386,10 @@ function CostInflationPassthrough() {
               { label: "Full passthrough", pr: fullPrice, mg: fullPrice - newCost, mp: fullPrice > 0 ? ((fullPrice - newCost) / fullPrice) * 100 : 0 },
             ].map(r => (
               <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.bold ? "bg-[var(--color-accent)] font-semibold" : ""}`}>
-                <td className="px-4 py-2.5">{r.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{fc(Math.round(r.pr))}</td>
-                <td className="px-4 py-2.5 tabular-nums">{fc(Math.round(r.mg))}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.mp.toFixed(1)}%</td>
+                <td data-label="Strategy" className="px-4 py-2.5">{r.label}</td>
+                <td data-label="Price" className="px-4 py-2.5 tabular-nums">{fc(Math.round(r.pr))}</td>
+                <td data-label="Margin / unit" className="px-4 py-2.5 tabular-nums">{fc(Math.round(r.mg))}</td>
+                <td data-label="Margin %" className="px-4 py-2.5 tabular-nums">{r.mp.toFixed(1)}%</td>
               </tr>
             ))}
           </tbody>

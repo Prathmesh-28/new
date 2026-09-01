@@ -199,7 +199,7 @@ export default function DebtPage() {
               <button onClick={() => navigate("/lenders")} className="text-[10px] text-[var(--color-primary)] hover:underline">Compare lender quotes →</button>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rcard">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Lender", "Outstanding", "Rate", "EMI", "Paid Off", "Est. Interest Left", ""].map(h =>
                     <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -212,11 +212,11 @@ export default function DebtPage() {
                     const intLeft = totalInterest(l.outstanding, l.rate, rem);
                     return (
                       <tr key={l.id} className={`hover:bg-white/2 cursor-pointer ${selected?.id === l.id ? "bg-[var(--color-primary)]/5" : ""}`} onClick={() => setSelectedId(l.id)}>
-                        <td className="px-5 py-3 font-medium">{l.lender}</td>
-                        <td className="px-5 py-3 tabular-nums font-semibold">{formatAmount(l.outstanding)}</td>
-                        <td className="px-5 py-3 tabular-nums">{l.rate}%</td>
-                        <td className="px-5 py-3 tabular-nums">{formatAmount(l.monthlyEmi)}</td>
-                        <td className="px-5 py-3">
+                        <td data-label="Lender" className="px-5 py-3 font-medium">{l.lender}</td>
+                        <td data-label="Outstanding" className="px-5 py-3 tabular-nums font-semibold">{formatAmount(l.outstanding)}</td>
+                        <td data-label="Rate" className="px-5 py-3 tabular-nums">{l.rate}%</td>
+                        <td data-label="EMI" className="px-5 py-3 tabular-nums">{formatAmount(l.monthlyEmi)}</td>
+                        <td data-label="Paid Off" className="px-5 py-3">
                           <div className="flex items-center gap-2">
                             <div className="w-16 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
                               <div className="h-full bg-green-500 rounded-full" style={{ width: `${paidPct}%` }} />
@@ -224,8 +224,8 @@ export default function DebtPage() {
                             <span className="text-xs text-[var(--color-muted)]">{paidPct}%</span>
                           </div>
                         </td>
-                        <td className="px-5 py-3 tabular-nums text-red-400">{formatAmount(intLeft)}</td>
-                        <td className="px-5 py-3 text-[10px] text-[var(--color-primary)]">{selected?.id === l.id ? "Selected" : "Analyse →"}</td>
+                        <td data-label="Est. Interest Left" className="px-5 py-3 tabular-nums text-red-400">{formatAmount(intLeft)}</td>
+                        <td data-label="" className="px-5 py-3 text-[10px] text-[var(--color-primary)]">{selected?.id === l.id ? "Selected" : "Analyse →"}</td>
                       </tr>
                     );
                   })}
@@ -313,7 +313,7 @@ export default function DebtPage() {
                   <p className="text-sm font-semibold">Repayment Schedule - next 12 months</p>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm rcard">
                     <thead className="border-b border-[var(--color-border)]">
                       <tr>{["Month", "Opening", "EMI", "Interest", "Principal", "Closing"].map(h =>
                         <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -322,12 +322,12 @@ export default function DebtPage() {
                     <tbody className="divide-y divide-[var(--color-border)]">
                       {schedule.slice(0, 12).map(r => (
                         <tr key={r.month} className="hover:bg-white/2">
-                          <td className="px-5 py-2.5 tabular-nums">{r.month}</td>
-                          <td className="px-5 py-2.5 tabular-nums">{formatAmount(r.opening)}</td>
-                          <td className="px-5 py-2.5 tabular-nums">{formatCurrency(Math.round(r.payment))}</td>
-                          <td className="px-5 py-2.5 tabular-nums text-red-400">{formatCurrency(Math.round(r.interest))}</td>
-                          <td className="px-5 py-2.5 tabular-nums text-green-400">{formatCurrency(Math.round(r.principal))}</td>
-                          <td className="px-5 py-2.5 tabular-nums">{formatAmount(r.closing)}</td>
+                          <td data-label="Month" className="px-5 py-2.5 tabular-nums">{r.month}</td>
+                          <td data-label="Opening" className="px-5 py-2.5 tabular-nums">{formatAmount(r.opening)}</td>
+                          <td data-label="EMI" className="px-5 py-2.5 tabular-nums">{formatCurrency(Math.round(r.payment))}</td>
+                          <td data-label="Interest" className="px-5 py-2.5 tabular-nums text-red-400">{formatCurrency(Math.round(r.interest))}</td>
+                          <td data-label="Principal" className="px-5 py-2.5 tabular-nums text-green-400">{formatCurrency(Math.round(r.principal))}</td>
+                          <td data-label="Closing" className="px-5 py-2.5 tabular-nums">{formatAmount(r.closing)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -489,7 +489,7 @@ function AmortisePrepaySimulator() {
               <p className="text-sm font-semibold">Amortisation Schedule {result.withPrepay ? "(with prepayment)" : ""} - first 24 months</p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm rcard min-w-[640px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Month", "Opening", "EMI", "Interest", "Principal", "Prepay", "Closing"].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -498,13 +498,13 @@ function AmortisePrepaySimulator() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {(result.withPrepay ?? result.base).rows.slice(0, 24).map(r => (
                     <tr key={r.month} className={`hover:bg-white/2 ${r.prepay > 0 ? "bg-green-950/20" : ""}`}>
-                      <td className="px-4 py-2 tabular-nums">{r.month}</td>
-                      <td className="px-4 py-2 tabular-nums">{formatAmount(Math.round(r.opening))}</td>
-                      <td className="px-4 py-2 tabular-nums">{fc(Math.round(r.payment))}</td>
-                      <td className="px-4 py-2 tabular-nums text-red-400">{fc(Math.round(r.interest))}</td>
-                      <td className="px-4 py-2 tabular-nums text-green-400">{fc(Math.round(r.principal))}</td>
-                      <td className="px-4 py-2 tabular-nums text-[var(--color-primary)]">{r.prepay > 0 ? fc(Math.round(r.prepay)) : "-"}</td>
-                      <td className="px-4 py-2 tabular-nums">{formatAmount(Math.round(r.closing))}</td>
+                      <td data-label="Month" className="px-4 py-2 tabular-nums">{r.month}</td>
+                      <td data-label="Opening" className="px-4 py-2 tabular-nums">{formatAmount(Math.round(r.opening))}</td>
+                      <td data-label="EMI" className="px-4 py-2 tabular-nums">{fc(Math.round(r.payment))}</td>
+                      <td data-label="Interest" className="px-4 py-2 tabular-nums text-red-400">{fc(Math.round(r.interest))}</td>
+                      <td data-label="Principal" className="px-4 py-2 tabular-nums text-green-400">{fc(Math.round(r.principal))}</td>
+                      <td data-label="Prepay" className="px-4 py-2 tabular-nums text-[var(--color-primary)]">{r.prepay > 0 ? fc(Math.round(r.prepay)) : "-"}</td>
+                      <td data-label="Closing" className="px-4 py-2 tabular-nums">{formatAmount(Math.round(r.closing))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -616,7 +616,7 @@ function DscrCoverageTracker() {
           <p className="text-xs text-[var(--color-muted)]">No covenants tracked. Add the DSCR / coverage limits from your sanction letter to monitor breach risk.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Covenant", "Requirement", "Actual", "Status", ""].map(h =>
                   <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -629,15 +629,15 @@ function DscrCoverageTracker() {
                   const isBreach = breached(c);
                   return (
                     <tr key={c.id} className="hover:bg-white/2">
-                      <td className="px-3 py-2.5 font-medium">{c.name}</td>
-                      <td className="px-3 py-2.5 text-[var(--color-muted)]">{label} {c.operator} {c.threshold}x</td>
-                      <td className="px-3 py-2.5 tabular-nums">{v !== null ? `${v.toFixed(2)}x` : "-"}</td>
-                      <td className="px-3 py-2.5">
+                      <td data-label="Covenant" className="px-3 py-2.5 font-medium">{c.name}</td>
+                      <td data-label="Requirement" className="px-3 py-2.5 text-[var(--color-muted)]">{label} {c.operator} {c.threshold}x</td>
+                      <td data-label="Actual" className="px-3 py-2.5 tabular-nums">{v !== null ? `${v.toFixed(2)}x` : "-"}</td>
+                      <td data-label="Status" className="px-3 py-2.5">
                         {v === null ? <span className="text-xs text-[var(--color-muted)]">No data</span>
                           : isBreach ? <span className="inline-flex items-center gap-1 text-xs text-red-400 font-semibold"><AlertTriangle size={12} /> Breach</span>
                           : <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={12} /> OK</span>}
                       </td>
-                      <td className="px-3 py-2.5 text-right">
+                      <td data-label="" className="px-3 py-2.5 text-right">
                         <button onClick={() => setCovenants(covenants.filter(x => x.id !== c.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
                       </td>
                     </tr>
@@ -772,7 +772,7 @@ function RefinanceComparator() {
             <p className="text-sm font-semibold">Offers ranked by all-in cost</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm rcard min-w-[720px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Lender", "Rate", "Tenure", "EMI", "Fees", "Interest", "All-in Cost", "Effective APR", ""].map(h =>
                   <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -781,15 +781,15 @@ function RefinanceComparator() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {evaluated.map(o => (
                   <tr key={o.id} className={`hover:bg-white/2 ${best && o.id === best.id ? "bg-green-950/20" : ""}`}>
-                    <td className="px-3 py-2.5 font-medium">{o.lender}{best && o.id === best.id && <span className="ml-1.5 text-[9px] text-green-400 font-semibold">BEST</span>}</td>
-                    <td className="px-3 py-2.5 tabular-nums">{o.rate}%</td>
-                    <td className="px-3 py-2.5 tabular-nums">{o.tenureMonths} mo</td>
-                    <td className="px-3 py-2.5 tabular-nums">{fc(Math.round(o.newEmi))}</td>
-                    <td className="px-3 py-2.5 tabular-nums text-yellow-400">{fc(Math.round(o.fees))}</td>
-                    <td className="px-3 py-2.5 tabular-nums text-red-400">{formatAmount(Math.round(o.interest))}</td>
-                    <td className="px-3 py-2.5 tabular-nums font-semibold">{formatAmount(Math.round(o.totalCost))}</td>
-                    <td className="px-3 py-2.5 tabular-nums text-[var(--color-primary)]">{o.effRate !== null ? `${o.effRate.toFixed(2)}%` : "-"}</td>
-                    <td className="px-3 py-2.5 text-right"><button onClick={() => setOffers(offers.filter(x => x.id !== o.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    <td data-label="Lender" className="px-3 py-2.5 font-medium">{o.lender}{best && o.id === best.id && <span className="ml-1.5 text-[9px] text-green-400 font-semibold">BEST</span>}</td>
+                    <td data-label="Rate" className="px-3 py-2.5 tabular-nums">{o.rate}%</td>
+                    <td data-label="Tenure" className="px-3 py-2.5 tabular-nums">{o.tenureMonths} mo</td>
+                    <td data-label="EMI" className="px-3 py-2.5 tabular-nums">{fc(Math.round(o.newEmi))}</td>
+                    <td data-label="Fees" className="px-3 py-2.5 tabular-nums text-yellow-400">{fc(Math.round(o.fees))}</td>
+                    <td data-label="Interest" className="px-3 py-2.5 tabular-nums text-red-400">{formatAmount(Math.round(o.interest))}</td>
+                    <td data-label="All-in Cost" className="px-3 py-2.5 tabular-nums font-semibold">{formatAmount(Math.round(o.totalCost))}</td>
+                    <td data-label="Effective APR" className="px-3 py-2.5 tabular-nums text-[var(--color-primary)]">{o.effRate !== null ? `${o.effRate.toFixed(2)}%` : "-"}</td>
+                    <td data-label="" className="px-3 py-2.5 text-right"><button onClick={() => setOffers(offers.filter(x => x.id !== o.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1052,7 +1052,7 @@ function RepaymentLadder({ loans }: { loans: ActiveLoanLike[] }) {
           <p className="text-sm font-semibold">Month-by-month ladder</p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[560px]">
+          <table className="w-full text-sm rcard min-w-[560px]">
             <thead className="border-b border-[var(--color-border)]">
               <tr>{["Month", "Combined EMI", "Interest", "Principal", "Outstanding", "Active loans"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1061,12 +1061,12 @@ function RepaymentLadder({ loans }: { loans: ActiveLoanLike[] }) {
             <tbody className="divide-y divide-[var(--color-border)]">
               {data.map(r => (
                 <tr key={r.idx} className="hover:bg-white/2">
-                  <td className="px-4 py-2 tabular-nums">{r.month}</td>
-                  <td className="px-4 py-2 tabular-nums font-medium">{fc(Math.round(r.combinedEmi))}</td>
-                  <td className="px-4 py-2 tabular-nums text-red-400">{fc(Math.round(r.interest))}</td>
-                  <td className="px-4 py-2 tabular-nums text-green-400">{fc(Math.round(r.principal))}</td>
-                  <td className="px-4 py-2 tabular-nums">{formatAmount(Math.round(r.outstanding))}</td>
-                  <td className="px-4 py-2 tabular-nums text-[var(--color-muted)]">{r.active}</td>
+                  <td data-label="Month" className="px-4 py-2 tabular-nums">{r.month}</td>
+                  <td data-label="Combined EMI" className="px-4 py-2 tabular-nums font-medium">{fc(Math.round(r.combinedEmi))}</td>
+                  <td data-label="Interest" className="px-4 py-2 tabular-nums text-red-400">{fc(Math.round(r.interest))}</td>
+                  <td data-label="Principal" className="px-4 py-2 tabular-nums text-green-400">{fc(Math.round(r.principal))}</td>
+                  <td data-label="Outstanding" className="px-4 py-2 tabular-nums">{formatAmount(Math.round(r.outstanding))}</td>
+                  <td data-label="Active loans" className="px-4 py-2 tabular-nums text-[var(--color-muted)]">{r.active}</td>
                 </tr>
               ))}
             </tbody>
@@ -1186,7 +1186,7 @@ function PrepayOptimizer({ loans }: { loans: ActiveLoanLike[] }) {
               <p className="text-sm font-semibold">Attack order - {strategy === "avalanche" ? "highest rate first" : "smallest balance first"}</p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rcard">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["#", "Lender", "Balance", "Rate", "Cleared by"].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1195,11 +1195,11 @@ function PrepayOptimizer({ loans }: { loans: ActiveLoanLike[] }) {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {order.map((l, i) => (
                     <tr key={l.id} className={`hover:bg-white/2 ${i === 0 ? "bg-[var(--color-primary)]/5" : ""}`}>
-                      <td className="px-4 py-2.5 tabular-nums font-semibold">{i + 1}{i === 0 && <span className="ml-1.5 text-[9px] text-[var(--color-primary)] font-semibold">TARGET</span>}</td>
-                      <td className="px-4 py-2.5 font-medium">{l.lender}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(l.bal))}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{l.rate}%</td>
-                      <td className="px-4 py-2.5 tabular-nums text-green-400">{l.closeAt ? `month ${l.closeAt}` : "-"}</td>
+                      <td data-label="#" className="px-4 py-2.5 tabular-nums font-semibold">{i + 1}{i === 0 && <span className="ml-1.5 text-[9px] text-[var(--color-primary)] font-semibold">TARGET</span>}</td>
+                      <td data-label="Lender" className="px-4 py-2.5 font-medium">{l.lender}</td>
+                      <td data-label="Balance" className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(l.bal))}</td>
+                      <td data-label="Rate" className="px-4 py-2.5 tabular-nums">{l.rate}%</td>
+                      <td data-label="Cleared by" className="px-4 py-2.5 tabular-nums text-green-400">{l.closeAt ? `month ${l.closeAt}` : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1285,7 +1285,7 @@ function CostOfDebtTracker({ loans }: { loans: ActiveLoanLike[] }) {
           <p className="text-sm font-semibold">Cost contribution by loan</p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm rcard min-w-[640px]">
             <thead className="border-b border-[var(--color-border)]">
               <tr>{["Lender", "Outstanding", "Rate", "Weight", "Adds to WACD", "Monthly Interest", "% of Interest"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1294,13 +1294,13 @@ function CostOfDebtTracker({ loans }: { loans: ActiveLoanLike[] }) {
             <tbody className="divide-y divide-[var(--color-border)]">
               {data.rows.map(r => (
                 <tr key={r.id} className={`hover:bg-white/2 ${r.aboveAvg ? "bg-red-950/10" : ""}`}>
-                  <td className="px-4 py-2.5 font-medium">{r.lender}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(r.outstanding))}</td>
-                  <td className={`px-4 py-2.5 tabular-nums ${r.aboveAvg ? "text-red-400" : "text-green-400"}`}>{r.rate}%</td>
-                  <td className="px-4 py-2.5 tabular-nums">{r.weightPct.toFixed(1)}%</td>
-                  <td className="px-4 py-2.5 tabular-nums">{r.contribution.toFixed(2)}%</td>
-                  <td className="px-4 py-2.5 tabular-nums text-red-400">{fc(Math.round(r.monthlyInt))}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.intShare.toFixed(0)}%</td>
+                  <td data-label="Lender" className="px-4 py-2.5 font-medium">{r.lender}</td>
+                  <td data-label="Outstanding" className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(r.outstanding))}</td>
+                  <td data-label="Rate" className={`px-4 py-2.5 tabular-nums ${r.aboveAvg ? "text-red-400" : "text-green-400"}`}>{r.rate}%</td>
+                  <td data-label="Weight" className="px-4 py-2.5 tabular-nums">{r.weightPct.toFixed(1)}%</td>
+                  <td data-label="Adds to WACD" className="px-4 py-2.5 tabular-nums">{r.contribution.toFixed(2)}%</td>
+                  <td data-label="Monthly Interest" className="px-4 py-2.5 tabular-nums text-red-400">{fc(Math.round(r.monthlyInt))}</td>
+                  <td data-label="% of Interest" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.intShare.toFixed(0)}%</td>
                 </tr>
               ))}
             </tbody>
@@ -1510,7 +1510,7 @@ function BalloonPlanner() {
               <p className="text-sm font-semibold">Schedule - first 12 months</p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[560px]">
+              <table className="w-full text-sm rcard min-w-[560px]">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Month", "Opening", "Payment", "Interest", "Principal", "Closing"].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1519,12 +1519,12 @@ function BalloonPlanner() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {result.rows.slice(0, 12).map(r => (
                     <tr key={r.month} className="hover:bg-white/2">
-                      <td className="px-4 py-2 tabular-nums">{r.month}</td>
-                      <td className="px-4 py-2 tabular-nums">{formatAmount(Math.round(r.opening))}</td>
-                      <td className="px-4 py-2 tabular-nums">{fc(Math.round(r.payment))}</td>
-                      <td className="px-4 py-2 tabular-nums text-red-400">{fc(Math.round(r.interest))}</td>
-                      <td className="px-4 py-2 tabular-nums text-green-400">{fc(Math.round(r.principal))}</td>
-                      <td className="px-4 py-2 tabular-nums">{formatAmount(Math.round(r.closing))}</td>
+                      <td data-label="Month" className="px-4 py-2 tabular-nums">{r.month}</td>
+                      <td data-label="Opening" className="px-4 py-2 tabular-nums">{formatAmount(Math.round(r.opening))}</td>
+                      <td data-label="Payment" className="px-4 py-2 tabular-nums">{fc(Math.round(r.payment))}</td>
+                      <td data-label="Interest" className="px-4 py-2 tabular-nums text-red-400">{fc(Math.round(r.interest))}</td>
+                      <td data-label="Principal" className="px-4 py-2 tabular-nums text-green-400">{fc(Math.round(r.principal))}</td>
+                      <td data-label="Closing" className="px-4 py-2 tabular-nums">{formatAmount(Math.round(r.closing))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1659,7 +1659,7 @@ function StepEmiPlanner({ loans }: { loans: ActiveLoanLike[] }) {
               <p className="text-sm font-semibold">EMI by year ({direction === "up" ? "rising" : "falling"} {parseFloat(stepPct) || 0}% p.a.)</p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rcard">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Year", "Monthly EMI", "vs flat EMI"].map(h =>
                     <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1668,9 +1668,9 @@ function StepEmiPlanner({ loans }: { loans: ActiveLoanLike[] }) {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {result.yearRows.map(y => (
                     <tr key={y.year} className="hover:bg-white/2">
-                      <td className="px-5 py-2.5 tabular-nums">Year {y.year}</td>
-                      <td className="px-5 py-2.5 tabular-nums font-medium">{fc(Math.round(y.emi))}</td>
-                      <td className={`px-5 py-2.5 tabular-nums ${y.emi > result.flatEmi ? "text-red-400" : "text-green-400"}`}>{y.emi >= result.flatEmi ? "+" : "−"}{fc(Math.abs(Math.round(y.emi - result.flatEmi)))}</td>
+                      <td data-label="Year" className="px-5 py-2.5 tabular-nums">Year {y.year}</td>
+                      <td data-label="Monthly EMI" className="px-5 py-2.5 tabular-nums font-medium">{fc(Math.round(y.emi))}</td>
+                      <td data-label="vs flat EMI" className={`px-5 py-2.5 tabular-nums ${y.emi > result.flatEmi ? "text-red-400" : "text-green-400"}`}>{y.emi >= result.flatEmi ? "+" : "−"}{fc(Math.abs(Math.round(y.emi - result.flatEmi)))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2209,7 +2209,7 @@ function RateResetImpact({ loans }: { loans: ActiveLoanLike[] }) {
           <p className="text-sm font-semibold">Per-loan reset - {mode === "emi" ? "EMI held to tenure" : "EMI fixed, tenure flexes"}</p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm rcard min-w-[640px]">
             <thead className="border-b border-[var(--color-border)]">
               <tr>{["Lender", "Old rate", "New rate", mode === "emi" ? "New EMI" : "New term", "Impact"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2218,11 +2218,11 @@ function RateResetImpact({ loans }: { loans: ActiveLoanLike[] }) {
             <tbody className="divide-y divide-[var(--color-border)]">
               {rows.map(r => (
                 <tr key={r.id} className="hover:bg-white/2">
-                  <td className="px-4 py-2.5 font-medium">{r.lender}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{r.rate}%</td>
-                  <td className={`px-4 py-2.5 tabular-nums ${r.newRate > r.rate ? "text-red-400" : "text-green-400"}`}>{r.newRate.toFixed(2)}%</td>
-                  <td className="px-4 py-2.5 tabular-nums">{mode === "emi" ? `${fc(Math.round(r.emi))} → ${fc(Math.round(r.newEmi))}` : `${r.rem} → ${r.newTerm} mo`}</td>
-                  <td className={`px-4 py-2.5 tabular-nums ${r.extraInterest > 0 ? "text-red-400" : "text-green-400"}`}>{mode === "emi" ? `${r.emiDelta >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(r.emiDelta)))}/mo` : `${r.newTerm - r.rem >= 0 ? "+" : "−"}${Math.abs(r.newTerm - r.rem)} mo`}</td>
+                  <td data-label="Lender" className="px-4 py-2.5 font-medium">{r.lender}</td>
+                  <td data-label="Old rate" className="px-4 py-2.5 tabular-nums">{r.rate}%</td>
+                  <td data-label="New rate" className={`px-4 py-2.5 tabular-nums ${r.newRate > r.rate ? "text-red-400" : "text-green-400"}`}>{r.newRate.toFixed(2)}%</td>
+                  <td data-label={mode === "emi" ? "New EMI" : "New term"} className="px-4 py-2.5 tabular-nums">{mode === "emi" ? `${fc(Math.round(r.emi))} → ${fc(Math.round(r.newEmi))}` : `${r.rem} → ${r.newTerm} mo`}</td>
+                  <td data-label="Impact" className={`px-4 py-2.5 tabular-nums ${r.extraInterest > 0 ? "text-red-400" : "text-green-400"}`}>{mode === "emi" ? `${r.emiDelta >= 0 ? "+" : "−"}${fc(Math.abs(Math.round(r.emiDelta)))}/mo` : `${r.newTerm - r.rem >= 0 ? "+" : "−"}${Math.abs(r.newTerm - r.rem)} mo`}</td>
                 </tr>
               ))}
             </tbody>
@@ -2285,7 +2285,7 @@ function ExposureStackingTracker({ loans }: { loans: ActiveLoanLike[] }) {
           <p className="text-sm font-semibold">Exposure by lender</p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[560px]">
+          <table className="w-full text-sm rcard min-w-[560px]">
             <thead className="border-b border-[var(--color-border)]">
               <tr>{["Lender", "Outstanding", "Monthly EMI", "Share of debt"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2294,10 +2294,10 @@ function ExposureStackingTracker({ loans }: { loans: ActiveLoanLike[] }) {
             <tbody className="divide-y divide-[var(--color-border)]">
               {data.rows.map(r => (
                 <tr key={r.id} className="hover:bg-white/2">
-                  <td className="px-4 py-2.5 font-medium">{r.lender}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(r.outstanding))}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{fc(Math.round(r.emi))}</td>
-                  <td className="px-4 py-2.5">
+                  <td data-label="Lender" className="px-4 py-2.5 font-medium">{r.lender}</td>
+                  <td data-label="Outstanding" className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(r.outstanding))}</td>
+                  <td data-label="Monthly EMI" className="px-4 py-2.5 tabular-nums">{fc(Math.round(r.emi))}</td>
+                  <td data-label="Share of debt" className="px-4 py-2.5">
                     <div className="flex items-center gap-2">
                       <div className="w-20 h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
                         <div className="h-full bg-[var(--color-primary)] rounded-full" style={{ width: `${Math.min(100, r.sharePct)}%` }} />
@@ -2544,7 +2544,7 @@ function DebtMaturityProfile({ loans }: { loans: ActiveLoanLike[] }) {
       </div>
 
       <div className={`${CARD} overflow-hidden`}>
-        <table className="w-full text-sm">
+        <table className="w-full text-sm rcard">
           <thead className="border-b border-[var(--color-border)]">
             <tr>{["Maturity window", "Loans", "Outstanding", "Share"].map(h =>
               <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2553,10 +2553,10 @@ function DebtMaturityProfile({ loans }: { loans: ActiveLoanLike[] }) {
           <tbody className="divide-y divide-[var(--color-border)]">
             {buckets.map(b => (
               <tr key={b.label} className="hover:bg-white/2">
-                <td className="px-4 py-2.5 font-medium">{b.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{b.count}</td>
-                <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(b.outstanding))}</td>
-                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{b.sharePct.toFixed(0)}%</td>
+                <td data-label="Maturity window" className="px-4 py-2.5 font-medium">{b.label}</td>
+                <td data-label="Loans" className="px-4 py-2.5 tabular-nums">{b.count}</td>
+                <td data-label="Outstanding" className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(b.outstanding))}</td>
+                <td data-label="Share" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{b.sharePct.toFixed(0)}%</td>
               </tr>
             ))}
           </tbody>
@@ -2627,7 +2627,7 @@ function PrepaymentPenaltyVsSavings({ loans }: { loans: ActiveLoanLike[] }) {
       ) : (
         <>
           <div className={`${CARD} overflow-hidden`}>
-            <table className="w-full text-sm min-w-[560px]">
+            <table className="w-full text-sm rcard min-w-[560px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Loan", "Rate", "Prepaid", "Interest saved", "Penalty", "Net benefit"].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2636,12 +2636,12 @@ function PrepaymentPenaltyVsSavings({ loans }: { loans: ActiveLoanLike[] }) {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium">{r.lender}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.rate}%</td>
-                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(r.applied))}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-green-400">{formatAmount(Math.round(r.interestSaved))}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-red-400">−{formatAmount(Math.round(r.penalty))}</td>
-                    <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.worthIt ? "text-green-400" : "text-red-400"}`}>{r.net >= 0 ? "" : "−"}{formatAmount(Math.round(Math.abs(r.net)))}</td>
+                    <td data-label="Loan" className="px-4 py-2.5 font-medium">{r.lender}</td>
+                    <td data-label="Rate" className="px-4 py-2.5 tabular-nums">{r.rate}%</td>
+                    <td data-label="Prepaid" className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(r.applied))}</td>
+                    <td data-label="Interest saved" className="px-4 py-2.5 tabular-nums text-green-400">{formatAmount(Math.round(r.interestSaved))}</td>
+                    <td data-label="Penalty" className="px-4 py-2.5 tabular-nums text-red-400">−{formatAmount(Math.round(r.penalty))}</td>
+                    <td data-label="Net benefit" className={`px-4 py-2.5 tabular-nums font-semibold ${r.worthIt ? "text-green-400" : "text-red-400"}`}>{r.net >= 0 ? "" : "−"}{formatAmount(Math.round(Math.abs(r.net)))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -2849,7 +2849,7 @@ function EmiDueCalendar({ loans }: { loans: ActiveLoanLike[] }) {
       <div className={`${CARD} overflow-hidden`}>
         <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Forward due schedule</p></div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm rcard">
             <thead className="border-b border-[var(--color-border)]">
               <tr>{["Month", "Loans due", "EMI total", "Cash after", "Cover"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2858,11 +2858,11 @@ function EmiDueCalendar({ loans }: { loans: ActiveLoanLike[] }) {
             <tbody className="divide-y divide-[var(--color-border)]">
               {monthly.map(m => (
                 <tr key={m.label} className={`hover:bg-white/2 ${m.short ? "bg-red-950/20" : ""}`}>
-                  <td className="px-4 py-2.5 font-medium">{m.label}</td>
-                  <td className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{m.rows.map(r => r.lender).join(", ")}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-red-400">{fc(Math.round(m.total))}</td>
-                  <td className={`px-4 py-2.5 tabular-nums ${m.short ? "text-red-400 font-semibold" : ""}`}>{fc(Math.round(m.balanceAfter))}</td>
-                  <td className="px-4 py-2.5">
+                  <td data-label="Month" className="px-4 py-2.5 font-medium">{m.label}</td>
+                  <td data-label="Loans due" className="px-4 py-2.5 text-[var(--color-muted)] text-xs">{m.rows.map(r => r.lender).join(", ")}</td>
+                  <td data-label="EMI total" className="px-4 py-2.5 tabular-nums text-red-400">{fc(Math.round(m.total))}</td>
+                  <td data-label="Cash after" className={`px-4 py-2.5 tabular-nums ${m.short ? "text-red-400 font-semibold" : ""}`}>{fc(Math.round(m.balanceAfter))}</td>
+                  <td data-label="Cover" className="px-4 py-2.5">
                     {m.short
                       ? <span className="inline-flex items-center gap-1 text-xs text-red-400 font-semibold"><AlertTriangle size={12} /> Short</span>
                       : <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={12} /> Covered</span>}
@@ -2937,7 +2937,7 @@ function RateBenchmark({ loans }: { loans: ActiveLoanLike[] }) {
       <div className={`${CARD} overflow-hidden`}>
         <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Per-loan pricing vs band</p></div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm rcard min-w-[640px]">
             <thead className="border-b border-[var(--color-border)]">
               <tr>{["Lender", "Rate", "vs fair", "Outstanding", "Overpay (life)", "Verdict"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2946,12 +2946,12 @@ function RateBenchmark({ loans }: { loans: ActiveLoanLike[] }) {
             <tbody className="divide-y divide-[var(--color-border)]">
               {rows.map(r => (
                 <tr key={r.id} className={`hover:bg-white/2 ${r.status === "above" ? "bg-red-950/20" : ""}`}>
-                  <td className="px-4 py-2.5 font-medium">{r.lender}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{r.rate}%</td>
-                  <td className={`px-4 py-2.5 tabular-nums ${r.premium > 0 ? "text-red-400" : "text-green-400"}`}>{r.premium > 0 ? "+" : ""}{r.premium.toFixed(1)} ppt</td>
-                  <td className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(r.outstanding))}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-red-400">{r.overpay > 0 ? fc(Math.round(r.overpay)) : "-"}</td>
-                  <td className="px-4 py-2.5">
+                  <td data-label="Lender" className="px-4 py-2.5 font-medium">{r.lender}</td>
+                  <td data-label="Rate" className="px-4 py-2.5 tabular-nums">{r.rate}%</td>
+                  <td data-label="vs fair" className={`px-4 py-2.5 tabular-nums ${r.premium > 0 ? "text-red-400" : "text-green-400"}`}>{r.premium > 0 ? "+" : ""}{r.premium.toFixed(1)} ppt</td>
+                  <td data-label="Outstanding" className="px-4 py-2.5 tabular-nums">{formatAmount(Math.round(r.outstanding))}</td>
+                  <td data-label="Overpay (life)" className="px-4 py-2.5 tabular-nums text-red-400">{r.overpay > 0 ? fc(Math.round(r.overpay)) : "-"}</td>
+                  <td data-label="Verdict" className="px-4 py-2.5">
                     {r.status === "above" ? <span className="text-xs text-red-400 font-semibold">Above band - renegotiate</span>
                       : r.status === "below" ? <span className="text-xs text-green-400 font-semibold">Below band - keep</span>
                       : <span className="text-xs text-[var(--color-muted)]">In band</span>}

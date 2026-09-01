@@ -75,6 +75,10 @@ const pageByPath = (p: string) => PAGE_INDEX.find(n => n.path === p);
 
 // Favorites & recents - small, fast personalisation in localStorage (C13).
 const FAV_KEY = "hr_fav_pages", REC_KEY = "hr_recent_pages", FREQ_KEY = "hr_page_freq";
+// Item 58 of the gap audit: search terms vanished on every close, so a term used daily
+// ("acme", "gstr") was re-typed daily. Recorded when a search leads to a real selection —
+// not on every keystroke, which would remember typos.
+const SEARCH_KEY = "hr_recent_searches";
 function readList(k: string): string[] { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch { return []; } }
 function writeList(k: string, v: string[]) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } }
 export function recordRecentPage(path: string) {
@@ -136,11 +140,21 @@ export function CommandPalette({ open, onClose }: Props) {
       try {
         // One search across the real records, so the palette finds things the current
         // page never loaded. A module that isn't deployed simply contributes nothing.
+        // Typing an AMOUNT ("11800", "11,800", "₹11800") finds the money, not the text:
+        // invoices and transactions within ±1% of that figure. Nobody remembers the
+        // invoice number; everybody remembers roughly what it was for.
+        const amt = /^[₹\s]*[\d,]+(?:\.\d{1,2})?$/.test(term) ? Number(term.replace(/[^\d.]/g, "")) : null;
+        const invQ = amt && amt > 0
+          ? `/api/invoices?minAmount=${Math.floor(amt * 0.99)}&maxAmount=${Math.ceil(amt * 1.01)}&limit=5`
+          : `/api/invoices?q=${encodeURIComponent(term)}&limit=5`;
+        const txnQ = amt && amt > 0
+          ? `/api/transactions?minAmount=${Math.floor(amt * 0.99)}&maxAmount=${Math.ceil(amt * 1.01)}&limit=5`
+          : `/api/transactions?q=${encodeURIComponent(term)}&limit=5`;
         const [cs, is, ts, vs] = await Promise.all([
-          api.get<{ data: ServerCustomer[] }>(`/api/customers?q=${encodeURIComponent(term)}&limit=5`).catch(() => ({ data: [] })),
-          api.get<{ data: ServerInvoice[] }>(`/api/invoices?q=${encodeURIComponent(term)}&limit=5`).catch(() => ({ data: [] })),
-          api.get<{ data: ServerTxn[] }>(`/api/transactions?q=${encodeURIComponent(term)}&limit=5`).catch(() => ({ data: [] })),
-          api.get<{ data: ServerVendor[] }>(`/api/vendors?q=${encodeURIComponent(term)}&limit=5`).catch(() => ({ data: [] })),
+          amt ? Promise.resolve({ data: [] }) : api.get<{ data: ServerCustomer[] }>(`/api/customers?q=${encodeURIComponent(term)}&limit=5`).catch(() => ({ data: [] })),
+          api.get<{ data: ServerInvoice[] }>(invQ).catch(() => ({ data: [] })),
+          api.get<{ data: ServerTxn[] }>(txnQ).catch(() => ({ data: [] })),
+          amt ? Promise.resolve({ data: [] }) : api.get<{ data: ServerVendor[] }>(`/api/vendors?q=${encodeURIComponent(term)}&limit=5`).catch(() => ({ data: [] })),
         ]);
         if (!ctl.signal.aborted) setServerHits({
           customers: cs.data ?? [], invoices: is.data ?? [], transactions: ts.data ?? [], vendors: vs.data ?? [],
@@ -160,11 +174,21 @@ export function CommandPalette({ open, onClose }: Props) {
 
   const results: Result[] = useMemo(() => {
     const q = query.toLowerCase().trim();
-    const go = (path: string) => { recordRecentPage(path); navigate(path); onClose(); };
+    const go = (path: string) => {
+      recordRecentPage(path);
+      if (q.length >= 2) writeList(SEARCH_KEY, [query.trim(), ...readList(SEARCH_KEY).filter(t => t.toLowerCase() !== q)].slice(0, 5));
+      navigate(path);
+      onClose();
+    };
 
     if (!q) {
       const out: Result[] = [];
       favs.map(pageByPath).filter(Boolean).forEach(n => out.push({ id: `fav${n!.path}`, label: n!.label, sub: n!.desc, type: "fav", path: n!.path, action: () => go(n!.path) }));
+      // The searches that actually led somewhere, so a daily term is one click, not typing.
+      readList(SEARCH_KEY).forEach(t => out.push({
+        id: `sq${t}`, label: t, sub: "Search again", type: "recent",
+        action: () => { setQuery(t); },
+      }));
       // Records the user actually opened recently — the product used to forget every one
       // the moment they navigated away.
       recentRecords.slice(0, 5).forEach(r => out.push({

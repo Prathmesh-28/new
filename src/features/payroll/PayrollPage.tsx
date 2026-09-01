@@ -17,6 +17,7 @@ import { useT } from "@/i18n";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import { useUrlTab } from "@/hooks/useUrlTab";
 import DatePicker from "@/components/DatePicker";
+import { useConfirm } from "@/components/ui/Confirm";
 
 // C14 (2026-07 gap audit) — keep in sync with the TabStrip `tabs=` array below.
 const PAYROLL_TAB_IDS = ["employees", "runs", "ewa", "slips", "form16", "ecr", "labor", "fnf", "variance", "pt", "flexi", "lwf", "offer", "esop", "ctc", "attendance", "gratuity", "reimburse", "tds192", "bonus", "contractor", "benchmark", "appraisal", "journal", "headcount", "liability", "portal", "overtime", "leave-encash", "notice", "advance", "nps", "minwage", "maternity", "roi", "takehome", "attrition-cost", "incentive", "superann", "gpa", "pf-challan", "register", "penalty", "lwp"] as const;
@@ -118,7 +119,7 @@ function AddEmployeeModal({ onClose, onAdded }: { onClose: () => void; onAdded: 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-bold">Add Employee</h2>
-          <button onClick={onClose}><X size={16} className="text-[var(--color-muted)]" /></button>
+          <button onClick={onClose} aria-label="Close"><X size={16} className="text-[var(--color-muted)]" /></button>
         </div>
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -183,6 +184,7 @@ function AddEmployeeModal({ onClose, onAdded }: { onClose: () => void; onAdded: 
 export default function PayrollPage() {
   const now = new Date();
   const tr = useT();
+  const confirm = useConfirm();
   const { store, currentRole } = useApp();
   const canWrite = PAYROLL_WRITE_ROLES.has(currentRole);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -288,7 +290,7 @@ export default function PayrollPage() {
     const confirmMsg = disburseBank
       ? `Disburse ${amountTxt} net payroll from ${bankName ?? "the selected bank"}? This posts a real payment voucher to the books - Dr Salaries Payable / Cr ${bankName ?? "bank"}.`
       : `Mark ${amountTxt} net payroll as disbursed WITHOUT posting anything to the books (no bank account selected)?`;
-    if (!window.confirm(confirmMsg)) return;
+    if (!await confirm({ title: "Disburse payroll?", body: confirmMsg, danger: true, confirmLabel: "Disburse" })) return;
     setDisbursingId(runId);
     try {
       const run = await api.post<PayrollRun>(`/api/payroll/runs/${runId}/disburse`, disburseBank ? { bank_ledger_id: disburseBank } : {});
@@ -424,7 +426,7 @@ export default function PayrollPage() {
               />
             </div>
             <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm min-w-[640px] rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>
                   {["Name", "Email", "Gross Salary", "TDS / month", "Net Pay", "Status"].map(h => (
@@ -438,15 +440,15 @@ export default function PayrollPage() {
                   const calc = computeStatutoryNet(parseFloat(String(e.gross_salary)) || 0, statCfg);
                   return (
                     <tr key={e.id} className="hover:bg-white/2">
-                      <td className="px-4 py-3">
+                      <td data-label="Name" className="px-4 py-3">
                         <div className="w-7 h-7 rounded-full bg-[var(--color-primary)]/20 inline-flex items-center justify-center text-xs font-bold text-[var(--color-primary)] mr-2">{e.name[0].toUpperCase()}</div>
                         {e.name}
                       </td>
-                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{e.email ?? "-"}</td>
-                      <td className="px-4 py-3 tabular-nums font-semibold">{formatCurrency(parseFloat(String(e.gross_salary)))}</td>
-                      <td className="px-4 py-3 tabular-nums text-orange-400">{formatCurrency(calc.tds)}</td>
-                      <td className="px-4 py-3 tabular-nums text-green-400 font-semibold">{formatCurrency(calc.net)}</td>
-                      <td className="px-4 py-3">
+                      <td data-label="Email" className="px-4 py-3 text-xs text-[var(--color-muted)]">{e.email ?? "-"}</td>
+                      <td data-label="Gross Salary" className="px-4 py-3 tabular-nums font-semibold">{formatCurrency(parseFloat(String(e.gross_salary)))}</td>
+                      <td data-label="TDS / month" className="px-4 py-3 tabular-nums text-orange-400">{formatCurrency(calc.tds)}</td>
+                      <td data-label="Net Pay" className="px-4 py-3 tabular-nums text-green-400 font-semibold">{formatCurrency(calc.net)}</td>
+                      <td data-label="Status" className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${e.status === "active" ? "bg-green-900/20 text-green-400 border-green-800/30" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
                           {e.status}
                         </span>
@@ -569,7 +571,7 @@ export default function PayrollPage() {
                         <span title="Salary accrual is posted to the books" className="text-[9px] px-1.5 py-0.5 rounded-full border border-green-800/40 text-green-400 bg-green-950/20">in books</span>
                       )}
                       {hasLines && (
-                        <button onClick={() => setExpandRun(expanded ? null : run.id)}
+                        <button onClick={() => setExpandRun(expanded ? null : run.id)} aria-label={expanded ? "Collapse run breakdown" : "Expand run breakdown"}
                           className="text-[var(--color-muted)] hover:text-[var(--color-text)]">
                           {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </button>
@@ -584,7 +586,7 @@ export default function PayrollPage() {
                         </button>
                       </div>
                       <div className="overflow-x-auto">
-                      <table className="w-full text-xs min-w-[620px]">
+                      <table className="w-full text-xs min-w-[620px] rcard">
                         <thead>
                           <tr className="text-[var(--color-muted)]">
                             <th className="text-left pb-1.5">Employee</th>
@@ -599,23 +601,23 @@ export default function PayrollPage() {
                         <tbody className="divide-y divide-[var(--color-border)]">
                           {lines.map(({ b, calc }) => (
                             <tr key={b.employee_id} title={`Basic ${formatCurrency(calc.basic)} · HRA ${formatCurrency(calc.hra)} · Allowances ${formatCurrency(calc.allowances)}`}>
-                              <td className="py-1">{b.name}</td>
-                              <td className="py-1 text-right tabular-nums">{formatCurrency(calc.gross)}</td>
-                              <td className="py-1 text-right tabular-nums text-red-400">{calc.pf ? formatCurrency(calc.pf) : "-"}</td>
-                              <td className="py-1 text-right tabular-nums text-red-400">{calc.esi ? formatCurrency(calc.esi) : "-"}</td>
-                              <td className="py-1 text-right tabular-nums text-red-400">{calc.pt ? formatCurrency(calc.pt) : "-"}</td>
-                              <td className="py-1 text-right tabular-nums text-orange-400">{calc.tds ? formatCurrency(calc.tds) : "-"}</td>
-                              <td className="py-1 text-right tabular-nums text-green-400 font-semibold">{formatCurrency(calc.net)}</td>
+                              <td data-label="Employee" className="py-1">{b.name}</td>
+                              <td data-label="Gross" className="py-1 text-right tabular-nums">{formatCurrency(calc.gross)}</td>
+                              <td data-label="PF" className="py-1 text-right tabular-nums text-red-400">{calc.pf ? formatCurrency(calc.pf) : "-"}</td>
+                              <td data-label="ESI" className="py-1 text-right tabular-nums text-red-400">{calc.esi ? formatCurrency(calc.esi) : "-"}</td>
+                              <td data-label="PT" className="py-1 text-right tabular-nums text-red-400">{calc.pt ? formatCurrency(calc.pt) : "-"}</td>
+                              <td data-label="TDS" className="py-1 text-right tabular-nums text-orange-400">{calc.tds ? formatCurrency(calc.tds) : "-"}</td>
+                              <td data-label="Net" className="py-1 text-right tabular-nums text-green-400 font-semibold">{formatCurrency(calc.net)}</td>
                             </tr>
                           ))}
                           <tr className="border-t-2 border-[var(--color-border)] font-semibold">
-                            <td className="py-1.5">Total ({lines.length})</td>
-                            <td className="py-1.5 text-right tabular-nums">{formatCurrency(sum.gross)}</td>
-                            <td className="py-1.5 text-right tabular-nums text-red-400">{formatCurrency(sum.pf)}</td>
-                            <td className="py-1.5 text-right tabular-nums text-red-400">{formatCurrency(sum.esi)}</td>
-                            <td className="py-1.5 text-right tabular-nums text-red-400">{formatCurrency(sum.pt)}</td>
-                            <td className="py-1.5 text-right tabular-nums text-orange-400">{formatCurrency(sum.tds)}</td>
-                            <td className="py-1.5 text-right tabular-nums text-green-400">{formatCurrency(sum.net)}</td>
+                            <td data-label="" className="py-1.5">Total ({lines.length})</td>
+                            <td data-label="Gross" className="py-1.5 text-right tabular-nums">{formatCurrency(sum.gross)}</td>
+                            <td data-label="PF" className="py-1.5 text-right tabular-nums text-red-400">{formatCurrency(sum.pf)}</td>
+                            <td data-label="ESI" className="py-1.5 text-right tabular-nums text-red-400">{formatCurrency(sum.esi)}</td>
+                            <td data-label="PT" className="py-1.5 text-right tabular-nums text-red-400">{formatCurrency(sum.pt)}</td>
+                            <td data-label="TDS" className="py-1.5 text-right tabular-nums text-orange-400">{formatCurrency(sum.tds)}</td>
+                            <td data-label="Net" className="py-1.5 text-right tabular-nums text-green-400">{formatCurrency(sum.net)}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -645,7 +647,7 @@ export default function PayrollPage() {
               <p className="text-xs text-[var(--color-muted)]">Employees can access up to 50% of wages earned so far this month. Deducted from next salary.</p>
             </div>
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rcard">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>
                     {["Employee", "Gross Salary", "Earned To Date", "Max Advance", "Action"].map(h => (
@@ -656,14 +658,14 @@ export default function PayrollPage() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {ewaData.employees.map(emp => (
                     <tr key={emp.id} className="hover:bg-white/2">
-                      <td className="px-4 py-3">
+                      <td data-label="Employee" className="px-4 py-3">
                         <div className="w-7 h-7 rounded-full bg-[var(--color-primary)]/20 inline-flex items-center justify-center text-xs font-bold text-[var(--color-primary)] mr-2">{emp.name[0].toUpperCase()}</div>
                         {emp.name}
                       </td>
-                      <td className="px-4 py-3 tabular-nums">{formatCurrency(emp.gross_salary)}</td>
-                      <td className="px-4 py-3 tabular-nums text-green-400 font-semibold">{formatCurrency(emp.earned_to_date)}</td>
-                      <td className="px-4 py-3 tabular-nums text-[var(--color-primary)] font-semibold">{formatCurrency(emp.max_advance)}</td>
-                      <td className="px-4 py-3">
+                      <td data-label="Gross Salary" className="px-4 py-3 tabular-nums">{formatCurrency(emp.gross_salary)}</td>
+                      <td data-label="Earned To Date" className="px-4 py-3 tabular-nums text-green-400 font-semibold">{formatCurrency(emp.earned_to_date)}</td>
+                      <td data-label="Max Advance" className="px-4 py-3 tabular-nums text-[var(--color-primary)] font-semibold">{formatCurrency(emp.max_advance)}</td>
+                      <td data-label="" className="px-4 py-3">
                         <button
                           onClick={() => requestAdvance(emp.id, emp.name, emp.max_advance)}
                           disabled={requesting[emp.id] || emp.max_advance === 0}
@@ -1092,7 +1094,7 @@ export default function PayrollPage() {
             </div>
 
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-              <table className="w-full text-xs min-w-[640px]">
+              <table className="w-full text-xs min-w-[640px] rcard">
                 <thead>
                   <tr className="border-b border-[var(--color-border)]">
                     {["UAN", "Name", "Gross", "PF Wages", "EE EPF (12%)", "ER EPF", "ER EPS (8.33%)", "Total"].map(h => (
@@ -1103,14 +1105,14 @@ export default function PayrollPage() {
                 <tbody>
                   {ecrRows.map(r => (
                     <tr key={r.employeeId} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                      <td className="px-3 py-2.5 font-mono text-orange-400/80 text-[10px]">Not on file</td>
-                      <td className="px-3 py-2.5 font-medium">{r.name}</td>
-                      <td className="px-3 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
-                      <td className="px-3 py-2.5 tabular-nums text-blue-400">{formatCurrency(r.pfWages)}</td>
-                      <td className="px-3 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.empEpf)}</td>
-                      <td className="px-3 py-2.5 tabular-nums text-purple-400">{formatCurrency(r.empEpfDiff)}</td>
-                      <td className="px-3 py-2.5 tabular-nums text-green-400">{formatCurrency(r.empEps)}</td>
-                      <td className="px-3 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{formatCurrency(r.totalContrib)}</td>
+                      <td data-label="UAN" className="px-3 py-2.5 font-mono text-orange-400/80 text-[10px]">Not on file</td>
+                      <td data-label="Name" className="px-3 py-2.5 font-medium">{r.name}</td>
+                      <td data-label="Gross" className="px-3 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
+                      <td data-label="PF Wages" className="px-3 py-2.5 tabular-nums text-blue-400">{formatCurrency(r.pfWages)}</td>
+                      <td data-label="EE EPF (12%)" className="px-3 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.empEpf)}</td>
+                      <td data-label="ER EPF" className="px-3 py-2.5 tabular-nums text-purple-400">{formatCurrency(r.empEpfDiff)}</td>
+                      <td data-label="ER EPS (8.33%)" className="px-3 py-2.5 tabular-nums text-green-400">{formatCurrency(r.empEps)}</td>
+                      <td data-label="Total" className="px-3 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{formatCurrency(r.totalContrib)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1178,7 +1180,7 @@ export default function PayrollPage() {
               {esiEligible.length === 0 ? (
                 <p className="p-4 text-sm text-[var(--color-muted)]">No employees in ESI bracket (all earning &gt; ₹21,000/month).</p>
               ) : (
-                <table className="w-full text-xs">
+                <table className="w-full text-xs rcard">
                   <thead>
                     <tr className="border-b border-[var(--color-border)]">
                       {["Name","Gross","EE ESI (0.75%)","ER ESI (3.25%)","Monthly Total"].map(h => (
@@ -1189,11 +1191,11 @@ export default function PayrollPage() {
                   <tbody>
                     {esiRows.map(r => (
                       <tr key={r.name} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                        <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-blue-400">{formatCurrency(r.empEsi)}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.erEsi)}</td>
-                        <td className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{formatCurrency(r.total)}</td>
+                        <td data-label="Name" className="px-4 py-2.5 font-medium">{r.name}</td>
+                        <td data-label="Gross" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
+                        <td data-label="EE ESI (0.75%)" className="px-4 py-2.5 tabular-nums text-blue-400">{formatCurrency(r.empEsi)}</td>
+                        <td data-label="ER ESI (3.25%)" className="px-4 py-2.5 tabular-nums text-orange-400">{formatCurrency(r.erEsi)}</td>
+                        <td data-label="Monthly Total" className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{formatCurrency(r.total)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1219,7 +1221,7 @@ export default function PayrollPage() {
               {bonusRows.length === 0 ? (
                 <p className="p-4 text-sm text-[var(--color-muted)]">No employees eligible (all earn &gt; ₹21,000/month).</p>
               ) : (
-                <table className="w-full text-xs">
+                <table className="w-full text-xs rcard">
                   <thead>
                     <tr className="border-b border-[var(--color-border)]">
                       {["Name","Gross","Calc. Wage","Min Bonus (8.33%)","Max Bonus (20%)"].map(h => (
@@ -1230,11 +1232,11 @@ export default function PayrollPage() {
                   <tbody>
                     {bonusRows.map(r => (
                       <tr key={r.name} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                        <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(r.calcWage)}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-green-400 font-semibold">{formatCurrency(r.minBonus)}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)] font-semibold">{formatCurrency(r.maxBonus)}</td>
+                        <td data-label="Name" className="px-4 py-2.5 font-medium">{r.name}</td>
+                        <td data-label="Gross" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.gross)}</td>
+                        <td data-label="Calc. Wage" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(r.calcWage)}</td>
+                        <td data-label="Min Bonus (8.33%)" className="px-4 py-2.5 tabular-nums text-green-400 font-semibold">{formatCurrency(r.minBonus)}</td>
+                        <td data-label="Max Bonus (20%)" className="px-4 py-2.5 tabular-nums text-[var(--color-primary)] font-semibold">{formatCurrency(r.maxBonus)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1250,7 +1252,7 @@ export default function PayrollPage() {
                 <h3 className="text-sm font-semibold">Gratuity Provision</h3>
                 <span className="text-xs text-[var(--color-muted)] ml-1">15/26 × last drawn salary × years of service</span>
               </div>
-              <table className="w-full text-xs">
+              <table className="w-full text-xs rcard">
                 <thead>
                   <tr className="border-b border-[var(--color-border)]">
                     {["Name","Monthly Salary","Per Year Provision","5-Year Total (₹)"].map(h => (
@@ -1261,10 +1263,10 @@ export default function PayrollPage() {
                 <tbody>
                   {gratuityRows.map(r => (
                     <tr key={r.name} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                      <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.monthly)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-purple-400 font-semibold">{formatCurrency(r.gratuityPerYear)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)]">{formatCurrency(r.provision5yr)}</td>
+                      <td data-label="Name" className="px-4 py-2.5 font-medium">{r.name}</td>
+                      <td data-label="Monthly Salary" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.monthly)}</td>
+                      <td data-label="Per Year Provision" className="px-4 py-2.5 tabular-nums text-purple-400 font-semibold">{formatCurrency(r.gratuityPerYear)}</td>
+                      <td data-label="5-Year Total (₹)" className="px-4 py-2.5 tabular-nums text-[var(--color-primary)]">{formatCurrency(r.provision5yr)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1514,7 +1516,7 @@ function PayrollVarianceTab() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
                   {["Month","Payroll Cost","vs Prior Month","Change %","Trend"].map(h => (
@@ -1525,15 +1527,15 @@ function PayrollVarianceTab() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.slice().reverse().map((r, i) => (
                   <tr key={r.key} className={`hover:bg-white/2 ${i === 0 ? "bg-[var(--color-primary)]/5" : ""}`}>
-                    <td className="px-4 py-3 font-medium">{r.label}{i === 0 ? <span className="ml-1.5 text-[9px] bg-[var(--color-primary)]/20 text-[var(--color-primary)] px-1.5 py-0.5 rounded-full">Latest</span> : ""}</td>
-                    <td className="px-4 py-3 tabular-nums font-semibold">{formatCurrency(r.total)}</td>
-                    <td className={`px-4 py-3 tabular-nums ${r.change !== null ? (r.change > 0 ? "text-red-400" : r.change < 0 ? "text-green-400" : "text-[var(--color-muted)]") : "text-[var(--color-muted)]"}`}>
+                    <td data-label="Month" className="px-4 py-3 font-medium">{r.label}{i === 0 ? <span className="ml-1.5 text-[9px] bg-[var(--color-primary)]/20 text-[var(--color-primary)] px-1.5 py-0.5 rounded-full">Latest</span> : ""}</td>
+                    <td data-label="Payroll Cost" className="px-4 py-3 tabular-nums font-semibold">{formatCurrency(r.total)}</td>
+                    <td data-label="vs Prior Month" className={`px-4 py-3 tabular-nums ${r.change !== null ? (r.change > 0 ? "text-red-400" : r.change < 0 ? "text-green-400" : "text-[var(--color-muted)]") : "text-[var(--color-muted)]"}`}>
                       {r.change !== null ? `${r.change >= 0 ? "+" : ""}${formatCurrency(r.change)}` : "-"}
                     </td>
-                    <td className={`px-4 py-3 tabular-nums font-semibold ${r.pct !== null ? (r.pct > 5 ? "text-red-400" : r.pct < -5 ? "text-green-400" : "text-[var(--color-muted)]") : "text-[var(--color-muted)]"}`}>
+                    <td data-label="Change %" className={`px-4 py-3 tabular-nums font-semibold ${r.pct !== null ? (r.pct > 5 ? "text-red-400" : r.pct < -5 ? "text-green-400" : "text-[var(--color-muted)]") : "text-[var(--color-muted)]"}`}>
                       {r.pct !== null ? `${r.pct >= 0 ? "+" : ""}${r.pct}%` : "-"}
                     </td>
-                    <td className="px-4 py-3">
+                    <td data-label="Trend" className="px-4 py-3">
                       {r.pct !== null && (
                         <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${
                           r.pct > 10  ? "bg-red-900/30 text-red-400 border-red-800/40" :
@@ -1651,7 +1653,7 @@ function PtCalculatorTab({ employees }: { employees: { id: string; name: string;
             </div>
             <button onClick={downloadCsv} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
           </div>
-          <table className="w-full text-sm">
+          <table className="w-full text-sm rcard">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
                 {["Employee","Gross Salary","Monthly PT","Annual PT"].map(h => (
@@ -1664,10 +1666,10 @@ function PtCalculatorTab({ employees }: { employees: { id: string; name: string;
                 const pt = calcPt(e.gross_salary);
                 return (
                   <tr key={e.id} className="hover:bg-white/2">
-                    <td className="px-4 py-3 font-medium">{e.name}</td>
-                    <td className="px-4 py-3 tabular-nums">{formatCurrency(e.gross_salary)}</td>
-                    <td className={`px-4 py-3 tabular-nums font-semibold ${pt > 0 ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]"}`}>{pt > 0 ? formatCurrency(pt) : "Nil"}</td>
-                    <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{pt > 0 ? formatCurrency(pt * 12) : "-"}</td>
+                    <td data-label="Employee" className="px-4 py-3 font-medium">{e.name}</td>
+                    <td data-label="Gross Salary" className="px-4 py-3 tabular-nums">{formatCurrency(e.gross_salary)}</td>
+                    <td data-label="Monthly PT" className={`px-4 py-3 tabular-nums font-semibold ${pt > 0 ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]"}`}>{pt > 0 ? formatCurrency(pt) : "Nil"}</td>
+                    <td data-label="Annual PT" className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{pt > 0 ? formatCurrency(pt * 12) : "-"}</td>
                   </tr>
                 );
               })}
@@ -1785,7 +1787,7 @@ function FlexiBenefitTab({ employees }: { employees: { id: string; name: string;
           <Banknote size={13} className="text-[var(--color-primary)]" />
           <span className="text-sm font-semibold">Optimised Salary Breakup (Annual)</span>
         </div>
-        <table className="w-full text-sm min-w-[560px]">
+        <table className="w-full text-sm min-w-[560px] rcard">
           <thead>
             <tr className="border-b border-[var(--color-border)]">
               {["Component","Amount","Taxable Portion","Exemption Basis"].map(h => (
@@ -1796,17 +1798,17 @@ function FlexiBenefitTab({ employees }: { employees: { id: string; name: string;
           <tbody>
             {rows.map(r => (
               <tr key={r.label} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                <td className="px-4 py-3 font-medium">{r.label}</td>
-                <td className="px-4 py-3 tabular-nums">{fc(r.amount)}</td>
-                <td className={`px-4 py-3 tabular-nums ${r.taxable === 0 ? "text-green-400" : "text-orange-400"}`}>{fc(r.taxable)}</td>
-                <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.exemptBasis}</td>
+                <td data-label="Component" className="px-4 py-3 font-medium">{r.label}</td>
+                <td data-label="Amount" className="px-4 py-3 tabular-nums">{fc(r.amount)}</td>
+                <td data-label="Taxable Portion" className={`px-4 py-3 tabular-nums ${r.taxable === 0 ? "text-green-400" : "text-orange-400"}`}>{fc(r.taxable)}</td>
+                <td data-label="Exemption Basis" className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.exemptBasis}</td>
               </tr>
             ))}
             <tr className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
-              <td className="px-4 py-3 font-bold">Total</td>
-              <td className="px-4 py-3 font-bold tabular-nums">{fc(rows.reduce((s, r) => s + r.amount, 0))}</td>
-              <td className="px-4 py-3 font-bold tabular-nums text-orange-400">{fc(rows.reduce((s, r) => s + r.taxable, 0))}</td>
-              <td className="px-4 py-3 text-xs text-green-400 font-semibold">Est. ₹{Math.round(taxSaving / 1000)}k/yr saved (30% slab)</td>
+              <td data-label="" className="px-4 py-3 font-bold">Total</td>
+              <td data-label="Amount" className="px-4 py-3 font-bold tabular-nums">{fc(rows.reduce((s, r) => s + r.amount, 0))}</td>
+              <td data-label="Taxable Portion" className="px-4 py-3 font-bold tabular-nums text-orange-400">{fc(rows.reduce((s, r) => s + r.taxable, 0))}</td>
+              <td data-label="Exemption Basis" className="px-4 py-3 text-xs text-green-400 font-semibold">Est. ₹{Math.round(taxSaving / 1000)}k/yr saved (30% slab)</td>
             </tr>
           </tbody>
         </table>
@@ -1881,7 +1883,7 @@ function LwfCalculatorTab({ employees }: { employees: { id: string; name: string
         <div className="px-4 py-3 border-b border-[var(--color-border)]">
           <span className="text-sm font-semibold">Per-Employee LWF Deductions</span>
         </div>
-        <table className="w-full text-sm min-w-[480px]">
+        <table className="w-full text-sm min-w-[480px] rcard">
           <thead>
             <tr className="border-b border-[var(--color-border)]">
               {["Employee","Employee Contrib","Employer Contrib","Total"].map(h => (
@@ -1892,16 +1894,16 @@ function LwfCalculatorTab({ employees }: { employees: { id: string; name: string
           <tbody>
             {employees.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">
+                <td colSpan={4} data-label="" className="px-4 py-6 text-center text-xs text-[var(--color-muted)]">
                   No employees yet - add your team in the Employees tab to see LWF contributions.
                 </td>
               </tr>
             ) : employees.map(e => (
               <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                <td className="px-4 py-3 font-medium">{e.name}</td>
-                <td className="px-4 py-3 tabular-nums">₹{slab.employee * annualMultiplier}</td>
-                <td className="px-4 py-3 tabular-nums text-orange-400">₹{slab.employer * annualMultiplier}</td>
-                <td className="px-4 py-3 tabular-nums font-semibold">₹{(slab.employee + slab.employer) * annualMultiplier}</td>
+                <td data-label="Employee" className="px-4 py-3 font-medium">{e.name}</td>
+                <td data-label="Employee Contrib" className="px-4 py-3 tabular-nums">₹{slab.employee * annualMultiplier}</td>
+                <td data-label="Employer Contrib" className="px-4 py-3 tabular-nums text-orange-400">₹{slab.employer * annualMultiplier}</td>
+                <td data-label="Total" className="px-4 py-3 tabular-nums font-semibold">₹{(slab.employee + slab.employer) * annualMultiplier}</td>
               </tr>
             ))}
           </tbody>
@@ -2219,7 +2221,7 @@ function EsopTab({ employees }: { employees: { id: string; name: string; gross_s
             <p className="text-sm text-[var(--color-muted)]">No grants yet. Add a grant above to track vesting and notional value.</p>
           </div>
         ) : (
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm min-w-[640px] rcard">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
                 {["Employee","Granted","Vested","Unvested","Vested %","Notional Value",""].map(h => (
@@ -2230,14 +2232,14 @@ function EsopTab({ employees }: { employees: { id: string; name: string; gross_s
             <tbody>
               {computed.map(g => (
                 <tr key={g.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                  <td className="px-4 py-3 font-medium">{g.name}</td>
-                  <td className="px-4 py-3 tabular-nums">{g.granted.toLocaleString("en-IN")}</td>
-                  <td className="px-4 py-3 tabular-nums text-green-400 font-semibold">{g.vested.toLocaleString("en-IN")}</td>
-                  <td className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{g.unvested.toLocaleString("en-IN")}</td>
-                  <td className="px-4 py-3 tabular-nums text-blue-400 font-semibold">{g.vestedPct.toFixed(1)}%</td>
-                  <td className="px-4 py-3 tabular-nums text-[var(--color-primary)] font-semibold">{fc(g.notional)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button onClick={() => removeGrant(g.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+                  <td data-label="Employee" className="px-4 py-3 font-medium">{g.name}</td>
+                  <td data-label="Granted" className="px-4 py-3 tabular-nums">{g.granted.toLocaleString("en-IN")}</td>
+                  <td data-label="Vested" className="px-4 py-3 tabular-nums text-green-400 font-semibold">{g.vested.toLocaleString("en-IN")}</td>
+                  <td data-label="Unvested" className="px-4 py-3 tabular-nums text-[var(--color-muted)]">{g.unvested.toLocaleString("en-IN")}</td>
+                  <td data-label="Vested %" className="px-4 py-3 tabular-nums text-blue-400 font-semibold">{g.vestedPct.toFixed(1)}%</td>
+                  <td data-label="Notional Value" className="px-4 py-3 tabular-nums text-[var(--color-primary)] font-semibold">{fc(g.notional)}</td>
+                  <td data-label="" className="px-4 py-3 text-right">
+                    <button onClick={() => removeGrant(g.id)} aria-label="Remove grant" className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
                   </td>
                 </tr>
               ))}
@@ -2400,7 +2402,7 @@ function CtcOptimizerTab({ employees }: { employees: EmpLite[] }) {
           <Wallet size={13} className="text-[var(--color-primary)]" />
           <span className="text-sm font-semibold">Optimised Annual Salary Structure</span>
         </div>
-        <table className="w-full text-sm min-w-[560px]">
+        <table className="w-full text-sm min-w-[560px] rcard">
           <thead>
             <tr className="border-b border-[var(--color-border)]">
               {["Component", "Amount", "Taxable", "Basis"].map(h => (
@@ -2411,17 +2413,17 @@ function CtcOptimizerTab({ employees }: { employees: EmpLite[] }) {
           <tbody>
             {rows.map(r => (
               <tr key={r.label} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                <td className="px-4 py-3 font-medium">{r.label}</td>
-                <td className="px-4 py-3 tabular-nums">{fc(r.amount)}</td>
-                <td className={`px-4 py-3 tabular-nums ${r.taxable === 0 ? "text-green-400" : "text-orange-400"}`}>{fc(r.taxable)}</td>
-                <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.note}</td>
+                <td data-label="Component" className="px-4 py-3 font-medium">{r.label}</td>
+                <td data-label="Amount" className="px-4 py-3 tabular-nums">{fc(r.amount)}</td>
+                <td data-label="Taxable" className={`px-4 py-3 tabular-nums ${r.taxable === 0 ? "text-green-400" : "text-orange-400"}`}>{fc(r.taxable)}</td>
+                <td data-label="Basis" className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.note}</td>
               </tr>
             ))}
             <tr className="border-t-2 border-[var(--color-border)] bg-[var(--color-accent)]">
-              <td className="px-4 py-3 font-bold">Total</td>
-              <td className="px-4 py-3 font-bold tabular-nums">{fc(rows.reduce((s, r) => s + r.amount, 0))}</td>
-              <td className="px-4 py-3 font-bold tabular-nums text-orange-400">{fc(rows.reduce((s, r) => s + r.taxable, 0))}</td>
-              <td className="px-4 py-3 text-xs text-green-400 font-semibold">{fc(taxFree)} kept tax-free</td>
+              <td data-label="" className="px-4 py-3 font-bold">Total</td>
+              <td data-label="Amount" className="px-4 py-3 font-bold tabular-nums">{fc(rows.reduce((s, r) => s + r.amount, 0))}</td>
+              <td data-label="Taxable" className="px-4 py-3 font-bold tabular-nums text-orange-400">{fc(rows.reduce((s, r) => s + r.taxable, 0))}</td>
+              <td data-label="Basis" className="px-4 py-3 text-xs text-green-400 font-semibold">{fc(taxFree)} kept tax-free</td>
             </tr>
           </tbody>
         </table>
@@ -2522,7 +2524,7 @@ function AttendanceRegisterTab({ employees }: { employees: EmpLite[] }) {
         {computed.length === 0 ? (
           <p className="p-6 text-sm text-[var(--color-muted)]">No attendance recorded yet.</p>
         ) : (
-          <table className="w-full text-xs min-w-[720px]">
+          <table className="w-full text-xs min-w-[720px] rcard">
             <thead>
               <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
                 {["Employee", "Month", "Payable", "Present", "LOP", "Encash Days", "LOP Deduction", "Encash Amt", "Net Pay", ""].map(h => (
@@ -2533,16 +2535,16 @@ function AttendanceRegisterTab({ employees }: { employees: EmpLite[] }) {
             <tbody>
               {computed.map(r => (
                 <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                  <td className="px-3 py-2.5 font-medium">{r.name}</td>
-                  <td className="px-3 py-2.5">{r.month}</td>
-                  <td className="px-3 py-2.5 tabular-nums">{r.payableDays}</td>
-                  <td className="px-3 py-2.5 tabular-nums">{r.present}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-red-400">{r.lop}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-green-400">{r.leaveEncash}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-red-400">{r.lopDeduction > 0 ? `(${fc(r.lopDeduction)})` : "-"}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-green-400">{r.encashAmt > 0 ? fc(r.encashAmt) : "-"}</td>
-                  <td className="px-3 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{fc(r.netPay)}</td>
-                  <td className="px-3 py-2.5 text-right"><button onClick={() => removeRow(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
+                  <td data-label="Employee" className="px-3 py-2.5 font-medium">{r.name}</td>
+                  <td data-label="Month" className="px-3 py-2.5">{r.month}</td>
+                  <td data-label="Payable" className="px-3 py-2.5 tabular-nums">{r.payableDays}</td>
+                  <td data-label="Present" className="px-3 py-2.5 tabular-nums">{r.present}</td>
+                  <td data-label="LOP" className="px-3 py-2.5 tabular-nums text-red-400">{r.lop}</td>
+                  <td data-label="Encash Days" className="px-3 py-2.5 tabular-nums text-green-400">{r.leaveEncash}</td>
+                  <td data-label="LOP Deduction" className="px-3 py-2.5 tabular-nums text-red-400">{r.lopDeduction > 0 ? `(${fc(r.lopDeduction)})` : "-"}</td>
+                  <td data-label="Encash Amt" className="px-3 py-2.5 tabular-nums text-green-400">{r.encashAmt > 0 ? fc(r.encashAmt) : "-"}</td>
+                  <td data-label="Net Pay" className="px-3 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{fc(r.netPay)}</td>
+                  <td data-label="" className="px-3 py-2.5 text-right"><button onClick={() => removeRow(r.id)} aria-label="Remove attendance row" className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -2616,7 +2618,7 @@ function GratuityProvisionTab({ employees }: { employees: EmpLite[] }) {
           <button onClick={() => downloadCsvRows([["Employee", "Basic (proxy)", "Years", "Eligible Years", "Accrued", "Vested"], ...rows.map(r => [r.name, r.basic, r.yearsRaw.toFixed(1), r.eligibleYears, r.accrued, r.isEligible ? "Yes" : "No"])], "gratuity-provision.csv")}
             className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
         </div>
-        <table className="w-full text-xs min-w-[640px]">
+        <table className="w-full text-xs min-w-[640px] rcard">
           <thead>
             <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
               {["Employee", "Basic+DA (proxy)", "Service (yrs)", "Eligible Years", "Accrued Liability", "Status"].map(h => (
@@ -2627,12 +2629,12 @@ function GratuityProvisionTab({ employees }: { employees: EmpLite[] }) {
           <tbody>
             {rows.map(r => (
               <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                <td className="px-4 py-2.5 tabular-nums">{fc(r.basic)}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.yearsRaw.toFixed(1)}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.eligibleYears}</td>
-                <td className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{fc(r.accrued)}</td>
-                <td className="px-4 py-2.5">
+                <td data-label="Employee" className="px-4 py-2.5 font-medium">{r.name}</td>
+                <td data-label="Basic+DA (proxy)" className="px-4 py-2.5 tabular-nums">{fc(r.basic)}</td>
+                <td data-label="Service (yrs)" className="px-4 py-2.5 tabular-nums">{r.yearsRaw.toFixed(1)}</td>
+                <td data-label="Eligible Years" className="px-4 py-2.5 tabular-nums">{r.eligibleYears}</td>
+                <td data-label="Accrued Liability" className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{fc(r.accrued)}</td>
+                <td data-label="Status" className="px-4 py-2.5">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border ${r.isEligible ? "bg-green-900/20 text-green-400 border-green-800/30" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
                     {r.isEligible ? "Vested" : "Not vested (<5 yr)"}
                   </span>
@@ -2732,7 +2734,7 @@ function ReimbursementTab({ employees }: { employees: EmpLite[] }) {
         {claims.length === 0 ? (
           <p className="p-6 text-sm text-[var(--color-muted)]">No claims yet.</p>
         ) : (
-          <table className="w-full text-xs min-w-[680px]">
+          <table className="w-full text-xs min-w-[680px] rcard">
             <thead>
               <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
                 {["Employee", "Date", "Category", "Description", "Amount", "Status", ""].map(h => (
@@ -2743,22 +2745,22 @@ function ReimbursementTab({ employees }: { employees: EmpLite[] }) {
             <tbody>
               {claims.map(c => (
                 <tr key={c.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                  <td className="px-3 py-2.5 font-medium">{empName(c.empId)}</td>
-                  <td className="px-3 py-2.5">{c.date}</td>
-                  <td className="px-3 py-2.5">{c.category}</td>
-                  <td className="px-3 py-2.5 text-[var(--color-muted)]">{c.description || "-"}</td>
-                  <td className="px-3 py-2.5 tabular-nums font-semibold">{fc(c.amount)}</td>
-                  <td className="px-3 py-2.5">
+                  <td data-label="Employee" className="px-3 py-2.5 font-medium">{empName(c.empId)}</td>
+                  <td data-label="Date" className="px-3 py-2.5">{c.date}</td>
+                  <td data-label="Category" className="px-3 py-2.5">{c.category}</td>
+                  <td data-label="Description" className="px-3 py-2.5 text-[var(--color-muted)]">{c.description || "-"}</td>
+                  <td data-label="Amount" className="px-3 py-2.5 tabular-nums font-semibold">{fc(c.amount)}</td>
+                  <td data-label="Status" className="px-3 py-2.5">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border ${c.status === "approved" ? "bg-green-900/20 text-green-400 border-green-800/30" : c.status === "rejected" ? "bg-red-900/20 text-red-400 border-red-800/30" : "bg-yellow-900/20 text-yellow-400 border-yellow-800/30"}`}>{c.status}</span>
                   </td>
-                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                  <td data-label="" className="px-3 py-2.5 text-right whitespace-nowrap">
                     {c.status === "pending" && (
                       <>
                         <button onClick={() => setStatus(c.id, "approved")} className="text-green-400 hover:underline mr-2">Approve</button>
                         <button onClick={() => setStatus(c.id, "rejected")} className="text-red-400 hover:underline mr-2">Reject</button>
                       </>
                     )}
-                    <button onClick={() => removeClaim(c.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} className="inline" /></button>
+                    <button onClick={() => removeClaim(c.id)} aria-label="Remove claim" className="text-[var(--color-muted)] hover:text-red-400"><X size={12} className="inline" /></button>
                   </td>
                 </tr>
               ))}
@@ -2958,7 +2960,7 @@ function BonusAccrualTab({ employees }: { employees: EmpLite[] }) {
           <button onClick={() => downloadCsvRows([["Employee", "Gross", "Eligible", "Calc Wage", "Min 8.33%", `Declared ${pct.toFixed(2)}%`, "Max 20%"], ...rows.map(r => [r.name, r.gross, r.eligible ? "Yes" : "No", r.calcWage, r.minBonus, r.eligible ? r.declared : 0, r.maxBonus])], "bonus-register.csv")}
             className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
         </div>
-        <table className="w-full text-xs min-w-[680px]">
+        <table className="w-full text-xs min-w-[680px] rcard">
           <thead>
             <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
               {["Employee", "Gross", "Eligible", "Calc. Wage", "Min (8.33%)", `Declared (${pct.toFixed(2)}%)`, "Max (20%)"].map(h => (
@@ -2969,15 +2971,15 @@ function BonusAccrualTab({ employees }: { employees: EmpLite[] }) {
           <tbody>
             {rows.map(r => (
               <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                <td className="px-4 py-2.5 tabular-nums">{fc(r.gross)}</td>
-                <td className="px-4 py-2.5">
+                <td data-label="Employee" className="px-4 py-2.5 font-medium">{r.name}</td>
+                <td data-label="Gross" className="px-4 py-2.5 tabular-nums">{fc(r.gross)}</td>
+                <td data-label="Eligible" className="px-4 py-2.5">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border ${r.eligible ? "bg-green-900/20 text-green-400 border-green-800/30" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{r.eligible ? "Yes" : "No"}</span>
                 </td>
-                <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(r.calcWage)}</td>
-                <td className="px-4 py-2.5 tabular-nums">{r.eligible ? fc(r.minBonus) : "-"}</td>
-                <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)] font-semibold">{r.eligible ? fc(r.declared) : "-"}</td>
-                <td className="px-4 py-2.5 tabular-nums text-orange-400">{r.eligible ? fc(r.maxBonus) : "-"}</td>
+                <td data-label="Calc. Wage" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(r.calcWage)}</td>
+                <td data-label="Min (8.33%)" className="px-4 py-2.5 tabular-nums">{r.eligible ? fc(r.minBonus) : "-"}</td>
+                <td data-label="Declared" className="px-4 py-2.5 tabular-nums text-[var(--color-primary)] font-semibold">{r.eligible ? fc(r.declared) : "-"}</td>
+                <td data-label="Max (20%)" className="px-4 py-2.5 tabular-nums text-orange-400">{r.eligible ? fc(r.maxBonus) : "-"}</td>
               </tr>
             ))}
           </tbody>
@@ -3089,7 +3091,7 @@ function ContractorPayoutTab() {
         {computed.length === 0 ? (
           <p className="p-6 text-sm text-[var(--color-muted)]">No payouts recorded yet.</p>
         ) : (
-          <table className="w-full text-xs min-w-[720px]">
+          <table className="w-full text-xs min-w-[720px] rcard">
             <thead>
               <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
                 {["Name", "PAN", "Section", "Date", "Gross", "Rate", "TDS", "Net", ""].map(h => (
@@ -3100,15 +3102,15 @@ function ContractorPayoutTab() {
             <tbody>
               {computed.map(r => (
                 <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                  <td className="px-3 py-2.5 font-medium">{r.name}</td>
-                  <td className="px-3 py-2.5 font-mono">{r.hasPan ? r.pan : <span className="text-red-400">NO PAN</span>}</td>
-                  <td className="px-3 py-2.5">{r.section}</td>
-                  <td className="px-3 py-2.5">{r.date}</td>
-                  <td className="px-3 py-2.5 tabular-nums">{fc(r.gross)}</td>
-                  <td className="px-3 py-2.5 tabular-nums">{r.rate}%</td>
-                  <td className="px-3 py-2.5 tabular-nums text-orange-400">{fc(r.tds)}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-green-400 font-semibold">{fc(r.net)}</td>
-                  <td className="px-3 py-2.5 text-right"><button onClick={() => removeRow(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                  <td data-label="Name" className="px-3 py-2.5 font-medium">{r.name}</td>
+                  <td data-label="PAN" className="px-3 py-2.5 font-mono">{r.hasPan ? r.pan : <span className="text-red-400">NO PAN</span>}</td>
+                  <td data-label="Section" className="px-3 py-2.5">{r.section}</td>
+                  <td data-label="Date" className="px-3 py-2.5">{r.date}</td>
+                  <td data-label="Gross" className="px-3 py-2.5 tabular-nums">{fc(r.gross)}</td>
+                  <td data-label="Rate" className="px-3 py-2.5 tabular-nums">{r.rate}%</td>
+                  <td data-label="TDS" className="px-3 py-2.5 tabular-nums text-orange-400">{fc(r.tds)}</td>
+                  <td data-label="Net" className="px-3 py-2.5 tabular-nums text-green-400 font-semibold">{fc(r.net)}</td>
+                  <td data-label="" className="px-3 py-2.5 text-right"><button onClick={() => removeRow(r.id)} aria-label="Remove payment" className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -3298,7 +3300,7 @@ function AppraisalPlannerTab({ employees }: { employees: EmpLite[] }) {
           <button onClick={() => downloadCsvRows([["Employee", "Current Annual", "Hike %", "Hike Amount", "New Annual"], ...rows.map(r => [r.name, r.annual, r.hikePct, r.hikeAmt, r.newAnnual])], "appraisal-plan.csv")}
             className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
         </div>
-        <table className="w-full text-xs min-w-[640px]">
+        <table className="w-full text-xs min-w-[640px] rcard">
           <thead>
             <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
               {["Employee", "Current Annual", "Hike %", "Hike Amount", "New Annual"].map(h => (
@@ -3309,14 +3311,14 @@ function AppraisalPlannerTab({ employees }: { employees: EmpLite[] }) {
           <tbody>
             {rows.map(r => (
               <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                <td className="px-4 py-2.5 tabular-nums">{fc(r.annual)}</td>
-                <td className="px-4 py-2.5">
+                <td data-label="Employee" className="px-4 py-2.5 font-medium">{r.name}</td>
+                <td data-label="Current Annual" className="px-4 py-2.5 tabular-nums">{fc(r.annual)}</td>
+                <td data-label="Hike %" className="px-4 py-2.5">
                   <input type="number" min={0} max={100} value={r.hikePct} onChange={e => setHike(r.id, Number(e.target.value))}
                     className="w-20 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)] tabular-nums" />
                 </td>
-                <td className="px-4 py-2.5 tabular-nums text-yellow-400">{fc(r.hikeAmt)}</td>
-                <td className="px-4 py-2.5 tabular-nums text-[var(--color-primary)] font-semibold">{fc(r.newAnnual)}</td>
+                <td data-label="Hike Amount" className="px-4 py-2.5 tabular-nums text-yellow-400">{fc(r.hikeAmt)}</td>
+                <td data-label="New Annual" className="px-4 py-2.5 tabular-nums text-[var(--color-primary)] font-semibold">{fc(r.newAnnual)}</td>
               </tr>
             ))}
           </tbody>
@@ -3404,7 +3406,7 @@ function PayrollJournalTab({ employees }: { employees: EmpLite[] }) {
           <button onClick={() => downloadCsvRows([["Account", "Debit", "Credit"], ...entries.map(e => [e.account, e.debit, e.credit]), ["TOTAL", totalDebit, totalCredit]], "payroll-journal.csv")}
             className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
         </div>
-        <table className="w-full text-sm min-w-[480px]">
+        <table className="w-full text-sm min-w-[480px] rcard">
           <thead>
             <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
               <th className="text-left text-xs font-semibold px-4 py-2.5">Ledger Account</th>
@@ -3415,9 +3417,9 @@ function PayrollJournalTab({ employees }: { employees: EmpLite[] }) {
           <tbody>
             {entries.map(e => (
               <tr key={e.account} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                <td className="px-4 py-2.5">{e.account}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{e.debit > 0 ? fc(e.debit) : "-"}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{e.credit > 0 ? fc(e.credit) : "-"}</td>
+                <td data-label="Ledger Account" className="px-4 py-2.5">{e.account}</td>
+                <td data-label="Debit" className="px-4 py-2.5 text-right tabular-nums">{e.debit > 0 ? fc(e.debit) : "-"}</td>
+                <td data-label="Credit" className="px-4 py-2.5 text-right tabular-nums">{e.credit > 0 ? fc(e.credit) : "-"}</td>
               </tr>
             ))}
           </tbody>
@@ -3502,7 +3504,7 @@ function HeadcountForecastTab({ employees }: { employees: EmpLite[] }) {
       {hires.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
           <div className="px-4 py-3 border-b border-[var(--color-border)]"><span className="text-sm font-semibold">Planned Hires</span></div>
-          <table className="w-full text-xs min-w-[420px]">
+          <table className="w-full text-xs min-w-[420px] rcard">
             <thead>
               <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
                 {["Role", "Monthly CTC", "Starts Month", ""].map(h => <th key={h} className="text-left font-semibold px-4 py-2.5">{h}</th>)}
@@ -3511,10 +3513,10 @@ function HeadcountForecastTab({ employees }: { employees: EmpLite[] }) {
             <tbody>
               {hires.map(h => (
                 <tr key={h.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                  <td className="px-4 py-2.5 font-medium">{h.role}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{fc(h.monthlyCtc)}</td>
-                  <td className="px-4 py-2.5 tabular-nums">M{h.startMonth}</td>
-                  <td className="px-4 py-2.5 text-right"><button onClick={() => removeHire(h.id)} className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
+                  <td data-label="Role" className="px-4 py-2.5 font-medium">{h.role}</td>
+                  <td data-label="Monthly CTC" className="px-4 py-2.5 tabular-nums">{fc(h.monthlyCtc)}</td>
+                  <td data-label="Starts Month" className="px-4 py-2.5 tabular-nums">M{h.startMonth}</td>
+                  <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => removeHire(h.id)} aria-label="Remove planned hire" className="text-[var(--color-muted)] hover:text-red-400"><X size={12} /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -3542,7 +3544,7 @@ function HeadcountForecastTab({ employees }: { employees: EmpLite[] }) {
           <button onClick={() => downloadCsvRows([["Month", "Base", "New Hires", "Fully-Loaded"], ...months.map(m => [m.label, m.base, m.newHireCost, m.loaded])], "headcount-forecast.csv")}
             className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
         </div>
-        <table className="w-full text-xs min-w-[480px]">
+        <table className="w-full text-xs min-w-[480px] rcard">
           <thead>
             <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
               {["Month", "Base Payroll", "New Hire Cost", "Fully-Loaded"].map(h => <th key={h} className="text-left font-semibold px-4 py-2.5">{h}</th>)}
@@ -3551,10 +3553,10 @@ function HeadcountForecastTab({ employees }: { employees: EmpLite[] }) {
           <tbody>
             {months.map(m => (
               <tr key={m.label} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                <td className="px-4 py-2.5 font-medium">{m.label}</td>
-                <td className="px-4 py-2.5 tabular-nums">{fc(m.base)}</td>
-                <td className="px-4 py-2.5 tabular-nums text-blue-400">{m.newHireCost > 0 ? fc(m.newHireCost) : "-"}</td>
-                <td className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{fc(m.loaded)}</td>
+                <td data-label="Month" className="px-4 py-2.5 font-medium">{m.label}</td>
+                <td data-label="Base Payroll" className="px-4 py-2.5 tabular-nums">{fc(m.base)}</td>
+                <td data-label="New Hire Cost" className="px-4 py-2.5 tabular-nums text-blue-400">{m.newHireCost > 0 ? fc(m.newHireCost) : "-"}</td>
+                <td data-label="Fully-Loaded" className="px-4 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{fc(m.loaded)}</td>
               </tr>
             ))}
           </tbody>
@@ -3618,7 +3620,7 @@ function StatutoryLiabilityTab({ employees }: { employees: EmpLite[] }) {
           <button onClick={() => downloadCsvRows([["Employee", "Gross", "Bonus Provision", "Leave-Encash Provision", "Total"], ...rows.map(r => [r.name, r.gross, r.bonusLiab, r.leaveLiab, r.total])], "statutory-liability.csv")}
             className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"><Download size={11} /> CSV</button>
         </div>
-        <table className="w-full text-xs min-w-[560px]">
+        <table className="w-full text-xs min-w-[560px] rcard">
           <thead>
             <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
               {["Employee", "Gross", "Bonus Provision", "Leave-Encash", "Total"].map(h => <th key={h} className="text-left font-semibold px-4 py-2.5">{h}</th>)}
@@ -3627,11 +3629,11 @@ function StatutoryLiabilityTab({ employees }: { employees: EmpLite[] }) {
           <tbody>
             {rows.map(r => (
               <tr key={r.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                <td className="px-4 py-2.5 tabular-nums">{fc(r.gross)}</td>
-                <td className="px-4 py-2.5 tabular-nums text-yellow-400">{r.bonusLiab > 0 ? fc(r.bonusLiab) : "-"}</td>
-                <td className="px-4 py-2.5 tabular-nums text-blue-400">{fc(r.leaveLiab)}</td>
-                <td className="px-4 py-2.5 tabular-nums font-semibold text-orange-400">{fc(r.total)}</td>
+                <td data-label="Employee" className="px-4 py-2.5 font-medium">{r.name}</td>
+                <td data-label="Gross" className="px-4 py-2.5 tabular-nums">{fc(r.gross)}</td>
+                <td data-label="Bonus Provision" className="px-4 py-2.5 tabular-nums text-yellow-400">{r.bonusLiab > 0 ? fc(r.bonusLiab) : "-"}</td>
+                <td data-label="Leave-Encash" className="px-4 py-2.5 tabular-nums text-blue-400">{fc(r.leaveLiab)}</td>
+                <td data-label="Total" className="px-4 py-2.5 tabular-nums font-semibold text-orange-400">{fc(r.total)}</td>
               </tr>
             ))}
           </tbody>
@@ -3726,7 +3728,7 @@ function PayslipPortalTab({ employees }: { employees: EmpLite[]; firmName: strin
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
         <div className="px-4 py-3 border-b border-[var(--color-border)]"><span className="text-sm font-semibold">Distribution & Declarations</span></div>
-        <table className="w-full text-xs min-w-[680px]">
+        <table className="w-full text-xs min-w-[680px] rcard">
           <thead>
             <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
               {["Employee", "Net Pay", "Portal Link", "IT Declaration", "Send"].map(h => <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>)}
@@ -3737,18 +3739,18 @@ function PayslipPortalTab({ employees }: { employees: EmpLite[]; firmName: strin
               const net = Number(e.gross_salary) - Number(e.tds_monthly ?? 0);
               return (
                 <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                  <td className="px-3 py-2.5 font-medium">{e.name}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-green-400 font-semibold">{fc(net)}</td>
-                  <td className="px-3 py-2.5">
+                  <td data-label="Employee" className="px-3 py-2.5 font-medium">{e.name}</td>
+                  <td data-label="Net Pay" className="px-3 py-2.5 tabular-nums text-green-400 font-semibold">{fc(net)}</td>
+                  <td data-label="" className="px-3 py-2.5">
                     <button onClick={() => copyLink(e)} className="text-[var(--color-primary)] hover:underline">{copied === e.id ? "Copied!" : "Copy link"}</button>
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td data-label="IT Declaration" className="px-3 py-2.5">
                     <label className="flex items-center gap-1.5 cursor-pointer">
                       <input type="checkbox" checked={!!declarations[e.id]} onChange={() => toggleDeclaration(e.id)} className="accent-[var(--color-primary)]" />
                       <span className={declarations[e.id] ? "text-green-400" : "text-[var(--color-muted)]"}>{declarations[e.id] ? "Submitted" : "Pending"}</span>
                     </label>
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td data-label="" className="px-3 py-2.5">
                     <button onClick={() => void share(e)} disabled={sending === e.id} className="flex items-center gap-1 text-[var(--color-primary)] hover:underline disabled:opacity-50">
                       <Send size={11} /> {sending === e.id ? "Sending…" : channel === "whatsapp" ? "WhatsApp" : "Email"}
                     </button>
@@ -3883,7 +3885,7 @@ function LeaveEncashmentTab({ employees }: { employees: EmpLite[] }) {
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-        <table className="w-full text-xs min-w-[640px]">
+        <table className="w-full text-xs min-w-[640px] rcard">
           <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
             {["Employee", "Earned", "Availed", "Balance", "Per-day", "Encashment"].map(h => <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>)}
           </tr></thead>
@@ -3892,12 +3894,12 @@ function LeaveEncashmentTab({ employees }: { employees: EmpLite[] }) {
               const r = get(e.id);
               return (
                 <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                  <td className="px-3 py-2.5 font-medium">{e.name}</td>
-                  <td className="px-3 py-2.5"><input type="number" min="0" value={r.earned} onChange={ev => set(e.id, { earned: Math.max(0, Number(ev.target.value)) })} className={numInp} /></td>
-                  <td className="px-3 py-2.5"><input type="number" min="0" value={r.availed} onChange={ev => set(e.id, { availed: Math.max(0, Number(ev.target.value)) })} className={numInp} /></td>
-                  <td className="px-3 py-2.5 tabular-nums font-semibold text-blue-400">{balance}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(Math.round(perDay))}</td>
-                  <td className="px-3 py-2.5 tabular-nums font-semibold text-green-400">{fc(encashment)}</td>
+                  <td data-label="Employee" className="px-3 py-2.5 font-medium">{e.name}</td>
+                  <td data-label="Earned" className="px-3 py-2.5"><input type="number" min="0" value={r.earned} onChange={ev => set(e.id, { earned: Math.max(0, Number(ev.target.value)) })} className={numInp} /></td>
+                  <td data-label="Availed" className="px-3 py-2.5"><input type="number" min="0" value={r.availed} onChange={ev => set(e.id, { availed: Math.max(0, Number(ev.target.value)) })} className={numInp} /></td>
+                  <td data-label="Balance" className="px-3 py-2.5 tabular-nums font-semibold text-blue-400">{balance}</td>
+                  <td data-label="Per-day" className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(Math.round(perDay))}</td>
+                  <td data-label="Encashment" className="px-3 py-2.5 tabular-nums font-semibold text-green-400">{fc(encashment)}</td>
                 </tr>
               );
             })}
@@ -4068,7 +4070,7 @@ function SalaryAdvanceTab({ employees }: { employees: EmpLite[] }) {
         <p className="text-sm text-[var(--color-muted)] border border-dashed border-[var(--color-border)] rounded-lg p-6 text-center">No advances tracked yet.</p>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-xs min-w-[720px]">
+          <table className="w-full text-xs min-w-[720px] rcard">
             <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
               {["Employee", "Issued", "Principal", "Recovered", "Outstanding", "Record a recovery", ""].map(h => <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>)}
             </tr></thead>
@@ -4078,12 +4080,12 @@ function SalaryAdvanceTab({ employees }: { employees: EmpLite[] }) {
                 const cleared = outstanding === 0;
                 return (
                   <tr key={a.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                    <td className="px-3 py-2.5 font-medium">{nameOf(a.empId)}</td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{a.date}</td>
-                    <td className="px-3 py-2.5 tabular-nums">{fc(a.principal)}</td>
-                    <td className="px-3 py-2.5 tabular-nums text-green-400">{fc(a.paid)}</td>
-                    <td className={`px-3 py-2.5 tabular-nums font-semibold ${cleared ? "text-green-400" : "text-orange-400"}`}>{cleared ? "Cleared" : fc(outstanding)}</td>
-                    <td className="px-3 py-2.5">
+                    <td data-label="Employee" className="px-3 py-2.5 font-medium">{nameOf(a.empId)}</td>
+                    <td data-label="Issued" className="px-3 py-2.5 text-[var(--color-muted)]">{a.date}</td>
+                    <td data-label="Principal" className="px-3 py-2.5 tabular-nums">{fc(a.principal)}</td>
+                    <td data-label="Recovered" className="px-3 py-2.5 tabular-nums text-green-400">{fc(a.paid)}</td>
+                    <td data-label="Outstanding" className={`px-3 py-2.5 tabular-nums font-semibold ${cleared ? "text-green-400" : "text-orange-400"}`}>{cleared ? "Cleared" : fc(outstanding)}</td>
+                    <td data-label="Record a recovery" className="px-3 py-2.5">
                       {!cleared && (
                         <div className="flex items-center gap-1.5">
                           <input type="number" min="0" max={outstanding} placeholder="Amount" value={recoverAmt[a.id] ?? ""} onChange={e => setRecoverAmt(prev => ({ ...prev, [a.id]: e.target.value }))} className={`${inp} w-24 !py-1`} />
@@ -4091,7 +4093,7 @@ function SalaryAdvanceTab({ employees }: { employees: EmpLite[] }) {
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td data-label="" className="px-3 py-2.5">
                       <button onClick={() => remove(a.id)} className="text-red-400 hover:underline">Remove</button>
                     </td>
                   </tr>
@@ -4249,18 +4251,18 @@ function MinWageCheckTab({ employees }: { employees: EmpLite[] }) {
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-        <table className="w-full text-xs min-w-[560px]">
+        <table className="w-full text-xs min-w-[560px] rcard">
           <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
             {["Employee", "Gross / month", "Minimum", "Shortfall", "Status"].map(h => <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>)}
           </tr></thead>
           <tbody>
             {rows.map(({ e, gross, shortfall, compliant }) => (
               <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                <td className="px-3 py-2.5 font-medium">{e.name}</td>
-                <td className="px-3 py-2.5 tabular-nums">{fc(gross)}</td>
-                <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(threshold)}</td>
-                <td className="px-3 py-2.5 tabular-nums text-red-400">{shortfall > 0 ? fc(shortfall) : "-"}</td>
-                <td className="px-3 py-2.5">
+                <td data-label="Employee" className="px-3 py-2.5 font-medium">{e.name}</td>
+                <td data-label="Gross / month" className="px-3 py-2.5 tabular-nums">{fc(gross)}</td>
+                <td data-label="Minimum" className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(threshold)}</td>
+                <td data-label="Shortfall" className="px-3 py-2.5 tabular-nums text-red-400">{shortfall > 0 ? fc(shortfall) : "-"}</td>
+                <td data-label="Status" className="px-3 py-2.5">
                   <span className={`px-2 py-0.5 rounded-full border text-[10px] ${compliant ? "bg-green-900/20 text-green-400 border-green-800/30" : "bg-red-900/20 text-red-400 border-red-800/30"}`}>
                     {compliant ? "Compliant" : "Below minimum"}
                   </span>
@@ -4648,7 +4650,7 @@ function IncentiveEngineTab({ employees }: { employees: EmpLite[] }) {
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-        <table className="w-full text-xs min-w-[680px]">
+        <table className="w-full text-xs min-w-[680px] rcard">
           <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
             {["Employee", "Target", "Actual", "Attainment", "Raw commission", "Payout"].map(h => <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>)}
           </tr></thead>
@@ -4657,12 +4659,12 @@ function IncentiveEngineTab({ employees }: { employees: EmpLite[] }) {
               const r = get(e.id);
               return (
                 <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                  <td className="px-3 py-2.5 font-medium">{e.name}</td>
-                  <td className="px-3 py-2.5"><input type="number" min="0" value={r.target} onChange={ev => setA(e.id, { target: Math.max(0, Number(ev.target.value)) })} className={numInp} /></td>
-                  <td className="px-3 py-2.5"><input type="number" min="0" value={r.actual} onChange={ev => setA(e.id, { actual: Math.max(0, Number(ev.target.value)) })} className={numInp} /></td>
-                  <td className={`px-3 py-2.5 tabular-nums font-semibold ${attainment >= 1 ? "text-green-400" : attainment >= 0.7 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{(attainment * 100).toFixed(0)}%</td>
-                  <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(raw)}</td>
-                  <td className="px-3 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{fc(payout)}{capped && <span className="ml-1 text-[10px] text-orange-400">capped</span>}</td>
+                  <td data-label="Employee" className="px-3 py-2.5 font-medium">{e.name}</td>
+                  <td data-label="Target" className="px-3 py-2.5"><input type="number" min="0" value={r.target} onChange={ev => setA(e.id, { target: Math.max(0, Number(ev.target.value)) })} className={numInp} /></td>
+                  <td data-label="Actual" className="px-3 py-2.5"><input type="number" min="0" value={r.actual} onChange={ev => setA(e.id, { actual: Math.max(0, Number(ev.target.value)) })} className={numInp} /></td>
+                  <td data-label="Attainment" className={`px-3 py-2.5 tabular-nums font-semibold ${attainment >= 1 ? "text-green-400" : attainment >= 0.7 ? "text-orange-400" : "text-[var(--color-muted)]"}`}>{(attainment * 100).toFixed(0)}%</td>
+                  <td data-label="Raw commission" className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(raw)}</td>
+                  <td data-label="Payout" className="px-3 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{fc(payout)}{capped && <span className="ml-1 text-[10px] text-orange-400">capped</span>}</td>
                 </tr>
               );
             })}
@@ -4826,17 +4828,17 @@ function GroupInsuranceTab({ employees }: { employees: EmpLite[] }) {
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-        <table className="w-full text-xs min-w-[560px]">
+        <table className="w-full text-xs min-w-[560px] rcard">
           <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
             {["Employee", "GMC SI", "GTL / GPA SI", "Annual premium"].map(h => <th key={h} className="text-left font-semibold px-3 py-2.5">{h}</th>)}
           </tr></thead>
           <tbody>
             {rows.map(({ e, gtlSi, total }) => (
               <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                <td className="px-3 py-2.5 font-medium">{e.name}</td>
-                <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(sumGmc)}</td>
-                <td className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(gtlSi)}</td>
-                <td className="px-3 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{fc(total)}</td>
+                <td data-label="Employee" className="px-3 py-2.5 font-medium">{e.name}</td>
+                <td data-label="GMC SI" className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(sumGmc)}</td>
+                <td data-label="GTL / GPA SI" className="px-3 py-2.5 tabular-nums text-[var(--color-muted)]">{fc(gtlSi)}</td>
+                <td data-label="Annual premium" className="px-3 py-2.5 tabular-nums font-semibold text-[var(--color-primary)]">{fc(total)}</td>
               </tr>
             ))}
           </tbody>
@@ -4892,9 +4894,9 @@ function PfEsiChallanTab({ employees }: { employees: EmpLite[] }) {
 
   const acRow = (ac: string, label: string, amt: number) => (
     <tr key={ac} className="border-b border-[var(--color-border)] last:border-0">
-      <td className="px-3 py-2.5 font-mono text-[var(--color-muted)]">{ac}</td>
-      <td className="px-3 py-2.5">{label}</td>
-      <td className="px-3 py-2.5 tabular-nums text-right font-semibold">{fc(amt)}</td>
+      <td data-label="A/C" className="px-3 py-2.5 font-mono text-[var(--color-muted)]">{ac}</td>
+      <td data-label="EPFO head" className="px-3 py-2.5">{label}</td>
+      <td data-label="Amount" className="px-3 py-2.5 tabular-nums text-right font-semibold">{fc(amt)}</td>
     </tr>
   );
 
@@ -4921,7 +4923,7 @@ function PfEsiChallanTab({ employees }: { employees: EmpLite[] }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="w-full text-xs rcard">
             <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
               {["A/C", "EPFO head", "Amount"].map(h => <th key={h} className={`font-semibold px-3 py-2.5 ${h === "Amount" ? "text-right" : "text-left"}`}>{h}</th>)}
             </tr></thead>
@@ -5018,20 +5020,20 @@ function PayrollRegisterTab({ employees }: { employees: EmpLite[] }) {
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-        <table className="w-full text-xs min-w-[680px]">
+        <table className="w-full text-xs min-w-[680px] rcard">
           <thead><tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
             {["Employee", "Gross", "EPF", "ESI", "TDS", "Deductions", "Net pay"].map(h => <th key={h} className={`font-semibold px-3 py-2.5 ${h === "Employee" ? "text-left" : "text-right"}`}>{h}</th>)}
           </tr></thead>
           <tbody>
             {rows.map(r => (
               <tr key={r.e.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                <td className="px-3 py-2.5 font-medium">{r.e.name}</td>
-                <td className="px-3 py-2.5 tabular-nums text-right">{fc(r.gross)}</td>
-                <td className="px-3 py-2.5 tabular-nums text-right text-orange-400">{fc(r.pf)}</td>
-                <td className="px-3 py-2.5 tabular-nums text-right text-blue-400">{r.esi > 0 ? fc(r.esi) : "-"}</td>
-                <td className="px-3 py-2.5 tabular-nums text-right text-purple-400">{r.tds > 0 ? fc(r.tds) : "-"}</td>
-                <td className="px-3 py-2.5 tabular-nums text-right">{fc(r.ded)}</td>
-                <td className="px-3 py-2.5 tabular-nums text-right font-semibold text-[var(--color-primary)]">{fc(r.net)}</td>
+                <td data-label="Employee" className="px-3 py-2.5 font-medium">{r.e.name}</td>
+                <td data-label="Gross" className="px-3 py-2.5 tabular-nums text-right">{fc(r.gross)}</td>
+                <td data-label="EPF" className="px-3 py-2.5 tabular-nums text-right text-orange-400">{fc(r.pf)}</td>
+                <td data-label="ESI" className="px-3 py-2.5 tabular-nums text-right text-blue-400">{r.esi > 0 ? fc(r.esi) : "-"}</td>
+                <td data-label="TDS" className="px-3 py-2.5 tabular-nums text-right text-purple-400">{r.tds > 0 ? fc(r.tds) : "-"}</td>
+                <td data-label="Deductions" className="px-3 py-2.5 tabular-nums text-right">{fc(r.ded)}</td>
+                <td data-label="Net pay" className="px-3 py-2.5 tabular-nums text-right font-semibold text-[var(--color-primary)]">{fc(r.net)}</td>
               </tr>
             ))}
           </tbody>

@@ -223,4 +223,45 @@ async function renderInvoicePdf(tenantId, invoiceId, res) {
   doc.end();
 }
 
-module.exports = { renderInvoicePdf, fmtDate, money };
+
+// ── Payment receipt ──────────────────────────────────────────────────────────
+// Small, numbered, printable proof of payment. Lives beside the invoice renderer so the
+// two documents share formatting rules (money, dates, the Rs. fallback).
+function renderReceiptPdf(res, { payment: p, firmName, firmGstin }) {
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${p.receipt_number || "receipt"}.pdf"`);
+  const doc = new PDFDoc({ margin: 50, size: "A5" });
+  doc.pipe(res);
+
+  doc.fontSize(16).font("Helvetica-Bold").text("PAYMENT RECEIPT", 50, 50);
+  doc.fontSize(9).font("Helvetica").fillColor("#666")
+    .text(p.receipt_number || "(unnumbered — recorded before receipt numbering)", 50, 72)
+    .text(`Date: ${fmtDate(p.received_at)}`, 50, 84);
+
+  doc.fillColor("#000").font("Helvetica-Bold").fontSize(10).text(firmName, 50, 110);
+  if (firmGstin) doc.font("Helvetica").fillColor("#666").fontSize(8.5).text(`GSTIN: ${firmGstin}`, 50, 124);
+
+  let y = 150;
+  const row = (k, v, bold) => {
+    doc.font("Helvetica").fillColor("#666").fontSize(9).text(k, 50, y, { width: 130 });
+    doc.font(bold ? "Helvetica-Bold" : "Helvetica").fillColor("#000").text(String(v), 190, y, { width: 200 });
+    y += 16;
+  };
+  row("Received from", p.customer_name, true);
+  row("Amount", money(p.amount), true);
+  row("Against invoice", p.invoice_number);
+  row("Mode", p.mode);
+  if (p.reference) row("Reference", p.reference);
+  const remaining = Math.max(0, round2(Number(p.total_amount) - Number(p.paid_amount) - Number(p.credited_amount || 0)));
+  row("Balance on invoice after receipts", remaining > 0 ? money(remaining) : "Nil — settled");
+
+  y += 8;
+  doc.font("Helvetica-Bold").fillColor("#000").fontSize(9)
+    .text(inWords(p.amount), 50, y, { width: 340 });
+
+  doc.font("Helvetica").fillColor("#999").fontSize(7.5)
+    .text("System-generated receipt. Subject to realisation of the instrument where applicable.", 50, doc.page.height - 60, { width: 340 });
+  doc.end();
+}
+
+module.exports = { renderInvoicePdf, renderReceiptPdf, fmtDate, money };

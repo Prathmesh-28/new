@@ -598,9 +598,17 @@ router.post("/:id/payments", authenticate, canWrite, idempotent(), async (req, r
     if (inv.status === "cancelled") return { cancelled: true };
     const eff = applyReceipt({ total: inv.total_amount, paidAmount: inv.paid_amount || 0, creditedAmount: inv.credited_amount || 0 }, amount);
     if (!eff.ok) return { over: true, balance: eff.balanceBefore };
+    // Every receipt gets a number the customer can quote (item 105 of the gap audit: a
+    // customer who paid got no acknowledgement — the receipt existed only as a table row).
+    // Serialised per tenant with the same advisory-lock pattern invoice numbering uses.
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`${t}:receipt-number`]);
+    const { rows: [rmax] } = await client.query(
+      `SELECT COALESCE(MAX((regexp_match(receipt_number, 'RCT-\\d{4}-(\\d+)$'))[1]::int), 0) AS maxn
+         FROM invoice_payments WHERE tenant_id=$1 AND receipt_number IS NOT NULL`, [t]);
+    const receiptNumber = `RCT-${new Date().getFullYear()}-${String(Number(rmax.maxn) + 1).padStart(3, "0")}`;
     const { rows: [pay] } = await client.query(
-      "INSERT INTO invoice_payments(tenant_id, invoice_id, amount, mode, reference, received_at, created_by) VALUES($1,$2,$3,$4,$5,COALESCE($6::date, CURRENT_DATE),$7) RETURNING *",
-      [t, inv.id, amount, mode, reference, receivedAt, req.user.id || null]);
+      "INSERT INTO invoice_payments(tenant_id, invoice_id, amount, mode, reference, received_at, created_by, receipt_number) VALUES($1,$2,$3,$4,$5,COALESCE($6::date, CURRENT_DATE),$7,$8) RETURNING *",
+      [t, inv.id, amount, mode, reference, receivedAt, req.user.id || null, receiptNumber]);
     const { rows: [upd] } = await client.query(
       `UPDATE invoices SET paid_amount=$1,
          status=CASE WHEN $2 THEN 'paid' WHEN status='draft' THEN 'sent' ELSE status END,
@@ -989,6 +997,27 @@ router.get("/:id([0-9a-fA-F-]{36})", authenticate, async (req, res, next) => {
       payments, credit_notes: notes, reminders,
       outstanding: remainingToSettle({ total: inv.total_amount, paidAmount: inv.paid_amount || 0, creditedAmount: inv.credited_amount || 0 }),
     });
+  } catch (e) { next(e); }
+});
+
+// ── GET /api/invoices/:id/payments/:paymentId/receipt — a receipt to hand over ─
+// A customer who paid got no acknowledgement from the system. This is the printable
+// proof: numbered, dated, amount in words, tied to its invoice.
+router.get("/:id([0-9a-fA-F-]{36})/payments/:paymentId/receipt", authenticate, async (req, res, next) => {
+  try {
+    const t = req.user.tenant_id;
+    const { rows: [p] } = await q(t,
+      `SELECT p.*, i.invoice_number, i.customer_name, i.total_amount, i.paid_amount, i.credited_amount
+         FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id
+        WHERE p.id=$1 AND p.invoice_id=$2 AND p.tenant_id=$3`,
+      [req.params.paymentId, req.params.id, t]);
+    if (!p) return res.status(404).json({ error: "Receipt not found" });
+
+    const { rows: kv } = await pool.query(
+      "SELECT value FROM kv_store WHERE tenant_id=$1 AND namespace='app' AND key='store' LIMIT 1", [t]);
+    const firm = kv[0]?.value?.value?.firm ?? {};
+    const { renderReceiptPdf } = require("../lib/invoicePdf");
+    renderReceiptPdf(res, { payment: p, firmName: firm.name || "Your Company", firmGstin: firm.gstNumber || null });
   } catch (e) { next(e); }
 });
 

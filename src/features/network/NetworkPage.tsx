@@ -231,7 +231,7 @@ function Overview({ counterparties }: { counterparties: Live[] }) {
           <p className="text-xs text-[var(--color-muted)] p-5">No counterparties yet - import transactions or invoices and your trade partners will appear here automatically.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Counterparty", "Money in", "Money out", "Invoiced", "Txns"].map(h =>
                   <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -240,11 +240,11 @@ function Overview({ counterparties }: { counterparties: Live[] }) {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {counterparties.slice(0, 8).map(c => (
                   <tr key={c.name} className="hover:bg-white/2">
-                    <td className="px-5 py-2.5 font-medium">{c.name}</td>
-                    <td className="px-5 py-2.5 tabular-nums text-green-400">{c.inflow > 0 ? formatAmount(c.inflow) : "-"}</td>
-                    <td className="px-5 py-2.5 tabular-nums text-red-400">{c.outflow > 0 ? formatAmount(c.outflow) : "-"}</td>
-                    <td className="px-5 py-2.5 tabular-nums">{c.invoiced > 0 ? formatAmount(c.invoiced) : "-"}</td>
-                    <td className="px-5 py-2.5 tabular-nums text-[var(--color-muted)]">{c.txns}</td>
+                    <td data-label="Counterparty" className="px-5 py-2.5 font-medium">{c.name}</td>
+                    <td data-label="Money in" className="px-5 py-2.5 tabular-nums text-green-400">{c.inflow > 0 ? formatAmount(c.inflow) : "-"}</td>
+                    <td data-label="Money out" className="px-5 py-2.5 tabular-nums text-red-400">{c.outflow > 0 ? formatAmount(c.outflow) : "-"}</td>
+                    <td data-label="Invoiced" className="px-5 py-2.5 tabular-nums">{c.invoiced > 0 ? formatAmount(c.invoiced) : "-"}</td>
+                    <td data-label="Txns" className="px-5 py-2.5 tabular-nums text-[var(--color-muted)]">{c.txns}</td>
                   </tr>
                 ))}
               </tbody>
@@ -346,7 +346,7 @@ function Directory({ live }: { live: Live[] }) {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Name", "GSTIN", "Role", "State", "Status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -355,17 +355,17 @@ function Directory({ live }: { live: Live[] }) {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {shown.map(d => (
                   <tr key={d.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium">{d.name}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{d.gstin || "-"}</td>
-                    <td className="px-4 py-2.5 capitalize">{d.role}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{d.state || "-"}</td>
-                    <td className="px-4 py-2.5">
+                    <td data-label="Name" className="px-4 py-2.5 font-medium">{d.name}</td>
+                    <td data-label="GSTIN" className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{d.gstin || "-"}</td>
+                    <td data-label="Role" className="px-4 py-2.5 capitalize">{d.role}</td>
+                    <td data-label="State" className="px-4 py-2.5 text-[var(--color-muted)]">{d.state || "-"}</td>
+                    <td data-label="Status" className="px-4 py-2.5">
                       <button onClick={() => toggleLink(d.id)}
                         className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium ${d.linked ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
                         <Link2 size={10} /> {d.linked ? "Linked" : "Not linked"}
                       </button>
                     </td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => remove(d.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => remove(d.id)} aria-label="Remove counterparty" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -424,7 +424,7 @@ function InvoiceConfirmation() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Customer", "Invoice", "Amount", "Due", "Counterparty status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -435,11 +435,11 @@ function InvoiceConfirmation() {
                   const s = statuses[i.id] ?? "sent";
                   return (
                     <tr key={i.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{i.customer}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{i.invoiceNumber ?? "-"}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(i.amount)}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{i.dueDate}</td>
-                      <td className="px-4 py-2.5">
+                      <td data-label="Customer" className="px-4 py-2.5 font-medium">{i.customer}</td>
+                      <td data-label="Invoice" className="px-4 py-2.5 text-[var(--color-muted)]">{i.invoiceNumber ?? "-"}</td>
+                      <td data-label="Amount" className="px-4 py-2.5 tabular-nums">{formatCurrency(i.amount)}</td>
+                      <td data-label="Due" className="px-4 py-2.5 text-[var(--color-muted)]">{i.dueDate}</td>
+                      <td data-label="Counterparty status" className="px-4 py-2.5">
                         <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium ${
                           s === "confirmed" ? "bg-green-900/30 text-green-400 border-green-800/40" :
                           s === "disputed" ? "bg-red-900/30 text-red-400 border-red-800/40" :
@@ -448,7 +448,7 @@ function InvoiceConfirmation() {
                           {s === "sent" ? "Awaiting" : s.charAt(0).toUpperCase() + s.slice(1)}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <td data-label="" className="px-4 py-2.5 text-right whitespace-nowrap">
                         <button onClick={() => set(i.id, "confirmed")} className="text-[10px] text-green-400 hover:underline mr-2">Confirm</button>
                         <button onClick={() => set(i.id, "disputed")} className="text-[10px] text-red-400 hover:underline mr-2">Dispute</button>
                         <button onClick={() => set(i.id, "sent")} className="text-[10px] text-[var(--color-muted)] hover:underline">Reset</button>
@@ -555,7 +555,7 @@ function CounterpartyReconciliation({ live }: { live: Live[] }) {
             <div className={`${CARD} overflow-hidden`}>
               <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Line-by-line match</p></div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm rcard">
                   <thead className="border-b border-[var(--color-border)]">
                     <tr>{["Their ref", "Their amount", "My match", "My amount", "Status"].map(h =>
                       <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -564,11 +564,11 @@ function CounterpartyReconciliation({ live }: { live: Live[] }) {
                   <tbody className="divide-y divide-[var(--color-border)]">
                     {matches.rows.map(r => (
                       <tr key={r.their.id} className={`hover:bg-white/2 ${r.mine ? "" : "bg-red-950/20"}`}>
-                        <td className="px-4 py-2.5">{r.their.ref}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{formatCurrency(r.their.amount)}</td>
-                        <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.mine?.ref ?? "-"}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{r.mine ? formatCurrency(r.mine.amount) : "-"}</td>
-                        <td className="px-4 py-2.5">
+                        <td data-label="Their ref" className="px-4 py-2.5">{r.their.ref}</td>
+                        <td data-label="Their amount" className="px-4 py-2.5 tabular-nums">{formatCurrency(r.their.amount)}</td>
+                        <td data-label="My match" className="px-4 py-2.5 text-[var(--color-muted)]">{r.mine?.ref ?? "-"}</td>
+                        <td data-label="My amount" className="px-4 py-2.5 tabular-nums">{r.mine ? formatCurrency(r.mine.amount) : "-"}</td>
+                        <td data-label="Status" className="px-4 py-2.5">
                           {r.mine
                             ? <span className="inline-flex items-center gap-1 text-[10px] text-green-400 font-semibold"><CheckCircle2 size={11} /> Matched</span>
                             : <span className="inline-flex items-center gap-1 text-[10px] text-red-400 font-semibold"><AlertTriangle size={11} /> Not in my books</span>}
@@ -577,11 +577,11 @@ function CounterpartyReconciliation({ live }: { live: Live[] }) {
                     ))}
                     {matches.unmatchedMine.map(m => (
                       <tr key={m.id} className="hover:bg-white/2 bg-yellow-950/20">
-                        <td className="px-4 py-2.5 text-[var(--color-muted)]">-</td>
-                        <td className="px-4 py-2.5 text-[var(--color-muted)]">-</td>
-                        <td className="px-4 py-2.5">{m.ref}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{formatCurrency(m.amount)}</td>
-                        <td className="px-4 py-2.5"><span className="inline-flex items-center gap-1 text-[10px] text-yellow-400 font-semibold"><AlertTriangle size={11} /> Not on their statement</span></td>
+                        <td data-label="Their ref" className="px-4 py-2.5 text-[var(--color-muted)]">-</td>
+                        <td data-label="Their amount" className="px-4 py-2.5 text-[var(--color-muted)]">-</td>
+                        <td data-label="My match" className="px-4 py-2.5">{m.ref}</td>
+                        <td data-label="My amount" className="px-4 py-2.5 tabular-nums">{formatCurrency(m.amount)}</td>
+                        <td data-label="Status" className="px-4 py-2.5"><span className="inline-flex items-center gap-1 text-[10px] text-yellow-400 font-semibold"><AlertTriangle size={11} /> Not on their statement</span></td>
                       </tr>
                     ))}
                   </tbody>
@@ -679,7 +679,7 @@ function TradeReferenceBook() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Party", "GSTIN", "Relationship", "Avg pay", "Credit", "Status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -688,17 +688,17 @@ function TradeReferenceBook() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {refs.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium">{r.party}{r.note && <span className="block text-[10px] text-[var(--color-muted)] font-normal">{r.note}</span>}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{r.gstin || "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.relMonths} mo</td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.avgDays} d</td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.creditLimit > 0 ? formatAmount(r.creditLimit) : "-"}</td>
-                    <td className="px-4 py-2.5">
+                    <td data-label="Party" className="px-4 py-2.5 font-medium">{r.party}{r.note && <span className="block text-[10px] text-[var(--color-muted)] font-normal">{r.note}</span>}</td>
+                    <td data-label="GSTIN" className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{r.gstin || "-"}</td>
+                    <td data-label="Relationship" className="px-4 py-2.5 tabular-nums">{r.relMonths} mo</td>
+                    <td data-label="Avg pay" className="px-4 py-2.5 tabular-nums">{r.avgDays} d</td>
+                    <td data-label="Credit" className="px-4 py-2.5 tabular-nums">{r.creditLimit > 0 ? formatAmount(r.creditLimit) : "-"}</td>
+                    <td data-label="Status" className="px-4 py-2.5">
                       {r.status === "confirmed"
                         ? <span className="inline-flex items-center gap-1 text-[10px] text-green-400 font-semibold"><CheckCircle2 size={11} /> Confirmed</span>
                         : <button onClick={() => confirm(r.id)} className="text-[10px] text-[var(--color-primary)] hover:underline">Mark confirmed</button>}
                     </td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => remove(r.id)} aria-label="Remove trade reference" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -853,7 +853,7 @@ function SupplierDiscovery() {
                   <Building2 size={15} className="text-[var(--color-primary)] shrink-0" />
                   <p className="text-sm font-semibold truncate">{p.name}</p>
                 </div>
-                <button onClick={() => remove(p.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={13} /></button>
+                <button onClick={() => remove(p.id)} aria-label="Remove supplier from shortlist" className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={13} /></button>
               </div>
               <div className="flex items-center gap-1 mt-2">
                 {[1, 2, 3, 4, 5].map(n => (
@@ -978,7 +978,7 @@ function DisputeLog() {
                   <div className="ml-auto flex gap-2">
                     {d.status === "open" && <button onClick={() => advance(d.id, "mediating")} className="text-[10px] text-yellow-400 hover:underline">Start mediation</button>}
                     {d.status !== "resolved" && <button onClick={() => advance(d.id, "resolved")} className="text-[10px] text-green-400 hover:underline">Resolve</button>}
-                    <button onClick={() => remove(d.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                    <button onClick={() => remove(d.id)} aria-label="Delete dispute" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
                   </div>
                 </div>
               </div>
@@ -1116,7 +1116,7 @@ function PaymentBehaviourRating({}: { live: Live[] }) {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Buyer", "Grade", "Score", "Invoices", "Overdue", "Worst aging", "Overdue value"].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1125,13 +1125,13 @@ function PaymentBehaviourRating({}: { live: Live[] }) {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {ratings.map(r => (
                   <tr key={r.name} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                    <td className={`px-4 py-2.5 font-bold text-lg ${r.gradeColor}`}>{r.grade}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.score}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.total}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.overdue} <span className="text-[var(--color-muted)]">({Math.round(r.overdueRate * 100)}%)</span></td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.worstDays > 0 ? `${r.worstDays}d` : "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-red-400">{r.overdueAmt > 0 ? formatAmount(r.overdueAmt) : "-"}</td>
+                    <td data-label="Buyer" className="px-4 py-2.5 font-medium">{r.name}</td>
+                    <td data-label="Grade" className={`px-4 py-2.5 font-bold text-lg ${r.gradeColor}`}>{r.grade}</td>
+                    <td data-label="Score" className="px-4 py-2.5 tabular-nums">{r.score}</td>
+                    <td data-label="Invoices" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.total}</td>
+                    <td data-label="Overdue" className="px-4 py-2.5 tabular-nums">{r.overdue} <span className="text-[var(--color-muted)]">({Math.round(r.overdueRate * 100)}%)</span></td>
+                    <td data-label="Worst aging" className="px-4 py-2.5 tabular-nums">{r.worstDays > 0 ? `${r.worstDays}d` : "-"}</td>
+                    <td data-label="Overdue value" className="px-4 py-2.5 tabular-nums text-red-400">{r.overdueAmt > 0 ? formatAmount(r.overdueAmt) : "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1311,7 +1311,7 @@ function OnboardingChecklist({ live }: { live: Live[] }) {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-bold tabular-nums ${complete ? "text-green-400" : "text-[var(--color-text)]"}`}>{pct}%</span>
-                    <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                    <button onClick={() => remove(r.id)} aria-label="Remove onboarding record" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
                   </div>
                 </div>
                 <div className="h-2 bg-[var(--color-bg)] rounded-full overflow-hidden my-3">
@@ -1396,7 +1396,7 @@ function TradeTermsTracker({ live }: { live: Live[] }) {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Party", "Credit", "Limit", "Early-pay", "Late penalty", "Review", "Status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1405,22 +1405,22 @@ function TradeTermsTracker({ live }: { live: Live[] }) {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {terms.map(t => (
                   <tr key={t.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium">{t.party}{t.note && <span className="block text-[10px] text-[var(--color-muted)] font-normal">{t.note}</span>}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{t.creditDays}d</td>
-                    <td className="px-4 py-2.5 tabular-nums">{t.creditLimit > 0 ? formatAmount(t.creditLimit) : "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{t.earlyPayDiscPct > 0 ? `${t.earlyPayDiscPct}%` : "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{t.latePenaltyPct > 0 ? `${t.latePenaltyPct}%/mo` : "-"}</td>
-                    <td className="px-4 py-2.5">
+                    <td data-label="Party" className="px-4 py-2.5 font-medium">{t.party}{t.note && <span className="block text-[10px] text-[var(--color-muted)] font-normal">{t.note}</span>}</td>
+                    <td data-label="Credit" className="px-4 py-2.5 tabular-nums">{t.creditDays}d</td>
+                    <td data-label="Limit" className="px-4 py-2.5 tabular-nums">{t.creditLimit > 0 ? formatAmount(t.creditLimit) : "-"}</td>
+                    <td data-label="Early-pay" className="px-4 py-2.5 tabular-nums">{t.earlyPayDiscPct > 0 ? `${t.earlyPayDiscPct}%` : "-"}</td>
+                    <td data-label="Late penalty" className="px-4 py-2.5 tabular-nums">{t.latePenaltyPct > 0 ? `${t.latePenaltyPct}%/mo` : "-"}</td>
+                    <td data-label="Review" className="px-4 py-2.5">
                       {t.reviewOn
                         ? <span className={dueForReview(t) ? "text-orange-400 font-medium" : "text-[var(--color-muted)]"}>{t.reviewOn}{dueForReview(t) ? " ⚠" : ""}</span>
                         : <span className="text-[var(--color-muted)]">-</span>}
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td data-label="Status" className="px-4 py-2.5">
                       {t.status === "agreed"
                         ? <span className="inline-flex items-center gap-1 text-[10px] text-green-400 font-semibold"><CheckCircle2 size={11} /> Agreed</span>
                         : <button onClick={() => agree(t.id)} className="text-[10px] text-[var(--color-primary)] hover:underline">Mark agreed</button>}
                     </td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => remove(t.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => remove(t.id)} aria-label="Remove trade terms" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1525,7 +1525,7 @@ function JointReconExport({ live }: { live: Live[] }) {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rcard">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Date", "Reference", "Debit", "Credit", "Balance"].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1534,11 +1534,11 @@ function JointReconExport({ live }: { live: Live[] }) {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {(() => { let run = 0; return lines.map((l, idx) => { run += l.debit - l.credit; return (
                     <tr key={idx} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{l.date}</td>
-                      <td className="px-4 py-2.5">{l.ref}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{l.debit > 0 ? formatCurrency(l.debit) : "-"}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{l.credit > 0 ? formatCurrency(l.credit) : "-"}</td>
-                      <td className="px-4 py-2.5 tabular-nums font-medium">{formatCurrency(run)}</td>
+                      <td data-label="Date" className="px-4 py-2.5 text-[var(--color-muted)]">{l.date}</td>
+                      <td data-label="Reference" className="px-4 py-2.5">{l.ref}</td>
+                      <td data-label="Debit" className="px-4 py-2.5 tabular-nums">{l.debit > 0 ? formatCurrency(l.debit) : "-"}</td>
+                      <td data-label="Credit" className="px-4 py-2.5 tabular-nums">{l.credit > 0 ? formatCurrency(l.credit) : "-"}</td>
+                      <td data-label="Balance" className="px-4 py-2.5 tabular-nums font-medium">{formatCurrency(run)}</td>
                     </tr>
                   ); }); })()}
                 </tbody>
@@ -1693,7 +1693,7 @@ function ReferralTracker() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Referred by", "New party", "Expected", "Reward", "Status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1702,17 +1702,17 @@ function ReferralTracker() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {refs.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium">{r.referredBy}</td>
-                    <td className="px-4 py-2.5">{r.newParty}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.expectedValue > 0 ? formatAmount(r.expectedValue) : "-"}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.rewardType === "none" ? "-" : `${r.rewardType}${r.rewardAmount > 0 ? ` · ${formatAmount(r.rewardAmount)}` : ""}`}</td>
-                    <td className="px-4 py-2.5">
+                    <td data-label="Referred by" className="px-4 py-2.5 font-medium">{r.referredBy}</td>
+                    <td data-label="New party" className="px-4 py-2.5">{r.newParty}</td>
+                    <td data-label="Expected" className="px-4 py-2.5 tabular-nums">{r.expectedValue > 0 ? formatAmount(r.expectedValue) : "-"}</td>
+                    <td data-label="Reward" className="px-4 py-2.5 text-[var(--color-muted)]">{r.rewardType === "none" ? "-" : `${r.rewardType}${r.rewardAmount > 0 ? ` · ${formatAmount(r.rewardAmount)}` : ""}`}</td>
+                    <td data-label="Status" className="px-4 py-2.5">
                       <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${r.status === "rewarded" ? "bg-green-900/30 text-green-400 border-green-800/40" : r.status === "converted" ? "bg-blue-900/30 text-blue-400 border-blue-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>{r.status}</span>
                     </td>
-                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    <td data-label="" className="px-4 py-2.5 text-right whitespace-nowrap">
                       {r.status === "pending" && <button onClick={() => advance(r.id, "converted")} className="text-[10px] text-blue-400 hover:underline mr-2">Converted</button>}
                       {r.status === "converted" && <button onClick={() => advance(r.id, "rewarded")} className="text-[10px] text-green-400 hover:underline mr-2">Rewarded</button>}
-                      <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                      <button onClick={() => remove(r.id)} aria-label="Delete referral" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
                     </td>
                   </tr>
                 ))}
@@ -1791,7 +1791,7 @@ function PriceListManager() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rcard">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["SKU", "Item", "Unit", "Price", "GST", "Incl GST", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1800,13 +1800,13 @@ function PriceListManager() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {items.map(i => (
                     <tr key={i.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{i.sku || "-"}</td>
-                      <td className="px-4 py-2.5 font-medium">{i.name}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{i.unit}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(i.price)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{i.gstPct}%</td>
-                      <td className="px-4 py-2.5 tabular-nums font-medium">{formatCurrency(i.price * (1 + i.gstPct / 100))}</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => remove(i.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                      <td data-label="SKU" className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{i.sku || "-"}</td>
+                      <td data-label="Item" className="px-4 py-2.5 font-medium">{i.name}</td>
+                      <td data-label="Unit" className="px-4 py-2.5 text-[var(--color-muted)]">{i.unit}</td>
+                      <td data-label="Price" className="px-4 py-2.5 tabular-nums">{formatCurrency(i.price)}</td>
+                      <td data-label="GST" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{i.gstPct}%</td>
+                      <td data-label="Incl GST" className="px-4 py-2.5 tabular-nums font-medium">{formatCurrency(i.price * (1 + i.gstPct / 100))}</td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => remove(i.id)} aria-label="Remove price-list item" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -1874,7 +1874,7 @@ function PartnerSLAScorecard({ live }: { live: Live[] }) {
             <div key={r.id} className={`${CARD} p-4`}>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2"><span className={`text-2xl font-bold ${r.color}`}>{r.grade}</span><div><p className="text-sm font-semibold">{r.party}</p><p className="text-[10px] text-[var(--color-muted)]">SLA score {r.score}/100 · {r.orders} orders</p></div></div>
-                <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                <button onClick={() => remove(r.id)} aria-label="Delete partner scorecard" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
               </div>
               <div className="mt-3 space-y-2">
                 {[
@@ -1960,7 +1960,7 @@ function GroupBuyCalculator() {
 
       <div className={`${CARD} overflow-hidden`}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm rcard">
             <thead className="border-b border-[var(--color-border)]">
               <tr>{["Member", "Qty", "Solo cost", "Group cost", "Saving", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1969,12 +1969,12 @@ function GroupBuyCalculator() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {calc.perMember.map(m => (
                 <tr key={m.id} className="hover:bg-white/2">
-                  <td className="px-4 py-2.5 font-medium">{m.name}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{formatAmount(m.qty)}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(m.soloCost)}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{formatCurrency(m.groupCost)}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-green-400">{m.saving > 0 ? formatCurrency(m.saving) : "-"}</td>
-                  <td className="px-4 py-2.5 text-right">{m.name !== "My firm" && <button onClick={() => remove(m.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>}</td>
+                  <td data-label="Member" className="px-4 py-2.5 font-medium">{m.name}</td>
+                  <td data-label="Qty" className="px-4 py-2.5 tabular-nums">{formatAmount(m.qty)}</td>
+                  <td data-label="Solo cost" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(m.soloCost)}</td>
+                  <td data-label="Group cost" className="px-4 py-2.5 tabular-nums">{formatCurrency(m.groupCost)}</td>
+                  <td data-label="Saving" className="px-4 py-2.5 tabular-nums text-green-400">{m.saving > 0 ? formatCurrency(m.saving) : "-"}</td>
+                  <td data-label="" className="px-4 py-2.5 text-right">{m.name !== "My firm" && <button onClick={() => remove(m.id)} aria-label="Remove pool member" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -2137,7 +2137,7 @@ function RiskWatchlist({ live }: { live: Live[] }) {
                 {(["low", "medium", "high"] as const).map(r => (
                   <button key={r} onClick={() => setRiskLevel(i.id, r)} className={`text-[10px] px-2 py-0.5 rounded-full border capitalize ${i.risk === r ? riskColor(r) : "border-[var(--color-border)] text-[var(--color-muted)]"}`}>{r}</button>
                 ))}
-                <button onClick={() => remove(i.id)} className="ml-auto text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                <button onClick={() => remove(i.id)} aria-label="Remove from watchlist" className="ml-auto text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
               </div>
             </div>
           ))}
@@ -2209,7 +2209,7 @@ function MeetingLog({ live }: { live: Live[] }) {
                   <p className="text-sm font-semibold">{e.party} <span className="text-[10px] text-[var(--color-muted)] font-normal capitalize">· {e.channel} · {e.date}</span></p>
                   {e.summary && <p className="text-[11px] text-[var(--color-muted)] mt-1">{e.summary}</p>}
                 </div>
-                <button onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={13} /></button>
+                <button onClick={() => remove(e.id)} aria-label="Delete meeting log" className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={13} /></button>
               </div>
               {e.followUp && (
                 <label className="flex items-center gap-2 mt-2 text-xs cursor-pointer">
@@ -2283,7 +2283,7 @@ function MutualNetting() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rcard">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Counterparty", "They owe me", "I owe them", "Net position", "Who pays", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2292,12 +2292,12 @@ function MutualNetting() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {calc.rows.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{r.party}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(r.theyOweMe)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(r.iOweThem)}</td>
-                      <td className={`px-4 py-2.5 tabular-nums font-medium ${r.net >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.abs(r.net))}</td>
-                      <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.net === 0 ? "Square" : r.net > 0 ? "They pay me" : "I pay them"}</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                      <td data-label="Counterparty" className="px-4 py-2.5 font-medium">{r.party}</td>
+                      <td data-label="They owe me" className="px-4 py-2.5 tabular-nums text-green-400">{formatCurrency(r.theyOweMe)}</td>
+                      <td data-label="I owe them" className="px-4 py-2.5 tabular-nums text-red-400">{formatCurrency(r.iOweThem)}</td>
+                      <td data-label="Net position" className={`px-4 py-2.5 tabular-nums font-medium ${r.net >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(Math.abs(r.net))}</td>
+                      <td data-label="Who pays" className="px-4 py-2.5 text-[var(--color-muted)]">{r.net === 0 ? "Square" : r.net > 0 ? "They pay me" : "I pay them"}</td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => remove(r.id)} aria-label="Remove netting entry" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -2380,7 +2380,7 @@ function PartnerTierScheme({ live }: { live: Live[] }) {
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">Partners by tier</p></div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Partner", "Trade volume", "Tier", "Perk earned"].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2389,10 +2389,10 @@ function PartnerTierScheme({ live }: { live: Live[] }) {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {ranked.slice(0, 20).map(r => (
                   <tr key={r.name} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(r.vol)}</td>
-                    <td className={`px-4 py-2.5 font-semibold ${tierColor(r.tier.id)}`}>{r.tier.name}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.tier.perk}</td>
+                    <td data-label="Partner" className="px-4 py-2.5 font-medium">{r.name}</td>
+                    <td data-label="Trade volume" className="px-4 py-2.5 tabular-nums">{formatAmount(r.vol)}</td>
+                    <td data-label="Tier" className={`px-4 py-2.5 font-semibold ${tierColor(r.tier.id)}`}>{r.tier.name}</td>
+                    <td data-label="Perk earned" className="px-4 py-2.5 text-[var(--color-muted)]">{r.tier.perk}</td>
                   </tr>
                 ))}
               </tbody>
@@ -2465,7 +2465,7 @@ function PaymentTermsBenchmark() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rcard">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Partner", "Agreed", "Actual", "Slippage", "vs sector", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2477,12 +2477,12 @@ function PaymentTermsBenchmark() {
                     const vsSector = e.actualDays - sectorRef;
                     return (
                       <tr key={e.id} className="hover:bg-white/2">
-                        <td className="px-4 py-2.5 font-medium">{e.party}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{e.agreedDays} d</td>
-                        <td className="px-4 py-2.5 tabular-nums">{e.actualDays} d</td>
-                        <td className={`px-4 py-2.5 tabular-nums font-medium ${slip > 0 ? "text-red-400" : "text-green-400"}`}>{slip >= 0 ? "+" : ""}{slip} d</td>
-                        <td className={`px-4 py-2.5 tabular-nums ${vsSector > 0 ? "text-red-400" : "text-green-400"}`}>{vsSector >= 0 ? "+" : ""}{vsSector} d</td>
-                        <td className="px-4 py-2.5 text-right"><button onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                        <td data-label="Partner" className="px-4 py-2.5 font-medium">{e.party}</td>
+                        <td data-label="Agreed" className="px-4 py-2.5 tabular-nums">{e.agreedDays} d</td>
+                        <td data-label="Actual" className="px-4 py-2.5 tabular-nums">{e.actualDays} d</td>
+                        <td data-label="Slippage" className={`px-4 py-2.5 tabular-nums font-medium ${slip > 0 ? "text-red-400" : "text-green-400"}`}>{slip >= 0 ? "+" : ""}{slip} d</td>
+                        <td data-label="vs sector" className={`px-4 py-2.5 tabular-nums ${vsSector > 0 ? "text-red-400" : "text-green-400"}`}>{vsSector >= 0 ? "+" : ""}{vsSector} d</td>
+                        <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => remove(e.id)} aria-label="Remove payment-terms entry" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                       </tr>
                     );
                   })}
@@ -2571,7 +2571,7 @@ function CoMarketingPlanner({ live }: { live: Live[] }) {
                     <p className="text-sm font-semibold truncate">{c.title}</p>
                     <p className="text-[11px] text-[var(--color-muted)]">with {c.partner} · {c.channel} · {c.date}</p>
                   </div>
-                  <button onClick={() => remove(c.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={13} /></button>
+                  <button onClick={() => remove(c.id)} aria-label="Delete campaign" className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={13} /></button>
                 </div>
                 <div className="flex items-center justify-between mt-3">
                   <p className="text-[11px] text-[var(--color-muted)]">Mine <span className="text-[var(--color-text)] tabular-nums">{formatAmount(c.myBudget)}</span> · Theirs <span className="text-[var(--color-text)] tabular-nums">{formatAmount(c.theirBudget)}</span></p>
@@ -2653,7 +2653,7 @@ function IntroductionsLedger() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Date", "Direction", "Connector", "To whom", "Outcome", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2662,22 +2662,22 @@ function IntroductionsLedger() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {intros.map(i => (
                   <tr key={i.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{i.date}</td>
-                    <td className="px-4 py-2.5">
+                    <td data-label="Date" className="px-4 py-2.5 text-[var(--color-muted)] tabular-nums">{i.date}</td>
+                    <td data-label="Direction" className="px-4 py-2.5">
                       <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium ${i.direction === "given" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-blue-900/30 text-blue-400 border-blue-800/40"}`}>
                         {i.direction === "given" ? "Given" : "Received"}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 font-medium">{i.partner}</td>
-                    <td className="px-4 py-2.5">{i.toWhom}{i.note && <span className="block text-[10px] text-[var(--color-muted)] font-normal">{i.note}</span>}</td>
-                    <td className="px-4 py-2.5">
+                    <td data-label="Connector" className="px-4 py-2.5 font-medium">{i.partner}</td>
+                    <td data-label="To whom" className="px-4 py-2.5">{i.toWhom}{i.note && <span className="block text-[10px] text-[var(--color-muted)] font-normal">{i.note}</span>}</td>
+                    <td data-label="Outcome" className="px-4 py-2.5">
                       <select value={i.outcome} onChange={e => setOutcome(i.id, e.target.value as Intro["outcome"])} className="bg-transparent text-xs outline-none cursor-pointer">
                         <option value="pending">Pending</option>
                         <option value="deal">Became a deal</option>
                         <option value="dropped">Dropped</option>
                       </select>
                     </td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => remove(i.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => remove(i.id)} aria-label="Delete introduction" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -2747,7 +2747,7 @@ function CollaborativeForecast({ live }: { live: Live[] }) {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rcard">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Supplier", "Month", "Forecast", "Last actual", "Change", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2758,12 +2758,12 @@ function CollaborativeForecast({ live }: { live: Live[] }) {
                     const pct = r.lastActual > 0 ? Math.round(((r.forecastQty - r.lastActual) / r.lastActual) * 100) : 0;
                     return (
                       <tr key={r.id} className="hover:bg-white/2">
-                        <td className="px-4 py-2.5 font-medium">{r.partner}</td>
-                        <td className="px-4 py-2.5 text-[var(--color-muted)]">{r.month}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{formatAmount(r.forecastQty)}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.lastActual > 0 ? formatAmount(r.lastActual) : "-"}</td>
-                        <td className={`px-4 py-2.5 tabular-nums font-medium ${pct > 0 ? "text-green-400" : pct < 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.lastActual > 0 ? `${pct >= 0 ? "+" : ""}${pct}%` : "-"}</td>
-                        <td className="px-4 py-2.5 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                        <td data-label="Supplier" className="px-4 py-2.5 font-medium">{r.partner}</td>
+                        <td data-label="Month" className="px-4 py-2.5 text-[var(--color-muted)]">{r.month}</td>
+                        <td data-label="Forecast" className="px-4 py-2.5 tabular-nums">{formatAmount(r.forecastQty)}</td>
+                        <td data-label="Last actual" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.lastActual > 0 ? formatAmount(r.lastActual) : "-"}</td>
+                        <td data-label="Change" className={`px-4 py-2.5 tabular-nums font-medium ${pct > 0 ? "text-green-400" : pct < 0 ? "text-red-400" : "text-[var(--color-muted)]"}`}>{r.lastActual > 0 ? `${pct >= 0 ? "+" : ""}${pct}%` : "-"}</td>
+                        <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => remove(r.id)} aria-label="Remove forecast row" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                       </tr>
                     );
                   })}
@@ -2842,7 +2842,7 @@ function PartnerNPS({ live }: { live: Live[] }) {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Partner", "Score", "Category", "Comment", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2851,11 +2851,11 @@ function PartnerNPS({ live }: { live: Live[] }) {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {entries.map(e => (
                   <tr key={e.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium">{e.partner}</td>
-                    <td className="px-4 py-2.5 tabular-nums font-semibold">{e.score}/10</td>
-                    <td className={`px-4 py-2.5 font-medium ${catColor(e.score)}`}>{cat(e.score)}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-muted)]">{e.comment || "-"}</td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    <td data-label="Partner" className="px-4 py-2.5 font-medium">{e.partner}</td>
+                    <td data-label="Score" className="px-4 py-2.5 tabular-nums font-semibold">{e.score}/10</td>
+                    <td data-label="Category" className={`px-4 py-2.5 font-medium ${catColor(e.score)}`}>{cat(e.score)}</td>
+                    <td data-label="Comment" className="px-4 py-2.5 text-[var(--color-muted)]">{e.comment || "-"}</td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => remove(e.id)} aria-label="Delete partner score" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -3014,7 +3014,7 @@ function JointVentureSplit({ live }: { live: Live[] }) {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Partner", "Revenue", "Cost", "Profit", "My share", "My P&L", "Their P&L", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -3025,14 +3025,14 @@ function JointVentureSplit({ live }: { live: Live[] }) {
                   const s = split(d);
                   return (
                     <tr key={d.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium">{d.partner}{d.note && <span className="block text-[10px] text-[var(--color-muted)] font-normal">{d.note}</span>}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(d.revenue)}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{formatCurrency(d.cost)}</td>
-                      <td className={`px-4 py-2.5 tabular-nums font-medium ${s.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(s.profit)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{d.mySharePct}%</td>
-                      <td className="px-4 py-2.5 tabular-nums font-medium">{formatCurrency(s.mine)}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(s.theirs)}</td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => remove(d.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                      <td data-label="Partner" className="px-4 py-2.5 font-medium">{d.partner}{d.note && <span className="block text-[10px] text-[var(--color-muted)] font-normal">{d.note}</span>}</td>
+                      <td data-label="Revenue" className="px-4 py-2.5 tabular-nums">{formatCurrency(d.revenue)}</td>
+                      <td data-label="Cost" className="px-4 py-2.5 tabular-nums">{formatCurrency(d.cost)}</td>
+                      <td data-label="Profit" className={`px-4 py-2.5 tabular-nums font-medium ${s.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(s.profit)}</td>
+                      <td data-label="My share" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{d.mySharePct}%</td>
+                      <td data-label="My P&L" className="px-4 py-2.5 tabular-nums font-medium">{formatCurrency(s.mine)}</td>
+                      <td data-label="Their P&L" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{formatCurrency(s.theirs)}</td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => remove(d.id)} aria-label="Remove joint venture" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                     </tr>
                   );
                 })}
@@ -3088,7 +3088,7 @@ function PaymentReliability() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Buyer", "On-time %", "Reliability", "Avg days late", "Paid", "Overdue", "Open"].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -3097,8 +3097,8 @@ function PaymentReliability() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.name} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                    <td className="px-4 py-2.5">
+                    <td data-label="Buyer" className="px-4 py-2.5 font-medium">{r.name}</td>
+                    <td data-label="On-time %" className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <div className="h-2 w-20 bg-[var(--color-bg)] rounded-full overflow-hidden">
                           <div className="h-full rounded-full" style={{ width: `${r.onTimePct}%`, background: r.onTimePct >= 80 ? "#22c55e" : r.onTimePct >= 50 ? "#f59e0b" : "#ef4444" }} />
@@ -3106,15 +3106,15 @@ function PaymentReliability() {
                         <span className="tabular-nums text-xs">{r.onTimePct.toFixed(0)}%</span>
                       </div>
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td data-label="Reliability" className="px-4 py-2.5">
                       <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium ${r.reliable ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
                         {r.reliable ? <CheckCheck size={10} /> : <AlertTriangle size={10} />} {r.reliable ? "Reliable" : "Watch"}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 tabular-nums">{r.avgLate > 0 ? `${r.avgLate}d` : "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-green-400">{r.paid}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-red-400">{r.overdue}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.pending}</td>
+                    <td data-label="Avg days late" className="px-4 py-2.5 tabular-nums">{r.avgLate > 0 ? `${r.avgLate}d` : "-"}</td>
+                    <td data-label="Paid" className="px-4 py-2.5 tabular-nums text-green-400">{r.paid}</td>
+                    <td data-label="Overdue" className="px-4 py-2.5 tabular-nums text-red-400">{r.overdue}</td>
+                    <td data-label="Open" className="px-4 py-2.5 tabular-nums text-[var(--color-muted)]">{r.pending}</td>
                   </tr>
                 ))}
               </tbody>
@@ -3329,7 +3329,7 @@ function NetworkIntelligence() {
                 <td data-label="Subject" className="py-1.5">{s.subject_name || s.subject_gstin}</td>
                 <td data-label="Type" className="py-1.5 capitalize">{String(s.signal_type).replace("_", " ")}</td>
                 <td data-label="Status" className="py-1.5 capitalize text-[var(--color-muted)]">{s.status}</td>
-                {!isReadOnly && s.status === "active" && <td className="py-1.5"><button onClick={() => withdrawSignal(s.id)} className="text-red-400 text-[11px]">Withdraw</button></td>}
+                {!isReadOnly && s.status === "active" && <td data-label="" className="py-1.5"><button onClick={() => withdrawSignal(s.id)} className="text-red-400 text-[11px]">Withdraw</button></td>}
               </tr>
             ))}
           </tbody></table>

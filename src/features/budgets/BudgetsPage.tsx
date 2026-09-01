@@ -53,7 +53,7 @@ function AddBudgetModal({ existing, onSave, onClose }: {
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-sm space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold">{existing ? "Edit Budget" : "New Budget"}</h2>
-          <button onClick={onClose}><X size={15} className="text-[var(--color-muted)]" /></button>
+          <button onClick={onClose} aria-label="Close"><X size={15} className="text-[var(--color-muted)]" /></button>
         </div>
         <form onSubmit={submit} className="space-y-3">
           <div>
@@ -74,7 +74,7 @@ function AddBudgetModal({ existing, onSave, onClose }: {
             <label className="text-xs text-[var(--color-muted)] block mb-1">Colour</label>
             <div className="flex gap-2 flex-wrap">
               {COLORS.map(c => (
-                <button key={c} type="button" onClick={() => setColor(c)}
+                <button key={c} type="button" aria-label={`Choose colour ${c}`} onClick={() => setColor(c)}
                   className={`w-6 h-6 rounded-full border-2 transition-all ${color === c ? "border-white scale-110" : "border-transparent"}`}
                   style={{ background: c }} />
               ))}
@@ -250,7 +250,7 @@ export default function BudgetsPage() {
                   className="text-[10px] text-[var(--color-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] px-2 py-1 rounded">
                   Edit
                 </button>
-                <button onClick={() => removeBudget(r.id)}
+                <button onClick={() => removeBudget(r.id)} aria-label={`Delete budget ${r.label}`}
                   className="text-[10px] text-[var(--color-muted)] hover:text-red-400 border border-[var(--color-border)] px-2 py-1 rounded">
                   <X size={10} />
                 </button>
@@ -463,7 +463,7 @@ function ZeroBasedBudgetBuilder() {
         </div>
 
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm rcard min-w-[640px]">
             <thead><tr className="border-b border-[var(--color-border)]">{["Line item", "Category", "Budgeted", "Cat. Actual", "Variance", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {lines.map(l => {
@@ -473,12 +473,12 @@ function ZeroBasedBudgetBuilder() {
                 const v = (l.justified || 0) - catActual * share;
                 return (
                   <tr key={l.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium">{l.label}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] capitalize">{l.category}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(l.justified)}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(catActual)}</td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${v < 0 ? "text-red-400" : "text-green-400"}`}>{v < 0 ? "-" : ""}{fc(Math.abs(v))}</td>
-                    <td className="px-3 py-2.5"><button onClick={() => remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    <td data-label="Line item" className="px-3 py-2.5 text-xs font-medium">{l.label}</td>
+                    <td data-label="Category" className="px-3 py-2.5 text-xs text-[var(--color-muted)] capitalize">{l.category}</td>
+                    <td data-label="Budgeted" className="px-3 py-2.5 text-xs tabular-nums">{fc(l.justified)}</td>
+                    <td data-label="Cat. Actual" className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(catActual)}</td>
+                    <td data-label="Variance" className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${v < 0 ? "text-red-400" : "text-green-400"}`}>{v < 0 ? "-" : ""}{fc(Math.abs(v))}</td>
+                    <td data-label="" className="px-3 py-2.5"><button onClick={() => remove(l.id)} aria-label="Remove line" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                   </tr>
                 );
               })}
@@ -605,7 +605,7 @@ function DepartmentBudgetAllocation() {
 
       {depts.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[760px]">
+          <table className="w-full text-sm rcard min-w-[760px]">
             <thead><tr className="border-b border-[var(--color-border)]">{["Department", "Category", "Allocated", "Live month spend", "Status", "Sign-off", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {depts.map(d => {
@@ -615,12 +615,12 @@ function DepartmentBudgetAllocation() {
                 const status = !a ? "draft" as const : a.status === "PENDING" ? "submitted" as const : a.status === "APPROVED" ? "approved" as const : "rejected" as const;
                 return (
                   <tr key={d.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium">{d.name}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] capitalize">{d.category}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(d.allocated)}</td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums ${over ? "text-red-400" : "text-[var(--color-muted)]"}`}>{fc(spent)}{over ? " ⚠" : ""}</td>
-                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[status]}`}>{status}</span></td>
-                    <td className="px-3 py-2.5">
+                    <td data-label="Department" className="px-3 py-2.5 text-xs font-medium">{d.name}</td>
+                    <td data-label="Category" className="px-3 py-2.5 text-xs text-[var(--color-muted)] capitalize">{d.category}</td>
+                    <td data-label="Allocated" className="px-3 py-2.5 text-xs tabular-nums">{fc(d.allocated)}</td>
+                    <td data-label="Live month spend" className={`px-3 py-2.5 text-xs tabular-nums ${over ? "text-red-400" : "text-[var(--color-muted)]"}`}>{fc(spent)}{over ? " ⚠" : ""}</td>
+                    <td data-label="Status" className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[status]}`}>{status}</span></td>
+                    <td data-label="Sign-off" className="px-3 py-2.5">
                       <div className="flex items-center gap-1">
                         {!a && <button onClick={() => submit(d)} disabled={busyId === d.id} className="text-[9px] text-yellow-400 border border-yellow-800/40 px-1.5 py-0.5 rounded flex items-center gap-1"><Clock size={8} />Submit</button>}
                         {a?.status === "PENDING" && <>
@@ -630,7 +630,7 @@ function DepartmentBudgetAllocation() {
                         {a?.status === "REJECTED" && <button onClick={() => submit(d)} disabled={busyId === d.id} className="text-[9px] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded">Re-submit</button>}
                       </div>
                     </td>
-                    <td className="px-3 py-2.5"><button onClick={() => remove(d.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    <td data-label="" className="px-3 py-2.5"><button onClick={() => remove(d.id)} aria-label="Remove department allocation" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                   </tr>
                 );
               })}
@@ -738,7 +738,7 @@ function CapexBudgetTracker() {
 
       {items.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[760px]">
+          <table className="w-full text-sm rcard min-w-[760px]">
             <thead><tr className="border-b border-[var(--color-border)]">{["Asset / project", "Planned", "Actual (editable)", "Variance", "Target date", "Status", "Sign-off", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {items.map(i => {
@@ -748,16 +748,16 @@ function CapexBudgetTracker() {
                 const status = i.done ? "completed" : a?.status === "APPROVED" ? "approved" : a?.status === "PENDING" ? "pending" : a?.status === "REJECTED" ? "rejected" : "planned";
                 return (
                   <tr key={i.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium">{i.asset}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(i.planned)}</td>
-                    <td className="px-3 py-2.5">
+                    <td data-label="Asset / project" className="px-3 py-2.5 text-xs font-medium">{i.asset}</td>
+                    <td data-label="Planned" className="px-3 py-2.5 text-xs tabular-nums">{fc(i.planned)}</td>
+                    <td data-label="Actual (editable)" className="px-3 py-2.5">
                       <input type="number" min="0" value={i.spent || ""} onChange={e => setSpent(i.id, parseFloat(e.target.value) || 0)} placeholder="0"
                         className="w-28 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none tabular-nums" />
                     </td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${over ? "text-red-400" : "text-green-400"}`}>{over ? "-" : ""}{fc(Math.abs(v))}{over ? " over" : ""}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.date}</td>
-                    <td className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[status]}`}>{status}</span></td>
-                    <td className="px-3 py-2.5">
+                    <td data-label="Variance" className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${over ? "text-red-400" : "text-green-400"}`}>{over ? "-" : ""}{fc(Math.abs(v))}{over ? " over" : ""}</td>
+                    <td data-label="Target date" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{i.date}</td>
+                    <td data-label="Status" className="px-3 py-2.5"><span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium capitalize ${STATUS_STYLE[status]}`}>{status}</span></td>
+                    <td data-label="Sign-off" className="px-3 py-2.5">
                       <div className="flex items-center gap-1">
                         {!a && !i.done && <button onClick={() => request(i)} disabled={busyId === i.id} className="text-[9px] text-yellow-400 border border-yellow-800/40 px-1.5 py-0.5 rounded flex items-center gap-1"><Clock size={8} />Request approval</button>}
                         {a?.status === "PENDING" && <>
@@ -769,7 +769,7 @@ function CapexBudgetTracker() {
                         {i.done && <button onClick={() => setDone(i.id, false)} className="text-[9px] text-[var(--color-muted)] border border-[var(--color-border)] px-1.5 py-0.5 rounded">Reopen</button>}
                       </div>
                     </td>
-                    <td className="px-3 py-2.5"><button onClick={() => remove(i.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    <td data-label="" className="px-3 py-2.5"><button onClick={() => remove(i.id)} aria-label="Remove capex item" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                   </tr>
                 );
               })}
@@ -865,25 +865,25 @@ function AnnualBudgetBuilder() {
             { label: "Peak Month", value: peakMonth, color: "text-yellow-400" },
           ]} />
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[900px]">
+            <table className="w-full text-sm rcard min-w-[900px]">
               <thead><tr className="border-b border-[var(--color-border)]">{["Line item", ...MONTH_KEYS, "Annual", ""].map(h => <th key={h} className="px-2 py-2.5 text-right text-[11px] font-semibold text-[var(--color-muted)] first:text-left">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {lines.map(l => {
                   const cells = spread(l);
                   return (
                     <tr key={l.id} className="hover:bg-white/2">
-                      <td className="px-2 py-2 text-xs font-medium">{l.label}</td>
-                      {cells.map((c, ci) => <td key={ci} className="px-2 py-2 text-[11px] tabular-nums text-right text-[var(--color-muted)]">{fc(c)}</td>)}
-                      <td className="px-2 py-2 text-xs tabular-nums text-right font-semibold">{fc(l.annual)}</td>
-                      <td className="px-2 py-2 text-right"><button onClick={() => remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="Line item" className="px-2 py-2 text-xs font-medium">{l.label}</td>
+                      {cells.map((c, ci) => <td key={ci} data-label={MONTH_KEYS[ci]} className="px-2 py-2 text-[11px] tabular-nums text-right text-[var(--color-muted)]">{fc(c)}</td>)}
+                      <td data-label="Annual" className="px-2 py-2 text-xs tabular-nums text-right font-semibold">{fc(l.annual)}</td>
+                      <td data-label="" className="px-2 py-2 text-right"><button onClick={() => remove(l.id)} aria-label="Remove line" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   );
                 })}
                 <tr className="bg-[var(--color-bg)]/40 font-semibold">
-                  <td className="px-2 py-2 text-xs">Total</td>
-                  {monthlyTotals.map((t, ti) => <td key={ti} className="px-2 py-2 text-[11px] tabular-nums text-right">{fc(t)}</td>)}
-                  <td className="px-2 py-2 text-xs tabular-nums text-right text-[var(--color-primary)]">{fc(grandTotal)}</td>
-                  <td />
+                  <td data-label="Line item" className="px-2 py-2 text-xs">Total</td>
+                  {monthlyTotals.map((t, ti) => <td key={ti} data-label={MONTH_KEYS[ti]} className="px-2 py-2 text-[11px] tabular-nums text-right">{fc(t)}</td>)}
+                  <td data-label="Annual" className="px-2 py-2 text-xs tabular-nums text-right text-[var(--color-primary)]">{fc(grandTotal)}</td>
+                  <td data-label="" />
                 </tr>
               </tbody>
             </table>
@@ -936,17 +936,17 @@ function BudgetVarianceReport() {
             { label: "Lines Over", value: String(overLines), color: overLines > 0 ? "text-red-400" : "text-green-400" },
           ]} />
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm rcard min-w-[640px]">
               <thead><tr className="border-b border-[var(--color-border)]">{["Budget", "Category", "Budgeted", "Actual", "Variance", "Var %"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: r.color }} />{r.label}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)] capitalize">{r.category}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.monthlyLimit)}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(r.actual)}</td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${r.over ? "text-red-400" : "text-green-400"}`}>{r.over ? "-" : ""}{fc(Math.abs(r.variance))}</td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums ${r.over ? "text-red-400" : "text-green-400"}`}>{r.pct.toFixed(0)}%</td>
+                    <td data-label="Budget" className="px-3 py-2.5 text-xs font-medium flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: r.color }} />{r.label}</td>
+                    <td data-label="Category" className="px-3 py-2.5 text-xs text-[var(--color-muted)] capitalize">{r.category}</td>
+                    <td data-label="Budgeted" className="px-3 py-2.5 text-xs tabular-nums">{fc(r.monthlyLimit)}</td>
+                    <td data-label="Actual" className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(r.actual)}</td>
+                    <td data-label="Variance" className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${r.over ? "text-red-400" : "text-green-400"}`}>{r.over ? "-" : ""}{fc(Math.abs(r.variance))}</td>
+                    <td data-label="Var %" className={`px-3 py-2.5 text-xs tabular-nums ${r.over ? "text-red-400" : "text-green-400"}`}>{r.pct.toFixed(0)}%</td>
                   </tr>
                 ))}
               </tbody>
@@ -1011,17 +1011,17 @@ function FlexibleBudgetRecalc() {
             { label: "Volume Effect", value: `${volumeEffect < 0 ? "-" : "+"}${fc(Math.abs(volumeEffect))}`, color: volumeEffect > 0 ? "text-yellow-400" : "text-green-400" },
           ]} />
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm rcard min-w-[640px]">
               <thead><tr className="border-b border-[var(--color-border)]">{["Cost line", "Fixed", "Variable/unit", "Static", "Flexed", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {lines.map(l => (
                   <tr key={l.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium">{l.label}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(l.fixed)}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(l.variablePerUnit)}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(l.fixed + l.variablePerUnit * pv)}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold">{fc(l.fixed + l.variablePerUnit * av)}</td>
-                    <td className="px-3 py-2.5"><button onClick={() => remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    <td data-label="Cost line" className="px-3 py-2.5 text-xs font-medium">{l.label}</td>
+                    <td data-label="Fixed" className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(l.fixed)}</td>
+                    <td data-label="Variable/unit" className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(l.variablePerUnit)}</td>
+                    <td data-label="Static" className="px-3 py-2.5 text-xs tabular-nums">{fc(l.fixed + l.variablePerUnit * pv)}</td>
+                    <td data-label="Flexed" className="px-3 py-2.5 text-xs tabular-nums font-semibold">{fc(l.fixed + l.variablePerUnit * av)}</td>
+                    <td data-label="" className="px-3 py-2.5"><button onClick={() => remove(l.id)} aria-label="Remove cost line" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1085,17 +1085,17 @@ function CashBudgetPlanner() {
             { label: "Lowest Balance", value: fc(lowest), color: lowest < 0 ? "text-red-400" : lowest < open0 * 0.2 ? "text-yellow-400" : "text-green-400" },
           ]} />
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm rcard min-w-[640px]">
               <thead><tr className="border-b border-[var(--color-border)]">{["Month", "Inflow", "Outflow", "Net", "Closing", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {computed.map(c => (
                   <tr key={c.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium">{c.month}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-green-400">{fc(c.inflow)}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-red-400">{fc(c.outflow)}</td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums ${c.net < 0 ? "text-red-400" : "text-[var(--color-text)]"}`}>{c.net < 0 ? "-" : ""}{fc(Math.abs(c.net))}</td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${c.closing < 0 ? "text-red-400" : "text-[var(--color-text)]"}`}>{c.closing < 0 ? "-" : ""}{fc(Math.abs(c.closing))}</td>
-                    <td className="px-3 py-2.5"><button onClick={() => remove(c.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    <td data-label="Month" className="px-3 py-2.5 text-xs font-medium">{c.month}</td>
+                    <td data-label="Inflow" className="px-3 py-2.5 text-xs tabular-nums text-green-400">{fc(c.inflow)}</td>
+                    <td data-label="Outflow" className="px-3 py-2.5 text-xs tabular-nums text-red-400">{fc(c.outflow)}</td>
+                    <td data-label="Net" className={`px-3 py-2.5 text-xs tabular-nums ${c.net < 0 ? "text-red-400" : "text-[var(--color-text)]"}`}>{c.net < 0 ? "-" : ""}{fc(Math.abs(c.net))}</td>
+                    <td data-label="Closing" className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${c.closing < 0 ? "text-red-400" : "text-[var(--color-text)]"}`}>{c.closing < 0 ? "-" : ""}{fc(Math.abs(c.closing))}</td>
+                    <td data-label="" className="px-3 py-2.5"><button onClick={() => remove(c.id)} aria-label="Remove month" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1155,18 +1155,18 @@ function HeadcountBudgetPlanner() {
             { label: "Annual (loaded)", value: fc(annualLoaded), color: "text-blue-400" },
           ]} />
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[760px]">
+            <table className="w-full text-sm rcard min-w-[760px]">
               <thead><tr className="border-b border-[var(--color-border)]">{["Role", "Dept", "Heads", "CTC/mo", "Loaded/mo", "Starts", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {hires.map(h => (
                   <tr key={h.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium">{h.role}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{h.dept}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{h.headcount}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(h.monthlyCtc)}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold">{fc(h.headcount * h.monthlyCtc * (1 + PF_ESI_LOAD))}</td>
-                    <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{h.startMonth}</td>
-                    <td className="px-3 py-2.5"><button onClick={() => remove(h.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    <td data-label="Role" className="px-3 py-2.5 text-xs font-medium">{h.role}</td>
+                    <td data-label="Dept" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{h.dept}</td>
+                    <td data-label="Heads" className="px-3 py-2.5 text-xs tabular-nums">{h.headcount}</td>
+                    <td data-label="CTC/mo" className="px-3 py-2.5 text-xs tabular-nums">{fc(h.monthlyCtc)}</td>
+                    <td data-label="Loaded/mo" className="px-3 py-2.5 text-xs tabular-nums font-semibold">{fc(h.headcount * h.monthlyCtc * (1 + PF_ESI_LOAD))}</td>
+                    <td data-label="Starts" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{h.startMonth}</td>
+                    <td data-label="" className="px-3 py-2.5"><button onClick={() => remove(h.id)} aria-label="Remove role" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1219,7 +1219,7 @@ function ProjectBudgetTracker() {
             { label: "Overruns", value: String(overruns), color: overruns > 0 ? "text-red-400" : "text-green-400" },
           ]} />
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[760px]">
+            <table className="w-full text-sm rcard min-w-[760px]">
               <thead><tr className="border-b border-[var(--color-border)]">{["Project", "Client", "Budget", "Spent (editable)", "Used", "Remaining", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {projects.map(p => {
@@ -1227,16 +1227,16 @@ function ProjectBudgetTracker() {
                   const over = p.spent > p.budget;
                   return (
                     <tr key={p.id} className="hover:bg-white/2">
-                      <td className="px-3 py-2.5 text-xs font-medium">{p.name}</td>
-                      <td className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{p.client}</td>
-                      <td className="px-3 py-2.5 text-xs tabular-nums">{fc(p.budget)}</td>
-                      <td className="px-3 py-2.5">
+                      <td data-label="Project" className="px-3 py-2.5 text-xs font-medium">{p.name}</td>
+                      <td data-label="Client" className="px-3 py-2.5 text-xs text-[var(--color-muted)]">{p.client}</td>
+                      <td data-label="Budget" className="px-3 py-2.5 text-xs tabular-nums">{fc(p.budget)}</td>
+                      <td data-label="Spent (editable)" className="px-3 py-2.5">
                         <input type="number" min="0" value={p.spent || ""} onChange={e => setSpent(p.id, parseFloat(e.target.value) || 0)} placeholder="0"
                           className="w-28 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none tabular-nums" />
                       </td>
-                      <td className={`px-3 py-2.5 text-xs tabular-nums ${over ? "text-red-400" : pct >= 80 ? "text-yellow-400" : "text-green-400"}`}>{pct.toFixed(0)}%</td>
-                      <td className={`px-3 py-2.5 text-xs tabular-nums ${over ? "text-red-400" : "text-[var(--color-text)]"}`}>{over ? "-" : ""}{fc(Math.abs(p.budget - p.spent))}</td>
-                      <td className="px-3 py-2.5"><button onClick={() => remove(p.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="Used" className={`px-3 py-2.5 text-xs tabular-nums ${over ? "text-red-400" : pct >= 80 ? "text-yellow-400" : "text-green-400"}`}>{pct.toFixed(0)}%</td>
+                      <td data-label="Remaining" className={`px-3 py-2.5 text-xs tabular-nums ${over ? "text-red-400" : "text-[var(--color-text)]"}`}>{over ? "-" : ""}{fc(Math.abs(p.budget - p.spent))}</td>
+                      <td data-label="" className="px-3 py-2.5"><button onClick={() => remove(p.id)} aria-label="Remove project" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   );
                 })}
@@ -1364,16 +1364,16 @@ function ForecastVsBudgetReforecast() {
             { label: "Projected Variance", value: `${totalVar < 0 ? "-" : ""}${fc(Math.abs(totalVar))}`, color: totalVar < 0 ? "text-red-400" : "text-green-400" },
           ]} />
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[700px]">
+            <table className="w-full text-sm rcard min-w-[700px]">
               <thead><tr className="border-b border-[var(--color-border)]">{["Budget", "Annual Budget", "YTD Actual", "FY Reforecast", "Variance"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: r.color }} />{r.label}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.annualBudget)}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(r.ytdActual)}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold">{fc(r.reforecast)}</td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${r.over ? "text-red-400" : "text-green-400"}`}>{r.over ? "-" : ""}{fc(Math.abs(r.variance))}</td>
+                    <td data-label="Budget" className="px-3 py-2.5 text-xs font-medium flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: r.color }} />{r.label}</td>
+                    <td data-label="Annual Budget" className="px-3 py-2.5 text-xs tabular-nums">{fc(r.annualBudget)}</td>
+                    <td data-label="YTD Actual" className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(r.ytdActual)}</td>
+                    <td data-label="FY Reforecast" className="px-3 py-2.5 text-xs tabular-nums font-semibold">{fc(r.reforecast)}</td>
+                    <td data-label="Variance" className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${r.over ? "text-red-400" : "text-green-400"}`}>{r.over ? "-" : ""}{fc(Math.abs(r.variance))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1444,18 +1444,18 @@ function MarketingBudgetAllocator() {
             { label: "Top Channel", value: bestChannel, color: "text-yellow-400" },
           ]} />
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[700px]">
+            <table className="w-full text-sm rcard min-w-[700px]">
               <thead><tr className="border-b border-[var(--color-border)]">{["Channel", "Prior spend", "Revenue", "ROAS", "Weight", "Recommended", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium">{r.name}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(r.spend)}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(r.revenue)}</td>
-                    <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${r.roas >= 1 ? "text-green-400" : "text-red-400"}`}>{r.roas.toFixed(2)}x</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{(r.weight * 100).toFixed(0)}%</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold text-[var(--color-primary)]">{fc(r.recommend)}</td>
-                    <td className="px-3 py-2.5"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                    <td data-label="Channel" className="px-3 py-2.5 text-xs font-medium">{r.name}</td>
+                    <td data-label="Prior spend" className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(r.spend)}</td>
+                    <td data-label="Revenue" className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{fc(r.revenue)}</td>
+                    <td data-label="ROAS" className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${r.roas >= 1 ? "text-green-400" : "text-red-400"}`}>{r.roas.toFixed(2)}x</td>
+                    <td data-label="Weight" className="px-3 py-2.5 text-xs tabular-nums">{(r.weight * 100).toFixed(0)}%</td>
+                    <td data-label="Recommended" className="px-3 py-2.5 text-xs tabular-nums font-semibold text-[var(--color-primary)]">{fc(r.recommend)}</td>
+                    <td data-label="" className="px-3 py-2.5"><button onClick={() => remove(r.id)} aria-label="Remove channel" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1516,14 +1516,14 @@ function CostCuttingSimulator() {
             { label: "Annualised Saving", value: fc(annualSaving), color: "text-yellow-400" },
           ]} />
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm rcard min-w-[640px]">
               <thead><tr className="border-b border-[var(--color-border)]">{["Category", "Avg monthly", "Cuttability", "Monthly saving", "% of total"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.cat} className="hover:bg-white/2">
-                    <td className="px-3 py-2.5 text-xs font-medium capitalize">{r.cat}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums">{fc(r.monthly)}</td>
-                    <td className="px-3 py-2.5">
+                    <td data-label="Category" className="px-3 py-2.5 text-xs font-medium capitalize">{r.cat}</td>
+                    <td data-label="Avg monthly" className="px-3 py-2.5 text-xs tabular-nums">{fc(r.monthly)}</td>
+                    <td data-label="Cuttability" className="px-3 py-2.5">
                       <div className="flex items-center gap-1">
                         {LEVELS.map(l => (
                           <button key={l} onClick={() => setLevel(r.cat, l)}
@@ -1533,8 +1533,8 @@ function CostCuttingSimulator() {
                         ))}
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold text-green-400">{fc(r.saving)}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{totalMonthly > 0 ? ((r.monthly / totalMonthly) * 100).toFixed(0) : 0}%</td>
+                    <td data-label="Monthly saving" className="px-3 py-2.5 text-xs tabular-nums font-semibold text-green-400">{fc(r.saving)}</td>
+                    <td data-label="% of total" className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-muted)]">{totalMonthly > 0 ? ((r.monthly / totalMonthly) * 100).toFixed(0) : 0}%</td>
                   </tr>
                 ))}
               </tbody>
@@ -1603,15 +1603,15 @@ function BudgetReallocationTool() {
               { label: "Reallocated", value: fc(netSwing), color: "text-blue-400" },
             ]} />
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-              <table className="w-full text-sm min-w-[600px]">
+              <table className="w-full text-sm rcard min-w-[600px]">
                 <thead><tr className="border-b border-[var(--color-border)]">{["Budget", "Current limit", "Net change", "Revised limit"].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {revised.map(b => (
                     <tr key={b.id} className="hover:bg-white/2">
-                      <td className="px-3 py-2.5 text-xs font-medium flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: b.color }} />{b.label}</td>
-                      <td className="px-3 py-2.5 text-xs tabular-nums">{fc(b.monthlyLimit)}</td>
-                      <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${b.delta < 0 ? "text-red-400" : b.delta > 0 ? "text-green-400" : "text-[var(--color-muted)]"}`}>{b.delta > 0 ? "+" : b.delta < 0 ? "-" : ""}{fc(Math.abs(b.delta))}</td>
-                      <td className="px-3 py-2.5 text-xs tabular-nums font-semibold">{fc(b.revised)}</td>
+                      <td data-label="Budget" className="px-3 py-2.5 text-xs font-medium flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: b.color }} />{b.label}</td>
+                      <td data-label="Current limit" className="px-3 py-2.5 text-xs tabular-nums">{fc(b.monthlyLimit)}</td>
+                      <td data-label="Net change" className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${b.delta < 0 ? "text-red-400" : b.delta > 0 ? "text-green-400" : "text-[var(--color-muted)]"}`}>{b.delta > 0 ? "+" : b.delta < 0 ? "-" : ""}{fc(Math.abs(b.delta))}</td>
+                      <td data-label="Revised limit" className="px-3 py-2.5 text-xs tabular-nums font-semibold">{fc(b.revised)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1623,7 +1623,7 @@ function BudgetReallocationTool() {
                 {moves.map(m => (
                   <div key={m.id} className="flex items-center justify-between text-xs">
                     <span>{nameOf(m.fromId)} <ArrowLeftRight size={10} className="inline mx-1 text-[var(--color-muted)]" /> {nameOf(m.toId)} · <span className="tabular-nums font-semibold">{fc(m.amount)}</span></span>
-                    <button onClick={() => remove(m.id)} className="text-[var(--color-muted)] hover:text-red-400">✕</button>
+                    <button onClick={() => remove(m.id)} aria-label="Remove queued move" className="text-[var(--color-muted)] hover:text-red-400">✕</button>
                   </div>
                 ))}
               </div>
@@ -1678,7 +1678,7 @@ function QuarterlyPhasingPlanner() {
             { label: "Q4", value: fc(qTotals[3]), color: "text-green-400" },
           ]} />
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[760px]">
+            <table className="w-full text-sm rcard min-w-[760px]">
               <thead><tr className="border-b border-[var(--color-border)]">{["Line item", ...Q_LABELS, "Phased", "Annual", ""].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-muted)]">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {lines.map(l => {
@@ -1686,25 +1686,25 @@ function QuarterlyPhasingPlanner() {
                   const off = Math.round(phased) !== Math.round(l.annual);
                   return (
                     <tr key={l.id} className="hover:bg-white/2">
-                      <td className="px-3 py-2.5 text-xs font-medium">{l.label}</td>
+                      <td data-label="Line item" className="px-3 py-2.5 text-xs font-medium">{l.label}</td>
                       {QUARTERS.map(q => (
-                        <td key={q} className="px-3 py-2">
+                        <td key={q} data-label={q.toUpperCase()} className="px-3 py-2">
                           <input type="number" min="0" value={l[q] || ""} onChange={e => setQ(l.id, q, parseFloat(e.target.value) || 0)} placeholder="0"
                             className="w-24 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none tabular-nums" />
                         </td>
                       ))}
-                      <td className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${off ? "text-red-400" : "text-green-400"}`}>{fc(phased)}</td>
-                      <td className="px-3 py-2.5 text-xs tabular-nums">{fc(l.annual)}</td>
-                      <td className="px-3 py-2.5"><button onClick={() => remove(l.id)} className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
+                      <td data-label="Phased" className={`px-3 py-2.5 text-xs tabular-nums font-semibold ${off ? "text-red-400" : "text-green-400"}`}>{fc(phased)}</td>
+                      <td data-label="Annual" className="px-3 py-2.5 text-xs tabular-nums">{fc(l.annual)}</td>
+                      <td data-label="" className="px-3 py-2.5"><button onClick={() => remove(l.id)} aria-label="Remove line" className="text-[var(--color-muted)] hover:text-red-400 text-xs">✕</button></td>
                     </tr>
                   );
                 })}
                 <tr className="bg-[var(--color-bg)]/40 font-semibold">
-                  <td className="px-3 py-2.5 text-xs">Total</td>
-                  {qTotals.map((t, ti) => <td key={ti} className="px-3 py-2.5 text-xs tabular-nums">{fc(t)}</td>)}
-                  <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-primary)]">{fc(qTotals.reduce((s, t) => s + t, 0))}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums">{fc(grand)}</td>
-                  <td />
+                  <td data-label="Line item" className="px-3 py-2.5 text-xs">Total</td>
+                  {qTotals.map((t, ti) => <td key={ti} data-label={Q_LABELS[ti]} className="px-3 py-2.5 text-xs tabular-nums">{fc(t)}</td>)}
+                  <td data-label="Phased" className="px-3 py-2.5 text-xs tabular-nums text-[var(--color-primary)]">{fc(qTotals.reduce((s, t) => s + t, 0))}</td>
+                  <td data-label="Annual" className="px-3 py-2.5 text-xs tabular-nums">{fc(grand)}</td>
+                  <td data-label="" />
                 </tr>
               </tbody>
             </table>

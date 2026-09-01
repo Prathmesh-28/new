@@ -39,6 +39,7 @@ const InvoiceDetailPage  = lazy(() => import("@/features/records/InvoiceDetailPa
 const CustomersPage      = lazy(() => import("@/features/customers/CustomersPage"));
 const TrashPage          = lazy(() => import("@/features/trash/TrashPage"));
 const ReportsPage        = lazy(() => import("@/features/reports/ReportsPage"));
+const ItemsPage          = lazy(() => import("@/features/items/ItemsPage"));
 const TransactionDetailPage = lazy(() => import("@/features/records/TransactionDetailPage"));
 const VendorDetailPage      = lazy(() => import("@/features/records/VendorDetailPage"));
 const CustomerDetailPage = lazy(() => import("@/features/customers/CustomerDetailPage"));
@@ -304,6 +305,7 @@ function AppShell() {
                 <Route path="/customers/:id" element={<CustomerDetailPage />} />
                 <Route path="/trash"         element={<TrashPage />} />{/* 30-day bin: no delete in the product is final any more */}
                 <Route path="/reports"       element={<ReportsPage />} />{/* Wave 12: the front door reports never had */}
+                <Route path="/items"         element={<ItemsPage />} />{/* item master front door — the engine lived buried in Books */}
                 <Route path="/gst"           element={<GstPage />} />
                 <Route path="/payroll"       element={<PayrollPage />} />
                 <Route path="/suppliers"     element={<SuppliersPage />} />

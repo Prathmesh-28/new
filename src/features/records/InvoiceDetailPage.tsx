@@ -25,7 +25,7 @@ import RecordShell, { CopyValue, Detail } from "./RecordShell";
  * notifications and list rows now deep-link to.
  */
 type Item = { id: string; description: string; hsn_sac: string | null; uom: string | null; quantity: string; unit_price: string; gst_rate: string; amount: string; discount_pct: string; discount_amount: string; taxable_value: string | null; tax_amount: string | null };
-type Payment = { id: string; amount: string; mode: string; reference: string | null; received_at: string };
+type Payment = { id: string; amount: string; mode: string; reference: string | null; received_at: string; receipt_number: string | null };
 type CreditNote = { id: string; note_number: string; total_amount: string; reason: string | null; created_at: string };
 type Reminder = { id: string; channel: string; status: string; reminded_at: string };
 type Revision = { id: string; version: number; reason: string | null; changed_at: string; changed_by_email: string | null; total_amount: string; customer_name: string; invoice_date: string };
@@ -324,12 +324,29 @@ export default function InvoiceDetailPage() {
         <Section title={`Receipts (${inv.payments.length})`} icon={<Wallet size={14} />}>
           <ul className="divide-y divide-[var(--color-border)]">
             {inv.payments.map((p) => (
-              <li key={p.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <span>
+              <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                <span className="min-w-0 truncate">
                   {new Date(p.received_at).toLocaleDateString("en-IN")}
                   <span className="text-[var(--color-muted)]"> · {p.mode}{p.reference ? ` · ${p.reference}` : ""}</span>
+                  {p.receipt_number && <span className="text-[var(--color-muted)] font-mono text-xs"> · {p.receipt_number}</span>}
                 </span>
-                <span className="tabular-nums font-medium">{formatCurrency(Number(p.amount))}</span>
+                <span className="flex items-center gap-3 shrink-0">
+                  <span className="tabular-nums font-medium">{formatCurrency(Number(p.amount))}</span>
+                  {/* The printable acknowledgement the customer never used to get. */}
+                  <button type="button"
+                    onClick={async () => {
+                      try {
+                        const r = await fetch(`${API_BASE}/api/invoices/${inv.id}/payments/${p.id}/receipt`, { headers: authHeaders() });
+                        if (!r.ok) throw new Error("Couldn't generate the receipt");
+                        const url = URL.createObjectURL(await r.blob());
+                        const a = document.createElement("a");
+                        a.href = url; a.download = `${p.receipt_number || "receipt"}.pdf`; a.click();
+                        URL.revokeObjectURL(url);
+                      } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't download the receipt"); }
+                    }}
+                    className="text-xs text-[var(--color-primary)] hover:underline"
+                    aria-label={`Download receipt ${p.receipt_number || ""}`}>Receipt</button>
+                </span>
               </li>
             ))}
           </ul>

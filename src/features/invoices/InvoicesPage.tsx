@@ -9,6 +9,7 @@ import { formatCurrency } from "@/lib/utils";
 import DiscussButton from "@/features/collab/DiscussButton";
 import { LoadingState, ErrorState } from "@/components/EmptyState";
 import DataTable, { type Column, type TableQuery } from "@/components/ui/DataTable";
+import SavedViewsMenu from "@/components/ui/SavedViewsMenu";
 import Button from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/Confirm";
 import { useListQuery } from "@/hooks/useListQuery";
@@ -71,7 +72,7 @@ const AGING_COLOR: Record<string, string> = {
  * The running total uses the SAME rules module as the server (lib/invoiceTotals, kept in
  * step by a cross-implementation test), so the number previewed is the number issued.
  */
-function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void; onCreated: () => void; initial?: { customer?: string; amount?: string; desc?: string; dealId?: string } }) {
+function NewInvoiceModal({ onClose, onCreated, initial, recent = [] }: { onClose: () => void; onCreated: () => void; initial?: { customer?: string; amount?: string; desc?: string; dealId?: string }; recent?: Invoice[] }) {
   const tr = useT();
   const [customerName, setCustomerName] = useState(initial?.customer ?? "");
   const [customerGstin, setCustomerGstin] = useState("");
@@ -140,6 +141,9 @@ function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void;
   // The place of supply the tax split will actually use: what was chosen, else the state
   // in the buyer's GSTIN. Shown to the user so the split is never a surprise.
   const effectivePos = placeOfSupply || (/^\d{2}/.test(customerGstin.trim()) ? customerGstin.trim().slice(0, 2) : "");
+  // Item 47: warn about a likely double entry BEFORE it exists. Same customer, same total,
+  // raised in the last 3 days — the classic "did I already bill this?" case. A warning,
+  // not a block: repeat billing at the same amount is legitimate.
   const totals = computeInvoice({
     items: items.map(it => ({ ...it, gst_rate: it.gst_rate || gstRate })),
     gst_rate: parseFloat(gstRate) || 0,
@@ -150,6 +154,16 @@ function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void;
     reverse_charge: reverseCharge,
     round_off_enabled: roundOff,
   });
+
+  const likelyDuplicate = (() => {
+    if (!customerName.trim() || totals.total_amount <= 0) return null;
+    const cutoff = Date.now() - 3 * 86400000;
+    return recent.find((i) =>
+      i.status !== "cancelled" &&
+      i.customer_name.trim().toLowerCase() === customerName.trim().toLowerCase() &&
+      Math.abs(Number(i.total_amount) - totals.total_amount) < 0.01 &&
+      new Date(i.created_at).getTime() > cutoff) ?? null;
+  })();
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -377,6 +391,14 @@ function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void;
               <textarea id="inv-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} className={inp} placeholder="Delivered to the Whitefield warehouse." />
             </div>
           </div>
+        )}
+
+        {likelyDuplicate && (
+          <p className="text-[11px] text-amber-400 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2">
+            Heads up: {likelyDuplicate.invoice_number} for {likelyDuplicate.customer_name} at{" "}
+            {formatCurrency(Number(likelyDuplicate.total_amount))} was raised on{" "}
+            {new Date(likelyDuplicate.created_at).toLocaleDateString("en-IN")}. Carry on if this is a separate supply.
+          </p>
         )}
 
         {/* The preview the composer never had */}
@@ -644,7 +666,7 @@ export default function InvoicesPage() {
   const [pageRows, setPageRows]   = useState<Invoice[]>([]);
   const [pageTotal, setPageTotal] = useState(0);
   const [summary, setSummary]     = useState<InvoiceSummary | null>(null);
-  const { query, setQuery, toApiQuery, write: writeQuery } = useListQuery({ limit: 50, sort: "created_at", order: "desc" });
+  const { query, setQuery, toApiQuery, filters, write: writeQuery, activeFilterCount } = useListQuery({ limit: 50, sort: "created_at", order: "desc" });
   const navigate = useNavigate();
   const confirm  = useConfirm();
 
@@ -1041,6 +1063,14 @@ export default function InvoicesPage() {
           query={query}
           onQueryChange={(q: TableQuery) => setQuery(q)}
           searchPlaceholder="Find an invoice, customer, GSTIN or email…"
+          toolbar={
+            <SavedViewsMenu
+              listKey="invoices"
+              isFiltered={activeFilterCount > 0 || !!query.sort}
+              currentConfig={() => ({ q: query.q || null, sort: query.sort, order: query.order, ...filters })}
+              onApply={(cfg) => writeQuery({ page: null, ...cfg }, true)}
+            />
+          }
           onRowClick={(i) => navigate(`/invoices/${i.id}`)}
           rowHref={(i) => `/invoices/${i.id}`}
           bulkActions={(rows, clear) => (
@@ -1059,7 +1089,7 @@ export default function InvoicesPage() {
         />
       )}
 
-      {showNew   && <NewInvoiceModal initial={composeInitial} onClose={() => { setShowNew(false); setComposeInitial(undefined); }} onCreated={load} />}
+      {showNew   && <NewInvoiceModal initial={composeInitial} recent={invoices} onClose={() => { setShowNew(false); setComposeInitial(undefined); }} onCreated={load} />}
       {qrInvoice && <UpiQrModal invoice={qrInvoice} onClose={() => setQrInvoice(null)} />}
       {payInvoice && (
         <RecordPaymentModal
@@ -1165,9 +1195,35 @@ function QuotationBuilder() {
     setCustomer(""); setValidUntil(""); setItems([blankItem()]);
     toast.success(`Quotation ${number} saved`);
   };
-  const convert = (id: string) => {
-    setQuotes(p => p.map(q => q.id === id ? { ...q, status: "converted" } : q));
-    toast.success("Quotation converted to invoice draft - open 'New Invoice' to finalise");
+  // Convert used to be fake: it flipped the quote's status and told the user to open "New
+  // Invoice" and RE-TYPE everything. It now raises the real invoice from the quote's own
+  // lines — customer, items, rates — and records the quote number on it, marking the quote
+  // converted only after the invoice actually exists.
+  const [converting, setConverting] = useState<string | null>(null);
+  const convert = async (id: string) => {
+    const quote = quotes.find(q => q.id === id);
+    if (!quote) return;
+    setConverting(id);
+    try {
+      const inv = await api.post<{ id: string; invoice_number: string }>("/api/invoices", {
+        customer_name: quote.customer,
+        gst_rate: 18,
+        reference: `From quotation ${quote.number}`,
+        items: quote.items.map(it => ({
+          description: it.description,
+          hsn_sac: it.hsn_sac || undefined,
+          quantity: parseFloat(String(it.qty)) || 1,
+          unit_price: parseFloat(String(it.rate)) || 0,
+          gst_rate: parseFloat(String(it.gst)) || 18,
+        })),
+      });
+      setQuotes(p => p.map(q => q.id === id ? { ...q, status: "converted" } : q));
+      toast.success(`${inv.invoice_number} raised from ${quote.number}`, {
+        action: { label: "Open it", onClick: () => { window.location.href = `/invoices/${inv.id}`; } },
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't raise the invoice — the quotation is unchanged");
+    } finally { setConverting(null); }
   };
 
   return (
@@ -1195,7 +1251,12 @@ function QuotationBuilder() {
                   <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(c.total)}</td>
                   <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${q.status === "converted" ? "bg-green-900/30 text-green-400 border-green-800/40" : q.status === "accepted" ? "bg-blue-900/30 text-blue-400 border-blue-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{q.status}</span></td>
                   <td className="px-4 py-2.5 text-right">
-                    {q.status !== "converted" && <button onClick={() => convert(q.id)} className="text-xs text-[var(--color-primary)] hover:underline inline-flex items-center gap-1">Convert <ArrowRight size={11} /></button>}
+                    {q.status !== "converted" && (
+                      <button onClick={() => convert(q.id)} disabled={converting === q.id}
+                        className="text-xs text-[var(--color-primary)] hover:underline inline-flex items-center gap-1 disabled:opacity-50">
+                        {converting === q.id ? "Raising…" : "Raise invoice"} <ArrowRight size={11} />
+                      </button>
+                    )}
                     <button onClick={() => setQuotes(p => p.filter(x => x.id !== q.id))} className="ml-3 text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
                   </td>
                 </tr>

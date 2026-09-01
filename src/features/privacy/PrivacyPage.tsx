@@ -294,7 +294,7 @@ function AAConsentRegister() {
               <label className="text-xs text-[var(--color-muted)] block mb-1">Valid (mo)</label>
               <input type="number" value={months} onChange={e => setMonths(e.target.value)} className={INP} />
             </div>
-            <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /></button>
+            <button onClick={add} aria-label="Add consent" className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /></button>
           </div>
         </div>
       </div>
@@ -304,7 +304,7 @@ function AAConsentRegister() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[760px]">
+            <table className="w-full text-sm min-w-[760px] rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["FIP", "AA", "Purpose / Scope", "Granted", "Expires", "Status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -313,20 +313,20 @@ function AAConsentRegister() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {view.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-4 py-3 font-medium">{r.fip}</td>
-                    <td className="px-4 py-3 text-[var(--color-muted)]">{r.aa}</td>
-                    <td className="px-4 py-3"><p className="text-xs">{r.purpose}</p><p className="text-[10px] text-[var(--color-muted)]">{r.scope}</p></td>
-                    <td className="px-4 py-3 text-xs text-[var(--color-muted)] tabular-nums">{r.grantedOn}</td>
-                    <td className="px-4 py-3 text-xs tabular-nums">{r.expiresOn}</td>
-                    <td className="px-4 py-3"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${STATUS_PILL[r.status]}`}>{r.status}</span></td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <td className="px-4 py-3 font-medium" data-label="FIP">{r.fip}</td>
+                    <td className="px-4 py-3 text-[var(--color-muted)]" data-label="AA">{r.aa}</td>
+                    <td className="px-4 py-3" data-label="Purpose / Scope"><p className="text-xs">{r.purpose}</p><p className="text-[10px] text-[var(--color-muted)]">{r.scope}</p></td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-muted)] tabular-nums" data-label="Granted">{r.grantedOn}</td>
+                    <td className="px-4 py-3 text-xs tabular-nums" data-label="Expires">{r.expiresOn}</td>
+                    <td className="px-4 py-3" data-label="Status"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${STATUS_PILL[r.status]}`}>{r.status}</span></td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap" data-label="">
                       {r.status === "active" && (
                         <button onClick={() => setStatus(r.id, "revoked")} className="inline-flex items-center gap-1 text-[10px] text-yellow-400 hover:underline mr-3"><Ban size={11} /> Revoke</button>
                       )}
                       {(r.status === "revoked" || r.status === "expired") && (
                         <button onClick={() => setStatus(r.id, "active")} className="inline-flex items-center gap-1 text-[10px] text-green-400 hover:underline mr-3"><RefreshCw size={11} /> Re-grant</button>
                       )}
-                      <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+                      <button onClick={() => remove(r.id)} aria-label="Delete consent" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
                     </td>
                   </tr>
                 ))}
@@ -397,7 +397,7 @@ function DpdpConsentLog() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[680px]">
+              <table className="w-full text-sm min-w-[680px] rcard">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Subject", "Purpose", "Channel", "Collected", "Status", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -406,18 +406,18 @@ function DpdpConsentLog() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {rows.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-3 font-medium">{r.subject}</td>
-                      <td className="px-4 py-3 text-xs">{r.purpose}</td>
-                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.channel}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.collectedOn}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 font-medium" data-label="Subject">{r.subject}</td>
+                      <td className="px-4 py-3 text-xs" data-label="Purpose">{r.purpose}</td>
+                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]" data-label="Channel">{r.channel}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]" data-label="Collected">{r.collectedOn}</td>
+                      <td className="px-4 py-3" data-label="Status">
                         {r.granted
                           ? <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={12} /> Granted</span>
                           : <span className="inline-flex items-center gap-1 text-xs text-[var(--color-muted)]"><XCircle size={12} /> Withdrawn {r.withdrawnOn}</span>}
                       </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <td className="px-4 py-3 text-right whitespace-nowrap" data-label="">
                         {r.granted && <button onClick={() => withdraw(r.id)} className="text-[10px] text-yellow-400 hover:underline mr-3">Mark withdrawn</button>}
-                        <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+                        <button onClick={() => remove(r.id)} aria-label="Delete consent entry" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button>
                       </td>
                     </tr>
                   ))}
@@ -467,7 +467,7 @@ function PermissionsMatrix() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm min-w-[640px] rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>
                   <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">Party</th>
@@ -478,16 +478,16 @@ function PermissionsMatrix() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-4 py-3 font-medium">{r.party}</td>
-                    {PERM_FIELDS.map(([field]) => (
-                      <td key={field} className="px-3 py-3 text-center">
+                    <td className="px-4 py-3 font-medium" data-label="Party">{r.party}</td>
+                    {PERM_FIELDS.map(([field, label]) => (
+                      <td key={field} className="px-3 py-3 text-center" data-label={label}>
                         <button onClick={() => toggle(r.id, field)} aria-label={`Toggle ${field} for ${r.party}`}
                           className={`w-8 h-5 rounded-full relative transition-colors ${r[field] ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}>
                           <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${r[field] ? "left-[14px]" : "left-0.5"}`} />
                         </button>
                       </td>
                     ))}
-                    <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                    <td className="px-4 py-3 text-right" data-label=""><button onClick={() => remove(r.id)} aria-label={`Remove ${r.party}`} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -553,7 +553,7 @@ function DataRightsTracker() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm min-w-[720px] rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Raised by", "Type", "Raised", "Due in", "Status", "Action"].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -565,16 +565,16 @@ function DataRightsTracker() {
                   const closed = r.status === "fulfilled" || r.status === "rejected";
                   return (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-3 font-medium">{r.subject}{r.note && <p className="text-[10px] text-[var(--color-muted)] font-normal">{r.note}</p>}</td>
-                      <td className="px-4 py-3 text-xs">{DSR_TYPE_LABEL[r.type]}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.raisedOn}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums">{closed ? "-" : <span className={due < 0 ? "text-red-400 font-semibold" : due <= 7 ? "text-yellow-400" : "text-[var(--color-muted)]"}>{due < 0 ? `${Math.abs(due)}d overdue` : `${due}d`}</span>}</td>
-                      <td className="px-4 py-3"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${DSR_STATUS_PILL[r.status]}`}>{r.status.replace("_", " ")}</span></td>
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-4 py-3 font-medium" data-label="Raised by">{r.subject}{r.note && <p className="text-[10px] text-[var(--color-muted)] font-normal">{r.note}</p>}</td>
+                      <td className="px-4 py-3 text-xs" data-label="Type">{DSR_TYPE_LABEL[r.type]}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]" data-label="Raised">{r.raisedOn}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums" data-label="Due in">{closed ? "-" : <span className={due < 0 ? "text-red-400 font-semibold" : due <= 7 ? "text-yellow-400" : "text-[var(--color-muted)]"}>{due < 0 ? `${Math.abs(due)}d overdue` : `${due}d`}</span>}</td>
+                      <td className="px-4 py-3" data-label="Status"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${DSR_STATUS_PILL[r.status]}`}>{r.status.replace("_", " ")}</span></td>
+                      <td className="px-4 py-3 whitespace-nowrap" data-label="">
                         <select value={r.status} onChange={e => setStatus(r.id, e.target.value as DsrStatus)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-[11px] outline-none focus:border-[var(--color-primary)] mr-2">
                           {(Object.keys(DSR_STATUS_PILL) as DsrStatus[]).map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
                         </select>
-                        <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 align-middle"><Trash2 size={12} /></button>
+                        <button onClick={() => remove(r.id)} aria-label="Delete request" className="text-[var(--color-muted)] hover:text-red-400 align-middle"><Trash2 size={12} /></button>
                       </td>
                     </tr>
                   );
@@ -633,7 +633,7 @@ function RetentionPolicy() {
 
       <div className={`${CARD} overflow-hidden`}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm rcard">
             <thead className="border-b border-[var(--color-border)]">
               <tr>{["Data category", "Retention", "Basis", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -642,10 +642,10 @@ function RetentionPolicy() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {rows.map(r => (
                 <tr key={r.id} className="hover:bg-white/2">
-                  <td className="px-4 py-3 font-medium">{r.category}</td>
-                  <td className="px-4 py-3 tabular-nums">{r.years === 0 ? "Until purpose ends" : `${r.years} year${r.years === 1 ? "" : "s"}`}</td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.basis}</td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                  <td className="px-4 py-3 font-medium" data-label="Data category">{r.category}</td>
+                  <td className="px-4 py-3 tabular-nums" data-label="Retention">{r.years === 0 ? "Until purpose ends" : `${r.years} year${r.years === 1 ? "" : "s"}`}</td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]" data-label="Basis">{r.basis}</td>
+                  <td className="px-4 py-3 text-right" data-label=""><button onClick={() => remove(r.id)} aria-label="Delete retention rule" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -713,7 +713,7 @@ function ThirdPartyRegistry() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[680px]">
+            <table className="w-full text-sm min-w-[680px] rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Recipient", "Data shared", "Purpose", "Since", "DPA", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -722,16 +722,16 @@ function ThirdPartyRegistry() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-4 py-3 font-medium">{r.recipient}</td>
-                    <td className="px-4 py-3 text-xs">{r.dataShared}</td>
-                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.purpose || "-"}</td>
-                    <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.sharedOn}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 font-medium" data-label="Recipient">{r.recipient}</td>
+                    <td className="px-4 py-3 text-xs" data-label="Data shared">{r.dataShared}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]" data-label="Purpose">{r.purpose || "-"}</td>
+                    <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]" data-label="Since">{r.sharedOn}</td>
+                    <td className="px-4 py-3" data-label="DPA">
                       <button onClick={() => toggleDpa(r.id)} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${r.dpaSigned ? "bg-green-950/30 text-green-400 border-green-800/40" : "bg-yellow-950/30 text-yellow-400 border-yellow-800/40"}`}>
                         {r.dpaSigned ? "Signed" : "Missing"}
                       </button>
                     </td>
-                    <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                    <td className="px-4 py-3 text-right" data-label=""><button onClick={() => remove(r.id)} aria-label="Remove recipient" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -922,7 +922,7 @@ function DataInventory() {
 
       <div className={`${CARD} overflow-hidden`}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm min-w-[640px] rcard">
             <thead className="border-b border-[var(--color-border)]">
               <tr>{["Data element", "Sensitivity", "Location", "Purpose", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -931,11 +931,11 @@ function DataInventory() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {rows.map(r => (
                 <tr key={r.id} className="hover:bg-white/2">
-                  <td className="px-4 py-3 font-medium">{r.element}</td>
-                  <td className="px-4 py-3"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${SENS_PILL[r.sensitivity]}`}>{r.sensitivity}</span></td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.location}</td>
-                  <td className="px-4 py-3 text-xs">{r.purpose}</td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                  <td className="px-4 py-3 font-medium" data-label="Data element">{r.element}</td>
+                  <td className="px-4 py-3" data-label="Sensitivity"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${SENS_PILL[r.sensitivity]}`}>{r.sensitivity}</span></td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]" data-label="Location">{r.location}</td>
+                  <td className="px-4 py-3 text-xs" data-label="Purpose">{r.purpose}</td>
+                  <td className="px-4 py-3 text-right" data-label=""><button onClick={() => remove(r.id)} aria-label="Delete data element" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -994,7 +994,7 @@ function BreachLog() {
                 {(["low", "medium", "high"] as const).map(s => <option key={s} value={s} className="capitalize">{s}</option>)}
               </select>
             </div>
-            <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /></button>
+            <button onClick={add} aria-label="Log incident" className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /></button>
           </div>
         </div>
       </div>
@@ -1017,7 +1017,7 @@ function BreachLog() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[760px]">
+            <table className="w-full text-sm min-w-[760px] rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Detected", "Incident", "Records", "Severity", "DPB", "Subjects", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1026,17 +1026,17 @@ function BreachLog() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.detectedOn}</td>
-                    <td className="px-4 py-3 text-xs max-w-[260px]">{r.description}</td>
-                    <td className="px-4 py-3 tabular-nums text-xs">{r.records.toLocaleString("en-IN")}</td>
-                    <td className="px-4 py-3"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${SEV_PILL[r.severity]}`}>{r.severity}</span></td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]" data-label="Detected">{r.detectedOn}</td>
+                    <td className="px-4 py-3 text-xs max-w-[260px]" data-label="Incident">{r.description}</td>
+                    <td className="px-4 py-3 tabular-nums text-xs" data-label="Records">{r.records.toLocaleString("en-IN")}</td>
+                    <td className="px-4 py-3" data-label="Severity"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${SEV_PILL[r.severity]}`}>{r.severity}</span></td>
+                    <td className="px-4 py-3" data-label="DPB">
                       <button onClick={() => toggle(r.id, "dpbNotified")} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${r.dpbNotified ? "bg-green-950/30 text-green-400 border-green-800/40" : "bg-red-950/30 text-red-400 border-red-800/40"}`}>{r.dpbNotified ? "Notified" : "Pending"}</button>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" data-label="Subjects">
                       <button onClick={() => toggle(r.id, "subjectsNotified")} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${r.subjectsNotified ? "bg-green-950/30 text-green-400 border-green-800/40" : "bg-yellow-950/30 text-yellow-400 border-yellow-800/40"}`}>{r.subjectsNotified ? "Notified" : "Pending"}</button>
                     </td>
-                    <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                    <td className="px-4 py-3 text-right" data-label=""><button onClick={() => remove(r.id)} aria-label="Delete incident" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1335,7 +1335,7 @@ function GrievanceOfficerRegister() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[680px]">
+            <table className="w-full text-sm min-w-[680px] rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Complainant", "Subject", "Raised", "Due in", "Status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1347,16 +1347,16 @@ function GrievanceOfficerRegister() {
                   const closed = r.status === "resolved";
                   return (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-3 font-medium">{r.complainant}</td>
-                      <td className="px-4 py-3 text-xs">{r.subject}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.raisedOn}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums">{closed ? "-" : <span className={due < 0 ? "text-red-400 font-semibold" : due <= 7 ? "text-yellow-400" : "text-[var(--color-muted)]"}>{due < 0 ? `${Math.abs(due)}d overdue` : `${due}d`}</span>}</td>
-                      <td className="px-4 py-3"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${GRIEVANCE_PILL[r.status]}`}>{r.status.replace("_", " ")}</span></td>
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-4 py-3 font-medium" data-label="Complainant">{r.complainant}</td>
+                      <td className="px-4 py-3 text-xs" data-label="Subject">{r.subject}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]" data-label="Raised">{r.raisedOn}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums" data-label="Due in">{closed ? "-" : <span className={due < 0 ? "text-red-400 font-semibold" : due <= 7 ? "text-yellow-400" : "text-[var(--color-muted)]"}>{due < 0 ? `${Math.abs(due)}d overdue` : `${due}d`}</span>}</td>
+                      <td className="px-4 py-3" data-label="Status"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${GRIEVANCE_PILL[r.status]}`}>{r.status.replace("_", " ")}</span></td>
+                      <td className="px-4 py-3 whitespace-nowrap" data-label="">
                         <select value={r.status} onChange={e => setStatus(r.id, e.target.value as GrievanceStatus)} className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-[11px] outline-none focus:border-[var(--color-primary)] mr-2">
                           {(Object.keys(GRIEVANCE_PILL) as GrievanceStatus[]).map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
                         </select>
-                        <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 align-middle"><Trash2 size={12} /></button>
+                        <button onClick={() => remove(r.id)} aria-label="Delete grievance" className="text-[var(--color-muted)] hover:text-red-400 align-middle"><Trash2 size={12} /></button>
                       </td>
                     </tr>
                   );
@@ -1492,7 +1492,7 @@ function ClassificationMatrix() {
 
       <div className={`${CARD} overflow-hidden`}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm min-w-[640px] rcard">
             <thead className="border-b border-[var(--color-border)]">
               <tr>{["Data element", "Tier", "Required handling", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1501,14 +1501,14 @@ function ClassificationMatrix() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {rows.map(r => (
                 <tr key={r.id} className="hover:bg-white/2">
-                  <td className="px-4 py-3 font-medium">{r.element}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 font-medium" data-label="Data element">{r.element}</td>
+                  <td className="px-4 py-3" data-label="Tier">
                     <select value={r.tier} onChange={e => setTierOf(r.id, e.target.value as ClassTier)} className={`text-[10px] font-semibold px-2 py-1 rounded-full border capitalize outline-none ${CLASS_TIER_PILL[r.tier]}`}>
                       {(Object.keys(CLASS_TIER_PILL) as ClassTier[]).map(t => <option key={t} value={t} className="capitalize bg-[var(--color-bg)] text-[var(--color-text)]">{t}</option>)}
                     </select>
                   </td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.handling}</td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]" data-label="Required handling">{r.handling}</td>
+                  <td className="px-4 py-3 text-right" data-label=""><button onClick={() => remove(r.id)} aria-label="Delete classification" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -1566,7 +1566,7 @@ function TrainingLog() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm min-w-[640px] rcard">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Employee", "Role", "Trained", "Expires", "Status", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1579,18 +1579,18 @@ function TrainingLog() {
                     const valid = days >= 0;
                     return (
                       <tr key={r.id} className="hover:bg-white/2">
-                        <td className="px-4 py-3 font-medium">{r.employee}</td>
-                        <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.role}</td>
-                        <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.trainedOn}</td>
-                        <td className="px-4 py-3 text-xs tabular-nums">{expiry.toISOString().split("T")[0]}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 font-medium" data-label="Employee">{r.employee}</td>
+                        <td className="px-4 py-3 text-xs text-[var(--color-muted)]" data-label="Role">{r.role}</td>
+                        <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]" data-label="Trained">{r.trainedOn}</td>
+                        <td className="px-4 py-3 text-xs tabular-nums" data-label="Expires">{expiry.toISOString().split("T")[0]}</td>
+                        <td className="px-4 py-3" data-label="Status">
                           {valid
                             ? <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={12} /> Valid {days <= 30 ? `(${days}d)` : ""}</span>
                             : <span className="inline-flex items-center gap-1 text-xs text-red-400 font-semibold"><XCircle size={12} /> Expired</span>}
                         </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <td className="px-4 py-3 text-right whitespace-nowrap" data-label="">
                           <button onClick={() => renew(r.id)} className="inline-flex items-center gap-1 text-[10px] text-green-400 hover:underline mr-3"><RefreshCw size={11} /> Renew</button>
-                          <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 align-middle"><Trash2 size={12} /></button>
+                          <button onClick={() => remove(r.id)} aria-label="Delete training record" className="text-[var(--color-muted)] hover:text-red-400 align-middle"><Trash2 size={12} /></button>
                         </td>
                       </tr>
                     );
@@ -1758,7 +1758,7 @@ function MarketingConsentRegister() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[560px]">
+              <table className="w-full text-sm min-w-[560px] rcard">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Contact", "Channel", "Status", "Updated", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1767,13 +1767,13 @@ function MarketingConsentRegister() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {rows.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-3 font-medium">{r.contact}</td>
-                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.channel}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 font-medium" data-label="Contact">{r.contact}</td>
+                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]" data-label="Channel">{r.channel}</td>
+                      <td className="px-4 py-3" data-label="Status">
                         <button onClick={() => toggle(r.id)} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${r.optedIn ? "bg-green-950/30 text-green-400 border-green-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{r.optedIn ? "Opted in" : "Opted out"}</button>
                       </td>
-                      <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.updatedOn}</td>
-                      <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                      <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]" data-label="Updated">{r.updatedOn}</td>
+                      <td className="px-4 py-3 text-right" data-label=""><button onClick={() => remove(r.id)} aria-label="Delete contact" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -1925,7 +1925,7 @@ function RopaRegister() {
               <label className="text-xs text-[var(--color-muted)] block mb-1">Retention</label>
               <input value={retention} onChange={e => setRetention(e.target.value)} placeholder="8 years" className={INP} />
             </div>
-            <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /></button>
+            <button onClick={add} aria-label="Add processing activity" className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /></button>
           </div>
         </div>
       </div>
@@ -1939,7 +1939,7 @@ function RopaRegister() {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[820px]">
+              <table className="w-full text-sm min-w-[820px] rcard">
                 <thead className="border-b border-[var(--color-border)]">
                   <tr>{["Activity", "Data categories", "Subjects", "Lawful basis", "Recipients", "Retention", ""].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -1948,13 +1948,13 @@ function RopaRegister() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {rows.map(r => (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-3 font-medium">{r.activity}</td>
-                      <td className="px-4 py-3 text-xs">{r.categories}</td>
-                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.subjects}</td>
-                      <td className="px-4 py-3 text-xs">{r.lawfulBasis}</td>
-                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.recipients}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums">{r.retention}</td>
-                      <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                      <td className="px-4 py-3 font-medium" data-label="Activity">{r.activity}</td>
+                      <td className="px-4 py-3 text-xs" data-label="Data categories">{r.categories}</td>
+                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]" data-label="Subjects">{r.subjects}</td>
+                      <td className="px-4 py-3 text-xs" data-label="Lawful basis">{r.lawfulBasis}</td>
+                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]" data-label="Recipients">{r.recipients}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums" data-label="Retention">{r.retention}</td>
+                      <td className="px-4 py-3 text-right" data-label=""><button onClick={() => remove(r.id)} aria-label="Delete activity" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -2022,7 +2022,7 @@ function DataFlowMap() {
             <label className="flex items-center gap-2 text-xs cursor-pointer h-[38px] flex-1">
               <input type="checkbox" checked={encrypted} onChange={e => setEncrypted(e.target.checked)} className="accent-[var(--color-primary)]" /> Encrypted
             </label>
-            <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /></button>
+            <button onClick={add} aria-label="Add data flow" className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /></button>
           </div>
         </div>
       </div>
@@ -2049,7 +2049,7 @@ function DataFlowMap() {
                 <span className="text-[11px] text-[var(--color-muted)] truncate max-w-[140px] hidden sm:block">{r.data}</span>
                 <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${FLOW_PILL[r.kind]}`}>{FLOW_LABEL[r.kind]}</span>
                 <span className={`text-[10px] font-semibold shrink-0 ${r.encrypted ? "text-green-400" : "text-red-400"}`}>{r.encrypted ? "Encrypted" : "Cleartext"}</span>
-                <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={12} /></button>
+                <button onClick={() => remove(r.id)} aria-label="Delete data flow" className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={12} /></button>
               </div>
             ))}
           </div>
@@ -2227,7 +2227,7 @@ function DpiaWizard() {
 
       {saved.length > 0 && (
         <div className={`${CARD} overflow-hidden`}>
-          <table className="w-full text-sm">
+          <table className="w-full text-sm rcard">
             <thead className="border-b border-[var(--color-border)]">
               <tr>{["Project", "Assessed", "Score", "Outcome", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2236,11 +2236,11 @@ function DpiaWizard() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {saved.map(r => (
                 <tr key={r.id} className="hover:bg-white/2">
-                  <td className="px-4 py-3 font-medium">{r.project}</td>
-                  <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.on}</td>
-                  <td className="px-4 py-3 text-xs tabular-nums">{r.score}/{r.max}</td>
-                  <td className={`px-4 py-3 text-xs ${r.score >= 8 ? "text-red-400" : r.score >= 4 ? "text-yellow-400" : "text-green-400"}`}>{r.level}</td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                  <td className="px-4 py-3 font-medium" data-label="Project">{r.project}</td>
+                  <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]" data-label="Assessed">{r.on}</td>
+                  <td className="px-4 py-3 text-xs tabular-nums" data-label="Score">{r.score}/{r.max}</td>
+                  <td className={`px-4 py-3 text-xs ${r.score >= 8 ? "text-red-400" : r.score >= 4 ? "text-yellow-400" : "text-green-400"}`} data-label="Outcome">{r.level}</td>
+                  <td className="px-4 py-3 text-right" data-label=""><button onClick={() => remove(r.id)} aria-label="Delete DPIA record" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -2295,7 +2295,7 @@ function CrossBorderLog() {
               {XBORDER_SAFEGUARDS.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
-          <button onClick={add} className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /></button>
+          <button onClick={add} aria-label="Log transfer" className="flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-[var(--color-bg)] rounded-lg px-3 py-2 text-sm font-medium h-[38px]"><Plus size={13} /></button>
         </div>
       </div>
 
@@ -2311,7 +2311,7 @@ function CrossBorderLog() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm min-w-[720px] rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Recipient", "Country", "Data", "Safeguard", "Logged", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2320,14 +2320,14 @@ function CrossBorderLog() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-4 py-3 font-medium">{r.recipient}</td>
-                    <td className="px-4 py-3 text-xs">{r.country}</td>
-                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{r.dataShared}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 font-medium" data-label="Recipient">{r.recipient}</td>
+                    <td className="px-4 py-3 text-xs" data-label="Country">{r.country}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]" data-label="Data">{r.dataShared}</td>
+                    <td className="px-4 py-3" data-label="Safeguard">
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${r.safeguard === "None / under review" ? "bg-yellow-950/30 text-yellow-400 border-yellow-800/40" : "bg-green-950/30 text-green-400 border-green-800/40"}`}>{r.safeguard}</span>
                     </td>
-                    <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.loggedOn}</td>
-                    <td className="px-4 py-3 text-right"><button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
+                    <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]" data-label="Logged">{r.loggedOn}</td>
+                    <td className="px-4 py-3 text-right" data-label=""><button onClick={() => remove(r.id)} aria-label="Delete transfer" className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={12} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -2395,7 +2395,7 @@ function VendorRiskScorecard() {
                   </div>
                   <div className="flex items-center gap-3">
                     <p className={`text-xl font-bold tabular-nums ${color}`}>{pct}%</p>
-                    <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                    <button onClick={() => remove(r.id)} aria-label={`Remove ${r.name}`} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -2603,7 +2603,7 @@ function PurgeScheduler() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[680px]">
+            <table className="w-full text-sm min-w-[680px] rcard">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Category", "Last touched", "Retain", "Purge due", "Status", ""].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}
@@ -2615,11 +2615,11 @@ function PurgeScheduler() {
                   const days = due ? differenceInCalendarDays(due, new Date()) : null;
                   return (
                     <tr key={r.id} className="hover:bg-white/2">
-                      <td className="px-4 py-3 font-medium">{r.category}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]">{r.lastDataDate}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums">{r.years <= 0 ? "Purpose-based" : `${r.years}y`}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums">{due ? due.toISOString().split("T")[0] : "-"}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 font-medium" data-label="Category">{r.category}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums text-[var(--color-muted)]" data-label="Last touched">{r.lastDataDate}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums" data-label="Retain">{r.years <= 0 ? "Purpose-based" : `${r.years}y`}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums" data-label="Purge due">{due ? due.toISOString().split("T")[0] : "-"}</td>
+                      <td className="px-4 py-3" data-label="Status">
                         {r.purgedOn
                           ? <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={12} /> Purged {r.purgedOn}</span>
                           : days !== null && days < 0
@@ -2628,9 +2628,9 @@ function PurgeScheduler() {
                               ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-yellow-950/30 text-yellow-400 border-yellow-800/40">Due in {days}d</span>
                               : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]">Within retention</span>}
                       </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <td className="px-4 py-3 text-right whitespace-nowrap" data-label="">
                         {!r.purgedOn && <button onClick={() => markPurged(r.id)} className="text-[10px] text-green-400 hover:underline mr-3">Mark purged</button>}
-                        <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 align-middle"><Trash2 size={12} /></button>
+                        <button onClick={() => remove(r.id)} aria-label="Delete purge schedule" className="text-[var(--color-muted)] hover:text-red-400 align-middle"><Trash2 size={12} /></button>
                       </td>
                     </tr>
                   );

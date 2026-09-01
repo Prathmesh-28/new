@@ -292,17 +292,17 @@ function AnomalyScanner({ txns }: { txns: Txn[] }) {
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{flagged.length} outlier payment(s)</p></div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Payee", "Amount", "Deviation", "Description"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {flagged.map(r => (
                   <tr key={r.t.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(r.t.date)}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{r.t.counterparty || "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(r.t.amount)))}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-orange-400">{r.z > 0 ? "+" : ""}{r.z.toFixed(1)}σ</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{r.t.description}</td>
+                    <td data-label="Date" className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(r.t.date)}</td>
+                    <td data-label="Payee" className="px-4 py-2.5 font-medium text-xs">{r.t.counterparty || "-"}</td>
+                    <td data-label="Amount" className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(r.t.amount)))}</td>
+                    <td data-label="Deviation" className="px-4 py-2.5 tabular-nums text-orange-400">{r.z > 0 ? "+" : ""}{r.z.toFixed(1)}σ</td>
+                    <td data-label="Description" className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{r.t.description}</td>
                   </tr>
                 ))}
               </tbody>
@@ -480,16 +480,16 @@ function NewPayeeWatch({ txns }: { txns: Txn[] }) {
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{payees.length} new payee(s)</p></div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Payee", "First paid", "Payments since", "Total paid"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {payees.map((p, i) => (
                   <tr key={i} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium text-xs">{p.firstTxn.counterparty || "(blank)"}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(p.date)}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{p.count}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(p.total))}</td>
+                    <td data-label="Payee" className="px-4 py-2.5 font-medium text-xs">{p.firstTxn.counterparty || "(blank)"}</td>
+                    <td data-label="First paid" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(p.date)}</td>
+                    <td data-label="Payments since" className="px-4 py-2.5 tabular-nums text-xs">{p.count}</td>
+                    <td data-label="Total paid" className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(p.total))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -567,21 +567,21 @@ function VendorBankChangeFlag({ txns }: { txns: Txn[] }) {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Vendor", "Account", "IFSC", "Status", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {records.map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium text-xs">{r.vendor}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{r.account}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.ifsc || "-"}</td>
-                    <td className="px-4 py-2.5">
+                    <td data-label="Vendor" className="px-4 py-2.5 font-medium text-xs">{r.vendor}</td>
+                    <td data-label="Account" className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{r.account}</td>
+                    <td data-label="IFSC" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{r.ifsc || "-"}</td>
+                    <td data-label="Status" className="px-4 py-2.5">
                       {r.lastChangedAt
                         ? <span className="inline-flex items-center gap-1 text-xs text-red-400 font-semibold"><AlertTriangle size={11} /> Changed {safeFormatDate(r.lastChangedAt.slice(0, 10))}</span>
                         : <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={11} /> Stable</span>}
                     </td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRecords(records.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setRecords(records.filter(x => x.id !== r.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -677,7 +677,7 @@ function MonitoringRules({ txns }: { txns: Txn[] }) {
               <span key={r.id} className={`inline-flex items-center gap-2 text-xs px-2.5 py-1 rounded-full border ${r.enabled ? "border-[var(--color-primary)]/40 text-[var(--color-text)]" : "border-[var(--color-border)] text-[var(--color-muted)] line-through"}`}>
                 {r.name}: {r.field} {r.operator === "gt" ? ">" : r.operator === "lt" ? "<" : "contains"} {r.field === "amount" ? formatCurrency(parseFloat(r.value) || 0) : `"${r.value}"`}
                 <button onClick={() => setRules(rules.map(x => x.id === r.id ? { ...x, enabled: !x.enabled } : x))} className="text-[var(--color-muted)] hover:text-[var(--color-text)]">{r.enabled ? "mute" : "on"}</button>
-                <button onClick={() => setRules(rules.filter(x => x.id !== r.id))} className="text-[var(--color-muted)] hover:text-red-400">✕</button>
+                <button onClick={() => setRules(rules.filter(x => x.id !== r.id))} aria-label={`Delete rule ${r.name}`} className="text-[var(--color-muted)] hover:text-red-400">✕</button>
               </span>
             ))}
           </div>
@@ -692,16 +692,16 @@ function MonitoringRules({ txns }: { txns: Txn[] }) {
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{hits.length} flagged transaction(s)</p></div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Payee", "Amount", "Triggered rules"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {hits.map(x => (
                   <tr key={x.t.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(x.t.date)}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{x.t.counterparty || "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(x.t.amount)))}</td>
-                    <td className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{x.matched.map(m => <span key={m.id} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{m.name}</span>)}</div></td>
+                    <td data-label="Date" className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(x.t.date)}</td>
+                    <td data-label="Payee" className="px-4 py-2.5 font-medium text-xs">{x.t.counterparty || "-"}</td>
+                    <td data-label="Amount" className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(x.t.amount)))}</td>
+                    <td data-label="Triggered rules" className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{x.matched.map(m => <span key={m.id} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{m.name}</span>)}</div></td>
                   </tr>
                 ))}
               </tbody>
@@ -765,7 +765,7 @@ function AccessReviewLog() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Person", "Role", "Scope", "Last reviewed", "Status", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
@@ -773,17 +773,17 @@ function AccessReviewLog() {
                   const isStale = daysBetween(e.lastReviewed, today) > 90 && e.status === "active";
                   return (
                     <tr key={e.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium text-xs">{e.person}</td>
-                      <td className="px-4 py-2.5 text-xs">{e.role}</td>
-                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{e.scope}</td>
-                      <td className={`px-4 py-2.5 text-xs ${isStale ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>{safeFormatDate(e.lastReviewed)}</td>
-                      <td className="px-4 py-2.5">
+                      <td data-label="Person" className="px-4 py-2.5 font-medium text-xs">{e.person}</td>
+                      <td data-label="Role" className="px-4 py-2.5 text-xs">{e.role}</td>
+                      <td data-label="Scope" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{e.scope}</td>
+                      <td data-label="Last reviewed" className={`px-4 py-2.5 text-xs ${isStale ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>{safeFormatDate(e.lastReviewed)}</td>
+                      <td data-label="Status" className="px-4 py-2.5">
                         <button onClick={() => setEntries(entries.map(x => x.id === e.id ? { ...x, status: x.status === "active" ? "suspended" : "active" } : x))}
                           className={`text-[9px] px-2 py-0.5 rounded-full border font-medium ${e.status === "active" ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
                           {e.status === "active" ? "Active" : "Suspended"}
                         </button>
                       </td>
-                      <td className="px-4 py-2.5 text-right space-x-2">
+                      <td data-label="" className="px-4 py-2.5 text-right space-x-2">
                         <button onClick={() => setEntries(entries.map(x => x.id === e.id ? { ...x, lastReviewed: today } : x))} className="text-[10px] text-[var(--color-primary)] hover:underline">Mark reviewed</button>
                         <button onClick={() => setEntries(entries.filter(x => x.id !== e.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
                       </td>
@@ -916,17 +916,17 @@ function SuspiciousInvoices({ invoices }: { invoices: Inv[] }) {
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{flags.length} invoice(s) worth reviewing</p></div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Invoice #", "Customer", "Amount", "Date", "Flags"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {flags.map(f => (
                   <tr key={f.invoice.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 text-xs font-medium">{f.invoice.invoiceNumber || "-"}</td>
-                    <td className="px-4 py-2.5 text-xs">{f.invoice.customer}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{formatCurrency(Math.round(f.invoice.amount))}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(f.invoice.invoiceDate)}</td>
-                    <td className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{f.reasons.map(r => <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{r}</span>)}</div></td>
+                    <td data-label="Invoice #" className="px-4 py-2.5 text-xs font-medium">{f.invoice.invoiceNumber || "-"}</td>
+                    <td data-label="Customer" className="px-4 py-2.5 text-xs">{f.invoice.customer}</td>
+                    <td data-label="Amount" className="px-4 py-2.5 tabular-nums text-xs">{formatCurrency(Math.round(f.invoice.amount))}</td>
+                    <td data-label="Date" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(f.invoice.invoiceDate)}</td>
+                    <td data-label="Flags" className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{f.reasons.map(r => <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{r}</span>)}</div></td>
                   </tr>
                 ))}
               </tbody>
@@ -1027,17 +1027,17 @@ function OffHoursPayments({ txns }: { txns: Txn[] }) {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rcard">
                 <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Day", "Payee", "Amount", "Description"].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {flagged.map(r => (
                     <tr key={r.t.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(r.t.date)}</td>
-                      <td className="px-4 py-2.5 text-xs text-yellow-400 font-medium">{r.dow === 0 ? "Sunday" : "Saturday"}</td>
-                      <td className="px-4 py-2.5 font-medium text-xs">{r.t.counterparty || "-"}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(r.t.amount)))}</td>
-                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{r.t.description}</td>
+                      <td data-label="Date" className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(r.t.date)}</td>
+                      <td data-label="Day" className="px-4 py-2.5 text-xs text-yellow-400 font-medium">{r.dow === 0 ? "Sunday" : "Saturday"}</td>
+                      <td data-label="Payee" className="px-4 py-2.5 font-medium text-xs">{r.t.counterparty || "-"}</td>
+                      <td data-label="Amount" className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(r.t.amount)))}</td>
+                      <td data-label="Description" className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{r.t.description}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1252,17 +1252,17 @@ function UnderLimitSplitting({ txns }: { txns: Txn[] }) {
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{justUnder.length} payment(s) just below {formatCurrency(limit)}</p></div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Payee", "Amount", "% of limit", "Description"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {justUnder.map(t => (
                   <tr key={t.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-orange-400 text-xs">{limit ? Math.round((Math.abs(t.amount) / limit) * 100) : 0}%</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[240px] truncate">{t.description}</td>
+                    <td data-label="Date" className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
+                    <td data-label="Payee" className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "-"}</td>
+                    <td data-label="Amount" className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
+                    <td data-label="% of limit" className="px-4 py-2.5 tabular-nums text-orange-400 text-xs">{limit ? Math.round((Math.abs(t.amount) / limit) * 100) : 0}%</td>
+                    <td data-label="Description" className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[240px] truncate">{t.description}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1311,17 +1311,17 @@ function DormantReactivation({ txns }: { txns: Txn[] }) {
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{reactivated.length} reactivation event(s)</p></div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Counterparty", "Quiet since", "Reactivated", "Idle gap", "Amount"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {reactivated.map((r, i) => (
                   <tr key={i} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium text-xs">{r.party || "-"}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(r.lastBefore.date)}</td>
-                    <td className="px-4 py-2.5 text-xs text-yellow-400">{safeFormatDate(r.reactivation.date)}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-orange-400 text-xs">{r.gapDays} days</td>
-                    <td className={`px-4 py-2.5 tabular-nums font-semibold ${r.reactivation.amount < 0 ? "text-red-400" : "text-green-400"}`}>{formatCurrency(Math.round(Math.abs(r.reactivation.amount)))}</td>
+                    <td data-label="Counterparty" className="px-4 py-2.5 font-medium text-xs">{r.party || "-"}</td>
+                    <td data-label="Quiet since" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(r.lastBefore.date)}</td>
+                    <td data-label="Reactivated" className="px-4 py-2.5 text-xs text-yellow-400">{safeFormatDate(r.reactivation.date)}</td>
+                    <td data-label="Idle gap" className="px-4 py-2.5 tabular-nums text-orange-400 text-xs">{r.gapDays} days</td>
+                    <td data-label="Amount" className={`px-4 py-2.5 tabular-nums font-semibold ${r.reactivation.amount < 0 ? "text-red-400" : "text-green-400"}`}>{formatCurrency(Math.round(Math.abs(r.reactivation.amount)))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1385,16 +1385,16 @@ function ExpensePolicyFlags({ txns }: { txns: Txn[] }) {
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{flags.length} expense(s) to review</p></div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Payee", "Amount", "Violations"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {flags.map(f => (
                   <tr key={f.t.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(f.t.date)}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{f.t.counterparty || "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(f.t.amount)))}</td>
-                    <td className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{f.reasons.map(r => <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{r}</span>)}</div></td>
+                    <td data-label="Date" className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(f.t.date)}</td>
+                    <td data-label="Payee" className="px-4 py-2.5 font-medium text-xs">{f.t.counterparty || "-"}</td>
+                    <td data-label="Amount" className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(f.t.amount)))}</td>
+                    <td data-label="Violations" className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{f.reasons.map(r => <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{r}</span>)}</div></td>
                   </tr>
                 ))}
               </tbody>
@@ -1463,7 +1463,7 @@ function DutiesSeparation({ txns }: { txns: Txn[] }) {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Vendor", "Created by", "Approved by", "Status", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
@@ -1471,15 +1471,15 @@ function DutiesSeparation({ txns }: { txns: Txn[] }) {
                   const conflict = m.creator.trim().toLowerCase() === m.approver.trim().toLowerCase();
                   return (
                     <tr key={m.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium text-xs">{m.payee}</td>
-                      <td className="px-4 py-2.5 text-xs">{m.creator}</td>
-                      <td className="px-4 py-2.5 text-xs">{m.approver}</td>
-                      <td className="px-4 py-2.5">
+                      <td data-label="Vendor" className="px-4 py-2.5 font-medium text-xs">{m.payee}</td>
+                      <td data-label="Created by" className="px-4 py-2.5 text-xs">{m.creator}</td>
+                      <td data-label="Approved by" className="px-4 py-2.5 text-xs">{m.approver}</td>
+                      <td data-label="Status" className="px-4 py-2.5">
                         {conflict
                           ? <span className="inline-flex items-center gap-1 text-xs text-red-400 font-semibold"><AlertTriangle size={11} /> Same person</span>
                           : <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={11} /> Separated</span>}
                       </td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setMaps(maps.filter(x => x.id !== m.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setMaps(maps.filter(x => x.id !== m.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                     </tr>
                   );
                 })}
@@ -1539,15 +1539,15 @@ function VendorDedupe({ txns }: { txns: Txn[] }) {
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{pairs.length} possible duplicate vendor pair(s)</p></div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Vendor A", "Vendor B", "Why flagged"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {pairs.map((p, i) => (
                   <tr key={i} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium text-xs">{p.a}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{p.b}</td>
-                    <td className="px-4 py-2.5"><span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{p.reason}</span></td>
+                    <td data-label="Vendor A" className="px-4 py-2.5 font-medium text-xs">{p.a}</td>
+                    <td data-label="Vendor B" className="px-4 py-2.5 font-medium text-xs">{p.b}</td>
+                    <td data-label="Why flagged" className="px-4 py-2.5"><span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{p.reason}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -1603,17 +1603,17 @@ function RefundAnomalies({ txns }: { txns: Txn[] }) {
           </div>
           <div className={`${CARD} overflow-hidden`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rcard">
                 <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Counterparty", "Amount", "Flags", "Description"].map(h =>
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {flags.map(f => (
                     <tr key={f.t.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(f.t.date)}</td>
-                      <td className="px-4 py-2.5 font-medium text-xs">{f.t.counterparty || "-"}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{formatCurrency(Math.round(Math.abs(f.t.amount)))}</td>
-                      <td className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{f.reasons.map(r => <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{r}</span>)}</div></td>
-                      <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[220px] truncate">{f.t.description}</td>
+                      <td data-label="Date" className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(f.t.date)}</td>
+                      <td data-label="Counterparty" className="px-4 py-2.5 font-medium text-xs">{f.t.counterparty || "-"}</td>
+                      <td data-label="Amount" className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{formatCurrency(Math.round(Math.abs(f.t.amount)))}</td>
+                      <td data-label="Flags" className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{f.reasons.map(r => <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{r}</span>)}</div></td>
+                      <td data-label="Description" className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[220px] truncate">{f.t.description}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1678,18 +1678,18 @@ function RecurringChargeWatch({ txns }: { txns: Txn[] }) {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Payee", "Started", "Charges", "Latest", "Change", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {result.map((r, i) => (
                   <tr key={i} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium text-xs">{r.payee}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(r.firstDate)}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{r.count}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(r.latest))}</td>
-                    <td className={`px-4 py-2.5 tabular-nums text-xs ${r.changePct >= 15 ? "text-orange-400 font-semibold" : "text-[var(--color-muted)]"}`}>{r.changePct > 0 ? "+" : ""}{r.changePct}%</td>
-                    <td className="px-4 py-2.5">{r.isNew && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-950/30 text-yellow-400 border border-yellow-800/40">New</span>}</td>
+                    <td data-label="Payee" className="px-4 py-2.5 font-medium text-xs">{r.payee}</td>
+                    <td data-label="Started" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(r.firstDate)}</td>
+                    <td data-label="Charges" className="px-4 py-2.5 tabular-nums text-xs">{r.count}</td>
+                    <td data-label="Latest" className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(r.latest))}</td>
+                    <td data-label="Change" className={`px-4 py-2.5 tabular-nums text-xs ${r.changePct >= 15 ? "text-orange-400 font-semibold" : "text-[var(--color-muted)]"}`}>{r.changePct > 0 ? "+" : ""}{r.changePct}%</td>
+                    <td data-label="" className="px-4 py-2.5">{r.isNew && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-950/30 text-yellow-400 border border-yellow-800/40">New</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1773,20 +1773,20 @@ function FakeItcRisk({ txns }: { txns: Txn[] }) {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Supplier", "GSTIN", "Risk markers", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {analysed.map(a => (
                   <tr key={a.rec.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium text-xs">{a.rec.vendor}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{a.rec.gstin}</td>
-                    <td className="px-4 py-2.5">
+                    <td data-label="Supplier" className="px-4 py-2.5 font-medium text-xs">{a.rec.vendor}</td>
+                    <td data-label="GSTIN" className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{a.rec.gstin}</td>
+                    <td data-label="Risk markers" className="px-4 py-2.5">
                       {a.reasons.length === 0
                         ? <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={11} /> Looks valid</span>
                         : <div className="flex flex-wrap gap-1">{a.reasons.map(r => <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">{r}</span>)}</div>}
                     </td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => setRecs(recs.filter(x => x.id !== a.rec.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setRecs(recs.filter(x => x.id !== a.rec.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1846,23 +1846,23 @@ function IpAllowlistRegister() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Label", "Type", "Value", "Added", "Status", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {entries.map(e => (
                   <tr key={e.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium text-xs">{e.label}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{e.kind === "ip" ? "IP / CIDR" : "Device"}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{e.value}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(e.addedAt)}</td>
-                    <td className="px-4 py-2.5">
+                    <td data-label="Label" className="px-4 py-2.5 font-medium text-xs">{e.label}</td>
+                    <td data-label="Type" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{e.kind === "ip" ? "IP / CIDR" : "Device"}</td>
+                    <td data-label="Value" className="px-4 py-2.5 tabular-nums text-xs">{e.value}</td>
+                    <td data-label="Added" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(e.addedAt)}</td>
+                    <td data-label="Status" className="px-4 py-2.5">
                       <button onClick={() => setEntries(entries.map(x => x.id === e.id ? { ...x, trusted: !x.trusted } : x))}
                         className={`text-[9px] px-2 py-0.5 rounded-full border font-medium ${e.trusted ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
                         {e.trusted ? "Trusted" : "Revoked"}
                       </button>
                     </td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => setEntries(entries.filter(x => x.id !== e.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setEntries(entries.filter(x => x.id !== e.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1949,18 +1949,18 @@ function DataExportAudit() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["When", "By", "Dataset", "Rows", "Reason", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {logs.map(l => (
                   <tr key={l.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(l.at.slice(0, 10))}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{l.who}</td>
-                    <td className="px-4 py-2.5 text-xs">{l.what}{l.containsPii && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">PII</span>}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{l.rows || "-"}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[220px] truncate">{l.reason}</td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => setLogs(logs.filter(x => x.id !== l.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    <td data-label="When" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(l.at.slice(0, 10))}</td>
+                    <td data-label="By" className="px-4 py-2.5 font-medium text-xs">{l.who}</td>
+                    <td data-label="Dataset" className="px-4 py-2.5 text-xs">{l.what}{l.containsPii && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-800/40">PII</span>}</td>
+                    <td data-label="Rows" className="px-4 py-2.5 tabular-nums text-xs">{l.rows || "-"}</td>
+                    <td data-label="Reason" className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[220px] truncate">{l.reason}</td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setLogs(logs.filter(x => x.id !== l.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -2031,20 +2031,20 @@ function KeyRotationReminder() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Credential", "Last rotated", "Age", "Due", "Status", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {rows.map(r => (
                   <tr key={r.c.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 font-medium text-xs">{r.c.name}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(r.c.lastRotated)}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{r.age}d</td>
-                    <td className={`px-4 py-2.5 tabular-nums text-xs ${r.state === "overdue" ? "text-red-400 font-semibold" : r.state === "soon" ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>{r.dueIn < 0 ? `${-r.dueIn}d overdue` : `in ${r.dueIn}d`}</td>
-                    <td className="px-4 py-2.5">
+                    <td data-label="Credential" className="px-4 py-2.5 font-medium text-xs">{r.c.name}</td>
+                    <td data-label="Last rotated" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(r.c.lastRotated)}</td>
+                    <td data-label="Age" className="px-4 py-2.5 tabular-nums text-xs">{r.age}d</td>
+                    <td data-label="Due" className={`px-4 py-2.5 tabular-nums text-xs ${r.state === "overdue" ? "text-red-400 font-semibold" : r.state === "soon" ? "text-yellow-400" : "text-[var(--color-muted)]"}`}>{r.dueIn < 0 ? `${-r.dueIn}d overdue` : `in ${r.dueIn}d`}</td>
+                    <td data-label="Status" className="px-4 py-2.5">
                       <span className={`text-[9px] px-2 py-0.5 rounded-full border font-medium ${r.state === "overdue" ? "bg-red-950/30 text-red-400 border-red-800/40" : r.state === "soon" ? "bg-yellow-950/30 text-yellow-400 border-yellow-800/40" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>{r.state === "overdue" ? "Overdue" : r.state === "soon" ? "Due soon" : "OK"}</span>
                     </td>
-                    <td className="px-4 py-2.5 text-right space-x-2">
+                    <td data-label="" className="px-4 py-2.5 text-right space-x-2">
                       <button onClick={() => setCreds(creds.map(x => x.id === r.c.id ? { ...x, lastRotated: today } : x))} className="text-[10px] text-[var(--color-primary)] hover:underline">Mark rotated</button>
                       <button onClick={() => setCreds(creds.filter(x => x.id !== r.c.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button>
                     </td>
@@ -2134,16 +2134,16 @@ function CashSpikeMonitor({ txns }: { txns: Txn[] }) {
             <div className={`${CARD} overflow-hidden`}>
               <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{result.bigSingles.length} single cash transaction(s) ≥ {formatCurrency(threshold)}</p></div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm rcard">
                   <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Counterparty", "Amount", "Description"].map(h =>
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
                   <tbody className="divide-y divide-[var(--color-border)]">
                     {result.bigSingles.map(t => (
                       <tr key={t.id} className="hover:bg-white/2">
-                        <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
-                        <td className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "-"}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
-                        <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{t.description}</td>
+                        <td data-label="Date" className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
+                        <td data-label="Counterparty" className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "-"}</td>
+                        <td data-label="Amount" className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
+                        <td data-label="Description" className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{t.description}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -2212,17 +2212,17 @@ function SensitiveActionLog() {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["When", "By", "Action", "Detail", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {logs.map(l => (
                   <tr key={l.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(l.at.slice(0, 10))}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{l.actor}</td>
-                    <td className="px-4 py-2.5"><span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent)] text-[var(--color-text)] border border-[var(--color-border)]">{l.action}</span></td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[240px] truncate">{l.detail || "-"}</td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => setLogs(logs.filter(x => x.id !== l.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                    <td data-label="When" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{safeFormatDate(l.at.slice(0, 10))}</td>
+                    <td data-label="By" className="px-4 py-2.5 font-medium text-xs">{l.actor}</td>
+                    <td data-label="Action" className="px-4 py-2.5"><span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent)] text-[var(--color-text)] border border-[var(--color-border)]">{l.action}</span></td>
+                    <td data-label="Detail" className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[240px] truncate">{l.detail || "-"}</td>
+                    <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setLogs(logs.filter(x => x.id !== l.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -2278,16 +2278,16 @@ function RoundAmountFlags({ txns }: { txns: Txn[] }) {
             <p className="text-xs text-[var(--color-muted)] tabular-nums">{formatCurrency(Math.round(total))} total</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "Payee", "Amount", "Description"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {flagged.map(t => (
                   <tr key={t.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{t.description}</td>
+                    <td data-label="Date" className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
+                    <td data-label="Payee" className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "-"}</td>
+                    <td data-label="Amount" className="px-4 py-2.5 tabular-nums text-orange-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
+                    <td data-label="Description" className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{t.description}</td>
                   </tr>
                 ))}
               </tbody>
@@ -2370,7 +2370,7 @@ function PayrollVendorBankMatch({ txns }: { txns: Txn[] }) {
       ) : (
         <div className={`${CARD} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Employee", "Account", "Status", ""].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
@@ -2378,14 +2378,14 @@ function PayrollVendorBankMatch({ txns }: { txns: Txn[] }) {
                   const flagged = collisions.some(c => c.staff.id === s.id);
                   return (
                     <tr key={s.id} className="hover:bg-white/2">
-                      <td className="px-4 py-2.5 font-medium text-xs">{s.name}</td>
-                      <td className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{s.account}</td>
-                      <td className="px-4 py-2.5">
+                      <td data-label="Employee" className="px-4 py-2.5 font-medium text-xs">{s.name}</td>
+                      <td data-label="Account" className="px-4 py-2.5 tabular-nums text-xs text-[var(--color-muted)]">{s.account}</td>
+                      <td data-label="Status" className="px-4 py-2.5">
                         {flagged
                           ? <span className="inline-flex items-center gap-1 text-xs text-red-400 font-semibold"><AlertTriangle size={11} /> Name overlap</span>
                           : <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold"><CheckCircle2 size={11} /> Clear</span>}
                       </td>
-                      <td className="px-4 py-2.5 text-right"><button onClick={() => setStaff(staff.filter(x => x.id !== s.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
+                      <td data-label="" className="px-4 py-2.5 text-right"><button onClick={() => setStaff(staff.filter(x => x.id !== s.id))} className="text-[10px] text-[var(--color-muted)] hover:text-red-400">Remove</button></td>
                     </tr>
                   );
                 })}
@@ -2443,16 +2443,16 @@ function NewAccountOverLimit({ txns }: { txns: Txn[] }) {
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-[var(--color-border)]"><p className="text-sm font-semibold">{flagged.length} high-risk payment(s) - suspects, confirm</p></div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rcard">
               <thead className="border-b border-[var(--color-border)]"><tr>{["Date", "New payee", "Amount", "Description"].map(h =>
                 <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {flagged.map(t => (
                   <tr key={t.id} className="hover:bg-white/2">
-                    <td className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
-                    <td className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "(blank)"}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{t.description}</td>
+                    <td data-label="Date" className="px-4 py-2.5 tabular-nums text-xs">{safeFormatDate(t.date)}</td>
+                    <td data-label="New payee" className="px-4 py-2.5 font-medium text-xs">{t.counterparty || "(blank)"}</td>
+                    <td data-label="Amount" className="px-4 py-2.5 tabular-nums text-red-400 font-semibold">{formatCurrency(Math.round(Math.abs(t.amount)))}</td>
+                    <td data-label="Description" className="px-4 py-2.5 text-xs text-[var(--color-muted)] max-w-[260px] truncate">{t.description}</td>
                   </tr>
                 ))}
               </tbody>

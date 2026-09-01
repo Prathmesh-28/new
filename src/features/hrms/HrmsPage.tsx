@@ -207,7 +207,7 @@ function SkeletonRows({ cols, rows = 6 }: { cols: number; rows?: number }) {
       {Array.from({ length: rows }).map((_, r) => (
         <tr key={r} className="border-b border-[var(--color-border)]">
           {Array.from({ length: cols }).map((__, c) => (
-            <td key={c} className="px-3 py-3">
+            <td key={c} data-label="" className="px-3 py-3">
               <div className="h-3 rounded bg-[var(--color-border)] animate-pulse" style={{ width: `${40 + ((r + c) % 4) * 15}%` }} />
             </td>
           ))}
@@ -225,7 +225,7 @@ const thCls = "px-3 py-2.5 text-left text-[10px] font-semibold uppercase trackin
 const cardCls = "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg";
 
 function EmptyRow({ cols, text }: { cols: number; text: string }) {
-  return <tr><td colSpan={cols} className="px-3 py-8 text-center text-[var(--color-muted)]">{text}</td></tr>;
+  return <tr><td data-label="" colSpan={cols} className="px-3 py-8 text-center text-[var(--color-muted)]">{text}</td></tr>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -379,7 +379,7 @@ function EmployeesTab({ loading, employees, canWrite, onReload }: {
       ) : (
       <div className={`${cardCls} overflow-hidden`}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
+          <table className="w-full text-sm border-collapse rcard">
             <thead><tr className="border-b border-[var(--color-border)]">
               <th className={thCls}>Name</th><th className={thCls}>Department</th><th className={thCls}>Designation</th><th className={thCls}>Status</th>
               {canWrite && <th className={`${thCls} text-right`}>Actions</th>}
@@ -388,12 +388,12 @@ function EmployeesTab({ loading, employees, canWrite, onReload }: {
               {loading ? <SkeletonRows cols={canWrite ? 5 : 4} />
                 : employees.map((emp) => (
                   <tr key={emp.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-bg)]/40">
-                    <td className="px-3 py-2.5 font-medium">{emp.name}</td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{emp.department || "-"}</td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{emp.designation || "-"}</td>
-                    <td className="px-3 py-2.5"><EmpStatusPill status={emp.status} /></td>
+                    <td data-label="Name" className="px-3 py-2.5 font-medium">{emp.name}</td>
+                    <td data-label="Department" className="px-3 py-2.5 text-[var(--color-muted)]">{emp.department || "-"}</td>
+                    <td data-label="Designation" className="px-3 py-2.5 text-[var(--color-muted)]">{emp.designation || "-"}</td>
+                    <td data-label="Status" className="px-3 py-2.5"><EmpStatusPill status={emp.status} /></td>
                     {canWrite && (
-                      <td className="px-3 py-2.5 text-right">
+                      <td data-label="" className="px-3 py-2.5 text-right">
                         <button type="button" disabled={busyId === emp.id} onClick={() => toggleStatus(emp)} className={btnGhost}>
                           {emp.status === "ACTIVE" ? "Deactivate" : "Reactivate"}
                         </button>
@@ -653,7 +653,7 @@ function LeaveTab({ employees, canWrite }: { employees: Employee[]; canWrite: bo
       {/* Applications */}
       <div className={`${cardCls} overflow-hidden`}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
+          <table className="w-full text-sm border-collapse rcard">
             <thead><tr className="border-b border-[var(--color-border)]">
               <th className={thCls}>Employee</th><th className={thCls}>Type</th><th className={thCls}>From</th><th className={thCls}>To</th>
               <th className={`${thCls} text-right`}>Days</th><th className={thCls}>Status</th>{canWrite && <th className={`${thCls} text-right`}>Decide</th>}
@@ -663,14 +663,14 @@ function LeaveTab({ employees, canWrite }: { employees: Employee[]; canWrite: bo
                 : requests.length === 0 ? <EmptyRow cols={canWrite ? 7 : 6} text="No leave applications." />
                 : requests.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-bg)]/40">
-                    <td className="px-3 py-2.5 font-medium">{empName(r.employee_id)}</td>
-                    <td className="px-3 py-2.5">{r.leave_type}</td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.from_date.slice(0, 10)}</td>
-                    <td className="px-3 py-2.5 text-[var(--color-muted)]">{r.to_date.slice(0, 10)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{r.days}</td>
-                    <td className="px-3 py-2.5"><LeaveStatusPill status={r.status} /></td>
+                    <td data-label="Employee" className="px-3 py-2.5 font-medium">{empName(r.employee_id)}</td>
+                    <td data-label="Type" className="px-3 py-2.5">{r.leave_type}</td>
+                    <td data-label="From" className="px-3 py-2.5 text-[var(--color-muted)]">{r.from_date.slice(0, 10)}</td>
+                    <td data-label="To" className="px-3 py-2.5 text-[var(--color-muted)]">{r.to_date.slice(0, 10)}</td>
+                    <td data-label="Days" className="px-3 py-2.5 text-right tabular-nums">{r.days}</td>
+                    <td data-label="Status" className="px-3 py-2.5"><LeaveStatusPill status={r.status} /></td>
                     {canWrite && (
-                      <td className="px-3 py-2.5 text-right">
+                      <td data-label="" className="px-3 py-2.5 text-right">
                         {r.status === "PENDING" ? (
                           <div className="inline-flex gap-1.5">
                             <button type="button" onClick={() => decide(r.id, true)} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-green-700/40 text-green-300 hover:bg-green-900/20"><CheckCircle2 size={13} /> Approve</button>
@@ -786,25 +786,25 @@ function StructuresTab({ employees, canWrite }: { employees: Employee[]; canWrit
           <p className="text-[11px] text-[var(--color-muted)]">Formulas may use <code className="text-[var(--color-text)]">base</code>, <code className="text-[var(--color-text)]">payment_days</code>, <code className="text-[var(--color-text)]">working_days</code> and other component abbreviations. Arithmetic only - no functions. e.g. <code className="text-[var(--color-text)]">base * 0.5</code></p>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
+            <table className="w-full text-sm border-collapse rcard">
               <thead><tr className="border-b border-[var(--color-border)]">
                 <th className={thCls}>Component</th><th className={thCls}>Type</th><th className={thCls}>Amount</th><th className={thCls}>Formula</th><th className={thCls}>Condition</th><th className={`${thCls} text-center`}>Prorate</th><th className={`${thCls} text-center`}>Stat.</th><th></th>
               </tr></thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={i} className="border-b border-[var(--color-border)]">
-                    <td className="px-2 py-1.5"><input value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} placeholder="Name" className={inputCls} /></td>
-                    <td className="px-2 py-1.5">
+                    <td data-label="Component" className="px-2 py-1.5"><input value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} placeholder="Name" className={inputCls} /></td>
+                    <td data-label="Type" className="px-2 py-1.5">
                       <select value={r.type} onChange={(e) => setRow(i, { type: e.target.value as CompType })} className={inputCls}>
                         <option value="earning">earning</option><option value="deduction">deduction</option>
                       </select>
                     </td>
-                    <td className="px-2 py-1.5"><input value={r.amount} onChange={(e) => setRow(i, { amount: e.target.value })} type="number" placeholder="0" className={`${inputCls} w-24`} /></td>
-                    <td className="px-2 py-1.5"><input value={r.formula} onChange={(e) => setRow(i, { formula: e.target.value })} placeholder="base * 0.5" className={`${inputCls} font-mono text-xs`} /></td>
-                    <td className="px-2 py-1.5"><input value={r.condition} onChange={(e) => setRow(i, { condition: e.target.value })} placeholder="base > 10000" className={`${inputCls} font-mono text-xs`} /></td>
-                    <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={r.dependsOnPaymentDays} onChange={(e) => setRow(i, { dependsOnPaymentDays: e.target.checked })} /></td>
-                    <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={r.statutory} onChange={(e) => setRow(i, { statutory: e.target.checked })} /></td>
-                    <td className="px-2 py-1.5"><button type="button" onClick={() => delRow(i)} className="text-[var(--color-muted)] hover:text-red-300"><Trash2 size={14} /></button></td>
+                    <td data-label="Amount" className="px-2 py-1.5"><input value={r.amount} onChange={(e) => setRow(i, { amount: e.target.value })} type="number" placeholder="0" className={`${inputCls} w-24`} /></td>
+                    <td data-label="Formula" className="px-2 py-1.5"><input value={r.formula} onChange={(e) => setRow(i, { formula: e.target.value })} placeholder="base * 0.5" className={`${inputCls} font-mono text-xs`} /></td>
+                    <td data-label="Condition" className="px-2 py-1.5"><input value={r.condition} onChange={(e) => setRow(i, { condition: e.target.value })} placeholder="base > 10000" className={`${inputCls} font-mono text-xs`} /></td>
+                    <td data-label="Prorate" className="px-2 py-1.5 text-center"><input type="checkbox" checked={r.dependsOnPaymentDays} onChange={(e) => setRow(i, { dependsOnPaymentDays: e.target.checked })} /></td>
+                    <td data-label="Stat." className="px-2 py-1.5 text-center"><input type="checkbox" checked={r.statutory} onChange={(e) => setRow(i, { statutory: e.target.checked })} /></td>
+                    <td data-label="" className="px-2 py-1.5"><button type="button" onClick={() => delRow(i)} aria-label="Remove component" className="text-[var(--color-muted)] hover:text-red-300"><Trash2 size={14} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -974,7 +974,7 @@ function PayrollTab({ canWrite }: { employees: Employee[]; canWrite: boolean }) 
 
       <div className={`${cardCls} overflow-hidden`}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
+          <table className="w-full text-sm border-collapse rcard">
             <thead><tr className="border-b border-[var(--color-border)]">
               <th className={thCls}>Month</th><th className={`${thCls} text-right`}>Gross</th><th className={`${thCls} text-right`}>Deductions</th><th className={`${thCls} text-right`}>Net</th><th className={thCls}>Journal</th><th></th>
             </tr></thead>
@@ -984,15 +984,15 @@ function PayrollTab({ canWrite }: { employees: Employee[]; canWrite: boolean }) 
                 : runs.map((r) => (
                   <Fragment key={r.id}>
                     <tr className="border-b border-[var(--color-border)] hover:bg-[var(--color-bg)]/40">
-                      <td className="px-3 py-2.5 font-medium">{r.run_month}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{rupee(r.gross)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums text-red-300">{rupee(r.total_deduction)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums text-[var(--color-primary)]">{rupee(r.net)}</td>
-                      <td className="px-3 py-2.5">{r.voucher_id ? <Pill text="POSTED" cls="bg-green-900/30 text-green-300 border border-green-700/40" /> : "-"}</td>
-                      <td className="px-3 py-2.5 text-right"><button type="button" onClick={() => viewSlips(r.id)} className={btnGhost}><FileText size={13} /> {openRun === r.id ? "Hide" : "Payslips"}</button></td>
+                      <td data-label="Month" className="px-3 py-2.5 font-medium">{r.run_month}</td>
+                      <td data-label="Gross" className="px-3 py-2.5 text-right tabular-nums">{rupee(r.gross)}</td>
+                      <td data-label="Deductions" className="px-3 py-2.5 text-right tabular-nums text-red-300">{rupee(r.total_deduction)}</td>
+                      <td data-label="Net" className="px-3 py-2.5 text-right tabular-nums text-[var(--color-primary)]">{rupee(r.net)}</td>
+                      <td data-label="Journal" className="px-3 py-2.5">{r.voucher_id ? <Pill text="POSTED" cls="bg-green-900/30 text-green-300 border border-green-700/40" /> : "-"}</td>
+                      <td data-label="" className="px-3 py-2.5 text-right"><button type="button" onClick={() => viewSlips(r.id)} className={btnGhost}><FileText size={13} /> {openRun === r.id ? "Hide" : "Payslips"}</button></td>
                     </tr>
                     {openRun === r.id && (
-                      <tr><td colSpan={6} className="px-3 py-3 bg-[var(--color-bg)]/30">
+                      <tr><td data-label="" colSpan={6} className="px-3 py-3 bg-[var(--color-bg)]/30">
                         <div className="space-y-3">
                           {slips.length === 0 ? <p className="text-sm text-[var(--color-muted)]">No payslips.</p> : slips.map((s) => (
                             <PayslipCard key={s.id} slip={s} />

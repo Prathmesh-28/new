@@ -324,6 +324,53 @@ router.post("/logout", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Change the sign-in email (Wave 14) ──────────────────────────────────────
+// There was no way to change your email at all. Two steps, both mandatory:
+//   1. prove you are you (current password),
+//   2. prove the NEW address is yours (OTP sent to it) — before it becomes the login.
+// The old address is notified either way, because a silent email change is exactly what
+// an account thief does first.
+router.post("/change-email", authenticate, async (req, res, next) => {
+  try {
+    const newEmail = String(req.body?.newEmail || "").trim().toLowerCase();
+    const password = String(req.body?.password || "");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(newEmail)) return res.status(400).json({ error: "That doesn't look like an email address", errors: { newEmail: "Check the address" } });
+    const { rows: [u] } = await pool.query("SELECT * FROM users WHERE id=$1", [req.user.id]);
+    if (!u || !(await bcrypt.compare(password, u.password))) return res.status(403).json({ error: "Your current password didn't match", errors: { password: "Wrong password" } });
+    if (newEmail === u.email) return res.status(400).json({ error: "That's already your email" });
+    const taken = await pool.query("SELECT 1 FROM users WHERE lower(email)=$1", [newEmail]);
+    if (taken.rows[0]) return res.status(409).json({ error: "That address is already used by another account" });
+
+    const otp = crypto.randomInt(100000, 999999).toString();
+    await pool.query(
+      "UPDATE users SET pending_email=$2, pending_email_otp=$3, pending_email_otp_expiry=now() + interval '15 minutes' WHERE id=$1",
+      [u.id, newEmail, await bcrypt.hash(otp, 10)]);
+    await sendMail({ to: newEmail, subject: "Confirm your new Headroom email",
+      html: `<p>Enter this code in Headroom to make <strong>${newEmail}</strong> your sign-in email:</p><p style="font-size:24px;font-weight:700;letter-spacing:4px">${otp}</p><p>It expires in 15 minutes. If you didn't ask for this, ignore it — nothing changes without the code.</p>` });
+    res.json({ ok: true, sent_to: newEmail });
+  } catch (e) { next(e); }
+});
+
+router.post("/confirm-change-email", authenticate, async (req, res, next) => {
+  try {
+    const otp = String(req.body?.otp || "").trim();
+    const { rows: [u] } = await pool.query("SELECT * FROM users WHERE id=$1", [req.user.id]);
+    if (!u?.pending_email || !u.pending_email_otp) return res.status(400).json({ error: "There's no email change in progress" });
+    if (new Date(u.pending_email_otp_expiry) < new Date()) return res.status(400).json({ error: "That code expired — start again" });
+    if (!(await bcrypt.compare(otp, u.pending_email_otp))) return res.status(400).json({ error: "That code isn't right", errors: { otp: "Check the code" } });
+
+    const oldEmail = u.email;
+    await pool.query(
+      "UPDATE users SET email=$2, pending_email=NULL, pending_email_otp=NULL, pending_email_otp_expiry=NULL WHERE id=$1",
+      [u.id, u.pending_email]);
+    writeAudit(u.id, "email_changed", "user", u.id, { from: oldEmail, to: u.pending_email }, u.tenant_id);
+    // Tell the OLD address — the person a thief locked out deserves to find out immediately.
+    sendMail({ to: oldEmail, subject: "Your Headroom sign-in email was changed",
+      html: `<p>Your sign-in email was changed to <strong>${u.pending_email}</strong>. If this was you, no action needed. If it wasn't, reply to this email straight away and change your password from a device where you're still signed in.</p>` }).catch(() => {});
+    res.json({ ok: true, email: u.pending_email });
+  } catch (e) { next(e); }
+});
+
 // ── GET /auth/sessions — where am I signed in? ──────────────────────────────
 router.get("/sessions", authenticate, async (req, res, next) => {
   try {

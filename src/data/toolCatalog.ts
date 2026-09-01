@@ -34,6 +34,7 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
   { label: "Merge duplicate customers", path: "/customers", group: "Sales", keywords: ["merge", "duplicate", "dedupe", "customer"] },
   { label: "Trash (restore deleted records)", path: "/trash", group: "Administration", keywords: ["trash", "bin", "restore", "undo", "deleted", "recover"] },
   { label: "Reports home", path: "/reports", group: "Planning", keywords: ["reports", "schedule", "email report", "summary", "daily", "weekly"] },
+  { label: "Items (stock master)", path: "/items", group: "Operations", keywords: ["items", "products", "stock", "inventory", "hsn", "reorder"] },
   { label: "Email me a daily business summary", path: "/reports", group: "Planning", keywords: ["digest", "summary", "email", "schedule"] },
   { label: "Sales forecast", path: "/sales?tab=forecast", group: "Sales", keywords: ["revenue", "pipeline forecast"] },
   { label: "Renewal tracker", path: "/sales?tab=renewals", group: "Sales", keywords: ["renewal", "retention", "churn"] },

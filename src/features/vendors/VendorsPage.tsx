@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth, differenceInDays, parseISO } from "date-fns";
 import DatePicker from "@/components/DatePicker";
 import { useApAging, AP_BUCKET_META, AP_BUCKET_KEYS } from "@/lib/apAging";
+import { useConfirm } from "@/components/ui/Confirm";
 
 /* ─────────────────────────────────────────────────────────────────────────
    Vendor master record - REAL persistence via /api/vendors (GET/POST/PATCH/DELETE).
@@ -148,6 +149,7 @@ function VendorProfileModal({
     notes: initial?.notes ?? "",
   });
   const [saving, setSaving] = useState(false);
+  const confirm = useConfirm();
 
   const set = <K extends keyof VendorDraft>(k: K, v: VendorDraft[K]) => setForm(f => ({ ...f, [k]: v }));
 
@@ -196,7 +198,12 @@ function VendorProfileModal({
 
   const handleDelete = async () => {
     if (!initial || !onDelete) return;
-    if (!window.confirm(`Delete vendor profile for ${initial.name}? Spend history from transactions is unaffected.`)) return;
+    if (!await confirm({
+      title: `Delete vendor profile for ${initial.name}?`,
+      body: "Spend history from transactions is unaffected.",
+      danger: true,
+      confirmLabel: "Delete",
+    })) return;
     setSaving(true);
     const ok = await onDelete(initial.id);
     setSaving(false);
@@ -211,7 +218,7 @@ function VendorProfileModal({
             <Building2 size={16} className="text-[var(--color-primary)]" />
             {initial ? "Edit Vendor Profile" : "New Vendor Profile"}
           </h2>
-          <button onClick={onClose}><X size={16} className="text-[var(--color-muted)]" /></button>
+          <button aria-label="Close" onClick={onClose}><X size={16} className="text-[var(--color-muted)]" /></button>
         </div>
         <p className="text-xs text-[var(--color-muted)]">Master record - saved to the server and shared across the MSME, TDS, terms and KYC tabs.</p>
 
@@ -371,7 +378,7 @@ function ScheduleModal({ vendor, onClose }: { vendor: Vendor; onClose: () => voi
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-md space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold">Schedule Payment</h2>
-          <button onClick={onClose}><X size={16} className="text-[var(--color-muted)]" /></button>
+          <button aria-label="Close" onClick={onClose}><X size={16} className="text-[var(--color-muted)]" /></button>
         </div>
         <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3">
           <p className="text-sm font-semibold">{vendor.name}</p>
@@ -750,7 +757,7 @@ export default function VendorsPage() {
             )
           ) : (
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-              <table className="w-full text-sm min-w-[620px]">
+              <table className="w-full text-sm rcard min-w-[620px]">
                 <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
                   <tr>
                     <th className="px-4 py-3 text-left w-10">
@@ -781,7 +788,7 @@ export default function VendorsPage() {
                     const prof = masterByName[v.name.toLowerCase()];
                     return (
                     <tr key={i} className="hover:bg-white/2 transition-colors cursor-pointer" onClick={() => setProfileEdit({ record: prof ?? null, presetName: v.name })}>
-                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                      <td data-label="" className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <input type="checkbox"
                           aria-label={prof ? `Select ${v.name}` : `${v.name} has no saved profile`}
                           title={prof ? undefined : "Add a profile to bulk-edit this vendor"}
@@ -790,7 +797,7 @@ export default function VendorsPage() {
                           onChange={() => prof && toggleSelect(prof.id)}
                           className="accent-[var(--color-primary)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-30" />
                       </td>
-                      <td className="px-4 py-3">
+                      <td data-label="Vendor" className="px-4 py-3">
                         <p className="font-medium text-sm flex items-center gap-1.5">
                           {v.name}
                           {prof && <span title="Has a saved profile" className="inline-flex"><BadgeCheck size={12} className="text-[var(--color-primary)]" /></span>}
@@ -802,24 +809,24 @@ export default function VendorsPage() {
                           {prof?.gstin && ` · ${prof.gstin}`}
                         </p>
                       </td>
-                      <td className="px-4 py-3 hidden md:table-cell">
+                      <td data-label="Category" className="px-4 py-3 hidden md:table-cell">
                         <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${CATEGORY_COLOR[v.category]}`}>
                           {CATEGORY_LABEL[v.category] ?? v.category}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums font-semibold text-red-400">{formatAmount(v.totalSpend)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)] hidden lg:table-cell">
+                      <td data-label="Total Spend" className="px-4 py-3 text-right tabular-nums font-semibold text-red-400">{formatAmount(v.totalSpend)}</td>
+                      <td data-label="This Month" className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)] hidden lg:table-cell">
                         {v.thisMonth > 0 ? formatAmount(v.thisMonth) : "-"}
                       </td>
-                      <td className="px-4 py-3 text-center hidden lg:table-cell">
+                      <td data-label="Trend" className="px-4 py-3 text-center hidden lg:table-cell">
                         {v.trend === "up" ? <span title="Spend up vs last month"><TrendingUp size={13} className="text-red-400 mx-auto" /></span>
                           : v.trend === "down" ? <span title="Spend down vs last month"><TrendingDown size={13} className="text-green-400 mx-auto" /></span>
                           : <span className="text-[var(--color-muted)] text-xs">-</span>}
                       </td>
-                      <td className="px-4 py-3 text-right text-xs text-[var(--color-muted)] hidden md:table-cell">
+                      <td data-label="Last Paid" className="px-4 py-3 text-right text-xs text-[var(--color-muted)] hidden md:table-cell">
                         {v.lastPayment ? new Date(v.lastPayment).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "-"}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td data-label="" className="px-4 py-3 text-right">
                         <div className="flex items-center gap-1.5 justify-end">
                           <button onClick={(e) => { e.stopPropagation(); setProfileEdit({ record: prof ?? null, presetName: v.name }); }}
                             className="flex items-center gap-1 text-xs border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 px-2.5 py-1.5 rounded-lg transition-colors">
@@ -900,7 +907,7 @@ export default function VendorsPage() {
               </div>
             ) : (
               <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-                <table className="w-full text-sm min-w-[520px]">
+                <table className="w-full text-sm rcard min-w-[520px]">
                   <thead>
                     <tr className="border-b border-[var(--color-border)]">
                       {["Vendor / Obligation","Amount","Due Date","Days Since Due","MSME Status"].map(h => (
@@ -915,13 +922,13 @@ export default function VendorsPage() {
                       const isPending  = o.daysSinceDue > 0;
                       return (
                         <tr key={o.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-accent)]">
-                          <td className="px-4 py-3 font-medium">{o.name}</td>
-                          <td className="px-4 py-3 tabular-nums font-semibold">{formatCurrency(o.amount)}</td>
-                          <td className="px-4 py-3 text-[var(--color-muted)] text-xs">{new Date(o.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td>
-                          <td className={`px-4 py-3 tabular-nums font-bold ${isBreached ? "text-red-400" : isWarning ? "text-orange-400" : isPending ? "text-yellow-400" : "text-green-400"}`}>
+                          <td data-label="Vendor / Obligation" className="px-4 py-3 font-medium">{o.name}</td>
+                          <td data-label="Amount" className="px-4 py-3 tabular-nums font-semibold">{formatCurrency(o.amount)}</td>
+                          <td data-label="Due Date" className="px-4 py-3 text-[var(--color-muted)] text-xs">{new Date(o.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td>
+                          <td data-label="Days Since Due" className={`px-4 py-3 tabular-nums font-bold ${isBreached ? "text-red-400" : isWarning ? "text-orange-400" : isPending ? "text-yellow-400" : "text-green-400"}`}>
                             {o.daysSinceDue > 0 ? `${o.daysSinceDue}d overdue` : `Due in ${Math.abs(o.daysSinceDue)}d`}
                           </td>
-                          <td className="px-4 py-3">
+                          <td data-label="MSME Status" className="px-4 py-3">
                             {isBreached ? (
                               <span className="text-xs font-bold px-2 py-0.5 rounded border bg-red-950/30 text-red-400 border-red-800/30 flex items-center gap-1 w-fit">
                                 <ShieldAlert size={10} /> Breach - ITR disclosure
@@ -1115,7 +1122,7 @@ function PurchaseOrderManager() {
                 <input value={l.desc} onChange={e => setLines(prev => prev.map((x, j) => j === i ? { ...x, desc: e.target.value } : x))} placeholder="Description" className={inpCls} />
                 <input type="number" min="0" value={l.qty} onChange={e => setLines(prev => prev.map((x, j) => j === i ? { ...x, qty: parseFloat(e.target.value) || 0 } : x))} placeholder="Qty" className={inpCls} />
                 <input type="number" min="0" value={l.rate} onChange={e => setLines(prev => prev.map((x, j) => j === i ? { ...x, rate: parseFloat(e.target.value) || 0 } : x))} placeholder="Rate" className={inpCls} />
-                <button onClick={() => setLines(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : prev)} className="text-[var(--color-muted)] hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                <button aria-label="Remove line item" onClick={() => setLines(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : prev)} className="text-[var(--color-muted)] hover:text-red-400 p-1"><Trash2 size={14} /></button>
               </div>
             ))}
             <button onClick={() => setLines(prev => [...prev, { id: crypto.randomUUID(), desc: "", qty: 1, rate: 0 }])} className="text-xs text-[var(--color-primary)] hover:underline">+ Add line</button>
@@ -1139,7 +1146,7 @@ function PurchaseOrderManager() {
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[680px]">
+          <table className="w-full text-sm rcard min-w-[680px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["PO #", "Vendor", "Date", "Expected", "Amount", "Status", ""].map((h, i) => (
@@ -1150,18 +1157,18 @@ function PurchaseOrderManager() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {pos.map(po => (
                 <tr key={po.id} className="hover:bg-white/2">
-                  <td className="px-4 py-3 font-mono text-xs font-semibold">{po.poNumber}</td>
-                  <td className="px-4 py-3 font-medium">{po.vendor}</td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(po.date), "dd MMM")}</td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(po.expectedDelivery), "dd MMM")}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(poTotal(po))}</td>
-                  <td className="px-4 py-3">
+                  <td data-label="PO #" className="px-4 py-3 font-mono text-xs font-semibold">{po.poNumber}</td>
+                  <td data-label="Vendor" className="px-4 py-3 font-medium">{po.vendor}</td>
+                  <td data-label="Date" className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(po.date), "dd MMM")}</td>
+                  <td data-label="Expected" className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(po.expectedDelivery), "dd MMM")}</td>
+                  <td data-label="Amount" className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(poTotal(po))}</td>
+                  <td data-label="Status" className="px-4 py-3">
                     <select value={po.status} onChange={e => setStatus(po.id, e.target.value as PoStatus)}
                       className={`text-[10px] font-bold px-2 py-1 rounded-full border outline-none cursor-pointer ${PO_STATUS_META[po.status].cls}`}>
                       {(Object.keys(PO_STATUS_META) as PoStatus[]).map(s => <option key={s} value={s}>{PO_STATUS_META[s].label}</option>)}
                     </select>
                   </td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => remove(po.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button></td>
+                  <td data-label="" className="px-4 py-3 text-right"><button aria-label="Delete purchase order" onClick={() => remove(po.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -1279,7 +1286,7 @@ function ThreeWayMatch() {
                     </p>
                     <p className="text-[11px] text-[var(--color-muted)] mt-1 tabular-nums">PO {r.poQty}×{formatCurrency(r.poRate)} · GRN {r.grnQty} · Inv {r.invQty}×{formatCurrency(r.invRate)} · tol {r.tolerancePct}%</p>
                   </div>
-                  <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={14} /></button>
+                  <button aria-label="Delete match record" onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={14} /></button>
                 </div>
                 {e.ok ? (
                   <p className="text-xs text-green-400 mt-2">Matched - safe to approve for payment.</p>
@@ -1379,7 +1386,7 @@ function VendorTdsLedger() {
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[720px]">
+          <table className="w-full text-sm rcard min-w-[720px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["Vendor", "Section", "Taxable Value", "Rate", "TDS", "Date", "Deposited?"].map((h, i) => (
@@ -1395,13 +1402,13 @@ function VendorTdsLedger() {
                 const dep = depositedSet.has(key);
                 return (
                   <tr key={`${e.voucherNumber}-${i}`} className="hover:bg-white/2">
-                    <td className="px-4 py-3 font-medium">{e.vendorName}</td>
-                    <td className="px-4 py-3"><span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded border bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]">{sectionLabel(e.section)}</span></td>
-                    <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(Number(e.taxableValue))}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-xs">{e.rate}%</td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-[var(--color-primary)]">{formatCurrency(Number(e.taxAmount))}</td>
-                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{e.date ? format(new Date(e.date), "dd MMM") : "-"}</td>
-                    <td className="px-4 py-3">
+                    <td data-label="Vendor" className="px-4 py-3 font-medium">{e.vendorName}</td>
+                    <td data-label="Section" className="px-4 py-3"><span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded border bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]">{sectionLabel(e.section)}</span></td>
+                    <td data-label="Taxable Value" className="px-4 py-3 text-right tabular-nums">{formatCurrency(Number(e.taxableValue))}</td>
+                    <td data-label="Rate" className="px-4 py-3 text-right tabular-nums text-xs">{e.rate}%</td>
+                    <td data-label="TDS" className="px-4 py-3 text-right tabular-nums font-semibold text-[var(--color-primary)]">{formatCurrency(Number(e.taxAmount))}</td>
+                    <td data-label="Date" className="px-4 py-3 text-xs text-[var(--color-muted)]">{e.date ? format(new Date(e.date), "dd MMM") : "-"}</td>
+                    <td data-label="Deposited?" className="px-4 py-3">
                       <button onClick={() => toggleDeposit(key)} title="Personal reminder only - not a real challan record" className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${dep ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-yellow-900/30 text-yellow-400 border-yellow-800/40"}`}>
                         {dep ? "Deposited" : "Pending"}
                       </button>
@@ -1571,7 +1578,7 @@ function VendorKycVault() {
                     </p>
                     {v.email && <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{v.email}</p>}
                   </div>
-                  <button onClick={() => remove(v.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={14} /></button>
+                  <button aria-label="Delete KYC record" onClick={() => remove(v.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={14} /></button>
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-3 text-[11px]">
                   <div><span className="text-[var(--color-muted)]">PAN: </span><span className="font-mono">{v.pan || "-"}</span></div>
@@ -1697,7 +1704,7 @@ function EarlyPaymentOptimizer() {
                       Effective annual yield <span className={`font-bold ${m.effAnnual > coc ? "text-green-400" : "text-red-400"}`}>{m.effAnnual.toFixed(1)}%</span> vs cost of capital {coc}% over {m.periodDays} days
                     </p>
                   </div>
-                  <button onClick={() => remove(o.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={14} /></button>
+                  <button aria-label="Delete discount offer" onClick={() => remove(o.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={14} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-3 mt-3">
                   <div><p className="text-[10px] text-[var(--color-muted)]">Discount saved</p><p className="text-sm font-semibold tabular-nums text-green-400">{formatCurrency(m.savings)}</p></div>
@@ -1809,7 +1816,7 @@ function PayRunScheduler() {
             </div>
             <button onClick={schedule} className="text-xs bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-4 py-1.5 rounded-lg hover:opacity-90">Check run vs balance</button>
           </div>
-          <table className="w-full text-sm min-w-[560px]">
+          <table className="w-full text-sm rcard min-w-[560px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["", "Payable", "Type", "Due", "Amount"].map((h, i) => (
@@ -1820,11 +1827,11 @@ function PayRunScheduler() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {payables.map(p => (
                 <tr key={p.id} className={`hover:bg-white/2 cursor-pointer ${selSet.has(p.id) ? "bg-[var(--color-primary)]/5" : ""}`} onClick={() => toggle(p.id)}>
-                  <td className="px-4 py-3"><input type="checkbox" checked={selSet.has(p.id)} readOnly className="accent-[var(--color-primary)]" /></td>
-                  <td className="px-4 py-3 font-medium max-w-[200px] truncate">{p.name}</td>
-                  <td className="px-4 py-3"><span className={`text-[10px] px-1.5 py-0.5 rounded border ${CATEGORY_COLOR[p.type] ?? "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{CATEGORY_LABEL[p.type] ?? p.type}</span></td>
-                  <td className="px-4 py-3 text-xs">{p.overdue > 0 ? <span className="text-red-400">{p.overdue}d overdue</span> : <span className="text-[var(--color-muted)]">{format(p.due, "dd MMM")}</span>}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(p.amount)}</td>
+                  <td data-label="" className="px-4 py-3"><input type="checkbox" checked={selSet.has(p.id)} readOnly className="accent-[var(--color-primary)]" /></td>
+                  <td data-label="Payable" className="px-4 py-3 font-medium max-w-[200px] truncate">{p.name}</td>
+                  <td data-label="Type" className="px-4 py-3"><span className={`text-[10px] px-1.5 py-0.5 rounded border ${CATEGORY_COLOR[p.type] ?? "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{CATEGORY_LABEL[p.type] ?? p.type}</span></td>
+                  <td data-label="Due" className="px-4 py-3 text-xs">{p.overdue > 0 ? <span className="text-red-400">{p.overdue}d overdue</span> : <span className="text-[var(--color-muted)]">{format(p.due, "dd MMM")}</span>}</td>
+                  <td data-label="Amount" className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(p.amount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1903,7 +1910,7 @@ function SpendAnalysis() {
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[420px]">
+          <table className="w-full text-sm rcard min-w-[420px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["#", "Vendor", "Spend", "Share", ""].map((h, i) => (
@@ -1917,11 +1924,11 @@ function SpendAnalysis() {
                 const risky = share >= threshold;
                 return (
                   <tr key={r.vendor} className="hover:bg-white/2">
-                    <td className="px-4 py-3 text-xs text-[var(--color-muted)] tabular-nums">{i + 1}</td>
-                    <td className="px-4 py-3 font-medium">{r.vendor} {risky && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-red-950/30 text-red-400 border-red-800/30 ml-1">RISK</span>}</td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-red-400">{formatAmount(r.spend)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-xs">{share.toFixed(1)}%</td>
-                    <td className="px-4 py-3 w-[120px]"><div className="h-1.5 rounded-full bg-[var(--color-bg)] overflow-hidden"><div className={`h-full ${risky ? "bg-red-400" : "bg-[var(--color-primary)]"}`} style={{ width: `${Math.min(share, 100)}%` }} /></div></td>
+                    <td data-label="#" className="px-4 py-3 text-xs text-[var(--color-muted)] tabular-nums">{i + 1}</td>
+                    <td data-label="Vendor" className="px-4 py-3 font-medium">{r.vendor} {risky && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-red-950/30 text-red-400 border-red-800/30 ml-1">RISK</span>}</td>
+                    <td data-label="Spend" className="px-4 py-3 text-right tabular-nums font-semibold text-red-400">{formatAmount(r.spend)}</td>
+                    <td data-label="Share" className="px-4 py-3 text-right tabular-nums text-xs">{share.toFixed(1)}%</td>
+                    <td data-label="" className="px-4 py-3 w-[120px]"><div className="h-1.5 rounded-full bg-[var(--color-bg)] overflow-hidden"><div className={`h-full ${risky ? "bg-red-400" : "bg-[var(--color-primary)]"}`} style={{ width: `${Math.min(share, 100)}%` }} /></div></td>
                   </tr>
                 );
               })}
@@ -2099,7 +2106,7 @@ function RequisitionToPo() {
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[720px]">
+          <table className="w-full text-sm rcard min-w-[720px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["PR #", "Requester", "Item", "Qty", "Est. Value", "Need By", "Status", ""].map((h, i) => (
@@ -2110,21 +2117,21 @@ function RequisitionToPo() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {reqs.map(r => (
                 <tr key={r.id} className="hover:bg-white/2">
-                  <td className="px-4 py-3 font-mono text-xs font-semibold">{r.reqNo}</td>
-                  <td className="px-4 py-3">{r.requester}</td>
-                  <td className="px-4 py-3 max-w-[160px] truncate" title={r.justification}>{r.item}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{r.qty}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(r.estCost * r.qty)}</td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(r.needBy), "dd MMM")}</td>
-                  <td className="px-4 py-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${REQ_META[r.status].cls}`}>{REQ_META[r.status].label}</span></td>
-                  <td className="px-4 py-3 text-right">
+                  <td data-label="PR #" className="px-4 py-3 font-mono text-xs font-semibold">{r.reqNo}</td>
+                  <td data-label="Requester" className="px-4 py-3">{r.requester}</td>
+                  <td data-label="Item" className="px-4 py-3 max-w-[160px] truncate" title={r.justification}>{r.item}</td>
+                  <td data-label="Qty" className="px-4 py-3 text-right tabular-nums">{r.qty}</td>
+                  <td data-label="Est. Value" className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(r.estCost * r.qty)}</td>
+                  <td data-label="Need By" className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(r.needBy), "dd MMM")}</td>
+                  <td data-label="Status" className="px-4 py-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${REQ_META[r.status].cls}`}>{REQ_META[r.status].label}</span></td>
+                  <td data-label="" className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1.5">
                       {r.status === "pending" && <>
                         <button onClick={() => setStatus(r.id, "approved")} className="text-[10px] font-semibold px-2 py-1 rounded border border-blue-800/40 text-blue-400 hover:bg-blue-950/30">Approve</button>
                         <button onClick={() => setStatus(r.id, "rejected")} className="text-[10px] font-semibold px-2 py-1 rounded border border-red-800/40 text-red-400 hover:bg-red-950/30">Reject</button>
                       </>}
                       {r.status === "approved" && <button onClick={() => setStatus(r.id, "converted")} className="text-[10px] font-semibold px-2 py-1 rounded border border-green-800/40 text-green-400 hover:bg-green-950/30">→ PO</button>}
-                      <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                      <button aria-label="Delete requisition" onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
                     </div>
                   </td>
                 </tr>
@@ -2245,7 +2252,7 @@ function VendorPerformanceReview() {
                     <p className="text-sm font-semibold">{r.vendor} <span className="text-[var(--color-muted)] font-normal text-xs">· {r.period}</span></p>
                     <p className={`text-lg font-bold tabular-nums mt-0.5 ${sc >= 3.5 ? "text-green-400" : sc >= 2.5 ? "text-yellow-400" : "text-red-400"}`}>{sc.toFixed(1)}/5</p>
                   </div>
-                  <button onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={14} /></button>
+                  <button aria-label="Delete review" onClick={() => remove(r.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={14} /></button>
                 </div>
                 <div className="space-y-1.5 mt-3">
                   {REVIEW_CRITERIA.map(c => (
@@ -2283,6 +2290,7 @@ function RfqComparison() {
   const [unitPrice, setUnitPrice] = useState("");
   const [leadDays, setLeadDays] = useState("");
   const [termDays, setTermDays] = useState("30");
+  const confirm = useConfirm();
 
   const qty = parseFloat(qtyStr) || 1;
 
@@ -2297,8 +2305,13 @@ function RfqComparison() {
     toast.success(`Quote from ${q.vendor} added`);
   };
   const remove = (id: string) => setQuotes(prev => prev.filter(q => q.id !== id));
-  const clearAll = () => {
-    if (quotes.length > 0 && !window.confirm(`Clear all ${quotes.length} quote(s) from this RFQ? This can't be undone.`)) return;
+  const clearAll = async () => {
+    if (quotes.length > 0 && !await confirm({
+      title: `Clear all ${quotes.length} quote(s) from this RFQ?`,
+      body: "This can't be undone.",
+      danger: true,
+      confirmLabel: "Clear all",
+    })) return;
     setQuotes([]); toast.success("RFQ cleared");
   };
 
@@ -2355,7 +2368,7 @@ function RfqComparison() {
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
           {best && <div className="px-4 py-2.5 bg-green-950/15 border-b border-green-800/30 text-xs">Recommended: <span className="font-semibold text-green-400">{best.vendor}</span> - best blended value at {formatCurrency(best.total)} for {qty} {item || "units"}</div>}
-          <table className="w-full text-sm min-w-[560px]">
+          <table className="w-full text-sm rcard min-w-[560px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["Rank", "Vendor", "Unit ₹", "Lead", "Terms", "Order Total", "Score", ""].map((h, i) => (
@@ -2366,14 +2379,14 @@ function RfqComparison() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {ranked.map((q, i) => (
                 <tr key={q.id} className={`hover:bg-white/2 ${i === 0 ? "bg-green-950/10" : ""}`}>
-                  <td className="px-4 py-3 font-bold tabular-nums">{i + 1}</td>
-                  <td className="px-4 py-3 font-medium">{q.vendor}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(q.unitPrice)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-xs">{q.leadDays}d</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-xs">{q.paymentTermDays}d</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(q.total)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-[var(--color-primary)]">{q.score.toFixed(0)}</td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => remove(q.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  <td data-label="Rank" className="px-4 py-3 font-bold tabular-nums">{i + 1}</td>
+                  <td data-label="Vendor" className="px-4 py-3 font-medium">{q.vendor}</td>
+                  <td data-label="Unit ₹" className="px-4 py-3 text-right tabular-nums">{formatCurrency(q.unitPrice)}</td>
+                  <td data-label="Lead" className="px-4 py-3 text-right tabular-nums text-xs">{q.leadDays}d</td>
+                  <td data-label="Terms" className="px-4 py-3 text-right tabular-nums text-xs">{q.paymentTermDays}d</td>
+                  <td data-label="Order Total" className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(q.total)}</td>
+                  <td data-label="Score" className="px-4 py-3 text-right tabular-nums font-bold text-[var(--color-primary)]">{q.score.toFixed(0)}</td>
+                  <td data-label="" className="px-4 py-3 text-right"><button aria-label="Remove quote" onClick={() => remove(q.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -2488,12 +2501,12 @@ function AdvancesTracker() {
                       <div className="flex items-center gap-1">
                         <input type="number" value={adjAmt} onChange={e => setAdjAmt(e.target.value)} placeholder="₹" className="w-20 bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-2 py-1 text-xs outline-none focus:border-[var(--color-primary)]" />
                         <button onClick={() => applyAdjust(a.id)} className="text-[10px] font-semibold px-2 py-1 rounded border border-green-800/40 text-green-400 hover:bg-green-950/30">Apply</button>
-                        <button onClick={() => { setAdjustFor(null); setAdjAmt(""); }} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
+                        <button aria-label="Cancel adjustment" onClick={() => { setAdjustFor(null); setAdjAmt(""); }} className="text-[var(--color-muted)] hover:text-red-400"><X size={13} /></button>
                       </div>
                     ) : (
                       <button onClick={() => { setAdjustFor(a.id); setAdjAmt(bal.toFixed(0)); }} className="text-[10px] font-semibold px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-primary)]">Adjust vs bill</button>
                     ))}
-                    <button onClick={() => remove(a.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+                    <button aria-label="Delete advance" onClick={() => remove(a.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button>
                   </div>
                 </div>
               </div>
@@ -2603,7 +2616,7 @@ function DebitNoteTracker() {
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[600px]">
+          <table className="w-full text-sm rcard min-w-[600px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["DN #", "Vendor", "Reason", "Date", "Amount", "Status", ""].map((h, i) => (
@@ -2614,17 +2627,17 @@ function DebitNoteTracker() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {notes.map(n => (
                 <tr key={n.id} className="hover:bg-white/2">
-                  <td className="px-4 py-3 font-mono text-xs font-semibold">{n.dnNo}</td>
-                  <td className="px-4 py-3 font-medium">{n.vendor}</td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{DN_REASON[n.reason]}</td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(n.date), "dd MMM")}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-green-400">{formatCurrency(n.amount)}</td>
-                  <td className="px-4 py-3">
+                  <td data-label="DN #" className="px-4 py-3 font-mono text-xs font-semibold">{n.dnNo}</td>
+                  <td data-label="Vendor" className="px-4 py-3 font-medium">{n.vendor}</td>
+                  <td data-label="Reason" className="px-4 py-3 text-xs text-[var(--color-muted)]">{DN_REASON[n.reason]}</td>
+                  <td data-label="Date" className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(n.date), "dd MMM")}</td>
+                  <td data-label="Amount" className="px-4 py-3 text-right tabular-nums font-semibold text-green-400">{formatCurrency(n.amount)}</td>
+                  <td data-label="Status" className="px-4 py-3">
                     <button onClick={() => toggleAdjust(n.id)} className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${n.status === "adjusted" ? "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]" : "bg-green-900/30 text-green-400 border-green-800/40"}`}>
                       {n.status === "adjusted" ? "Adjusted" : "Open"}
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => remove(n.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  <td data-label="" className="px-4 py-3 text-right"><button aria-label="Delete debit note" onClick={() => remove(n.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -2710,7 +2723,7 @@ function PayablesForecast() {
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-        <table className="w-full text-sm min-w-[520px]">
+        <table className="w-full text-sm rcard min-w-[520px]">
           <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
             <tr>
               {["Window", "Scheduled", "Recurring Run-Rate", "Projected Outflow"].map((h, i) => (
@@ -2721,17 +2734,17 @@ function PayablesForecast() {
           <tbody className="divide-y divide-[var(--color-border)]">
             {rows.map(r => (
               <tr key={r.key} className="hover:bg-white/2">
-                <td className="px-4 py-3 font-medium">{r.label}</td>
-                <td className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(r.scheduled))}</td>
-                <td className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(r.runRate))}</td>
-                <td className="px-4 py-3 text-right tabular-nums font-semibold text-orange-400">{formatCurrency(Math.round(r.total))}</td>
+                <td data-label="Window" className="px-4 py-3 font-medium">{r.label}</td>
+                <td data-label="Scheduled" className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(r.scheduled))}</td>
+                <td data-label="Recurring Run-Rate" className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(r.runRate))}</td>
+                <td data-label="Projected Outflow" className="px-4 py-3 text-right tabular-nums font-semibold text-orange-400">{formatCurrency(Math.round(r.total))}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr className="border-t border-[var(--color-border)] bg-[var(--color-bg)]">
-              <td className="px-4 py-3 font-semibold" colSpan={3}>Total 90-day vendor outflow</td>
-              <td className="px-4 py-3 text-right tabular-nums font-bold text-orange-400">{formatCurrency(Math.round(total90))}</td>
+              <td data-label="" className="px-4 py-3 font-semibold" colSpan={3}>Total 90-day vendor outflow</td>
+              <td data-label="Projected Outflow" className="px-4 py-3 text-right tabular-nums font-bold text-orange-400">{formatCurrency(Math.round(total90))}</td>
             </tr>
           </tfoot>
         </table>
@@ -2840,7 +2853,7 @@ function BlanketPoDrawdown() {
                       {" · "}{b.releases.length} release{b.releases.length !== 1 ? "s" : ""}
                     </p>
                   </div>
-                  <button onClick={() => remove(b.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={14} /></button>
+                  <button aria-label="Delete blanket PO" onClick={() => remove(b.id)} className="text-[var(--color-muted)] hover:text-red-400 shrink-0"><Trash2 size={14} /></button>
                 </div>
 
                 <div>
@@ -2951,7 +2964,7 @@ function ConcentrationRisk() {
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[600px]">
+          <table className="w-full text-sm rcard min-w-[600px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["Vendor", "Category", "Spend", "% of Total", "% of Category", "Risk"].map((h, i) => (
@@ -2964,16 +2977,16 @@ function ConcentrationRisk() {
                 const risky = v.totalShare >= threshold || v.catShare >= 60;
                 return (
                   <tr key={v.name} className={`hover:bg-white/2 ${risky ? "bg-red-950/10" : ""}`}>
-                    <td className="px-4 py-3 font-medium max-w-[200px] truncate">{v.name}</td>
-                    <td className="px-4 py-3">
+                    <td data-label="Vendor" className="px-4 py-3 font-medium max-w-[200px] truncate">{v.name}</td>
+                    <td data-label="Category" className="px-4 py-3">
                       <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${CATEGORY_COLOR[v.category] ?? "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>
                         {CATEGORY_LABEL[v.category] ?? v.category}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(Math.round(v.spend))}</td>
-                    <td className={`px-4 py-3 text-right tabular-nums ${v.totalShare >= threshold ? "text-red-400 font-semibold" : "text-[var(--color-muted)]"}`}>{v.totalShare.toFixed(1)}%</td>
-                    <td className={`px-4 py-3 text-right tabular-nums ${v.catShare >= 60 ? "text-orange-400 font-semibold" : "text-[var(--color-muted)]"}`}>{v.catShare.toFixed(0)}%</td>
-                    <td className="px-4 py-3 text-center">
+                    <td data-label="Spend" className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(Math.round(v.spend))}</td>
+                    <td data-label="% of Total" className={`px-4 py-3 text-right tabular-nums ${v.totalShare >= threshold ? "text-red-400 font-semibold" : "text-[var(--color-muted)]"}`}>{v.totalShare.toFixed(1)}%</td>
+                    <td data-label="% of Category" className={`px-4 py-3 text-right tabular-nums ${v.catShare >= 60 ? "text-orange-400 font-semibold" : "text-[var(--color-muted)]"}`}>{v.catShare.toFixed(0)}%</td>
+                    <td data-label="Risk" className="px-4 py-3 text-center">
                       {risky
                         ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-950/30 text-red-400 border-red-800/30 inline-flex items-center gap-1"><AlertTriangle size={9} /> Single-source</span>
                         : <span className="text-[10px] text-green-400">OK</span>}
@@ -3204,7 +3217,7 @@ function MsmeInterestLiability() {
             ))}
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[560px]">
+            <table className="w-full text-sm rcard min-w-[560px]">
               <thead className="border-b border-[var(--color-border)]">
                 <tr>{["Pay before", "MSME vendor", "Amount", "Status", "Interest if unpaid"].map((h, i) => (
                   <th key={h} className={`px-3 py-2 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-wider ${i >= 2 ? "text-right" : "text-left"}`}>{h}</th>
@@ -3213,17 +3226,17 @@ function MsmeInterestLiability() {
               <tbody className="divide-y divide-[var(--color-border)]">
                 {auto.slice(0, 25).map(r => (
                   <tr key={r.id} className="hover:bg-white/2">
-                    <td className="px-3 py-2 text-xs">{r.deadline.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</td>
-                    <td className="px-3 py-2 font-medium">{r.vendor}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(r.amount)}</td>
-                    <td className="px-3 py-2 text-right">
+                    <td data-label="Pay before" className="px-3 py-2 text-xs">{r.deadline.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</td>
+                    <td data-label="MSME vendor" className="px-3 py-2 font-medium">{r.vendor}</td>
+                    <td data-label="Amount" className="px-3 py-2 text-right tabular-nums">{formatCurrency(r.amount)}</td>
+                    <td data-label="Status" className="px-3 py-2 text-right">
                       {r.daysToDeadline < 0
                         ? <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-red-950/30 text-red-400 border-red-800/40">{r.overdueDays}d overdue - disallowed</span>
                         : r.daysToDeadline <= 7
                         ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded border bg-orange-950/30 text-orange-400 border-orange-800/40">pay in {r.daysToDeadline}d</span>
                         : <span className="text-[10px] px-2 py-0.5 rounded border bg-green-950/20 text-green-400 border-green-800/30">{r.daysToDeadline}d left</span>}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-orange-400">{r.interest > 0 ? formatCurrency(Math.round(r.interest)) : "-"}</td>
+                    <td data-label="Interest if unpaid" className="px-3 py-2 text-right tabular-nums text-orange-400">{r.interest > 0 ? formatCurrency(Math.round(r.interest)) : "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -3266,7 +3279,7 @@ function MsmeInterestLiability() {
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm rcard min-w-[640px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["MSME Vendor", "Due Amount", "Accepted On", "Overdue (>45d)", "Est. Interest", ""].map((h, i) => (
@@ -3277,20 +3290,20 @@ function MsmeInterestLiability() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {computed.map(c => (
                 <tr key={c.id} className="hover:bg-white/2">
-                  <td className="px-4 py-3"><input value={c.vendor} onChange={e => update(c.id, { vendor: e.target.value })} placeholder="Vendor name" className={`${inpCls} min-w-[140px]`} /></td>
-                  <td className="px-4 py-3 text-right"><input type="number" value={c.amount} onChange={e => update(c.id, { amount: e.target.value })} placeholder="₹" className={`${inpCls} max-w-[120px] text-right`} /></td>
-                  <td className="px-4 py-3 text-right"><input type="date" value={c.acceptedOn} onChange={e => update(c.id, { acceptedOn: e.target.value })} className={`${inpCls} max-w-[150px]`} /></td>
-                  <td className={`px-4 py-3 text-right tabular-nums font-semibold ${c.overdueDays > 0 ? "text-red-400" : "text-green-400"}`}>{c.overdueDays > 0 ? `${c.overdueDays}d` : "Within limit"}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-orange-400">{formatCurrency(Math.round(c.interest))}</td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => remove(c.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  <td data-label="MSME Vendor" className="px-4 py-3"><input value={c.vendor} onChange={e => update(c.id, { vendor: e.target.value })} placeholder="Vendor name" className={`${inpCls} min-w-[140px]`} /></td>
+                  <td data-label="Due Amount" className="px-4 py-3 text-right"><input type="number" value={c.amount} onChange={e => update(c.id, { amount: e.target.value })} placeholder="₹" className={`${inpCls} max-w-[120px] text-right`} /></td>
+                  <td data-label="Accepted On" className="px-4 py-3 text-right"><input type="date" value={c.acceptedOn} onChange={e => update(c.id, { acceptedOn: e.target.value })} className={`${inpCls} max-w-[150px]`} /></td>
+                  <td data-label="Overdue (>45d)" className={`px-4 py-3 text-right tabular-nums font-semibold ${c.overdueDays > 0 ? "text-red-400" : "text-green-400"}`}>{c.overdueDays > 0 ? `${c.overdueDays}d` : "Within limit"}</td>
+                  <td data-label="Est. Interest" className="px-4 py-3 text-right tabular-nums font-semibold text-orange-400">{formatCurrency(Math.round(c.interest))}</td>
+                  <td data-label="" className="px-4 py-3 text-right"><button aria-label="Remove MSME due" onClick={() => remove(c.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr className="border-t border-[var(--color-border)] bg-[var(--color-bg)]">
-                <td className="px-4 py-3 font-semibold" colSpan={4}>Total estimated non-deductible interest</td>
-                <td className="px-4 py-3 text-right tabular-nums font-bold text-orange-400">{formatCurrency(Math.round(totalInterest))}</td>
-                <td />
+                <td data-label="" className="px-4 py-3 font-semibold" colSpan={4}>Total estimated non-deductible interest</td>
+                <td data-label="Est. Interest" className="px-4 py-3 text-right tabular-nums font-bold text-orange-400">{formatCurrency(Math.round(totalInterest))}</td>
+                <td data-label="" />
               </tr>
             </tfoot>
           </table>
@@ -3388,7 +3401,7 @@ function SavingsTracker() {
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[620px]">
+          <table className="w-full text-sm rcard min-w-[620px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["Vendor", "Type", "Baseline", "Final", "Saved", "Date", ""].map((h, i) => (
@@ -3402,18 +3415,18 @@ function SavingsTracker() {
                 const pct = e.baseline > 0 ? (saved / e.baseline) * 100 : 0;
                 return (
                   <tr key={e.id} className="hover:bg-white/2">
-                    <td className="px-4 py-3">
+                    <td data-label="Vendor" className="px-4 py-3">
                       <p className="font-medium">{e.vendor}</p>
                       {e.note && <p className="text-[10px] text-[var(--color-muted)]">{e.note}</p>}
                     </td>
-                    <td className="px-4 py-3">
+                    <td data-label="Type" className="px-4 py-3">
                       <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${SAVING_META[e.type].cls}`}>{SAVING_META[e.type].label}</span>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(e.baseline))}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(e.final))}</td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-green-400">{formatCurrency(Math.round(saved))} <span className="text-[10px] text-[var(--color-muted)]">({pct.toFixed(0)}%)</span></td>
-                    <td className="px-4 py-3 text-right text-xs text-[var(--color-muted)]">{format(new Date(e.date), "dd MMM")}</td>
-                    <td className="px-4 py-3 text-right"><button onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    <td data-label="Baseline" className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(e.baseline))}</td>
+                    <td data-label="Final" className="px-4 py-3 text-right tabular-nums text-[var(--color-muted)]">{formatCurrency(Math.round(e.final))}</td>
+                    <td data-label="Saved" className="px-4 py-3 text-right tabular-nums font-semibold text-green-400">{formatCurrency(Math.round(saved))} <span className="text-[10px] text-[var(--color-muted)]">({pct.toFixed(0)}%)</span></td>
+                    <td data-label="Date" className="px-4 py-3 text-right text-xs text-[var(--color-muted)]">{format(new Date(e.date), "dd MMM")}</td>
+                    <td data-label="" className="px-4 py-3 text-right"><button aria-label="Delete savings entry" onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                   </tr>
                 );
               })}
@@ -3548,7 +3561,7 @@ function Form16ATracker() {
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[680px]">
+          <table className="w-full text-sm rcard min-w-[680px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["Vendor", "Quarter", "TDS", "Status", "Certificate"].map(h => (
@@ -3561,16 +3574,16 @@ function Form16ATracker() {
                 const status = statusByKey[r.key] ?? "pending";
                 return (
                   <tr key={r.key} className="hover:bg-white/2">
-                    <td className="px-4 py-3">
+                    <td data-label="Vendor" className="px-4 py-3">
                       <p className="font-medium">{r.vendorName}</p>
                       {r.vendorPan && <p className="text-[10px] text-[var(--color-muted)] font-mono">{r.vendorPan}</p>}
                     </td>
-                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{F16_QUARTER_LABEL[r.quarter]} · {fy}</td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(Math.round(r.totalTds))}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td data-label="Quarter" className="px-4 py-3 text-xs text-[var(--color-muted)]">{F16_QUARTER_LABEL[r.quarter]} · {fy}</td>
+                    <td data-label="TDS" className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(Math.round(r.totalTds))}</td>
+                    <td data-label="Status" className="px-4 py-3 text-right">
                       <button onClick={() => cycle(r.key)} title="Personal reminder only - not verified against a real handover" className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${F16_STATUS_META[status].cls}`}>{F16_STATUS_META[status].label}</button>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td data-label="Certificate" className="px-4 py-3 text-right">
                       <button onClick={() => generate(r)} disabled={generatingKey === r.key} className="text-xs text-[var(--color-primary)] hover:underline disabled:opacity-50">{generatingKey === r.key ? "Generating…" : "Generate"}</button>
                     </td>
                   </tr>
@@ -3668,7 +3681,7 @@ function RebateTracker() {
                   <div className="flex items-center gap-2">
                     <span className={`text-sm font-bold tabular-nums ${hit ? "text-green-400" : "text-[var(--color-muted)]"}`}>{hit ? formatCurrency(Math.round(earned(d))) : "-"}</span>
                     <button onClick={() => refresh(d.id, d.vendor)} className="text-[10px] text-[var(--color-primary)] hover:underline">Refresh</button>
-                    <button onClick={() => remove(d.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+                    <button aria-label="Delete rebate tracker" onClick={() => remove(d.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
                   </div>
                 </div>
                 <div className="h-1.5 bg-[var(--color-bg)] rounded-full overflow-hidden">
@@ -3765,7 +3778,7 @@ function VendorWatchlist() {
                 <p className="text-xs text-[var(--color-muted)] mt-1">{f.reason}</p>
                 <p className="text-[10px] text-[var(--color-muted)] mt-0.5">Flagged {format(new Date(f.date), "dd MMM yyyy")}</p>
               </div>
-              <button onClick={() => remove(f.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
+              <button aria-label="Remove watchlist flag" onClick={() => remove(f.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
             </div>
           ))}
         </div>
@@ -3928,7 +3941,7 @@ function RecurringBillTracker() {
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[620px]">
+          <table className="w-full text-sm rcard min-w-[620px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["Vendor", "Cadence", "Avg Charge", "Est. Monthly", "Last Charged", "Status"].map((h, i) => (
@@ -3939,12 +3952,12 @@ function RecurringBillTracker() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {recurs.map(r => (
                 <tr key={r.vendor} className={`hover:bg-white/2 ${r.dormant ? "opacity-70" : ""}`}>
-                  <td className="px-4 py-3 font-medium">{r.vendor}<span className="block text-[10px] text-[var(--color-muted)]">{r.charges} charges</span></td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">~ every {Math.round(r.avgGap)}d</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(Math.round(r.avgAmt))}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-orange-400">{formatCurrency(Math.round(r.monthly))}</td>
-                  <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(r.lastDate), "dd MMM")} <span className="text-[10px]">({r.daysSinceLast}d ago)</span></td>
-                  <td className="px-4 py-3">
+                  <td data-label="Vendor" className="px-4 py-3 font-medium">{r.vendor}<span className="block text-[10px] text-[var(--color-muted)]">{r.charges} charges</span></td>
+                  <td data-label="Cadence" className="px-4 py-3 text-xs text-[var(--color-muted)]">~ every {Math.round(r.avgGap)}d</td>
+                  <td data-label="Avg Charge" className="px-4 py-3 text-right tabular-nums">{formatCurrency(Math.round(r.avgAmt))}</td>
+                  <td data-label="Est. Monthly" className="px-4 py-3 text-right tabular-nums font-semibold text-orange-400">{formatCurrency(Math.round(r.monthly))}</td>
+                  <td data-label="Last Charged" className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(r.lastDate), "dd MMM")} <span className="text-[10px]">({r.daysSinceLast}d ago)</span></td>
+                  <td data-label="Status" className="px-4 py-3">
                     {r.dormant ? (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-yellow-950/30 text-yellow-400 border-yellow-800/30 w-fit flex items-center gap-1"><AlertTriangle size={10} /> Dormant?</span>
                     ) : (
@@ -4012,7 +4025,7 @@ function LandedCostCalculator() {
               <input value={l.item} onChange={e => setLines(prev => prev.map((x, j) => j === i ? { ...x, item: e.target.value } : x))} placeholder="Item description" className={numInp} />
               <input type="number" min="0" value={l.qty} onChange={e => setLines(prev => prev.map((x, j) => j === i ? { ...x, qty: parseFloat(e.target.value) || 0 } : x))} placeholder="Qty" className={numInp} />
               <input type="number" min="0" value={l.unitCost} onChange={e => setLines(prev => prev.map((x, j) => j === i ? { ...x, unitCost: parseFloat(e.target.value) || 0 } : x))} placeholder="Unit cost" className={numInp} />
-              <button onClick={() => setLines(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : prev)} className="text-[var(--color-muted)] hover:text-red-400 p-1"><Trash2 size={14} /></button>
+              <button aria-label="Remove line item" onClick={() => setLines(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : prev)} className="text-[var(--color-muted)] hover:text-red-400 p-1"><Trash2 size={14} /></button>
             </div>
           ))}
           <button onClick={() => setLines(prev => [...prev, { id: crypto.randomUUID(), item: "", qty: 1, unitCost: 0 }])} className="text-xs text-[var(--color-primary)] hover:underline">+ Add item</button>
@@ -4053,7 +4066,7 @@ function LandedCostCalculator() {
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm rcard min-w-[640px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["Item", "Goods Value", "+ Allocated", "Landed Total", "Landed Unit", "Uplift"].map((h, i) => (
@@ -4064,12 +4077,12 @@ function LandedCostCalculator() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {allocated.map(l => (
                 <tr key={l.id} className="hover:bg-white/2">
-                  <td className="px-4 py-3 font-medium">{l.item}<span className="block text-[10px] text-[var(--color-muted)]">{l.qty} × {formatCurrency(Math.round(l.unitCost))}</span></td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(Math.round(l.lineValue))}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-orange-400">{formatCurrency(Math.round(l.allocatedAddOn))}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(Math.round(l.landedTotal))}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-red-400">{formatCurrency(Math.round(l.landedUnit))}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-xs text-[var(--color-muted)]">+{l.uplift.toFixed(1)}%</td>
+                  <td data-label="Item" className="px-4 py-3 font-medium">{l.item}<span className="block text-[10px] text-[var(--color-muted)]">{l.qty} × {formatCurrency(Math.round(l.unitCost))}</span></td>
+                  <td data-label="Goods Value" className="px-4 py-3 text-right tabular-nums">{formatCurrency(Math.round(l.lineValue))}</td>
+                  <td data-label="+ Allocated" className="px-4 py-3 text-right tabular-nums text-orange-400">{formatCurrency(Math.round(l.allocatedAddOn))}</td>
+                  <td data-label="Landed Total" className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(Math.round(l.landedTotal))}</td>
+                  <td data-label="Landed Unit" className="px-4 py-3 text-right tabular-nums font-semibold text-red-400">{formatCurrency(Math.round(l.landedUnit))}</td>
+                  <td data-label="Uplift" className="px-4 py-3 text-right tabular-nums text-xs text-[var(--color-muted)]">+{l.uplift.toFixed(1)}%</td>
                 </tr>
               ))}
             </tbody>
@@ -4168,7 +4181,7 @@ function DuplicateInvoiceDetector() {
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm rcard min-w-[640px]">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["Vendor", "Bill #", "Date", "Amount", "Status"].map((h, i) => (
@@ -4181,11 +4194,11 @@ function DuplicateInvoiceDetector() {
                 const reason = flagged.get(b.voucherId);
                 return (
                   <tr key={b.voucherId} className={`hover:bg-white/2 ${reason ? "bg-red-950/10" : ""}`}>
-                    <td className="px-4 py-3 font-medium">{b.vendorName}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-[var(--color-muted)]">{b.billNumber || "-"}</td>
-                    <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(parseISO(b.date), "dd MMM yyyy")}</td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(Number(b.amount))}</td>
-                    <td className="px-4 py-3">
+                    <td data-label="Vendor" className="px-4 py-3 font-medium">{b.vendorName}</td>
+                    <td data-label="Bill #" className="px-4 py-3 font-mono text-xs text-[var(--color-muted)]">{b.billNumber || "-"}</td>
+                    <td data-label="Date" className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(parseISO(b.date), "dd MMM yyyy")}</td>
+                    <td data-label="Amount" className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(Number(b.amount))}</td>
+                    <td data-label="Status" className="px-4 py-3">
                       {reason ? (
                         <span title={reason} className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-950/30 text-red-400 border-red-800/30 w-fit flex items-center gap-1"><AlertTriangle size={10} /> Possible duplicate</span>
                       ) : (
@@ -4306,7 +4319,7 @@ function ApprovalSlaTracker() {
           </div>
 
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[560px]">
+            <table className="w-full text-sm rcard min-w-[560px]">
               <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
                 <tr>
                   {["Item", "Approver", "Requested", "Cycle", "Outcome", ""].map(h => (
@@ -4319,14 +4332,14 @@ function ApprovalSlaTracker() {
                   const d = cycleDays(e);
                   return (
                     <tr key={e.id} className="hover:bg-white/2">
-                      <td className="px-4 py-3 font-medium">{e.item}</td>
-                      <td className="px-4 py-3 text-[var(--color-muted)]">{e.approver}</td>
-                      <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(e.requested), "dd MMM")}</td>
-                      <td className={`px-4 py-3 tabular-nums font-semibold ${d > sla ? "text-red-400" : "text-green-400"}`}>{d}d</td>
-                      <td className="px-4 py-3">
+                      <td data-label="Item" className="px-4 py-3 font-medium">{e.item}</td>
+                      <td data-label="Approver" className="px-4 py-3 text-[var(--color-muted)]">{e.approver}</td>
+                      <td data-label="Requested" className="px-4 py-3 text-xs text-[var(--color-muted)]">{format(new Date(e.requested), "dd MMM")}</td>
+                      <td data-label="Cycle" className={`px-4 py-3 tabular-nums font-semibold ${d > sla ? "text-red-400" : "text-green-400"}`}>{d}d</td>
+                      <td data-label="Outcome" className="px-4 py-3">
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border w-fit ${e.outcome === "approved" ? "bg-green-950/30 text-green-400 border-green-800/30" : "bg-red-950/30 text-red-400 border-red-800/30"}`}>{e.outcome === "approved" ? "Approved" : "Rejected"}</span>
                       </td>
-                      <td className="px-4 py-3 text-right"><button onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button></td>
+                      <td data-label="" className="px-4 py-3 text-right"><button aria-label="Delete entry" onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={14} /></button></td>
                     </tr>
                   );
                 })}
@@ -4488,7 +4501,7 @@ function ApAgingBoard({ onSelectVendor }: { onSelectVendor: (vendorId: string) =
         </div>
       ) : (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm rcard">
             <thead className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
               <tr>
                 {["Vendor", "Current", "1-30d", "31-60d", "60d+", "Total", ""].map((h, i) => (
@@ -4499,15 +4512,15 @@ function ApAgingBoard({ onSelectVendor }: { onSelectVendor: (vendorId: string) =
             <tbody className="divide-y divide-[var(--color-border)]">
               {aging.vendors.map(v => (
                 <tr key={v.vendorId} className="hover:bg-white/2">
-                  <td className="px-4 py-3 font-medium max-w-[200px] truncate">
+                  <td data-label="Vendor" className="px-4 py-3 font-medium max-w-[200px] truncate">
                     {v.vendorName}
                     {v.isMsme && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full border border-purple-800/40 text-purple-400 bg-purple-950/20">MSME</span>}
                   </td>
-                  {AP_BUCKET_KEYS.map(b => (
-                    <td key={b} className={`px-4 py-3 text-right tabular-nums ${v.buckets[b] > 0 ? AP_BUCKET_META[b].color : "text-[var(--color-muted)]"}`}>{v.buckets[b] > 0 ? formatCurrency(v.buckets[b]) : "-"}</td>
+                  {AP_BUCKET_KEYS.map((b, bi) => (
+                    <td key={b} data-label={["Current", "1-30d", "31-60d", "60d+"][bi]} className={`px-4 py-3 text-right tabular-nums ${v.buckets[b] > 0 ? AP_BUCKET_META[b].color : "text-[var(--color-muted)]"}`}>{v.buckets[b] > 0 ? formatCurrency(v.buckets[b]) : "-"}</td>
                   ))}
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(v.total)}</td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => onSelectVendor(v.vendorId)} className="text-[10px] font-semibold text-[var(--color-primary)] hover:underline">View bills</button></td>
+                  <td data-label="Total" className="px-4 py-3 text-right tabular-nums font-semibold">{formatCurrency(v.total)}</td>
+                  <td data-label="" className="px-4 py-3 text-right"><button onClick={() => onSelectVendor(v.vendorId)} className="text-[10px] font-semibold text-[var(--color-primary)] hover:underline">View bills</button></td>
                 </tr>
               ))}
             </tbody>
@@ -4736,7 +4749,7 @@ function BillsPayables({ focus }: { focus?: { vendorId: string; n: number } }) {
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
               <h3 className="font-semibold flex items-center gap-2"><Wallet size={16} className="text-green-400" /> {payTarget === "fifo" ? "Pay vendor (oldest bills first)" : `Pay ${payTarget.billNumber || `PUR-${payTarget.voucherNumber}`}`}</h3>
-              <button onClick={() => setPayTarget(null)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
+              <button aria-label="Close" onClick={() => setPayTarget(null)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
             </div>
             <div className="p-5 space-y-3">
               <div><label className="text-[10px] text-[var(--color-muted)] block mb-1">Amount (₹)</label><input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} className={inpCls} /></div>

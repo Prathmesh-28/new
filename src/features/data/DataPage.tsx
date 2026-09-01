@@ -14,6 +14,7 @@ import MigrationWizard from "@/components/MigrationWizard";
 import type { Transaction } from "@/data/types";
 import DataFreshnessBadge from "@/components/DataFreshnessBadge";
 import DatePicker from "@/components/DatePicker";
+import { useConfirm } from "@/components/ui/Confirm";
 
 function downloadCsv(name: string, content: string) {
   const blob = new Blob([content], { type: "text/csv" });
@@ -27,6 +28,7 @@ export default function DataPage() {
   const { store, setStore, canAccess, canEdit } = useApp();
   const tr = useT();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [showImport, setShowImport] = useState(false);
   const [showMigrate, setShowMigrate] = useState(false);
   const [tab, setTab] = useState<"overview" | "tally" | "mapper" | "consolidate" | "backup" | "quality" | "dedupe" | "replace" | "templates-store" | "filings" | "archive" | "profiler" | "csv-json" | "number-clean" | "gstin-check" | "pivot" | "statement-parse" | "range-export" | "paste-dupes" | "json-fmt">("overview");
@@ -48,7 +50,7 @@ export default function DataPage() {
   };
 
   const loadDemo = async () => {
-    if (!window.confirm("Load the full demo dataset? This fills EVERY module - transactions, invoices, accounts, loans, GST, payroll, inventory, sales pipeline, treasury, compliance and more - with realistic sample data so you can walk through the whole platform.")) return;
+    if (!await confirm({ title: "Load the full demo dataset?", body: "This fills EVERY module - transactions, invoices, accounts, loans, GST, payroll, inventory, sales pipeline, treasury, compliance and more - with realistic sample data so you can walk through the whole platform.", confirmLabel: "Load demo data" })) return;
     const demo = generateDemoData();
     // Spread the entire generated store: every top-level array (orders, inventory,
     // credit, capital, connectors, budgets, alerts…) plus the full featureData bag
@@ -67,8 +69,8 @@ export default function DataPage() {
     else toast.error("Frontend demo loaded; backend seed unavailable (sign in to a workspace to seed books/CRM).", { id: "demo-backend" });
   };
 
-  const clearAll = () => {
-    if (!window.confirm("Clear ALL demo/financial data across every module (transactions, invoices, accounts, loans, and all feature tools)? This cannot be undone.")) return;
+  const clearAll = async () => {
+    if (!await confirm({ title: "Clear ALL data?", body: "This clears all demo/financial data across every module (transactions, invoices, accounts, loans, and all feature tools). This cannot be undone.", danger: true, confirmLabel: "Clear all" })) return;
     setStore(s => ({
       ...s,
       transactions: [], invoices: [], bankAccounts: [], activeLoans: [], obligations: [],
@@ -432,7 +434,7 @@ ${vouchers}
 
       {parsed && parsed.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[480px]">
+          <table className="w-full text-sm min-w-[480px] rcard">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
                 {["Date", "Counterparty", "Description", "Amount"].map(h => (
@@ -443,10 +445,10 @@ ${vouchers}
             <tbody>
               {parsed.slice(0, 50).map(t => (
                 <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0">
-                  <td className="px-4 py-2 tabular-nums">{t.date}</td>
-                  <td className="px-4 py-2">{t.counterparty}</td>
-                  <td className="px-4 py-2 text-[var(--color-muted)]">{t.description}</td>
-                  <td className={`px-4 py-2 tabular-nums ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(t.amount)}</td>
+                  <td data-label="Date" className="px-4 py-2 tabular-nums">{t.date}</td>
+                  <td data-label="Counterparty" className="px-4 py-2">{t.counterparty}</td>
+                  <td data-label="Description" className="px-4 py-2 text-[var(--color-muted)]">{t.description}</td>
+                  <td data-label="Amount" className={`px-4 py-2 tabular-nums ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(t.amount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -550,7 +552,7 @@ function CsvMapper({ editable, onImport, importAccountId }: { editable: boolean;
       {built.length > 0 && (
         <>
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[480px]">
+            <table className="w-full text-sm min-w-[480px] rcard">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
                   {["Date", "Counterparty", "Description", "Amount"].map(h => (
@@ -561,10 +563,10 @@ function CsvMapper({ editable, onImport, importAccountId }: { editable: boolean;
               <tbody>
                 {built.slice(0, 50).map(t => (
                   <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0">
-                    <td className="px-4 py-2 tabular-nums">{t.date}</td>
-                    <td className="px-4 py-2">{t.counterparty || "-"}</td>
-                    <td className="px-4 py-2 text-[var(--color-muted)]">{t.description}</td>
-                    <td className={`px-4 py-2 tabular-nums ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(t.amount)}</td>
+                    <td data-label="Date" className="px-4 py-2 tabular-nums">{t.date}</td>
+                    <td data-label="Counterparty" className="px-4 py-2">{t.counterparty || "-"}</td>
+                    <td data-label="Description" className="px-4 py-2 text-[var(--color-muted)]">{t.description}</td>
+                    <td data-label="Amount" className={`px-4 py-2 tabular-nums ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(t.amount)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -656,7 +658,7 @@ function MultiEntityConsolidation() {
       {entities.length > 0 && (
         <>
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm min-w-[640px] rcard">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
                   {["Entity", "Owned %", "Revenue", "Expense", "PBT", "Cash", ""].map(h => (
@@ -667,13 +669,13 @@ function MultiEntityConsolidation() {
               <tbody>
                 {entities.map(e => (
                   <tr key={e.id} className="border-b border-[var(--color-border)] last:border-0">
-                    <td className="px-4 py-2.5 font-medium">{e.name}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{e.ownership}%</td>
-                    <td className="px-4 py-2.5 tabular-nums">{fc(e.revenue)}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{fc(e.expense)}</td>
-                    <td className={`px-4 py-2.5 tabular-nums ${e.revenue - e.expense >= 0 ? "text-green-400" : "text-red-400"}`}>{fc(e.revenue - e.expense)}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{fc(e.cash)}</td>
-                    <td className="px-4 py-2.5"><button onClick={() => remove(e.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                    <td data-label="Entity" className="px-4 py-2.5 font-medium">{e.name}</td>
+                    <td data-label="Owned %" className="px-4 py-2.5 tabular-nums">{e.ownership}%</td>
+                    <td data-label="Revenue" className="px-4 py-2.5 tabular-nums">{fc(e.revenue)}</td>
+                    <td data-label="Expense" className="px-4 py-2.5 tabular-nums">{fc(e.expense)}</td>
+                    <td data-label="PBT" className={`px-4 py-2.5 tabular-nums ${e.revenue - e.expense >= 0 ? "text-green-400" : "text-red-400"}`}>{fc(e.revenue - e.expense)}</td>
+                    <td data-label="Cash" className="px-4 py-2.5 tabular-nums">{fc(e.cash)}</td>
+                    <td data-label="" className="px-4 py-2.5"><button onClick={() => remove(e.id)} aria-label={`Remove ${e.name}`} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -797,7 +799,7 @@ function ScheduledBackup() {
       {log.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
           <div className="px-4 py-3 border-b border-[var(--color-border)] text-sm font-semibold">Export history</div>
-          <table className="w-full text-sm min-w-[360px]">
+          <table className="w-full text-sm min-w-[360px] rcard">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
                 {["When", "Format", "Records"].map(h => (
@@ -808,9 +810,9 @@ function ScheduledBackup() {
             <tbody>
               {log.map(l => (
                 <tr key={l.id} className="border-b border-[var(--color-border)] last:border-0">
-                  <td className="px-4 py-2.5">{format(new Date(l.at), "dd MMM yyyy, HH:mm")}</td>
-                  <td className="px-4 py-2.5 uppercase text-xs text-[var(--color-muted)]">{l.format}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{l.records}</td>
+                  <td data-label="When" className="px-4 py-2.5">{format(new Date(l.at), "dd MMM yyyy, HH:mm")}</td>
+                  <td data-label="Format" className="px-4 py-2.5 uppercase text-xs text-[var(--color-muted)]">{l.format}</td>
+                  <td data-label="Records" className="px-4 py-2.5 tabular-nums">{l.records}</td>
                 </tr>
               ))}
             </tbody>
@@ -887,7 +889,7 @@ function DataQualityChecker() {
       </div>
 
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-        <table className="w-full text-sm min-w-[320px]">
+        <table className="w-full text-sm min-w-[320px] rcard">
           <thead>
             <tr className="border-b border-[var(--color-border)]">
               {["Check", "Affected rows", "Status"].map(h => (
@@ -898,9 +900,9 @@ function DataQualityChecker() {
           <tbody>
             {rows.map(r => (
               <tr key={r.label} className="border-b border-[var(--color-border)] last:border-0">
-                <td className="px-4 py-2.5">{r.label}</td>
-                <td className={`px-4 py-2.5 tabular-nums ${r.count > 0 ? r.tone : ""}`}>{r.count}</td>
-                <td className="px-4 py-2.5">{r.count === 0
+                <td data-label="Check" className="px-4 py-2.5">{r.label}</td>
+                <td data-label="Affected rows" className={`px-4 py-2.5 tabular-nums ${r.count > 0 ? r.tone : ""}`}>{r.count}</td>
+                <td data-label="Status" className="px-4 py-2.5">{r.count === 0
                   ? <span className="text-green-400 text-xs">OK</span>
                   : <span className={`text-xs ${r.tone}`}>Review</span>}</td>
               </tr>
@@ -918,6 +920,7 @@ function DataQualityChecker() {
 // all but the first occurrence of each group from the store.
 function TransactionDedupe({ editable }: { editable: boolean }) {
   const { store, setStore } = useApp();
+  const confirm = useConfirm();
   const groups = useMemo(() => {
     const txns = store.transactions ?? [];
     const map = new Map<string, Transaction[]>();
@@ -938,7 +941,7 @@ function TransactionDedupe({ editable }: { editable: boolean }) {
   const dedupe = async () => {
     if (deduping) return;
     if (removable === 0) { toast.error("No duplicates found"); return; }
-    if (!window.confirm(`Remove ${removable} duplicate transaction(s)? The first of each group is kept.`)) return;
+    if (!await confirm({ title: `Remove ${removable} duplicate transaction(s)?`, body: "The first of each group is kept.", danger: true, confirmLabel: "Remove duplicates" })) return;
     const ids = groups.flatMap(g => g.slice(1).map(t => t.id));
     setDeduping(true);
     try {
@@ -966,7 +969,7 @@ function TransactionDedupe({ editable }: { editable: boolean }) {
 
       {groups.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[480px]">
+          <table className="w-full text-sm min-w-[480px] rcard">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
                 {["Date", "Counterparty", "Description", "Amount", "Copies"].map(h => (
@@ -977,11 +980,11 @@ function TransactionDedupe({ editable }: { editable: boolean }) {
             <tbody>
               {groups.slice(0, 50).map(g => (
                 <tr key={g[0].id} className="border-b border-[var(--color-border)] last:border-0">
-                  <td className="px-4 py-2 tabular-nums">{g[0].date}</td>
-                  <td className="px-4 py-2">{g[0].counterparty || "-"}</td>
-                  <td className="px-4 py-2 text-[var(--color-muted)]">{g[0].description || "-"}</td>
-                  <td className={`px-4 py-2 tabular-nums ${g[0].amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(g[0].amount)}</td>
-                  <td className="px-4 py-2 tabular-nums text-orange-400">×{g.length}</td>
+                  <td data-label="Date" className="px-4 py-2 tabular-nums">{g[0].date}</td>
+                  <td data-label="Counterparty" className="px-4 py-2">{g[0].counterparty || "-"}</td>
+                  <td data-label="Description" className="px-4 py-2 text-[var(--color-muted)]">{g[0].description || "-"}</td>
+                  <td data-label="Amount" className={`px-4 py-2 tabular-nums ${g[0].amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(g[0].amount)}</td>
+                  <td data-label="Copies" className="px-4 py-2 tabular-nums text-orange-400">×{g.length}</td>
                 </tr>
               ))}
             </tbody>
@@ -998,6 +1001,7 @@ function TransactionDedupe({ editable }: { editable: boolean }) {
 // all matching rows in one pass. Case-insensitive match, preview count first.
 function BulkFindReplace({ editable }: { editable: boolean }) {
   const { store, setStore } = useApp();
+  const confirm = useConfirm();
   const [field, setField] = useState<"counterparty" | "description">("counterparty");
   const [find, setFind] = useState("");
   const [repl, setRepl] = useState("");
@@ -1021,7 +1025,7 @@ function BulkFindReplace({ editable }: { editable: boolean }) {
     if (applying) return;
     if (!find.trim()) { toast.error("Enter text to find"); return; }
     if (matches.length === 0) { toast.error("No matching rows"); return; }
-    if (!window.confirm(`Replace "${find}" in ${matches.length} transaction(s)' ${field}?`)) return;
+    if (!await confirm({ title: `Replace "${find}" in ${matches.length} transaction(s)' ${field}?`, body: "Matching rows are rewritten on the server - review the preview below first.", confirmLabel: "Replace" })) return;
     const q = find.trim();
     const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
     const newValue = (t: Transaction) => {
@@ -1085,7 +1089,7 @@ function BulkFindReplace({ editable }: { editable: boolean }) {
 
       {matches.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[420px]">
+          <table className="w-full text-sm min-w-[420px] rcard">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
                 {["Date", "Current value", "Amount"].map(h => (
@@ -1096,9 +1100,9 @@ function BulkFindReplace({ editable }: { editable: boolean }) {
             <tbody>
               {matches.slice(0, 50).map(t => (
                 <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0">
-                  <td className="px-4 py-2 tabular-nums">{t.date}</td>
-                  <td className="px-4 py-2">{t[field] || "-"}</td>
-                  <td className={`px-4 py-2 tabular-nums ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(t.amount)}</td>
+                  <td data-label="Date" className="px-4 py-2 tabular-nums">{t.date}</td>
+                  <td data-label="Current value" className="px-4 py-2">{t[field] || "-"}</td>
+                  <td data-label="Amount" className={`px-4 py-2 tabular-nums ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(t.amount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1159,7 +1163,7 @@ function MappingTemplateStore() {
 
       {templates.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[420px]">
+          <table className="w-full text-sm min-w-[420px] rcard">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
                 {["Name", "Column order", "Saved", ""].map(h => (
@@ -1170,10 +1174,10 @@ function MappingTemplateStore() {
             <tbody>
               {templates.map(t => (
                 <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0">
-                  <td className="px-4 py-2.5 font-medium">{t.name}</td>
-                  <td className="px-4 py-2.5 text-[var(--color-muted)] font-mono text-xs">{t.columns}</td>
-                  <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{format(new Date(t.createdAt), "dd MMM yyyy")}</td>
-                  <td className="px-4 py-2.5"><button onClick={() => remove(t.id)} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
+                  <td data-label="Name" className="px-4 py-2.5 font-medium">{t.name}</td>
+                  <td data-label="Column order" className="px-4 py-2.5 text-[var(--color-muted)] font-mono text-xs">{t.columns}</td>
+                  <td data-label="Saved" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{format(new Date(t.createdAt), "dd MMM yyyy")}</td>
+                  <td data-label="" className="px-4 py-2.5"><button onClick={() => remove(t.id)} aria-label={`Delete template ${t.name}`} className="text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -1246,6 +1250,7 @@ function FilingTemplates() {
 // purge them from the store to keep the working set lean.
 function ArchivePurge({ editable }: { editable: boolean }) {
   const { store, setStore } = useApp();
+  const confirm = useConfirm();
   const [cutoff, setCutoff] = useState("2024-04-01");
 
   const { older, newer } = useMemo(() => {
@@ -1273,7 +1278,7 @@ function ArchivePurge({ editable }: { editable: boolean }) {
   const purge = async () => {
     if (purging) return;
     if (older.length === 0) { toast.error("Nothing older than the cut-off"); return; }
-    if (!window.confirm(`Permanently remove ${older.length} transaction(s) dated before ${cutoff}? Download the archive first - this cannot be undone.`)) return;
+    if (!await confirm({ title: `Permanently remove ${older.length} transaction(s) dated before ${cutoff}?`, body: "Download the archive first - this cannot be undone.", danger: true, confirmLabel: "Purge" })) return;
     setPurging(true);
     try {
       const results = await Promise.allSettled(older.map(t => api.delete(`/api/transactions/${t.id}`)));
@@ -1388,7 +1393,7 @@ function ColumnProfiler() {
       {profiles.length > 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
           <div className="px-4 py-3 border-b border-[var(--color-border)] text-sm font-semibold">{dataRows.length} rows · {profiles.length} columns</div>
-          <table className="w-full text-sm min-w-[680px]">
+          <table className="w-full text-sm min-w-[680px] rcard">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
                 {["Column", "Fill rate", "Distinct", "Type", "Sum", "Mean", "Median", "Min", "Max"].map(h => (
@@ -1401,15 +1406,15 @@ function ColumnProfiler() {
                 const pct = p.total === 0 ? 0 : Math.round((p.filled / p.total) * 100);
                 return (
                   <tr key={p.index} className="border-b border-[var(--color-border)] last:border-0">
-                    <td className="px-4 py-2.5 font-medium">{p.name}</td>
-                    <td className={`px-4 py-2.5 tabular-nums ${pct < 100 ? "text-orange-400" : "text-green-400"}`}>{pct}%</td>
-                    <td className="px-4 py-2.5 tabular-nums">{p.distinct}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{p.numeric ? "Numeric" : "Text"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.sum) : "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.mean) : "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.median) : "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.min) : "-"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.max) : "-"}</td>
+                    <td data-label="Column" className="px-4 py-2.5 font-medium">{p.name}</td>
+                    <td data-label="Fill rate" className={`px-4 py-2.5 tabular-nums ${pct < 100 ? "text-orange-400" : "text-green-400"}`}>{pct}%</td>
+                    <td data-label="Distinct" className="px-4 py-2.5 tabular-nums">{p.distinct}</td>
+                    <td data-label="Type" className="px-4 py-2.5 text-xs text-[var(--color-muted)]">{p.numeric ? "Numeric" : "Text"}</td>
+                    <td data-label="Sum" className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.sum) : "-"}</td>
+                    <td data-label="Mean" className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.mean) : "-"}</td>
+                    <td data-label="Median" className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.median) : "-"}</td>
+                    <td data-label="Min" className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.min) : "-"}</td>
+                    <td data-label="Max" className="px-4 py-2.5 tabular-nums">{p.numeric ? num(p.max) : "-"}</td>
                   </tr>
                 );
               })}
@@ -1579,7 +1584,7 @@ function NumberCleanup() {
           </div>
 
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[360px]">
+            <table className="w-full text-sm min-w-[360px] rcard">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
                   {["Original", "Cleaned", "Status"].map(h => (
@@ -1590,9 +1595,9 @@ function NumberCleanup() {
               <tbody>
                 {result.rows.slice(0, 100).map((r, i) => (
                   <tr key={i} className="border-b border-[var(--color-border)] last:border-0">
-                    <td className="px-4 py-2 font-mono text-xs">{r.input.trim()}</td>
-                    <td className={`px-4 py-2 tabular-nums ${r.value !== null && r.value < 0 ? "text-red-400" : ""}`}>{r.value !== null ? r.value.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "-"}</td>
-                    <td className="px-4 py-2">{r.value !== null ? <span className="text-green-400 text-xs">OK</span> : <span className="text-red-400 text-xs">Skipped</span>}</td>
+                    <td data-label="Original" className="px-4 py-2 font-mono text-xs">{r.input.trim()}</td>
+                    <td data-label="Cleaned" className={`px-4 py-2 tabular-nums ${r.value !== null && r.value < 0 ? "text-red-400" : ""}`}>{r.value !== null ? r.value.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "-"}</td>
+                    <td data-label="Status" className="px-4 py-2">{r.value !== null ? <span className="text-green-400 text-xs">OK</span> : <span className="text-red-400 text-xs">Skipped</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1687,7 +1692,7 @@ function GstinValidator() {
           </div>
 
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[480px]">
+            <table className="w-full text-sm min-w-[480px] rcard">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
                   {["GSTIN", "Status", "State", "Note"].map(h => (
@@ -1698,10 +1703,10 @@ function GstinValidator() {
               <tbody>
                 {results.slice(0, 100).map((r, i) => (
                   <tr key={i} className="border-b border-[var(--color-border)] last:border-0">
-                    <td className="px-4 py-2 font-mono text-xs">{r.gstin}</td>
-                    <td className="px-4 py-2">{r.valid ? <span className="text-green-400 text-xs">Valid</span> : <span className="text-red-400 text-xs">Invalid</span>}</td>
-                    <td className="px-4 py-2 text-[var(--color-muted)]">{r.state || "-"}</td>
-                    <td className="px-4 py-2 text-xs text-[var(--color-muted)]">{r.reason}</td>
+                    <td data-label="GSTIN" className="px-4 py-2 font-mono text-xs">{r.gstin}</td>
+                    <td data-label="Status" className="px-4 py-2">{r.valid ? <span className="text-green-400 text-xs">Valid</span> : <span className="text-red-400 text-xs">Invalid</span>}</td>
+                    <td data-label="State" className="px-4 py-2 text-[var(--color-muted)]">{r.state || "-"}</td>
+                    <td data-label="Note" className="px-4 py-2 text-xs text-[var(--color-muted)]">{r.reason}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1790,7 +1795,7 @@ function PivotBuilder() {
         <>
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
             <div className="px-4 py-3 border-b border-[var(--color-border)] text-sm font-semibold">{pivot.length} group(s) · total {formatCurrency(grandTotal)}</div>
-            <table className="w-full text-sm min-w-[420px]">
+            <table className="w-full text-sm min-w-[420px] rcard">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
                   {["Group", "Sum", "Count", "Average"].map(h => (
@@ -1801,10 +1806,10 @@ function PivotBuilder() {
               <tbody>
                 {pivot.slice(0, 100).map((p, i) => (
                   <tr key={i} className="border-b border-[var(--color-border)] last:border-0">
-                    <td className="px-4 py-2.5 font-medium">{p.group}</td>
-                    <td className={`px-4 py-2.5 tabular-nums ${p.sum < 0 ? "text-red-400" : ""}`}>{formatCurrency(p.sum)}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{p.count}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{formatCurrency(p.avg)}</td>
+                    <td data-label="Group" className="px-4 py-2.5 font-medium">{p.group}</td>
+                    <td data-label="Sum" className={`px-4 py-2.5 tabular-nums ${p.sum < 0 ? "text-red-400" : ""}`}>{formatCurrency(p.sum)}</td>
+                    <td data-label="Count" className="px-4 py-2.5 tabular-nums">{p.count}</td>
+                    <td data-label="Average" className="px-4 py-2.5 tabular-nums">{formatCurrency(p.avg)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1898,7 +1903,7 @@ function StatementParser({ editable, onImport, importAccountId }: { editable: bo
             ))}
           </div>
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[480px]">
+            <table className="w-full text-sm min-w-[480px] rcard">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
                   {["Date", "Counterparty", "Description", "Amount"].map(h => (
@@ -1909,10 +1914,10 @@ function StatementParser({ editable, onImport, importAccountId }: { editable: bo
               <tbody>
                 {parsed.slice(0, 50).map(t => (
                   <tr key={t.id} className="border-b border-[var(--color-border)] last:border-0">
-                    <td className="px-4 py-2 tabular-nums">{t.date}</td>
-                    <td className="px-4 py-2">{t.counterparty || "-"}</td>
-                    <td className="px-4 py-2 text-[var(--color-muted)]">{t.description}</td>
-                    <td className={`px-4 py-2 tabular-nums ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(t.amount)}</td>
+                    <td data-label="Date" className="px-4 py-2 tabular-nums">{t.date}</td>
+                    <td data-label="Counterparty" className="px-4 py-2">{t.counterparty || "-"}</td>
+                    <td data-label="Description" className="px-4 py-2 text-[var(--color-muted)]">{t.description}</td>
+                    <td data-label="Amount" className={`px-4 py-2 tabular-nums ${t.amount >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(t.amount)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -2055,7 +2060,7 @@ function PasteDuplicateFinder() {
           </div>
           {dupes.length > 0 && (
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-x-auto">
-              <table className="w-full text-sm min-w-[280px]">
+              <table className="w-full text-sm min-w-[280px] rcard">
                 <thead>
                   <tr className="border-b border-[var(--color-border)]">
                     {["Value", "Occurrences"].map(h => (
@@ -2066,8 +2071,8 @@ function PasteDuplicateFinder() {
                 <tbody>
                   {dupes.slice(0, 100).map((d, i) => (
                     <tr key={i} className="border-b border-[var(--color-border)] last:border-0">
-                      <td className="px-4 py-2 font-mono text-xs">{d.display}</td>
-                      <td className="px-4 py-2 tabular-nums text-orange-400">×{d.n}</td>
+                      <td data-label="Value" className="px-4 py-2 font-mono text-xs">{d.display}</td>
+                      <td data-label="Occurrences" className="px-4 py-2 tabular-nums text-orange-400">×{d.n}</td>
                     </tr>
                   ))}
                 </tbody>
