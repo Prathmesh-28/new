@@ -2,6 +2,7 @@ const router = require("express").Router();
 const { pool } = require("../db");
 const { authenticate } = require("../middleware/auth");
 const trash = require("../lib/trash");
+const { q, withTenant: withTenantTx } = require("../lib/tenantDb");
 const { auditReq } = require("../lib/audit");
 
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant"];
@@ -90,6 +91,18 @@ router.post("/", authenticate, canWrite, async (req, res) => {
   const inserted = [];
   let skippedDuplicates = 0, skippedErrors = 0;
 
+  // Every bulk upload gets a batch id stamped on its rows, so a bad CSV can be taken back
+  // as a unit (POST /api/transactions/imports/:batchId/rollback) instead of hunting rows.
+  let batchId = null;
+  if (isBulk && items.length) {
+    try {
+      const b = await q(req.user.tenant_id,
+        "INSERT INTO import_batches(tenant_id, entity, filename, created_by) VALUES($1,'transactions',$2,$3) RETURNING id",
+        [req.user.tenant_id, String(req.headers["x-import-filename"] || "").slice(0, 200) || null, req.user.id]);
+      batchId = b.rows[0].id;
+    } catch { /* batch tracking must never block the import itself */ }
+  }
+
   // Statement-import dedupe: re-importing an overlapping statement must never double-count.
   // For source:"import" rows, load the ledger's (date|amount|description) signatures over the
   // incoming date range once, and skip exact matches (and repeats within the same upload).
@@ -114,9 +127,9 @@ router.post("/", authenticate, canWrite, async (req, res) => {
     }
 
     const insertOne = () => pool.query(
-      `INSERT INTO transactions(tenant_id, bank_account_id, amount, description_raw, merchant_name, category, is_recurring, recurrence_cadence, transaction_date, source)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [req.user.tenant_id, asBankAccountId(bank_account_id), amount, description_raw || null, merchant_name || null, category, is_recurring, recurrence_cadence || null, transaction_date, source]
+      `INSERT INTO transactions(tenant_id, bank_account_id, amount, description_raw, merchant_name, category, is_recurring, recurrence_cadence, transaction_date, source, import_batch_id)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [req.user.tenant_id, asBankAccountId(bank_account_id), amount, description_raw || null, merchant_name || null, category, is_recurring, recurrence_cadence || null, transaction_date, source, batchId]
     );
     if (isBulk) {
       // A per-row failure (unexpected constraint, etc.) must never abort the rest of the
@@ -138,7 +151,14 @@ router.post("/", authenticate, canWrite, async (req, res) => {
     }).catch(() => {});
   }
 
-  if (isBulk) return res.status(201).json({ inserted, skipped_duplicates: skippedDuplicates, skipped_errors: skippedErrors });
+  if (isBulk) {
+    if (batchId) {
+      q(req.user.tenant_id,
+        "UPDATE import_batches SET row_count=$3, skipped_dupes=$4, skipped_errors=$5 WHERE id=$1 AND tenant_id=$2",
+        [batchId, req.user.tenant_id, inserted.length, skippedDuplicates, skippedErrors]).catch(() => {});
+    }
+    return res.status(201).json({ inserted, skipped_duplicates: skippedDuplicates, skipped_errors: skippedErrors, import_batch_id: batchId });
+  }
   res.status(201).json(inserted.length === 1 ? inserted[0] : inserted);
 });
 
@@ -208,6 +228,43 @@ router.get("/:id([0-9a-fA-F-]{36})", authenticate, async (req, res, next) => {
 
     res.json({ ...rows[0], nearby });
   } catch (e) { next(e); }
+});
+
+// ── Import batches: see them, take one back (Wave 11) ────────────────────────
+// A wrong-column CSV used to land hundreds of bad rows with no way to remove just that
+// upload. Rollback deletes exactly the rows the batch created — already-deleted rows are
+// simply gone, edited rows still carry the stamp and go with the batch (documented).
+router.get("/imports", authenticate, async (req, res, next) => {
+  try {
+    const { rows } = await q(req.user.tenant_id,
+      `SELECT b.*, u.email AS created_by_email FROM import_batches b
+        LEFT JOIN users u ON u.id = b.created_by
+       WHERE b.tenant_id=$1 AND b.entity='transactions' ORDER BY b.created_at DESC LIMIT 50`,
+      [req.user.tenant_id]);
+    res.json(rows);
+  } catch (e) { next(e); }
+});
+
+router.post("/imports/:batchId/rollback", authenticate, canWrite, async (req, res, next) => {
+  try {
+    const out = await withTenantTx(req.user.tenant_id, async (c) => {
+      const { rows: [b] } = await c.query(
+        "SELECT * FROM import_batches WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [req.params.batchId, req.user.tenant_id]);
+      if (!b) throw Object.assign(new Error("Import not found"), { status: 404 });
+      if (b.rolled_back_at) throw Object.assign(new Error("That import was already rolled back"), { status: 409 });
+      const del = await c.query(
+        "DELETE FROM transactions WHERE tenant_id=$1 AND import_batch_id=$2", [req.user.tenant_id, b.id]);
+      await c.query(
+        "UPDATE import_batches SET rolled_back_at=now(), rolled_back_by=$3 WHERE id=$1 AND tenant_id=$2",
+        [b.id, req.user.tenant_id, req.user.id]);
+      return { removed: del.rowCount, batch: b.id, filename: b.filename };
+    });
+    auditReq(req, "import_rolled_back", "import_batch", req.params.batchId, out);
+    res.json(out);
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    next(e);
+  }
 });
 
 module.exports = router;

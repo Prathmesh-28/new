@@ -268,4 +268,49 @@ router.delete("/:id", authenticate, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── GET /api/users/permissions — who can do what (Wave 10) ───────────────────
+// Roles are enforcement-side constants (per-domain WRITE_ROLES in each route file), but
+// nothing ever SHOWED them, so "can my accountant send invoices?" was answered by trying.
+// This is the human-readable matrix, kept next to the enforcement so drift is one file away.
+const PERMISSION_MATRIX = [
+  { domain: "Invoices & receivables", write: ["owner", "finance_manager", "accountant", "sales"], includes: "create/send invoices, receipts, credit notes, reminders" },
+  { domain: "Customers",              write: ["owner", "finance_manager", "accountant", "sales"], includes: "customer master, credit limits, portal links" },
+  { domain: "Transactions & banking", write: ["owner", "finance_manager", "accountant"],          includes: "bank lines, categorisation, reconciliation" },
+  { domain: "GST & tax",              write: ["owner", "finance_manager", "accountant"],          includes: "returns, challans, filings prep" },
+  { domain: "Vendors & purchases",    write: ["owner", "finance_manager", "operations_manager"],  includes: "vendor master, bills, purchase orders" },
+  { domain: "Payroll & people",       write: ["owner", "finance_manager"],                        includes: "salary structures, payroll runs, payslips" },
+  { domain: "Payouts & money out",    write: ["owner", "finance_manager"],                        includes: "payouts, EWA, credit lines" },
+  { domain: "Team & settings",        write: ["owner"],                                           includes: "invites, roles, billing, firm settings" },
+];
+router.get("/permissions", authenticate, (_req, res) => {
+  res.json({
+    roles: ["owner", "finance_manager", "accountant", "sales", "operations_manager", "viewer"],
+    matrix: PERMISSION_MATRIX,
+    note: "Every role can VIEW everything in the firm; this matrix is about who can change things. super_admin is the platform operator, not a firm role.",
+  });
+});
+
+// ── GET /api/users/:id/activity — what did this person change? (Wave 10) ────
+// The audit trail records every mutation but there was no per-person view, so "what did
+// Ravi change last week?" had no answer. Owner/admin only, own firm only.
+router.get("/:id/activity", authenticate, requireOwnerOrAdmin, async (req, res, next) => {
+  try {
+    const days = Math.min(90, Math.max(1, parseInt(req.query.days, 10) || 14));
+    // The target must be a member of THIS firm — an owner must not read another firm's trail.
+    const m = await pool.query(
+      `SELECT 1 FROM users u WHERE u.id=$1 AND (u.tenant_id=$2 OR EXISTS
+         (SELECT 1 FROM tenant_memberships tm WHERE tm.user_id=u.id AND tm.tenant_id=$2 AND tm.status='active'))`,
+      [req.params.id, req.user.tenant_id]);
+    if (!m.rows[0]) return res.status(404).json({ error: "That person isn't in this firm" });
+    const { rows } = await pool.query(
+      `SELECT action, entity, entity_id, meta, created_at FROM audit_log
+        WHERE user_id=$1 AND tenant_id=$2 AND created_at > now() - ($3 || ' days')::interval
+        ORDER BY created_at DESC LIMIT 200`,
+      [req.params.id, req.user.tenant_id, String(days)]);
+    const byAction = {};
+    for (const r of rows) byAction[r.action] = (byAction[r.action] || 0) + 1;
+    res.json({ days, total: rows.length, by_action: byAction, events: rows });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

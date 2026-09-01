@@ -215,6 +215,7 @@ app.use("/api/notifications",      require("./routes/notifications")); // per-us
 app.use("/api/support",            require("./routes/support"));       // help, feedback, changelog (Wave 7)
 // PUBLIC (no auth): the customer portal. The token in the URL is the authorisation.
 app.use("/api/portal",             require("./routes/portal").router);
+app.use("/api/reports",            require("./routes/reports"));       // reports home + scheduled email (Wave 12)
 app.use("/api/prefs",              require("./routes/prefs"));
 app.use("/api/records",            require("./routes/records"));
 app.use("/api/trash",              require("./routes/trash"));
@@ -688,6 +689,10 @@ initDb()
       require("./modules/flows/runner").runDueScheduled(new Date())
         .then(r => { if (r && r.ran) console.log(`[flows] ran ${r.ran} scheduled flow(s)`); })
         .catch(err => console.error("[flows-scheduled]", err.message));
+      // Scheduled report emails (Wave 12): send the ones whose local hour has arrived.
+      require("./lib/reportMailer").runDueSchedules()
+        .then(n => { if (n) console.log(`[reports] emailed ${n} scheduled report(s)`); })
+        .catch(err => console.error("[reports-scheduled]", err.message));
     }, { timezone: "UTC" });
     // Overdue-invoice reminders daily at 08:30 IST (03:00 UTC) - raises in-app alerts.
     cron.schedule("0 3 * * *", () => {

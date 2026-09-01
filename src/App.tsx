@@ -38,6 +38,7 @@ import { ConfirmProvider, ThemeProvider, KeyboardShortcuts, useTheme } from "@/c
 const InvoiceDetailPage  = lazy(() => import("@/features/records/InvoiceDetailPage"));
 const CustomersPage      = lazy(() => import("@/features/customers/CustomersPage"));
 const TrashPage          = lazy(() => import("@/features/trash/TrashPage"));
+const ReportsPage        = lazy(() => import("@/features/reports/ReportsPage"));
 const TransactionDetailPage = lazy(() => import("@/features/records/TransactionDetailPage"));
 const VendorDetailPage      = lazy(() => import("@/features/records/VendorDetailPage"));
 const CustomerDetailPage = lazy(() => import("@/features/customers/CustomerDetailPage"));
@@ -302,6 +303,7 @@ function AppShell() {
                 <Route path="/customers"     element={<CustomersPage />} />
                 <Route path="/customers/:id" element={<CustomerDetailPage />} />
                 <Route path="/trash"         element={<TrashPage />} />{/* 30-day bin: no delete in the product is final any more */}
+                <Route path="/reports"       element={<ReportsPage />} />{/* Wave 12: the front door reports never had */}
                 <Route path="/gst"           element={<GstPage />} />
                 <Route path="/payroll"       element={<PayrollPage />} />
                 <Route path="/suppliers"     element={<SuppliersPage />} />

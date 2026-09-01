@@ -11,6 +11,9 @@ import { recoverFromChunkError } from "@/lib/chunkReload";
 // Capture uncaught errors + unhandled promise rejections → backend telemetry.
 installGlobalErrorReporting();
 
+// Replay writes that were saved while offline (lib/offlineQueue). Safe on every start.
+import("@/lib/offlineQueue").then((m) => m.installOfflineQueue()).catch(() => {});
+
 // Paint the user's theme BEFORE React mounts. The stored preference is read from the
 // localStorage mirror rather than waiting on /api/prefs, so a light-mode user never sees
 // a flash of the dark app while the request is in flight.
