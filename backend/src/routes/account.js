@@ -58,7 +58,28 @@ router.get("/export", authenticate, async (req, res) => {
   await grab("invoices", "SELECT * FROM invoices WHERE tenant_id=$1", [t]);
   await grab("active_loans", "SELECT * FROM active_loans WHERE tenant_id=$1", [t]);
   await grab("consents", "SELECT purpose, granted, version, updated_at FROM consents WHERE tenant_id=$1", [t]);
-  res.setHeader("Content-Disposition", `attachment; filename="headroom-data-${t}.json"`);
+  // Waves 1-15 added real business tables; an "everything" export that missed them would
+  // be a false promise. File CONTENTS are deliberately excluded (metadata only) — they're
+  // encrypted blobs that would balloon the download; the vault has its own downloads.
+  await grab("customers", "SELECT * FROM customers WHERE tenant_id=$1", [t]);
+  await grab("customer_contacts", "SELECT * FROM customer_contacts WHERE tenant_id=$1", [t]);
+  await grab("customer_advances", "SELECT * FROM customer_advances WHERE tenant_id=$1", [t]);
+  await grab("invoice_items", "SELECT ii.* FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id WHERE i.tenant_id=$1", [t]);
+  await grab("invoice_payments", "SELECT * FROM invoice_payments WHERE tenant_id=$1", [t]);
+  await grab("invoice_credit_notes", "SELECT * FROM invoice_credit_notes WHERE tenant_id=$1", [t]);
+  await grab("invoice_writeoffs", "SELECT * FROM invoice_writeoffs WHERE tenant_id=$1", [t]);
+  await grab("invoice_revisions", "SELECT * FROM invoice_revisions WHERE tenant_id=$1", [t]);
+  await grab("vendors", "SELECT id, name, gstin, contact_name, phone, email, payment_terms_days, is_msme, msme_category, udyam, category, notes, created_at FROM vendor_master WHERE tenant_id=$1", [t]);
+  await grab("employees", "SELECT * FROM employees WHERE tenant_id=$1", [t]);
+  await grab("files_metadata", "SELECT id, name, mime_type, size, category, tags, created_at FROM files WHERE tenant_id=$1", [t]);
+  await grab("audit_log", "SELECT action, entity, entity_id, meta, created_at FROM audit_log WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 5000", [t]);
+
+  out.record_counts = Object.fromEntries(Object.entries(out).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, v.length]));
+  // The export doubles as the do-it-yourself backup; remember when it last happened so
+  // Settings can show "last backed up N days ago" instead of silence.
+  require("../lib/audit").writeAudit(req.user.id, "data_export", "tenant", t, { counts: out.record_counts }, t);
+
+  res.setHeader("Content-Disposition", `attachment; filename="headroom-data-${t}-${new Date().toISOString().slice(0, 10)}.json"`);
   res.setHeader("Content-Type", "application/json");
   res.send(JSON.stringify(out, null, 2));
 });
@@ -67,6 +88,17 @@ router.get("/export", authenticate, async (req, res) => {
 // REQUEST (not an immediate hard delete) because RBI/tax rules require certain
 // financial records to be retained for a statutory period before purge.
 // Requires the owner to re-enter their password.
+// GET /api/account/export/last — when did this firm last take its data out? Shown in
+// Settings so "backed up" is a date, not a feeling.
+router.get("/export/last", authenticate, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT created_at, meta FROM audit_log
+        WHERE tenant_id=$1 AND action='data_export' ORDER BY created_at DESC LIMIT 1`, [req.user.tenant_id]);
+    res.json(rows[0] ? { last_export_at: rows[0].created_at, counts: rows[0].meta?.counts ?? null } : { last_export_at: null });
+  } catch (e) { next(e); }
+});
+
 router.post("/deletion-request", authenticate, requireOwnerOrAdmin, validateBody({
   password: { type: "string", required: true, maxLen: 200 },
   reason:   { type: "string", maxLen: 1000 },

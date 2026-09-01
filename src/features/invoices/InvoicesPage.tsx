@@ -443,6 +443,92 @@ function Row({ label, value, muted }: { label: string; value: string; muted?: bo
   );
 }
 
+/**
+ * Counter sale (Wave 20, item 112 — the software half of POS, no hardware chased).
+ * A walk-in cash/UPI sale was six steps: compose invoice → save → find it → record
+ * payment → mode → confirm. At a counter that's five too many. One screen: items, how
+ * they paid, done — a real numbered invoice with a real numbered receipt, in the ledger
+ * like everything else, never a parallel "POS" store.
+ */
+function CounterSaleModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [customer, setCustomer] = useState("Walk-in customer");
+  const [items, setItems] = useState([{ description: "", quantity: "1", unit_price: "", gst_rate: "18" }]);
+  const [mode, setMode] = useState<"cash" | "upi" | "card">("cash");
+  const [busy, setBusy] = useState(false);
+  const totals = computeInvoice({ items, gst_rate: 18 });
+
+  const update = (i: number, k: string, v: string) => setItems(p => p.map((r, j) => j === i ? { ...r, [k]: v } : r));
+
+  const ring = async () => {
+    if (items.some(i => !i.description || !i.unit_price)) { toast.error("Every line needs a description and a price"); return; }
+    setBusy(true);
+    try {
+      const inv = await api.post<{ id: string; invoice_number: string; total_amount: string }>("/api/invoices", {
+        customer_name: customer.trim() || "Walk-in customer",
+        gst_rate: 18, reference: "Counter sale",
+        items: items.map(it => ({ description: it.description, quantity: parseFloat(it.quantity) || 1, unit_price: parseFloat(it.unit_price) || 0, gst_rate: parseFloat(it.gst_rate) || 18 })),
+      });
+      const pay = await api.post<{ payment: { receipt_number: string } }>(`/api/invoices/${inv.id}/payments`, {
+        amount: Number(inv.total_amount), mode, reference: "Counter sale",
+      });
+      toast.success(`${inv.invoice_number} · ${formatCurrency(Number(inv.total_amount))} taken in ${mode}`, {
+        description: `Receipt ${pay.payment.receipt_number}. It's in the ledger like any other sale.`,
+      });
+      setItems([{ description: "", quantity: "1", unit_price: "", gst_rate: "18" }]);
+      setCustomer("Walk-in customer");
+      onDone();
+      // Stays open: at a counter the next sale is seconds away.
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't ring that up"); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Counter sale" size="md"
+      description="Items, how they paid, done — a paid invoice with a numbered receipt. Stays open for the next sale."
+      footer={<>
+        <Button variant="ghost" onClick={onClose}>Close</Button>
+        <Button variant="primary" loading={busy} onClick={ring}>
+          Take {formatCurrency(totals.total_amount)} in {mode}
+        </Button>
+      </>}>
+      <div className="space-y-3">
+        <input value={customer} onChange={e => setCustomer(e.target.value)} aria-label="Customer"
+          className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+        {items.map((it, i) => (
+          <div key={i} className="grid grid-cols-12 gap-2">
+            <input value={it.description} onChange={e => update(i, "description", e.target.value)} placeholder={`Item ${i + 1}`}
+              aria-label={`Item ${i + 1}`} autoFocus={i === items.length - 1}
+              className="col-span-6 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            <input value={it.quantity} onChange={e => update(i, "quantity", e.target.value)} type="number" min="0" step="any" placeholder="Qty"
+              aria-label={`Item ${i + 1} quantity`}
+              className="col-span-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            <input value={it.unit_price} onChange={e => update(i, "unit_price", e.target.value)} type="number" min="0" step="any" placeholder="₹"
+              aria-label={`Item ${i + 1} price`}
+              className="col-span-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]" />
+            <button type="button" onClick={() => setItems(p => p.length === 1 ? p : p.filter((_, j) => j !== i))}
+              aria-label={`Remove item ${i + 1}`} disabled={items.length === 1}
+              className="col-span-1 text-[var(--color-muted)] hover:text-red-400 disabled:opacity-30"><X size={13} /></button>
+          </div>
+        ))}
+        <button type="button" onClick={() => setItems(p => [...p, { description: "", quantity: "1", unit_price: "", gst_rate: "18" }])}
+          className="text-xs text-[var(--color-primary)] hover:underline">+ Another item</button>
+        <div className="flex gap-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-1 w-fit" role="radiogroup" aria-label="Payment mode">
+          {(["cash", "upi", "card"] as const).map(m => (
+            <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => setMode(m)}
+              className={`px-4 py-1.5 text-xs rounded font-semibold uppercase ${mode === m ? "bg-[var(--color-primary)] text-[var(--color-bg)]" : "text-[var(--color-muted)]"}`}>
+              {m}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center justify-between text-sm pt-2 border-t border-[var(--color-border)]">
+          <span className="text-[var(--color-muted)]">Total incl. 18% GST</span>
+          <span className="text-xl font-bold tabular-nums">{formatCurrency(totals.total_amount)}</span>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function UpiQrModal({ invoice, onClose }: { invoice: Invoice; onClose: () => void }) {
   const [qr, setQr]       = useState<string | null>(null);
   const [url, setUrl]     = useState<string | null>(null);
@@ -635,6 +721,7 @@ export default function InvoicesPage() {
   const [loading, setLoading]   = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [showNew, setShowNew]   = useState(false);
+  const [showCounter, setShowCounter] = useState(false);
   const [composeInitial, setComposeInitial] = useState<{ customer?: string; amount?: string; desc?: string; dealId?: string } | undefined>();
   const [searchParams, setSearchParams] = useSearchParams();
   const [qrInvoice, setQrInvoice] = useState<Invoice | null>(null);
@@ -942,10 +1029,17 @@ export default function InvoicesPage() {
           <h1 className="text-xl font-bold">{tr("Invoices")}</h1>
           <p className="text-xs text-[var(--color-muted)] mt-0.5">{tr("inv.subtitle")}</p>
         </div>
-        <button onClick={() => setShowNew(true)}
-          className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
-          <Plus size={13} /> {tr("quickcreate.invoice")}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowCounter(true)}
+            title="Cash sale at the counter: items, cash received, paid invoice — one screen"
+            className="flex items-center gap-1.5 text-sm border border-[var(--color-border)] font-semibold px-3 py-2 rounded-lg hover:bg-[var(--color-accent)]">
+            <Zap size={13} /> Counter sale
+          </button>
+          <button onClick={() => setShowNew(true)}
+            className="flex items-center gap-1.5 text-sm bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold px-3 py-2 rounded-lg hover:opacity-90">
+            <Plus size={13} /> {tr("quickcreate.invoice")}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -1090,6 +1184,7 @@ export default function InvoicesPage() {
       )}
 
       {showNew   && <NewInvoiceModal initial={composeInitial} recent={invoices} onClose={() => { setShowNew(false); setComposeInitial(undefined); }} onCreated={load} />}
+      {showCounter && <CounterSaleModal onClose={() => setShowCounter(false)} onDone={load} />}
       {qrInvoice && <UpiQrModal invoice={qrInvoice} onClose={() => setQrInvoice(null)} />}
       {payInvoice && (
         <RecordPaymentModal
@@ -2036,9 +2131,32 @@ function DeliveryChallan() {
     setCustomer(""); setVehicle(""); setItems([blankItem()]);
     toast.success(`Delivery challan ${number} created`);
   };
-  const toInvoice = (id: string) => {
-    setDocs(p => p.map(d => d.id === id ? { ...d, invoiced: true } : d));
-    toast.success("Challan converted - raise the tax invoice with these lines in New Invoice");
+  // "To invoice" used to flip a flag and leave the user to re-type everything — the same
+  // fake-conversion pattern the quotation builder had. It now raises the real invoice
+  // from the challan's own lines and records the challan number on it.
+  const [converting, setConverting] = useState<string | null>(null);
+  const toInvoice = async (id: string) => {
+    const doc = docs.find(d => d.id === id);
+    if (!doc) return;
+    setConverting(id);
+    try {
+      const inv = await api.post<{ id: string; invoice_number: string }>("/api/invoices", {
+        customer_name: doc.customer,
+        gst_rate: 18,
+        reference: `Against delivery challan ${doc.number}${doc.vehicle ? ` (vehicle ${doc.vehicle})` : ""}`,
+        items: doc.items.map(it => ({
+          description: it.description, hsn_sac: it.hsn_sac || undefined,
+          quantity: parseFloat(String(it.qty)) || 1, unit_price: parseFloat(String(it.rate)) || 0,
+          gst_rate: parseFloat(String(it.gst)) || 18,
+        })),
+      });
+      setDocs(p => p.map(d => d.id === id ? { ...d, invoiced: true } : d));
+      toast.success(`${inv.invoice_number} raised from ${doc.number}`, {
+        action: { label: "Open it", onClick: () => { window.location.href = `/invoices/${inv.id}`; } },
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't raise the invoice — the challan is unchanged");
+    } finally { setConverting(null); }
   };
 
   return (
@@ -2069,7 +2187,12 @@ function DeliveryChallan() {
                   <td className="px-4 py-2.5 tabular-nums font-semibold">{formatCurrency(c.total)}</td>
                   <td className="px-4 py-2.5"><span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${d.invoiced ? "bg-green-900/30 text-green-400 border-green-800/40" : "bg-[var(--color-accent)] text-[var(--color-muted)] border-[var(--color-border)]"}`}>{d.invoiced ? "invoiced" : "open"}</span></td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    {!d.invoiced && <button onClick={() => toInvoice(d.id)} className="text-xs text-[var(--color-primary)] hover:underline inline-flex items-center gap-1">To invoice <ArrowRight size={11} /></button>}
+                    {!d.invoiced && (
+                      <button onClick={() => toInvoice(d.id)} disabled={converting === d.id}
+                        className="text-xs text-[var(--color-primary)] hover:underline inline-flex items-center gap-1 disabled:opacity-50">
+                        {converting === d.id ? "Raising…" : "Raise invoice"} <ArrowRight size={11} />
+                      </button>
+                    )}
                     <button onClick={() => setDocs(p => p.filter(x => x.id !== d.id))} className="ml-3 text-[var(--color-muted)] hover:text-red-400"><Trash2 size={13} /></button>
                   </td>
                 </tr>

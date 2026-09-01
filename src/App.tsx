@@ -23,6 +23,7 @@ import InstallPrompt from "@/components/InstallPrompt";
 import NotificationBell from "@/components/NotificationBell";
 import SupportButton from "@/components/SupportButton";
 import WhatsNew from "@/components/WhatsNew";
+import WelcomeTour from "@/components/WelcomeTour";
 import QuickCreate from "@/components/QuickCreate";
 import { onAppResume } from "@/lib/mobile";
 import { onDeepLink } from "@/lib/native";
@@ -275,6 +276,7 @@ function AppShell() {
         </div>
         {/* Reaching a human used to mean leaving the product to find an email address. */}
         <SupportButton />
+        <WelcomeTour />
         <QuickCreate />
         <MobileBottomNav onOpenSearch={openPalette} />
         <main className="flex-1 px-5 py-5 md:p-6 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-6 overflow-auto">
