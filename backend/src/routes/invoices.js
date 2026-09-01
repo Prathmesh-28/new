@@ -13,7 +13,30 @@ const listQuery = require("../lib/listQuery");
 const trash = require("../lib/trash");
 const { idempotent } = require("../middleware/idempotency");
 const { writeAudit, auditReq } = require("../lib/audit");
-const { taxSplit } = require("../lib/gstInvoice");
+const { taxSplit, stateName } = require("../lib/gstInvoice");
+// One date formatter for the document: DATE columns arrive as plain "YYYY-MM-DD" strings
+// (db.js), so they must not be pushed through a timezone-converting Date.
+const fmtDate = (v) => {
+  const s = String(v || "");
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : new Date(s).toLocaleDateString("en-IN");
+};
+// Money ON THE PDF. Two separate defects being fixed here:
+//   • PDFKit's built-in Helvetica is WinAnsi-encoded and has no glyph for the rupee sign,
+//     so every "₹" printed as "¹" on the invoice the customer received. Embedding a
+//     Unicode font would mean shipping a font file; "Rs." is the conventional fallback on
+//     Indian invoices and is unambiguous, and a non-INR invoice prints its ISO code.
+//   • Amounts printed with toLocaleString alone dropped trailing zeros — 499.5 and 890.1
+//     next to 4,945 on the same document. Money always shows two decimals.
+const money = (v, currency = "INR") => {
+  const n = Number(v) || 0;
+  const body = Math.abs(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const symbol = currency === "INR" ? "Rs. " : `${currency} `;
+  return `${n < 0 ? "-" : ""}${symbol}${body}`;
+};
+// Quantities and unit rates: grouped, two decimals, no currency prefix (the column says it).
+const qty = (v) => (Number(v) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+const { computeInvoice, inWords } = require("../lib/invoiceTotals");
 
 const WRITE_ROLES = ["super_admin","owner","finance_manager","accountant","sales"];
 const canWrite = (req, res, next) => WRITE_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Forbidden" });
@@ -30,7 +53,7 @@ async function firmNameOf(tenantId) {
   return null;
 }
 
-const { createInvoiceTx } = require("../lib/invoiceCreate"); // shared with the recurring-invoice cron
+const { createInvoiceTx, sellerStateCode } = require("../lib/invoiceCreate"); // shared with the recurring-invoice cron
 
 function computeAging(invoice) {
   if (invoice.status === "paid") return "paid";
@@ -92,20 +115,33 @@ router.get("/", authenticate, async (req, res) => {
 
 // POST /api/invoices
 router.post("/", authenticate, canWrite, idempotent(), async (req, res) => {
-  const { customer_name, customer_gstin, customer_email, customer_phone, gst_rate = 18, due_date, items = [] } = req.body;
+  const {
+    customer_name, customer_gstin, customer_email, customer_phone, gst_rate = 18, due_date, items = [],
+    // Wave 4 document fields. All optional: an invoice raised the old way still works, it
+    // just gets today's date, the customer's place of supply and no discount/freight.
+    customer_id, invoice_date, place_of_supply_code, reverse_charge, discount_amount,
+    shipping_amount, currency, exchange_rate, po_number, reference, terms, notes, round_off_enabled,
+  } = req.body;
   if (!customer_name || !items.length) return res.status(400).json({ error: "customer_name and items required" });
   // A malformed date used to reach Postgres and reject asynchronously with nothing
   // catching it: the request never answered and the caller hung until its own timeout.
   // Validate here and say which field is wrong.
-  if (due_date != null && due_date !== "" && Number.isNaN(Date.parse(due_date)))
-    return res.status(400).json({ error: `due_date "${due_date}" is not a valid date (use YYYY-MM-DD)` });
+  for (const [field, value] of [["due_date", due_date], ["invoice_date", invoice_date]]) {
+    if (value != null && value !== "" && Number.isNaN(Date.parse(value)))
+      return res.status(400).json({ error: `${field} "${value}" is not a valid date (use YYYY-MM-DD)`, errors: { [field]: "Use a date like 2026-09-01" } });
+  }
 
   // One tenant-scoped transaction (RLS GUC set once): next-number read + invoice insert +
   // line items — atomic, via the factory shared with the recurring-invoice cron.
   let inv;
   try {
     inv = await withTenant(req.user.tenant_id, (client) =>
-      createInvoiceTx(client, req.user.tenant_id, { customer_name, customer_gstin, customer_email, customer_phone, gst_rate, due_date, items })
+      createInvoiceTx(client, req.user.tenant_id, {
+        customer_name, customer_gstin, customer_email, customer_phone, gst_rate, due_date, items,
+        customer_id, invoice_date, place_of_supply_code, reverse_charge, discount_amount,
+        shipping_amount, currency, exchange_rate, po_number, reference, terms, notes,
+        round_off_enabled: round_off_enabled !== false,
+      })
     );
   } catch (e) {
     // 22xxx = Postgres data exceptions (bad date, numeric overflow, …): the client sent
@@ -222,10 +258,25 @@ router.get("/:id/pdf", authenticate, async (req, res) => {
   // falling back to the firm KV) and the same derivation (lib/gstInvoice), so the printed
   // CGST/SGST-vs-IGST can never disagree with what was posted to the books.
   const { rows: profRows } = await pool.query("SELECT gstin FROM tenant_profile WHERE tenant_id=$1 LIMIT 1", [req.user.tenant_id]).catch(() => ({ rows: [] }));
-  const split = taxSplit({
+  // Wave 4 stores the split ON the invoice at creation, so the printed document and the GL
+  // can never drift apart. taxSplit() is still used for invoices raised before that (their
+  // stored split is zero) — the derivation it uses is the one the migration backfilled with.
+  const stored = Number(inv.cgst_amount) + Number(inv.sgst_amount) + Number(inv.igst_amount) > 0;
+  const derived = taxSplit({
     gstAmount: inv.gst_amount, gstRate: inv.gst_rate,
     buyerGstin: inv.customer_gstin, sellerGstin: profRows[0]?.gstin || firm.gstNumber || null,
   });
+  const halfRate = round2(Number(inv.gst_rate) / 2);
+  const split = stored ? {
+    interState: inv.is_inter_state === true,
+    placeOfSupply: inv.place_of_supply_code
+      ? { code: inv.place_of_supply_code, name: stateName(inv.place_of_supply_code) }
+      : derived.placeOfSupply,
+    lines: Number(inv.igst_amount) > 0
+      ? [{ label: `IGST (${Number(inv.gst_rate)}%)`, amount: Number(inv.igst_amount) }]
+      : [{ label: `CGST (${halfRate}%)`, amount: Number(inv.cgst_amount) },
+         { label: `SGST (${halfRate}%)`, amount: Number(inv.sgst_amount) }],
+  } : derived;
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="${inv.invoice_number}.pdf"`);
@@ -234,11 +285,24 @@ router.get("/:id/pdf", authenticate, async (req, res) => {
   doc.pipe(res);
 
   // Header
-  doc.fontSize(20).font("Helvetica-Bold").text("INVOICE", 50, 50);
+  // A void invoice must never be mistaken for a live one, so it says so across the page.
+  if (inv.voided_at) {
+    doc.save().rotate(-30, { origin: [300, 400] })
+      .fontSize(72).fillColor("#e11d48").opacity(0.12).font("Helvetica-Bold")
+      .text("VOID", 120, 360, { width: 400, align: "center" })
+      .opacity(1).restore();
+  }
+  doc.fontSize(20).font("Helvetica-Bold").fillColor("#000")
+    .text(inv.reverse_charge ? "TAX INVOICE (REVERSE CHARGE)" : "TAX INVOICE", 50, 50, { width: 330 });
   doc.fontSize(10).font("Helvetica").fillColor("#666")
     .text(inv.invoice_number, 50, 76)
-    .text(`Date: ${new Date(inv.created_at).toLocaleDateString("en-IN")}`, 50, 90);
-  if (inv.due_date) doc.text(`Due: ${new Date(inv.due_date).toLocaleDateString("en-IN")}`, 50, 104);
+    // The document date, not the row's insert timestamp: an invoice can be dated to the
+    // actual date of supply, which is what a back-dated entry needs.
+    .text(`Date: ${fmtDate(inv.invoice_date || inv.created_at)}`, 50, 90);
+  let hy = 104;
+  if (inv.due_date) { doc.text(`Due: ${fmtDate(inv.due_date)}`, 50, hy); hy += 14; }
+  if (inv.po_number) { doc.text(`Your PO: ${inv.po_number}`, 50, hy); hy += 14; }
+  if (inv.reference) { doc.text(`Ref: ${inv.reference}`, 50, hy); hy += 14; }
 
   // Company info (right side)
   const right = 400;
@@ -264,17 +328,25 @@ router.get("/:id/pdf", authenticate, async (req, res) => {
     .text("Description",  55,  tableTop + 6, { width: 220 })
     .text("HSN/SAC",       280, tableTop + 6, { width: 60 })
     .text("Qty",           340, tableTop + 6, { width: 40, align: "right" })
-    .text("Rate (₹)",      380, tableTop + 6, { width: 70, align: "right" })
-    .text("Amount (₹)",    450, tableTop + 6, { width: 95, align: "right" });
+    .text("Rate",          380, tableTop + 6, { width: 70, align: "right" })
+    .text("Amount",        450, tableTop + 6, { width: 95, align: "right" });
 
   let y = tableTop + 28;
   doc.font("Helvetica").fillColor("#000").fontSize(9);
   for (const item of items) {
-    doc.text(item.description, 55, y, { width: 220 })
+    doc.text(item.uom ? `${item.description} (${item.uom})` : item.description, 55, y, { width: 220 })
        .text(item.hsn_sac || "-", 280, y, { width: 60 })
-       .text(parseFloat(item.quantity).toFixed(2), 340, y, { width: 40, align: "right" })
-       .text(parseFloat(item.unit_price).toLocaleString("en-IN"), 380, y, { width: 70, align: "right" })
-       .text(parseFloat(item.amount).toLocaleString("en-IN"), 450, y, { width: 95, align: "right" });
+       .text(qty(item.quantity), 340, y, { width: 40, align: "right" })
+       .text(qty(item.unit_price), 380, y, { width: 70, align: "right" })
+       .text(qty(item.amount), 450, y, { width: 95, align: "right" });
+    // A per-line discount has to be visible, or the rate and the amount look like they
+    // disagree and the customer queries the invoice.
+    if (Number(item.discount_amount) > 0) {
+      y += 11;
+      doc.fillColor("#888").fontSize(8)
+        .text(`less discount ${Number(item.discount_pct) > 0 ? `${Number(item.discount_pct)}% ` : ""}(${qty(item.discount_amount)})`, 55, y, { width: 380 })
+        .fillColor("#000").fontSize(9);
+    }
     y += 20;
     if (y > 680) { doc.addPage(); y = 50; }
   }
@@ -283,10 +355,20 @@ router.get("/:id/pdf", authenticate, async (req, res) => {
   y += 10;
   doc.moveTo(50, y).lineTo(550, y).stroke("#ddd");
   y += 12;
+  const disc = round2(inv.discount_amount);
+  const ship = round2(inv.shipping_amount);
+  const roundOff = round2(inv.round_off);
   const totals = [
-    ["Subtotal", parseFloat(inv.subtotal)],
+    // Show the arithmetic, not just the answer: gross, what came off, what went on, the
+    // taxable value the GST is actually charged on, then the tax.
+    ...(disc > 0 || ship > 0 ? [["Gross value", round2(Number(inv.subtotal) + disc - ship)]] : []),
+    ...(disc > 0 ? [["Less: Discount", -disc]] : []),
+    ...(ship > 0 ? [["Add: Freight / packing", ship]] : []),
+    [disc > 0 || ship > 0 ? "Taxable value" : "Subtotal", parseFloat(inv.subtotal)],
     // CGST+SGST for intra-state, IGST for inter-state — matches the GL posting exactly.
     ...split.lines.map((l) => [l.label, l.amount]),
+    ...(inv.reverse_charge ? [["(Tax payable by recipient under RCM)", 0]] : []),
+    ...(roundOff !== 0 ? [["Round off", roundOff]] : []),
     ["Total", parseFloat(inv.total_amount)],
   ];
   const paidSoFar = round2(inv.paid_amount);
@@ -300,9 +382,44 @@ router.get("/:id/pdf", authenticate, async (req, res) => {
   for (const [label, val] of totals) {
     const bold = label === "Total" || label === "Balance Due";
     doc.font(bold ? "Helvetica-Bold" : "Helvetica").fillColor(bold ? "#1A6B55" : "#000")
-       .text(label, 380, y, { width: 120, align: "right" })
-       .text(`₹${Number(val).toLocaleString("en-IN")}`, 450, y, { width: 95, align: "right" });
+       .text(label, 330, y, { width: 170, align: "right" })
+       .text(money(val, inv.currency || "INR"), 450, y, { width: 95, align: "right" });
     y += 18;
+  }
+
+  // Amount in words — expected on the face of an Indian tax invoice, and the thing a
+  // reviewer checks the figures against.
+  y += 6;
+  doc.font("Helvetica-Bold").fillColor("#000").fontSize(9)
+    .text(inWords(inv.total_amount, inv.currency || "INR"), 50, y, { width: 320 });
+  y += 26;
+
+  // Where to actually send the money. Without this the customer has to email and ask,
+  // which is a day added to every collection.
+  const bank = firm.bank || {};
+  if (bank.accountNumber || bank.ifsc || firm.upiVpa) {
+    doc.font("Helvetica-Bold").fillColor("#000").fontSize(9).text("Payment details", 50, y);
+    y += 13;
+    doc.font("Helvetica").fillColor("#444").fontSize(8.5);
+    for (const [label, value] of [
+      ["Bank", bank.bankName], ["A/c name", bank.accountName || firm.name],
+      ["A/c no.", bank.accountNumber], ["IFSC", bank.ifsc], ["UPI", firm.upiVpa],
+    ]) { if (value) { doc.text(`${label}: ${value}`, 50, y, { width: 320 }); y += 11; } }
+    y += 6;
+  }
+
+  if (inv.terms) {
+    doc.font("Helvetica-Bold").fillColor("#000").fontSize(9).text("Terms", 50, y); y += 12;
+    doc.font("Helvetica").fillColor("#444").fontSize(8.5).text(String(inv.terms).slice(0, 600), 50, y, { width: 320 });
+    y = doc.y + 8;
+  }
+  if (inv.notes) {
+    doc.font("Helvetica-Bold").fillColor("#000").fontSize(9).text("Notes", 50, y); y += 12;
+    doc.font("Helvetica").fillColor("#444").fontSize(8.5).text(String(inv.notes).slice(0, 600), 50, y, { width: 320 });
+  }
+  if (inv.voided_at) {
+    doc.font("Helvetica-Bold").fillColor("#e11d48").fontSize(9)
+      .text(`VOID — ${inv.void_reason || "cancelled"}`, 50, 740, { width: 500 });
   }
 
   // Footer
@@ -861,6 +978,129 @@ router.post("/recurring/:rid/run-now", authenticate, canWrite, async (req, res) 
     if (!inv) return res.status(400).json({ error: "Schedule not found, inactive, or has no items." });
     res.status(201).json(inv);
   } catch (e) { console.error("[invoices] recurring run-now failed:", e.message); res.status(500).json({ error: "Internal error" }); }
+});
+
+// ── PUT /api/invoices/:id — edit the document, keeping what it used to say ───
+// Editing an invoice used to be impossible (PATCH only flipped status), so a typo in a
+// customer's name or a wrong rate meant deleting and re-raising — which burned an invoice
+// number. Now the PREVIOUS state is snapshotted into invoice_revisions first, so the trail
+// can always reconstruct the document as it was issued.
+//
+// Refused once money or tax has moved: an invoice that has been paid, part-paid, credited
+// or voided must be corrected with a credit note, not edited in place.
+router.put("/:id([0-9a-fA-F-]{36})", authenticate, canWrite, async (req, res, next) => {
+  const tenantId = req.user.tenant_id;
+  try {
+    const out = await withTenant(tenantId, async (client) => {
+      const { rows: [cur] } = await client.query(
+        "SELECT * FROM invoices WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [req.params.id, tenantId]);
+      if (!cur) throw Object.assign(new Error("Invoice not found"), { status: 404 });
+      if (cur.voided_at) throw Object.assign(new Error("This invoice is void and can't be edited"), { status: 409 });
+      if (cur.status === "paid" || Number(cur.paid_amount) > 0 || Number(cur.credited_amount) > 0)
+        throw Object.assign(new Error("Money has already moved against this invoice. Issue a credit note instead of editing it."), { status: 409 });
+
+      const { rows: oldItems } = await client.query("SELECT * FROM invoice_items WHERE invoice_id=$1 ORDER BY id", [cur.id]);
+      await client.query(
+        `INSERT INTO invoice_revisions(tenant_id, invoice_id, version, snapshot, reason, changed_by)
+         VALUES($1,$2,$3,$4,$5,$6)`,
+        [tenantId, cur.id, cur.version, { invoice: cur, items: oldItems }, req.body?.reason || null, req.user.id]);
+
+      const b = req.body || {};
+      const items = Array.isArray(b.items) && b.items.length ? b.items : oldItems;
+      const pos = b.place_of_supply_code !== undefined ? b.place_of_supply_code : cur.place_of_supply_code;
+      const totals = computeInvoice({
+        items,
+        gst_rate: b.gst_rate ?? cur.gst_rate,
+        discount_amount: b.discount_amount ?? cur.discount_amount,
+        shipping_amount: b.shipping_amount ?? cur.shipping_amount,
+        place_of_supply_code: pos,
+        seller_state_code: await sellerStateCode(client, tenantId),
+        reverse_charge: b.reverse_charge ?? cur.reverse_charge,
+        round_off_enabled: b.round_off_enabled !== false,
+      });
+
+      const { rows: [upd] } = await client.query(
+        `UPDATE invoices SET
+           customer_name=$3, customer_gstin=$4, customer_email=$5, customer_phone=$6,
+           invoice_date=$7, due_date=$8, gst_rate=$9, place_of_supply_code=$10, is_inter_state=$11,
+           reverse_charge=$12, subtotal=$13, gst_amount=$14, cgst_amount=$15, sgst_amount=$16,
+           igst_amount=$17, discount_amount=$18, shipping_amount=$19, round_off=$20, total_amount=$21,
+           po_number=$22, reference=$23, terms=$24, notes=$25, currency=$26,
+           version = version + 1, updated_at = now()
+         WHERE id=$1 AND tenant_id=$2 RETURNING *`,
+        [cur.id, tenantId,
+         b.customer_name ?? cur.customer_name, b.customer_gstin ?? cur.customer_gstin,
+         b.customer_email ?? cur.customer_email, b.customer_phone ?? cur.customer_phone,
+         b.invoice_date ?? cur.invoice_date, b.due_date ?? cur.due_date,
+         b.gst_rate ?? cur.gst_rate, pos, totals.is_inter_state,
+         b.reverse_charge ?? cur.reverse_charge,
+         totals.taxable_total, totals.gst_amount, totals.cgst_amount, totals.sgst_amount,
+         totals.igst_amount, totals.discount_amount, totals.shipping_amount, totals.round_off, totals.total_amount,
+         b.po_number ?? cur.po_number, b.reference ?? cur.reference,
+         b.terms ?? cur.terms, b.notes ?? cur.notes, b.currency ?? cur.currency]);
+
+      if (Array.isArray(b.items) && b.items.length) {
+        await client.query("DELETE FROM invoice_items WHERE invoice_id=$1", [cur.id]);
+        for (const line of totals.lines) {
+          await client.query(
+            `INSERT INTO invoice_items(invoice_id, description, hsn_sac, quantity, unit_price, gst_rate, amount,
+               uom, discount_pct, discount_amount, taxable_value, tax_amount)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+            [cur.id, line.description, line.hsn_sac ?? null, line.quantity, line.unit_price, line.taxRate,
+             line.taxable_value, line.uom ?? null, line.discount_pct, line.discount_amount, line.taxable_value, line.tax_amount]);
+        }
+      }
+      return upd;
+    });
+    auditReq(req, "updated", "invoice", req.params.id, { version: out.version, reason: req.body?.reason || null });
+    res.json(out);
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    next(e);
+  }
+});
+
+// ── GET /api/invoices/:id/revisions — what this invoice used to say ──────────
+router.get("/:id([0-9a-fA-F-]{36})/revisions", authenticate, async (req, res, next) => {
+  try {
+    const { rows } = await q(req.user.tenant_id,
+      `SELECT r.id, r.version, r.reason, r.changed_at, r.changed_by, u.email AS changed_by_email,
+              r.snapshot->'invoice'->>'total_amount'   AS total_amount,
+              r.snapshot->'invoice'->>'customer_name'  AS customer_name,
+              r.snapshot->'invoice'->>'invoice_date'   AS invoice_date
+         FROM invoice_revisions r LEFT JOIN users u ON u.id = r.changed_by
+        WHERE r.invoice_id=$1 AND r.tenant_id=$2 ORDER BY r.version DESC`,
+      [req.params.id, req.user.tenant_id]);
+    res.json(rows);
+  } catch (e) { next(e); }
+});
+
+// ── POST /api/invoices/:id/void — cancel WITHOUT destroying the number ───────
+// "Cancelling" used to mean deleting, which punched a hole in the invoice sequence — the
+// one thing a numbered statutory document must never have. A void keeps the number and the
+// paper trail, and records who voided it and why.
+router.post("/:id([0-9a-fA-F-]{36})/void", authenticate, canWrite, async (req, res, next) => {
+  const reason = String(req.body?.reason || "").trim();
+  if (!reason) return res.status(400).json({ error: "A reason is required to void an invoice", errors: { reason: "Say why this is being voided" } });
+  try {
+    const out = await withTenant(req.user.tenant_id, async (client) => {
+      const { rows: [cur] } = await client.query("SELECT * FROM invoices WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [req.params.id, req.user.tenant_id]);
+      if (!cur) throw Object.assign(new Error("Invoice not found"), { status: 404 });
+      if (cur.voided_at) throw Object.assign(new Error("This invoice is already void"), { status: 409 });
+      if (Number(cur.paid_amount) > 0)
+        throw Object.assign(new Error(`${cur.invoice_number} has received payment. Refund it or raise a credit note — voiding would hide money that actually moved.`), { status: 409 });
+      const { rows: [upd] } = await client.query(
+        `UPDATE invoices SET status='cancelled', voided_at=now(), voided_by=$3, void_reason=$4, updated_at=now()
+          WHERE id=$1 AND tenant_id=$2 RETURNING *`,
+        [cur.id, req.user.tenant_id, req.user.id, reason.slice(0, 500)]);
+      return upd;
+    });
+    auditReq(req, "voided", "invoice", req.params.id, { reason, invoice_number: out.invoice_number });
+    res.json(out);
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    next(e);
+  }
 });
 
 // ── GET /api/invoices/summary — the KPI numbers, computed in SQL ─────────────

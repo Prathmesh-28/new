@@ -19,6 +19,7 @@ const { authenticate } = require("../middleware/auth");
 const { pool } = require("../db");
 const { q } = require("../lib/tenantDb");
 const { raiseAlert } = require("../lib/alerts");
+const { writeAudit } = require("../lib/audit");
 
 const ENTITY_RE = /^[a-z_]{2,40}$/;
 const okEntity = (e) => ENTITY_RE.test(String(e || ""));
@@ -187,6 +188,62 @@ router.post("/recent", authenticate, async (req, res) => {
                ORDER BY viewed_at DESC LIMIT 40) keep)`,
     [req.user.tenant_id, req.user.id]);
   res.json({ ok: true });
+});
+
+// ── Attachments on any record ────────────────────────────────────────────────
+// The signed PO, the delivery proof, the email approving the price — all of it lived in
+// someone's inbox, because a record could not hold a file. Files themselves keep going
+// through /api/files (encrypted at rest, MIME-allowlisted, 10 MB); this just links one to
+// a record so it is where the person looking for it will actually look.
+//
+//   GET    /api/records/:entity/:id/attachments
+//   POST   /api/records/:entity/:id/attachments   { fileId, label? }
+//   DELETE /api/records/attachments/:attachmentId
+router.get("/:entity/:id/attachments", authenticate, async (req, res, next) => {
+  if (!okEntity(req.params.entity)) return res.status(400).json({ error: "Bad entity" });
+  try {
+    const { rows } = await q(req.user.tenant_id,
+      `SELECT a.id, a.file_id, a.label, a.created_at, a.uploaded_by,
+              f.name, f.mime_type, f.size
+         FROM record_attachments a JOIN files f ON f.id = a.file_id
+        WHERE a.tenant_id=$1 AND a.entity=$2 AND a.entity_id=$3
+        ORDER BY a.created_at DESC`,
+      [req.user.tenant_id, req.params.entity, String(req.params.id)]);
+    res.json(rows);
+  } catch (e) { next(e); }
+});
+
+router.post("/:entity/:id/attachments", authenticate, async (req, res, next) => {
+  if (!okEntity(req.params.entity)) return res.status(400).json({ error: "Bad entity" });
+  const fileId = req.body?.fileId;
+  if (!fileId) return res.status(400).json({ error: "Upload the file first, then attach it by fileId" });
+  try {
+    // The file must belong to THIS firm — a client could otherwise attach any file id it
+    // guessed and read it back through the attachment listing.
+    const own = await pool.query("SELECT id FROM files WHERE id=$1 AND tenant_id=$2", [fileId, req.user.tenant_id]);
+    if (!own.rows[0]) return res.status(404).json({ error: "That file wasn't found" });
+
+    const { rows } = await q(req.user.tenant_id,
+      `INSERT INTO record_attachments(tenant_id, entity, entity_id, file_id, label, uploaded_by)
+       VALUES($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (tenant_id, entity, entity_id, file_id) DO UPDATE SET label = EXCLUDED.label
+       RETURNING *`,
+      [req.user.tenant_id, req.params.entity, String(req.params.id), fileId,
+       req.body.label ? String(req.body.label).slice(0, 120) : null, req.user.id]);
+    writeAudit(req.user.id, "attached", req.params.entity, String(req.params.id), { fileId }, req.user.tenant_id);
+    res.status(201).json(rows[0]);
+  } catch (e) { next(e); }
+});
+
+router.delete("/attachments/:attachmentId", authenticate, async (req, res, next) => {
+  try {
+    // Detaches the file from the record; the file itself stays in the vault, because
+    // someone else's record may also point at it and deleting it here would be a surprise.
+    const { rowCount } = await q(req.user.tenant_id,
+      "DELETE FROM record_attachments WHERE id=$1 AND tenant_id=$2", [req.params.attachmentId, req.user.tenant_id]);
+    if (!rowCount) return res.status(404).json({ error: "Attachment not found" });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
 });
 
 // ── Who can be @mentioned ────────────────────────────────────────────────────

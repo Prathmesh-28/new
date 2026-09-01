@@ -1,4 +1,17 @@
-const { Pool } = require("pg");
+const { Pool, types } = require("pg");
+
+// ── DATE columns come back as 'YYYY-MM-DD' strings, not JS Dates ─────────────
+// node-pg parses a DATE (OID 1082) into a JS Date at LOCAL midnight. res.json() then calls
+// toISOString() on it, which converts to UTC — so on any host not running in UTC, an
+// invoice dated 2026-09-01 is sent to the browser as "2026-08-31T18:30:00.000Z" and the
+// user sees the wrong day. server.js pins process.env.TZ to UTC, which hides this, but a
+// single missing env var anywhere (a dev machine, a container, a one-off script) brings it
+// straight back — and it is silent when it happens.
+//
+// A calendar date has no time and no zone: keeping it as the exact string Postgres stored
+// removes the conversion entirely. It also renders correctly when printed as-is, which is
+// what most of the UI does with due_date.
+types.setTypeParser(types.builtins.DATE, (v) => v);
 
 // Explicit pool sizing + timeouts (the audit flagged pg defaults). Without these, the
 // default max=10 with an INFINITE acquire wait means a slow query or a flow that holds a

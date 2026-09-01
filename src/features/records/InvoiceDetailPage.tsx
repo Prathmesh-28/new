@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Copy, Download, FileText, Loader2, Printer, Send, Trash2, Wallet } from "lucide-react";
+import { Ban, Copy, Download, FileText, History, Loader2, Paperclip, Printer, Send, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { api, authHeaders } from "@/lib/api";
 import { API_BASE } from "@/lib/apiBase";
 import { formatCurrency } from "@/lib/utils";
 import { deleteWithUndo } from "@/lib/undo";
 import Button from "@/components/ui/Button";
+import Modal from "@/components/ui/Modal";
+import { TextAreaField } from "@/components/ui/Field";
+import { inWords } from "@/lib/invoiceTotals";
 import { useConfirm } from "@/components/ui/Confirm";
 import { LoadingState, ErrorState } from "@/components/EmptyState";
 import { useTrackView } from "@/hooks/useRecentlyViewed";
@@ -21,16 +24,24 @@ import RecordShell, { CopyValue, Detail } from "./RecordShell";
  * fetches exactly one (GET /api/invoices/:id) and is the target the command palette,
  * notifications and list rows now deep-link to.
  */
-type Item = { id: string; description: string; hsn_sac: string | null; quantity: string; unit_price: string; gst_rate: string; amount: string };
+type Item = { id: string; description: string; hsn_sac: string | null; uom: string | null; quantity: string; unit_price: string; gst_rate: string; amount: string; discount_pct: string; discount_amount: string; taxable_value: string | null; tax_amount: string | null };
 type Payment = { id: string; amount: string; mode: string; reference: string | null; received_at: string };
 type CreditNote = { id: string; note_number: string; total_amount: string; reason: string | null; created_at: string };
 type Reminder = { id: string; channel: string; status: string; reminded_at: string };
+type Revision = { id: string; version: number; reason: string | null; changed_at: string; changed_by_email: string | null; total_amount: string; customer_name: string; invoice_date: string };
+type Attachment = { id: string; file_id: string; label: string | null; name: string; mime_type: string; size: number; created_at: string };
 type Invoice = {
   id: string; invoice_number: string; customer_name: string; customer_gstin: string | null;
-  customer_email: string | null; customer_phone: string | null;
+  customer_email: string | null; customer_phone: string | null; customer_id: string | null;
   subtotal: string; gst_rate: string; gst_amount: string; total_amount: string;
   paid_amount: string; credited_amount: string | null; status: string; due_date: string | null;
-  created_at: string; paid_at: string | null; aging: string; outstanding: number;
+  created_at: string; updated_at: string | null; paid_at: string | null; aging: string; outstanding: number;
+  // Wave 4 document fields.
+  invoice_date: string | null; place_of_supply_code: string | null; is_inter_state: boolean | null;
+  reverse_charge: boolean; cgst_amount: string; sgst_amount: string; igst_amount: string;
+  currency: string; po_number: string | null; reference: string | null; terms: string | null; notes: string | null;
+  discount_amount: string; shipping_amount: string; round_off: string; version: number;
+  voided_at: string | null; void_reason: string | null;
   items: Item[]; payments: Payment[]; credit_notes: CreditNote[]; reminders: Reminder[];
 };
 
@@ -50,6 +61,9 @@ export default function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [revisions, setRevisions] = useState<Revision[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [voidOpen, setVoidOpen] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true); setError(null);
@@ -59,6 +73,12 @@ export default function InvoiceDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
   useEffect(() => { load(); }, [load]);
+
+  const loadSidecars = useCallback(() => {
+    api.get<Revision[]>(`/api/invoices/${id}/revisions`).then(setRevisions).catch(() => setRevisions([]));
+    api.get<Attachment[]>(`/api/records/invoice/${id}/attachments`).then(setAttachments).catch(() => setAttachments([]));
+  }, [id]);
+  useEffect(() => { loadSidecars(); }, [loadSidecars]);
 
   useTrackView(inv ? { entity: "invoice", id: inv.id, label: `${inv.invoice_number} · ${inv.customer_name}`, href: `/invoices/${inv.id}` } : null);
 
@@ -134,6 +154,22 @@ export default function InvoiceDetailPage() {
     });
   };
 
+  const attachFile = async (file: File) => {
+    setBusy("attach");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      // Files go through the existing vault (encrypted at rest, MIME-allowlisted, 10 MB),
+      // then get linked to this record.
+      const uploaded = await fetch(`${API_BASE}/api/files`, { method: "POST", headers: authHeaders(), body: fd })
+        .then(async (r) => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Upload failed"); return r.json(); });
+      await api.post(`/api/records/invoice/${id}/attachments`, { fileId: uploaded.id, label: file.name });
+      toast.success(`${file.name} attached`);
+      loadSidecars();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't attach that file"); }
+    finally { setBusy(null); }
+  };
+
   if (loading) return <div className="max-w-7xl mx-auto"><LoadingState rows={6} label="Loading invoice" /></div>;
   if (error || !inv) return <div className="max-w-7xl mx-auto"><ErrorState title="Couldn't open this invoice" message={error ?? undefined} onRetry={load} /></div>;
 
@@ -150,7 +186,11 @@ export default function InvoiceDetailPage() {
       meta={{ createdAt: inv.created_at }}
       badges={
         <>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide ${STATUS[inv.status] ?? STATUS.draft}`}>{inv.status}</span>
+          {inv.voided_at
+            ? <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide bg-red-500/15 text-red-400">Void</span>
+            : <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide ${STATUS[inv.status] ?? STATUS.draft}`}>{inv.status}</span>}
+          {inv.reverse_charge && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 font-semibold">Reverse charge</span>}
+          {inv.version > 1 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-border)]/50 text-[var(--color-muted)] font-semibold">v{inv.version}</span>}
           {overdue && <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">{AGING_LABEL[inv.aging] ?? "overdue"}</span>}
         </>
       }
@@ -163,6 +203,10 @@ export default function InvoiceDetailPage() {
           <Button size="sm" icon={<Download size={13} />} loading={busy === "pdf"} onClick={downloadPdf}>PDF</Button>
           <Button size="sm" icon={<Printer size={13} />} onClick={() => window.print()}>Print</Button>
           <Button size="sm" icon={<Copy size={13} />} loading={busy === "dup"} onClick={duplicate}>Duplicate</Button>
+          {!inv.voided_at && Number(inv.paid_amount) === 0 && (
+            <Button size="sm" icon={<Ban size={13} />} onClick={() => setVoidOpen(true)}
+              title="Cancel this invoice but keep its number and paper trail">Void</Button>
+          )}
           <Button size="sm" variant="ghost" icon={<Trash2 size={13} />} onClick={del} title="Delete (recoverable for 30 days)" />
         </>
       }
@@ -179,11 +223,28 @@ export default function InvoiceDetailPage() {
             </span>} />
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-5 border-t border-[var(--color-border)]">
+          <Detail label="Invoice date" value={inv.invoice_date || "—"} />
           <Detail label="Due date" value={inv.due_date || "Not set"} />
+          <Detail label="Place of supply" value={
+            inv.place_of_supply_code
+              ? <>{inv.place_of_supply_code}{" "}
+                  <span className="text-[var(--color-muted)] text-xs">
+                    ({inv.is_inter_state === true ? "inter-state, IGST" : inv.is_inter_state === false ? "intra-state, CGST+SGST" : "split unknown"})
+                  </span>
+                </>
+              : <span className="text-amber-400 text-xs">Not stated — the tax split can't be confirmed</span>} />
+          <Detail label="Your PO reference" value={inv.po_number || "—"} />
           <Detail label="GST rate" value={`${Number(inv.gst_rate)}%`} />
           <Detail label="Customer email" value={inv.customer_email || "Not set"} />
           <Detail label="Customer phone" value={inv.customer_phone || "Not set"} />
+          <Detail label="Currency" value={inv.currency || "INR"} />
         </div>
+        {inv.voided_at && (
+          <p className="mt-4 pt-4 border-t border-red-500/30 text-xs text-red-400">
+            Voided {new Date(inv.voided_at).toLocaleString("en-IN")}{inv.void_reason ? ` — ${inv.void_reason}` : ""}.
+            The number is kept so the sequence stays unbroken.
+          </p>
+        )}
       </div>
 
       {/* Line items */}
@@ -201,7 +262,14 @@ export default function InvoiceDetailPage() {
           <tbody className="divide-y divide-[var(--color-border)]">
             {inv.items.map((it) => (
               <tr key={it.id}>
-                <td data-label="Description" className="px-4 py-2.5">{it.description}</td>
+                <td data-label="Description" className="px-4 py-2.5">
+                  {it.description}{it.uom ? <span className="text-[var(--color-muted)] text-xs"> ({it.uom})</span> : null}
+                  {Number(it.discount_amount) > 0 && (
+                    <p className="text-[10px] text-[var(--color-muted)]">
+                      less {Number(it.discount_pct) > 0 ? `${Number(it.discount_pct)}% ` : ""}discount {formatCurrency(Number(it.discount_amount))}
+                    </p>
+                  )}
+                </td>
                 <td data-label="HSN/SAC" className="px-4 py-2.5 font-mono text-xs text-[var(--color-muted)] hidden md:table-cell">{it.hsn_sac || "—"}</td>
                 <td data-label="Qty" className="px-4 py-2.5 text-right tabular-nums">{Number(it.quantity)}</td>
                 <td data-label="Rate" className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(Number(it.unit_price))}</td>
@@ -210,12 +278,44 @@ export default function InvoiceDetailPage() {
             ))}
           </tbody>
           <tfoot className="border-t-2 border-[var(--color-border)]">
-            <tr><td colSpan={4} className="px-4 py-2 text-right text-xs text-[var(--color-muted)]">Subtotal</td>
+            {Number(inv.discount_amount) > 0 && (
+              <tr><td colSpan={4} className="px-4 py-2 text-right text-xs text-[var(--color-muted)]">Less: discount on the invoice</td>
+                  <td className="px-4 py-2 text-right tabular-nums">-{formatCurrency(Number(inv.discount_amount))}</td></tr>
+            )}
+            {Number(inv.shipping_amount) > 0 && (
+              <tr><td colSpan={4} className="px-4 py-2 text-right text-xs text-[var(--color-muted)]">Add: freight / packing</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(Number(inv.shipping_amount))}</td></tr>
+            )}
+            <tr><td colSpan={4} className="px-4 py-2 text-right text-xs text-[var(--color-muted)]">Taxable value</td>
                 <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(Number(inv.subtotal))}</td></tr>
-            <tr><td colSpan={4} className="px-4 py-2 text-right text-xs text-[var(--color-muted)]">GST @ {Number(inv.gst_rate)}%</td>
-                <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(Number(inv.gst_amount))}</td></tr>
+            {/* The split as STORED on the invoice, not re-derived here — the document, the
+                books and this screen all read the same three columns. */}
+            {Number(inv.igst_amount) > 0 && (
+              <tr><td colSpan={4} className="px-4 py-2 text-right text-xs text-[var(--color-muted)]">IGST @ {Number(inv.gst_rate)}%</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(Number(inv.igst_amount))}</td></tr>
+            )}
+            {Number(inv.cgst_amount) > 0 && (
+              <>
+                <tr><td colSpan={4} className="px-4 py-2 text-right text-xs text-[var(--color-muted)]">CGST @ {Number(inv.gst_rate) / 2}%</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(Number(inv.cgst_amount))}</td></tr>
+                <tr><td colSpan={4} className="px-4 py-2 text-right text-xs text-[var(--color-muted)]">SGST @ {Number(inv.gst_rate) / 2}%</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(Number(inv.sgst_amount))}</td></tr>
+              </>
+            )}
+            {Number(inv.igst_amount) === 0 && Number(inv.cgst_amount) === 0 && Number(inv.gst_amount) > 0 && (
+              <tr><td colSpan={4} className="px-4 py-2 text-right text-xs text-amber-400">GST (split not stated)</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(Number(inv.gst_amount))}</td></tr>
+            )}
+            {inv.reverse_charge && (
+              <tr><td colSpan={5} className="px-4 py-2 text-right text-[11px] text-blue-400">Tax payable by the recipient under reverse charge — not collected on this invoice.</td></tr>
+            )}
+            {Number(inv.round_off) !== 0 && (
+              <tr><td colSpan={4} className="px-4 py-2 text-right text-xs text-[var(--color-muted)]">Round off</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(Number(inv.round_off))}</td></tr>
+            )}
             <tr><td colSpan={4} className="px-4 py-2.5 text-right text-xs font-bold">Total</td>
                 <td className="px-4 py-2.5 text-right tabular-nums font-bold">{formatCurrency(Number(inv.total_amount))}</td></tr>
+            <tr><td colSpan={5} className="px-4 py-2 text-right text-[11px] text-[var(--color-muted)]">{inWords(Number(inv.total_amount), inv.currency || "INR")}</td></tr>
           </tfoot>
         </table>
       </Section>
@@ -249,6 +349,63 @@ export default function InvoiceDetailPage() {
         </Section>
       )}
 
+      {(inv.terms || inv.notes) && (
+        <Section title="Terms and notes">
+          <div className="px-4 py-3 space-y-3 text-sm">
+            {inv.terms && <div><p className="text-[10px] uppercase tracking-wider text-[var(--color-muted)] mb-1">Terms</p><p className="whitespace-pre-wrap">{inv.terms}</p></div>}
+            {inv.notes && <div><p className="text-[10px] uppercase tracking-wider text-[var(--color-muted)] mb-1">Notes</p><p className="whitespace-pre-wrap">{inv.notes}</p></div>}
+          </div>
+        </Section>
+      )}
+
+      {/* The signed PO, the delivery proof, the email agreeing the price — previously these
+          lived in someone's inbox because a record could not hold a file. */}
+      <Section title={`Attachments (${attachments.length})`} icon={<Paperclip size={14} />}>
+        <div className="px-4 py-3 space-y-2">
+          {attachments.length === 0 && (
+            <p className="text-xs text-[var(--color-muted)]">Nothing attached yet. Add the PO or the delivery proof so the next person doesn't have to go looking.</p>
+          )}
+          {attachments.map((a) => (
+            <div key={a.id} className="flex items-center justify-between gap-3 text-sm">
+              <span className="truncate">{a.label || a.name}
+                <span className="text-[10px] text-[var(--color-muted)]"> · {(a.size / 1024).toFixed(0)} KB</span>
+              </span>
+              <button
+                onClick={async () => {
+                  if (!await confirm({ title: `Remove "${a.label || a.name}" from this invoice?`, body: "The file stays in your document vault.", confirmLabel: "Remove" })) return;
+                  try { await api.delete(`/api/records/attachments/${a.id}`); loadSidecars(); }
+                  catch { toast.error("Couldn't remove that"); }
+                }}
+                className="shrink-0 text-[var(--color-muted)] hover:text-red-400" aria-label={`Remove ${a.name}`}><Trash2 size={12} /></button>
+            </div>
+          ))}
+          <label className="inline-flex items-center gap-1.5 text-xs text-[var(--color-primary)] hover:underline cursor-pointer">
+            <Paperclip size={12} /> {busy === "attach" ? "Uploading…" : "Attach a file"}
+            <input type="file" className="sr-only" disabled={busy === "attach"}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void attachFile(f); e.target.value = ""; }} />
+          </label>
+        </div>
+      </Section>
+
+      {revisions.length > 0 && (
+        <Section title={`Earlier versions (${revisions.length})`} icon={<History size={14} />}>
+          <ul className="divide-y divide-[var(--color-border)]">
+            {revisions.map((r) => (
+              <li key={r.id} className="px-4 py-2.5 text-xs flex items-center justify-between gap-3">
+                <span>
+                  <span className="font-medium">v{r.version}</span>
+                  <span className="text-[var(--color-muted)]"> · {r.customer_name} · {formatCurrency(Number(r.total_amount))}</span>
+                  {r.reason && <span className="text-[var(--color-muted)]"> · {r.reason}</span>}
+                </span>
+                <span className="text-[var(--color-muted)] shrink-0">
+                  {r.changed_by_email ? `${r.changed_by_email.split("@")[0]} · ` : ""}{new Date(r.changed_at).toLocaleDateString("en-IN")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
       {inv.reminders.length > 0 && (
         <Section title={`Reminders sent (${inv.reminders.length})`}>
           <ul className="divide-y divide-[var(--color-border)]">
@@ -261,7 +418,40 @@ export default function InvoiceDetailPage() {
           </ul>
         </Section>
       )}
+      {voidOpen && (
+        <VoidModal invoice={inv} onClose={() => setVoidOpen(false)} onVoided={() => { setVoidOpen(false); load(); loadSidecars(); }} />
+      )}
     </RecordShell>
+  );
+}
+
+/**
+ * Voiding, as distinct from deleting. Cancelling used to mean deleting the invoice, which
+ * punched a hole in the number sequence — the one thing a numbered statutory document must
+ * never have. A void keeps the number, keeps the paper trail, and records why.
+ */
+function VoidModal({ invoice, onClose, onVoided }: { invoice: Invoice; onClose: () => void; onVoided: () => void }) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/api/invoices/${invoice.id}/void`, { reason: reason.trim() });
+      toast.success(`${invoice.invoice_number} voided`);
+      onVoided();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't void it"); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Modal open onClose={onClose} size="sm" title={`Void ${invoice.invoice_number}?`}
+      description="The invoice stays, marked void, and its number is never reused. This is what to do instead of deleting a numbered document."
+      footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button>
+               <Button variant="danger" loading={busy} disabled={!reason.trim()} onClick={submit}>Void this invoice</Button></>}>
+      <TextAreaField label="Why is this being voided?" required value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        help="Printed on the invoice and kept in the audit trail — write what an auditor would need to read."
+        placeholder="e.g. Raised on the wrong entity; re-issued as INV-2026-031." />
+    </Modal>
   );
 }
 

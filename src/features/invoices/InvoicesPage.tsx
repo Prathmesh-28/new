@@ -13,6 +13,10 @@ import Button from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/Confirm";
 import { useListQuery } from "@/hooks/useListQuery";
 import { deleteWithUndo } from "@/lib/undo";
+import Modal from "@/components/ui/Modal";
+import { ErrorSummary } from "@/components/ui/Field";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { computeInvoice, dueDateFromTerms, inWords } from "@/lib/invoiceTotals";
 import DatePicker from "@/components/DatePicker";
 import CurrencyInput from "@/components/CurrencyInput";
 import RecordPaymentModal from "@/components/RecordPaymentModal";
@@ -55,6 +59,18 @@ const AGING_COLOR: Record<string, string> = {
   current: "text-green-400", "30d": "text-yellow-400", "60d": "text-orange-400", "90d+": "text-red-400",
 };
 
+/**
+ * The invoice composer, rebuilt for Wave 4.
+ *
+ * What it could not do before: set the invoice date (the document was dated by its
+ * database insert), state a place of supply (so the CGST/SGST-vs-IGST split was guessed
+ * from the buyer's GSTIN, and simply unavailable for a B2C sale), record a PO number,
+ * discount, freight, terms or notes, or show the user what the invoice would total before
+ * they committed to it.
+ *
+ * The running total uses the SAME rules module as the server (lib/invoiceTotals, kept in
+ * step by a cross-implementation test), so the number previewed is the number issued.
+ */
 function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void; onCreated: () => void; initial?: { customer?: string; amount?: string; desc?: string; dealId?: string } }) {
   const tr = useT();
   const [customerName, setCustomerName] = useState(initial?.customer ?? "");
@@ -62,145 +78,345 @@ function NewInvoiceModal({ onClose, onCreated, initial }: { onClose: () => void;
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [gstRate, setGstRate] = useState("18");
+  const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
-  const [items, setItems] = useState([{ description: initial?.desc ?? "", hsn_sac: "", quantity: "1", unit_price: initial?.amount ?? "", gst_rate: "18" }]);
+  const [placeOfSupply, setPlaceOfSupply] = useState("");
+  const [poNumber, setPoNumber] = useState("");
+  const [discount, setDiscount] = useState<number | null>(null);
+  const [shipping, setShipping] = useState<number | null>(null);
+  const [reverseCharge, setReverseCharge] = useState(false);
+  const [roundOff, setRoundOff] = useState(true);
+  const [terms, setTerms] = useState("");
+  const [notes, setNotes] = useState("");
+  const [showMore, setShowMore] = useState(false);
+  const [items, setItems] = useState([{ description: initial?.desc ?? "", hsn_sac: "", uom: "", quantity: "1", unit_price: initial?.amount ?? "", gst_rate: "18", discount_pct: "" }]);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [sellerState, setSellerState] = useState<string | null>(null);
+  const [states, setStates] = useState<{ code: string; name: string }[]>([]);
+  const [matches, setMatches] = useState<CustomerMatch[]>([]);
+  const [picked, setPicked] = useState<CustomerMatch | null>(null);
 
-  const addItem = () => setItems(v => [...v, { description: "", hsn_sac: "", quantity: "1", unit_price: "", gst_rate: gstRate }]);
-  const removeItem = (i: number) => setItems(v => v.filter((_, j) => j !== i));
+  // Anything typed is worth guarding — the audit found no unsaved-changes protection
+  // anywhere, so a stray refresh silently destroyed a part-filled invoice.
+  const dirty = !!(customerName || items.some((i) => i.description || i.unit_price));
+  const { guard } = useUnsavedChanges(dirty && !saving);
+
+  useEffect(() => {
+    api.get<{ code: string; name: string }[]>("/api/customers/meta/states").then(setStates).catch(() => setStates([]));
+    api.get<{ gstin?: string | null }>("/api/org/profile")
+      .then((p) => setSellerState(p?.gstin && /^\d{2}/.test(p.gstin) ? p.gstin.slice(0, 2) : null))
+      .catch(() => setSellerState(null));
+  }, []);
+
+  // Type-ahead against the customer master: picking an existing customer brings their
+  // GSTIN, place of supply and payment terms with them, so the same details are not
+  // re-keyed (and mis-keyed) on every invoice.
+  useEffect(() => {
+    const term = customerName.trim();
+    if (term.length < 2 || picked?.name === term) { setMatches([]); return; }
+    const t = window.setTimeout(() => {
+      api.get<{ data: CustomerMatch[] }>(`/api/customers?q=${encodeURIComponent(term)}&limit=5`)
+        .then((r) => setMatches(r.data ?? [])).catch(() => setMatches([]));
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [customerName, picked]);
+
+  const applyCustomer = (c: CustomerMatch) => {
+    setPicked(c);
+    setCustomerName(c.name);
+    if (c.gstin) setCustomerGstin(c.gstin);
+    if (c.email) setCustomerEmail(c.email);
+    if (c.phone) setCustomerPhone(c.phone);
+    if (c.place_of_supply_code) setPlaceOfSupply(c.place_of_supply_code);
+    if (c.payment_terms_days) setDueDate(dueDateFromTerms(invoiceDate, c.payment_terms_days) ?? "");
+    setMatches([]);
+  };
+
+  const addItem = () => setItems(v => [...v, { description: "", hsn_sac: "", uom: "", quantity: "1", unit_price: "", gst_rate: gstRate, discount_pct: "" }]);
+  const removeItem = (i: number) => setItems(v => v.length === 1 ? v : v.filter((_, j) => j !== i));
   const updateItem = (i: number, key: string, val: string) => setItems(v => v.map((row, j) => j === i ? { ...row, [key]: val } : row));
 
-  const subtotal = items.reduce((s, it) => s + (parseFloat(it.quantity) || 0) * (parseFloat(it.unit_price) || 0), 0);
-  const gst      = items.reduce((s, it) => {
-    const lineAmt = (parseFloat(it.quantity) || 0) * (parseFloat(it.unit_price) || 0);
-    const lineRate = parseFloat(it.gst_rate) || parseFloat(gstRate) || 0;
-    return s + lineAmt * (lineRate / 100);
-  }, 0);
+  // The place of supply the tax split will actually use: what was chosen, else the state
+  // in the buyer's GSTIN. Shown to the user so the split is never a surprise.
+  const effectivePos = placeOfSupply || (/^\d{2}/.test(customerGstin.trim()) ? customerGstin.trim().slice(0, 2) : "");
+  const totals = computeInvoice({
+    items: items.map(it => ({ ...it, gst_rate: it.gst_rate || gstRate })),
+    gst_rate: parseFloat(gstRate) || 0,
+    discount_amount: discount ?? 0,
+    shipping_amount: shipping ?? 0,
+    place_of_supply_code: effectivePos || null,
+    seller_state_code: sellerState,
+    reverse_charge: reverseCharge,
+    round_off_enabled: roundOff,
+  });
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!customerName.trim()) e.customerName = "Who is this invoice for?";
+    if (!invoiceDate) e.invoiceDate = "An invoice needs a date";
+    items.forEach((it, i) => {
+      if (!it.description.trim()) e[`item${i}desc`] = `Line ${i + 1} needs a description`;
+      if (!it.unit_price) e[`item${i}price`] = `Line ${i + 1} needs a rate`;
+    });
+    if (dueDate && invoiceDate && dueDate < invoiceDate) e.dueDate = "The due date can't be before the invoice date";
+    return e;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerName || items.some(it => !it.description || !it.unit_price)) {
-      toast.error("Fill customer name and all item descriptions/prices"); return;
-    }
+    const found = validate();
+    setErrors(found);
+    if (Object.keys(found).length) { toast.error(Object.values(found)[0]); return; }
     setSaving(true);
     try {
-      const inv = await api.post<{ id: string }>("/api/invoices", {
-        customer_name: customerName, customer_gstin: customerGstin || undefined,
+      const inv = await api.post<{ id: string; invoice_number: string }>("/api/invoices", {
+        customer_name: customerName.trim(), customer_id: picked?.id,
+        customer_gstin: customerGstin || undefined,
         customer_email: customerEmail || undefined,
         customer_phone: customerPhone || undefined,
         gst_rate: parseFloat(gstRate),
+        invoice_date: invoiceDate,
         due_date: dueDate || undefined,
+        place_of_supply_code: effectivePos || undefined,
+        po_number: poNumber || undefined,
+        discount_amount: discount ?? 0,
+        shipping_amount: shipping ?? 0,
+        reverse_charge: reverseCharge,
+        round_off_enabled: roundOff,
+        terms: terms || undefined,
+        notes: notes || undefined,
         items: items.map(it => ({
-          description: it.description, hsn_sac: it.hsn_sac || undefined,
+          description: it.description, hsn_sac: it.hsn_sac || undefined, uom: it.uom || undefined,
           quantity: parseFloat(it.quantity) || 1, unit_price: parseFloat(it.unit_price) || 0,
           gst_rate: parseFloat(it.gst_rate) || parseFloat(gstRate),
+          discount_pct: parseFloat(it.discount_pct) || 0,
         })),
-      });
-      toast.success("Invoice created");
-      // Best-effort: link this invoice back onto the CRM deal that spawned it, so the
-      // deal's Won Value reconciles against the real invoice from here on. Awaited so it
-      // isn't dropped by an immediate navigation away, but a failure here must never
-      // block the invoice the user just created.
+      }, );
+      toast.success(`${inv.invoice_number} created`);
       if (initial?.dealId) {
         try { await api.post(`/api/crm/deals/${initial.dealId}/link-invoice`, { invoiceId: inv.id }); } catch { /* best-effort */ }
       }
       onCreated();
       onClose();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to create invoice");
+      const msg = err instanceof Error ? err.message : "Failed to create invoice";
+      setErrors({ form: msg });
+      toast.error(msg);
     } finally { setSaving(false); }
   };
 
   const inp = "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]";
   const lbl = "block text-xs font-medium text-[var(--color-muted)] mb-1";
+  const splitNote = totals.is_inter_state === null
+    ? "Set a place of supply (or the customer's GSTIN) and the tax will split into CGST+SGST or IGST."
+    : totals.is_inter_state
+      ? "Inter-state supply — IGST"
+      : "Intra-state supply — CGST + SGST";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 overflow-y-auto py-8 px-4">
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl w-full max-w-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
-          <h2 className="text-base font-bold">{tr("quickcreate.invoice")}</h2>
-          <button onClick={onClose}><X size={16} className="text-[var(--color-muted)]" /></button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 md:col-span-1">
-              <label className={lbl}>Customer name *</label>
-              <input value={customerName} onChange={e => setCustomerName(e.target.value)} required className={inp} placeholder="Acme Pvt Ltd" />
-            </div>
-            <div>
-              <label className={lbl}>Customer GSTIN</label>
-              <input value={customerGstin} onChange={e => setCustomerGstin(e.target.value)} className={inp} placeholder="27AAAAA0000A1Z5" maxLength={15} />
-            </div>
-            <div>
-              <label className={lbl}>Customer email</label>
-              <input type="email" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} className={inp} placeholder="accounts@acme.com" />
-            </div>
-            <div>
-              <label className={lbl}>Customer WhatsApp</label>
-              <input type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className={inp} placeholder="+91 98765 43210" />
-            </div>
-            <div>
-              <label className={lbl}>GST rate (%)</label>
-              <select value={gstRate} onChange={e => setGstRate(e.target.value)} className={inp}>
-                {["0", "5", "12", "18", "28"].map(r => <option key={r} value={r}>{r}%</option>)}
-              </select>
-            </div>
-            <div>
-              <DatePicker label="Due date" value={dueDate} onChange={setDueDate} id="new-invoice-due-date" />
-            </div>
-          </div>
+    <Modal
+      open onClose={() => void guard(onClose)} size="lg"
+      title={tr("quickcreate.invoice")}
+      description="The totals below are calculated exactly the way the saved invoice will be."
+      onBeforeClose={async () => !dirty || window.confirm("Discard this invoice?")}
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => void guard(onClose)}>Cancel</Button>
+          <Button variant="primary" loading={saving} onClick={(ev) => handleSubmit(ev as unknown as React.FormEvent)}>
+            {saving ? tr("inv.creating") : tr("inv.createInvoice")}
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <ErrorSummary errors={errors} />
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Line items</label>
-              <button type="button" onClick={addItem} className="text-xs text-[var(--color-primary)] hover:underline">+ Add item</button>
-            </div>
-            <div className="space-y-2">
-              {items.map((item, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-start">
-                  <div className="col-span-5">
-                    <input value={item.description} onChange={e => updateItem(i, "description", e.target.value)}
-                      className={inp} placeholder="Description" required />
-                  </div>
-                  <div className="col-span-2">
-                    <input value={item.hsn_sac} onChange={e => updateItem(i, "hsn_sac", e.target.value)}
-                      className={inp} placeholder="HSN/SAC" />
-                  </div>
-                  <div className="col-span-1">
-                    <input type="number" min="0.001" step="0.001" value={item.quantity}
-                      onChange={e => updateItem(i, "quantity", e.target.value)} className={inp} placeholder="Qty" required />
-                  </div>
-                  <div className="col-span-2">
-                    <input type="number" min="0" step="0.01" value={item.unit_price}
-                      onChange={e => updateItem(i, "unit_price", e.target.value)} className={inp} placeholder="Rate ₹" required />
-                  </div>
-                  <div className="col-span-1 text-right pt-2 text-xs font-semibold tabular-nums">
-                    {formatCurrency((parseFloat(item.quantity)||0)*(parseFloat(item.unit_price)||0))}
-                  </div>
-                  {items.length > 1 && (
-                    <button type="button" onClick={() => removeItem(i)} className="col-span-1 text-[var(--color-muted)] hover:text-red-400 pt-2">
-                      <X size={13} />
+        {/* Customer */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2 md:col-span-1 relative">
+            <label className={lbl} htmlFor="inv-customer">Customer name <span className="text-red-400">*</span></label>
+            <input id="inv-customer" value={customerName} autoFocus
+              onChange={e => { setCustomerName(e.target.value); setPicked(null); setErrors(x => ({ ...x, customerName: "" })); }}
+              required className={inp} placeholder="Acme Pvt Ltd" autoComplete="off"
+              aria-invalid={!!errors.customerName} />
+            {errors.customerName && <p className="text-[11px] text-red-400 mt-1">{errors.customerName}</p>}
+            {matches.length > 0 && (
+              <ul className="absolute z-30 mt-1 w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl overflow-hidden">
+                {matches.map(c => (
+                  <li key={c.id}>
+                    <button type="button" onClick={() => applyCustomer(c)}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--color-accent)]">
+                      <span className="font-medium">{c.name}</span>
+                      <span className="text-[var(--color-muted)]">
+                        {c.gstin ? ` · ${c.gstin}` : ""}{c.payment_terms_days ? ` · Net ${c.payment_terms_days}` : ""}
+                      </span>
                     </button>
-                  )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {picked && <p className="text-[11px] text-[var(--color-primary)] mt-1">Using existing customer — their terms and place of supply are filled in.</p>}
+          </div>
+          <div>
+            <label className={lbl} htmlFor="inv-gstin">Customer GSTIN</label>
+            <input id="inv-gstin" value={customerGstin} onChange={e => setCustomerGstin(e.target.value.toUpperCase())} className={inp} placeholder="27AAAAA0000A1Z5" />
+          </div>
+          <div>
+            <label className={lbl} htmlFor="inv-email">Customer email</label>
+            <input id="inv-email" type="email" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} className={inp} placeholder="ap@acme.com" />
+          </div>
+          <div>
+            <label className={lbl} htmlFor="inv-phone">Customer phone</label>
+            <input id="inv-phone" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className={inp} placeholder="9876543210" />
+          </div>
+        </div>
+
+        {/* Dates + tax context */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className={lbl} htmlFor="inv-date">Invoice date <span className="text-red-400">*</span></label>
+            <DatePicker id="inv-date" value={invoiceDate} onChange={v => { setInvoiceDate(v); setErrors(x => ({ ...x, invoiceDate: "" })); }} />
+            {errors.invoiceDate && <p className="text-[11px] text-red-400 mt-1">{errors.invoiceDate}</p>}
+          </div>
+          <div>
+            <label className={lbl} htmlFor="inv-due">Due date</label>
+            <DatePicker id="inv-due" value={dueDate} onChange={v => { setDueDate(v); setErrors(x => ({ ...x, dueDate: "" })); }} />
+            {errors.dueDate && <p className="text-[11px] text-red-400 mt-1">{errors.dueDate}</p>}
+          </div>
+          <div>
+            <label className={lbl} htmlFor="inv-pos">Place of supply</label>
+            <select id="inv-pos" value={effectivePos} onChange={e => setPlaceOfSupply(e.target.value)} className={inp}>
+              <option value="">Not set</option>
+              {states.map(s => <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={lbl} htmlFor="inv-rate">Default GST rate %</label>
+            <select id="inv-rate" value={gstRate} onChange={e => setGstRate(e.target.value)} className={inp}>
+              {["0", "0.25", "3", "5", "12", "18", "28"].map(r => <option key={r} value={r}>{r}%</option>)}
+            </select>
+          </div>
+        </div>
+        <p className={`text-[11px] ${totals.is_inter_state === null ? "text-amber-400" : "text-[var(--color-muted)]"}`}>{splitNote}</p>
+
+        {/* Line items */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium text-[var(--color-muted)]">Line items</p>
+            <button type="button" onClick={addItem} className="text-xs text-[var(--color-primary)] hover:underline">+ Add a line</button>
+          </div>
+          <div className="space-y-2">
+            {items.map((item, i) => (
+              <div key={i} className="grid grid-cols-12 gap-2 items-start">
+                <input value={item.description} onChange={e => updateItem(i, "description", e.target.value)}
+                  placeholder={`Line ${i + 1} description`} aria-label={`Line ${i + 1} description`}
+                  className={`col-span-12 md:col-span-4 ${inp} ${errors[`item${i}desc`] ? "border-red-500/60" : ""}`} />
+                <input value={item.hsn_sac} onChange={e => updateItem(i, "hsn_sac", e.target.value)}
+                  placeholder="HSN" aria-label={`Line ${i + 1} HSN or SAC`} className={`col-span-3 md:col-span-1 ${inp}`} />
+                <input value={item.quantity} onChange={e => updateItem(i, "quantity", e.target.value)} type="number" step="any" min="0"
+                  placeholder="Qty" aria-label={`Line ${i + 1} quantity`} className={`col-span-3 md:col-span-1 ${inp}`} />
+                <input value={item.uom} onChange={e => updateItem(i, "uom", e.target.value)}
+                  placeholder="Unit" aria-label={`Line ${i + 1} unit`} className={`col-span-3 md:col-span-1 ${inp}`} />
+                <CurrencyInput value={item.unit_price === "" ? null : Number(item.unit_price)}
+                  onChange={v => updateItem(i, "unit_price", v == null ? "" : String(v))}
+                  placeholder="Rate" min={0}
+                  className={`col-span-3 md:col-span-2 ${inp} ${errors[`item${i}price`] ? "border-red-500/60" : ""}`} />
+                <input value={item.discount_pct} onChange={e => updateItem(i, "discount_pct", e.target.value)} type="number" step="any" min="0" max="100"
+                  placeholder="Disc %" aria-label={`Line ${i + 1} discount percent`} className={`col-span-3 md:col-span-1 ${inp}`} />
+                <select value={item.gst_rate} onChange={e => updateItem(i, "gst_rate", e.target.value)}
+                  aria-label={`Line ${i + 1} GST rate`} className={`col-span-3 md:col-span-1 ${inp}`}>
+                  {["0", "0.25", "3", "5", "12", "18", "28"].map(r => <option key={r} value={r}>{r}%</option>)}
+                </select>
+                <div className="col-span-5 md:col-span-1 text-right text-sm tabular-nums pt-2">
+                  {formatCurrency(totals.lines[i]?.taxable_value ?? 0)}
                 </div>
-              ))}
+                <button type="button" onClick={() => removeItem(i)} disabled={items.length === 1}
+                  aria-label={`Remove line ${i + 1}`}
+                  className="col-span-1 text-[var(--color-muted)] hover:text-red-400 disabled:opacity-30 pt-2"><X size={13} /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Everything a real invoice needs but most don't use every time */}
+        <button type="button" onClick={() => setShowMore(v => !v)}
+          className="text-xs text-[var(--color-primary)] hover:underline">
+          {showMore ? "Hide" : "Add"} discount, freight, PO number, terms…
+        </button>
+        {showMore && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 rounded-lg border border-[var(--color-border)]">
+            <div>
+              <label className={lbl} htmlFor="inv-disc">Discount on the whole invoice</label>
+              <CurrencyInput id="inv-disc" value={discount} onChange={setDiscount} className={inp} placeholder="0" min={0} />
+            </div>
+            <div>
+              <label className={lbl} htmlFor="inv-ship">Freight / packing</label>
+              <CurrencyInput id="inv-ship" value={shipping} onChange={setShipping} className={inp} placeholder="0" min={0} />
+            </div>
+            <div>
+              <label className={lbl} htmlFor="inv-po">Customer's PO number</label>
+              <input id="inv-po" value={poNumber} onChange={e => setPoNumber(e.target.value)} className={inp} placeholder="PO-4455" />
+            </div>
+            <div className="flex flex-col justify-end gap-1.5 text-xs">
+              <label className="flex items-center gap-2 text-[var(--color-muted)]">
+                <input type="checkbox" className="accent-[var(--color-primary)]" checked={roundOff} onChange={e => setRoundOff(e.target.checked)} />
+                Round to the nearest rupee
+              </label>
+              <label className="flex items-center gap-2 text-[var(--color-muted)]">
+                <input type="checkbox" className="accent-[var(--color-primary)]" checked={reverseCharge} onChange={e => setReverseCharge(e.target.checked)} />
+                Reverse charge (customer pays the GST)
+              </label>
+            </div>
+            <div className="col-span-2">
+              <label className={lbl} htmlFor="inv-terms">Terms printed on the invoice</label>
+              <textarea id="inv-terms" value={terms} onChange={e => setTerms(e.target.value)} rows={2} className={inp} placeholder="Payment within 30 days. Interest at 18% p.a. thereafter." />
+            </div>
+            <div className="col-span-2">
+              <label className={lbl} htmlFor="inv-notes">Notes</label>
+              <textarea id="inv-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} className={inp} placeholder="Delivered to the Whitefield warehouse." />
             </div>
           </div>
+        )}
 
-          <div className="border-t border-[var(--color-border)] pt-3 space-y-1 text-sm">
-            <div className="flex justify-between text-[var(--color-muted)]"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-            <div className="flex justify-between text-[var(--color-muted)]"><span>GST {gstRate}%</span><span>{formatCurrency(gst)}</span></div>
-            <div className="flex justify-between font-bold text-base text-[var(--color-primary)]"><span>Total</span><span>{formatCurrency(subtotal + gst)}</span></div>
+        {/* The preview the composer never had */}
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]/50 p-4 space-y-1.5 text-sm">
+          {(totals.discount_amount > 0 || totals.shipping_amount > 0) && (
+            <Row label="Line total" value={formatCurrency(totals.subtotal)} />
+          )}
+          {totals.discount_amount > 0 && <Row label="Less: discount" value={`- ${formatCurrency(totals.discount_amount)}`} />}
+          {totals.shipping_amount > 0 && <Row label="Add: freight / packing" value={formatCurrency(totals.shipping_amount)} />}
+          <Row label={totals.discount_amount > 0 || totals.shipping_amount > 0 ? "Taxable value" : "Subtotal"} value={formatCurrency(totals.taxable_total)} />
+          {totals.is_inter_state === true && <Row label={`IGST (${gstRate}%)`} value={formatCurrency(totals.igst_amount)} />}
+          {totals.is_inter_state === false && <>
+            <Row label={`CGST (${(parseFloat(gstRate) / 2) || 0}%)`} value={formatCurrency(totals.cgst_amount)} />
+            <Row label={`SGST (${(parseFloat(gstRate) / 2) || 0}%)`} value={formatCurrency(totals.sgst_amount)} />
+          </>}
+          {totals.is_inter_state === null && totals.gst_amount > 0 && <Row label="GST" value={formatCurrency(totals.gst_amount)} />}
+          {reverseCharge && <Row label="Tax payable by the customer (RCM)" value="not collected" muted />}
+          {totals.round_off !== 0 && <Row label="Round off" value={formatCurrency(totals.round_off)} />}
+          <div className="flex items-center justify-between pt-2 mt-1 border-t border-[var(--color-border)]">
+            <span className="font-bold">Total</span>
+            <span className="font-bold text-base tabular-nums">{formatCurrency(totals.total_amount)}</span>
           </div>
+          <p className="text-[11px] text-[var(--color-muted)] pt-1">{inWords(totals.total_amount)}</p>
+        </div>
+        <button type="submit" hidden />
+      </form>
+    </Modal>
+  );
+}
 
-          <div className="flex gap-2 pt-2">
-            <button type="submit" disabled={saving} className="flex-1 bg-[var(--color-primary)] text-[var(--color-bg)] font-bold py-2.5 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">
-              {saving ? tr("inv.creating") : tr("inv.createInvoice")}
-            </button>
-            <button type="button" onClick={onClose} className="px-4 text-sm text-[var(--color-muted)] hover:bg-[var(--color-accent)] rounded-lg">Cancel</button>
-          </div>
-        </form>
-      </div>
+type CustomerMatch = {
+  id: string; name: string; gstin: string | null; email: string | null; phone: string | null;
+  place_of_supply_code: string | null; payment_terms_days: number;
+};
+
+function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className={muted ? "text-[var(--color-muted)]" : "text-[var(--color-muted)]"}>{label}</span>
+      <span className={`tabular-nums ${muted ? "text-[var(--color-muted)]" : ""}`}>{value}</span>
     </div>
   );
 }

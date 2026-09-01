@@ -19,7 +19,13 @@ const round2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
 // disagree with what the GL posts. Requires 2 leading DIGITS (a real GSTIN state code) —
 // a malformed GSTIN now falls back to intra-state, same as no GSTIN at all.
 const { stateOf } = require("./gstInvoice");
-const isoDate = (d) => { try { return new Date(d).toISOString().slice(0, 10); } catch { return new Date().toISOString().slice(0, 10); } };
+// DATE columns now arrive as plain "YYYY-MM-DD" strings (db.js); passing one through
+// `new Date()` and back would re-introduce the timezone shift that fix removed.
+const isoDate = (d) => {
+  const s = String(d ?? "");
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  try { return new Date(d).toISOString().slice(0, 10); } catch { return new Date().toISOString().slice(0, 10); }
+};
 
 async function sellerGstin(tenantId) {
   try {
@@ -45,8 +51,13 @@ async function salesLegs(tenantId, inv, { subtotal, gst }) {
     const rate = num(inv.gst_rate);
     const buyer = stateOf(inv.customer_gstin);
     const seller = stateOf(await sellerGstin(tenantId));
-    const interState = !!(buyer && seller && buyer !== seller);
-    const pos = buyer || seller || null;
+    // Wave 4 stores place_of_supply_code and is_inter_state ON the invoice. Prefer them:
+    // an unregistered (B2C) buyer has no GSTIN to derive a state from, so deriving would
+    // silently book CGST+SGST on what may be an inter-state supply.
+    const interState = inv.is_inter_state != null
+      ? inv.is_inter_state === true
+      : !!(buyer && seller && buyer !== seller);
+    const pos = inv.place_of_supply_code || buyer || seller || null;
     if (interState) {
       const igstL = await ledgerIdByName(tenantId, "IGST Output");
       if (!igstL) return null;
@@ -78,14 +89,46 @@ async function postInvoiceSale(tenantId, inv) {
     if (!derived) return null;
     const { party, legs, taxes } = derived;
 
-    // Balanced by construction: party debit == sum of credits (subtotal + gst booked).
+    // ── Round-off ─────────────────────────────────────────────────────────────
+    // Wave 4 lets an invoice round to the nearest rupee. Without handling it here the
+    // debtor would be debited subtotal+gst (e.g. 5540.40) while the customer is billed
+    // and pays the rounded total (5540.00) — leaving a 40-paise residue on their account
+    // that never clears and quietly ages into the receivables report forever.
+    // Preference: a dedicated "Round Off" ledger (what Tally-style charts use). If the
+    // chart doesn't have one, the adjustment folds into Sales — sub-rupee, and far better
+    // than an uncollectable residue on the customer.
+    const roundOff = round2(num(inv.round_off));
+    if (roundOff !== 0) {
+      const roundL = await ledgerIdByName(tenantId, "Round Off").catch(() => null);
+      if (roundL) {
+        legs.push({ ledgerId: roundL, amt: roundOff });
+      } else {
+        const salesLedgerId = await ledgerIdByName(tenantId, "Sales").catch(() => null);
+        const sales = legs.find((l) => l.ledgerId === salesLedgerId);
+        if (sales) sales.amt = round2(sales.amt + roundOff);
+      }
+    }
+
+    // Balanced by construction: party debit == sum of credits.
     const partyDebit = round2(legs.reduce((s, c) => s + c.amt, 0));
     const entries = [{ ledgerId: party, debit: toDb(partyDebit), credit: "0" }];
-    for (const c of legs) entries.push({ ledgerId: c.ledgerId, debit: "0", credit: toDb(c.amt) });
+    for (const c of legs) {
+      // A negative round-off is a debit, not a negative credit — a voucher line must
+      // never carry a negative amount.
+      if (c.amt < 0) entries.push({ ledgerId: c.ledgerId, debit: toDb(-c.amt), credit: "0" });
+      else entries.push({ ledgerId: c.ledgerId, debit: "0", credit: toDb(c.amt) });
+    }
 
     return await postVoucher(
       tenantId, null,
-      { voucherType: "SALES", voucherDate: isoDate(inv.created_at || Date.now()), narration: `Invoice ${inv.invoice_number || ""}`.trim(), reference: inv.invoice_number || null, partyLedgerId: party, source: "invoice" },
+      {
+        voucherType: "SALES",
+        // The DOCUMENT date, not the row's insert timestamp: a back-dated invoice must land
+        // in the period it was actually raised in, or the books and the invoice disagree.
+        voucherDate: isoDate(inv.invoice_date || inv.created_at || Date.now()),
+        narration: `Invoice ${inv.invoice_number || ""}`.trim(),
+        reference: inv.invoice_number || null, partyLedgerId: party, source: "invoice",
+      },
       entries,
       { idempotencyKey: `sale:inv:${inv.id}`, taxes }
     );
