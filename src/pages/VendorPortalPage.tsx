@@ -77,7 +77,7 @@ export default function VendorPortalPage() {
             <h2 className="text-sm font-semibold mb-2 flex items-center gap-1.5"><ReceiptText size={14} /> Open bills</h2>
             <ul className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
               {open.map((b) => (
-                <li key={b.voucher_number} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                <li key={`${b.date}-${b.voucher_number}-${b.reference ?? ""}`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
                   <span className="min-w-0">
                     <span className="font-mono text-xs">{b.reference || b.voucher_number}</span>
                     <span className="text-[var(--color-muted)] text-xs"> · booked {b.date}</span>
@@ -95,7 +95,7 @@ export default function VendorPortalPage() {
             <summary className="text-sm font-semibold cursor-pointer">Settled bills ({settled.length})</summary>
             <ul className="mt-3 divide-y divide-[var(--color-border)]">
               {settled.map((b) => (
-                <li key={b.voucher_number} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <li key={`${b.date}-${b.voucher_number}-${b.reference ?? ""}`} className="flex items-center justify-between gap-3 py-2 text-sm">
                   <span className="font-mono text-xs">{b.reference || b.voucher_number}<span className="font-sans text-[var(--color-muted)]"> · {b.date}</span></span>
                   <span className="tabular-nums text-[var(--color-muted)]">{formatCurrency(b.gross)}</span>
                 </li>

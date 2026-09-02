@@ -72,7 +72,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function authFetch<T = unknown>(
   path: string,
-  init?: RequestInit
+  init?: RequestInit,
+  /** Internal: set on the single post-refresh retry, so a 401 can never recurse twice. */
+  retried = false
 ): Promise<T> {
   const token = getToken();
   const active = getActiveFirm();
@@ -105,13 +107,14 @@ export async function authFetch<T = unknown>(
     break;
   }
 
-  // Rate limiting with a real answer (Wave 19): a 429 used to surface as raw JSON. Say
-  // when to try again, from the server's own Retry-After when it sends one.
-  if (res.status === 429) {
-    const after = parseInt(res.headers.get("Retry-After") ?? "", 10);
-    const wait = Number.isFinite(after) && after > 0 ? after : 30;
-    throw new Error(`You're doing that a bit too fast — try again in ${wait >= 60 ? `${Math.ceil(wait / 60)} minute${wait >= 120 ? "s" : ""}` : `${wait} seconds`}.`);
-  }
+  // 429 is NOT only "slow down". This backend also uses it for semantic limits that
+  // waiting will never clear — a plan quota (upgrade), "one credit application per 90
+  // days", "already reminded in the last 24 hours", "you can own at most N firms". An
+  // earlier version replaced ALL of them with "try again in 30 seconds", which is false
+  // advice and threw away the status and code the UI needs. So: keep the server's own
+  // message whenever it sent one, and only synthesise the wait when it didn't (i.e. the
+  // generic express-rate-limit case, which is also the only one that sets Retry-After).
+  // Falls through to the shared !res.ok handler below so status/code are always attached.
 
   if (res.status === 401) {
     // Only bounce to /login when a session actually ended. A request with no token from a
@@ -121,8 +124,29 @@ export async function authFetch<T = unknown>(
     // WAS signed in and now has no token (logged out in another tab) must be sent to
     // /login rather than left sitting on a dead screen.
     if (!token && !localStorage.getItem("hr_refresh") && !everAuthed) throw new Error("Unauthenticated");
-    const refreshed = await tryRefresh();
-    if (refreshed) return authFetch(path, init);
+
+    // Refresh and retry AT MOST ONCE. Several endpoints answer 401 for reasons a refresh
+    // cannot fix — "current password is incorrect" (change-password, delete-account),
+    // upstream Razorpay auth — and the previous unguarded recursion re-sent the request
+    // after every successful refresh, looping forever: the promise never settled, so the
+    // user's spinner span forever and the real "wrong password" message was unreachable.
+    if (!retried) {
+      const refreshed = await tryRefresh();
+      if (refreshed) return authFetch(path, init, true);
+    }
+
+    // A 401 that survives a refresh is either a genuinely dead session or an endpoint
+    // using 401 for something else. If the session still looks alive, surface the
+    // server's own message instead of signing the user out over a typo'd password.
+    if (retried && localStorage.getItem("hr_refresh")) {
+      const raw401 = await res.text().catch(() => "");
+      let msg401 = "";
+      try { msg401 = JSON.parse(raw401)?.error || ""; } catch { /* not JSON */ }
+      const e401 = new Error(msg401 || "Not authorised") as Error & { status?: number };
+      e401.status = 401;
+      throw e401;
+    }
+
     localStorage.removeItem("hr_access");
     localStorage.removeItem("hr_refresh");
     window.location.href = "/login";
@@ -153,7 +177,20 @@ export async function authFetch<T = unknown>(
   return res.json();
 }
 
-async function tryRefresh(): Promise<boolean> {
+// Concurrent 401s must share ONE refresh. The app routinely has 5-6 requests in flight
+// (the 5s KV poll alone fires one per namespace), so when a 15-minute access token expires
+// they all 401 at once. Independently rotating the refresh token N times trips the
+// server's reuse detection — which keeps a single previous hash — and REVOKES the whole
+// session: the user is signed out for doing nothing but leaving a tab open.
+let refreshInFlight: Promise<boolean> | null = null;
+
+function tryRefresh(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = doRefresh().finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
+}
+
+async function doRefresh(): Promise<boolean> {
   const rt = localStorage.getItem("hr_refresh");
   if (!rt) return false;
   try {

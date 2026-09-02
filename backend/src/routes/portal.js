@@ -147,7 +147,10 @@ router.get("/vendor/:token", async (req, res, next) => {
 
     pool.query("UPDATE vendor_portal_links SET view_count=view_count+1, last_viewed_at=now() WHERE id=$1", [link.id]).catch(() => {});
 
-    const bills = await require("../modules/vendorBills").listBills(link.tenant_id, link.vendor_id).catch(() => []);
+    // Deliberately NOT swallowed: an empty list here is indistinguishable from "nothing is
+    // owed", and answering a supplier with a confident Rs 0.00 when the query actually
+    // failed is worse than answering with an error they can act on.
+    const bills = await require("../modules/vendorBills").listBills(link.tenant_id, link.vendor_id);
     // listBills returns camelCase (voucherNumber/billNumber/date/cancelled/outstanding) and
     // already computes `outstanding` and `status`. Reading snake_case here made every
     // identifier undefined AND made `!b.is_cancelled` always true — so a bill the buyer

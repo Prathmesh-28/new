@@ -23,7 +23,19 @@ const KEY = "hr_offline_queue";
 const MAX_QUEUE = 50;
 
 const readQueue = (): QueuedWrite[] => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } };
-const writeQueue = (q: QueuedWrite[]) => { try { localStorage.setItem(KEY, JSON.stringify(q.slice(0, MAX_QUEUE))); } catch { /* full/private */ } };
+// Returns whether the write actually landed: a QuotaExceededError while telling the user
+// "saved on this device" is the precise failure this module exists to prevent.
+const writeQueue = (q: QueuedWrite[]): boolean => {
+  try { localStorage.setItem(KEY, JSON.stringify(q.slice(0, MAX_QUEUE))); return true; }
+  catch { return false; }
+};
+// Old Android WebViews (pre-Chrome 92) have no crypto.randomUUID; api.ts already guards
+// the identical call. Without this the very first line of queuedPost throws and the
+// offline path is dead exactly where it matters most — a cheap phone in the field.
+const newId = () =>
+  (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 export const queuedCount = () => readQueue().length;
 
@@ -32,7 +44,7 @@ const isNetworkFailure = (e: unknown) =>
 
 /** POST that survives a dead spot. Returns { queued: true } instead of throwing when offline. */
 export async function queuedPost<T>(path: string, body: unknown, label: string): Promise<T | { queued: true }> {
-  const idempotencyKey = crypto.randomUUID();
+  const idempotencyKey = newId();
   try {
     return await authFetch<T>(path, {
       method: "POST",
@@ -51,7 +63,11 @@ export async function queuedPost<T>(path: string, body: unknown, label: string):
       throw e;
     }
     q.push({ id: idempotencyKey, path, body, label, queuedAt: new Date().toISOString(), idempotencyKey });
-    writeQueue(q);
+    if (!writeQueue(q)) {
+      // Storage refused it (quota, private mode). Never claim it was saved.
+      toast.error(`Couldn't save "${label}" on this device — storage is full. Reconnect and try again.`, { duration: 8000 });
+      throw e;
+    }
     toast.info(`Saved on this device — "${label}" will send when you're back online.`, { duration: 6000 });
     return { queued: true };
   }
@@ -81,6 +97,12 @@ export async function flushQueue(): Promise<{ sent: number; kept: number }> {
         headers: { "Idempotency-Key": item.idempotencyKey },
       });
       sent++;
+      // Drain IMMEDIATELY, not at the end of the loop: the queue used to be rewritten
+      // once after every item had been through the network, so closing the tab (or the
+      // 401 redirect, which unloads the page from inside this loop) re-sent everything
+      // already delivered on the next start.
+      const remaining = readQueue().filter((i) => i.id !== item.id);
+      writeQueue(remaining);
     } catch (e) {
       if (isNetworkFailure(e)) { kept.push(item); continue; } // still offline — try later
       // Transient server-side conditions are NOT rejections: a 503 mid-deploy, a 429, a
@@ -95,7 +117,8 @@ export async function flushQueue(): Promise<{ sent: number; kept: number }> {
       toast.error(`"${item.label}" (saved offline) was rejected: ${e instanceof Error ? e.message : "unknown error"}`);
     }
   }
-  // Merge, don't overwrite: anything enqueued while we were sending survives.
+  // Sent items were already drained one by one above; what remains in storage is anything
+  // enqueued DURING the flush. Merge the keepers back in front of it.
   const late = readQueue().filter((i) => !snapshotIds.has(i.id));
   writeQueue([...kept, ...late]);
   if (sent) toast.success(`Back online — ${sent} saved item${sent === 1 ? "" : "s"} sent.`);
