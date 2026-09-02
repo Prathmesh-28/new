@@ -139,7 +139,17 @@ app.use("/api/capabilities", require("./routes/capabilities"));
 // Platform settings - public social links (footer) + super-admin editor
 app.use("/api/platform",     require("./routes/platform"));
 // Client error sink (structured logging / observability)
-app.use("/api/telemetry", require("./routes/telemetry"));
+// Telemetry is UNAUTHENTICATED (client errors happen pre-login), so it needs a tighter
+// ceiling than the general API limiter: the logger forwards errors to ERROR_WEBHOOK_URL
+// behind a single-flight guard, so a flood of junk from one IP can crowd out the real
+// alerts it exists to deliver. A genuine browser session reports a handful, not hundreds.
+app.use("/api/telemetry", rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: "Too many reports" },
+  standardHeaders: true,
+  legacyHeaders: false,
+}), require("./routes/telemetry"));
 
 // Auth (rate limited)
 app.use("/auth",                   authLimiter, require("./routes/auth"));

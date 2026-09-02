@@ -148,8 +148,13 @@ router.get("/vendor/:token", async (req, res, next) => {
     pool.query("UPDATE vendor_portal_links SET view_count=view_count+1, last_viewed_at=now() WHERE id=$1", [link.id]).catch(() => {});
 
     const bills = await require("../modules/vendorBills").listBills(link.tenant_id, link.vendor_id).catch(() => []);
-    const open = bills.filter((b) => !b.is_cancelled && Number(b.gross) - Number(b.allocated) > 0.005);
-    const totalDue = open.reduce((s, b) => s + (Number(b.gross) - Number(b.allocated)), 0);
+    // listBills returns camelCase (voucherNumber/billNumber/date/cancelled/outstanding) and
+    // already computes `outstanding` and `status`. Reading snake_case here made every
+    // identifier undefined AND made `!b.is_cancelled` always true — so a bill the buyer
+    // had CANCELLED was shown to the supplier as money still owed, with no bill number.
+    const live = bills.filter((b) => !b.cancelled);
+    const open = live.filter((b) => Number(b.outstanding) > 0.005);
+    const totalDue = open.reduce((s, b) => s + Number(b.outstanding), 0);
 
     const { rows: prof } = await pool.query(
       "SELECT company_name, gstin FROM tenant_profile WHERE tenant_id=$1", [link.tenant_id]).catch(() => ({ rows: [] }));
@@ -166,13 +171,13 @@ router.get("/vendor/:token", async (req, res, next) => {
       summary: {
         total_due_to_you: Math.round(totalDue * 100) / 100,
         open_bills: open.length,
-        bills_on_record: bills.length,
+        bills_on_record: live.length,
       },
-      bills: bills.slice(0, 100).map((b) => ({
-        voucher_number: b.voucher_number, date: b.voucher_date, reference: b.reference,
+      bills: live.slice(0, 100).map((b) => ({
+        voucher_number: b.voucherNumber, date: b.date, reference: b.billNumber,
         gross: Number(b.gross), paid: Number(b.allocated),
-        outstanding: Math.max(0, Math.round((Number(b.gross) - Number(b.allocated)) * 100) / 100),
-        cancelled: !!b.is_cancelled,
+        outstanding: Math.max(0, Math.round(Number(b.outstanding) * 100) / 100),
+        cancelled: !!b.cancelled,
       })),
       as_of: new Date().toISOString(),
     });

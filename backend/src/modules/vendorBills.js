@@ -181,6 +181,9 @@ async function listBills(tenantId, vendorId) {
             COALESCE((SELECT SUM(a.amount) FROM book_allocations a WHERE a.tenant_id=v.tenant_id AND a.target_voucher_id=v.id),0) AS allocated
        FROM book_vouchers v
       WHERE v.tenant_id=$1 AND v.party_ledger_id=$2 AND v.voucher_type='PURCHASE'
+        -- A reversal is posted as a MIRROR voucher of the same type on the same party
+        -- ledger, so it otherwise surfaced here as a phantom zero-value "bill".
+        AND v.reverses_voucher_id IS NULL
       ORDER BY v.voucher_date DESC, v.voucher_number DESC LIMIT 200`,
     [tenantId, vendorLedgerId]
   );

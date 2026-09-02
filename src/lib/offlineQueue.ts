@@ -42,6 +42,14 @@ export async function queuedPost<T>(path: string, body: unknown, label: string):
   } catch (e) {
     if (!isNetworkFailure(e)) throw e; // a real 4xx/5xx is an answer, not a dead spot
     const q = readQueue();
+    // At the cap the old code appended and then sliced to the first MAX — silently
+    // discarding the write it had just promised to keep. Refuse honestly instead: the
+    // user still has the data on screen and can retry, which is strictly better than a
+    // "saved" toast for something that was thrown away.
+    if (q.length >= MAX_QUEUE) {
+      toast.error(`Can't save "${label}" offline — ${MAX_QUEUE} items are already waiting to send. Reconnect first.`, { duration: 8000 });
+      throw e;
+    }
     q.push({ id: idempotencyKey, path, body, label, queuedAt: new Date().toISOString(), idempotencyKey });
     writeQueue(q);
     toast.info(`Saved on this device — "${label}" will send when you're back online.`, { duration: 6000 });
@@ -75,8 +83,15 @@ export async function flushQueue(): Promise<{ sent: number; kept: number }> {
       sent++;
     } catch (e) {
       if (isNetworkFailure(e)) { kept.push(item); continue; } // still offline — try later
-      // A real rejection (validation, auth): keep it out of the queue but tell the user,
-      // because silently discarding their work is the thing this module exists to prevent.
+      // Transient server-side conditions are NOT rejections: a 503 mid-deploy, a 429, a
+      // 409 IN_FLIGHT (the server is still processing this very key), or a 401 while the
+      // token refreshes would all have thrown the user's work away. Keep those and retry.
+      const status = (e as { status?: number; code?: string })?.status;
+      const code = (e as { code?: string })?.code;
+      const transient = status === undefined || status >= 500 || status === 429 || status === 401 || code === "IN_FLIGHT";
+      if (transient) { kept.push(item); continue; }
+      // A genuine rejection (validation, permission): drop it, but never silently — the
+      // whole point of this module is that work doesn't vanish without the user knowing.
       toast.error(`"${item.label}" (saved offline) was rejected: ${e instanceof Error ? e.message : "unknown error"}`);
     }
   }

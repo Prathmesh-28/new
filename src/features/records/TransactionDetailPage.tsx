@@ -80,7 +80,10 @@ export default function TransactionDetailPage() {
     await deleteWithUndo({
       label: "Transaction",
       remove: () => api.delete(`/api/transactions/${txn.id}`),
-      onDone: () => navigate("/transactions"),
+      onDone: () => { navigate("/transactions"); },
+      // Restoring from a detail page must land back ON the record — re-running onDone
+      // would just re-navigate to a list that never refetches.
+      onRestore: (r) => { navigate(r.href || "/transactions"); },
     });
   };
 

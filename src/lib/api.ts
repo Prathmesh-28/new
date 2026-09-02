@@ -33,8 +33,16 @@ export function setActiveFirm(tenantId: string | null) {
   } catch { /* ignore */ }
 }
 
+// Has this tab ever held a session? A 401 with no token means two very different things:
+// a visitor on a public page (never signed in → fail quietly), or a tab whose session was
+// ended elsewhere, e.g. logout in another tab (→ send them to /login). Without this
+// distinction one of the two is always broken.
+let everAuthed = false;
+
 function getToken() {
-  return localStorage.getItem("hr_access");
+  const t = localStorage.getItem("hr_access");
+  if (t) everAuthed = true;
+  return t;
 }
 
 // Headers identical to what authFetch sends (auth + client id + impersonation), for
@@ -51,15 +59,14 @@ export function authHeaders(): Record<string, string> {
   };
 }
 
-// Which failures are safe to retry? GETs always (idempotent by definition), and writes
-// ONLY when the caller attached an Idempotency-Key — the server-side idempotency layer
-// (Wave 1) makes replaying those exact requests safe. Anything else retried blindly could
-// double-post money.
-const isRetriableRequest = (path: string, init?: RequestInit) => {
+// Only GET/HEAD are retried. An earlier version also retried any write carrying an
+// Idempotency-Key, on the theory that the server would de-duplicate it — but the
+// idempotency middleware is mounted on a HANDFUL of routes, so for every other write that
+// assumption silently becomes "double-post the money". Replay of a genuine write is the
+// offline queue's job (lib/offlineQueue), which only ever replays keys the server honours.
+const isRetriableRequest = (_path: string, init?: RequestInit) => {
   const method = (init?.method ?? "GET").toUpperCase();
-  if (method === "GET" || method === "HEAD") return true;
-  const h = (init?.headers ?? {}) as Record<string, string>;
-  return Object.keys(h).some((k) => k.toLowerCase() === "idempotency-key");
+  return method === "GET" || method === "HEAD";
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -107,11 +114,13 @@ export async function authFetch<T = unknown>(
   }
 
   if (res.status === 401) {
-    // Only bounce to /login when a session actually EXPIRED. A request made with no token
-    // at all (a provider mounted above the public routes, a portal page, the homepage)
-    // must simply fail quietly — redirecting there would kick every logged-out visitor,
-    // including customers on /portal/:token, off the page they were sent.
-    if (!token && !localStorage.getItem("hr_refresh")) throw new Error("Unauthenticated");
+    // Only bounce to /login when a session actually ended. A request with no token from a
+    // tab that never had one (a provider above the public routes, a portal page, the
+    // homepage) fails quietly — redirecting there would kick every logged-out visitor,
+    // including customers on /portal/:token, off the page they were sent. But a tab that
+    // WAS signed in and now has no token (logged out in another tab) must be sent to
+    // /login rather than left sitting on a dead screen.
+    if (!token && !localStorage.getItem("hr_refresh") && !everAuthed) throw new Error("Unauthenticated");
     const refreshed = await tryRefresh();
     if (refreshed) return authFetch(path, init);
     localStorage.removeItem("hr_access");
@@ -132,7 +141,12 @@ export async function authFetch<T = unknown>(
       msg = body?.error || body?.message || "";
       if (msg && body?.code === "NOT_SEEDED") msg += " (open Books and run the one-time setup first)";
     } catch { /* not JSON */ }
-    throw new Error(msg || `${res.status}: ${raw || res.statusText}`);
+    // Carry the status: the offline queue must distinguish a transient 503/429 (keep and
+    // retry) from a real rejection (drop and tell the user). A bare message can't.
+    const err = new Error(msg || `${res.status}: ${raw || res.statusText}`) as Error & { status?: number; code?: string };
+    err.status = res.status;
+    try { err.code = JSON.parse(raw)?.code; } catch { /* not JSON */ }
+    throw err;
   }
 
   if (res.status === 204) return {} as T;

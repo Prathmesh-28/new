@@ -151,6 +151,9 @@ export default function InvoiceDetailPage() {
       label: `Invoice ${inv.invoice_number}`,
       remove: () => api.delete(`/api/invoices/${inv.id}`),
       onDone: () => { navigate("/invoices"); },
+      // Restoring from a detail page must land back ON the record — re-running onDone
+      // would just re-navigate to a list that never refetches.
+      onRestore: (r) => { navigate(r.href || "/invoices"); },
     });
   };
 

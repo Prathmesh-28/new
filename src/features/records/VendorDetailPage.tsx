@@ -142,7 +142,10 @@ export default function VendorDetailPage() {
         : "They go to Trash for 30 days.",
       danger: true, confirmLabel: "Delete",
     })) return;
-    await deleteWithUndo({ label: v.name, remove: () => api.delete(`/api/vendors/${v.id}`), onDone: () => navigate("/vendors") });
+    await deleteWithUndo({ label: v.name, remove: () => api.delete(`/api/vendors/${v.id}`), onDone: () => navigate("/vendors"),
+      // Land back ON the restored record — re-running onDone would re-navigate to a list
+      // that never refetches, so the record returns server-side and the user never sees it.
+      onRestore: (r) => navigate(r.href || "/vendors") });
   };
 
   if (loading) return <div className="max-w-7xl mx-auto"><LoadingState rows={5} label="Loading vendor" /></div>;

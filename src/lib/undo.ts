@@ -18,11 +18,18 @@ import { api } from "./api";
 export type TrashResult = { ok?: boolean; trashId?: string; label?: string };
 
 export async function deleteWithUndo({
-  label, remove, onDone, undoSeconds = 10,
+  label, remove, onDone, onRestore, undoSeconds = 10,
 }: {
   label: string;
   remove: () => Promise<TrashResult>;
   onDone?: () => void | Promise<void>;
+  /**
+   * What to do once the record is back. Defaults to onDone, which is right for a LIST
+   * (refetch). A detail page must pass this: its onDone navigates away, and calling that
+   * again after the restore just re-navigates to a list that never refetches — the record
+   * comes back on the server and the user never sees it.
+   */
+  onRestore?: (restored: { href?: string }) => void | Promise<void>;
   undoSeconds?: number;
 }): Promise<boolean> {
   let result: TrashResult;
@@ -48,9 +55,10 @@ export async function deleteWithUndo({
       label: "Undo",
       onClick: async () => {
         try {
-          await api.post(`/api/trash/${result.trashId}/restore`, {});
+          const back = await api.post<{ href?: string }>(`/api/trash/${result.trashId}/restore`, {});
           toast.success(`${label} restored`);
-          await onDone?.();
+          if (onRestore) await onRestore(back ?? {});
+          else await onDone?.();
         } catch (e) {
           toast.error(e instanceof Error ? e.message : "Couldn't restore it");
         }

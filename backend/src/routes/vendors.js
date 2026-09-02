@@ -77,15 +77,18 @@ router.get("/:id([0-9a-fA-F-]{36})", async (req, res, next) => {
     let bills = [], totals = { outstanding: 0, billed: 0, count: 0 };
     try {
       const raw = await require("../modules/vendorBills").listBills(tenantId, vendor.id);
+      // listBills returns camelCase and already computes status/outstanding. The earlier
+      // snake_case reads left every bill number and date undefined and counted CANCELLED
+      // bills into what we owe.
       bills = raw.slice(0, 25).map((b) => ({
-        id: b.id, bill_number: b.voucher_number, bill_date: b.voucher_date,
+        id: b.voucherId, bill_number: b.billNumber || b.voucherNumber, bill_date: b.date,
         total_amount: b.gross, paid_amount: b.allocated,
-        status: b.is_cancelled ? "cancelled" : (Number(b.gross) - Number(b.allocated) <= 0.005 ? "paid" : "open"),
+        status: b.status,
         due_date: null,
       }));
-      const live = raw.filter((b) => !b.is_cancelled);
+      const live = raw.filter((b) => !b.cancelled);
       totals = {
-        outstanding: Math.round(live.reduce((s, b) => s + Math.max(0, Number(b.gross) - Number(b.allocated)), 0) * 100) / 100,
+        outstanding: Math.round(live.reduce((s, b) => s + Math.max(0, Number(b.outstanding)), 0) * 100) / 100,
         billed: Math.round(live.reduce((s, b) => s + Number(b.gross), 0) * 100) / 100,
         count: live.length,
       };

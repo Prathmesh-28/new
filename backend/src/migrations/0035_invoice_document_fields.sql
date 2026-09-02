@@ -97,21 +97,27 @@ UPDATE invoices i SET place_of_supply_code =
 
 -- Inter-state = both states known AND different. Unknown stays NULL rather than guessing
 -- "intra" — a wrong confident answer here misstates the tax on the document.
-UPDATE invoices i SET is_inter_state = (
-    i.place_of_supply_code IS NOT NULL
-    AND p.seller_state IS NOT NULL
-    AND i.place_of_supply_code <> p.seller_state
-  )
+-- CASE, not a boolean AND-chain: with AND, an unknown place of supply evaluates to FALSE,
+-- which asserts "intra-state" (CGST+SGST) for a supply whose state nobody knows — the
+-- exact confident-wrong-answer this file's own comment says to avoid. Unknown stays NULL.
+UPDATE invoices i SET is_inter_state = CASE
+    WHEN i.place_of_supply_code IS NULL OR p.seller_state IS NULL THEN NULL
+    ELSE i.place_of_supply_code <> p.seller_state
+  END
   FROM (SELECT tenant_id, substr(btrim(gstin), 1, 2) AS seller_state FROM tenant_profile WHERE gstin ~ '^[0-9]{2}') p
  WHERE p.tenant_id = i.tenant_id AND i.is_inter_state IS NULL;
 
 -- Write the split down. SGST takes the odd paise so the two halves always sum exactly to
 -- the GST amount — the same rule lib/gstInvoice.js uses for display.
+-- Only invoices whose split is actually KNOWN get one written. Where is_inter_state is
+-- NULL the three columns stay zero and gst_amount still carries the total, so the document
+-- says "split not stated" rather than asserting a split it cannot support.
 UPDATE invoices SET
-  igst_amount = CASE WHEN is_inter_state THEN gst_amount ELSE 0 END,
-  cgst_amount = CASE WHEN is_inter_state IS NOT TRUE THEN round(gst_amount / 2, 2) ELSE 0 END,
-  sgst_amount = CASE WHEN is_inter_state IS NOT TRUE THEN gst_amount - round(gst_amount / 2, 2) ELSE 0 END
- WHERE gst_amount > 0 AND cgst_amount = 0 AND sgst_amount = 0 AND igst_amount = 0;
+  igst_amount = CASE WHEN is_inter_state IS TRUE  THEN gst_amount ELSE 0 END,
+  cgst_amount = CASE WHEN is_inter_state IS FALSE THEN round(gst_amount / 2, 2) ELSE 0 END,
+  sgst_amount = CASE WHEN is_inter_state IS FALSE THEN gst_amount - round(gst_amount / 2, 2) ELSE 0 END
+ WHERE gst_amount > 0 AND is_inter_state IS NOT NULL
+   AND cgst_amount = 0 AND sgst_amount = 0 AND igst_amount = 0;
 
 -- Line-level taxable value and tax, so GSTR-1 and the printed document agree line by line.
 UPDATE invoice_items SET taxable_value = amount WHERE taxable_value IS NULL;
