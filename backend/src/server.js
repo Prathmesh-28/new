@@ -521,8 +521,21 @@ app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 
 // Error handler
 app.use((err, req, res, _next) => {
+  // A malformed id in the URL is a CLIENT mistake, not a server fault. Postgres raises
+  // 22P02 (invalid text representation) for e.g. /api/customers/undefined/ledger, which
+  // previously surfaced as a 500 plus a logged "unhandled_error" — noise that buries real
+  // incidents, and the wrong answer for a stale bookmark or a broken deep link.
+  if (err.code === "22P02") {
+    return res.status(400).json({ error: "That looks like a broken link — the id in the address isn't valid." });
+  }
+  // 23503 = foreign key violation: the thing being referenced isn't there (or isn't the
+  // caller's). Also a 4xx, not a crash.
+  if (err.code === "23503") {
+    return res.status(409).json({ error: "That refers to something that no longer exists." });
+  }
   logger.error("unhandled_error", {
     msg: err.message,
+    code: err.code,
     stack: (err.stack || "").split("\n").slice(0, 4).join(" | "),
     method: req.method,
     path: req.path,
