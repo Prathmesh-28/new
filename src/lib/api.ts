@@ -107,6 +107,11 @@ export async function authFetch<T = unknown>(
   }
 
   if (res.status === 401) {
+    // Only bounce to /login when a session actually EXPIRED. A request made with no token
+    // at all (a provider mounted above the public routes, a portal page, the homepage)
+    // must simply fail quietly — redirecting there would kick every logged-out visitor,
+    // including customers on /portal/:token, off the page they were sent.
+    if (!token && !localStorage.getItem("hr_refresh")) throw new Error("Unauthenticated");
     const refreshed = await tryRefresh();
     if (refreshed) return authFetch(path, init);
     localStorage.removeItem("hr_access");

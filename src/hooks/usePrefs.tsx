@@ -33,6 +33,10 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true;
+    // No session → nothing to load and nothing to write. This provider sits above the
+    // PUBLIC routes too (homepage, customer/vendor portals), so it must never trigger an
+    // auth round-trip for a visitor who was never signed in.
+    if (!localStorage.getItem("hr_access")) { setReady(true); return () => { alive = false; }; }
     api.get<PrefMap>("/api/prefs")
       .then((server) => {
         if (!alive) return;
