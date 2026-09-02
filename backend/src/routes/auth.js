@@ -587,7 +587,7 @@ router.post("/set-password", authenticate, async (req, res) => {
   if (!password || password.length < 8) return res.status(400).json({ error: "Password too short" });
   const hash = await bcrypt.hash(password, 10);
   const { rows } = await pool.query(
-    "UPDATE users SET password=$1, first_login=false WHERE id=$2 RETURNING email, display_name",
+    "UPDATE users SET mfa_trust_version = COALESCE(mfa_trust_version,1) + 1, password=$1, first_login=false WHERE id=$2 RETURNING email, display_name",
     [hash, req.user.id]
   );
   if (rows[0]) sendPasswordResetSuccess({ to: rows[0].email, name: rows[0].display_name }).catch(() => {});
@@ -629,7 +629,7 @@ router.post("/change-password", authenticate, async (req, res) => {
   if (!ok) return res.status(401).json({ error: "Current password is incorrect" });
 
   const hash = await bcrypt.hash(new_password, 10);
-  await pool.query("UPDATE users SET password=$1 WHERE id=$2", [hash, req.user.id]);
+  await pool.query("UPDATE users SET mfa_trust_version = COALESCE(mfa_trust_version,1) + 1, password=$1 WHERE id=$2", [hash, req.user.id]);
   sendPasswordResetSuccess({ to: req.user.email, name: req.user.display_name }).catch(() => {});
   res.json({ ok: true });
 });
@@ -669,7 +669,7 @@ router.post("/mfa/enable", authenticate, async (req, res) => {
   if (!u.mfa_secret_enc) return res.status(400).json({ error: "Start with /mfa/setup first." });
   if (!totp.verifyTotp(totp.decSecret(u.mfa_secret_enc), code)) return res.status(400).json({ error: "That code didn't match. Check your authenticator and try again." });
   const backup = totp.genBackupCodes();
-  await pool.query("UPDATE users SET mfa_enabled=true, mfa_backup_codes=$1, mfa_last_totp_counter=0 WHERE id=$2", [backup.map(totp.hashBackup), req.user.id]);
+  await pool.query("UPDATE users SET mfa_enabled=true, mfa_backup_codes=$1, mfa_last_totp_counter=0, mfa_trust_version = COALESCE(mfa_trust_version,1) + 1 WHERE id=$2", [backup.map(totp.hashBackup), req.user.id]);
   pool.query("INSERT INTO audit_log(user_id, action, entity, entity_id, meta) VALUES($1,'mfa_enabled','user',$2,$3)", [req.user.id, req.user.id, { ip: req.ip }]).catch(() => {});
   res.set("Cache-Control", "no-store");
   res.json({ enabled: true, backup_codes: backup }); // shown once — the server only stores hashes
@@ -687,7 +687,7 @@ router.post("/mfa/disable", authenticate, async (req, res) => {
   const okCode = (u.mfa_secret_enc && totp.verifyTotp(totp.decSecret(u.mfa_secret_enc), code)) ||
                  (Array.isArray(u.mfa_backup_codes) && u.mfa_backup_codes.includes(totp.hashBackup(code)));
   if (!okCode) return res.status(400).json({ error: "Enter a valid authenticator or backup code to disable MFA." });
-  await pool.query("UPDATE users SET mfa_enabled=false, mfa_secret_enc=NULL, mfa_backup_codes='{}', mfa_last_totp_counter=0 WHERE id=$1", [req.user.id]);
+  await pool.query("UPDATE users SET mfa_enabled=false, mfa_secret_enc=NULL, mfa_backup_codes='{}', mfa_last_totp_counter=0, mfa_trust_version = COALESCE(mfa_trust_version,1) + 1 WHERE id=$1", [req.user.id]);
   pool.query("INSERT INTO audit_log(user_id, action, entity, entity_id, meta) VALUES($1,'mfa_disabled','user',$2,$3)", [req.user.id, req.user.id, { ip: req.ip }]).catch(() => {});
   res.json({ enabled: false });
 });

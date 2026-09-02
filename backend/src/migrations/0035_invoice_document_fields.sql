@@ -79,6 +79,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_record_attachment ON record_attachments(ten
 -- created) and its tax split written down explicitly, so nothing has to re-derive it later.
 -- FORCE RLS is lifted for the maintenance statements and restored, as in 0026/0031/0034.
 ALTER TABLE invoices NO FORCE ROW LEVEL SECURITY;
+-- customers (0034) is FORCE-RLS too, and the place-of-supply backfill below reads it via
+-- a subquery. As the production (non-superuser) role that subquery would silently return
+-- NULL for every row — a superuser dev database hides this. Lift for the DML, restore after.
+ALTER TABLE customers NO FORCE ROW LEVEL SECURITY;
 
 UPDATE invoices SET invoice_date = created_at::date WHERE invoice_date IS NULL;
 UPDATE invoices SET updated_at   = created_at       WHERE updated_at IS NULL;
@@ -114,6 +118,7 @@ UPDATE invoice_items SET taxable_value = amount WHERE taxable_value IS NULL;
 UPDATE invoice_items SET tax_amount = round(amount * gst_rate / 100, 2) WHERE tax_amount IS NULL;
 
 ALTER TABLE invoices FORCE ROW LEVEL SECURITY;
+ALTER TABLE customers FORCE ROW LEVEL SECURITY;
 
 -- invoice_date is now mandatory for new rows; the backfill above guarantees every existing
 -- row already has one.

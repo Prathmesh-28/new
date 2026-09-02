@@ -53,15 +53,26 @@ async function rotate({ sessionId, presentedToken, newToken, ip }) {
   if (s.revoked_at) return { ok: false, reason: "revoked" };
   if (new Date(s.expires_at) < new Date()) return { ok: false, reason: "expired" };
 
-  if (s.refresh_hash && s.refresh_hash !== hash(presentedToken)) {
-    // Replay of an already-exchanged token. Assume the token was stolen and end the
-    // session — the legitimate holder simply signs in again; the thief loses access.
-    await revoke(sessionId, "refresh token reuse detected");
-    return { ok: false, reason: "reuse" };
+  const presented = hash(presentedToken);
+  if (s.refresh_hash && s.refresh_hash !== presented) {
+    // Two tabs refreshing within a moment of each other both present the token that was
+    // just exchanged — that is the NORMAL multi-tab case, not theft. The immediately-
+    // previous hash stays acceptable for a 60s grace window; both tabs end up holding a
+    // valid token and re-rotate on their next refresh.
+    const graceOk = s.prev_refresh_hash === presented
+      && s.rotated_at && (Date.now() - new Date(s.rotated_at).getTime()) < 60_000;
+    if (!graceOk) {
+      // Anything older is a genuine replay of an exchanged token — the classic stolen-
+      // token signal. End the session; the legitimate holder signs in again, the thief
+      // loses access.
+      await revoke(sessionId, "refresh token reuse detected");
+      return { ok: false, reason: "reuse" };
+    }
   }
 
   await pool.query(
-    "UPDATE user_sessions SET refresh_hash=$2, last_seen_at=now(), ip=COALESCE($3, ip) WHERE id=$1",
+    `UPDATE user_sessions SET prev_refresh_hash = refresh_hash, refresh_hash=$2, rotated_at=now(),
+            last_seen_at=now(), ip=COALESCE($3, ip) WHERE id=$1`,
     [sessionId, hash(newToken), ip || null]
   );
   return { ok: true, session: s };

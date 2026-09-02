@@ -62,7 +62,12 @@ router.get("/quiet-hours", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.put("/quiet-hours", authenticate, async (req, res, next) => {
+// Firm-wide setting → owner/admin only. It shipped ungated; any member could silence or
+// unsilence every customer chaser for the whole firm.
+const QUIET_ROLES = ["super_admin", "owner", "admin", "finance_manager"];
+router.put("/quiet-hours", authenticate, (req, res, next) =>
+  QUIET_ROLES.includes(req.user.role) ? next() : res.status(403).json({ error: "Only an owner or finance manager can change the firm's messaging window" }),
+  async (req, res, next) => {
   const hour = (v) => (v === null || v === "" || v === undefined ? null : Math.min(23, Math.max(0, parseInt(v, 10) || 0)));
   const start = hour(req.body?.start), end = hour(req.body?.end);
   if ((start === null) !== (end === null)) return res.status(400).json({ error: "Set both a start and an end hour, or neither" });

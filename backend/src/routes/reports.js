@@ -82,8 +82,9 @@ router.post("/send-now/:reportKey", authenticate, async (req, res, next) => {
 router.get("/compare", authenticate, async (req, res, next) => {
   try {
     const t = req.user.tenant_id;
-    const { pool } = require("../db");
-    const { rows: [r] } = await pool.query(`
+    // invoices is FORCE-RLS: these aggregates must run under the tenant GUC or the
+    // production role gets zeros (a superuser dev DB hides this).
+    const { rows: [r] } = await q(t, `
       WITH cur AS (SELECT date_trunc('month', CURRENT_DATE)::date AS s),
       inv AS (
         SELECT date_trunc('month', invoice_date::timestamp)::date AS m,
@@ -112,7 +113,7 @@ router.get("/compare", authenticate, async (req, res, next) => {
     `, [t]);
 
     // The variance explainer: which customers moved the revenue number, either way.
-    const { rows: drivers } = await pool.query(`
+    const { rows: drivers } = await q(t, `
       SELECT COALESCE(NULLIF(btrim(customer_name), ''), '(unnamed)') AS customer,
              COALESCE(SUM(total_amount) FILTER (WHERE date_trunc('month', invoice_date::timestamp) = date_trunc('month', CURRENT_DATE)),0) AS cur,
              COALESCE(SUM(total_amount) FILTER (WHERE date_trunc('month', invoice_date::timestamp) = date_trunc('month', CURRENT_DATE) - interval '1 month'),0) AS prev
@@ -167,13 +168,13 @@ router.get("/consolidated", authenticate, async (req, res, next) => {
     for (const f of firms) {
       const { rows: [prof] } = await pool.query(
         "SELECT company_name FROM tenant_profile WHERE tenant_id=$1", [f.tenant_id]).catch(() => ({ rows: [{}] }));
-      const { rows: [m] } = await pool.query(`
+      const { rows: [m] } = await q(f.tenant_id, `
         WITH o AS (SELECT status, due_date, GREATEST(total_amount - paid_amount - COALESCE(credited_amount,0),0) AS out
                      FROM invoices WHERE tenant_id=$1)
         SELECT COALESCE(SUM(out) FILTER (WHERE status NOT IN ('paid','cancelled','draft')),0) AS receivables,
                COALESCE(SUM(out) FILTER (WHERE status NOT IN ('paid','cancelled','draft') AND due_date < CURRENT_DATE),0) AS overdue
           FROM o`, [f.tenant_id]);
-      const { rows: [c] } = await pool.query(`
+      const { rows: [c] } = await q(f.tenant_id, `
         SELECT COALESCE(SUM(amount) FILTER (WHERE amount > 0),0) AS inflow,
                COALESCE(-SUM(amount) FILTER (WHERE amount < 0),0) AS outflow
           FROM transactions WHERE tenant_id=$1 AND transaction_date >= CURRENT_DATE - 30`, [f.tenant_id]);

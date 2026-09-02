@@ -28,6 +28,10 @@ const ENTITIES = {
       { table: "invoice_payments",    fk: "invoice_id" },
       { table: "invoice_reminders",   fk: "invoice_id" },
       { table: "invoice_credit_notes", fk: "invoice_id" },
+      // Without these two, deleting an invoice destroyed its write-off record and edit
+      // history, and a restore resurrected a credited_amount with no backing paper.
+      { table: "invoice_writeoffs",   fk: "invoice_id" },
+      { table: "invoice_revisions",   fk: "invoice_id" },
     ],
     href: (id) => `/invoices/${id}`,
   },

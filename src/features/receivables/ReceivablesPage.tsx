@@ -2670,8 +2670,10 @@ function PartialPaymentTracker() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get<BackendInvoiceRow[]>("/api/invoices")
-      .then(rows => setBackendInvoices(Array.isArray(rows) ? rows : []))
+    // The list endpoint returns the Wave-1 envelope now; ?all=1 keeps the whole set this
+    // tracker aggregates over. Reading the bare body left this widget permanently empty.
+    api.get<{ data: BackendInvoiceRow[] }>("/api/invoices?all=1")
+      .then(res => setBackendInvoices(Array.isArray(res?.data) ? res.data : []))
       .catch(() => setBackendInvoices(null))
       .finally(() => setLoading(false));
   }, []);

@@ -4,19 +4,20 @@
 // the in-app pages use (outstanding = total − received − credited, floored at zero; drafts
 // disclosed separately, since a draft is not a claim on anyone).
 const { pool } = require("../db");
+const { q } = require("./tenantDb"); // invoices/transactions aggregates must run under the tenant GUC (FORCE RLS)
 const { sendMail } = require("./email");
 
 const fmt = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
 async function businessSummary(tenantId) {
-  const inv = (await pool.query(`
+  const inv = (await q(tenantId, `
     WITH o AS (SELECT status, due_date, GREATEST(total_amount - paid_amount - COALESCE(credited_amount,0),0) AS out
                  FROM invoices WHERE tenant_id=$1)
     SELECT COALESCE(sum(out) FILTER (WHERE status NOT IN ('paid','cancelled')),0)                        AS pending,
            COALESCE(sum(out) FILTER (WHERE status NOT IN ('paid','cancelled') AND due_date < CURRENT_DATE),0) AS overdue,
            COALESCE(sum(out) FILTER (WHERE status = 'draft'),0)                                          AS draft
       FROM o`, [tenantId])).rows[0];
-  const cash = (await pool.query(`
+  const cash = (await q(tenantId, `
     SELECT COALESCE(sum(amount) FILTER (WHERE amount > 0),0) AS inflow,
            COALESCE(-sum(amount) FILTER (WHERE amount < 0),0) AS outflow
       FROM transactions WHERE tenant_id=$1 AND transaction_date >= CURRENT_DATE - 30`, [tenantId])).rows[0];
@@ -30,7 +31,7 @@ async function businessSummary(tenantId) {
 }
 
 async function receivables(tenantId) {
-  const { rows } = await pool.query(`
+  const { rows } = await q(tenantId, `
     SELECT customer_name, sum(GREATEST(total_amount - paid_amount - COALESCE(credited_amount,0),0)) AS due
       FROM invoices WHERE tenant_id=$1 AND status NOT IN ('paid','cancelled','draft')
      GROUP BY customer_name HAVING sum(GREATEST(total_amount - paid_amount - COALESCE(credited_amount,0),0)) > 0
@@ -39,7 +40,7 @@ async function receivables(tenantId) {
 }
 
 async function cashflow(tenantId) {
-  const { rows } = await pool.query(`
+  const { rows } = await q(tenantId, `
     SELECT to_char(date_trunc('week', transaction_date), 'DD Mon') AS wk,
            COALESCE(sum(amount) FILTER (WHERE amount > 0),0) AS inflow,
            COALESCE(-sum(amount) FILTER (WHERE amount < 0),0) AS outflow
@@ -74,12 +75,19 @@ async function sendReport(tenantId, reportKey, toEmail) {
 // Hourly cron: send every schedule whose local hour has arrived and hasn't gone today
 // (this week, for weekly). Crosses tenants, so plain pool.query with explicit scoping.
 async function runDueSchedules() {
+  // Without SMTP nothing can be delivered — marking rows sent would silently burn the
+  // day's send and log a success that never happened.
+  if (!process.env.SMTP_USER) return 0;
   const hourIST = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hour12: false, timeZone: "Asia/Kolkata" }).format(new Date()));
   const dowIST = new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "Asia/Kolkata" }).format(new Date());
+  // "Already sent today" must compare IST calendar days on BOTH sides: last_sent_at is a
+  // timestamptz, and casting only the right side made sends before 05:30 IST count as
+  // yesterday's (double-send at the next hour).
   const { rows } = await pool.query(`
     SELECT s.*, u.email FROM report_schedules s JOIN users u ON u.id = s.user_id
      WHERE s.send_hour = $1
-       AND (s.last_sent_at IS NULL OR s.last_sent_at < (now() AT TIME ZONE 'Asia/Kolkata')::date)
+       AND (s.last_sent_at IS NULL
+            OR (s.last_sent_at AT TIME ZONE 'Asia/Kolkata')::date < (now() AT TIME ZONE 'Asia/Kolkata')::date)
        AND (s.cadence = 'daily' OR (s.cadence = 'weekly' AND $2 = 'Mon'))`, [hourIST, dowIST]);
   let sent = 0;
   for (const s of rows) {

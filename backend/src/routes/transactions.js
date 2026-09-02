@@ -213,7 +213,7 @@ router.get("/:id([0-9a-fA-F-]{36})", authenticate, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT t.*, b.account_name, b.account_type, b.provider
-         FROM transactions t LEFT JOIN bank_accounts b ON b.id = t.bank_account_id
+         FROM transactions t LEFT JOIN bank_accounts b ON b.id = t.bank_account_id AND b.tenant_id = t.tenant_id
         WHERE t.id=$1 AND t.tenant_id=$2`,
       [req.params.id, req.user.tenant_id]);
     if (!rows[0]) return res.status(404).json({ error: "Transaction not found" });

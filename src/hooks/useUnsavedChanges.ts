@@ -33,10 +33,11 @@ export function useUnsavedChanges(isDirty: boolean, opts?: { message?: string; o
     // If the user confirms, we go back twice (past the sentinel and off the page).
     const sentinel = { __hrGuard: Date.now() };
     window.history.pushState(sentinel, "");
+    let leaving = false; // once the user confirms, the guard must not re-fire on its own go(-1)
     const onPop = () => {
-      if (!dirty.current) return;
+      if (!dirty.current || leaving) return;
       const leave = window.confirm(message);
-      if (leave) window.history.go(-1);
+      if (leave) { leaving = true; window.history.go(-1); }
       else window.history.pushState(sentinel, ""); // stay put; restore the sentinel
     };
     window.addEventListener("popstate", onPop);

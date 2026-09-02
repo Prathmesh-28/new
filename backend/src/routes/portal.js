@@ -16,6 +16,9 @@ const router = require("express").Router();
 const crypto = require("crypto");
 const { pool } = require("../db");
 const { renderInvoicePdf } = require("../lib/invoicePdf");
+// invoices/invoice_payments are FORCE-RLS: reads MUST carry the link's tenant GUC (q),
+// or the production role sees zero rows. The link tables themselves are non-RLS by design.
+const { q } = require("../lib/tenantDb");
 
 const hashToken = (t) => crypto.createHash("sha256").update(String(t)).digest("hex");
 
@@ -26,13 +29,18 @@ const hashToken = (t) => crypto.createHash("sha256").update(String(t)).digest("h
  */
 async function resolve(token) {
   if (!token || String(token).length < 20) return { error: "This link isn't valid." };
+  // Two steps on purpose: the link row is non-RLS (no tenant context exists yet), but
+  // customers is FORCE-RLS — joining it here returned zero rows for the production role.
   const { rows } = await pool.query(
-    `SELECT l.*, c.name AS customer_name, c.email AS customer_email, c.opening_balance
-       FROM customer_portal_links l JOIN customers c ON c.id = l.customer_id
-      WHERE l.token_hash = $1`,
-    [hashToken(token)]
-  );
-  const link = rows[0];
+    "SELECT * FROM customer_portal_links WHERE token_hash = $1", [hashToken(token)]);
+  let link = rows[0];
+  if (link) {
+    const { rows: cust } = await q(link.tenant_id,
+      "SELECT name, email, opening_balance FROM customers WHERE id=$1 AND tenant_id=$2",
+      [link.customer_id, link.tenant_id]);
+    if (!cust[0]) link = undefined; // customer deleted → the link is dead too
+    else link = { ...link, customer_name: cust[0].name, customer_email: cust[0].email, opening_balance: cust[0].opening_balance };
+  }
   if (!link) return { error: "This link isn't valid. Ask your supplier for a new one." };
   if (link.revoked_at) return { error: "This link has been turned off. Ask your supplier for a new one." };
   if (link.expires_at && new Date(link.expires_at) < new Date())
@@ -49,8 +57,9 @@ router.get("/:token", async (req, res, next) => {
     // Count the view, but never let a stats write break the page the customer came for.
     pool.query("UPDATE customer_portal_links SET view_count = view_count + 1, last_viewed_at = now() WHERE id=$1", [link.id]).catch(() => {});
 
-    // Explicitly tenant-scoped (this table is outside RLS by design — see migration 0038).
-    const { rows: invoices } = await pool.query(
+    // invoices is FORCE-RLS — the read must set the tenant GUC (q), not just filter by
+    // column: as the production role a plain pool.query returns zero rows here.
+    const { rows: invoices } = await q(link.tenant_id,
       `SELECT id, invoice_number, invoice_date, due_date, total_amount, paid_amount,
               COALESCE(credited_amount,0) AS credited_amount, status, currency,
               GREATEST(total_amount - paid_amount - COALESCE(credited_amount,0), 0) AS outstanding
@@ -59,7 +68,7 @@ router.get("/:token", async (req, res, next) => {
         ORDER BY invoice_date DESC NULLS LAST, created_at DESC LIMIT 100`,
       [link.tenant_id, link.customer_id]);
 
-    const { rows: receipts } = await pool.query(
+    const { rows: receipts } = await q(link.tenant_id,
       `SELECT p.id, p.amount, p.mode, p.reference, p.received_at, p.receipt_number, i.invoice_number
          FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id
         WHERE p.tenant_id=$1 AND i.customer_id=$2
@@ -106,7 +115,7 @@ router.get("/:token/invoice/:id/pdf", async (req, res, next) => {
   try {
     const { link, error } = await resolve(req.params.token);
     if (error) return res.status(404).json({ error });
-    const { rows } = await pool.query(
+    const { rows } = await q(link.tenant_id,
       "SELECT id FROM invoices WHERE id=$1 AND tenant_id=$2 AND customer_id=$3 AND status <> 'draft'",
       [req.params.id, link.tenant_id, link.customer_id]);
     if (!rows[0]) return res.status(404).json({ error: "That invoice isn't on this account." });

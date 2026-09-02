@@ -47,6 +47,13 @@ async function salesLegs(tenantId, inv, { subtotal, gst }) {
   const taxes = [];
   if (subtotal > 0) legs.push({ ledgerId: salesL, amt: subtotal });
 
+  // Reverse charge: the RECIPIENT pays the GST to the government, not to us. The document
+  // layer already excludes it from total_amount (invoiceTotals.js); the audit caught this
+  // file still crediting Output GST and debiting the customer for it — a permanent AR
+  // residue and a false output liability. Under RCM the voucher is Dr Debtor / Cr Sales
+  // for the taxable value only; the tax is the buyer's problem by law.
+  if (inv.reverse_charge) return { party, legs, taxes };
+
   if (gst > 0) {
     const rate = num(inv.gst_rate);
     const buyer = stateOf(inv.customer_gstin);

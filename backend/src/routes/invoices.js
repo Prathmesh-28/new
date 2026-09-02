@@ -143,6 +143,15 @@ router.patch("/:id", authenticate, canWrite, async (req, res) => {
   if (!valid.includes(status)) return res.status(400).json({ error: `status must be one of: ${valid.join(", ")}` });
   const tenantId = req.user.tenant_id;
 
+  // A voided invoice is a closed legal document: flipping its status back to sent/paid
+  // here would resurrect it while voided_at/void_reason still say the opposite. The
+  // audit found this route predated (and bypassed) every guard the void path enforces.
+  {
+    const { rows: [chk] } = await q(tenantId, "SELECT voided_at FROM invoices WHERE id=$1 AND tenant_id=$2", [req.params.id, tenantId]);
+    if (!chk) return res.status(404).json({ error: "Invoice not found" });
+    if (chk.voided_at) return res.status(409).json({ error: "This invoice is void — it can't change status. Raise a fresh invoice instead." });
+  }
+
   // Marking paid must settle only the OUTSTANDING balance (partial receipts may already be
   // booked) and must be a no-op on an already-paid invoice — otherwise the settling receipt
   // double-posts against those partials or against a historical full receipt.
@@ -263,7 +272,7 @@ router.post("/:id/remind", authenticate, canWrite, async (req, res) => {
     // 7-day window) is a super-admin-tunable platform setting, defaulting to 3.
     const reminderCap = await platformConfig.num("limits", "reminderMaxPer7d", 3);
     const { rows: recent } = await pool.query(
-      "SELECT count(*)::int AS n FROM invoice_reminders WHERE invoice_id=$1 AND tenant_id=$2 AND created_at > now() - interval '7 days'",
+      "SELECT count(*)::int AS n FROM invoice_reminders WHERE invoice_id=$1 AND tenant_id=$2 AND reminded_at > now() - interval '7 days'",
       [id, tenantId]
     ).catch(() => ({ rows: [{ n: 0 }] }));
     if (reminderCap > 0 && (recent[0]?.n ?? 0) >= reminderCap) {
@@ -630,6 +639,9 @@ router.post("/:id([0-9a-fA-F-]{36})/write-off", authenticate, canWrite, idempote
       const { rows: [inv] } = await client.query("SELECT * FROM invoices WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [req.params.id, t]);
       if (!inv) return { notFound: true };
       if (inv.status === "cancelled" || inv.voided_at) return { err: "This invoice is cancelled — there's nothing to write off." };
+      // A draft was never issued: writing it off would post Sales + output GST to the
+      // books for a document no customer ever received. Delete or void the draft instead.
+      if (inv.status === "draft") return { err: "This is still a draft — nothing was ever owed. Delete the draft instead of writing it off." };
       const outstanding = remainingToSettle({ total: inv.total_amount, paidAmount: inv.paid_amount || 0, creditedAmount: inv.credited_amount || 0 });
       const amount = req.body?.amount != null ? round2(req.body.amount) : outstanding;
       if (!(amount > 0)) return { err: "Nothing is outstanding on this invoice." };
@@ -860,9 +872,16 @@ router.put("/:id([0-9a-fA-F-]{36})", authenticate, canWrite, async (req, res, ne
         [tenantId, cur.id, cur.version, { invoice: cur, items: oldItems }, req.body?.reason || null, req.user.id]);
 
       const b = req.body || {};
+      // Money is recomputed ONLY when a money-affecting input is actually in the body.
+      // The audit caught the alternative failing two ways: a notes-only PUT re-rounded a
+      // no-round-off invoice (its issued total changed from a metadata edit), and a
+      // gst_rate-only PUT rewrote header totals while the stored line items kept their
+      // old tax — header and lines disagreeing on a legal document.
+      const moneyTouched = ["items", "gst_rate", "discount_amount", "shipping_amount", "reverse_charge", "round_off_enabled", "place_of_supply_code"]
+        .some((k) => b[k] !== undefined);
       const items = Array.isArray(b.items) && b.items.length ? b.items : oldItems;
       const pos = b.place_of_supply_code !== undefined ? b.place_of_supply_code : cur.place_of_supply_code;
-      const totals = computeInvoice({
+      const totals = moneyTouched ? computeInvoice({
         items,
         gst_rate: b.gst_rate ?? cur.gst_rate,
         discount_amount: b.discount_amount ?? cur.discount_amount,
@@ -870,8 +889,28 @@ router.put("/:id([0-9a-fA-F-]{36})", authenticate, canWrite, async (req, res, ne
         place_of_supply_code: pos,
         seller_state_code: await sellerStateCode(client, tenantId),
         reverse_charge: b.reverse_charge ?? cur.reverse_charge,
-        round_off_enabled: b.round_off_enabled !== false,
-      });
+        // When the body doesn't restate the preference, the stored row is the truth: a
+        // non-zero round_off (or an already-whole total) means rounding was on.
+        round_off_enabled: b.round_off_enabled !== undefined ? b.round_off_enabled !== false
+          : (Number(cur.round_off) !== 0 || Number(cur.total_amount) === Math.round(Number(cur.total_amount))),
+      }) : {
+        // Metadata-only edit: every money column keeps its stored value, verbatim.
+        taxable_total: cur.subtotal, gst_amount: cur.gst_amount,
+        cgst_amount: cur.cgst_amount, sgst_amount: cur.sgst_amount, igst_amount: cur.igst_amount,
+        is_inter_state: cur.is_inter_state, discount_amount: cur.discount_amount,
+        shipping_amount: cur.shipping_amount, round_off: cur.round_off, total_amount: cur.total_amount,
+        lines: null,
+      };
+
+      // Renaming the customer must move the master link too — otherwise the invoice keeps
+      // showing on the OLD customer's ledger and portal under the NEW name.
+      let newCustomerId = cur.customer_id;
+      if (b.customer_name !== undefined && String(b.customer_name).trim() !== cur.customer_name) {
+        newCustomerId = await require("../lib/invoiceCreate").resolveCustomerId(client, tenantId, {
+          customer_name: b.customer_name, customer_gstin: b.customer_gstin ?? cur.customer_gstin,
+          customer_email: b.customer_email ?? cur.customer_email, customer_phone: b.customer_phone ?? cur.customer_phone,
+        });
+      }
 
       const { rows: [upd] } = await client.query(
         `UPDATE invoices SET
@@ -879,7 +918,7 @@ router.put("/:id([0-9a-fA-F-]{36})", authenticate, canWrite, async (req, res, ne
            invoice_date=$7, due_date=$8, gst_rate=$9, place_of_supply_code=$10, is_inter_state=$11,
            reverse_charge=$12, subtotal=$13, gst_amount=$14, cgst_amount=$15, sgst_amount=$16,
            igst_amount=$17, discount_amount=$18, shipping_amount=$19, round_off=$20, total_amount=$21,
-           po_number=$22, reference=$23, terms=$24, notes=$25, currency=$26,
+           po_number=$22, reference=$23, terms=$24, notes=$25, currency=$26, customer_id=$27,
            version = version + 1, updated_at = now()
          WHERE id=$1 AND tenant_id=$2 RETURNING *`,
         [cur.id, tenantId,
@@ -891,9 +930,9 @@ router.put("/:id([0-9a-fA-F-]{36})", authenticate, canWrite, async (req, res, ne
          totals.taxable_total, totals.gst_amount, totals.cgst_amount, totals.sgst_amount,
          totals.igst_amount, totals.discount_amount, totals.shipping_amount, totals.round_off, totals.total_amount,
          b.po_number ?? cur.po_number, b.reference ?? cur.reference,
-         b.terms ?? cur.terms, b.notes ?? cur.notes, b.currency ?? cur.currency]);
+         b.terms ?? cur.terms, b.notes ?? cur.notes, b.currency ?? cur.currency, newCustomerId]);
 
-      if (Array.isArray(b.items) && b.items.length) {
+      if (Array.isArray(b.items) && b.items.length && totals.lines) {
         await client.query("DELETE FROM invoice_items WHERE invoice_id=$1", [cur.id]);
         for (const line of totals.lines) {
           await client.query(

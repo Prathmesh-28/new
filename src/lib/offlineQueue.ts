@@ -50,9 +50,17 @@ export async function queuedPost<T>(path: string, body: unknown, label: string):
 }
 
 /** Replay everything queued. Called on 'online' and app start; safe to call repeatedly. */
+let flushing = false;
 export async function flushQueue(): Promise<{ sent: number; kept: number }> {
+  // Single-flight, and the queue is SNAPSHOTTED then atomically drained: a write queued
+  // while the flush's awaits were in progress used to be clobbered by the flush's final
+  // write-back (read-modify-write race) — the one loss this module exists to prevent.
+  if (flushing) return { sent: 0, kept: readQueue().length };
+  flushing = true;
+  try {
   const q = readQueue();
   if (!q.length || !navigator.onLine) return { sent: 0, kept: q.length };
+  const snapshotIds = new Set(q.map((i) => i.id));
   const kept: QueuedWrite[] = [];
   let sent = 0;
   for (const item of q) {
@@ -72,9 +80,12 @@ export async function flushQueue(): Promise<{ sent: number; kept: number }> {
       toast.error(`"${item.label}" (saved offline) was rejected: ${e instanceof Error ? e.message : "unknown error"}`);
     }
   }
-  writeQueue(kept);
+  // Merge, don't overwrite: anything enqueued while we were sending survives.
+  const late = readQueue().filter((i) => !snapshotIds.has(i.id));
+  writeQueue([...kept, ...late]);
   if (sent) toast.success(`Back online — ${sent} saved item${sent === 1 ? "" : "s"} sent.`);
-  return { sent, kept: kept.length };
+  return { sent, kept: kept.length + late.length };
+  } finally { flushing = false; }
 }
 
 export function installOfflineQueue() {

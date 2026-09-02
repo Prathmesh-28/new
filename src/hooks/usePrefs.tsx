@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
+import { AuthCtxForPrefs } from "@/context/AuthContext";
 
 /**
  * Per-user preferences that follow the person, not the browser.
@@ -26,17 +27,31 @@ const Ctx = createContext<{
 }>({ prefs: {}, ready: false, setPref: () => {} });
 
 export function PrefsProvider({ children }: { children: ReactNode }) {
+  // Read the auth context WITHOUT the must-be-inside-provider throw: prefs only need to
+  // know "who, if anyone" — outside an AuthProvider (tests, future mount-order changes)
+  // the answer is simply "no one" and the provider behaves as logged-out.
+  const auth = useContext(AuthCtxForPrefs);
+  const user = auth?.user ?? null;
   const [prefs, setPrefs] = useState<PrefMap>(readCache);
   const [ready, setReady] = useState(false);
   const pending = useRef<Map<string, unknown>>(new Map());
   const timer = useRef<number | null>(null);
 
+  // Re-fetches whenever the signed-in USER changes: the audit caught that fetching once
+  // on mount meant prefs never loaded in the session where someone logged in (only after
+  // a reload), and a logout left the previous user's cached layout for the next one.
   useEffect(() => {
     let alive = true;
     // No session → nothing to load and nothing to write. This provider sits above the
     // PUBLIC routes too (homepage, customer/vendor portals), so it must never trigger an
     // auth round-trip for a visitor who was never signed in.
-    if (!localStorage.getItem("hr_access")) { setReady(true); return () => { alive = false; }; }
+    if (!user?.id) {
+      pending.current.clear();
+      setPrefs({});
+      writeCache({});
+      setReady(true);
+      return () => { alive = false; };
+    }
     api.get<PrefMap>("/api/prefs")
       .then((server) => {
         if (!alive) return;
@@ -51,7 +66,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
       .catch(() => { /* offline or logged out — the cache is a fine fallback */ })
       .finally(() => { if (alive) setReady(true); });
     return () => { alive = false; };
-  }, []);
+  }, [user?.id]);
 
   const flush = useCallback(() => {
     const batch = Array.from(pending.current.entries());

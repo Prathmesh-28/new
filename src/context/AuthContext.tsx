@@ -35,6 +35,10 @@ interface AuthCtx {
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
+// Exported for PrefsProvider, which reads auth state OPPORTUNISTICALLY (it must work as
+// "logged out" when no AuthProvider is mounted — tests, public shells) rather than through
+// useAuth()'s deliberate must-be-inside-provider throw.
+export const AuthCtxForPrefs = Ctx;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]           = useState<AuthUser | null>(null);

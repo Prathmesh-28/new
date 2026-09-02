@@ -25,6 +25,13 @@ async function runMigrations(pool, dir = DEFAULT_DIR) {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      // A backfill over a years-old audit_log/invoices table can legitimately take longer
+      // than the pool's 30s statement_timeout — a migration must never die to the app's
+      // query budget. Scoped to this transaction only.
+      await client.query("SET LOCAL statement_timeout = '15min'");
+      // One migrator at a time across instances: a second booting instance blocks here
+      // instead of racing the same file and crashing on a duplicate-object error.
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('hr:migrations'))");
       await client.query(sql);
       await client.query("INSERT INTO schema_migrations(id) VALUES($1)", [file]);
       await client.query("COMMIT");

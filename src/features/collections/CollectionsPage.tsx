@@ -3711,8 +3711,9 @@ function PartialPaymentTracker() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get<CollBackendInvoiceRow[]>("/api/invoices")
-      .then(rows => setBackendInvoices(Array.isArray(rows) ? rows : []))
+    // Envelope-aware (?all=1): the bare-array read left this tracker permanently empty.
+    api.get<{ data: CollBackendInvoiceRow[] }>("/api/invoices?all=1")
+      .then(res => setBackendInvoices(Array.isArray(res?.data) ? res.data : []))
       .catch(() => setBackendInvoices(null))
       .finally(() => setLoading(false));
   }, []);
